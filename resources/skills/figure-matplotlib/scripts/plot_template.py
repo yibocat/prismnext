@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Publication figure template (matplotlib).
+"""Publication figure template (matplotlib; seaborn works with the same style).
 
-Copy into your island/scripts folder, replace the data section, run via
-experiment-run so it executes inside the project venv. The style file ships
-with the scientific-visualization skill — adjust STYLE_PATH if you move it.
+Copy this file AND `prism.mplstyle` together into your island/scripts folder,
+replace the data section, run via experiment-run so it executes inside the
+project venv. The style resolves next to this script by default (override
+with --style); copying the script alone silently drops the style.
 
 Outputs: <out>/fig-name.pdf (manuscript) and .png (preview/chat).
 """

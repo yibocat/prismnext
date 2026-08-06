@@ -1,14 +1,26 @@
 ---
 name: prisma-systematic-review
-description: Use when conducting a systematic review or structured literature survey — protocol, PRISMA flow, screening log, and synthesis, wired to the project's literature tools.
+description: Use when conducting a systematic review or structured literature survey — protocol, PRISMA flow, screening log, and synthesis, wired to the project's literature tools. A systematic review is a *method* (predefined protocol, auditable screening, reproducible counts), not an ad-hoc reading pile — for casual exploration or a quick coverage pass, this skill is overkill.
 license: MIT
 ---
 
 # PRISMA Systematic Review
 
 A systematic review is a method, not a reading pile: protocol first,
-auditable screening, reproducible counts. This skill wires the PRISMA 2020
-discipline into the project's literature tools.
+auditable screening, reproducible counts. Where an ordinary review says "I
+read some papers and here is my take", a systematic review can answer "how
+did you search, what did you exclude, and why" — with logs. This skill
+wires the PRISMA 2020 discipline into the project's literature tools.
+
+**Not for**: exploring a new area, building a reading list, or drafting an
+ordinary Related Work section (`writing-related-work` when enabled) — those
+need no protocol and no flow diagram.
+
+**Scaled-down mode**: when full PRISMA is heavier than the occasion but
+coverage still needs to be defensible (e.g. a Related Work section someone
+may challenge), keep the two minimal records — the queries as executed and
+the exclusion reasons — and skip the protocol registration and flow
+diagram. Say that you are doing so.
 
 ## When to use
 
@@ -45,6 +57,16 @@ discipline into the project's literature tools.
 6. **Synthesize & report** — draft the review following the checklist;
    citations via `[@bibkey]` / staged `[n]`; `literature-export-bib` for the
    manuscript.
+
+## Done when
+
+- Flow-diagram counts reconcile with the screening log (audited against
+  each other).
+- Protocol deviations recorded with dates and reasons.
+- Included papers are in the library (user-confirmed) or staged; the
+  bibliography is synced.
+- Scaled-down mode: the query log and exclusion reasons exist on disk —
+  the rest is optional.
 
 ## Rules
 

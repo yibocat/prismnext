@@ -57,4 +57,13 @@ export const REPLY_DEPTH_PROMPT = [
   "- Prefer an **`artifact` fence** for a one-shot project file peek: `path: …` and optional `title: …`.",
   "- **Reopenable figures/plots** → **Interaction** module — not `artifact`.",
   "- Prefer a fence over only listing a path.",
+  "",
+  "### Math and formulas in chat",
+  "",
+  "- The chat renderer typesets math with KaTeX. Always write formulas and math symbols in LaTeX",
+  "  math delimiters: `$...$` inline, `$$...$$` for display. `\\(...\\)` and `\\[...\\]` also work.",
+  "- **Never** wrap a formula in backticks or a code fence — code spans render as literal text,",
+  "  not typeset math. Reserve code formatting for actual code, commands, and file paths.",
+  "- Example: write `Overall Goal $L = L_{dyn}^{z} + L_{dyn}^{s} + \\lambda_{align} L_{align}$`, not",
+  "  `` `L = L_dyn^z + ...` ``.",
 ].join("\n");

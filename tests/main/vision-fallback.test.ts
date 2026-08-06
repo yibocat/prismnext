@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+const settingsState = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+
 vi.mock("electron-store", () => ({
   default: class {
     get() {
@@ -10,7 +12,7 @@ vi.mock("electron-store", () => ({
 }));
 
 vi.mock("../../src/main/services/settings", () => ({
-  getSettings: () => ({}),
+  getSettings: () => settingsState.current,
 }));
 
 vi.mock("../../src/main/services/logger", () => ({
@@ -19,7 +21,9 @@ vi.mock("../../src/main/services/logger", () => ({
 
 import {
   normalizeVisionBaseUrl,
+  parseVisionHelperModelRef,
   resolveAnthropicMessagesUrl,
+  resolveVisionHelperFromSettings,
   usesAnthropicMessagesApi,
 } from "../../src/main/services/vision-fallback";
 
@@ -47,5 +51,48 @@ describe("vision-fallback URL routing", () => {
     expect(normalizeVisionBaseUrl("opencode-go", "https://opencode.ai/zen/go/v1/")).toBe(
       "https://opencode.ai/zen/go/v1",
     );
+  });
+});
+
+describe("vision helper settings resolver", () => {
+  it("parses provider/model refs", () => {
+    expect(parseVisionHelperModelRef("openai/gpt-4o")).toEqual({
+      providerId: "openai",
+      modelId: "gpt-4o",
+    });
+    expect(parseVisionHelperModelRef(" opencode-go/kimi-k2.6 ")).toEqual({
+      providerId: "opencode-go",
+      modelId: "kimi-k2.6",
+    });
+    // First slash splits; model ids may contain slashes.
+    expect(parseVisionHelperModelRef("openrouter/vendor/model")).toEqual({
+      providerId: "openrouter",
+      modelId: "vendor/model",
+    });
+  });
+
+  it("rejects missing or malformed refs", () => {
+    expect(parseVisionHelperModelRef(undefined)).toBeNull();
+    expect(parseVisionHelperModelRef(null)).toBeNull();
+    expect(parseVisionHelperModelRef("")).toBeNull();
+    expect(parseVisionHelperModelRef("   ")).toBeNull();
+    expect(parseVisionHelperModelRef("noslash")).toBeNull();
+    expect(parseVisionHelperModelRef("openai/")).toBeNull();
+    expect(parseVisionHelperModelRef("/gpt-4o")).toBeNull();
+  });
+
+  it("resolves the helper from settings.aiVisionFallbackModel", () => {
+    settingsState.current = {};
+    expect(resolveVisionHelperFromSettings()).toBeNull();
+
+    settingsState.current = { aiVisionFallbackModel: null };
+    expect(resolveVisionHelperFromSettings()).toBeNull();
+
+    settingsState.current = { aiVisionFallbackModel: "anthropic/claude-sonnet-4" };
+    expect(resolveVisionHelperFromSettings()).toEqual({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-4",
+    });
+    settingsState.current = {};
   });
 });

@@ -25,6 +25,8 @@ export interface VisionFallbackImageInput {
   mimeType: string;
   data: string;
   uri?: string;
+  /** Optional focus question from the requester (image-describe tool). */
+  question?: string;
 }
 
 export interface VisionFallbackDescription {
@@ -130,6 +132,12 @@ function getProviderCredentials(providerId: string): { apiKey: string; baseUrl: 
   return { apiKey, baseUrl };
 }
 
+function promptForImage(image: VisionFallbackImageInput): string {
+  const question = image.question?.trim();
+  if (!question) return IMAGE_DESCRIPTION_PROMPT;
+  return `${IMAGE_DESCRIPTION_PROMPT}\n\nThe requester asked specifically: ${question}`;
+}
+
 function cacheKey(providerId: string, modelId: string, image: VisionFallbackImageInput): string {
   const digest = createHash("sha256")
     .update(CACHE_VERSION)
@@ -137,6 +145,7 @@ function cacheKey(providerId: string, modelId: string, image: VisionFallbackImag
     .update(modelId)
     .update(image.mimeType)
     .update(image.data)
+    .update(image.question?.trim() ?? "")
     .digest("hex");
   return `${providerId}/${modelId}:${digest}`;
 }
@@ -181,7 +190,7 @@ async function describeViaOpenAiCompatible(
         {
           role: "user",
           content: [
-            { type: "text", text: IMAGE_DESCRIPTION_PROMPT },
+            { type: "text", text: promptForImage(image) },
             {
               type: "image_url",
               image_url: {
@@ -236,7 +245,7 @@ async function describeViaAnthropic(
         {
           role: "user",
           content: [
-            { type: "text", text: IMAGE_DESCRIPTION_PROMPT },
+            { type: "text", text: promptForImage(image) },
             {
               type: "image",
               source: {
@@ -275,7 +284,7 @@ async function describeViaGoogle(
         {
           role: "user",
           parts: [
-            { text: IMAGE_DESCRIPTION_PROMPT },
+            { text: promptForImage(image) },
             { inlineData: { mimeType: image.mimeType, data: image.data } },
           ],
         },
@@ -341,4 +350,40 @@ export async function describeImagesWithVisionFallback(
   return await Promise.all(
     images.map((image) => describeSingleImage(providerId, resolvedModelId, image)),
   );
+}
+
+/**
+ * Parse a "provider/model" helper ref (Settings → Models → Multimodal helper).
+ * Returns null when unset or malformed.
+ */
+export function parseVisionHelperModelRef(
+  ref: string | null | undefined,
+): { providerId: string; modelId: string } | null {
+  const raw = ref?.trim() ?? "";
+  const slash = raw.indexOf("/");
+  if (slash <= 0 || slash >= raw.length - 1) return null;
+  return { providerId: raw.slice(0, slash), modelId: raw.slice(slash + 1) };
+}
+
+/** Configured multimodal helper from Settings, or null when unset/malformed. */
+export function resolveVisionHelperFromSettings(): { providerId: string; modelId: string } | null {
+  return parseVisionHelperModelRef(getSettings().aiVisionFallbackModel);
+}
+
+/**
+ * Main-process entry point (image-describe bridge): describe images with the
+ * user-configured multimodal helper — no renderer-passed provider/model args.
+ * Throws an actionable Error when no helper is configured; provider credentials
+ * resolve from Settings inside the describe path (getProviderCredentials).
+ */
+export async function describeImagesWithConfiguredHelper(
+  images: VisionFallbackImageInput[],
+): Promise<VisionFallbackDescription[]> {
+  const helper = resolveVisionHelperFromSettings();
+  if (!helper) {
+    throw new Error(
+      "No multimodal helper model is configured. Ask the user to pick one under Settings → Models → Multimodal helper, then retry.",
+    );
+  }
+  return describeImagesWithVisionFallback(helper.providerId, helper.modelId, images);
 }

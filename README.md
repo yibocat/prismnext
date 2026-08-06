@@ -130,16 +130,19 @@ Reading and writing notes live next to the work, and every meaningful change can
 
 ## Built-in research standards
 
-The agent ships held to a codified set of research standards — each with the reference tables, templates, and runnable scripts to enforce it:
+The agent ships held to a codified set of research standards — **25 bundled skills**, each with its reference tables, templates, and runnable scripts. Discipline that must hold every turn lives in an always-on prompt layer; skills load on demand, and every skill stands alone even with all its siblings disabled.
 
-| Layer | Standards on board |
+| Family | On board |
 | --- | --- |
-| **The loop** | Project kickoff · related-work pipeline · intensive reading notes · hypothesis design · experiment matrices · Methods drafting · figure pipeline · structured self-critique · rebuttals · pre-submission gate |
-| **Method** | Statistical rigor with power analysis · PRISMA 2020 reviews · colorblind-safe figures · SymPy-verified derivations · TikZ/pgfplots templates · panel figure standards |
-| **Discipline** | Empirical-ML protocol (seeds, fair baselines, aggregation) · management & decision science (DiD/IV/RDD, behavioral experiments, robustness) |
-| **Meta** | Author and validate your own |
+| **Ideate** | idea-lab: divergent brainstorming before judgment · literature cross-pollination · a dedicated `ideas/` folder so bold sparks never evaporate |
+| **Design & run** | Hypothesis design · experiment design matrices (cost confirmed before compute) · empirical-ML protocol (seeds, fair baselines, aggregation) · statistical rigor with power analysis · management & decision science (DiD/IV/RDD, behavioral experiments) · run receipts → Methods prose |
+| **Math** | SymPy-verified derivations → LaTeX |
+| **Figures** | matplotlib templates · TikZ/pgfplots vector graphics · reproducible figure pipeline · reopenable panel figures |
+| **Writing** | Outline gate before prose · section skills for Introduction / Preliminaries / Methods / Results / Conclusion / Related Work — patterns, not molds |
+| **Review** | Intensive reading notes · PRISMA 2020 · reverse-angle critical review (backed by an independent peer-reviewer expert) · pre-submission preflight · rebuttal letters |
+| **Meta** | Distill your own skills from workflows that just worked |
 
-Growing with every release — the format is open: connect community skill sources or author your own.
+Growing with every release — the format is open: connect community skill sources or author your own. Settings → Skills marks each skill's origin (built-in / registry / custom) and lets you disable or delete them individually.
 
 ---
 

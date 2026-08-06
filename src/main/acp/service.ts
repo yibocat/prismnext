@@ -512,8 +512,20 @@ export class AcpService {
       const settings = getSettings() as Record<string, unknown>;
       const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
       const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
+      // Skip orphan keys whose provider was removed from aiCustomProviders.
+      const customProviders = settings.aiCustomProviders as
+        | Array<{ id?: unknown }>
+        | undefined;
+      const listed = Array.isArray(customProviders)
+        ? new Set(
+            customProviders
+              .map((p) => (typeof p?.id === "string" ? p.id : ""))
+              .filter(Boolean),
+          )
+        : null;
       for (const [provider, apiKey] of Object.entries(aiApiKeys)) {
         if (!apiKey?.trim()) continue;
+        if (listed && !listed.has(provider)) continue;
         const envKey = providerApiKeyEnvVar(provider);
         if (!this.lastExtraEnv[envKey]?.trim()) {
           this.lastExtraEnv[envKey] = apiKey.trim();
@@ -2864,6 +2876,13 @@ export class AcpService {
   /**
    * Re-read mcp.json (incl. built-in ensure) and push MCP set into all open
    * sessions for this project via session/load.
+   *
+   * Each session gets only the set it actually asked for (its `/` MCP tokens,
+   * per `sessionLoadedMcpNames`) re-resolved against the new config — never
+   * the full project set. Pushing everything would turn one settings save
+   * into an eager connect of every enabled server in every open session,
+   * and (because the dedupe map wasn't updated) it would stick for the rest
+   * of the session.
    */
   async applyProjectMcpConfig(projectRoot: string): Promise<{ reloadedSessions: number }> {
     const { listSessionsForProject } = await import("../services/chat-session-registry");
@@ -2872,7 +2891,11 @@ export class AcpService {
     const sessions = listSessionsForProject(projectRoot);
     let reloadedSessions = 0;
     for (const sessionId of sessions) {
-      await this.reloadSessionMcps(sessionId, projectRoot, projectRoot);
+      const desired = [...(this.sessionLoadedMcpNames.get(sessionId) ?? [])];
+      await this.reloadSessionMcps(sessionId, projectRoot, projectRoot, desired);
+      // Keep the dedupe map in sync so a later token-less turn doesn't think
+      // a reload is needed (or worse, skip one that is).
+      this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
       reloadedSessions++;
     }
     log.info("Applied project MCP config", { projectRoot, reloadedSessions });

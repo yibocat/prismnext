@@ -618,6 +618,11 @@
       "pageDesc": "Reusable instruction packs the agent can load during a chat.",
       "openProject": "Open a project to manage skills.",
       "empty": "No skills installed yet.",
+      "origin": {
+        "custom": "custom",
+        "bundled": "built-in",
+        "registry": "registry"
+      },
       "toast": {
         "updatesAvailable": "{{count}} skill update(s) available.",
         "upToDate": "All tracked skills are up to date.",

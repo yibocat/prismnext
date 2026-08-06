@@ -729,6 +729,98 @@ export async function compileLatex(
   }
 }
 
+export interface StandaloneCompileResult {
+  success: boolean;
+  /** Project-relative PDF path (next to the source file). */
+  pdfPath?: string;
+  logContent?: string;
+  error?: string;
+}
+
+/**
+ * Compile a standalone `.tex` (e.g. a `\documentclass{standalone}` TikZ
+ * figure) IN PLACE: the engine runs in the figure's own folder and all
+ * artifacts (PDF/aux/log) stay there. Never touches the shared manuscript
+ * build dir (`.prismnext/compile/`), so figure builds cannot clobber the
+ * paper PDF. No bib passes, no SyncTeX — standalone graphics have neither.
+ */
+export async function compileStandaloneTexInPlace(
+  projectDir: string,
+  mainFile: string,
+): Promise<StandaloneCompileResult> {
+  const normalized = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
+  const absMain = join(projectDir, normalized);
+  if (!existsSync(absMain)) {
+    return { success: false, error: `Main file not found: ${mainFile}` };
+  }
+  if (activeCount >= MAX_CONCURRENT) {
+    return { success: false, error: "Maximum concurrent compilations reached. Please wait." };
+  }
+
+  const sourceDir = dirname(absMain);
+  const baseName = basename(normalized);
+  const mainStem = basename(normalized, extname(normalized));
+  const pdfAbs = join(sourceDir, `${mainStem}.pdf`);
+  const relDir = dirname(normalized);
+  const pdfRel = relDir === "." ? `${mainStem}.pdf` : `${relDir}/${mainStem}.pdf`;
+
+  activeCount++;
+  try {
+    const content = await readFile(absMain, "utf-8");
+    const engine = detectTexEngine(content) || "xelatex";
+
+    const tectonic = await resolveTectonicBinary();
+    let success: boolean;
+    let logContent: string;
+    if (tectonic.available) {
+      console.log("[compiler] standalone in-place via Tectonic:", normalized);
+      ({ success, logContent } = await compileWithTectonic(
+        sourceDir,
+        baseName,
+        sourceDir,
+        tectonic.path,
+        { synctex: false },
+      ));
+    } else {
+      console.log("[compiler] standalone in-place via TeX Live:", normalized);
+      const enginePath = await findTexliveBinary(engine);
+      if (!enginePath) {
+        return {
+          success: false,
+          error: `${engine} not found. Install TeXLive or add it to your PATH.`,
+        };
+      }
+      const env = { ...process.env, PATH: texliveEnvPath(enginePath) };
+      const args = [
+        "-synctex=0",
+        "-interaction=nonstopmode",
+        `-output-directory=${sourceDir}`,
+        baseName,
+      ];
+      // Two passes: TikZ `remember picture` / positioning needs a rerun to settle.
+      await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
+      await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
+      success = existsSync(pdfAbs);
+      try {
+        logContent = await readFile(join(sourceDir, `${mainStem}.log`), "utf-8");
+      } catch {
+        logContent = "";
+      }
+    }
+
+    if (!success) {
+      return {
+        success: false,
+        error: extractErrorLines(logContent ?? "") || "Compilation failed",
+        logContent,
+      };
+    }
+    return { success: true, pdfPath: pdfRel, logContent };
+  } finally {
+    activeCount--;
+  }
+}
+
 /**
  * Get the last build info for a project.
  */

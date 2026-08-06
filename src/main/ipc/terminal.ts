@@ -3,6 +3,7 @@ import * as terminalService from "../services/terminal";
 import * as terminalConfig from "../services/terminal-config";
 import { runAiBashJob, setAiBashRunnerWindow, registerBashJobIntent } from "../services/ai-bash-runner";
 import { destroyAllAiPty } from "../services/ai-pty";
+import { getSessionProjectRoot } from "../services/chat-session-registry";
 import type { TerminalConfig } from "../services/terminal-config";
 
 export function registerTerminalHandlers(): void {
@@ -79,6 +80,9 @@ export function registerTerminalHandlers(): void {
         toolCallId: args.toolCallId,
         command: args.command,
         cwd: args.cwd || process.cwd(),
+        // Keep the Python gate anchored to the session's project even when
+        // cwd alone would not reveal one.
+        projectRoot: getSessionProjectRoot(args.sessionId),
       });
     },
   );

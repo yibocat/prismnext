@@ -383,48 +383,59 @@
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="skillsTitle">Research standards, codified</h3>
           <p class="cap-text" data-i18n="skillsText">
-            A small set of research standards the agent is held to — each with the tables,
-            templates, and runnable scripts to enforce it. Open format: plug in community
-            sources or write your own.
+            25 bundled skills the agent is held to — each with reference tables, templates,
+            and runnable scripts. Always-on discipline lives in the prompt layer; skills load
+            on demand. Open format: plug in community sources or distill your own from practice.
           </p>
           <div class="skill-tiers">
             <div class="skill-tier">
-              <h4 class="skill-tier-head" data-i18n="skillTierOrch">Orchestration · 10</h4>
+              <h4 class="skill-tier-head" data-i18n="skillTierDesign">Ideate, design &amp; run · 7</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameKickoff">Project kickoff</code><span data-i18n="skKickoff">Idea → structured project: brief, plan, skeleton.</span></li>
-                <li><code data-i18n="skNameRelated">Related-work pipeline</code><span data-i18n="skRelatedWork">Discover → screen → stage → cite, on the literature tools.</span></li>
-                <li><code data-i18n="skNameNotes">Intensive reading notes</code><span data-i18n="skReadingNotes">Structured deep-read notes from PDFs.</span></li>
+                <li><code data-i18n="skNameIdeaLab">Idea lab</code><span data-i18n="skIdeaLab">Brainstorm boldly — divergence before judgment, sparks filed in a dedicated ideas/ folder.</span></li>
                 <li><code data-i18n="skNameHypothesis">Hypothesis design</code><span data-i18n="skHypothesis">Sharpen a question into testable hypotheses.</span></li>
-                <li><code data-i18n="skNameMatrix">Experiment design matrix</code><span data-i18n="skDesignMatrix">Fix the factorial / ablation matrix before running.</span></li>
-                <li><code data-i18n="skNameMethods">Experiment-to-Methods</code><span data-i18n="skToMethods">Experiment logs become Methods prose.</span></li>
-                <li><code data-i18n="skNameFigure">Figure pipeline</code><span data-i18n="skFigurePipeline">Data → figure → manuscript, end to end.</span></li>
-                <li><code data-i18n="skNameReview">Critical self-review</code><span data-i18n="skCriticalReview">Claims-vs-evidence structured self-critique.</span></li>
-                <li><code data-i18n="skNameRebuttal">Rebuttal letter</code><span data-i18n="skRebuttal">Point-by-point reviewer rebuttal drafting.</span></li>
-                <li><code data-i18n="skNamePreflight">Manuscript preflight</code><span data-i18n="skPreflight">Pass/fail gate before sharing: compile, citations, desk-reject.</span></li>
+                <li><code data-i18n="skNameMatrix">Experiment design matrix</code><span data-i18n="skDesignMatrix">Fix the factorial / ablation matrix — and the compute budget — before running.</span></li>
+                <li><code data-i18n="skNameMl">ML experiment protocol</code><span data-i18n="skMlProtocol">Multi-seed discipline, fair baselines, aggregation script.</span></li>
+                <li><code data-i18n="skNameStats">Statistical rigor</code><span data-i18n="skStatRigor">Test selection, effect sizes, runnable power analysis.</span></li>
+                <li><code data-i18n="skNameMgmt">Management &amp; decision science</code><span data-i18n="skMgmtSci">DiD/IV/RDD, behavioral experiments, robustness battery.</span></li>
+                <li><code data-i18n="skNameMethods">Experiment-to-Methods</code><span data-i18n="skToMethods">Run records become Methods prose — no invented numbers.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
-              <h4 class="skill-tier-head" data-i18n="skillTierMethod">Method &amp; rigor · 6</h4>
+              <h4 class="skill-tier-head" data-i18n="skillTierWriting">Writing · 7</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameStats">Statistical rigor</code><span data-i18n="skStatRigor">Test selection, effect sizes, runnable power analysis.</span></li>
-                <li><code data-i18n="skNamePrisma">PRISMA systematic review</code><span data-i18n="skPrisma">PRISMA 2020 protocol, screening log, flow counts.</span></li>
-                <li><code data-i18n="skNameVis">Scientific visualization</code><span data-i18n="skSciVis">Colorblind-safe matplotlib style + chart selection.</span></li>
-                <li><code data-i18n="skNameSympy">Symbolic math</code><span data-i18n="skSymMath">SymPy-verified derivations, straight to LaTeX.</span></li>
+                <li><code data-i18n="skNameWritingDesign">Writing design</code><span data-i18n="skWritingDesign">Outline gate before prose: story, sections, promise map.</span></li>
+                <li><code data-i18n="skNameIntro">Introduction</code><span data-i18n="skIntro">Problem-driven, contribution-first, or story-arc — patterns, not molds.</span></li>
+                <li><code data-i18n="skNamePrelims">Preliminaries</code><span data-i18n="skPrelims">Notation tables, problem setup, symbol consistency.</span></li>
+                <li><code data-i18n="skNameMethodsCh">Methods chapter</code><span data-i18n="skMethodsCh">Motivation-driven structure; experiment receipts welcome.</span></li>
+                <li><code data-i18n="skNameResults">Results</code><span data-i18n="skResults">Numbers carry run ids; negative results reported.</span></li>
+                <li><code data-i18n="skNameConclusion">Conclusion</code><span data-i18n="skConclusion">Closes the Introduction's questions; honest limitations.</span></li>
+                <li><code data-i18n="skNameRelated">Related work</code><span data-i18n="skRelatedWork">Library → synthesis narrative, grounded citations.</span></li>
+              </ul>
+            </div>
+            <div class="skill-tier">
+              <h4 class="skill-tier-head" data-i18n="skillTierFigures">Figures · 4</h4>
+              <ul class="skill-list">
+                <li><code data-i18n="skNameVis">Matplotlib figures</code><span data-i18n="skSciVis">Colorblind-safe matplotlib style + chart selection.</span></li>
                 <li><code data-i18n="skNameTikz">TikZ &amp; pgfplots</code><span data-i18n="skTikz">TikZ/pgfplots templates that compile out of the box.</span></li>
+                <li><code data-i18n="skNameFigure">Figure pipeline</code><span data-i18n="skFigurePipeline">Data → figure → manuscript, end to end.</span></li>
                 <li><code data-i18n="skNamePanel">Panel figures</code><span data-i18n="skInteraction">RightArea figure &amp; plot objects, conventions included.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
-              <h4 class="skill-tier-head" data-i18n="skillTierDiscipline">Discipline protocols · 2</h4>
+              <h4 class="skill-tier-head" data-i18n="skillTierReview">Reading &amp; review · 5</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameMl">ML experiment protocol</code><span data-i18n="skMlProtocol">Multi-seed discipline, fair baselines, aggregation script.</span></li>
-                <li><code data-i18n="skNameMgmt">Management &amp; decision science</code><span data-i18n="skMgmtSci">DiD/IV/RDD, behavioral experiments, robustness battery.</span></li>
+                <li><code data-i18n="skNameNotes">Intensive reading notes</code><span data-i18n="skReadingNotes">Structured deep-read notes from PDFs.</span></li>
+                <li><code data-i18n="skNamePrisma">PRISMA systematic review</code><span data-i18n="skPrisma">PRISMA 2020 protocol, screening log, flow counts.</span></li>
+                <li><code data-i18n="skNameReview">Critical review</code><span data-i18n="skCriticalReview">Reverse-angle pass over manuscripts, claims, decisions — and itself.</span></li>
+                <li><code data-i18n="skNamePreflight">Manuscript preflight</code><span data-i18n="skPreflight">Pass/fail gate before sharing: compile, citations, desk-reject.</span></li>
+                <li><code data-i18n="skNameRebuttal">Rebuttal letter</code><span data-i18n="skRebuttal">Point-by-point reviewer rebuttal drafting.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
-              <h4 class="skill-tier-head" data-i18n="skillTierMeta">Meta · 1</h4>
+              <h4 class="skill-tier-head" data-i18n="skillTierMeta">Math &amp; meta · 2</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameCreator">Skill creator</code><span data-i18n="skSkillCreator">Author and validate your own skills.</span></li>
+                <li><code data-i18n="skNameSympy">Symbolic math</code><span data-i18n="skSymMath">SymPy-verified derivations, straight to LaTeX.</span></li>
+                <li><code data-i18n="skNameCreator">Skill creator</code><span data-i18n="skSkillCreator">Distill skills from workflows that just worked.</span></li>
               </ul>
             </div>
           </div>

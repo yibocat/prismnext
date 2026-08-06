@@ -5,6 +5,7 @@ import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/s
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
+import { listBundledSkills } from "./bundled-skills";
 
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
@@ -115,6 +116,12 @@ export interface InstalledSkillInfo {
   /** o200k_base BPE estimate of SKILL.md body */
   tokenCount: number;
   installOrigin?: import("../../shared/skill-install-types").SkillInstallOrigin;
+  /**
+   * Where this installed copy came from: shipped with the app ("bundled"),
+   * installed from a registry/GitHub ("registry"), or written by the user /
+   * skill-creator in this project ("custom").
+   */
+  origin: "bundled" | "registry" | "custom";
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -277,6 +284,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
   const installBySkillId = new Map(
     (manifest.installs ?? []).map((item) => [item.skillId, item.origin]),
   );
+  const bundledIds = new Set(listBundledSkills().map((skill) => skill.id));
   const results: InstalledSkillInfo[] = [];
 
   for (const entry of readdirSync(skillsRoot, { withFileTypes: true })) {
@@ -293,6 +301,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
 
     const meta = parseSkillMd(content);
     const id = entry.name;
+    const installOrigin = installBySkillId.get(id);
     results.push({
       id,
       name: meta.name || id,
@@ -300,7 +309,8 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
       skillDirRel: `${PRISM_SKILLS_REL}/${id}`,
       enabled: !disabled.has(id),
       tokenCount: countPromptTokens(content).tokenCount,
-      installOrigin: installBySkillId.get(id),
+      installOrigin,
+      origin: installOrigin ? "registry" : bundledIds.has(id) ? "bundled" : "custom",
     });
   }
 

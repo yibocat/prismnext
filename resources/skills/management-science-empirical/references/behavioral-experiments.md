@@ -20,8 +20,8 @@ before data collection; every "later" answer is a future problem.
 
 - [ ] Target effect size justified (prior work, pilot, or smallest effect
       of practical interest — say which)
-- [ ] N from `statistical-rigor`'s `power_analysis.py` (or equivalent),
-      with inputs recorded
+- [ ] N from a power analysis (`statistical-rigor`'s `power_analysis.py`
+      when enabled, or equivalent), with inputs recorded
 - [ ] Attrition/invalid-response inflation applied to the recruitment target
 
 ## Incentives & ethics
@@ -44,7 +44,8 @@ before data collection; every "later" answer is a future problem.
 - [ ] Primary analysis = preregistered analysis; everything else labeled
       exploratory
 - [ ] Exclusion rules applied blind to condition where possible
-- [ ] Multiple outcomes/covariates → correction per `statistical-rigor`
+- [ ] Multiple outcomes/covariates → multiplicity correction
+      (`statistical-rigor` when enabled)
 - [ ] Manipulation-check failures reported; "it worked" needs the number
 
 ## Reporting

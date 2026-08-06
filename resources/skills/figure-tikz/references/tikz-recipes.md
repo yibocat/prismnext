@@ -100,4 +100,4 @@ figures.
 - Structure, schematics, commutative diagrams, symbolic function plots →
   TikZ (fonts match, infinite zoom, diffable).
 - Data from experiment runs, large CSVs, histograms/heatmaps of results →
-  matplotlib (`scientific-visualization`), include the PDF.
+  matplotlib (`figure-matplotlib`), include the PDF.

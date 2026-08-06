@@ -1,19 +1,21 @@
 # Reproducibility & Compute-Reporting Checklist
 
-Condensed from the NeurIPS reproducibility checklist and common AE practice.
-Work it top to bottom before submission; every "no" is either a fix or a
-sentence you add to limitations.
+Condensed from community reproducibility checklists (NeurIPS-style) and
+common artifact-evaluation practice. Work it top to bottom before you rely
+on the results — and revisit it before writing them up; every "no" is
+either a fix or an explicit limitation you record.
 
 ## Claims & scope
 
-- [ ] Abstract/intro claims map 1:1 to experiments actually run
+- [ ] Claims map 1:1 to experiments actually run
 - [ ] Limitations stated (assumptions, failure modes, scope of validity)
 
 ## Theory (if any)
 
 - [ ] Assumptions stated next to each claim; proofs complete or clearly
       sketched with the full version in appendix
-- [ ] Symbolic steps machine-checked (see `symbolic-math` skill)
+- [ ] Symbolic steps machine-checked (SymPy check script — the
+      `symbolic-math` skill packages this when enabled)
 
 ## Experiments
 
@@ -21,13 +23,15 @@ sentence you add to limitations.
       manual; licenses and PII status stated
 - [ ] Baselines: same data, same splits, comparable tuning budget; official
       numbers cited vs rerun distinguished in the table
-- [ ] Seeds: predefined list, ≥3 (5 preferred), mean±std reported
+- [ ] Seeds: predefined list, mean±std reported; count scaled to run cost
+      (cheap: ≥3, 5 preferred; expensive: fewer seeds + labeled variance
+      stand-in such as bootstrap or CV folds)
 - [ ] Hyperparameters: full table in appendix (use
       `templates/hyperparameters-table.tex`); search ranges and selection
       criterion (validation metric) stated
 - [ ] Test set touched once per claim; model selection on validation only
-- [ ] Statistical treatment: test named, effect size + CI reported (see
-      `statistical-rigor` skill); multiple comparisons corrected
+- [ ] Statistical treatment: test named, effect size + CI reported (the
+      `statistical-rigor` skill when enabled); multiple comparisons corrected
 
 ## Compute
 
@@ -35,7 +39,7 @@ sentence you add to limitations.
 - [ ] Wall-clock per run type and total project compute (GPU-hours)
 - [ ] Training-time/parameter-count/FLOPs for each compared method where
       "efficiency" is claimed
-- [ ] Energy/carbon statement if the venue requires it
+- [ ] Energy/carbon statement where the reporting context calls for it
 
 ## Code & data availability
 

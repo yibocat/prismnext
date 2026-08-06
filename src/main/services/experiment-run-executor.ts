@@ -243,10 +243,10 @@ function kickoffWithEnv(
   setImmediate(() => {
     // Allocate a temp file for stderr capture (Bug #11 — see
     // docs-private/audit/experiment-agent-architecture-analysis.md). A PTY merges
-    // stdout+stderr onto a single stream; the only way to get a clean
-    // stderr record without sacrificing the live PTY stream for stdout
-    // is to redirect the *command's* stderr to a file via a subshell
-    // wrapper. The temp dir is OS-managed and the file is unlinked by
+    // stdout+stderr onto a single stream; ai-pty wraps the command so stderr
+    // is teed into this file — joining the live stream (progress/logging
+    // visible in real time) while still leaving a clean stderr-only record.
+    // The temp dir is OS-managed and the file is unlinked by
     // ai-pty after the PTY exits.
     const stderrTmpDir = mkdtempSync(join(tmpdir(), "prism-exp-stderr-"));
     const stderrPath = join(stderrTmpDir, `${runId}.log`);

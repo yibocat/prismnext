@@ -340,3 +340,72 @@ export function updateSettings(patch: Partial<AppSettings>): void {
 
   store.set(encrypted as any);
 }
+
+/**
+ * GC for provider removals that predate the scrub in
+ * buildRemoveCustomProviderPatch (≤ v0.6.7): per-provider maps can retain
+ * entries for ids no longer listed in `aiCustomProviders`. Those orphans are
+ * invisible in Settings yet still get re-registered and env-exported at every
+ * startup. Prune them. Runs on every launch; cheap and idempotent.
+ *
+ * Skipped while `aiCustomProviders` is not an array — the renderer-side
+ * legacy migration may still legitimately promote keyed former built-ins
+ * into the list, so nothing is an orphan yet.
+ *
+ * Returns the pruned provider ids (for startup logging).
+ */
+export function pruneOrphanProviderSettings(): string[] {
+  const raw = (store as unknown as { store: Record<string, unknown> }).store;
+  const list = raw.aiCustomProviders;
+  if (!Array.isArray(list)) return [];
+
+  const listed = new Set<string>();
+  for (const entry of list) {
+    const id = (entry as { id?: unknown } | null)?.id;
+    if (typeof id === "string" && id.trim()) listed.add(id);
+  }
+
+  const settings = getSettings() as Record<string, unknown>;
+  const pruned = new Set<string>();
+  const patch: Record<string, unknown> = {};
+
+  const pruneMap = (key: string): void => {
+    const map = settings[key];
+    if (!map || typeof map !== "object" || Array.isArray(map)) return;
+    const entries = Object.entries(map as Record<string, unknown>);
+    const kept = entries.filter(([id]) => {
+      if (listed.has(id)) return true;
+      pruned.add(id);
+      return false;
+    });
+    if (kept.length !== entries.length) {
+      patch[key] = Object.fromEntries(kept);
+    }
+  };
+
+  pruneMap("aiApiKeys");
+  pruneMap("aiBaseUrls");
+  pruneMap("aiEnabledModels");
+  pruneMap("aiCustomModels");
+  pruneMap("aiCustomModelsData");
+
+  const verified = settings.aiVerifiedProviders;
+  if (Array.isArray(verified)) {
+    const kept = verified.filter((id) => {
+      if (typeof id === "string" && !listed.has(id)) {
+        pruned.add(id);
+        return false;
+      }
+      return true;
+    });
+    if (kept.length !== verified.length) patch.aiVerifiedProviders = kept;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    updateSettings(patch as Partial<AppSettings>);
+    console.log(
+      `[settings] Pruned orphan provider leftovers: ${[...pruned].sort().join(", ")}`,
+    );
+  }
+  return [...pruned].sort();
+}

@@ -36,6 +36,32 @@ sp.powsimp(expr, force=True)   # power rules (force ignores assumptions — only
 sp.expand(expr); sp.factor(expr); sp.cancel(expr)
 ```
 
+## Verify by inverse operation — not every claim is an identity
+
+Many derivations are not `lhs == rhs` identities; verify them by closing
+the loop with the inverse operation and checking the residual is zero:
+
+```python
+# Antiderivative: differentiate back, compare with the integrand
+F = sp.integrate(f, x)
+sp.simplify(sp.diff(F, x) - f) == 0
+
+# ODE solution: substitute back into the equation
+sol = sp.dsolve(ode, f(x))
+sp.checkodesol(ode, sol)          # True, or (True, 0) per solution
+
+# Matrix inverse / factorization: multiply back
+sp.simplify(M * M.inv() - sp.eye(M.rows)) == sp.zeros(M.rows)
+L, U, _ = sp.Matrix(M).LUdecomposition(); sp.simplify(L * U - M)
+
+# Roots of an equation: substitute, check the residual
+for r in sp.solve(eq, x):
+    sp.simplify(eq.subs(x, r)) == 0
+```
+
+These residuals are usually far easier for `simplify` than a rewritten
+identity — prefer them whenever the claim has an inverse form.
+
 ## Calculus
 
 ```python

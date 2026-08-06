@@ -7,7 +7,7 @@ import { unwrapToolResultPayload } from "@/lib/chat/unwrap-tool-result";
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
 import { kindDisplayLabel, type InteractionSpec } from "../../../../../shared/interaction-spec";
 import { InteractionChatThumbnail } from "@/lib/interaction/interaction-chat-thumbnail";
-import { claimInteractionFenceSlot } from "@/lib/interaction/interaction-fence-dedupe";
+import { useInteractionFenceClaim } from "@/lib/interaction/interaction-fence-dedupe";
 import { useDocumentStore } from "@/stores/document-store";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -142,7 +142,8 @@ function InteractionToolPeek({
     openInteractionPanel(id, title);
   }, [id, title]);
 
-  if (!claimInteractionFenceSlot(id)) return null;
+  const claimed = useInteractionFenceClaim(id);
+  if (!claimed) return null;
 
   return (
     <button

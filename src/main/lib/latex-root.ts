@@ -32,6 +32,21 @@ export function hasDocumentClass(content: string): boolean {
   return false;
 }
 
+/**
+ * True when the document uses the `standalone` class — a self-contained
+ * graphic/figure artifact (what figure-tikz ships). These compile
+ * in place in their own folder, never through the shared manuscript build
+ * dir (`.prismnext/compile/`).
+ */
+export function isStandaloneTexDocument(content: string): boolean {
+  const head = content
+    .split("\n")
+    .slice(0, 50)
+    .filter((line) => !line.trim().startsWith("%"))
+    .join("\n");
+  return /\\documentclass(?:\[[^\]]*\])?\{standalone\}/.test(head);
+}
+
 function normalizeRel(p: string): string {
   return p.replace(/\\/g, "/").replace(/^\.\//, "");
 }

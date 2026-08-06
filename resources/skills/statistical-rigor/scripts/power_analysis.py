@@ -5,6 +5,10 @@ Normal-approximation planning numbers for the three most common cases.
 Approximations are fine for design decisions; if the result is borderline,
 simulate instead of arguing about the second decimal.
 
+Scope: two-sample t, two proportions, correlation. Anything else (e.g.
+seed planning for ML method comparisons) is a simulation question — do
+not force these formulas onto designs they do not cover.
+
 Usage:
   python power_analysis.py ttest --effect 0.5 --alpha 0.05 --power 0.8
   python power_analysis.py ttest --n 64 --effect 0.5 --alpha 0.05

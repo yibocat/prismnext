@@ -9,7 +9,7 @@ import { join } from "node:path";
 import type { BrowserWindow } from "electron";
 import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { runAiCommand } from "./ai-pty";
-import { resolveChatTabId } from "./chat-session-registry";
+import { resolveChatTabId, getSessionProjectRoot } from "./chat-session-registry";
 import { createLogger } from "./logger";
 import {
   isDirectLatexCompileBashCommand,
@@ -260,12 +260,17 @@ export async function runAiBashFromBridgeRequest(
   },
 ): Promise<RunAiBashJobResult> {
   const toolCallId = req.toolCallId || requestId;
+  const sessionKey = sessionId || sessionDirName;
   return runAiBashJob({
-    sessionId: sessionId || sessionDirName,
+    sessionId: sessionKey,
     chatTabId: req.rendererTabId || req.chatTabId,
     toolCallId,
     command: req.command,
     cwd: req.cwd || process.cwd(),
+    // Bridge requests carry no project root — resolve it from the session
+    // registry so the Python gate never falls into its no-root passthrough
+    // while the session is in fact inside a project.
+    projectRoot: getSessionProjectRoot(sessionKey),
   });
 }
 

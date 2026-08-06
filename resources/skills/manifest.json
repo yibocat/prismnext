@@ -3,56 +3,70 @@
     {
       "id": "critical-review",
       "name": "critical-review",
-      "description": "Use for structured, confidential critical evaluation of a paper, a manuscript draft, or a set of claims — claims-vs-evidence table, load-bearing assumptions, reproducibility red flags.",
+      "description": "Use for a deliberate critical deep pass — over a manuscript or paper (reviewer-grade review), a claim or plan in conversation, a decision about to be made, the AI's own previous output (self-critique), or the methods and reasoning of published work. Critical here means reverse-angle analysis — inverting, steelmanning, shifting perspective — not negation. The product is what survives and what needs reinforcement.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "experiment-design-matrix",
       "name": "experiment-design-matrix",
-      "description": "Use when planning experiments, ablations, or evaluation matrices before running anything — factors and levels, fair baselines, controls, metrics, seeds, and stopping criteria as a design doc.",
+      "description": "Use when planning experiments, ablations, or evaluation sweeps — before a costly run series, or when adding new cells (e.g. ablations) to a running campaign. Turns pre-registered hypotheses into a factor matrix with fair baselines, metrics, seeds, and stopping criteria. Not needed for trivial probes and smoke tests.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "experiment-to-methods",
       "name": "experiment-to-methods",
-      "description": "Use when writing or refreshing a Methods / Experiments section from logged runs, provenance, and result snapshots — Methods-grade receipts with no invented numbers.",
+      "description": "Use when writing or refreshing a Methods / Experiments section from logged runs, provenance, and result snapshots — or when auditing an existing section to check every number still traces to a run. Methods-grade receipts with no invented numbers.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "figure-interaction",
+      "name": "figure-interaction",
+      "description": "Use when presenting a result as a reopenable figure or plot in the RightArea panel — visual standards (palette, sizing, legibility on any theme), choosing between a static figure and a CSV plot, and update discipline. Not for making the figures themselves (→ figure-matplotlib / figure-tikz) or wiring them into the manuscript (→ figure-pipeline).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "figure-matplotlib",
+      "name": "figure-matplotlib",
+      "description": "Use when creating data-driven 2D figures — for analysis, notes, or publication — with matplotlib or seaborn. Chart selection, colorblind-safe palettes, a ready style file, and a plotting template that outputs into the project's figures folder. Not for structural diagrams (architecture, schematics → figure-tikz), not for the manuscript-wiring process (→ figure-pipeline), not for panel presentation standards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-pipeline",
       "name": "figure-pipeline",
-      "description": "Use when turning experiment outputs or project data into publication-quality figures wired into the manuscript and reopenable as interaction objects.",
+      "description": "Use when turning experiment outputs or project data into publication-quality figures wired into the manuscript and reopenable as interaction objects. This is the plumbing (source data → script → manuscript wiring); the chart craft itself lives in figure-matplotlib, the panel presentation in figure-interaction.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "figure-tikz",
+      "name": "figure-tikz",
+      "description": "Use when drawing publication-quality TikZ/pgfplots figures — architecture and pipeline diagrams, commutative diagrams, function/schematic plots, and data line-plots rendered by LaTeX itself. Not for data-heavy result plots (→ figure-matplotlib). Templates compile standalone into the project's figures folder.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "hypothesis-design",
       "name": "hypothesis-design",
-      "description": "Use when sharpening a research idea into falsifiable hypotheses, pre-registering claims/metrics/stopping criteria in the project brief, or pressure-testing whether an idea is worth testing.",
+      "description": "Use when an idea is about to move from open exploration into empirical testing — sharpening it into falsifiable hypotheses and pre-registering what would change your mind before any run happens. Not for early free-form brainstorming; that belongs in ordinary chat.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "idea-lab",
+      "name": "idea-lab",
+      "description": "Use for open-ended ideation — brainstorming bold or half-formed ideas, thinking out loud with the AI, giving an early hunch a gentle first look, or mining the literature for inspiration, analogies, and contradictions. Divergence first, judgment later; converging into a hypothesis is optional and always the user's call.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "intensive-reading-notes",
       "name": "intensive-reading-notes",
-      "description": "Use when reading library papers deeply (intensive reading) and turning them into structured, linked project notes or reading cards with page-level evidence.",
-      "category": "academic",
-      "license": "MIT"
-    },
-    {
-      "id": "interaction-figures",
-      "name": "interaction-figures",
-      "description": "Use when presenting a result as a reopenable figure or plot in the RightArea panel — visual standards (palette, sizing, legibility on any theme), choosing between a static figure and a CSV plot, and update discipline.",
-      "category": "academic",
-      "license": "MIT"
-    },
-    {
-      "id": "latex-tikz-graphics",
-      "name": "latex-tikz-graphics",
-      "description": "Use when drawing publication-quality TikZ/pgfplots figures — architecture and pipeline diagrams, commutative diagrams, function/schematic plots, and data line-plots rendered by LaTeX itself. Templates compile standalone into the project's figures folder.",
+      "description": "Use when reading library papers deeply (intensive reading) and turning them into structured, linked project notes or reading cards with page-level evidence. Depth and note shape follow the reading purpose — the skeleton is a reference, not a mold.",
       "category": "academic",
       "license": "MIT"
     },
@@ -66,28 +80,21 @@
     {
       "id": "manuscript-preflight",
       "name": "manuscript-preflight",
-      "description": "Use before submission, sharing, or tagging a manuscript release — compile, citation integrity, bibliography sync, figure paths, desk-reject and anonymization checks, and git hygiene as one pass/fail checklist.",
+      "description": "Use before submission, sharing, or tagging a manuscript release — compile, citation integrity, bibliography sync, figure paths, desk-reject and anonymization checks, and git hygiene as one pass/fail checklist. Mechanical integrity only — it does not judge the argument or the science.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "ml-research-protocol",
       "name": "ml-research-protocol",
-      "description": "Use when running empirical machine-learning experiments — baseline and ablation discipline, multi-seed aggregation, reproducibility logging, and results you can trust, decide on, and defend. Wires the experiment island to statistical-rigor and the manuscript.",
+      "description": "Use when running empirical machine-learning experiments — baseline and ablation discipline, multi-seed aggregation, reproducibility logging — or when auditing whether a conclusion you rely on is actually supported by the runs behind it. Wires the experiment island to statistical-rigor and the manuscript.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "prisma-systematic-review",
       "name": "prisma-systematic-review",
-      "description": "Use when conducting a systematic review or structured literature survey — protocol, PRISMA flow, screening log, and synthesis, wired to the project's literature tools.",
-      "category": "academic",
-      "license": "MIT"
-    },
-    {
-      "id": "project-kickoff",
-      "name": "project-kickoff",
-      "description": "Use when starting a new research project or study in this workspace — set up the brief, seed cornerstone literature, plan phases, and scaffold the first experiment island.",
+      "description": "Use when conducting a systematic review or structured literature survey — protocol, PRISMA flow, screening log, and synthesis, wired to the project's literature tools. A systematic review is a *method* (predefined protocol, auditable screening, reproducible counts), not an ad-hoc reading pile — for casual exploration or a quick coverage pass, this skill is overkill.",
       "category": "academic",
       "license": "MIT"
     },
@@ -99,37 +106,72 @@
       "license": "MIT"
     },
     {
-      "id": "related-work-pipeline",
-      "name": "related-work-pipeline",
-      "description": "Use when drafting a Related Work / literature review section, synthesizing prior work into a cited narrative, or comparing methods across papers — from the project library plus external discovery.",
-      "category": "academic",
-      "license": "MIT"
-    },
-    {
-      "id": "scientific-visualization",
-      "name": "scientific-visualization",
-      "description": "Use when creating figures — for analysis, notes, or publication — chart selection, colorblind-safe palettes, a ready matplotlib style file, and a plotting template that outputs into the project's figures folder.",
-      "category": "academic",
-      "license": "MIT"
-    },
-    {
       "id": "skill-creator",
       "name": "skill-creator",
-      "description": "Use when the user wants to create, write, or author a new agent skill (SKILL.md), extend agent capabilities, or asks to make a skill, create a skill, or define a reusable workflow.",
+      "description": "Use when the user wants to create, distill, or author a new agent skill — turning a workflow that just worked in conversation into a reusable skill, or authoring one from scratch — including multi-file skills with references, templates, scripts, and assets.",
       "category": "general",
       "license": "MIT"
     },
     {
       "id": "statistical-rigor",
       "name": "statistical-rigor",
-      "description": "Use when choosing statistical tests, computing power or sample size, reporting effect sizes, correcting for multiple comparisons, or reviewing a results section for statistical validity.",
+      "description": "Use when choosing statistical tests, computing power or sample size, reporting effect sizes, or correcting for multiple comparisons — and when auditing a results section or a claimed finding for statistical validity.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "symbolic-math",
       "name": "symbolic-math",
-      "description": "Use when deriving, checking, or simplifying symbolic mathematics — algebra, calculus, linear algebra, ODEs — with SymPy verification and LaTeX output that goes straight into the manuscript. Covers math, physics, engineering, and economics derivations.",
+      "description": "Use when deriving, checking, or simplifying symbolic mathematics — algebra, calculus, linear algebra, ODEs — with SymPy verification and LaTeX output that goes straight into the manuscript. Covers math, physics, engineering, and economics derivations. Not for formal theorem proving or purely numerical computation.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-conclusion",
+      "name": "writing-conclusion",
+      "description": "Use when drafting a Conclusion / Discussion section — answering the questions the Introduction raised, stating honest limitations, and marking what the evidence does and does not license. No new claims appear here.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-design",
+      "name": "writing-design",
+      "description": "Use when starting to write a paper, report, or any substantial document from the project's research — the outline gate. Discuss the story, audience, and section plan with the user and fix the outline on disk BEFORE any section is drafted. Not for revising a single existing section (use the section skill directly).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-introduction",
+      "name": "writing-introduction",
+      "description": "Use when drafting or rewriting a paper's Introduction — framing the problem, positioning against prior work, and stating contributions as checkable claims, grounded in the brief, notes, and the library. Reference rhetorical patterns, adapted to the paper — never applied as molds.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-methods",
+      "name": "writing-methods",
+      "description": "Use when drafting a Methods / Methodology / Approach / Model section — expounding the ideas and the reasoning behind the method, grounded in the project's brief, notes, and prior discussions, with empirical details from run receipts. Structure follows the idea's shape; reference angles, not fixed templates.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-preliminaries",
+      "name": "writing-preliminaries",
+      "description": "Use when drafting a Preliminaries / Background / Notation section — definitions, problem setup, and formal statements the rest of the paper builds on, with notation consistency and machine-checked formal claims. Reference patterns, not molds; include only what later sections actually use.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-related-work",
+      "name": "writing-related-work",
+      "description": "Use when drafting a Related Work / literature review section or a standalone synthesis note — organizing prior work into a grounded, cited narrative or comparing methods across papers, from the project library plus staged external discovery. Never cites from memory.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "writing-results",
+      "name": "writing-results",
+      "description": "Use when drafting a Results / Experiments / Analysis section — narrating verified evidence from run receipts, with complete statistical reporting, derivation analysis, and honest treatment of negative results. Every number traces to a run; every claim survives the audit.",
       "category": "academic",
       "license": "MIT"
     }

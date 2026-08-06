@@ -2,7 +2,7 @@
 
 One per experiment island. The island's provenance captures commands and
 environment automatically; this log captures **intent and identity** — the
-things a reviewer (or future you) asks about.
+things future you (or anyone auditing the claim) asks about.
 
 ## Identity
 

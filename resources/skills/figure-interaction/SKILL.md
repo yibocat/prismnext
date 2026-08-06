@@ -1,6 +1,6 @@
 ---
-name: interaction-figures
-description: Use when presenting a result as a reopenable figure or plot in the RightArea panel — visual standards (palette, sizing, legibility on any theme), choosing between a static figure and a CSV plot, and update discipline.
+name: figure-interaction
+description: Use when presenting a result as a reopenable figure or plot in the RightArea panel — visual standards (palette, sizing, legibility on any theme), choosing between a static figure and a CSV plot, and update discipline. Not for making the figures themselves (→ figure-matplotlib / figure-tikz) or wiring them into the manuscript (→ figure-pipeline).
 license: MIT
 ---
 
@@ -25,8 +25,10 @@ any manuscript figure — make it worth rereading.
 
 These apply to everything shown in the panel, exploratory or final:
 
-- **Palette**: colorblind-safe only — Okabe-Ito or Tol (hex values in
-  `scientific-visualization`'s references). Never red–green contrasts.
+- **Palette**: colorblind-safe only. Okabe-Ito defaults: `#0072B2` (blue),
+  `#E69F00` (orange), `#009E73` (bluish green), `#D55E00` (vermillion),
+  `#CC79A7` (reddish purple), `#56B4E9` (sky blue), `#F0E442` (yellow),
+  `#000000`. Never red–green contrasts.
 - **Background**: export transparent-background images so the panel's own
   theme (light or dark, any pack) shows through. A white box on a dark
   panel is a defect.
@@ -68,8 +70,9 @@ the current scope plainly and offer the best static alternative instead.
 
 ## Workflow
 
-1. Make the figure properly — `scientific-visualization` discipline
-   (script-generated, style file, right size), saved in the project.
+1. Make the figure properly — script-generated (never hand-edited output),
+   sized for the panel; when `figure-matplotlib` is enabled, use its style
+   file and template. Saved in the project.
 2. Register it as a panel object (image or CSV) with a clear title and a
    stable name.
 3. Share the card in chat with one sentence: what it shows and what to

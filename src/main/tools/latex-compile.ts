@@ -68,7 +68,12 @@ async function bridgeCall(
 }
 
 export default tool({
-  description: "Compile the project LaTeX document and return log summary plus structured errors.",
+  description:
+    "Compile a LaTeX document and return log summary plus structured errors. " +
+    "The project manuscript (default, or any non-standalone mainFile) builds in the shared " +
+    "`.prismnext/compile/` dir. A `\\documentclass{standalone}` file (e.g. a TikZ figure) " +
+    "compiles in place in its own folder — PDF/aux stay next to the source and never " +
+    "overwrite the manuscript build.",
   args: {
     mainFile: tool.schema
       .string()

@@ -1,83 +1,166 @@
 ---
 name: skill-creator
-description: Use when the user wants to create, write, or author a new agent skill (SKILL.md), extend agent capabilities, or asks to make a skill, create a skill, or define a reusable workflow.
+description: Use when the user wants to create, distill, or author a new agent skill — turning a workflow that just worked in conversation into a reusable skill, or authoring one from scratch — including multi-file skills with references, templates, scripts, and assets.
 license: MIT
 ---
 
 # Skill Creator
 
-Guide the user through creating an OpenCode-compatible agent skill for this prismnext project.
+A skill is born one of two ways, and they are not equal:
 
-## When to use
+- **Distilled from practice** — the workflow just happened in this
+  conversation: steps were tried, corrected, and finally worked. This is
+  the preferred origin; the skill encodes demonstrated practice, not
+  imagined best practice.
+- **Authored from scratch** — the user describes a workflow that has not
+  been run yet. Fine for simple procedures, but the steps are hypotheses.
 
-- User asks to create, write, add, or author a skill
-- User wants a reusable workflow the agent can load later via the skill tool
-- User is unsure how SKILL.md works but has a goal in mind
+## Mode 1: Distill from practice
 
-## Before writing
+The moment: the conversation contains a procedure that actually worked,
+and the user says some version of "make this a skill" — or you notice the
+procedure is clearly reusable and propose it.
 
-If the request is vague, ask **one or two** short clarifying questions:
+**Harvest from the transcript, in this order:**
+
+1. **The trigger** — what did the user actually want at the start? That
+   phrasing is raw material for the `description`.
+2. **The steps that worked** — in the order they finally worked, not the
+   order first attempted. Dead ends get dropped; the correction gets
+   recorded.
+3. **The corrections** — every place the user pushed back ("no, not like
+   that") is a Rule in the skill. Rules earned from real mistakes are the
+   most valuable content a skill has.
+4. **The forks** — every point where the user made a decision marks a spot
+   for judgment-driven use of the `question` interaction. Do not script an
+   interrogation; mark where the fork genuinely belongs to the user.
+5. **The tools** — which app tools were actually called, with what inputs.
+6. **The artifacts** — tables, templates, scripts, checklists produced
+   along the way. Generalized, these become `templates/` and `scripts/`.
+
+**Then abstract.** Remove the conversation's specifics — the topic, the
+numbers, the project name, that particular paper. What stays is the
+procedure, the checks, the forks, the pitfalls. A skill with residue from
+one past conversation reads as overfit and misleads the next run.
+
+**Backtest the trigger.** Put the start of the original conversation in
+front of the drafted `description`: would it have matched? If not, the
+description is wrong — fix it before anything else.
+
+## Mode 2: Author from scratch
+
+Ask **one or two** short questions only if the request is vague:
 
 1. What task should this skill help with? (concrete trigger scenarios)
-2. What should the agent do step-by-step when the skill is loaded?
+2. What should the agent do step by step when the skill loads?
 
-Do not over-interview. If the user already gave enough detail, proceed.
+Do not over-interview. Start the draft from
+`templates/SKILL.template.md` — a skeleton with the frontmatter rules and
+section prompts inline. Sections are earned, not mandatory: delete empty
+ones, and let a distilled skill's structure follow what actually happened
+rather than the skeleton. Mark the new skill honestly as untested, and
+after its first real use, revisit it with the distillation workflow
+above — the first run always reveals corrections.
 
-## prismnext project layout
+## Skill anatomy
 
-Install skills under this **relative** path (same on macOS, Windows, and Linux):
+A skill is a folder. `SKILL.md` is mandatory; everything else is earned.
+
+```
+<skill-id>/
+├── SKILL.md        # the router: triggers, procedure skeleton, rules
+├── references/     # deep docs, loaded on demand ("walk references/x.md")
+├── templates/      # fill-in patterns generalized from real artifacts
+├── scripts/        # executable helpers (python/node)
+└── assets/         # style files, images, other resources
+```
+
+- **Keep `SKILL.md` lean.** It is the router the agent reads every time
+  the skill triggers. If a section is bulky detail consulted only in one
+  branch (a venue checklist, a format spec), move it to `references/` and
+  point at it. A 300-line SKILL.md is two skills or a skill with missing
+  references.
+- **`templates/`** hold patterns, not molds — say so inside each template
+  ("adapt, blend, reorder, or depart"). Templates distilled from real
+  artifacts beat invented ones.
+- **`scripts/` path discipline** — this is the most common multi-file bug:
+  - reference sibling files (styles, data) relative to the script's own
+    location, never the CWD;
+  - files that travel together (script + its style file) must be copied
+    together — say so where the skill tells the user to copy things;
+  - fail loudly with a clear message when an expected sibling is missing,
+    never silently fall back to defaults.
+- **All paths inside `SKILL.md` are relative to the skill folder**
+  (`references/foo.md`, `scripts/bar.py`) — never absolute.
+
+## Frontmatter craft
+
+```markdown
+---
+name: skill-id
+description: One sentence — what it does AND when to use it, front-loaded with trigger keywords.
+license: MIT
+---
+```
+
+- `name` must equal the folder name: lowercase letters, numbers, hyphens.
+- **`description` is written for the matcher, not for a human reader.**
+  It is the only text the agent sees when deciding whether to load the
+  skill. Front-load the trigger words; cover the non-obvious scenarios
+  too (a skill described only as "for new X" will never fire on "continue
+  X in a new direction"). Third person: "Use when…".
+- **YAML rule**: no unquoted `: ` (colon + space) inside `description` —
+  it breaks frontmatter parsing. Rephrase, or quote the whole value.
+  (Learned the hard way.)
+
+## Install location
+
+Write skills under this **relative** project path (same on macOS, Windows,
+Linux):
 
 ```
 .prismnext/agent/skills/<skill-id>/SKILL.md
 ```
 
-- `<skill-id>` must match the `name` in frontmatter (lowercase letters, numbers, hyphens only; e.g. `bibtex-cleanup`, `my-workflow`)
-- Use the project's **relative** path above — never absolute paths, never `.agents/`, never project-root `.opencode/`
-- prismnext stores skill files only under `.prismnext/agent/skills/`
-- After you write `SKILL.md`, prismnext **automatically** syncs OpenCode (app-level config in the user's app data directory — not inside the project)
-- Do **not** create `.opencode/`, `.agents/`, or run `npm install` for OpenCode in the project
-- To use the skill in chat, the user must **start a new chat tab** (OpenCode skill lists are session-scoped)
-- Optional: enable/disable in Settings → Skills
-
-## SKILL.md format
-
-```markdown
----
-name: skill-id
-description: One sentence — what it does AND when to use it (front-load trigger keywords).
-license: MIT
----
-
-# Title
-
-## When to use
-- Bullet triggers
-
-## Instructions
-Step-by-step guidance for the agent.
-```
-
-Rules:
-
-- `description` is required and shown to the agent when choosing skills — write in third person ("Use when…")
-- Body is markdown instructions only (no duplicate frontmatter)
-- Keep skills focused: one domain per skill
-
-## Workflow
-
-1. Propose a `skill-id` and one-line description; confirm if naming is ambiguous
-2. Draft the full SKILL.md (frontmatter + body)
-3. Write the file to `.prismnext/agent/skills/<skill-id>/SKILL.md` using the project's file tools (write/edit tools that target the project tree)
-4. Confirm the relative path; remind the user that prismnext syncs automatically but a **new chat tab** is needed to invoke the skill via the `skill` tool
-5. If the skill should stay disabled until reviewed, mention Settings → Skills toggle
+- prismnext stores skill files only under `.prismnext/agent/skills/` and
+  syncs OpenCode automatically (app-level config, not in the project).
+- Skills created here are **user-created**: they appear in Settings →
+  Skills marked as custom, and can be deleted there. Bundled skills ship
+  with the app — they can be enabled/disabled but not deleted.
+- A **new chat tab** is required before the skill can be invoked via the
+  `skill` tool (skill lists are session-scoped).
 
 ## Quality bar
 
-- Prefer actionable steps over generic advice
-- Skills earn their place by orchestrating this app's tools (literature-*, experiment-*, latex-*, citation-health, …) or encoding heavy procedures — generic writing advice the model already knows does not belong in a skill
-- Include examples or checklists when helpful
-- If similar skills exist in the project, match their tone and depth
-- Do not create skills for one-off tasks that do not need reuse
+- **Earn its place**: orchestrate this app's tools (literature-*,
+  experiment-*, latex-*, citation-health, …) or encode a heavy procedure.
+  Generic advice the model already knows does not belong in a skill.
+  Tools are registered in main regardless of skill toggles, so referencing
+  tools is always safe.
+- **Stand-alone contract**: the skill must work when every other skill is
+  disabled. Reference siblings only as routing pointers ("that work
+  belongs to X") or optional upgrades with a fallback ("use X when
+  enabled, otherwise do the key step inline"). Inline small critical
+  content instead of referencing it.
+- **Judgment-driven interaction**: mark where decisions belong to the
+  user; do not script fixed question batteries. Two gates stay hard:
+  confirm the plan/outline before writing at length, and estimate cost and
+  confirm before any expensive run.
+- **End with a Done-when checklist** — verifiable conditions, so the next
+  run knows when it is finished.
+- Never claim a skill "triggers automatically" on some event — skills are
+  matched per turn from the description, or invoked explicitly with `/`.
+- One domain per skill. No skills for one-off tasks.
+
+## Before delivering
+
+- [ ] Every file referenced in `SKILL.md` exists; paths are relative.
+- [ ] Scripts parse (`py_compile` / `node --check`); sibling-file
+      discipline holds.
+- [ ] Description backtested against the originating conversation (mode 1)
+      or against the user's stated scenarios (mode 2).
+- [ ] Re-read as if every other skill were disabled — still works?
+- [ ] User told: new chat tab needed; manageable in Settings → Skills.
 
 ## Forbidden paths (never create)
 

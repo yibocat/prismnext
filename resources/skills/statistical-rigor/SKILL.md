@@ -1,6 +1,6 @@
 ---
 name: statistical-rigor
-description: Use when choosing statistical tests, computing power or sample size, reporting effect sizes, correcting for multiple comparisons, or reviewing a results section for statistical validity.
+description: Use when choosing statistical tests, computing power or sample size, reporting effect sizes, or correcting for multiple comparisons — and when auditing a results section or a claimed finding for statistical validity.
 license: MIT
 ---
 
@@ -39,13 +39,32 @@ Read on demand — do not preload everything:
    ordinal), number of groups, paired or independent, n per group.
 2. **Pick the test from the table** — read `references/test-selection.md`;
    state the assumptions you are relying on and how you checked them.
-3. **Plan before running** — if the question is "how many samples / seeds?",
-   run `scripts/power_analysis.py`; record the inputs and the result in the
-   experiment design doc.
+3. **Plan before running** — if the question is "how many samples / seeds?"
+   and it fits the script's three cases, run `scripts/power_analysis.py`;
+   record the inputs and the result in the experiment design doc. If it
+   does not fit (see Boundaries), simulate instead of forcing the formulas.
 4. **Report completely** — every claim gets the full block from
    `templates/results-block.md`. p alone is never a result.
 5. **Multiplicity** — more than one hypothesis on the same data → read
    `references/multiple-comparisons.md` and say which correction applies.
+
+## Done when
+
+- Every quantitative claim carries the full results block (test, statistic,
+  df, p, effect size + CI, n, assumptions checked, correction).
+- Multiplicity is declared: which family of tests, which correction — or
+  "single pre-registered test".
+- Test assumptions were checked and the outcome of the check is reported.
+
+## Boundaries
+
+- **Power beyond the script's three cases** (two-sample t, proportions,
+  correlation) — e.g. "how many seeds to detect a method difference" in ML —
+  is a simulation question. Say so and simulate; do not force the
+  normal-approximation formulas onto designs they do not cover.
+- **Econometric inference** (clustered / robust standard errors, DiD / IV /
+  RDD identification) → `management-science-empirical`; this skill owns the
+  classical test tables.
 
 ## Rules
 

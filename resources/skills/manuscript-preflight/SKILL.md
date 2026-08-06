@@ -1,6 +1,6 @@
 ---
 name: manuscript-preflight
-description: Use before submission, sharing, or tagging a manuscript release — compile, citation integrity, bibliography sync, figure paths, desk-reject and anonymization checks, and git hygiene as one pass/fail checklist.
+description: Use before submission, sharing, or tagging a manuscript release — compile, citation integrity, bibliography sync, figure paths, desk-reject and anonymization checks, and git hygiene as one pass/fail checklist. Mechanical integrity only — it does not judge the argument or the science.
 license: MIT
 ---
 
@@ -8,6 +8,11 @@ license: MIT
 
 One checklist before the manuscript leaves the desk. Report pass/fail with
 exact fixes — apply fixes only when the user asks.
+
+This checks the **envelope**, not the argument: compile health, citation
+integrity, anonymity, format. Whether the claims hold up is a different
+pass — see `critical-review` when enabled, or just run a content review in
+conversation.
 
 ## When to use
 
@@ -32,11 +37,25 @@ exact fixes — apply fixes only when the user asks.
 7. **Git hygiene** — working tree state; suggest a commit or annotated tag as
    the submission snapshot.
 
+### PDF-level checks without a tool
+
+Anonymity of PDF metadata and page count live inside the built PDF. If
+`pdfinfo` or `exiftool` is available in the environment, use it; if not,
+list these as **manual items** ("open document properties, check author
+field; count pages against the CFP limit") — never silently skip them.
+
 ## Output
 
-A checklist with ✅ / ❌ per item, each ❌ with the exact fix and the tool
-that applies it. This skill reports — it does not edit, compile-fix, or
-export without being asked.
+A checklist per item, each marked:
+
+- ✅ pass
+- ❌ **blocker** — fabrication-suspect citations, compile errors, broken
+  figure paths, anonymity leaks. Must be fixed before the manuscript moves.
+- ⚠️ **warning** — unused keys, dirty git tree, manual items pending. The
+  user's call.
+
+Every ❌ / ⚠️ carries the exact fix and the tool that applies it. This skill
+reports — it does not edit, compile-fix, or export without being asked.
 
 ## Rules
 

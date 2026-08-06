@@ -29,6 +29,22 @@ describe("isPythonRelatedCommand", () => {
     expect(isPythonRelatedCommand("ls -la")).toBe(false);
     expect(isPythonRelatedCommand("Rscript analysis.R")).toBe(false);
   });
+
+  it("sees through wrapper commands (sudo/env/time/nohup/nice/timeout)", () => {
+    expect(isPythonRelatedCommand("sudo python3 plot.py")).toBe(true);
+    expect(isPythonRelatedCommand("env FOO=1 python script.py")).toBe(true);
+    expect(isPythonRelatedCommand("time python train.py")).toBe(true);
+    expect(isPythonRelatedCommand("nohup python3 serve.py &")).toBe(true);
+    expect(isPythonRelatedCommand("nice -n 5 python3 train.py")).toBe(true);
+    expect(isPythonRelatedCommand("timeout 300 python3 train.py")).toBe(true);
+    expect(isPythonRelatedCommand("sudo env FOO=1 python3 x.py")).toBe(true);
+  });
+
+  it("unwraps sh -c / bash -c inner commands", () => {
+    expect(isPythonRelatedCommand("bash -c 'python3 plot.py'")).toBe(true);
+    expect(isPythonRelatedCommand('sh -c "pip install numpy"')).toBe(true);
+    expect(isPythonRelatedCommand("bash -c 'echo hi'")).toBe(false);
+  });
 });
 
 describe("isExperimentPythonSetupCommand / script", () => {
@@ -55,6 +71,16 @@ describe("isForbiddenSystemPythonInstall", () => {
       ),
     ).toBe(true);
     expect(isForbiddenSystemPythonInstall("uv pip install matplotlib")).toBe(false);
+  });
+
+  it("flags wrapped bare-pip installs (sudo/env/bash -c)", () => {
+    expect(isForbiddenSystemPythonInstall("sudo pip install numpy")).toBe(true);
+    expect(isForbiddenSystemPythonInstall("env pip install x")).toBe(true);
+    expect(isForbiddenSystemPythonInstall("sudo python3 -m pip install x")).toBe(true);
+    expect(isForbiddenSystemPythonInstall("bash -c 'pip install numpy'")).toBe(true);
+    // Wrapped uv pip still targets the project venv — allowed.
+    expect(isForbiddenSystemPythonInstall("sudo uv pip install matplotlib")).toBe(false);
+    expect(isExperimentPythonSetupCommand("sudo uv pip install matplotlib")).toBe(true);
   });
 });
 

@@ -72,6 +72,7 @@ description: Manage BibTeX citations
     expect(skills).toHaveLength(1);
     expect(skills[0].name).toBe("citations");
     expect(skills[0].enabled).toBe(true);
+    expect(skills[0].origin).toBe("custom");
   });
 
   it("sync returns relative skills scan path and does not write project-root opencode.json", () => {

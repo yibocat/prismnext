@@ -47,3 +47,7 @@ export function experimentLogBridgeRoot(): string {
 export function interactionBridgeRoot(): string {
   return process.env.PRISM_INTERACTION_BRIDGE_ROOT || path.join(bridgeRoot(), "interaction");
 }
+
+export function imageDescribeBridgeRoot(): string {
+  return process.env.PRISM_IMAGE_DESCRIBE_BRIDGE_ROOT || path.join(bridgeRoot(), "image-describe");
+}

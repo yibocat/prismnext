@@ -1318,6 +1318,7 @@ export interface ElectronAPI {
     installOrigin?:
       | { adapter: "github"; repo: string; ref: string; path: string }
       | { adapter: "discovery"; indexUrl: string };
+    origin: "bundled" | "registry" | "custom";
   }>>;
   agentListRules: (projectPath: string) => Promise<Array<{
     id: string;
@@ -1487,9 +1488,11 @@ export interface ElectronAPI {
       description: string;
       skillDirRel: string;
       enabled: boolean;
+      tokenCount: number;
       installOrigin?:
         | { adapter: "github"; repo: string; ref: string; path: string }
         | { adapter: "discovery"; indexUrl: string };
+      origin: "bundled" | "registry" | "custom";
     }>;
   }>;
   agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;

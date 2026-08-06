@@ -64,10 +64,31 @@ export function buildOpenCodeCredentialEnv(
   options?: BuildOpenCodeCredentialEnvOptions,
 ): Record<string, string> {
   const settings = getSettings() as Record<string, unknown>;
-  const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
+  const rawApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
   const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
   const settingsAiProvider =
     typeof settings.aiProvider === "string" ? settings.aiProvider : undefined;
+
+  // Drop orphan keys whose provider was removed from aiCustomProviders —
+  // exporting them would resurrect the vendor inside OpenCode. Only gate when
+  // the list exists: an unwritten list means the renderer migration may still
+  // promote keyed legacy built-ins, so nothing is an orphan yet.
+  const customProviders = settings.aiCustomProviders as
+    | Array<{ id?: unknown }>
+    | undefined;
+  const aiApiKeys: Record<string, string> = {};
+  if (Array.isArray(customProviders)) {
+    const listed = new Set(
+      customProviders
+        .map((p) => (typeof p?.id === "string" ? p.id : ""))
+        .filter(Boolean),
+    );
+    for (const [provider, key] of Object.entries(rawApiKeys)) {
+      if (listed.has(provider)) aiApiKeys[provider] = key;
+    }
+  } else {
+    Object.assign(aiApiKeys, rawApiKeys);
+  }
 
   const fromSettings: Record<string, string> = {};
   for (const [provider, apiKey] of Object.entries(aiApiKeys)) {

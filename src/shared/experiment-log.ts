@@ -362,10 +362,8 @@ export function isPythonRelatedCommand(command: string): boolean {
   if (/\buv\s+(pip|run|sync|add|remove|lock|venv|python|tree)\b/i.test(raw)) return true;
   const segments = raw.split(/(?:&&|\|\||;|\n)/);
   for (const segment of segments) {
-    let s = segment.trim();
+    const s = normalizeCommandSegment(segment);
     if (!s) continue;
-    // Strip leading env assignments: FOO=1 BAR=2 python ...
-    s = s.replace(/^(?:\w+=(?:'[^']*'|"[^"]*"|\S+)\s+)+/, "");
     if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?(?:\s|$)/i.test(s)) return true;
     if (/^(?:[\w.+@/-]*\/)?pip(?:\d+)?(?:\s|$)/i.test(s)) return true;
   }
@@ -389,7 +387,7 @@ export function isForbiddenSystemPythonInstall(command: string): boolean {
 export function isBarePipInstallCommand(command: string): boolean {
   const segments = (command || "").split(/(?:&&|\|\||;|\n|\|)/);
   for (const segment of segments) {
-    const s = stripLeadingEnvAssignments(segment);
+    const s = normalizeCommandSegment(segment);
     if (!s) continue;
     // Explicitly allow only when the segment starts with `uv pip`
     if (/^uv\s+pip\b/i.test(s)) continue;
@@ -405,9 +403,39 @@ function stripLeadingEnvAssignments(segment: string): string {
   return segment.replace(/^(?:\w+=(?:'[^']*'|"[^"]*"|\S+)\s+)+/, "").trim();
 }
 
+/**
+ * Reduce a command segment to the real tool being invoked: strip leading env
+ * assignments and common wrappers (`sudo`, `env`, `time`, `nohup`, `nice`,
+ * `stdbuf`, `timeout`, `exec`, `command`, `builtin`), and unwrap one level of
+ * `sh|bash|zsh -c '…'`. Without this, `sudo pip install x` or
+ * `bash -c 'python x.py'` would slip past every Python detector below and
+ * hit the system interpreter.
+ */
+function normalizeCommandSegment(segment: string, depth = 0): string {
+  let s = stripLeadingEnvAssignments(segment);
+  for (let i = 0; i < 6; i++) {
+    const before = s;
+    // nice first: its `-n N` value must be consumed together with the flag.
+    s = s.replace(/^nice\s+(?:(?:-n\s*\S+|--adjustment=\S+)\s+)?/i, "");
+    s = s.replace(
+      /^(?:(?:sudo|command|builtin|exec|time|nohup|stdbuf|env)(?:\s+--?\S+)*|timeout(?:\s+--?\S+)*\s+\S+)\s+/i,
+      "",
+    );
+    s = stripLeadingEnvAssignments(s);
+    if (s === before) break;
+  }
+  if (depth < 2) {
+    const m = s.match(
+      /^(?:[\w.+@/-]*\/)?(?:bash|sh|zsh|dash|ksh)\s+(?:(?:-[a-zA-Z]+)\s+)*-c\s+(["'])([\s\S]*)\1\s*$/i,
+    );
+    if (m) return normalizeCommandSegment(m[2], depth + 1);
+  }
+  return s;
+}
+
 /** Package/venv setup segments allowed via bash inside Experiment islands. */
 function isPythonSetupSegment(segment: string): boolean {
-  const s = stripLeadingEnvAssignments(segment);
+  const s = normalizeCommandSegment(segment);
   if (!s) return false;
   // Only uv pip / uv venv — never bare pip3 (system Python).
   if (/^uv\s+pip\s+(install|sync|uninstall|list|show|freeze)\b/i.test(s)) return true;
@@ -417,7 +445,7 @@ function isPythonSetupSegment(segment: string): boolean {
 }
 
 function isPythonScriptSegment(segment: string): boolean {
-  const s = stripLeadingEnvAssignments(segment);
+  const s = normalizeCommandSegment(segment);
   if (!s) return false;
   if (/^uv\s+run\b/i.test(s)) return true;
   if (/^uv\s+python\b/i.test(s)) return true;
@@ -439,7 +467,7 @@ export function isExperimentPythonSetupCommand(command: string): boolean {
   const segments = (command || "").split(/(?:&&|\|\||;|\n)/);
   let sawSetup = false;
   for (const segment of segments) {
-    const s = stripLeadingEnvAssignments(segment);
+    const s = normalizeCommandSegment(segment);
     if (!s) continue;
     if (isPythonSetupSegment(s)) {
       sawSetup = true;

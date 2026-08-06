@@ -12,16 +12,24 @@ export interface RunAiCommandArgs {
   /** Extra env vars merged into the PTY child process. */
   envExtra?: Record<string, string>;
   /**
-   * Optional absolute file path. When supplied, the wrapped shell will
-   * redirect the *command's* stderr into this file (via `( $cmd ) 2>$path`),
-   * while stdout still flows through the PTY for live streaming. After the
-   * PTY exits, the file is read and returned as `stderr` on the result.
+   * Optional absolute file path. When supplied, the wrapped shell tees the
+   * *command's* stderr into this file (via `( $cmd ) 2> >(tee -a $path)`),
+   * so stderr BOTH joins the live PTY stream (progress bars, logging and
+   * tracebacks become visible in real time) AND lands in the file as a
+   * clean stderr-only record. After the PTY exits, the file is read and
+   * returned as `stderr` on the result.
    *
    * Why this is needed: a PTY merges stdout+stderr onto a single stream by
    * design — the master fd cannot distinguish between them. For
-   * experiment-run we want both: live stdout (so the user sees the run
-   * in real time) and a clean stderr record on disk (so the run record
-   * in runs.jsonl is honest about what the command emitted to fd 2).
+   * experiment-run we want both: a live combined stream (so the user sees
+   * the run in real time) and a clean stderr record on disk (so the run
+   * record in runs.jsonl is honest about what the command emitted to fd 2).
+   * The trade-off: `output` (and hence the persisted stdoutTail) is the
+   * combined terminal stream, exactly what the user saw live.
+   *
+   * zsh and bash both wait for the process-substitution tee before exiting,
+   * so the file is complete when read after PTY exit (verified on macOS
+   * zsh 5.9 / bash 3.2).
    *
    * PTY-internal noise (bash syntax errors, etc.) still appears on stdout
    * because bash's own stderr is not redirected — only the wrapped
@@ -81,6 +89,25 @@ export function cancelAiCommandForSession(sessionId: string): void {
   activeBySession.delete(sessionId);
 }
 
+/**
+ * Base env for AI-spawned PTYs: the app process env minus ambient Python
+ * environment activations (VIRTUAL_ENV / conda vars / PYTHONHOME) inherited
+ * from whatever shell launched the app. Leaking those made non-gated
+ * commands silently run against a foreign Python environment; the
+ * experiment Python gate re-injects the project venv via `envExtra` for the
+ * commands it governs. The user's own interactive terminal is unaffected.
+ */
+function aiPtyBaseEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.VIRTUAL_ENV;
+  delete env.VIRTUAL_ENV_PROMPT;
+  delete env.CONDA_PREFIX;
+  delete env.CONDA_DEFAULT_ENV;
+  delete env.CONDA_SHLVL;
+  delete env.PYTHONHOME;
+  return env;
+}
+
 export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult> {
   const { command, cwd, sessionId, chatTabId, requestId, onChunk, envExtra, captureStderr } = args;
   const trimmed = command.trim();
@@ -93,11 +120,14 @@ export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult
   cancelAiCommandForSession(sessionId);
 
   // When stderr capture is requested, wrap the command in a subshell so the
-  // *command's* stderr is redirected to a file while its stdout still flows
-  // through the PTY for live streaming. Without the subshell, `2>$file`
-  // would apply to bash itself, which we don't want.
+  // *command's* stderr is teed to a file while ALSO staying on the live PTY
+  // stream. Without the subshell, `2>$file` would apply to bash itself,
+  // which we don't want. Process substitution needs a POSIX shell — on
+  // Windows fall back to a plain stderr-file redirect (no live stderr).
   const wrappedCommand = captureStderr
-    ? `{ ${trimmed}; } 2>${quoteForDoubleQuotedShellPath(captureStderr)}`
+    ? process.platform === "win32"
+      ? `{ ${trimmed}; } 2>${quoteForDoubleQuotedShellPath(captureStderr)}`
+      : `{ ${trimmed}; } 2> >(tee -a ${quoteForDoubleQuotedShellPath(captureStderr)})`
     : trimmed;
 
   return new Promise((resolve) => {
@@ -155,7 +185,7 @@ export function runAiCommand(args: RunAiCommandArgs): Promise<RunAiCommandResult
         rows: 24,
         cwd,
         env: {
-          ...process.env,
+          ...aiPtyBaseEnv(),
           TERM: "xterm-256color",
           ...envExtra,
         } as { [key: string]: string },

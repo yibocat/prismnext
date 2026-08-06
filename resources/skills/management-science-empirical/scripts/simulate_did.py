@@ -4,7 +4,8 @@
 Generates a two-group panel with a known treatment effect, estimates the
 2x2 DiD, and checks pre-trends. Use it to sanity-check a design, to teach
 the logic, or as the skeleton for power simulations (loop over effect
-sizes and N, feed `statistical-rigor`'s power analysis).
+sizes and N, then feed a power analysis — e.g. `statistical-rigor`'s
+script when that skill is available).
 
     python simulate_did.py --tau 2.0 --n 200 --periods 6 --treat-at 4
 """

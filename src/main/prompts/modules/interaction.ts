@@ -37,6 +37,8 @@ export const INTERACTION_PROMPT = [
   "### Judgment",
   "",
   "- Prefer Interaction when you may return to the view; prefer `artifact` for a quick peek.",
+  "- Need the image's contents (axes, values, text) and you cannot view images directly →",
+  `  \`${TOOL_NAMES.imageDescribe}\`; Interaction/\`artifact\` only display it.`,
   "- Do not substitute `artifact` after a failed write — fix the file or spec.",
   "- Tool how-to stays on the tools; project rules may tighten naming — defer to them.",
 ].join("\n");

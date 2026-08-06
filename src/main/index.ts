@@ -26,6 +26,7 @@ import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/re
 import { startPlanSuggestBridge, stopPlanSuggestBridge } from "./services/plan-suggest-bridge";
 import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
 import { startInteractionBridge, stopInteractionBridge } from "./services/interaction-bridge";
+import { startImageDescribeBridge, stopImageDescribeBridge } from "./services/image-describe-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
@@ -189,6 +190,7 @@ function disposeGlobalsWhenNoWindows(): void {
   stopPlanSuggestBridge();
   stopExperimentLogBridge();
   stopInteractionBridge();
+  stopImageDescribeBridge();
   setTerminalBridgeWindow(null);
   void import("./ipc/log").then((m) => m.disposeLogger());
   mainWindow = null;
@@ -341,6 +343,7 @@ app.whenReady().then(async () => {
   startPlanSuggestBridge();
   startExperimentLogBridge();
   startInteractionBridge();
+  startImageDescribeBridge();
 
   try {
     const { initAppUpdater } = await import("./services/update-checker");
@@ -364,11 +367,29 @@ app.whenReady().then(async () => {
   try {
     const { AcpService } = await import("./acp/service");
     const { buildOpenCodeCredentialEnv } = await import("./acp/credential-env");
-    const { getSettings } = await import("./services/settings");
+    const { getSettings, pruneOrphanProviderSettings } = await import("./services/settings");
+
+    // GC leftovers from pre-v0.6.8 provider removals (orphan API keys etc.)
+    // before anything below reads settings — orphans must not re-register.
+    try {
+      const pruned = pruneOrphanProviderSettings();
+      if (pruned.length) {
+        console.log(`[prismnext] Pruned orphan provider settings: ${pruned.join(", ")}`);
+        log.info("Pruned orphan provider settings", { ids: pruned });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn("Orphan provider settings prune failed", { error: message });
+    }
 
     const settings = getSettings() as Record<string, unknown>;
     const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
     const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
+    const listedProviderIds = new Set(
+      ((settings.aiCustomProviders as Array<{ id?: unknown }> | undefined) ?? [])
+        .map((p) => (typeof p?.id === "string" ? p.id : ""))
+        .filter(Boolean),
+    );
 
     // ── Initialize Prompt System ──
     try {
@@ -430,8 +451,11 @@ app.whenReady().then(async () => {
 
     // Register non-bundled providers (DeepSeek, OpenRouter, custom) via ACP
     // Built-in providers (anthropic, openai, google) are already recognized.
+    // Only providers still listed in aiCustomProviders — a key whose provider
+    // was removed is an orphan the Settings UI can no longer clear.
     for (const [provider] of Object.entries(aiApiKeys)) {
       if (!aiApiKeys[provider]?.trim()) continue;
+      if (!listedProviderIds.has(provider)) continue;
       try {
         const result = await service.setAuth(provider, {
           apiKey: aiApiKeys[provider].trim(),

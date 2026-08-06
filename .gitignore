@@ -5,6 +5,8 @@ dist/
 .DS_Store
 *.log
 *.tsbuildinfo
+__pycache__/
+*.pyc
 src/renderer/public/pdfjs-dist/
 
 # OpenCode / Tectonic binaries (downloaded or manually placed)

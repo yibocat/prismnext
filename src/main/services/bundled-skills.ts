@@ -19,6 +19,9 @@ interface BundledSkillsManifest {
 
 /** Resolve bundled skills directory (dev + packaged). */
 export function getBundledSkillsDir(): string {
+  // `app` is undefined outside the Electron runtime (e.g. vitest) — fall back
+  // to the repo layout so pure-node callers keep working.
+  if (!app) return join(process.cwd(), "resources", "skills");
   return app.isPackaged
     ? join(process.resourcesPath, "resources", "skills")
     : join(app.getAppPath(), "resources", "skills");

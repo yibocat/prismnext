@@ -32,6 +32,17 @@ export function ExperimentRunBar() {
   const command = runInFlight?.command || pending?.command || "";
   const isLive = runInFlight != null && (!experimentId || runInFlight.id === experimentId);
 
+  // Last few non-empty lines of the rolling PTY stream. tqdm-style \r
+  // progress is unfolded into lines so the tail approximates a terminal.
+  const liveTail = useMemo(() => {
+    if (!isLive || !runInFlight?.liveOutput) return "";
+    const lines = runInFlight.liveOutput
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((line) => line.trim());
+    return lines.slice(-4).join("\n");
+  }, [isLive, runInFlight?.liveOutput]);
+
   if (!experimentId && !command) return null;
 
   return (
@@ -75,6 +86,11 @@ export function ExperimentRunBar() {
           {t("chat.composer.experimentRunOpen")}
         </span>
       </button>
+      {liveTail ? (
+        <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap break-all border-t border-border/40 px-3 py-2 font-mono text-[length:var(--font-chat-meta)] text-muted-foreground">
+          {liveTail}
+        </pre>
+      ) : null}
     </ComposerChromeCard>
   );
 }

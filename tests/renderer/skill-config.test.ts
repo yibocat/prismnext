@@ -41,15 +41,15 @@ description: For testing
 });
 
 describe("bundled skill files", () => {
-  it("related-work-pipeline SKILL.md parses correctly", () => {
+  it("writing-related-work SKILL.md parses correctly", () => {
     const content = readFileSync(
-      join(RESOURCES_SKILLS, "related-work-pipeline", "SKILL.md"),
+      join(RESOURCES_SKILLS, "writing-related-work", "SKILL.md"),
       "utf-8",
     );
     const parsed = parseSkillMd(content);
-    expect(parsed.name).toBe("related-work-pipeline");
+    expect(parsed.name).toBe("writing-related-work");
     expect(parsed.description).toContain("Related Work");
-    expect(parsed.body).toContain("# Related Work Pipeline");
+    expect(parsed.body).toContain("# Writing: Related Work");
   });
 
   it("skill-creator SKILL.md parses correctly", () => {

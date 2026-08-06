@@ -40,6 +40,7 @@ interface InstalledSkill {
   installOrigin?:
     | { adapter: "github"; repo: string; ref: string; path: string }
     | { adapter: "discovery"; indexUrl: string };
+  origin: "bundled" | "registry" | "custom";
 }
 
 interface SkillUpdateRow {
@@ -292,6 +293,16 @@ export function SkillsSettings() {
                           {!skill.enabled && (
                             <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
                               off
+                            </span>
+                          )}
+                          {skill.origin === "custom" && (
+                            <span className={cn(BADGE, "bg-secondary text-primary")}>
+                              {t("settings.skillsPage.origin.custom")}
+                            </span>
+                          )}
+                          {skill.origin === "bundled" && (
+                            <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                              {t("settings.skillsPage.origin.bundled")}
                             </span>
                           )}
                           {hasUpdate && (

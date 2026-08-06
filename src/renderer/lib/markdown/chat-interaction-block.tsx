@@ -11,7 +11,7 @@ import type { InteractionSpec } from "../../../shared/interaction-spec";
 import { InteractionChatThumbnail } from "@/lib/interaction/interaction-chat-thumbnail";
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
 import { parseInteractionFenceContent } from "./chat-interaction";
-import { claimInteractionFenceSlot } from "@/lib/interaction/interaction-fence-dedupe";
+import { useInteractionFenceClaim } from "@/lib/interaction/interaction-fence-dedupe";
 import {
   CHAT_ARTIFACT_THUMB_SHELL_CLASS,
 } from "@/lib/markdown/chat-artifact";
@@ -117,6 +117,7 @@ export function ChatInteractionBlock({
 export function ChatInteractionFence({ raw }: { raw: string }) {
   const { t } = useTranslation();
   const parsed = parseInteractionFenceContent(raw);
+  const claimed = useInteractionFenceClaim(parsed?.id ?? "");
   if (!parsed) {
     return (
       <span className="my-2 block text-[length:var(--font-size-12)] text-muted-foreground">
@@ -124,7 +125,7 @@ export function ChatInteractionFence({ raw }: { raw: string }) {
       </span>
     );
   }
-  if (!claimInteractionFenceSlot(parsed.id)) {
+  if (!claimed) {
     return null;
   }
   return <ChatInteractionBlock id={parsed.id} titleOverride={parsed.title} />;

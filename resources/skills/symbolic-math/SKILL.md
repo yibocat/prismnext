@@ -1,6 +1,6 @@
 ---
 name: symbolic-math
-description: Use when deriving, checking, or simplifying symbolic mathematics — algebra, calculus, linear algebra, ODEs — with SymPy verification and LaTeX output that goes straight into the manuscript. Covers math, physics, engineering, and economics derivations.
+description: Use when deriving, checking, or simplifying symbolic mathematics — algebra, calculus, linear algebra, ODEs — with SymPy verification and LaTeX output that goes straight into the manuscript. Covers math, physics, engineering, and economics derivations. Not for formal theorem proving or purely numerical computation.
 license: MIT
 ---
 
@@ -41,6 +41,10 @@ Read on demand:
 2. **Verify symbolically** — copy `scripts/verify_derivation.py` into the
    project, encode lhs/rhs, run via `experiment-run` (or the project venv).
    Equality is `simplify(lhs - rhs) == 0`, never `==` on expressions.
+   If `import sympy` fails, install into the project venv only:
+   `uv pip install sympy` (`.prismnext/.venv`) — never the system Python.
+   Not every claim is an identity: integrals, ODE solutions, inverses, and
+   roots verify by **inverse operation** — see the recipes.
 3. **Spot-check numerically** — substitute concrete values (including edge
    cases: 0, 1, large, negative where allowed). Symbolic pass + numeric pass
    catches assumption bugs that either alone misses.
@@ -50,6 +54,14 @@ Read on demand:
 5. **Into the manuscript** — present via `templates/derivation-block.md`;
    keep the verification script next to the experiment island so the claim
    is re-checkable.
+
+## Done when
+
+- Symbolic check passed (identity form, or inverse-operation residual zero).
+- Numeric spot-check passed, including the boundary of the assumption domain.
+- Assumptions are recorded next to the result.
+- The verification script stays next to the experiment island, so the claim
+  is re-checkable.
 
 ## Rules
 

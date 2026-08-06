@@ -91,6 +91,25 @@ describe("buildOpenCodeCredentialEnv", () => {
       OPENAI_API_KEY: "override",
     });
   });
+
+  it("drops orphan keys whose provider is no longer in aiCustomProviders", () => {
+    getSettings.mockReturnValue({
+      aiProvider: "opencode-go",
+      aiCustomProviders: [{ id: "opencode-go", name: "Go", baseUrl: "" }],
+      aiApiKeys: {
+        "opencode-go": "go-key",
+        openrouter: "or-key",
+        "opencode-zen": "zen-key",
+      },
+      aiBaseUrls: { openrouter: "https://or.example" },
+    });
+
+    // Removed providers must not be env-exported, and the shared
+    // OPENCODE_API_KEY resolution must skip the removed zen key.
+    expect(buildOpenCodeCredentialEnv()).toEqual({
+      OPENCODE_API_KEY: "go-key",
+    });
+  });
 });
 
 describe("resolveOpenCodeApiKey", () => {

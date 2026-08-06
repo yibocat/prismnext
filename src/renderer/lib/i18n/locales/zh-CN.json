@@ -625,6 +625,11 @@
       "pageDesc": "可在对话中加载的可复用指令包。",
       "openProject": "打开项目以管理技能。",
       "empty": "尚未安装技能。",
+      "origin": {
+        "custom": "自建",
+        "bundled": "内置",
+        "registry": "注册源"
+      },
       "toast": {
         "updatesAvailable": "有 {{count}} 个技能可更新。",
         "upToDate": "所有已跟踪技能均为最新。",

@@ -103,6 +103,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "interaction-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "interaction-write": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "interaction-open": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "image-describe": { permissionGroup: "network", confirmUx: "none", rules: READ_ONLY },
 };
 
 export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | undefined {

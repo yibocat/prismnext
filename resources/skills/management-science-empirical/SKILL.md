@@ -19,9 +19,9 @@ survives your own skepticism before anyone else's. The loop is
 - Building the robustness battery for an empirical result
 - Writing up regression evidence (tables from `templates/`)
 - Developing a theory model: propositions + comparative statics
-  (verify with `symbolic-math`)
-- Running simulation/ABM studies (the seed and logging discipline is shared
-  with `ml-research-protocol`)
+  (verified symbolically — the `symbolic-math` skill when enabled)
+- Running simulation/ABM studies (the seed and logging discipline of
+  `ml-research-protocol` applies when that skill is enabled)
 
 ## Files in this skill
 
@@ -48,18 +48,21 @@ Read on demand:
 1. **Question as a decision** — state who decides what, and which estimate
    would change the action. This fixes the estimand before any method talk.
 2. **Theory first when modeling** — propositions via
-   `templates/proposition-block.md`; comparative statics verified with
-   `symbolic-math` (SymPy), never by hand.
+   `templates/proposition-block.md`; comparative statics verified
+   symbolically with SymPy (the `symbolic-math` skill when enabled), never
+   by hand.
 3. **Identification before regression** — pick the design in
    `references/identification-strategies.md`; write the identifying
    assumption in one sentence and how you will check it. Run
    `scripts/simulate_did.py`-style simulations when the design is new to you.
-4. **Power and preregistration for experiments** — sample size from
-   `statistical-rigor`'s `power_analysis.py`; exclusions and hypotheses
-   fixed before data (see `references/behavioral-experiments.md`).
+4. **Power and preregistration for experiments** — sample size from a power
+   analysis (`statistical-rigor`'s `power_analysis.py` when enabled, or an
+   equivalent calculation); exclusions and hypotheses fixed before data
+   (see `references/behavioral-experiments.md`).
 5. **Estimate, then attack your own result** — the robustness battery in
-   `references/robustness-battery.md`, in order. Statistical treatment per
-   `statistical-rigor` (clustered SEs, effect sizes, multiplicity).
+   `references/robustness-battery.md`, in order. Statistical treatment
+   (clustered SEs, effect sizes, multiplicity) per `statistical-rigor` when
+   enabled.
 6. **Report for a decision-maker** — tables from `templates/`; every claim
    carries the magnitude and what action it supports, not just significance.
 

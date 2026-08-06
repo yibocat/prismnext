@@ -16,7 +16,8 @@ justification (what it buys, what it costs).
 
 *Proof sketch.* <Key steps; full proof in appendix.> Comparative statics
 $\partial x^*/\partial \theta$ verified symbolically (script:
-`<path>/verify_derivation.py`, see the `symbolic-math` skill). ∎
+`<path>/verify_derivation.py` — from the `symbolic-math` skill when
+enabled, else an equivalent SymPy check). ∎
 
 **Comparative statics.**
 

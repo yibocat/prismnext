@@ -504,6 +504,22 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
       "Still prefer embedding fenceMarkdown in chat so the user has a card entry.",
     ],
   },
+  {
+    name: TOOL_NAMES.imageDescribe,
+    label: "Image Describe",
+    description:
+      "Describe an image file with the configured multimodal helper model",
+    category: "utility",
+    usageHint:
+      "Use when you need to understand the contents of an image file (figure, chart, screenshot, diagram) " +
+      "and you cannot view images directly. path may be absolute or project-relative and must stay inside " +
+      "the project; png/jpg/jpeg/webp/gif up to 5 MB. Pass question to focus the description. " +
+      "Returns the helper's text description — reason from it; the image itself is not shown to you.",
+    workflowRules: [
+      "On the not-configured error, ask the user to set a Multimodal helper in Settings → Models, then retry.",
+      "Do not guess absolute paths outside the project root — the bridge rejects them.",
+    ],
+  },
 ];
 
 // ─── Tool file loading (used by AcpService.syncBuiltinTools) ──────

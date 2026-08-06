@@ -31,6 +31,7 @@ export const TOOL_NAMES = {
   interactionRead: "interaction-read",
   interactionWrite: "interaction-write",
   interactionOpen: "interaction-open",
+  imageDescribe: "image-describe",
 } as const;
 
 export type ToolNameKey = keyof typeof TOOL_NAMES;

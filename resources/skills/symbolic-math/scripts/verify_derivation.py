@@ -27,14 +27,18 @@ def main() -> int:
     print(f"symbolic: simplify(lhs - rhs) = {diff}  ->  {'PASS' if symbolic_ok else 'FAIL'}")
 
     # --- 4. Numeric spot-check, including domain boundaries -----------------
+    # Relative tolerance: absolute 1e-9 misfires on large-magnitude results.
+    # Hand-picked edge probes; add random interior points for wider domains.
     f_lhs = sp.lambdify((x, a), lhs, "math")
     f_rhs = sp.lambdify((x, a), rhs, "math")
     probes = [(0.0, 1.0), (1.0, 0.5), (-2.0, 3.0), (10.0, 0.1)]
-    numeric_ok = all(
-        abs(f_lhs(xv, av) - f_rhs(xv, av)) < 1e-9 for xv, av in probes
-    )
+    worst = 0.0
     for xv, av in probes:
-        print(f"  x={xv}, a={av}: |lhs-rhs| = {abs(f_lhs(xv, av) - f_rhs(xv, av)):.2e}")
+        err = abs(f_lhs(xv, av) - f_rhs(xv, av))
+        scale = max(1.0, abs(f_rhs(xv, av)))
+        worst = max(worst, err / scale)
+        print(f"  x={xv}, a={av}: rel|lhs-rhs| = {err / scale:.2e}")
+    numeric_ok = worst < 1e-9
     print(f"numeric: {'PASS' if numeric_ok else 'FAIL'}")
 
     # --- 5. LaTeX for the manuscript ----------------------------------------
