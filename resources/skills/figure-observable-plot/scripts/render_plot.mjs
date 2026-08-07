@@ -63,22 +63,31 @@ function resolveDeps(fromDir) {
     if (parent === dir) break;
     dir = parent;
   }
+  /** Plot dir present but jsdom dir missing — packaging hole in the app bundle. */
+  let plotWithoutJsdom = null;
   for (const nm of candidates) {
-    if (!nm || !existsSync(join(nm, "@observablehq", "plot"))) continue;
+    if (!nm) continue;
+    const hasPlot = existsSync(join(nm, "@observablehq", "plot"));
+    if (!hasPlot) continue;
+    const hasJsdom = existsSync(join(nm, "jsdom"));
+    if (!hasJsdom) {
+      if (!plotWithoutJsdom) plotWithoutJsdom = nm;
+      continue;
+    }
     try {
+      // Probe path must sit inside a directory named node_modules so Node's
+      // resolver treats packages as siblings (it skips doubling that segment).
       const req = createRequire(join(nm, "render-plot-probe.cjs"));
       const Plot = req("@observablehq/plot");
-      let jsdom = null;
+      const jsdom = req("jsdom");
       let d3 = null;
-      try { jsdom = req("jsdom"); } catch { /* handled below */ }
       try { d3 = req("d3"); } catch { d3 = null; }
-      if (!jsdom) continue;
       return { Plot, JSDOM: jsdom.JSDOM, d3, resolvedFrom: nm };
     } catch {
       continue;
     }
   }
-  return null;
+  return plotWithoutJsdom ? { missing: "jsdom", plotFrom: plotWithoutJsdom } : null;
 }
 
 function parseCsv(text) {
@@ -122,6 +131,13 @@ async function main() {
       "cannot resolve @observablehq/plot + jsdom. Run via experiment-run " +
       "(PRISM_APP_NODE_MODULES is injected), or `npm install @observablehq/plot jsdom` " +
       "into the project.",
+    );
+  }
+  if ("missing" in deps) {
+    fail(
+      `found @observablehq/plot at ${deps.plotFrom} but jsdom is missing there. ` +
+      "The PrismNext app bundle should ship both; this usually means a packaging bug " +
+      "(jsdom must be a production dependency). Workaround: `npm install jsdom` in the project.",
     );
   }
   const { Plot, JSDOM, d3, resolvedFrom } = deps;

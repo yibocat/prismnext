@@ -20,6 +20,21 @@ const RENDER_SCRIPT = join(
 const APP_NODE_MODULES = join(process.cwd(), "node_modules");
 
 describe("figure-observable-plot render_plot.mjs", () => {
+  it("ships jsdom as a production dependency (asar packaging)", () => {
+    // electron-builder only packs `dependencies` into app.asar. jsdom lived in
+    // devDependencies once and broke PRISM_APP_NODE_MODULES resolution in
+    // distributed builds while @observablehq/plot still resolved.
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf-8"),
+    ) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(pkg.dependencies?.["@observablehq/plot"]).toBeTruthy();
+    expect(pkg.dependencies?.jsdom).toBeTruthy();
+    expect(pkg.devDependencies?.jsdom).toBeUndefined();
+  });
+
   let root: string;
 
   afterEach(() => {
@@ -125,5 +140,38 @@ describe("figure-observable-plot render_plot.mjs", () => {
     }
     expect(code).toBe(1);
     expect(stderr).toMatch(/cannot resolve @observablehq\/plot/);
+  });
+
+  it("names the packaging hole when plot resolves but jsdom does not", () => {
+    root = mkdtempSync(join(tmpdir(), "prism-oplot-nojsdom-"));
+    // Must be named `node_modules` — createRequire only resolves siblings under
+    // a directory literally called node_modules (Node skips doubling that segment).
+    const nm = join(root, "node_modules");
+    mkdirSync(join(nm, "@observablehq", "plot"), { recursive: true });
+    // Minimal stub so createRequire can load plot but not jsdom.
+    writeFileSync(
+      join(nm, "@observablehq", "plot", "package.json"),
+      JSON.stringify({ name: "@observablehq/plot", main: "index.js" }),
+    );
+    writeFileSync(join(nm, "@observablehq", "plot", "index.js"), "module.exports = {};\n");
+    const spec = join(root, "spec.mjs");
+    const out = join(root, "fig.svg");
+    writeFileSync(spec, `export default () => ({});\n`, "utf-8");
+    let code = 0;
+    let stderr = "";
+    try {
+      execFileSync(process.execPath, [RENDER_SCRIPT, spec, "--out", out], {
+        env: { ...process.env, PRISM_APP_NODE_MODULES: nm },
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "pipe"],
+        cwd: root,
+      });
+    } catch (err) {
+      code = (err as { status?: number }).status ?? 1;
+      stderr = String((err as { stderr?: unknown }).stderr ?? "");
+    }
+    expect(code).toBe(1);
+    expect(stderr).toMatch(/jsdom is missing/);
+    expect(stderr).toMatch(/packaging/);
   });
 });

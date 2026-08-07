@@ -194,6 +194,9 @@ importers:
       js-tiktoken:
         specifier: ^1.0.21
         version: 1.0.21
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1(@noble/hashes@2.2.0)
       katex:
         specifier: ^0.16.28
         version: 0.16.46
@@ -300,9 +303,6 @@ importers:
       electron-vite:
         specifier: ^4.0.1
         version: 4.0.1(vite@6.4.2(@types/node@22.19.19)(jiti@2.7.0)(lightningcss@1.32.0))
-      jsdom:
-        specifier: ^29.1.1
-        version: 29.1.1(@noble/hashes@2.2.0)
       opencc-js:
         specifier: ^1.4.1
         version: 1.4.1
