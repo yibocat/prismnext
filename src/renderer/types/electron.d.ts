@@ -1415,6 +1415,15 @@ export interface ElectronAPI {
     registryUrls: string[];
     installedIds: string[];
   }>;
+  agentUninstallAllFromLibrarySource: (
+    projectPath: string,
+    sourceId: string,
+  ) => Promise<{
+    skillsCount: number;
+    configPath: string;
+    registryUrls: string[];
+    removedIds: string[];
+  }>;
   agentRemoveSkillLibrarySource: (projectPath: string, sourceId: string) => Promise<{
     sources: Array<{
       id: string;

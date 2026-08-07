@@ -502,4 +502,47 @@ describe("kickoffExperimentRun (executor refactor)", () => {
     expect(kickoffReturnedAt.value).toBe(1);
     expect(microtaskBeforeCallback).toBe(1);
   });
+
+  it("runs the external-interpreter lane without touching the project venv", async () => {
+    root = mkdtempSync(join(tmpdir(), "prism-exp-exec-"));
+    mkdirSync(join(root, "experiment"), { recursive: true });
+    ctx = buildExperimentStorageContext(root, "experiment");
+    const created = createExperiment(ctx, { title: "External lane" }, { ensureVenv: false });
+    if (!created.ok) throw new Error("create failed");
+
+    const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      kickoffExperimentRun({
+        ctx,
+        id: created.id,
+        command: "echo external-lane-ok",
+        onComplete: resolve,
+        interpreter: "external",
+        pythonPath: "/bin/echo",
+        ensureVenv: false,
+      });
+    });
+    expect(result.ok).toBe(true);
+
+    // Provenance: runs.jsonl records the real external interpreter.
+    const runsPath = join(ctx.registryRoot, created.id, "runs.jsonl");
+    const lines = readFileSync(runsPath, "utf-8").trim().split("\n");
+    const last = JSON.parse(lines[lines.length - 1]!) as {
+      env?: {
+        python?: string | null;
+        pythonVersion?: string | null;
+        interpreter?: { kind: string; path: string | null; version: string | null } | null;
+      };
+    };
+    // macOS /bin/echo echoes the flag verbatim → first stdout line is "--version".
+    expect(last.env?.python).toBe("/bin/echo");
+    expect(last.env?.pythonVersion).toBe("--version");
+    expect(last.env?.interpreter).toEqual({
+      kind: "external",
+      path: "/bin/echo",
+      version: "--version",
+    });
+
+    // The shared project venv must NOT have been created for this lane.
+    expect(existsSync(join(root, ".prismnext", ".venv"))).toBe(false);
+  });
 });

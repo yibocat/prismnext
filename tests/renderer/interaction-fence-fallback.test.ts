@@ -7,6 +7,7 @@ import {
 } from "../../src/renderer/lib/markdown/chat-interaction";
 import {
   buildInteractionReplyFallbackMarkdown,
+  collectInteractionResourcePathsFromBlocks,
   extractInteractionWriteSuccess,
   resolveMissingInteractionFencesForReply,
 } from "../../src/renderer/lib/chat/interaction-fence-fallback";
@@ -133,5 +134,90 @@ describe("buildInteractionFallbackMarkdown", () => {
     ]);
     expect(md).toContain("id: a");
     expect(md).toContain("id: b");
+  });
+});
+
+describe("collectInteractionResourcePathsFromBlocks", () => {
+  const writeUse = (id: string): ContentBlock => ({
+    type: "tool_use",
+    id,
+    name: "interaction-write",
+    input: {},
+  });
+
+  it("collects normalized spec resource paths from successful writes", () => {
+    const toolUse = writeUse("tu1");
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tu1",
+      content: JSON.stringify({
+        ok: true,
+        spec: {
+          id: "fig.main",
+          kind: "figure.static",
+          resources: [
+            { path: "artifacts/run-1\\fig.png" },
+            { artifactPath: "output/fig.pdf" },
+            { path: "" },
+            { label: "no path" },
+          ],
+        },
+      }),
+    };
+    const map = new Map<string, ContentBlock>([["tu1", toolResult]]);
+    expect(collectInteractionResourcePathsFromBlocks([toolUse], map)).toEqual([
+      "artifacts/run-1/fig.png",
+      "output/fig.pdf",
+    ]);
+  });
+
+  it("dedupes repeated paths and skips error / non-write blocks", () => {
+    const useA = writeUse("tu-a");
+    const useB = writeUse("tu-b");
+    const useOther: ContentBlock = {
+      type: "tool_use",
+      id: "tu-c",
+      name: "experiment-run",
+      input: {},
+    };
+    const map = new Map<string, ContentBlock>([
+      [
+        "tu-a",
+        {
+          type: "tool_result",
+          tool_use_id: "tu-a",
+          content: JSON.stringify({
+            ok: true,
+            spec: { id: "f1", resources: [{ path: "out/a.png" }] },
+          }),
+        },
+      ],
+      [
+        "tu-b",
+        {
+          type: "tool_result",
+          tool_use_id: "tu-b",
+          is_error: true,
+          content: JSON.stringify({
+            ok: false,
+            spec: { id: "f2", resources: [{ path: "out/b.png" }] },
+          }),
+        },
+      ],
+      [
+        "tu-c",
+        {
+          type: "tool_result",
+          tool_use_id: "tu-c",
+          content: JSON.stringify({
+            ok: true,
+            spec: { id: "f3", resources: [{ path: "out/c.png" }] },
+          }),
+        },
+      ],
+    ]);
+    expect(
+      collectInteractionResourcePathsFromBlocks([useA, useB, useOther], map),
+    ).toEqual(["out/a.png"]);
   });
 });

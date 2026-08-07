@@ -53,8 +53,23 @@ Skills with `scripts/` usually execute inside an experiment island via
 
 **Performance contract**: verification scripts are designed to finish in
 **seconds on CPU**; long training runs are a separate concern. First use of
-SymPy / matplotlib requires `uv pip install` into the project venv (e.g.
-`uv pip install sympy`).
+SymPy / matplotlib requires `uv pip install` into the project venv — skills
+that need third-party packages ship a `requirements-verify.txt` (e.g.
+`uv pip install -r requirements-verify.txt`).
+
+**External interpreters (opt-in heavy tier)**: `experiment-run` also accepts
+`interpreter="external"` + `pythonPath` for scripts that must run on the
+user's own interpreter — SageMath, a vendor toolchain python, a conda env.
+The external lane skips the project venv entirely (no ensure, no
+PATH/`VIRTUAL_ENV` injection), probes `<pythonPath> --version`, and records
+the real interpreter in `runs.jsonl` (`env.interpreter`). Using an
+absolute-path external python *without* the declaration still runs, but the
+gate attaches a guidance warning to the run notes. Reproducibility grades:
+**R0** project venv · **R1** external, version probed · **R2** external,
+version unknown — Methods prose should name R1/R2 runs as external
+environments. Skills never install such interpreters; the user opts in at
+the OS level (see `math-lattice/references/sage-backend.md` for the
+standard dual-lane pattern).
 
 ---
 
@@ -84,6 +99,11 @@ rather than a form-filler.
 - **Templates are patterns, not molds.** Files under `templates/` say so
   themselves: adapt, blend, reorder, or depart. They are starting points
   distilled from real artifacts.
+- **Notation has two audiences.** Manuscript-bound content (`templates/`,
+  anything pasted into notes or the paper) is written in LaTeX
+  (`$...$` / `$$...$$`). Agent-facing docs (`SKILL.md`, `references/`) are
+  read as raw text and may use plain-text or Unicode notation. Never mix
+  the two layers.
 - **The `specs/` convention.** Working documents — deep analysis, decision
   records, drafts-in-progress — live in the project's `specs/` folder (a
   plain folder, deliberately not an app feature). The project brief holds
@@ -91,6 +111,14 @@ rather than a form-filler.
 - **Tools are always safe to reference.** App tools (`experiment-run`,
   `literature-*`, `latex-compile`, `citation-health`, …) are registered in
   the main process regardless of skill toggles.
+- **Math skills: novel claims only.** The `math-*` family (`symbolic-math`,
+  `math-numeric`, `math-manifold`, `math-lattice`) shares one epistemic gate:
+  verify **new or uncertain** claims from the discussion or **your**
+  implementation — not textbook identities, standard coordinate formulas, or
+  literature results with known derivations. **Cite** established material;
+  run scripts only for what is genuinely at stake in the manuscript. Re-check
+  an established formula **only when the human explicitly asks** (human
+  override).
 
 ---
 
@@ -113,17 +141,24 @@ rather than a form-filler.
 | [management-science-empirical](management-science-empirical/SKILL.md) | Management & decision science empirics: DiD/IV/RDD, behavioral experiments, comparative statics |
 | [experiment-to-methods](experiment-to-methods/SKILL.md) | Run records → Methods prose; every number traceable, none invented |
 
-### Mathematics
+### Mathematics (`math-*`)
+
+**Family rule:** cite established math; script only **novel, uncertain, or
+implementation-level** claims unless the human explicitly asks to re-check.
 
 | Skill | What it does |
 | --- | --- |
-| [symbolic-math](symbolic-math/SKILL.md) | SymPy-checked symbolic derivations → LaTeX: calculus, linear algebra, ODEs, gradient/Hessian verification |
+| [symbolic-math](symbolic-math/SKILL.md) | Novel/uncertain symbolic identities → SymPy + LaTeX (calculus, linear algebra, ODEs, new losses) |
+| [math-numeric](math-numeric/SKILL.md) | Novel/uncertain numeric checks when symbolic stalls or the claim lives in code: probes, gradients vs FD, convergence order |
+| [math-manifold](math-manifold/SKILL.md) | Novel/uncertain concrete geometry: your metric/connection/gauge, geodesics, holonomy, variational residuals |
+| [math-lattice](math-lattice/SKILL.md) | Novel/uncertain ring & lattice instances: your ideals, quotient relations, LLL claims, algebraic numbers |
 
 ### Figures (`figure-*`)
 
 | Skill | What it does |
 | --- | --- |
 | [figure-matplotlib](figure-matplotlib/SKILL.md) | Scientific plotting norms and matplotlib templates; colorblind-safe palettes |
+| [figure-observable-plot](figure-observable-plot/SKILL.md) | Observable Plot vocabulary — density contours, hexbin, facets, geo — rendered headless to manuscript-grade SVG |
 | [figure-tikz](figure-tikz/SKILL.md) | TikZ / pgfplots vector graphics: architecture diagrams, commutative diagrams |
 | [figure-pipeline](figure-pipeline/SKILL.md) | Experiment artifacts → reproducible paper figures, wired into the manuscript |
 | [figure-interaction](figure-interaction/SKILL.md) | Reopenable figures in the chat side panel; static vs CSV-interactive |
@@ -195,15 +230,27 @@ patterns — adapt freely.
 
 | You want to… | Use | Notes |
 | --- | --- | --- |
-| Algebra, integrals, derivatives, series, ODEs | symbolic-math | SymPy check + numerical probes + LaTeX |
-| Verify gradients, Jacobians/Hessians | symbolic-math | Against autodiff or by hand |
+| **New** identity from discussion (algebra, integrals, ODEs, series) | symbolic-math | SymPy + probes + LaTeX; cite textbook results |
+| **Your** gradient/Jacobian/Hessian formula or implementation | symbolic-math → math-numeric | Symbolic first; numeric if scale binds |
+| Large matrix / code-level numeric claim | math-numeric | Worst-case error; not textbook numerics |
+| **Your** metric, connection, gauge, geodesic, holonomy claim | math-manifold | Cite standard manifolds; verify novel coupling |
+| **Your** ideal, lattice, quotient-ring instance | math-lattice | Cite standard examples; witness required |
 | Commutative diagrams, category-style figures | figure-tikz | Drawing, not proof |
-| Structure theorems (groups, rings, topology) | — | **Out of scope** for bundled skills |
+| Structure theorems (groups, rings, topology) | — | **Out of scope** — cite or `math-formal` (deferred) |
+
+The math skills form a `math-*` family — `math-numeric`, `math-manifold`,
+and `math-lattice` are bundled; `math-formal` (proof assistants) is
+deferred. All four share the **novel-claims-only** gate (see Design
+principles). See the Boundaries table in
+[symbolic-math](symbolic-math/SKILL.md) for the division of labor.
 
 ### 5. Figures
 
 Data from experiment runs: figure-matplotlib (how to draw) → figure-pipeline
-(wire into the manuscript) → figure-interaction (panel display).
+(wire into the manuscript) → figure-interaction (panel display). When the
+figure needs Plot's vocabulary — density contours, hexbin, faceted small
+multiples, heatmap cells, geo — figure-observable-plot renders a spec + CSV
+to SVG headlessly, then figure-pipeline wires the SVG in like any other.
 
 ### 6. Writing & finishing
 
@@ -235,14 +282,21 @@ manuscript-preflight (mechanics). Reviews in: rebuttal-letter.
 
 | Skill | Script | Dependencies | Runs via |
 | --- | --- | --- | --- |
-| symbolic-math | [verify_derivation.py](symbolic-math/scripts/verify_derivation.py) | SymPy | `experiment-run`; needs `uv pip install sympy` |
+| symbolic-math | [verify_derivation.py](symbolic-math/scripts/verify_derivation.py) | SymPy ([requirements-verify.txt](symbolic-math/requirements-verify.txt)) | `experiment-run` |
+| math-numeric | [verify_identity.py](math-numeric/scripts/verify_identity.py), [verify_gradient.py](math-numeric/scripts/verify_gradient.py), [verify_convergence.py](math-numeric/scripts/verify_convergence.py) | numpy ([requirements-verify.txt](math-numeric/requirements-verify.txt)) | `experiment-run` |
+| math-manifold | [verify_tensor.py](math-manifold/scripts/verify_tensor.py), [verify_geodesic.py](math-manifold/scripts/verify_geodesic.py), [verify_holonomy.py](math-manifold/scripts/verify_holonomy.py), [verify_variational.py](math-manifold/scripts/verify_variational.py), [verify_gauge.py](math-manifold/scripts/verify_gauge.py) | numpy + SymPy ([requirements-verify.txt](math-manifold/requirements-verify.txt)) | `experiment-run` |
+| math-lattice | [verify_ideal.py](math-lattice/scripts/verify_ideal.py), [verify_lattice.py](math-lattice/scripts/verify_lattice.py), [verify_numberfield.py](math-lattice/scripts/verify_numberfield.py) | SymPy + fpylll ([requirements-verify.txt](math-lattice/requirements-verify.txt)) | `experiment-run` |
 | statistical-rigor | [power_analysis.py](statistical-rigor/scripts/power_analysis.py) | **stdlib only** | `experiment-run` or venv |
 | ml-research-protocol | [aggregate_seeds.py](ml-research-protocol/scripts/aggregate_seeds.py) | **stdlib only** | `experiment-run` |
 | management-science-empirical | [simulate_did.py](management-science-empirical/scripts/simulate_did.py) | **stdlib only** | `experiment-run` |
 | figure-matplotlib | [plot_template.py](figure-matplotlib/scripts/plot_template.py) | matplotlib | `experiment-run` |
+| figure-observable-plot | [render_plot.mjs](figure-observable-plot/scripts/render_plot.mjs) | **bundled** @observablehq/plot + jsdom — nothing installs into the venv | `experiment-run` |
 
 Stdlib-only scripts need no installs — good for quick checks. SymPy /
 matplotlib scripts install into `.prismnext/.venv` first.
+figure-observable-plot runs on the app's bundled Node runtime and resolves
+Plot/jsdom from the app's own `node_modules`, so it adds zero dependencies
+to the project environment.
 
 ---
 
@@ -289,7 +343,7 @@ or `.agents/`.
 | --- | --- | --- |
 | Symbolic identities (calculus, matrices, closed-form ODEs) | symbolic-math | — |
 | Statistical testing & reporting | statistical-rigor | pure symbolic derivation |
-| Plotting (matplotlib / TikZ) | figure-matplotlib, figure-tikz | mathematical proof |
+| Plotting (matplotlib / Observable Plot / TikZ) | figure-matplotlib, figure-observable-plot, figure-tikz | mathematical proof |
 | Structure theorems (groups, rings, topology, bundles) | manual proof or formal tools (not bundled) | symbolic-math |
 | Long GPU training | `experiment-run` + islands | math-skill verification scripts |
 

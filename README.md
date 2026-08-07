@@ -130,14 +130,14 @@ Reading and writing notes live next to the work, and every meaningful change can
 
 ## Built-in research standards
 
-The agent ships held to a codified set of research standards — **25 bundled skills**, each with its reference tables, templates, and runnable scripts. Discipline that must hold every turn lives in an always-on prompt layer; skills load on demand, and every skill stands alone even with all its siblings disabled.
+The agent ships held to a codified set of research standards — **29 bundled skills**, each with its reference tables, templates, and runnable scripts. Discipline that must hold every turn lives in an always-on prompt layer; skills load on demand, and every skill stands alone even with all its siblings disabled.
 
 | Family | On board |
 | --- | --- |
 | **Ideate** | idea-lab: divergent brainstorming before judgment · literature cross-pollination · a dedicated `ideas/` folder so bold sparks never evaporate |
 | **Design & run** | Hypothesis design · experiment design matrices (cost confirmed before compute) · empirical-ML protocol (seeds, fair baselines, aggregation) · statistical rigor with power analysis · management & decision science (DiD/IV/RDD, behavioral experiments) · run receipts → Methods prose |
-| **Math** | SymPy-verified derivations → LaTeX |
-| **Figures** | matplotlib templates · TikZ/pgfplots vector graphics · reproducible figure pipeline · reopenable panel figures |
+| **Math** | SymPy-verified derivations → LaTeX · numeric probes & convergence checks · differential-geometry and ring/lattice verification — novel claims only |
+| **Figures** | matplotlib templates · Observable Plot data-viz (density, hexbin, facets, geo) → SVG · TikZ/pgfplots vector graphics · reproducible figure pipeline · reopenable panel figures |
 | **Writing** | Outline gate before prose · section skills for Introduction / Preliminaries / Methods / Results / Conclusion / Related Work — patterns, not molds |
 | **Review** | Intensive reading notes · PRISMA 2020 · reverse-angle critical review (backed by an independent peer-reviewer expert) · pre-submission preflight · rebuttal letters |
 | **Meta** | Distill your own skills from workflows that just worked |

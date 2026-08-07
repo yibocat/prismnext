@@ -76,4 +76,44 @@ describe("smart-permission-policy", () => {
     expect(isPathInsideProject(`${ROOT}/main.tex`, ROOT)).toBe(true);
     expect(isPathInsideProject("/etc/hosts", ROOT)).toBe(false);
   });
+
+  it("denies whole-disk search even with cwd inside the project", () => {
+    expect(resolveSmartBashAction("mdfind -name SKILL.md", ROOT, ROOT)).toBe("deny");
+    expect(resolveSmartBashAction("locate foo", ROOT, "/tmp")).toBe("deny");
+    expect(resolveSmartBashAction("echo a && mdfind b", ROOT, ROOT)).toBe("deny");
+  });
+
+  it("prompts for bash read-verbs carrying outside-project paths (was silent allow)", () => {
+    expect(resolveSmartBashAction("cat /elsewhere/SKILL.md", ROOT, ROOT)).toBe("prompt");
+    expect(resolveSmartBashAction("cp /elsewhere/render.mjs .", ROOT, ROOT)).toBe("prompt");
+    expect(resolveSmartBashAction("cd /elsewhere && cat x.md", ROOT, ROOT)).toBe("prompt");
+    // …while in-project usage of the same verbs stays silent.
+    expect(resolveSmartBashAction("cat src/a.ts", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("cat notes.md", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("find . -name '*.md'", ROOT, ROOT)).toBe("allow");
+  });
+
+  it("exempts outside bash paths under user allowedPaths", () => {
+    expect(resolveSmartBashAction("cat /refs/x.bib", ROOT, ROOT, ["/refs"])).toBe("allow");
+  });
+
+  it("reads stay silent allow inside and outside the project (deliberate)", () => {
+    expect(resolveSmartPermissionAction({
+      toolName: "read",
+      projectRoot: ROOT,
+      filePath: "main.tex",
+    })).toBe("allow");
+    // Outside-project reads are an intentional capability (external papers,
+    // reference checkouts); only whole-disk search and bash path args gate.
+    expect(resolveSmartPermissionAction({
+      toolName: "read",
+      projectRoot: ROOT,
+      filePath: "/elsewhere/repo/SKILL.md",
+    })).toBe("allow");
+    expect(resolveSmartPermissionAction({
+      toolName: "grep",
+      projectRoot: ROOT,
+      filePath: "/elsewhere/repo",
+    })).toBe("allow");
+  });
 });

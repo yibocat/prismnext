@@ -16,6 +16,10 @@ import {
 } from "./session-agent";
 import { bashCommandMatchesAnyPattern, normalizeBashCommand } from "./bash-allow-always";
 import {
+  extractOutsideProjectPathArgs,
+  isWholeDiskSearchBashCommand,
+} from "./project-escape-guard";
+import {
   emptyPermissionRulesConfig,
   isLegacyBashAllowAlways,
   isLegacyToolAllowAlways,
@@ -323,12 +327,24 @@ export function resolveSmartBashAction(
   command: string | null | undefined,
   projectRoot: string | null | undefined,
   cwd: string | null | undefined,
+  allowedPaths?: string[] | null,
 ): SmartPermissionAction {
   const cmd = normalizeBashCommand(command || "");
   if (!cmd) return "allow";
 
   if (bashCommandMatchesAnyPattern(cmd, BASH_DENY_PATTERNS)) {
     return "deny";
+  }
+
+  // Whole-disk search has no in-project use — grep/glob cover that.
+  if (isWholeDiskSearchBashCommand(cmd)) {
+    return "deny";
+  }
+
+  // File-access verbs carrying paths outside the project → visible prompt,
+  // even when the cwd is inside the project (`cat /elsewhere/x` was silent).
+  if (extractOutsideProjectPathArgs(cmd, cwd, projectRoot, { allowedPaths }).length > 0) {
+    return "prompt";
   }
 
   const inProject = isCwdInsideProject(cwd, projectRoot);
@@ -382,6 +398,11 @@ export function resolveHardDenyAction(ctx: SmartPermissionContext): boolean {
   const cmd = normalizeBashCommand(ctx.bashCommand || "");
 
   if (cmd && bashCommandMatchesAnyPattern(cmd, BASH_DENY_PATTERNS)) {
+    return true;
+  }
+
+  // Whole-disk search (mdfind / locate) — user allow rules cannot override.
+  if (cmd && isWholeDiskSearchBashCommand(cmd)) {
     return true;
   }
 
@@ -469,7 +490,7 @@ function resolveSmartDefaultAction(
     if (toolName === "experiment-run" && isCwdInsideProject(ctx.bashCwd, root)) {
       return "allow";
     }
-    return resolveSmartBashAction(ctx.bashCommand, root, ctx.bashCwd);
+    return resolveSmartBashAction(ctx.bashCommand, root, ctx.bashCwd, allowedPaths);
   }
 
   return "allow";

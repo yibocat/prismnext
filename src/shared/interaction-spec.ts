@@ -108,6 +108,12 @@ export const INTERACTION_KINDS_AGENT = [
   "plot.line",
   "plot.series",
   "plot.scatter",
+  "plot.area",
+  "plot.bar",
+  "plot.histogram",
+  "plot.box",
+  "plot.density",
+  "plot.heatmap",
 ] as const;
 
 export type InteractionKindAgent = (typeof INTERACTION_KINDS_AGENT)[number];

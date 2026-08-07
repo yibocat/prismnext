@@ -3,6 +3,7 @@ import type { ContentBlock } from "../../src/renderer/stores/chat-store";
 import {
   extractExperimentArtifactPaths,
   extractExperimentImageArtifactPaths,
+  collectExperimentArtifactPathsFromBlocks,
   isExperimentFigureToolUse,
   assistantTextEmbedsImagePath,
   buildNaturalFigureReplyMarkdown,
@@ -268,5 +269,63 @@ describe("artifact reply fallback", () => {
     // Cap of fallback shown is suppressed; overflow remains for the card
     expect(suppress).toContain("out/f1.csv");
     expect(suppress).not.toContain(`out/f${CHAT_ARTIFACT_AUTO_CAP + 1}.csv`);
+  });
+});
+
+describe("one chat preview per logical figure", () => {
+  it("collapses same-run PDF + PNG to the image snapshot", () => {
+    const toolUse: ContentBlock = {
+      type: "tool_use",
+      id: "tu1",
+      name: "experiment-run",
+      input: {},
+    };
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tu1",
+      content: JSON.stringify({
+        ok: true,
+        run: {
+          cwd: "experiments/e1",
+          artifacts: [
+            "experiments/e1/results/fig.pdf",
+            "experiments/e1/results/fig.png",
+          ],
+          artifactSnapshots: [".prismnext/experiments/e1/artifacts/run-1/fig.png"],
+          exitCode: 0,
+        },
+      }),
+    };
+    expect(extractExperimentArtifactPaths(toolUse, toolResult)).toEqual([
+      ".prismnext/experiments/e1/artifacts/run-1/fig.png",
+    ]);
+  });
+
+  it("collapses repeated runs (working path + snapshot) to one preview", () => {
+    const mk = (id: string, snapshots?: string[]): [ContentBlock, ContentBlock] => [
+      { type: "tool_use", id, name: "experiment-run", input: {} },
+      {
+        type: "tool_result",
+        tool_use_id: id,
+        content: JSON.stringify({
+          ok: true,
+          run: {
+            cwd: "experiments/e1",
+            artifacts: ["experiments/e1/fig.svg"],
+            ...(snapshots ? { artifactSnapshots: snapshots } : {}),
+            exitCode: 0,
+          },
+        }),
+      },
+    ];
+    const [tu1, tr1] = mk("tu1");
+    const [tu2, tr2] = mk("tu2", [".prismnext/experiments/e1/artifacts/run-2/fig.svg"]);
+    const map = new Map<string, ContentBlock>([
+      ["tu1", tr1],
+      ["tu2", tr2],
+    ]);
+    expect(collectExperimentArtifactPathsFromBlocks([tu1, tu2], map)).toEqual([
+      ".prismnext/experiments/e1/artifacts/run-2/fig.svg",
+    ]);
   });
 });

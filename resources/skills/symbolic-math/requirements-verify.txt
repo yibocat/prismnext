@@ -1,0 +1,5 @@
+# Verification dependencies for the symbolic-math skill.
+# Install once per project, into the project venv only:
+#   uv pip install -r requirements-verify.txt
+# (`.prismnext/.venv` — never the system Python)
+sympy>=1.13

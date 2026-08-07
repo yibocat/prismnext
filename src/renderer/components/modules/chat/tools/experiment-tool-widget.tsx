@@ -1,7 +1,7 @@
 import { memo, useEffect, useState, type ReactNode } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react";
-import { ToolCard, Field, TOOL_INLINE_ROW_CLASS, StatusIcon } from "./shared";
+import { ToolCard, Field } from "./shared";
 import { ChatArtifactGallery } from "@/lib/markdown/chat-artifact-block";
 import { pathsForRunChatDisplay } from "@/lib/chat/experiment-run-figures";
 import {
@@ -482,7 +482,6 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
   toolResult,
   toolName,
   suppressArtifactPaths,
-  hostedInComposer = false,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
@@ -555,23 +554,6 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
   useEffect(() => {
     if (liveForThis) setExpanded(true);
   }, [liveForThis?.runId]);
-
-  if (
-    hostedInComposer
-    && toolName === "experiment-run"
-    && (liveForThis || isLoading)
-  ) {
-    return (
-      <div className={cn(TOOL_INLINE_ROW_CLASS, "py-1 text-[length:var(--font-chat-message)]")}>
-        <StatusIcon isLoading={!!liveForThis || isLoading} isError={!!isError} />
-        <span className="shrink-0 text-muted-foreground/55">{toolName}</span>
-        <FlaskConicalIcon className="size-3.5 shrink-0 text-info" />
-        <span className="min-w-0 truncate text-muted-foreground/70">
-          {shortCommand(liveForThis?.command || inputCommand || LABELS["experiment-run"], 72)}
-        </span>
-      </div>
-    );
-  }
 
   const canOpenInExperiments = Boolean(experimentId) && !isError;
   const openHint = liveForThis ? "Open live output in Experiments" : "Open in Experiments";

@@ -70,9 +70,10 @@ async function bridgeCall(
 export default tool({
   description:
     "Create or update an Interaction at `.prismnext/interactions/<id>/spec.json`. " +
-    "Allowed kinds: figure.static (image) or plot.line | plot.series | plot.scatter (CSV). " +
+    "Allowed kinds: figure.static (image) or plot.line | plot.series | plot.scatter | plot.area | plot.bar | plot.histogram | plot.box | plot.density | plot.heatmap (CSV). " +
     "figure.static requires resources: [{ role: \"figure\", path: \"<png|svg|jpg|webp|gif>\" }]. " +
-    "plot.* requires resources: [{ role: \"data\", path: \"<.csv>\" }] and params: { x, y } column names. " +
+    "plot.* requires resources: [{ role: \"data\", path: \"<.csv>\" }] and params: { x, y } column names (y: string or string[]); " +
+    "plot.histogram uses only params.x (+ optional params.bins); plot.density / plot.box take a single y; plot.heatmap also needs params.fill (value column). " +
     "Files must already exist — do not invent numeric series. " +
     "After success, embed the returned fenceMarkdown in your assistant reply — do NOT use ```artifact for Interaction objects.",
   args: {

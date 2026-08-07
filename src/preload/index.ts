@@ -862,6 +862,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("agent:installLibraryCatalogItem", { projectPath, item }),
 	agentInstallAllFromLibrarySource: (projectPath: string, sourceId: string) =>
 		ipcRenderer.invoke("agent:installAllFromLibrarySource", { projectPath, sourceId }),
+	agentUninstallAllFromLibrarySource: (projectPath: string, sourceId: string) =>
+		ipcRenderer.invoke("agent:uninstallAllFromLibrarySource", { projectPath, sourceId }),
 	agentRemoveSkillLibrarySource: (projectPath: string, sourceId: string) =>
 		ipcRenderer.invoke("agent:removeSkillLibrarySource", { projectPath, sourceId }),
 	agentSetSkillLibrarySourceConnected: (projectPath: string, sourceId: string, connected: boolean) =>

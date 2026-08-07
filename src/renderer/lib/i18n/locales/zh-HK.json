@@ -618,6 +618,8 @@
       "pageDesc": "可在對話中載入的可複用指令包。",
       "openProject": "開啟專案以管理技能。",
       "empty": "尚未安裝技能。",
+      "showAll": "顯示全部（{{count}} 個技能）",
+      "showLess": "收起",
       "origin": {
         "custom": "自建",
         "bundled": "內建",
@@ -1072,6 +1074,8 @@
           "loadFailed": "載入技能庫失敗。",
           "installFailed": "安裝失敗。",
           "installAllFailed": "全部安裝失敗。",
+          "uninstallAllFailed": "全部卸載失敗。",
+          "uninstalledBatch": "已從「{{name}}」移除 {{count}} 個內置 skill — 請新開聊天標籤頁生效。",
           "addSourceFailed": "無法新增來源。",
           "removeFailed": "移除來源失敗。",
           "githubAdded": "已新增 GitHub 來源（{{count}} 個技能）。"
@@ -1091,6 +1095,7 @@
         "connected": "已連線",
         "disconnected": "未連線",
         "installAll": "全部安裝",
+        "uninstallAll": "全部卸載",
         "connect": "連線",
         "disconnect": "斷開",
         "searchPlaceholder": "搜尋已載入的技能…",
@@ -1325,6 +1330,7 @@
           "exists": "技能「{{name}}」已存在。",
           "created": "已建立「{{name}}」— 請新開聊天后使用。",
           "updated": "技能已更新 — 請新開聊天以生效。",
+          "restored": "技能已恢復為預設內容。",
           "saveFailed": "儲存技能失敗。"
         },
         "openProject": "請先開啟專案以編輯技能。",
@@ -1782,10 +1788,7 @@
       "queueDelete": "從佇列刪除",
       "taskPlanTitle": "任務計劃",
       "taskPlanInProgress": "進行中",
-      "taskPlanDismiss": "隱藏任務計劃",
-      "experimentRunTitle": "實驗執行",
-      "experimentRunLive": "執行中 — 點選開啟即時輸出",
-      "experimentRunOpen": "開啟"
+      "taskPlanDismiss": "隱藏任務計劃"
     },
     "questionPanel": {
       "title": "需要你確認",
@@ -2626,7 +2629,7 @@
       "placeholderTitle": "預覽暫不可用",
       "placeholderBody": "型別「{{kind}}」將在後續版本中在此渲染。",
       "unsupportedTitle": "不支援該 Interaction 型別",
-      "unsupportedBody": "型別「{{kind}}」不可寫入。請使用 figure.static（影像）或 plot.line / plot.series / plot.scatter（CSV）。",
+      "unsupportedBody": "型別「{{kind}}」不可寫入。請使用 figure.static（影像）或 plot.* CSV 圖類（plot.line / series / scatter / area / bar / histogram / box / density / heatmap）。",
       "figureMissingPath": "resources[] 中沒有影像路徑。請新增 png/svg 路徑後重新寫入。",
       "figureLoadError": "無法載入影像：{{path}}",
       "plotErrorTitle": "無法渲染圖表",

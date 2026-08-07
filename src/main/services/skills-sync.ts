@@ -269,6 +269,18 @@ export function removeSkillInstallRecord(projectRoot: string, skillId: string): 
   writeSkillsManifest(projectRoot, { ...manifest, installs });
 }
 
+/** Remove an installed skill folder and clear manifest entries (disabled + install record). */
+export function deleteProjectSkill(projectRoot: string, skillId: string): void {
+  const skillDir = join(projectRoot, PRISM_SKILLS_REL, skillId);
+  if (existsSync(skillDir)) {
+    rmSync(skillDir, { recursive: true, force: true });
+  }
+  const manifest = readSkillsManifest(projectRoot);
+  const disabled = (manifest.disabled ?? []).filter((id) => id !== skillId);
+  const installs = (manifest.installs ?? []).filter((item) => item.skillId !== skillId);
+  writeSkillsManifest(projectRoot, { ...manifest, disabled, installs });
+}
+
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
   const path = join(projectRoot, SKILLS_MANIFEST_REL);
   mkdirSync(join(projectRoot, ".prismnext", "agent"), { recursive: true });

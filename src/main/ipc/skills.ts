@@ -1,10 +1,11 @@
 import { ipcMain } from "electron";
-import { mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   listProjectSkills,
   readSkillsManifest,
   writeSkillsManifest,
+  deleteProjectSkill,
   addSkillLibrarySource,
   removeSkillLibrarySource,
   setSkillLibrarySourceConnected,
@@ -19,6 +20,7 @@ import {
   fetchLibraryCatalog,
   installAllFromLibrarySource,
   installLibraryCatalogItem,
+  uninstallAllFromLibrarySource,
 } from "../services/skill-library-catalog";
 import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
 import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../services/skill-install";
@@ -276,16 +278,18 @@ export function registerSkillsHandlers(): void {
   );
 
   ipcMain.handle(
+    "agent:uninstallAllFromLibrarySource",
+    async (_event, args: { projectPath: string; sourceId: string }) => {
+      const { removedIds } = await uninstallAllFromLibrarySource(args.projectPath, args.sourceId);
+      const refresh = await refreshProjectSkills(args.projectPath);
+      return { ...refresh, removedIds };
+    },
+  );
+
+  ipcMain.handle(
     "agent:deleteSkill",
     async (_event, args: { projectPath: string; skillId: string }) => {
-      const skillDir = join(args.projectPath, PRISM_SKILLS_REL, args.skillId);
-      if (existsSync(skillDir)) {
-        rmSync(skillDir, { recursive: true, force: true });
-      }
-      const manifest = readSkillsManifest(args.projectPath);
-      const disabled = (manifest.disabled ?? []).filter((id) => id !== args.skillId);
-      const installs = (manifest.installs ?? []).filter((item) => item.skillId !== args.skillId);
-      writeSkillsManifest(args.projectPath, { ...manifest, disabled, installs });
+      deleteProjectSkill(args.projectPath, args.skillId);
       return refreshProjectSkills(args.projectPath);
     },
   );

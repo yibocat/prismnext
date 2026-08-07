@@ -88,6 +88,11 @@ import {
   latexCompileBashBlockMessage,
   latexCompileBashRedirectNote,
 } from "../../shared/latex-compile-bash";
+import {
+  isWholeDiskSearchBashCommand,
+  wholeDiskSearchBlockMessage,
+  wholeDiskSearchRedirectNote,
+} from "../../shared/project-escape-guard";
 import { resolveOpencodeBinaryPath } from "../services/opencode-binary";
 import {
   getPlanPermissionOverride,
@@ -1158,6 +1163,27 @@ export class AcpService {
             }
             if (sessionId && toolCallIdEarly) {
               denyBashJob(sessionId, toolCallIdEarly, latexCompileBashBlockMessage());
+            }
+            return buildPermissionOutcome(options, false);
+          }
+
+          // Hard block: whole-disk search escapes the project sandbox.
+          if (
+            bashCommand
+            && isWholeDiskSearchBashCommand(bashCommand)
+            && (
+              this.isBashTool(toolName)
+              || /bash|shell|terminal|command/.test(toolName)
+            )
+          ) {
+            log.info(
+              `permission:whole-disk-search-deny id=${permissionId} cmd=${bashCommand.slice(0, 80)}`,
+            );
+            if (sessionId) {
+              this.pendingTaskDenialRedirect.set(sessionId, wholeDiskSearchRedirectNote());
+            }
+            if (sessionId && toolCallIdEarly) {
+              denyBashJob(sessionId, toolCallIdEarly, wholeDiskSearchBlockMessage());
             }
             return buildPermissionOutcome(options, false);
           }
@@ -3723,6 +3749,17 @@ export class AcpService {
       return;
     }
 
+    if (isWholeDiskSearchBashCommand(command)) {
+      log.info(
+        `permission:whole-disk-search-deny-tool-call toolCallId=${toolCallId} cmd=${command.slice(0, 80)}`,
+      );
+      this.pendingTaskDenialRedirect.set(sessionId, wholeDiskSearchRedirectNote());
+      denyBashJob(sessionId, toolCallId, wholeDiskSearchBlockMessage());
+      this.bashJobContext.delete(toolCallId);
+      this.bashAutoApproved.delete(toolCallId);
+      return;
+    }
+
     // If we already approved (auto-allow arrived before real command) — execute now.
     const existing = this.bashJobContext.get(toolCallId);
     if (existing && this.bashAutoApproved.has(toolCallId)) {
@@ -3973,6 +4010,14 @@ export class AcpService {
       );
       this.pendingTaskDenialRedirect.set(job.sessionId, latexCompileBashRedirectNote());
       denyBashJob(job.sessionId, job.toolCallId, latexCompileBashBlockMessage());
+      return;
+    }
+    if (isWholeDiskSearchBashCommand(job.command)) {
+      log.info(
+        `permission:whole-disk-search-deny-run toolCallId=${job.toolCallId} cmd=${job.command.slice(0, 80)}`,
+      );
+      this.pendingTaskDenialRedirect.set(job.sessionId, wholeDiskSearchRedirectNote());
+      denyBashJob(job.sessionId, job.toolCallId, wholeDiskSearchBlockMessage());
       return;
     }
     executeApprovedBashJob(job);

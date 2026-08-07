@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { InteractionSpec } from "../../../../shared/interaction-spec";
 import { pickCsvResourcePath, type PlotDataResult } from "../../../../shared/interaction-plot";
+import { buildPlotOptions } from "./build-plot-spec";
 import { loadInteractionPlotData } from "./load-interaction-plot-data";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
@@ -87,41 +88,9 @@ export function InteractionPlotView({
       const Plot = await import("@observablehq/plot");
       if (cancelled || !node) return;
 
-      const isScatter = spec.kind === "plot.scatter";
-      const mark = isScatter
-        ? Plot.dot(data.points, {
-            x: "x",
-            y: "y",
-            fill: "series",
-            r: 2.5,
-            fillOpacity: 0.75,
-          })
-        : Plot.line(data.points, {
-            x: "x",
-            y: "y",
-            stroke: "series",
-            strokeWidth: 2,
-          });
-
-      const plot = Plot.plot({
-        width,
-        height,
-        marginLeft: 56,
-        marginBottom: 48,
-        marginTop: 32,
-        marginRight: 20,
-        x: { label: data.xLabel ?? "x", grid: true },
-        y: { label: data.yLabel ?? "y", grid: true },
-        color: { legend: true },
-        marks: [mark],
-        style: {
-          background: "transparent",
-          color: "var(--foreground)",
-          fontFamily: "var(--font-sans)",
-          fontSize: "11px",
-          overflow: "visible",
-        },
-      });
+      const plot = Plot.plot(
+        buildPlotOptions(Plot, data, { width, height }, { compact: false }),
+      );
 
       plotEl = plot;
       node.replaceChildren(plot);

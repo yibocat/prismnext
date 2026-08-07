@@ -39,6 +39,8 @@ import {
   RUN_OUTPUT_TAIL_BYTES,
   isForbiddenSystemPythonInstall,
   isPythonRelatedCommand,
+  extractAbsolutePythonPath,
+  isExternalInterpreterCommand,
   isExperimentPythonSetupCommand,
   isExperimentPythonScriptCommand,
   slugBaseFromTitle,
@@ -521,7 +523,18 @@ export function resolveExperimentIslandForPath(
 
 export type ExperimentPythonGate =
   | { action: "passthrough" }
-  | { action: "apply"; islandAbs: string; envExtra: Record<string, string>; python: string }
+  | {
+      action: "apply";
+      islandAbs: string;
+      envExtra: Record<string, string>;
+      python: string;
+      /**
+       * Non-blocking guidance, e.g. the command leads with an absolute-path
+       * Python outside the shared venv — the run proceeds (project lane) but
+       * the caller should declare `interpreter: "external"` instead.
+       */
+      warning?: string;
+    }
   | { action: "block"; error: string };
 
 function buildWorkspaceVenvEnvExtra(pythonAbs: string): Record<string, string> {
@@ -537,6 +550,35 @@ function buildWorkspaceVenvEnvExtra(pythonAbs: string): Record<string, string> {
 }
 
 /**
+ * Read-only check: would this command execute under the Experiment workspace
+ * (cwd or any `cd` target)? Scopes the bash-lane external-interpreter block;
+ * the venv gate proper keeps its own walk (it needs the island path too).
+ */
+function isUnderExperimentWorkspace(
+  projectRootOpt: string | null | undefined,
+  cwd: string,
+  command: string,
+): boolean {
+  const projectRoot =
+    (projectRootOpt && projectRootOpt.trim()) ||
+    findPrismProjectRoot(cwd) ||
+    findPrismProjectRoot(process.cwd());
+  if (!projectRoot) return false;
+  const resolved = resolveExperimentDir(projectRoot, join(projectRoot, ".prismnext"));
+  if ("error" in resolved) return false;
+  const candidates: string[] = [cwd];
+  for (const cd of extractCdTargets(command)) {
+    candidates.push(pathResolve(cwd, cd));
+  }
+  for (const candidate of candidates) {
+    if (resolveExperimentIslandForPath(projectRoot, resolved.rel, candidate).underExperiment) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Hard gate for Python under a Prism project.
  *
  * Shared venv: `.prismnext/.venv` (Experiment + Interaction + other project Python).
@@ -544,6 +586,8 @@ function buildWorkspaceVenvEnvExtra(pythonAbs: string): Record<string, string> {
  * - Non-Python → passthrough
  * - No project root → passthrough
  * - Forbidden system pip → block
+ * - External interpreters (`sage -python …`) → passthrough for the venv lane,
+ *   but BLOCK via bash under the Experiment workspace (must use experiment-run)
  * - Scripts inside Experiment folder but not in an island → block (use experiment-run)
  * - Env setup (`uv pip` / `uv venv`) at workspace root or island → apply project venv
  * - Scripts in an island / elsewhere in project → ensure project venv + inject PATH
@@ -573,6 +617,25 @@ export function gateExperimentPythonExecution(opts: {
   }
 
   if (!isPythonRelatedCommand(command)) {
+    // External interpreters (`sage -python …`) run Python outside the project
+    // venv — the venv lane below leaves them alone (passthrough; the declared
+    // `interpreter: "external"` lane handles them in the executor). But under
+    // the Experiment workspace, bash must not be a backdoor around
+    // experiment-run's run logging.
+    if (isExternalInterpreterCommand(command)) {
+      if (
+        opts.blockBashPythonScripts &&
+        isUnderExperimentWorkspace(opts.projectRoot, opts.cwd, command)
+      ) {
+        return {
+          action: "block",
+          error:
+            `prismnext: external interpreters (\`sage -python …\`) under the Experiment workspace must run via ` +
+            `\`experiment-run\` so the run is logged — bash would bypass the record. ` +
+            `Pass interpreter="external" and pythonPath (e.g. "sage") so the run records the real interpreter.`,
+        };
+      }
+    }
     return { action: "passthrough" };
   }
 
@@ -599,8 +662,30 @@ export function gateExperimentPythonExecution(opts: {
       islandAbs: opts.cwd,
       python: ensured.python,
       envExtra: buildWorkspaceVenvEnvExtra(ensured.python),
+      warning: externalPythonWarning(command, ensured.python),
     };
   };
+
+  /**
+   * Non-blocking nudge when the command leads with an absolute-path Python
+   * that is NOT the shared project venv interpreter — the run proceeds on
+   * the project lane, but the real interpreter should be declared via
+   * `interpreter: "external"` so provenance records what actually ran.
+   */
+  function externalPythonWarning(
+    cmd: string,
+    ensuredPython: string,
+  ): string | undefined {
+    const abs = extractAbsolutePythonPath(cmd);
+    if (!abs) return undefined;
+    if (normalizeAbs(abs) === normalizeAbs(ensuredPython)) return undefined;
+    return (
+      `prismnext: command leads with an external Python (${abs}) outside the shared ` +
+      `\`${PRISMNEXT_VENV_REL}\`; the project venv was still injected into PATH. ` +
+      `Prefer experiment-run with interpreter="external" and pythonPath="${abs}" ` +
+      `so the run records the real interpreter.`
+    );
+  }
 
   const resolved = resolveExperimentDir(projectRoot, join(projectRoot, ".prismnext"));
   if ("error" in resolved) {
@@ -677,6 +762,7 @@ export function gateExperimentPythonExecution(opts: {
     islandAbs: islandAbs ?? workspaceAbs,
     python: ensured.python,
     envExtra: buildWorkspaceVenvEnvExtra(ensured.python),
+    warning: externalPythonWarning(command, ensured.python),
   };
 }
 

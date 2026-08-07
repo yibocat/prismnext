@@ -1,11 +1,12 @@
 import type { InteractionSpec } from "../../../../shared/interaction-spec";
 import {
-  csvRowsToPlotPoints,
+  csvRowsToPlotData,
   isInteractionPlotKind,
   MAX_PLOT_CSV_BYTES,
   parsePlotParams,
   parseSimpleCsv,
   pickCsvResourcePath,
+  type InteractionPlotKind,
   type PlotDataResult,
 } from "../../../../shared/interaction-plot";
 
@@ -27,7 +28,7 @@ export async function loadInteractionPlotData(
     return { ok: false, error: `unsupported kind "${spec.kind}"` };
   }
 
-  const { xCol, yCols } = parsePlotParams(spec.params);
+  const params = parsePlotParams(spec.params);
   const csvPath = pickCsvResourcePath(spec.resources);
   if (!csvPath) {
     return {
@@ -54,5 +55,10 @@ export async function loadInteractionPlotData(
     return { ok: false, error: "invalid or empty csv" };
   }
 
-  return csvRowsToPlotPoints(parsed.rows, parsed.columns, xCol, yCols);
+  return csvRowsToPlotData(
+    parsed.rows,
+    parsed.columns,
+    spec.kind as InteractionPlotKind,
+    params,
+  );
 }

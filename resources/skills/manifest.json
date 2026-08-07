@@ -36,6 +36,13 @@
       "license": "MIT"
     },
     {
+      "id": "figure-observable-plot",
+      "name": "figure-observable-plot",
+      "description": "Use when a data figure needs Observable Plot's chart vocabulary — density contours, hexbin, faceted small multiples, heatmap cells, geo/graticule views, or Plot's polished default aesthetics — rendered headless to manuscript-grade SVG from a spec + CSV in the experiment island. Not for ordinary 2D line/bar/scatter (figure-matplotlib is the default lane), not for panel CSV charts (figure-interaction), not for diagrams (figure-tikz).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
       "id": "figure-pipeline",
       "name": "figure-pipeline",
       "description": "Use when turning experiment outputs or project data into publication-quality figures wired into the manuscript and reopenable as interaction objects. This is the plumbing (source data → script → manuscript wiring); the chart craft itself lives in figure-matplotlib, the panel presentation in figure-interaction.",
@@ -85,6 +92,27 @@
       "license": "MIT"
     },
     {
+      "id": "math-lattice",
+      "name": "math-lattice",
+      "description": "Use when verifying novel or uncertain concrete computations on polynomial rings, ideals, and lattices — Groebner-basis ideal membership and ideal equality, quotient-ring relations, LLL-reduced basis equivalence, lattice vector membership, short-vector bounds, minimal polynomials, norms and units in small algebraic number fields — with SymPy and fpylll scripts producing PASS/FAIL exit codes. Not for restating established textbook or literature algebra (cite them), symbolic identities without ring structure (symbolic-math), numeric matrix checks without lattice structure (math-numeric), or abstract structure theorems (cite them or use a proof assistant).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "math-manifold",
+      "name": "math-manifold",
+      "description": "Use when verifying novel or uncertain differential-geometry claims about a concrete structure — a given metric, connection, chart, Lie group, or local bundle presentation — including Christoffel/Riemann/Ricci identities, metric compatibility and torsion, geodesic and exp/log map checks, parallel transport and holonomy, Euler-Lagrange and action-stationarity residuals, gauge equivariance, curvature of a connection, and symplectic closedness, via symbolic tensor computation in low dimension plus seeded numeric probes with PASS/FAIL exit codes. Not for restating established textbook or literature geometry (cite them), abstract existence/uniqueness/classification theorems, flat Euclidean checks without geometric structure (math-numeric), or non-geometric symbolic identities (symbolic-math).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "math-numeric",
+      "name": "math-numeric",
+      "description": "Use when verifying a novel or uncertain mathematical claim numerically — matrix or tensor identities too large for symbolic checking, gradient/Jacobian implementations against finite differences, convergence or consistency order of a numerical method, quadrature or ODE-solution residuals — via seeded random probes, worst-case error reporting, and a PASS/FAIL exit code. Not for restating established textbook or literature numerics (cite them), claims that simplify symbolically (symbolic-math), statistical hypothesis testing (statistical-rigor), or training/optimization runs.",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
       "id": "ml-research-protocol",
       "name": "ml-research-protocol",
       "description": "Use when running empirical machine-learning experiments — baseline and ablation discipline, multi-seed aggregation, reproducibility logging — or when auditing whether a conclusion you rely on is actually supported by the runs behind it. Wires the experiment island to statistical-rigor and the manuscript.",
@@ -122,7 +150,7 @@
     {
       "id": "symbolic-math",
       "name": "symbolic-math",
-      "description": "Use when deriving, checking, or simplifying symbolic mathematics — algebra, calculus, linear algebra, ODEs — with SymPy verification and LaTeX output that goes straight into the manuscript. Covers math, physics, engineering, and economics derivations. Not for formal theorem proving or purely numerical computation.",
+      "description": "Use when verifying a novel or uncertain symbolic claim — a hypothesis, a conjectured identity or equation proposed in discussion, or a derivation step whose correctness is not already established — with SymPy checking and LaTeX output that goes straight into the manuscript. Not for restating established formulas or literature results with known derivations (cite them, don't re-derive), formal theorem proving, or purely numerical computation.",
       "category": "academic",
       "license": "MIT"
     },

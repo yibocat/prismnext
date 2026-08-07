@@ -57,6 +57,8 @@ export const REPLY_DEPTH_PROMPT = [
   "- Prefer an **`artifact` fence** for a one-shot project file peek: `path: …` and optional `title: …`.",
   "- **Reopenable figures/plots** → **Interaction** module — not `artifact`.",
   "- Prefer a fence over only listing a path.",
+  "- One embed per logical figure — when a run yields the same figure as PDF + PNG + SVG, fence only",
+  "  one (prefer the image); the Experiments panel lists every format.",
   "",
   "### Math and formulas in chat",
   "",

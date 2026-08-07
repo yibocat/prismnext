@@ -1,0 +1,6 @@
+# Verification dependencies for the math-numeric skill.
+# Install once per project, into the project venv only:
+#   uv pip install -r requirements-verify.txt
+# (`.prismnext/.venv` — never the system Python)
+# scipy is optional: add it only when a claim needs ODE/integrate helpers.
+numpy>=2.0

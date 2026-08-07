@@ -1,0 +1,6 @@
+# Verification dependencies for the math-manifold skill.
+# Install once per project, into the project venv only:
+#   uv pip install -r requirements-verify.txt
+# (`.prismnext/.venv` — never the system Python)
+numpy>=2.0
+sympy>=1.13

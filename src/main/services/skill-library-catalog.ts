@@ -9,7 +9,9 @@ import {
 import { fetchRegistryIndex, installRegistrySkill, type RegistrySkillEntry } from "./skills-registry";
 import { installSkillPackages } from "./skill-install";
 import {
+  deleteProjectSkill,
   listLibrarySources,
+  listProjectSkills,
   type SkillLibrarySourceInfo,
 } from "./skills-sync";
 
@@ -118,8 +120,18 @@ export async function installAllFromLibrarySource(
   sourceId: string,
 ): Promise<{ installedIds: string[] }> {
   const source = findSource(projectRoot, sourceId);
+
+  if (source.kind === "bundled") {
+    const installedIds: string[] = [];
+    for (const skill of listBundledSkills()) {
+      copyBundledSkillToProject(projectRoot, skill.id);
+      installedIds.push(skill.id);
+    }
+    return { installedIds };
+  }
+
   if (source.kind !== "github") {
-    throw new Error("Install all is only supported for GitHub sources.");
+    throw new Error("Install all is only supported for built-in and GitHub sources.");
   }
 
   const analysis = await analyzeGitHubSkillSource(githubSourceToAnalyzeUrl(source));
@@ -129,6 +141,26 @@ export async function installAllFromLibrarySource(
     includeShared: Boolean(analysis.sharedBundle),
     origin: analysis.origin,
   });
+}
+
+export async function uninstallAllFromLibrarySource(
+  projectRoot: string,
+  sourceId: string,
+): Promise<{ removedIds: string[] }> {
+  const source = findSource(projectRoot, sourceId);
+
+  if (source.kind === "bundled") {
+    const bundledIds = new Set(listBundledSkills().map((skill) => skill.id));
+    const removedIds: string[] = [];
+    for (const skill of listProjectSkills(projectRoot)) {
+      if (!bundledIds.has(skill.id)) continue;
+      deleteProjectSkill(projectRoot, skill.id);
+      removedIds.push(skill.id);
+    }
+    return { removedIds };
+  }
+
+  throw new Error("Uninstall all is only supported for built-in skills.");
 }
 
 export async function fetchLibraryCatalog(

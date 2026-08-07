@@ -479,13 +479,13 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     name: TOOL_NAMES.interactionWrite,
     label: "Interaction Write",
     description:
-      "Create or update an Interaction (figure.static or plot.line|plot.series|plot.scatter). Persists to `.prismnext/interactions/<id>/spec.json`. " +
-      "figure.static needs an existing image path; plot.* needs an existing CSV + params.x/y. Returns fenceMarkdown — embed it in your assistant reply after success.",
+      "Create or update an Interaction (figure.static or plot.* CSV chart). Persists to `.prismnext/interactions/<id>/spec.json`. " +
+      "figure.static needs an existing image path; plot.* needs an existing CSV + params.x/y (plot.heatmap also params.fill). Returns fenceMarkdown — embed it in your assistant reply after success.",
     category: "project",
     usageHint:
       "When the user needs a saved figure or CSV chart in the RightArea panel (after savefig / experiment metrics CSV).",
     workflowRules: [
-      "Allowed kinds: figure.static, plot.line, plot.series, plot.scatter — no invented numeric series.",
+      "Allowed kinds: figure.static, plot.line, plot.series, plot.scatter, plot.area, plot.bar, plot.histogram, plot.box, plot.density, plot.heatmap — no invented numeric series.",
       "Write the image/CSV file to disk first; interaction-write rejects missing paths.",
       "Do NOT use ```artifact for Interaction objects — use interaction-write then ```interaction fence in your reply.",
       "Do NOT edit spec.json with generic write/edit — use this tool only.",

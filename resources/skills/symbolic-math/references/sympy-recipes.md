@@ -100,6 +100,29 @@ sp.Matrix.jacobian  # use: sp.Matrix([f1, f2]).jacobian([x, y])
 Symbolic inverses and eigenvalues blow up fast — for matrices beyond 3×3,
 verify identities numerically with random rational matrices instead.
 
+## Scale and timeouts
+
+Verification scripts must finish in seconds. SymPy's failure mode is not
+wrong answers but *no* answer — `simplify` exploding or `integrate` /
+`dsolve` running forever. Budget accordingly:
+
+- **Soft limits.** Symbolic matrices ≤ 3×3; expressions up to a few dozen
+  terms. Beyond that, do not escalate simplification — switch to numeric
+  probes (below).
+- **Escalation order for `simplify`:** `ratsimp` → `trigsimp` → `powsimp` →
+  `refine` with assumptions. If none lands quickly, stop; a stalled
+  `simplify` almost never means the claim is false.
+- **Prefer residuals over rewritten identities** (see "Verify by inverse
+  operation") — they are dramatically cheaper to simplify.
+- **Numeric fallback is a full check, not a consolation prize.** Random
+  rational probes over the assumption domain (plus its boundary) at 30-digit
+  precision catch wrong claims reliably; they just don't prove right ones.
+  Say "numerically verified" in the manuscript note, not "proven".
+- **Wall-clock discipline.** Wrap long symbolic calls so the script still
+  exits 1 (not hangs) on timeout, e.g. `signal.alarm` on Unix or a
+  multiprocessing worker. `experiment-run` imposes no hard timeout — the
+  script is responsible for its own budget.
+
 ## Numeric spot-checking
 
 ```python

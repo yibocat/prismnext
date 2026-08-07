@@ -323,13 +323,11 @@ export function isComposerHostedToolId(
   toolUseId: string | undefined,
   questionId: string | null | undefined,
   todoId: string | null | undefined,
-  experimentRunId?: string | null | undefined,
 ): boolean {
   if (!toolUseId?.trim()) return false;
   return (
     toolUseId === questionId
     || toolUseId === todoId
-    || toolUseId === experimentRunId
   );
 }
 

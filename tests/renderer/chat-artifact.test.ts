@@ -5,6 +5,7 @@ import {
   buildArtifactFallbackMarkdown,
   buildArtifactFenceMarkdown,
   classifyArtifactKind,
+  collapseVisualArtifactPaths,
   parseArtifactFenceContent,
   resolveToolCardGalleryPaths,
   CHAT_ARTIFACT_AUTO_CAP,
@@ -95,5 +96,44 @@ describe("buildArtifactFallbackMarkdown", () => {
     expect(buildArtifactFenceMarkdown("a/b.csv", "T")).toBe(
       ["```artifact", "path: a/b.csv", "title: T", "```"].join("\n"),
     );
+  });
+});
+
+describe("collapseVisualArtifactPaths", () => {
+  it("collapses same figure across formats to the image", () => {
+    expect(
+      collapseVisualArtifactPaths(["out/fig.pdf", "out/fig.png"]),
+    ).toEqual(["out/fig.png"]);
+    // order-independent: PDF listed after the image still collapses away
+    expect(
+      collapseVisualArtifactPaths(["out/fig.png", "out/fig.pdf"]),
+    ).toEqual(["out/fig.png"]);
+  });
+
+  it("prefers the frozen snapshot over the working path", () => {
+    expect(
+      collapseVisualArtifactPaths([
+        "experiments/e1/fig.svg",
+        ".prismnext/experiments/e1/artifacts/run-1/fig.svg",
+      ]),
+    ).toEqual([".prismnext/experiments/e1/artifacts/run-1/fig.svg"]);
+  });
+
+  it("keeps non-visual files even when the stem matches a figure", () => {
+    expect(
+      collapseVisualArtifactPaths(["out/results.csv", "out/results.png"]),
+    ).toEqual(["out/results.csv", "out/results.png"]);
+  });
+
+  it("keeps distinct figures in first-seen order", () => {
+    expect(
+      collapseVisualArtifactPaths(["a/fig1.png", "b/fig2.pdf", "c/fig1.svg"]),
+    ).toEqual(["c/fig1.svg", "b/fig2.pdf"]);
+  });
+
+  it("dedupes exact paths and ignores case in the stem", () => {
+    expect(
+      collapseVisualArtifactPaths(["a/Fig.PNG", "a/Fig.PNG", "a/fig.pdf"]),
+    ).toEqual(["a/Fig.PNG"]);
   });
 });

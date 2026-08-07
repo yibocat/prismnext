@@ -110,6 +110,62 @@ export function artifactPathMatchesAny(
   return false;
 }
 
+/** Extensions chat previews as a figure (image inline / PDF peek). */
+const CHAT_VISUAL_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg|pdf)$/i;
+
+/** Group key for one logical figure: basename minus visual extension. */
+function visualStemKey(path: string): string | null {
+  const base = artifactBasename(path);
+  if (!base || !CHAT_VISUAL_ARTIFACT_EXT.test(base)) return null;
+  return base.replace(CHAT_VISUAL_ARTIFACT_EXT, "").toLowerCase();
+}
+
+/** Representative preference: image over PDF; frozen snapshot over working path. */
+function visualRank(path: string): number {
+  const base = artifactBasename(path);
+  const kindScore = isImageArtifactPath(base) ? 2 : isPdfArtifactPath(base) ? 1 : 0;
+  const snapshotBonus = /\/artifacts\/run-/.test(normalizeArtifactSlash(path)) ? 1 : 0;
+  return kindScore * 2 + snapshotBonus;
+}
+
+/**
+ * One chat preview per logical figure. A run often registers the same figure
+ * as PDF + PNG/SVG, and repeated runs surface both the working path and the
+ * frozen snapshot — identical pixels each. Collapse same-stem visual paths to
+ * one representative (image over PDF, snapshot over working, freshest wins
+ * ties). Non-visual files (csv, json, …) are never collapsed, and the first
+ * occurrence's position is kept so display order stays stable.
+ */
+export function collapseVisualArtifactPaths(paths: string[]): string[] {
+  const bestByStem = new Map<string, { path: string; rank: number }>();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of paths) {
+    const p = normalizeArtifactSlash(raw);
+    if (!p || seen.has(p)) continue;
+    seen.add(p);
+    const stem = visualStemKey(p);
+    if (stem == null) {
+      out.push(p);
+      continue;
+    }
+    const rank = visualRank(p);
+    const hit = bestByStem.get(stem);
+    if (!hit) {
+      bestByStem.set(stem, { path: p, rank });
+      out.push(p);
+      continue;
+    }
+    if (rank >= hit.rank) {
+      const idx = out.indexOf(hit.path);
+      if (idx >= 0) out[idx] = p;
+      hit.path = p;
+      hit.rank = rank;
+    }
+  }
+  return out;
+}
+
 /**
  * Paths for a tool-card gallery: display list minus reply embeds / fallback.
  * Caps at {@link CHAT_ARTIFACT_AUTO_CAP} (same as reply auto-fallback).

@@ -442,4 +442,93 @@ describe("experiment-log-bridge experiment-run request lifecycle (Bug #1)", () =
       executorSpy.mockRestore();
     }
   });
+
+  it("passes interpreter=external + pythonPath through to kickoffExperimentRun", async () => {
+    const { resPath } = writeBridgeRequest(sessionId, "run-external", {
+      tool: "experiment-run",
+      sessionId,
+      projectRoot,
+      action: "run",
+      id: expId,
+      command: "sage -python train.py",
+      interpreter: "external",
+      pythonPath: "sage",
+    });
+
+    const executorSpy = vi
+      .spyOn(experimentRunExecutor, "kickoffExperimentRun")
+      .mockImplementation(() => {
+        setImmediate(() => {
+          writeFileSync(resPath, JSON.stringify({ ok: true, exitCode: 0 }), "utf-8");
+        });
+      });
+
+    try {
+      await processExperimentLogBridgeOnceForTests();
+      expect(executorSpy).toHaveBeenCalledTimes(1);
+      expect(executorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expId,
+          command: "sage -python train.py",
+          interpreter: "external",
+          pythonPath: "sage",
+        }),
+      );
+      await new Promise((r) => setImmediate(r));
+      await processExperimentLogBridgeOnceForTests();
+      expect(readResult(resPath)).toMatchObject({ ok: true, exitCode: 0 });
+    } finally {
+      executorSpy.mockRestore();
+    }
+  });
+
+  it("rejects interpreter=external without pythonPath (missing_python_path, no kickoff)", async () => {
+    const { resPath } = writeBridgeRequest(sessionId, "run-external-missing", {
+      tool: "experiment-run",
+      sessionId,
+      projectRoot,
+      action: "run",
+      id: expId,
+      command: "true",
+      interpreter: "external",
+    });
+
+    const executorSpy = vi.spyOn(experimentRunExecutor, "kickoffExperimentRun");
+
+    try {
+      await processExperimentLogBridgeOnceForTests();
+      expect(executorSpy).not.toHaveBeenCalled();
+      expect(readResult(resPath)).toMatchObject({
+        ok: false,
+        error: "missing_python_path",
+      });
+    } finally {
+      executorSpy.mockRestore();
+    }
+  });
+
+  it("rejects an unknown interpreter value (invalid_interpreter, no kickoff)", async () => {
+    const { resPath } = writeBridgeRequest(sessionId, "run-external-bogus", {
+      tool: "experiment-run",
+      sessionId,
+      projectRoot,
+      action: "run",
+      id: expId,
+      command: "true",
+      interpreter: "conda",
+    });
+
+    const executorSpy = vi.spyOn(experimentRunExecutor, "kickoffExperimentRun");
+
+    try {
+      await processExperimentLogBridgeOnceForTests();
+      expect(executorSpy).not.toHaveBeenCalled();
+      expect(readResult(resPath)).toMatchObject({
+        ok: false,
+        error: "invalid_interpreter",
+      });
+    } finally {
+      executorSpy.mockRestore();
+    }
+  });
 });

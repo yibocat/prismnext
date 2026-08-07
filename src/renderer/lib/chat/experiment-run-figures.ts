@@ -15,6 +15,7 @@ import {
   assistantTextEmbedsArtifactPath,
   buildArtifactFallbackMarkdown,
   CHAT_ARTIFACT_AUTO_CAP,
+  collapseVisualArtifactPaths,
   collectEmbeddedArtifactPaths,
   missingArtifactPathsInText,
 } from "@/lib/markdown/chat-artifact";
@@ -72,6 +73,7 @@ export function isExperimentFigureToolUse(toolUse: ContentBlock): boolean {
 /**
  * Paths to show for a run: keep every artifact; for images prefer a matching
  * snapshot (same basename) when present so chat shows the frozen figure.
+ * Same figure in several formats (PDF + PNG + SVG) collapses to one preview.
  */
 export function pathsForRunChatDisplay(opts: {
   artifacts: string[];
@@ -103,7 +105,7 @@ export function pathsForRunChatDisplay(opts: {
     seen.add(n);
     out.push(n);
   }
-  return out;
+  return collapseVisualArtifactPaths(out);
 }
 
 /**
@@ -165,7 +167,8 @@ export function collectExperimentArtifactPathsFromBlocks(
       out.push(p);
     }
   }
-  return out;
+  // Repeated runs of one figure surface working path + snapshot — one preview.
+  return collapseVisualArtifactPaths(out);
 }
 
 /** @deprecated */

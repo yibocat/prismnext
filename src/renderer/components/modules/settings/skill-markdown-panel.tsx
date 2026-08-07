@@ -25,6 +25,9 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetSource, setResetSource] = useState<"bundled" | "registry" | null>(null);
+  const [bundledDefault, setBundledDefault] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"source" | "preview">(
     slot.mode === "new" ? "source" : "preview",
   );
@@ -97,6 +100,62 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     setViewMode(slot.mode === "new" ? "source" : "preview");
   }, [loadContent, slot.mode, slot.mode === "new" ? null : slot.skillId]);
 
+  // Resolve what "reset" means for this skill: restore the bundled copy when
+  // one exists, reinstall from its registry/GitHub source otherwise. Custom
+  // skills have no default to recover, so they get no reset.
+  useEffect(() => {
+    if (slot.mode !== "edit") {
+      setResetSource(null);
+      setBundledDefault(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const bundled = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
+        if (cancelled) return;
+        if (bundled != null) {
+          setBundledDefault(bundled);
+          setResetSource("bundled");
+          return;
+        }
+        if (projectRoot) {
+          const list = await window.electronAPI.agentListSkills(projectRoot);
+          const info = list.find((s) => s.id === slot.skillId);
+          if (!cancelled && info?.installOrigin) setResetSource("registry");
+        }
+      } catch {
+        /* no reset source available */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slot.mode, slot.mode === "new" ? null : slot.skillId, projectRoot]);
+
+  const handleResetToDefault = async () => {
+    if (!projectRoot || slot.mode !== "edit" || !resetSource) return;
+    setResetting(true);
+    try {
+      if (resetSource === "bundled") {
+        await window.electronAPI.agentInstallBundledSkill(projectRoot, slot.skillId);
+      } else {
+        await window.electronAPI.agentReinstallSkill(projectRoot, slot.skillId);
+      }
+      await window.electronAPI.chatPrewarm(projectRoot);
+      bumpSkillsRefresh();
+      toast.success(t("settings.editor.skillMd.toast.restored"));
+      await loadContent({ silent: true });
+      setViewMode("preview");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skillMd.toast.saveFailed"),
+      );
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!projectRoot) return;
     const expectedId = slot.mode === "edit" ? slot.skillId : undefined;
@@ -164,7 +223,15 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
             : {
                 onSave: () => void handleSave(),
                 onCancel: closePanel,
-                saving,
+                saving: saving || resetting,
+                onResetToDefault: resetSource
+                  ? () => void handleResetToDefault()
+                  : undefined,
+                resetDisabled:
+                  resetting ||
+                  (resetSource === "bundled" &&
+                    bundledDefault != null &&
+                    content.trim() === bundledDefault.trim()),
               }
         }
       />

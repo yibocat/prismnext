@@ -8,6 +8,7 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction-figure";
 import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction-plot";
+import { buildPlotOptions } from "./plot/build-plot-spec";
 import type { InteractionSpec } from "../../../shared/interaction-spec";
 import {
   artifactBasename,
@@ -265,41 +266,9 @@ function PlotPeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: s
       const Plot = await import("@observablehq/plot");
       if (cancelled || !plotHostRef.current) return;
 
-      const isScatter = spec.kind === "plot.scatter";
-      const mark = isScatter
-        ? Plot.dot(data.points, {
-            x: "x",
-            y: "y",
-            fill: "series",
-            r: 2,
-            fillOpacity: 0.85,
-          })
-        : Plot.line(data.points, {
-            x: "x",
-            y: "y",
-            stroke: "series",
-            strokeWidth: 1.75,
-          });
-
-      const plot = Plot.plot({
-        width,
-        height,
-        marginLeft: Math.min(44, Math.max(28, Math.round(width * 0.12))),
-        marginBottom: Math.min(36, Math.max(22, Math.round(height * 0.22))),
-        marginTop: 6,
-        marginRight: 6,
-        x: { label: null, grid: true },
-        y: { label: null, grid: true },
-        color: { legend: false },
-        marks: [mark],
-        style: {
-          background: "transparent",
-          color: "var(--foreground)",
-          fontFamily: "var(--font-sans)",
-          fontSize: "9px",
-          overflow: "visible",
-        },
-      });
+      const plot = Plot.plot(
+        buildPlotOptions(Plot, data, { width, height }, { compact: true }),
+      );
 
       plotEl = plot;
       node.replaceChildren(plot);

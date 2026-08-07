@@ -202,7 +202,8 @@ export function SkillLibraryPanel() {
   };
 
   const installAllFromSource = async (source: LibrarySource) => {
-    if (!projectRoot || source.kind !== "github") return;
+    if (!projectRoot) return;
+    if (source.kind !== "github" && source.kind !== "bundled") return;
     setSaving(true);
     try {
       const result = await window.electronAPI.agentInstallAllFromLibrarySource(
@@ -221,6 +222,36 @@ export function SkillLibraryPanel() {
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : t("settings.editor.skills.toast.installAllFailed"),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const uninstallAllFromSource = async (source: LibrarySource) => {
+    if (!projectRoot || source.kind !== "bundled") return;
+    setSaving(true);
+    try {
+      const result = await window.electronAPI.agentUninstallAllFromLibrarySource(
+        projectRoot,
+        source.id,
+      );
+      await window.electronAPI.chatPrewarm(projectRoot);
+      bumpSkillsRefresh();
+      setInstalledIds((prev) => {
+        const next = new Set(prev);
+        for (const id of result.removedIds) next.delete(id);
+        return next;
+      });
+      toast.success(
+        t("settings.editor.skills.toast.uninstalledBatch", {
+          count: result.removedIds.length,
+          name: source.name,
+        }),
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("settings.editor.skills.toast.uninstallAllFailed"),
       );
     } finally {
       setSaving(false);
@@ -403,7 +434,7 @@ export function SkillLibraryPanel() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {source.kind === "github" && source.connected && (
+                    {(source.kind === "github" || source.kind === "bundled") && source.connected && (
                       <Button
                         variant="outline"
                         size="xs"
@@ -411,6 +442,16 @@ export function SkillLibraryPanel() {
                         onClick={() => void installAllFromSource(source)}
                       >
                         {t("settings.editor.skills.installAll")}
+                      </Button>
+                    )}
+                    {source.kind === "bundled" && source.connected && (
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        disabled={saving}
+                        onClick={() => void uninstallAllFromSource(source)}
+                      >
+                        {t("settings.editor.skills.uninstallAll")}
                       </Button>
                     )}
                     {source.connected ? (

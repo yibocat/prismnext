@@ -1,0 +1,10 @@
+# Verification dependencies for the math-lattice skill.
+# Install once per project, into the project venv only:
+#   uv pip install -r requirements-verify.txt
+# (`.prismnext/.venv` — never the system Python)
+#
+# cysignals is a hard runtime dependency of fpylll that is not always
+# pulled in automatically (observed with uv resolution) — keep it listed.
+sympy>=1.13
+fpylll>=0.6
+cysignals>=1.11

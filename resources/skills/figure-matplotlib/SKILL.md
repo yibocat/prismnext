@@ -34,8 +34,15 @@ that interactive/3D panel views are not currently supported.
   error-bar conventions. Read before picking a chart.
 - `references/colorblind-palettes.md` — Okabe-Ito / Tol hex values and usage
   rules.
+- `references/journal-sizing.md` — column widths by venue (Nature/Science/
+  Cell/IEEE + LaTeX `\textwidth` measurement), type/line minimums at final
+  size, format & DPI rules, multi-panel mechanics.
+- `references/figure-qc.md` — pre-submission QC checklist: geometry, color,
+  honesty, cross-figure consistency, caption wiring.
 - `scripts/plot_template.py` — runnable template: loads the style, correct
-  figure size, saves PDF+PNG. Start plots from this file.
+  figure size, saves PDF+PNG. Start single-panel plots from this file.
+- `scripts/plot_multipanel.py` — 2×2 multi-panel template: panel letters,
+  shared colorbar, exact column-width sizing. Start composed figures here.
 
 ## Workflow
 
@@ -52,9 +59,12 @@ that interactive/3D panel views are not currently supported.
    (`.prismnext/.venv`) — never the system Python.
 4. **Check against the standards** — axis labels with units, sample sizes,
    legible at final column width, palette from
-   `references/colorblind-palettes.md`.
+   `references/colorblind-palettes.md`; width per
+   `references/journal-sizing.md`.
 5. **Wire & verify** — `\includegraphics` + caption + label; `latex-compile`;
    `interaction-write` when the figure should be reopenable in chat.
+   Before submission or sharing, run the checklist in
+   `references/figure-qc.md`.
 
 ## Rules
 

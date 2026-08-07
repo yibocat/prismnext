@@ -4,6 +4,11 @@
 Usage: copy into the project, replace CLAIM with lhs/rhs and assumptions,
 run inside the project venv (or via experiment-run). Exits non-zero when the
 claim fails, so it can gate a manuscript step.
+
+Soft scale limits (see references/sympy-recipes.md → "Scale and timeouts"):
+symbolic matrices <= 3x3, expressions up to a few dozen terms, and the whole
+script should finish in seconds on CPU. Beyond that, keep the symbolic part
+small and let the numeric probes carry the weight.
 """
 
 import sys
@@ -22,6 +27,9 @@ def main() -> int:
     rhs = sp.exp(a * x) * (a * x - 1) / a**2
 
     # --- 3. Symbolic check ---------------------------------------------------
+    # simplify() must return in seconds. If it stalls, escalate per the recipes
+    # (ratsimp -> trigsimp -> powsimp -> refine) or shrink the claim; do not
+    # let the script hang — experiment-run imposes no hard timeout.
     diff = sp.simplify(lhs - rhs)
     symbolic_ok = diff == 0
     print(f"symbolic: simplify(lhs - rhs) = {diff}  ->  {'PASS' if symbolic_ok else 'FAIL'}")

@@ -120,17 +120,47 @@ export default tool({
         "Optional run classification. Omit when unsure — do not invent 'other' as a default.",
       )
       .optional(),
+    interpreter: tool.schema
+      .enum(["project", "external"])
+      .describe(
+        'Interpreter lane. "project" (default) runs in the shared project venv ' +
+          "(.prismnext/.venv), which is ensured and injected. " +
+          '"external" runs the command as-is with a user-provided interpreter ' +
+          "(e.g. a SageMath environment): no venv ensure, no PATH/VIRTUAL_ENV " +
+          "injection; the real interpreter and its version are recorded in the " +
+          "run's env for provenance.",
+      )
+      .optional(),
+    pythonPath: tool.schema
+      .string()
+      .describe(
+        'Required when interpreter="external": the external interpreter — ' +
+          'absolute path (e.g. "/opt/miniforge3/envs/sage/bin/python") or a ' +
+          'command name resolvable via PATH (e.g. "sage"). Ignored on the ' +
+          "project lane.",
+      )
+      .optional(),
   },
   async execute(args, context) {
     const id = typeof args.id === "string" ? args.id.trim() : "";
     const command = typeof args.command === "string" ? args.command : "";
     if (!id) return toolOutput({ ok: false, error: "Missing id parameter." });
     if (!command.trim()) return toolOutput({ ok: false, error: "Missing command parameter." });
+    const interpreter = typeof args.interpreter === "string" ? args.interpreter.trim() : "";
+    const pythonPath = typeof args.pythonPath === "string" ? args.pythonPath.trim() : "";
+    if (interpreter === "external" && !pythonPath) {
+      return toolOutput({
+        ok: false,
+        error: 'interpreter="external" requires pythonPath (the external interpreter to record and probe).',
+      });
+    }
 
     const payload: Record<string, unknown> = { action: "run", id, command };
     if (Array.isArray(args.artifacts)) payload.artifacts = args.artifacts;
     if (typeof args.notes === "string") payload.notes = args.notes;
     if (typeof args.kind === "string" && args.kind.trim()) payload.kind = args.kind.trim();
+    if (interpreter) payload.interpreter = interpreter;
+    if (pythonPath) payload.pythonPath = pythonPath;
 
     return bridgeCall(context as Record<string, unknown>, payload);
   },

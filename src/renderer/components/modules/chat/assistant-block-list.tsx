@@ -5,12 +5,18 @@ import { PlanArtifactCard } from "./plan-artifact-card";
 import { ToolWidget } from "./tools/tool-widget-dispatcher";
 import { ThinkingWidget } from "./tools/thinking-widget";
 import { ActivityFold } from "./tools/activity-fold";
-import { buildArtifactFallbackMarkdown } from "@/lib/markdown/chat-artifact";
+import {
+  artifactPathMatchesAny,
+  buildArtifactFallbackMarkdown,
+} from "@/lib/markdown/chat-artifact";
 import {
   resolveMissingArtifactPathsForReply,
   resolveSuppressArtifactPathsForToolCards,
 } from "@/lib/chat/experiment-run-figures";
-import { buildInteractionReplyFallbackMarkdown } from "@/lib/chat/interaction-fence-fallback";
+import {
+  buildInteractionReplyFallbackMarkdown,
+  collectInteractionResourcePathsFromBlocks,
+} from "@/lib/chat/interaction-fence-fallback";
 import { buildPlanReplyFallbackMarkdown } from "@/lib/chat/plan-reply-fallback";
 import { InteractionFenceDedupeProvider } from "@/lib/interaction/interaction-fence-dedupe";
 import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
@@ -50,9 +56,16 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   const settled = !isStreamingMsg;
   const phase = settled ? "settled" : "live";
 
+  // Paths already displayed as interactions (spec resources) must not
+  // re-appear as plain artifact previews — one surface per file.
+  const interactionResourcePaths = isStreamingMsg
+    ? []
+    : collectInteractionResourcePathsFromBlocks(blocks, toolResultMap);
   const missingArtifacts = isStreamingMsg
     ? []
-    : resolveMissingArtifactPathsForReply(blocks, toolResultMap);
+    : resolveMissingArtifactPathsForReply(blocks, toolResultMap).filter(
+        (p) => !artifactPathMatchesAny(p, interactionResourcePaths),
+      );
   const fallbackReply = buildArtifactFallbackMarkdown(missingArtifacts);
   const interactionFallbackReply = isStreamingMsg
     ? ""
@@ -63,11 +76,14 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       : buildPlanReplyFallbackMarkdown(blocks, planReplyFallbackSummary);
   const suppressArtifactPaths = isStreamingMsg
     ? []
-    : resolveSuppressArtifactPathsForToolCards(
-        blocks,
-        toolResultMap,
-        missingArtifacts,
-      );
+    : [
+        ...resolveSuppressArtifactPathsForToolCards(
+          blocks,
+          toolResultMap,
+          missingArtifacts,
+        ),
+        ...interactionResourcePaths,
+      ];
 
   const segments = useMemo(
     () => (foldActivity ? segmentAssistantBlocks(blocks, { phase }) : null),

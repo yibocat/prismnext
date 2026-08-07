@@ -1,15 +1,10 @@
 import { useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
-import { useExperimentStore } from "@/stores/experiment-store";
 import {
   resolveComposerPendingQuestion,
   selectComposerHostedQuestionId,
 } from "@/lib/chat/composer-pending-tools";
-import {
-  resolveComposerPendingExperimentRun,
-  selectComposerHostedExperimentRunId,
-} from "@/lib/chat/composer-pending-experiment";
 import {
   PermissionGatePanel,
   usePermissionGateState,
@@ -17,11 +12,14 @@ import {
 import { PlanSuggestBar } from "./plan-suggest-bar";
 import { PlanChrome } from "./plan-chrome";
 import { QuestionComposerPanel } from "./question-composer-panel";
-import { ExperimentRunBar } from "./experiment-run-bar";
 import {
   ComposerChromeStackBody,
   type ComposerChromeStackItem,
 } from "./composer-chrome-stack-body";
+
+// Composer chrome is reserved for blocking, interactive surfaces (permission
+// gate, plan approval, user questions). Experiment runs are not interactive —
+// their live status streams in the message-flow tool card instead.
 function useComposerChromeStackItems(): ComposerChromeStackItem[] {
   const { t } = useTranslation();
   const streamTick = useChatStore((s) => s.streamTick);
@@ -35,12 +33,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     return tab?.sessionAgent === "plan" && !!tab.planDraftFileReady && !tab.planConfirmSuppressed;
   });
   const questionId = useChatStore(selectComposerHostedQuestionId);
-  const experimentRunId = useChatStore(selectComposerHostedExperimentRunId);
-  const runInFlight = useExperimentStore((s) => s.runInFlight);
-  const chromeLive = useChatStore((s) => {
-    const tab = s.tabs.find((x) => x.id === s.activeTabId);
-    return !tab?.composerToolsSuppressed;
-  });
   const permissionGate = usePermissionGateState();
   const permissionOpen = permissionGate.show;
   const permissionPeek = permissionGate.peekLabel;
@@ -54,15 +46,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     }
     return t("chat.questionPanel.title");
   }, [questionId, streamTick, t]);
-
-  const experimentPeek = useMemo(() => {
-    if (runInFlight?.command?.trim()) {
-      return runInFlight.command.trim().slice(0, 72);
-    }
-    const pending = resolveComposerPendingExperimentRun(useChatStore.getState());
-    if (pending?.command) return pending.command.slice(0, 72);
-    return t("chat.composer.experimentRunTitle");
-  }, [runInFlight?.command, runInFlight?.runId, experimentRunId, streamTick, t]);
 
   return useMemo(() => {
     const items: ComposerChromeStackItem[] = [];
@@ -99,17 +82,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
         content: <QuestionComposerPanel />,
       });
     }
-    const showExperiment =
-      chromeLive
-      && (runInFlight != null || experimentRunId != null);
-    if (showExperiment) {
-      items.push({
-        id: "experiment-run",
-        order: 50,
-        peekLabel: experimentPeek,
-        content: <ExperimentRunBar />,
-      });
-    }
 
     return items;
   }, [
@@ -120,10 +92,6 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
     planChromeVisible,
     questionId,
     questionPeek,
-    experimentRunId,
-    experimentPeek,
-    runInFlight,
-    chromeLive,
     t,
   ]);
 }

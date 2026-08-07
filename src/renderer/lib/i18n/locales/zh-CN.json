@@ -151,13 +151,6 @@
       "systemFontLoading": "正在加载字体…",
       "systemFontEmpty": "未找到字体。",
       "systemFontError": "无法读取系统字体。",
-      "systemFontPreset": "系统默认",
-      "systemFontPresets": "预设",
-      "systemFontInstalled": "已安装字体",
-      "systemFontSearch": "搜索字体…",
-      "systemFontLoading": "正在加载字体…",
-      "systemFontEmpty": "未找到字体。",
-      "systemFontError": "无法读取系统字体。",
       "editor": "编辑器",
       "editorTheme": "编辑器语法主题",
       "editorThemeDesc": "选择代码与 LaTeX 语法的高亮配色。编辑器背景始终与应用主题一致。",
@@ -625,6 +618,8 @@
       "pageDesc": "可在对话中加载的可复用指令包。",
       "openProject": "打开项目以管理技能。",
       "empty": "尚未安装技能。",
+      "showAll": "显示全部（{{count}} 个技能）",
+      "showLess": "收起",
       "origin": {
         "custom": "自建",
         "bundled": "内置",
@@ -1079,6 +1074,8 @@
           "loadFailed": "加载技能库失败。",
           "installFailed": "安装失败。",
           "installAllFailed": "全部安装失败。",
+          "uninstallAllFailed": "全部卸载失败。",
+          "uninstalledBatch": "已从「{{name}}」移除 {{count}} 个内置 skill — 请新开聊天标签页生效。",
           "addSourceFailed": "无法添加来源。",
           "removeFailed": "移除来源失败。",
           "githubAdded": "已添加 GitHub 来源（{{count}} 个技能）。"
@@ -1098,6 +1095,7 @@
         "connected": "已连接",
         "disconnected": "未连接",
         "installAll": "全部安装",
+        "uninstallAll": "全部卸载",
         "connect": "连接",
         "disconnect": "断开",
         "searchPlaceholder": "搜索已加载的技能…",
@@ -1332,6 +1330,7 @@
           "exists": "技能「{{name}}」已存在。",
           "created": "已创建「{{name}}」— 请新开聊天后使用。",
           "updated": "技能已更新 — 请新开聊天以生效。",
+          "restored": "技能已恢复为默认内容。",
           "saveFailed": "保存技能失败。"
         },
         "openProject": "请先打开项目以编辑技能。",
@@ -1789,10 +1788,7 @@
       "queueDelete": "从队列删除",
       "taskPlanTitle": "任务计划",
       "taskPlanInProgress": "进行中",
-      "taskPlanDismiss": "隐藏任务计划",
-      "experimentRunTitle": "实验运行",
-      "experimentRunLive": "运行中 — 点击打开实时输出",
-      "experimentRunOpen": "打开"
+      "taskPlanDismiss": "隐藏任务计划"
     },
     "questionPanel": {
       "title": "需要你确认",
@@ -2633,7 +2629,7 @@
       "placeholderTitle": "预览暂不可用",
       "placeholderBody": "类型「{{kind}}」将在后续版本中在此渲染。",
       "unsupportedTitle": "不支持该 Interaction 类型",
-      "unsupportedBody": "类型「{{kind}}」不可写入。请使用 figure.static（图像）或 plot.line / plot.series / plot.scatter（CSV）。",
+      "unsupportedBody": "类型「{{kind}}」不可写入。请使用 figure.static（图像）或 plot.* CSV 图类（plot.line / series / scatter / area / bar / histogram / box / density / heatmap）。",
       "figureMissingPath": "resources[] 中没有图像路径。请添加 png/svg 路径后重新写入。",
       "figureLoadError": "无法加载图像：{{path}}",
       "plotErrorTitle": "无法渲染图表",

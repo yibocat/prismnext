@@ -29,6 +29,7 @@ const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
+const SKILLS_PAGE_INITIAL_COUNT = 10;
 
 interface InstalledSkill {
   id: string;
@@ -62,7 +63,18 @@ export function SkillsSettings() {
   const [saving, setSaving] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updatesBySkillId, setUpdatesBySkillId] = useState<Record<string, SkillUpdateRow>>({});
+  const [showAllSkills, setShowAllSkills] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
+
+  const visibleSkills =
+    showAllSkills || skills.length <= SKILLS_PAGE_INITIAL_COUNT
+      ? skills
+      : skills.slice(0, SKILLS_PAGE_INITIAL_COUNT);
+  const hasMoreSkills = skills.length > SKILLS_PAGE_INITIAL_COUNT;
+
+  useEffect(() => {
+    setShowAllSkills(false);
+  }, [projectRoot]);
 
   const loadSkills = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoaded(false);
@@ -277,7 +289,8 @@ export function SkillsSettings() {
                     </div>
                   </div>
                 ) : (
-                  skills.map((skill) => {
+                  <>
+                  {visibleSkills.map((skill) => {
                     const update = updatesBySkillId[skill.id];
                     const hasUpdate = update?.updateAvailable === true;
                     return (
@@ -351,7 +364,22 @@ export function SkillsSettings() {
                       />
                     </div>
                     );
-                  })
+                  })}
+                  {hasMoreSkills && (
+                    <div className="py-2.5 flex justify-center border-t border-border">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-[length:var(--font-size-12)] text-muted-foreground"
+                        onClick={() => setShowAllSkills((v) => !v)}
+                      >
+                        {showAllSkills
+                          ? t("settings.skillsPage.showLess")
+                          : t("settings.skillsPage.showAll", { count: skills.length })}
+                      </Button>
+                    </div>
+                  )}
+                  </>
                 )}
               </div>
             </div>

@@ -15,6 +15,10 @@ import {
   isDirectLatexCompileBashCommand,
   latexCompileBashBlockMessage,
 } from "../../shared/latex-compile-bash";
+import {
+  isWholeDiskSearchBashCommand,
+  wholeDiskSearchBlockMessage,
+} from "../../shared/project-escape-guard";
 import { gateExperimentPythonExecution } from "./experiment-log-service";
 
 const log = createLogger("ai-bash-runner", "agent");
@@ -162,6 +166,32 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
       cwd: args.cwd,
     });
     log.warn("AI bash blocked by LaTeX compile gate", {
+      chatTabId,
+      command: args.command.slice(0, 120),
+    });
+    return Promise.resolve(blocked);
+  }
+
+  if (isWholeDiskSearchBashCommand(args.command)) {
+    const blocked: RunAiBashJobResult = {
+      output: wholeDiskSearchBlockMessage(),
+      exitCode: 1,
+      cwd: args.cwd,
+    };
+    try {
+      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
+    } catch {
+      // ignore
+    }
+    emitAiExit({
+      sessionId: args.sessionId,
+      chatTabId,
+      requestId: args.toolCallId,
+      toolCallId: args.toolCallId,
+      exitCode: 1,
+      cwd: args.cwd,
+    });
+    log.warn("AI bash blocked by whole-disk search gate", {
       chatTabId,
       command: args.command.slice(0, 120),
     });

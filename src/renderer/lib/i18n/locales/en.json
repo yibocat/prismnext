@@ -618,6 +618,8 @@
       "pageDesc": "Reusable instruction packs the agent can load during a chat.",
       "openProject": "Open a project to manage skills.",
       "empty": "No skills installed yet.",
+      "showAll": "Show all ({{count}} skills)",
+      "showLess": "Show less",
       "origin": {
         "custom": "custom",
         "bundled": "built-in",
@@ -1072,6 +1074,8 @@
           "loadFailed": "Failed to load library.",
           "installFailed": "Install failed.",
           "installAllFailed": "Install all failed.",
+          "uninstallAllFailed": "Uninstall all failed.",
+          "uninstalledBatch": "Removed {{count}} built-in skills from \"{{name}}\" — start a new chat tab.",
           "addSourceFailed": "Could not add source.",
           "removeFailed": "Failed to remove source.",
           "githubAdded": "GitHub source added ({{count}} skills)."
@@ -1091,6 +1095,7 @@
         "connected": "Connected",
         "disconnected": "Disconnected",
         "installAll": "Install all",
+        "uninstallAll": "Uninstall all",
         "connect": "Connect",
         "disconnect": "Disconnect",
         "searchPlaceholder": "Search loaded skills…",
@@ -1325,6 +1330,7 @@
           "exists": "Skill \"{{name}}\" already exists.",
           "created": "Created \"{{name}}\" — start a new chat to use it.",
           "updated": "Skill updated — start a new chat to pick up changes.",
+          "restored": "Skill restored to its default content.",
           "saveFailed": "Failed to save skill."
         },
         "openProject": "Open a project to edit skills.",
@@ -1620,7 +1626,7 @@
       "running": "Running",
       "stopped": "Stopped"
     },
-      "rightArea": {
+    "rightArea": {
       "backToSettings": "Back to settings",
       "modes": "Modes",
       "addMode": "Add panel",
@@ -1782,10 +1788,7 @@
       "queueDelete": "Remove from queue",
       "taskPlanTitle": "Task plan",
       "taskPlanInProgress": "In progress",
-      "taskPlanDismiss": "Hide task plan",
-      "experimentRunTitle": "Experiment run",
-      "experimentRunLive": "Running — open for live output",
-      "experimentRunOpen": "Open"
+      "taskPlanDismiss": "Hide task plan"
     },
     "questionPanel": {
       "title": "Agent needs your input",
@@ -2600,7 +2603,7 @@
       "placeholderTitle": "Preview not available yet",
       "placeholderBody": "Kind “{{kind}}” will render here in a future release.",
       "unsupportedTitle": "This Interaction kind is not supported",
-      "unsupportedBody": "Kind “{{kind}}” is not writable here. Use figure.static (image) or plot.line / plot.series / plot.scatter (CSV).",
+      "unsupportedBody": "Kind “{{kind}}” is not writable here. Use figure.static (image) or a plot.* CSV kind (plot.line / series / scatter / area / bar / histogram / box / density / heatmap).",
       "figureMissingPath": "No image path in resources[]. Add a png/svg path and rewrite the Interaction.",
       "figureLoadError": "Could not load image: {{path}}",
       "plotErrorTitle": "Could not render plot",

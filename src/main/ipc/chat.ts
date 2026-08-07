@@ -74,6 +74,7 @@ import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
 import { emitChatStream } from "../services/chat-stream-notify";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import { resolveSessionAgent } from "../../shared/session-agent";
+import { formatTaskError } from "../../shared/task-error-codes";
 
 const log = createLogger("chat-ipc", "agent");
 

@@ -17,7 +17,12 @@ any manuscript figure — make it worth rereading.
   the matplotlib/TikZ pipeline output, a diagram, a composed result.
 - **CSV plot** when the value is the data itself — quick looks at results,
   curves the user may want to re-examine, anything where a live-rendered
-  line beats a frozen image.
+  view beats a frozen image. Kinds: `plot.line` / `plot.series` /
+  `plot.scatter` / `plot.area` (numeric x/y, melted by series), `plot.bar`
+  (categorical x; multiple y columns stack), `plot.histogram` (one numeric
+  column, optional `params.bins`), `plot.box` (group column x + one
+  numeric y), `plot.density` (numeric x/y density contours over a faint
+  dot underlay), `plot.heatmap` (x/y cells + `params.fill` value column).
 - Either way: **one object answers one visual question.** A second
   comparison is a second object, not more series crammed in.
 
@@ -64,9 +69,12 @@ These apply to everything shown in the panel, exploratory or final:
 
 ## Scope, for now
 
-The panel shows static images and CSV plots. Interactive, 3D, and
-externally-rendered views are a designed future extension — if asked, say
-the current scope plainly and offer the best static alternative instead.
+The panel shows static images and CSV plots (the nine kinds above;
+categorical palettes are Okabe-Ito and continuous scales viridis by
+default). Interactive, 3D, and externally-rendered views (custom JS specs,
+three.js) are a designed future extension — if asked, say the current
+scope plainly and offer the best static alternative instead. For
+manuscript-grade plots beyond the panel's kinds, use the figure pipeline.
 
 ## Workflow
 

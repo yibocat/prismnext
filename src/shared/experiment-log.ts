@@ -134,6 +134,17 @@ export interface ExperimentEnv {
    * (`.prismnext/.venv`), or null when missing.
    */
   venvPath: string | null;
+  /**
+   * Interpreter actually used for the run (external-interpreter lane).
+   * "project" = the shared `.prismnext/.venv`; "external" = a user-declared
+   * interpreter outside the project venv (e.g. a SageMath environment).
+   * Absent in run records predating the lane.
+   */
+  interpreter?: {
+    kind: "project" | "external";
+    path: string | null;
+    version: string | null;
+  } | null;
 }
 
 /** One run record — a single line in `runs.jsonl`. */
@@ -370,6 +381,51 @@ export function isPythonRelatedCommand(command: string): boolean {
   return false;
 }
 
+/**
+ * Command names that execute Python(-like) code through an interpreter living
+ * OUTSIDE the project venv — currently SageMath's `sage` (`sage -python x.py`,
+ * `sage x.sage`, `sage -c …`). Deliberately kept OUT of
+ * `isPythonRelatedCommand`: the experiment-run gate must not ensure/inject the
+ * project venv for these (that is what `interpreter: "external"` is for).
+ * Used to close the bash-lane bypass — inside the Experiment workspace such
+ * commands must go through `experiment-run` like any other script run.
+ */
+const EXTERNAL_INTERPRETER_HEADS = ["sage"] as const;
+
+export function isExternalInterpreterCommand(command: string): boolean {
+  const raw = (command || "").trim();
+  if (!raw) return false;
+  const segments = raw.split(/(?:&&|\|\||;|\n)/);
+  for (const segment of segments) {
+    const s = normalizeCommandSegment(segment);
+    if (!s) continue;
+    for (const name of EXTERNAL_INTERPRETER_HEADS) {
+      if (new RegExp(`^(?:[\\w.+@/-]*\\/)?${name}(?:\\s|$)`, "i").test(s)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extract an absolute-path Python interpreter from a command, when the
+ * command leads with one (e.g. `/opt/conda/envs/sage/bin/python x.py`).
+ * Returns null for bare `python` / `python3` (PATH-resolved) and for
+ * non-Python commands. Used to detect *undeclared* external interpreters
+ * so the gate can nudge callers toward `interpreter: "external"`.
+ */
+export function extractAbsolutePythonPath(command: string): string | null {
+  const raw = (command || "").trim();
+  if (!raw) return null;
+  const segments = raw.split(/(?:&&|\|\||;|\n)/);
+  for (const segment of segments) {
+    const s = normalizeCommandSegment(segment);
+    if (!s) continue;
+    const m = /^((?:[\w.+@:-]*[\\/])+\.?python(?:\d+(?:\.\d+)*)?)(?:\s|$)/i.exec(s);
+    if (m && m[1] && /^(?:\/|[A-Za-z]:[\\/])/.test(m[1])) return m[1];
+  }
+  return null;
+}
+
 /** Installs that would target the host/system interpreter — always forbidden via bash. */
 export function isForbiddenSystemPythonInstall(command: string): boolean {
   const raw = (command || "").trim();
@@ -449,6 +505,10 @@ function isPythonScriptSegment(segment: string): boolean {
   if (!s) return false;
   if (/^uv\s+run\b/i.test(s)) return true;
   if (/^uv\s+python\b/i.test(s)) return true;
+  // External interpreters (`sage -python …`) run code outside the project
+  // venv — they count as script runs so a mixed `uv pip install … && sage …`
+  // command cannot slip through as "setup-only".
+  if (isExternalInterpreterCommand(s)) return true;
   // python / python3 … but not `python -m venv`
   if (/^(?:[\w.+@/-]*\/)?python(?:\d+(?:\.\d+)*)?(?:\s|$)/i.test(s)) {
     if (/\s+-m\s+venv\b/i.test(s)) return false;
@@ -485,9 +545,14 @@ export function isExperimentPythonSetupCommand(command: string): boolean {
 }
 
 /**
- * True when the command runs Python / uv run (not just env setup).
- * These must use experiment-run inside Experiment islands — bash is blocked.
+ * True when the command runs Python / uv run (not just env setup) — including
+ * external interpreters (`sage -python …`), which execute Python outside the
+ * project venv. These must use experiment-run inside Experiment islands —
+ * bash is blocked.
  */
 export function isExperimentPythonScriptCommand(command: string): boolean {
-  return isPythonRelatedCommand(command) && !isExperimentPythonSetupCommand(command);
+  return (
+    (isPythonRelatedCommand(command) || isExternalInterpreterCommand(command)) &&
+    !isExperimentPythonSetupCommand(command)
+  );
 }

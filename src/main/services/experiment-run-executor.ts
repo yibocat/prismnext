@@ -8,8 +8,10 @@
  *  - Both can be used at once; either is optional.
  */
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { tmpdir } from "node:os";
+import { app } from "electron";
 import { runAiCommand } from "./ai-pty";
 import {
   appendRun,
@@ -163,6 +165,30 @@ export interface KickoffExperimentRunArgs {
   /** Default true — ensure shared project `.prismnext/.venv` before detect/run. */
   ensureVenv?: boolean;
   venvRunner?: ExperimentVenvRunner;
+  /**
+   * Interpreter lane (default "project"). "external" opts out of the shared
+   * venv entirely: no ensure, no PATH/VIRTUAL_ENV injection; the declared
+   * interpreter and its probed version are recorded in the run's env.
+   */
+  interpreter?: "project" | "external";
+  /** Required when interpreter="external" — absolute path or PATH-resolvable command. */
+  pythonPath?: string;
+}
+
+/** Best-effort `--version` probe of an external interpreter (never throws). */
+function probeInterpreterVersion(pythonPath: string, cwd: string): string | null {
+  try {
+    const out = execFileSync(pythonPath, ["--version"], {
+      cwd,
+      timeout: 15000,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const first = (out || "").split("\n")[0]?.trim() ?? "";
+    return first ? first.slice(0, 200) : null;
+  } catch {
+    return null;
+  }
 }
 
 function detectIslandEnv(
@@ -191,6 +217,26 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     return;
   }
 
+  // External-interpreter lane (SageMath & co): run the command as-is with the
+  // declared interpreter — no venv ensure, no gate, no PATH/VIRTUAL_ENV
+  // injection. The run's env records the real interpreter (provenance).
+  if (args.interpreter === "external") {
+    const pythonPath = (args.pythonPath ?? "").trim();
+    if (!pythonPath) {
+      queueMicrotask(() =>
+        reportResult(args, { ok: false, error: "missing_python_path" }),
+      );
+      return;
+    }
+    const env = detectIslandEnv(ctx, island);
+    const version = probeInterpreterVersion(pythonPath, island);
+    env.python = pythonPath;
+    env.pythonVersion = version;
+    env.interpreter = { kind: "external", path: pythonPath, version };
+    kickoffWithEnv(args, island, env, { PYTHONUNBUFFERED: "1" });
+    return;
+  }
+
   // Hard gate: Python under Experiment uses the shared project `.prismnext/.venv`.
   if (isPythonRelatedCommand(command) && args.ensureVenv !== false) {
     const gate = gateExperimentPythonExecution({
@@ -205,7 +251,11 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     }
     if (gate.action === "apply") {
       const env = detectIslandEnv(ctx, island);
-      kickoffWithEnv(args, island, env, gate.envExtra);
+      env.interpreter = { kind: "project", path: env.python, version: env.pythonVersion };
+      const gatedArgs = gate.warning
+        ? { ...args, notes: [gate.warning, args.notes].filter(Boolean).join(" ") }
+        : args;
+      kickoffWithEnv(gatedArgs, island, env, gate.envExtra);
       return;
     }
   } else if (args.ensureVenv !== false) {
@@ -216,7 +266,32 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
   }
 
   const env = detectIslandEnv(ctx, island);
+  env.interpreter = { kind: "project", path: env.python, version: env.pythonVersion };
   kickoffWithEnv(args, island, env, buildPythonEnvExtra(env));
+}
+
+/**
+ * Base env for every run: the Electron binary doubles as a Node runtime
+ * (ELECTRON_RUN_AS_NODE=1) so JS tooling lanes (e.g. the Observable Plot
+ * SVG renderer) work without requiring a system Node install, and
+ * PRISM_APP_NODE_MODULES lets island scripts resolve the app's bundled deps
+ * (@observablehq/plot, jsdom) via createRequire. Harmless to Python runs.
+ */
+function prismRuntimeEnv(): Record<string, string> {
+  const env: Record<string, string> = {
+    PRISM_NODE: process.execPath,
+    ELECTRON_RUN_AS_NODE: "1",
+  };
+  let appPath: string | null = null;
+  try {
+    // `app.getAppPath` is absent in unit-test electron mocks and in plain
+    // Node (where `electron` resolves to a path string) — fall back to cwd.
+    appPath = typeof app?.getAppPath === "function" ? app.getAppPath() : null;
+  } catch {
+    appPath = null;
+  }
+  env.PRISM_APP_NODE_MODULES = join(appPath ?? process.cwd(), "node_modules");
+  return env;
 }
 
 function kickoffWithEnv(
@@ -257,7 +332,7 @@ function kickoffWithEnv(
       chatTabId: "experiment",
       requestId: runId,
       toolCallId: runId,
-      envExtra,
+      envExtra: { ...prismRuntimeEnv(), ...envExtra },
       captureStderr: stderrPath,
       onChunk: (chunk) => {
         const cleaned = stripAnsi(chunk);

@@ -97,6 +97,10 @@ export interface ExperimentLogBridgeRequest {
   artifacts?: string[];
   notes?: string;
   kind?: string;
+  /** External-interpreter lane: "project" (default) or "external". */
+  interpreter?: string;
+  /** External interpreter path/command — required when interpreter="external". */
+  pythonPath?: string;
   // provenance-query
   artifactPath?: string;
   runId?: string;
@@ -175,6 +179,25 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
         hint: "kind must be one of: train, eval, plot, data, setup, other (or omit)",
       };
     }
+    // External-interpreter lane (SageMath etc.): explicit opt-in, requires pythonPath.
+    let interpreter: "project" | "external" | undefined;
+    if (req.interpreter === "project" || req.interpreter === "external") {
+      interpreter = req.interpreter;
+    } else if (req.interpreter !== undefined && req.interpreter !== null && req.interpreter !== "") {
+      return {
+        ok: false,
+        error: "invalid_interpreter",
+        hint: 'interpreter must be "project" or "external" (or omit for the project venv default)',
+      };
+    }
+    const pythonPath = typeof req.pythonPath === "string" ? req.pythonPath.trim() : "";
+    if (interpreter === "external" && !pythonPath) {
+      return {
+        ok: false,
+        error: "missing_python_path",
+        hint: 'interpreter="external" requires pythonPath (absolute path or PATH-resolvable command, e.g. "sage")',
+      };
+    }
     kickoffExperimentRun({
       ctx,
       id,
@@ -184,6 +207,8 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
       kind,
       resPath,
       chatSessionId: req.sessionId ?? null,
+      interpreter,
+      pythonPath: pythonPath || undefined,
     });
     return null;
   }

@@ -5,7 +5,6 @@ import {
   selectComposerHostedQuestionId,
   selectComposerHostedTodoId,
 } from "@/lib/chat/composer-pending-tools";
-import { selectComposerHostedExperimentRunId } from "@/lib/chat/composer-pending-experiment";
 import { useChatStore } from "@/stores/chat-store";
 import { EditWidget } from "./edit-widget";
 import { BashWidget } from "./bash-widget";
@@ -176,12 +175,10 @@ export const ToolWidget = memo(function ToolWidget({
 }) {
   const hostedQuestionId = useChatStore(selectComposerHostedQuestionId);
   const hostedTodoId = useChatStore(selectComposerHostedTodoId);
-  const hostedExperimentRunId = useChatStore(selectComposerHostedExperimentRunId);
   const hostedInComposer = isComposerHostedToolId(
     toolUse.id,
     hostedQuestionId,
     hostedTodoId,
-    hostedExperimentRunId,
   );
 
   const name = resolveToolWidgetName(toolUse, toolResult);
