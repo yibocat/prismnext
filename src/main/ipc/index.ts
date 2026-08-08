@@ -25,6 +25,7 @@ import { registerExperimentHandlers } from "./experiment";
 import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
 import { registerInteractionHandlers } from "./interaction";
+import { registerProLicenseHandlers } from "./pro-license";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -32,6 +33,7 @@ export function registerIpcHandlers(): void {
   registerChatHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();
+  registerProLicenseHandlers();
   registerBrowserHandlers();
   registerTerminalHandlers();
   registerGitHandlers();

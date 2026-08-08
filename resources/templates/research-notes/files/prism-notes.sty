@@ -1,0 +1,28 @@
+\ProvidesPackage{prism-notes}
+% Distinctive research-notes look for the Free Template Center.
+
+\RequirePackage{geometry}
+\geometry{margin=1.1in}
+\RequirePackage{microtype}
+\RequirePackage{fancyhdr}
+\RequirePackage{titlesec}
+\RequirePackage{xcolor}
+\definecolor{PrismNote}{HTML}{1F4E79}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{PrismNote}\textit{Research notes}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{PrismNote}\leaders\hrule height \headrulewidth\hfill}}
+
+\titleformat{\section}
+  {\large\bfseries\color{PrismNote}}{\thesection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.25em}{0.5em}
+
+\newcommand{\noteheadline}[1]{%
+  {\Large\bfseries\color{PrismNote}#1\par}
+  \vspace{0.35em}
+  {\color{PrismNote}\hrule height 0.6pt}\par
+  \vspace{0.9em}%
+}

@@ -18,16 +18,21 @@ export function sharedAliasPlugin(rootDir: string): Plugin {
     if (cached !== undefined) return cached;
     let resolved: string | null = null;
     for (const base of bases) {
+      // Prefer real files / index.ts over a bare directory (EISDIR on import).
       const candidates = [
-        path.join(base, subpath),
         path.join(base, `${subpath}.ts`),
         path.join(base, `${subpath}.tsx`),
         path.join(base, subpath, "index.ts"),
+        path.join(base, subpath),
       ];
       for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) {
-          resolved = candidate;
-          break;
+        try {
+          if (fs.statSync(candidate).isFile()) {
+            resolved = candidate;
+            break;
+          }
+        } catch {
+          // missing path
         }
       }
       if (resolved) break;

@@ -17,6 +17,7 @@
   "scripts": {
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && node scripts/ensure-native-modules.mjs && exec electron-vite dev'",
+    "dev:pro": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && node scripts/ensure-native-modules.mjs && export PRISM_PRO_PATH=\"$PWD/../prism-next-pro/src/index.ts\" && exec electron-vite dev'",
     "build": "node scripts/copy-pdfjs-assets.mjs && electron-vite build",
     "preview": "node scripts/ensure-native-modules.mjs && electron-vite preview",
     "test": "vitest run",

@@ -66,12 +66,14 @@ export function DetailView({
   onUse,
   canApply = true,
   applyDisabledReason,
+  isCurrent = false,
 }: {
   template: TemplateFull;
   onBack: () => void;
   onUse: (t: TemplateFull) => void;
   canApply?: boolean;
   applyDisabledReason?: string;
+  isCurrent?: boolean;
 }) {
   const { t } = useTranslation();
   const [showSource, setShowSource] = useState(false);
@@ -122,7 +124,12 @@ export function DetailView({
         <div className="flex-1 min-w-0 space-y-6">
           {/* Description */}
           <div>
-            <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">{t("templates.detail.description")}</h3>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <h3 className="text-[length:var(--font-size-13)] font-medium">{t("templates.detail.description")}</h3>
+              {isCurrent ? (
+                <Badge>{t("templates.center.inUse")}</Badge>
+              ) : null}
+            </div>
             <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
               {template.description}
             </p>
@@ -132,6 +139,10 @@ export function DetailView({
                 <Badge key={tag} variant="secondary">{tag}</Badge>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border px-3 py-2.5 text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
+            {t("templates.detail.applyHint")}
           </div>
 
           {/* File structure */}
@@ -155,7 +166,7 @@ export function DetailView({
               disabled={!canApply}
               title={applyDisabledReason}
             >
-              {t("templates.detail.use")}
+              {isCurrent ? t("templates.detail.reapply") : t("templates.detail.use")}
             </Button>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setShowSource(true)}>
               {t("templates.detail.viewSource")}
@@ -189,11 +200,11 @@ export function DetailView({
         {/* Right side: Preview image */}
         <div className="flex-1 min-w-0">
           <h3 className="text-[length:var(--font-size-13)] font-medium mb-2">{t("templates.detail.preview")}</h3>
-          <div className="aspect-[3/4] rounded-lg border border-border overflow-hidden bg-muted/20 flex items-center justify-center">
+          <div className="aspect-[3/4] rounded-lg border border-border overflow-hidden bg-muted flex items-center justify-center">
             {previewUrl ? (
               <img src={previewUrl} alt={`${template.name} preview`} className="w-full h-full object-contain" />
             ) : (
-              <span className="text-[length:var(--font-hint)] text-muted-foreground/50">{t("templates.detail.noPreview")}</span>
+              <span className="text-[length:var(--font-hint)] text-muted-foreground">{t("templates.detail.noPreview")}</span>
             )}
           </div>
         </div>

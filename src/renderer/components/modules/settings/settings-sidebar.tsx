@@ -30,7 +30,9 @@ import {
   SlashIcon,
   ShieldIcon,
   InfoIcon,
+  SparklesIcon,
 } from "lucide-react";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 
 const SECTION_LABEL =
   "text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50";
@@ -68,7 +70,10 @@ export const SETTINGS_GROUPS = [
   },
 ] as const;
 
-export type SettingsCategory = (typeof SETTINGS_GROUPS)[number]["items"][number]["id"];
+/** Builtin ids plus dynamic Pro contribution ids. */
+export type SettingsCategory =
+  | (typeof SETTINGS_GROUPS)[number]["items"][number]["id"]
+  | (string & {});
 
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
@@ -86,6 +91,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   const sidebarContent = (
     <SidebarProvider defaultOpen className="contents">
@@ -130,6 +136,36 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
               </div>
             </div>
           ))}
+          {proSettings.length > 0 ? (
+            <div>
+              <div className="pt-2 pb-1">
+                <span className={SECTION_LABEL}>{t("settings.nav.pro")}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {proSettings.map((item) => {
+                  const label = item.sectionLabelKey
+                    ? t(item.sectionLabelKey, { defaultValue: item.sectionLabel })
+                    : item.sectionLabel;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
+                        activeCategory === item.id
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                      onClick={() => onSelectCategory(item.id)}
+                    >
+                      <SparklesIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 text-left">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <SidebarFooter className="px-2 pb-2">

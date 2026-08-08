@@ -1,0 +1,9 @@
+{
+  "id": "clean-talk",
+  "name": "Clean Talk",
+  "description": "16:9 Beamer deck with a custom cleantalk.sty theme (header rule, soft blocks)—less stock than Madrid defaults.",
+  "category": "beamer",
+  "tags": ["beamer", "talk", "style-file", "custom-theme"],
+  "documentClass": "beamer",
+  "icon": "🎤"
+}

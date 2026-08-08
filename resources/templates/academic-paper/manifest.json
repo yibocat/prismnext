@@ -1,13 +1,9 @@
 {
   "id": "academic-paper",
   "name": "Academic Paper",
-  "description": "Standard IMRaD paper with bibliography, cross-references, and AMS math. Ideal for journal submissions.",
+  "description": "IMRaD article scaffold with a small style file (geometry, spacing, theorem envs) and APA biblatex. Good default for journal drafts.",
   "category": "paper",
-  "tags": [
-    "article",
-    "imrad",
-    "basic"
-  ],
+  "tags": ["article", "imrad", "biblatex", "style-file"],
   "documentClass": "article",
   "icon": "📄"
 }

@@ -10,7 +10,7 @@ import {
   CommandItem,
   CommandShortcut,
 } from "@/components/ui/command";
-import { BookIcon, BookOpenIcon, Loader2Icon, FilePlusIcon, MessageSquarePlusIcon, FlaskConicalIcon, GlobeIcon, HistoryIcon, XIcon, CheckIcon, MoreHorizontalIcon } from "lucide-react";
+import { BookIcon, BookOpenIcon, Loader2Icon, FilePlusIcon, MessageSquarePlusIcon, FlaskConicalIcon, GlobeIcon, HistoryIcon, XIcon, CheckIcon, MoreHorizontalIcon, SparklesIcon } from "lucide-react";
 import { getFileIcon } from "@/lib/files/file-tree";
 import { getRecentOpenedFilesForProject, trackRecentOpenedFile } from "@/lib/files/recent-files";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
@@ -21,6 +21,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -470,6 +471,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   // ── Settings ──
   const showSettings =
     category === "settings" || (isAll && (showRecentLayout || hasQuery) && sessionsReady);
+  const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   const allSettingItems = useMemo(() => {
     if (!showSettings)
@@ -481,10 +483,16 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
         all.push({ id: it.id, label, icon: it.icon });
       }
     }
+    for (const it of proSettings) {
+      const label = it.sectionLabelKey
+        ? t(it.sectionLabelKey, { defaultValue: it.sectionLabel })
+        : it.sectionLabel;
+      all.push({ id: it.id, label, icon: SparklesIcon });
+    }
     return query
       ? all.filter((s) => fuzzyMatch(query, s.label) || fuzzyMatch(query, s.id))
       : all;
-  }, [showSettings, query, t]);
+  }, [showSettings, query, t, proSettings]);
 
   const visibleSettingItems = useMemo(() => {
     if (hasQuery || category === "settings") return allSettingItems;

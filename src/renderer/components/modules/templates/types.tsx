@@ -9,6 +9,8 @@ import {
   BookOpenIcon,
   ScrollTextIcon,
   MonitorIcon,
+  NotebookPenIcon,
+  Mic2Icon,
 } from "lucide-react";
 
 // ─── Types ───
@@ -38,16 +40,50 @@ export const TEMPLATE_ICONS: Record<string, React.ComponentType<{ className?: st
   "beamer-presentation": MonitorIcon,
   poster: Columns2Icon,
   letter: MailIcon,
+  "research-notes": NotebookPenIcon,
+  "clean-talk": Mic2Icon,
 };
 
-// ─── Category config ───
+// ─── Category config (labels via i18n) ───
 
-export const CATEGORIES: { id: TemplateCategory | "all"; label: string; icon: React.ReactNode }[] = [
-  { id: "all", label: "All Templates", icon: <LayoutGridIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "paper", label: "Academic Paper", icon: <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "thesis", label: "Thesis", icon: <GraduationCapIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "cv", label: "CV / Resume", icon: <BriefcaseIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "beamer", label: "Beamer Slides", icon: <PresentationIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "poster", label: "Poster", icon: <Columns2Icon className="size-3.5 shrink-0 text-muted-foreground" /> },
-  { id: "letter", label: "Letter", icon: <MailIcon className="size-3.5 shrink-0 text-muted-foreground" /> },
+export const CATEGORIES: {
+  id: TemplateCategory | "all";
+  labelKey: string;
+  icon: React.ReactNode;
+}[] = [
+  {
+    id: "all",
+    labelKey: "templates.center.all",
+    icon: <LayoutGridIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "paper",
+    labelKey: "templates.categories.paper",
+    icon: <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "thesis",
+    labelKey: "templates.categories.thesis",
+    icon: <GraduationCapIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "cv",
+    labelKey: "templates.categories.cv",
+    icon: <BriefcaseIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "beamer",
+    labelKey: "templates.categories.beamer",
+    icon: <PresentationIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "poster",
+    labelKey: "templates.categories.poster",
+    icon: <Columns2Icon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
+  {
+    id: "letter",
+    labelKey: "templates.categories.letter",
+    icon: <MailIcon className="size-3.5 shrink-0 text-muted-foreground" />,
+  },
 ];

@@ -365,6 +365,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		},
 		aboutGetVersions: () => ipcRenderer.invoke("about:getVersions"),
 
+	// Pro license (open-core activation; Free builds have no private Pro module)
+	proGetLicense: () => ipcRenderer.invoke("pro:getLicense"),
+	proActivate: (rawKey: string) => ipcRenderer.invoke("pro:activate", rawKey),
+	proClearLicense: () => ipcRenderer.invoke("pro:clearLicense"),
+
 	// Window operations
 	windowSetTitle: (title: string) =>
 		ipcRenderer.invoke("window:setTitle", { title }),

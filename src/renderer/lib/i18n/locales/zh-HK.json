@@ -67,7 +67,8 @@
       "texWorkspace": "TeX 工作區",
       "terminal": "終端",
       "browser": "瀏覽器",
-      "literature": "文獻"
+      "literature": "文獻",
+      "pro": "Pro"
     },
     "general": {
       "title": "通用",
@@ -472,7 +473,21 @@
       "retry": "重試",
       "noSourceLabel": "暫無可用更新源",
       "noSourceDetail": "請在上方設定更新源 URL 或本地路徑以啟用更新檢查。",
-      "noSourceDevOnly": "一般只會出現在未寫入釋出地址的本地開發構建。"
+      "noSourceDevOnly": "一般只會出現在未寫入釋出地址的本地開發構建。",
+      "proLicense": "Pro",
+      "proLicenseTitle": "啟用碼",
+      "proLicenseDesc": "在打包了私有 Pro 模組的發行版中解鎖可選增強。免費功能永不需要啟用碼。",
+      "proKeyPlaceholder": "PRISM-PRO-…",
+      "proActivate": "啟用",
+      "proDeactivate": "取消啟用",
+      "proActive": "Pro 已啟用（{{label}}）",
+      "proModuleAbsent": "目前建置未包含 Pro 模組",
+      "proModuleLoaded": "Pro 模組已載入",
+      "proModuleError": "Pro 模組載入失敗",
+      "proKeyEmpty": "請輸入啟用碼。",
+      "proKeyInvalid": "啟用碼無效。",
+      "proActivateFailed": "無法啟用。",
+      "proClearFailed": "無法清除授權。"
     },
     "compiler": {
       "title": "編譯器",
@@ -2948,21 +2963,44 @@
   "templates": {
     "center": {
       "title": "模板中心",
+      "subtitle": "將 LaTeX 腳手架寫入手稿目錄。覆蓋前會說明會動到哪些檔案。",
       "search": "搜尋模板…",
       "noFound": "未找到模板",
       "all": "全部模板",
+      "categories": "分類",
       "openProject": "請先開啟專案再應用模板。",
-      "needManuscript": "請先在工作區設定中配置手稿資料夾。"
+      "needManuscript": "請先在工作區設定中配置手稿資料夾。",
+      "current": "目前：{{name}}（{{category}}）",
+      "inUse": "使用中",
+      "status": "狀態",
+      "countAll": "共 {{count}} 個模板",
+      "countFiltered": "顯示 {{shown}} / {{total}}",
+      "categoryLabel": "分類：{{name}}",
+      "clearSearch": "清除搜尋"
+    },
+    "categories": {
+      "paper": "學術論文",
+      "thesis": "學位論文",
+      "cv": "履歷",
+      "beamer": "Beamer 投影片",
+      "poster": "海報",
+      "letter": "信件"
     },
     "detail": {
       "back": "返回模板列表",
       "description": "說明",
       "filesStructure": "檔案與結構",
       "use": "使用",
+      "reapply": "重新套用",
       "viewSource": "檢視原始碼",
       "viewPdf": "檢視 PDF",
       "preview": "預覽",
-      "noPreview": "無預覽"
+      "noPreview": "無預覽",
+      "info": "資訊",
+      "documentClass": "文件類",
+      "fileCount": "檔案數",
+      "category": "分類",
+      "applyHint": "套用會把模板檔案寫入手稿目錄。若已有同名檔案或你改過舊模板，會先列出將觸及的路徑，並在寫入前備份。"
     },
     "switch": {
       "switchTitle": "切換模板",
@@ -2976,6 +3014,10 @@
       "applyNamed": "應用 {{name}}（{{category}}）",
       "arrow": "{{oldName}}（{{oldCategory}}）→ {{newName}}（{{newCategory}}）",
       "affected": "受影響的檔案：",
+      "willTouch": "將寫入或覆蓋的檔案：",
+      "willRemove": "將移除的舊模板檔案：",
+      "noFileList": "此步驟沒有逐檔列表 — 確認後繼續。",
+      "backupNote": "寫入前會把重疊或先前套用的模板檔案備份到 .prismnext/backups。",
       "backupMerge": "備份併合並",
       "backupReplace": "備份並替換"
     }

@@ -11,6 +11,7 @@ import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
   prefetchOpenCodeModelsCatalog,
   resolveSelectedModelContextTokens,
@@ -192,6 +193,7 @@ export function LeftMainArea() {
 
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
+  const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   // centerView 型导航项的页面路由：新增入口时在此增加 leftSidebarView 分支
   // （定义见 left-nav/items.tsx，centerView 字段须与下方判断一致）
@@ -208,7 +210,7 @@ export function LeftMainArea() {
   if (leftSidebarView === "settings") {
     const resolvedCategory =
       settingsCategory === "zotero" ? "literature" : settingsCategory;
-    const SettingsContent = {
+    const BuiltinSettings = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
       models: ModelSettings,
@@ -227,10 +229,26 @@ export function LeftMainArea() {
       literature: LiteratureSettings,
       backups: BackupsSettings,
       about: AboutSettings,
-    }[resolvedCategory] || GeneralSettings;
+    }[resolvedCategory];
+    if (BuiltinSettings) {
+      return (
+        <div className="flex h-full flex-col min-w-0" data-surface="content">
+          <BuiltinSettings />
+        </div>
+      );
+    }
+    const pro = proSettings.find((c) => c.id === resolvedCategory);
+    if (pro) {
+      const ProSettingsContent = pro.Content;
+      return (
+        <div className="flex h-full flex-col min-w-0" data-surface="content">
+          <ProSettingsContent />
+        </div>
+      );
+    }
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
-        <SettingsContent />
+        <GeneralSettings />
       </div>
     );
   }

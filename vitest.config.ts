@@ -16,6 +16,10 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src/renderer"),
+      "@prismnext/pro": path.resolve(
+        __dirname,
+        "src/renderer/lib/pro/absent-module.ts",
+      ),
     },
   },
 });

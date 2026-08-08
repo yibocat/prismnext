@@ -9,6 +9,7 @@ import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-g
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
@@ -89,6 +90,7 @@ export function App() {
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const rightAreaMin = RIGHT_AREA_MIN;
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const showWelcome = useDocumentStore((s) => s.showWelcome);
@@ -273,6 +275,11 @@ export function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Open-core: hydrate activation key, then tryLoadPro (no-op when Free / absent).
+  useEffect(() => {
+    void hydrateProLicense();
+  }, [hydrateProLicense]);
 
   // Initialize theme system (injects <style id="prism-theme">)
   useEffect(() => {

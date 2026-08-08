@@ -1,9 +1,7 @@
-\documentclass{article}
+\documentclass[11pt]{article}
 
-% ── Packages ──
-\usepackage[utf8]{inputenc}
+\usepackage{academic-paper}
 \usepackage[T1]{fontenc}
-\usepackage{amsmath,amssymb,amsthm}
 \usepackage{graphicx}
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
 \usepackage[
@@ -13,19 +11,8 @@
 ]{biblatex}
 \addbibresource{references.bib}
 
-% ── Theorem environments ──
-\newtheorem{theorem}{Theorem}[section]
-\newtheorem{lemma}[theorem]{Lemma}
-\newtheorem{proposition}[theorem]{Proposition}
-\newtheorem{corollary}[theorem]{Corollary}
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}[section]
-\theoremstyle{remark}
-\newtheorem{remark}{Remark}[section]
-
-% ── Title ──
 \title{Paper Title}
-\author{Author Name\thanks{affiliation}}
+\author{Author Name\thanks{Affiliation}}
 \date{\today}
 
 \begin{document}
@@ -33,37 +20,41 @@
 \maketitle
 
 \begin{abstract}
-  Write your abstract here. Summarize the problem, approach,
-  key results, and conclusions in one paragraph.
+  Summarize the problem, approach, key results, and conclusions in one paragraph.
+  Keep this template's IMRaD section titles if you plan to switch templates later—
+  PrismNext can preserve matching sections when merging.
 \end{abstract}
 
 \section{Introduction}
 \label{sec:introduction}
 
-Introduce the problem, review related work, and state your
-contribution. Use \cite{key} for citations.
+State the problem, situate related work, and list contributions.
+Cite with \cite{key}.
 
 \section{Preliminaries}
 \label{sec:preliminaries}
 
-Define notation and recall necessary background.
+Notation and background needed for the results.
 
 \section{Main Results}
 \label{sec:results}
 
-Present your theorems, proofs, and analysis.
+Theorems, proofs, and analysis. Example:
+
+\begin{theorem}
+  A placeholder theorem statement.
+\end{theorem}
 
 \section{Discussion}
 \label{sec:discussion}
 
-Interpret your results and discuss implications.
+Interpret results and limitations.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-Summarize and suggest future work.
+Summary and future work.
 
-% ── Bibliography ──
 \printbibliography
 
 \end{document}

@@ -605,6 +605,12 @@ export interface ElectronAPI {
   onUpdateChanged: (callback: (status: UpdaterStatus) => void) => () => void;
   /** prismnext app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
+  /** Open-core Pro license (activation key). Null when Free / inactive. */
+  proGetLicense: () => Promise<import("../../shared/pro").LicenseSnapshot | null>;
+  proActivate: (
+    rawKey: string,
+  ) => Promise<import("../../shared/pro").ActivateLicenseResult>;
+  proClearLicense: () => Promise<{ ok: true }>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;

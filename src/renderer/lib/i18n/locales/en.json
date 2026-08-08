@@ -67,7 +67,8 @@
       "texWorkspace": "TeX Workspace",
       "terminal": "Terminal",
       "browser": "Browser",
-      "literature": "Literature"
+      "literature": "Literature",
+      "pro": "Pro"
     },
     "general": {
       "title": "General",
@@ -472,7 +473,21 @@
       "retry": "Retry",
       "noSourceLabel": "No update feed available",
       "noSourceDetail": "Set a feed URL or local path above to enable update checks.",
-      "noSourceDevOnly": "This usually only happens in local development builds without a baked release URL."
+      "noSourceDevOnly": "This usually only happens in local development builds without a baked release URL.",
+      "proLicense": "Pro",
+      "proLicenseTitle": "Activation key",
+      "proLicenseDesc": "Unlock optional Pro modules when a private Pro build is packaged. Free features never require a key.",
+      "proKeyPlaceholder": "PRISM-PRO-…",
+      "proActivate": "Activate",
+      "proDeactivate": "Deactivate",
+      "proActive": "Pro active ({{label}})",
+      "proModuleAbsent": "Pro module not packaged in this build",
+      "proModuleLoaded": "Pro module loaded",
+      "proModuleError": "Pro module failed to load",
+      "proKeyEmpty": "Enter an activation key.",
+      "proKeyInvalid": "That key is not valid.",
+      "proActivateFailed": "Could not activate the key.",
+      "proClearFailed": "Could not clear the license."
     },
     "compiler": {
       "title": "Compiler",
@@ -2922,21 +2937,44 @@
   "templates": {
     "center": {
       "title": "Template Center",
+      "subtitle": "Apply a LaTeX scaffold into your manuscript folder. Overlaps are explained before anything is overwritten.",
       "search": "Search templates…",
       "noFound": "No templates found",
       "all": "All Templates",
+      "categories": "Categories",
       "openProject": "Open a project before applying a template.",
-      "needManuscript": "Configure a manuscript folder in Workspace settings first."
+      "needManuscript": "Configure a manuscript folder in Workspace settings first.",
+      "current": "Current: {{name}} ({{category}})",
+      "inUse": "In use",
+      "status": "Status",
+      "countAll": "{{count}} templates",
+      "countFiltered": "Showing {{shown}} of {{total}}",
+      "categoryLabel": "Category: {{name}}",
+      "clearSearch": "Clear search"
+    },
+    "categories": {
+      "paper": "Academic Paper",
+      "thesis": "Thesis",
+      "cv": "CV / Resume",
+      "beamer": "Beamer Slides",
+      "poster": "Poster",
+      "letter": "Letter"
     },
     "detail": {
       "back": "Back to templates",
       "description": "Description",
       "filesStructure": "Files & Structure",
       "use": "Use",
+      "reapply": "Re-apply",
       "viewSource": "View Source",
       "viewPdf": "View PDF",
       "preview": "Preview",
-      "noPreview": "No preview"
+      "noPreview": "No preview",
+      "info": "Info",
+      "documentClass": "Document class",
+      "fileCount": "Files",
+      "category": "Category",
+      "applyHint": "Applying writes template files into your manuscript folder. If files already exist or you changed a previous template, you will see which paths will be touched and a backup will be saved first."
     },
     "switch": {
       "switchTitle": "Switch Template",
@@ -2950,6 +2988,10 @@
       "applyNamed": "Apply {{name}} ({{category}})",
       "arrow": "{{oldName}} ({{oldCategory}}) → {{newName}} ({{newCategory}})",
       "affected": "Affected files:",
+      "willTouch": "Files that will be overwritten or written:",
+      "willRemove": "Template files that will be removed:",
+      "noFileList": "No per-file list for this step — confirm to continue.",
+      "backupNote": "A copy of overlapping or previously applied template files is saved under .prismnext/backups before changes are written.",
       "backupMerge": "Backup & Merge",
       "backupReplace": "Backup & Replace"
     }

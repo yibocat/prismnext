@@ -50,6 +50,38 @@ function getLevelConfig(t: TFunction): Record<
   };
 }
 
+function FileList({
+  title,
+  files,
+  strike = false,
+}: {
+  title: string;
+  files: string[];
+  strike?: boolean;
+}) {
+  if (files.length === 0) return null;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+        {title}{" "}
+        <span className="tabular-nums text-foreground">({files.length})</span>
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {files.map((f) => (
+          <code
+            key={f}
+            className={`rounded bg-muted px-1.5 py-0.5 text-[length:var(--font-size-11)] ${
+              strike ? "line-through text-muted-foreground" : ""
+            }`}
+          >
+            {f}
+          </code>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function TemplateSwitchDialog({
   open,
   onOpenChange,
@@ -67,7 +99,6 @@ export function TemplateSwitchDialog({
   const { t } = useTranslation();
   const config = getLevelConfig(t)[level];
   const isDestructive = level === "L3" || level === "reset" || level === "firstUse";
-  const isWarning = level === "L2";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -90,36 +121,25 @@ export function TemplateSwitchDialog({
           <div
             className={`rounded-md border px-3 py-2.5 text-[length:var(--font-size-12)] ${
               isDestructive
-                ? "border-destructive/30 bg-destructive/10 text-destructive"
-                : isWarning
-                  ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
-                  : "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400"
+                ? "border-destructive bg-muted text-destructive"
+                : "border-border bg-muted text-foreground"
             }`}
           >
             {config.message}
           </div>
 
-          {(changedFiles.length > 0 || deletedFiles.length > 0) && (
-            <div className="text-[length:var(--font-size-12)]">
-              <span className="text-muted-foreground">{t("templates.switch.affected")} </span>
-              {changedFiles.map((f) => (
-                <code
-                  key={f}
-                  className="mr-1 rounded bg-accent px-1 py-0.5 text-[length:var(--font-size-11)]"
-                >
-                  {f}
-                </code>
-              ))}
-              {deletedFiles.map((f) => (
-                <code
-                  key={f}
-                  className="mr-1 rounded bg-destructive/10 px-1 py-0.5 text-[length:var(--font-size-11)] line-through"
-                >
-                  {f}
-                </code>
-              ))}
-            </div>
-          )}
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed">
+            {t("templates.switch.backupNote")}
+          </p>
+
+          <FileList title={t("templates.switch.willTouch")} files={changedFiles} />
+          <FileList title={t("templates.switch.willRemove")} files={deletedFiles} strike />
+
+          {changedFiles.length === 0 && deletedFiles.length === 0 ? (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("templates.switch.noFileList")}
+            </p>
+          ) : null}
         </div>
 
         <DialogFooter>
@@ -138,7 +158,7 @@ export function TemplateSwitchDialog({
               size="sm"
               className={
                 isDestructive
-                  ? "shadow-none bg-destructive hover:bg-destructive/90"
+                  ? "shadow-none bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   : "shadow-none"
               }
               disabled={submitting}
