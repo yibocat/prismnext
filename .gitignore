@@ -14,6 +14,9 @@ bin/opencode/
 bin/tectonic/
 .cursor/
 
+# Pro packs staging dir — build artifact of scripts/prepare-pro-packs.mjs (private content, never commit)
+resources/pro-package/
+
 # Private / internal docs (specs, plans, audits) — not for open source
 docs-private/
 

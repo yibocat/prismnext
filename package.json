@@ -18,7 +18,7 @@
     "copy-pdfjs-assets": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && node scripts/ensure-native-modules.mjs && exec electron-vite dev'",
     "dev:pro": "bash -c 'unset ELECTRON_RUN_AS_NODE && node scripts/copy-pdfjs-assets.mjs && node scripts/ensure-native-modules.mjs && export PRISM_PRO_PATH=\"$PWD/../prism-next-pro/src/index.ts\" && exec electron-vite dev'",
-    "build": "node scripts/copy-pdfjs-assets.mjs && electron-vite build",
+    "build": "node scripts/copy-pdfjs-assets.mjs && node scripts/prepare-pro-packs.mjs && electron-vite build",
     "preview": "node scripts/ensure-native-modules.mjs && electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -31,7 +31,8 @@
     "dist:mac": "pnpm build && electron-builder --mac --publish never",
     "dist:win": "pnpm build && electron-builder --win --publish never",
     "dist:linux": "pnpm build && electron-builder --linux --publish never",
-    "dist:dir": "pnpm build && electron-builder --dir --publish never"
+    "dist:dir": "pnpm build && electron-builder --dir --publish never",
+    "dist:pro:dir": "bash -c 'export PRISM_PRO_PATH=\"$PWD/../prism-next-pro/src/index.ts\" && pnpm dist:dir'"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.22.1",

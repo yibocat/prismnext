@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,9 @@ type Filter = "all" | "installed" | `cat:${string}`;
 export function PluginsCenter({ onBack }: PluginsCenterProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  // §8.5：license 激活/清除 → main 侧门控即时翻转，Gallery 重新拉 catalog
+  //（locked 标记与可安装性随授权变化即时更新）。
+  const license = useProLicenseStore((s) => s.license);
 
   const [packs, setPacks] = useState<ProjectPackView[]>([]);
   const [search, setSearch] = useState("");
@@ -71,7 +75,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, license]);
 
   // 详情页内容清单（catalog 级扫描，未安装也可见）
   useEffect(() => {

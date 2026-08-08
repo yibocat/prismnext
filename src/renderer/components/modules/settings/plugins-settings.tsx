@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ChevronDownIcon, ChevronRightIcon, Package, StoreIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -47,6 +48,8 @@ interface Suggestion {
 export default function PluginsSettings() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  // §8.5：license 变化 → pro pack 的 locked/激活态翻转，管理面即时刷新。
+  const license = useProLicenseStore((s) => s.license);
 
   const [packs, setPacks] = useState<ProjectPackView[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export default function PluginsSettings() {
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, license]);
 
   useEffect(() => {
     if (!projectRoot || !expanded) {

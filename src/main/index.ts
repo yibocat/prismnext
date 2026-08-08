@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
+import { discoverAndRegisterProPacks } from "./services/pro-packs-discovery";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -315,6 +316,10 @@ function createWindow(): BrowserWindow {
 
   return win;
 }
+
+// Pro 私有包的 packs 发现与注册必须先于 IPC 注册（§8.2）：
+// catalog 在任何 packs:* handler 服务前就要包含 pro pack（locked 与否由 resolver 门控）。
+discoverAndRegisterProPacks();
 
 // Register IPC handlers that don't need the window reference
 registerIpcHandlers();

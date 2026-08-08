@@ -4,6 +4,7 @@ import {
   clearProLicense,
   readProLicense,
 } from "../services/pro-license";
+import { handleProLicenseChanged } from "../services/pro-packs-discovery";
 
 export function registerProLicenseHandlers(): void {
   ipcMain.handle("pro:getLicense", async () => {
@@ -11,11 +12,16 @@ export function registerProLicenseHandlers(): void {
   });
 
   ipcMain.handle("pro:activate", async (_event, rawKey: string) => {
-    return activateProLicense(typeof rawKey === "string" ? rawKey : "");
+    const result = activateProLicense(typeof rawKey === "string" ? rawKey : "");
+    // 激活成功 → 授权门翻转：catalog locked 标记 + 全项目内容再同步（§8.3）
+    if (result.ok) handleProLicenseChanged();
+    return result;
   });
 
   ipcMain.handle("pro:clearLicense", async () => {
     clearProLicense();
+    // license 清除 → pro pack 内容即时失活（即使历史上装过；§8.3 第 4 行）
+    handleProLicenseChanged();
     return { ok: true as const };
   });
 }

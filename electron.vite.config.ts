@@ -10,22 +10,10 @@ function bakedUpdaterBaseUrl(): string {
   return raw ? raw.replace(/\/$/, "") : "";
 }
 
-/**
- * Build-time gate for the Agent Pack (v2) architecture rework — see
- * docs-private/specs/2026-08-08-agent-pack-architecture-refactor.md (Phase 0).
- * Set `PRISM_PACKS_V2=1` at dev/build time to expose packs-v2 surfaces
- * (Plugins nav entry, Settings → Plugins) while the rebuild is underway.
- * Default OFF so 0.6.x releases ship no plugins entry points.
- */
-function bakedPacksV2Flag(): boolean {
-  return process.env.PRISM_PACKS_V2 === "1";
-}
-
 export default defineConfig({
   main: {
     define: {
       __PRISM_UPDATER_BASE_URL__: JSON.stringify(bakedUpdaterBaseUrl()),
-      __PRISM_PACKS_V2__: JSON.stringify(bakedPacksV2Flag()),
     },
     plugins: [
       sharedAliasPlugin(__dirname),
@@ -54,9 +42,6 @@ export default defineConfig({
     },
   },
   renderer: {
-    define: {
-      __PRISM_PACKS_V2__: JSON.stringify(bakedPacksV2Flag()),
-    },
     plugins: [react(), sharedAliasPlugin(__dirname)],
     resolve: {
       alias: {
