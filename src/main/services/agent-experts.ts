@@ -33,12 +33,16 @@ export interface OrchestratorDefinition {
 }
 
 export interface ExpertInfo extends ExpertDefinition {
+  /** 全限定 id（`packId:contentId`）；facade 恒定提供，渲染/IPC 无需关心 */
+  fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
   effectiveModules: string[];
 }
 
 export interface OrchestratorInfo extends OrchestratorDefinition {
+  /** 全限定 id（`packId:contentId`）；facade 恒定提供 */
+  fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
   effectiveModules: string[];

@@ -4,7 +4,6 @@ import { join } from "node:path";
 import {
   listProjectSkills,
   readSkillsManifest,
-  writeSkillsManifest,
   deleteProjectSkill,
   addSkillLibrarySource,
   removeSkillLibrarySource,
@@ -12,7 +11,8 @@ import {
   listLibrarySources,
   PRISM_CURATED_SOURCE_ID,
   activeRemoteRegistryUrls,
-  PRISM_SKILLS_REL,
+  PRISM_LOCAL_SKILLS_REL,
+  setSkillContentEnabled,
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
 } from "../services/skills-sync";
@@ -30,11 +30,9 @@ import {
   validateRegistryIndex,
   type RegistrySkillEntry,
 } from "../services/skills-registry";
-import {
-  listBundledSkills,
-  copyBundledSkillToProject,
-  readBundledSkillMd,
-} from "../services/bundled-skills";
+import { CORE_PACK_ID } from "../../shared/packs/types";
+import { toFqid } from "../../shared/packs/state";
+import { listCorePackSkills, readCoreSkillMd } from "../services/core-pack-skills";
 
 function refreshProjectSkills(
   projectPath: string,
@@ -93,18 +91,19 @@ export function registerSkillsHandlers(): void {
     },
   );
 
-  ipcMain.handle("agent:listBundledSkills", async () => listBundledSkills());
+  ipcMain.handle("agent:listBundledSkills", async () => listCorePackSkills());
 
   ipcMain.handle(
     "agent:installBundledSkill",
     async (_event, args: { projectPath: string; skillId: string }) => {
-      copyBundledSkillToProject(args.projectPath, args.skillId);
+      // 引用模型：core pack 技能天然可用，「安装」= 确保启用（零拷贝）
+      setSkillContentEnabled(args.projectPath, toFqid(CORE_PACK_ID, args.skillId), true);
       return refreshProjectSkills(args.projectPath);
     },
   );
 
   ipcMain.handle("agent:readBundledSkillMd", async (_event, args: { skillId: string }) => {
-    return readBundledSkillMd(args.skillId);
+    return readCoreSkillMd(args.skillId);
   });
 
   ipcMain.handle("agent:syncSkills", async (_event, args: { projectPath: string }) => {
@@ -154,14 +153,10 @@ export function registerSkillsHandlers(): void {
   ipcMain.handle(
     "agent:setSkillEnabled",
     async (_event, args: { projectPath: string; skillId: string; enabled: boolean }) => {
-      const manifest = readSkillsManifest(args.projectPath);
-      const disabled = new Set(manifest.disabled ?? []);
-      if (args.enabled) {
-        disabled.delete(args.skillId);
-      } else {
-        disabled.add(args.skillId);
-      }
-      writeSkillsManifest(args.projectPath, { ...manifest, disabled: Array.from(disabled) });
+      // 启停唯一状态操作 = packs.json disabledContent（D3）；skillId 为 FQID
+      // （列表项自带），裸 id 按 resolver 规则解析兜底。
+      const fqid = setSkillContentEnabled(args.projectPath, args.skillId, args.enabled);
+      if (!fqid) throw new Error(`Skill not found: ${args.skillId}`);
       const integration = await refreshProjectSkillsIntegration(args.projectPath);
       return {
         ...integration,
@@ -176,7 +171,7 @@ export function registerSkillsHandlers(): void {
       _event,
       args: { projectPath: string; skillId: string; content: string },
     ) => {
-      const skillDir = join(args.projectPath, PRISM_SKILLS_REL, args.skillId);
+      const skillDir = join(args.projectPath, PRISM_LOCAL_SKILLS_REL, args.skillId);
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(join(skillDir, "SKILL.md"), args.content, "utf-8");
       return refreshProjectSkills(args.projectPath);

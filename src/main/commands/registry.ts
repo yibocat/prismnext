@@ -1,8 +1,7 @@
 // prism-next/src/main/commands/registry.ts
-import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, renameSync } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CommandDef, CreateCommandPayload, UpdateCommandPayload } from "./types";
-import { BUILTIN_COMMANDS } from "./builtin-commands";
 import {
   buildCommandPack,
   parseCommandPack,
@@ -13,50 +12,47 @@ import {
   type CommandPack,
 } from "./export-import";
 import { isValidCommandName } from "./template-utils";
+import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../shared/packs/types";
+import { parseFqid } from "../../shared/packs/state";
+import type { ResolvedCommand } from "../../shared/packs/types";
+import { invalidateResolver, listCommands, resolveBareContentId } from "../services/pack-resolver";
+import { setContentDisabled } from "../services/packs-state";
 
 /**
- * CommandRegistry — merges three layers into a unified list.
+ * CommandRegistry（§5.6.3）—— resolver 之上的命令门面，per-project 实例。
  *
- * Layer priority (highest wins):
- *   1. User custom commands (shadow built-in of same name)
- *   2. App commands
- *   3. OpenCode built-in commands
- *
- * Cached in memory; call reload() after filesystem changes.
+ * 内容唯一来源 = PackResolver.listCommands（core + local + 启用 packs）。
+ * 本类不持有内容缓存（resolver 视图自校验新鲜度）：
+ * - 启停 = packs.json disabledContent（废弃 .md ↔ .md.disabled 改名与
+ *   applyBuiltinStates/dumpBuiltinStates 全局态）；
+ * - CRUD 只允许 Local Pack（remove 对非 local 直接报错——结构上杜绝 P9）；
+ * - 斜杠重名遮蔽优先级：local > core > 其他 pack（id 字典序）。
  */
 export class CommandRegistry {
-  private cache: CommandDef[] | null = null;
-  private projectRoot: string | null = null;
+  constructor(private readonly projectRoot: string) {}
 
-  /** Path to user commands directory */
+  /** Local Pack commands 目录 */
   private get commandsDir(): string {
-    return join(this.projectRoot!, ".prismnext", "agent", "commands");
+    return join(this.projectRoot, LOCAL_PACK_REL, "commands");
   }
 
-  /**
-   * Set the active project root. Resets the cache.
-   */
-  setProjectRoot(root: string | null): void {
-    this.projectRoot = root;
-    this.cache = null;
-  }
-
-  /**
-   * Return the full merged command list (all three layers).
-   * User commands shadow built-in commands of the same name.
-   */
   list(): CommandDef[] {
-    if (this.cache) return this.cache;
-    this.cache = this.buildList();
-    return this.cache;
+    return listCommands(this.projectRoot).map((cmd) => toCommandDef(cmd));
   }
 
   /**
-   * Look up a single command by name.
+   * Look up a single command by name for slash execution.
+   * 同名遮蔽优先级：local > core > 其他 pack（与 resolver bare-id 语义一致）。
    * Returns undefined if not found or disabled.
    */
   lookup(name: string): CommandDef | undefined {
-    return this.list().find((c) => c.name === name && c.enabled);
+    const matches = this.list().filter((c) => c.name === name && c.enabled);
+    if (matches.length === 0) return undefined;
+    return (
+      matches.find((c) => c.packId === LOCAL_PACK_ID) ??
+      matches.find((c) => c.packId === CORE_PACK_ID) ??
+      matches.sort((a, b) => a.packId.localeCompare(b.packId))[0]
+    );
   }
 
   /**
@@ -75,23 +71,24 @@ export class CommandRegistry {
   }
 
   /**
-   * Reload: flush cache and rescan user command files.
+   * Reload: drop the resolver view for this project and rebuild.
+   * （resolver 的 viewKey 已覆盖文件指纹，多数情况下只是预热。）
    */
   reload(): CommandDef[] {
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return this.list();
   }
 
-  // ── User command CRUD ──
+  // ── Local Pack command CRUD（只允许 user.local）──
 
   /**
-   * Create a new user command as a .md file.
+   * Create a new local command as a .md file in the Local Pack.
    */
   create(payload: CreateCommandPayload): CommandDef {
     this.ensureDir();
 
     const def: CommandDef = {
-      id: `user:${payload.name}`,
+      id: `${LOCAL_PACK_ID}:${payload.name}`,
       name: payload.name,
       description: payload.description,
       source: "user",
@@ -101,29 +98,33 @@ export class CommandRegistry {
       model: payload.model,
       order: 1000,
       enabled: true,
+      packId: LOCAL_PACK_ID,
+      packName: "My Content",
+      removable: true,
     };
 
     this.writeFile(def);
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return def;
   }
 
   /**
-   * Update an existing user command.
+   * Update an existing local command.
    */
   update(id: string, payload: UpdateCommandPayload): CommandDef {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
-    if (existing.source !== "user") throw new Error(`Cannot modify built-in command: ${id}`);
+    if (!existing.removable) throw new Error(`Cannot modify pack command (disable it instead): ${id}`);
 
     // If name changed, delete old file
     if (payload.name && payload.name !== existing.name) {
-      this.deleteFile(existing);
+      this.deleteFile(existing.name);
     }
 
     const updated: CommandDef = {
       ...existing,
       name: payload.name ?? existing.name,
+      id: `${LOCAL_PACK_ID}:${payload.name ?? existing.name}`,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
       action:
@@ -135,72 +136,45 @@ export class CommandRegistry {
     };
 
     this.writeFile(updated);
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return updated;
   }
 
   /**
-   * Delete a user command (removes the .md file).
+   * Delete a local command (removes the .md file).
+   * 非 local 内容直接报错 —— pack 内容只能禁用（P9 结构性修复）。
    */
   remove(id: string): void {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
-    if (existing.source !== "user") throw new Error(`Cannot delete built-in command: ${id}`);
-    this.deleteFile(existing);
-    this.cache = null;
+    if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
+    this.deleteFile(existing.name);
+    // 清理可能残留的逐项禁用
+    setContentDisabled(this.projectRoot, existing.id, false);
+    invalidateResolver(this.projectRoot);
   }
 
   /**
-   * Enable or disable any command by id.
-   * For user commands: renames .md ↔ .md.disabled
-   * For built-in: toggles in-memory only.
+   * Enable or disable any command by id —— 唯一状态操作 = packs.json
+   * disabledContent（FQID 原样；裸 id 按 resolver 规则解析兜底）。
    */
   setEnabled(id: string, enabled: boolean): void {
-    const existing = this.list().find((c) => c.id === id);
-    if (!existing) throw new Error(`Command not found: ${id}`);
-
-    if (existing.source === "user") {
-      const oldPath = this.filePath(existing.name, existing.enabled);
-      const newPath = this.filePath(existing.name, enabled);
-      if (existsSync(oldPath) && oldPath !== newPath) {
-        renameSync(oldPath, newPath);
-      }
-    }
-
-    existing.enabled = enabled;
-    this.cache = null;
+    const fqid = parseFqid(id)
+      ? id
+      : resolveBareContentId(this.projectRoot, "command", id);
+    if (!fqid) throw new Error(`Command not found: ${id}`);
+    setContentDisabled(this.projectRoot, fqid, !enabled);
   }
 
-  /**
-   * Restore built-in command enabled states from persisted settings.
-   */
-  applyBuiltinStates(states: Record<string, boolean>): void {
-    for (const cmd of BUILTIN_COMMANDS) {
-      if (cmd.name in states) {
-        cmd.enabled = states[cmd.name];
-      }
-    }
-    this.cache = null;
-  }
-
-  /**
-   * Export built-in command enabled states for persistence.
-   */
-  dumpBuiltinStates(): Record<string, boolean> {
-    const result: Record<string, boolean> = {};
-    for (const cmd of BUILTIN_COMMANDS) {
-      result[cmd.name] = cmd.enabled;
-    }
-    return result;
-  }
+  // ── Export / import（作用域 = Local Pack commands）──
 
   exportPack(): CommandPack {
-    return buildCommandPack(this.scanUserCommands());
+    return buildCommandPack(this.localCommands());
   }
 
   previewImport(packRaw: unknown): CommandImportPreview {
     const pack = parseCommandPack(packRaw);
-    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+    const existingNames = new Set(this.localCommands().map((c) => c.name));
     return previewCommandImport(existingNames, pack);
   }
 
@@ -212,7 +186,7 @@ export class CommandRegistry {
       renamed: [],
     };
 
-    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+    const existingNames = new Set(this.localCommands().map((c) => c.name));
 
     for (const entry of pack.commands) {
       const baseName = entry.name?.trim().toLowerCase();
@@ -233,7 +207,7 @@ export class CommandRegistry {
       }
 
       const def: CommandDef = {
-        id: `user:${targetName}`,
+        id: `${LOCAL_PACK_ID}:${targetName}`,
         name: targetName,
         description: entry.description ?? "",
         source: "user",
@@ -243,111 +217,36 @@ export class CommandRegistry {
         model: entry.model || undefined,
         order: 1000,
         enabled: entry.enabled !== false,
+        packId: LOCAL_PACK_ID,
+        packName: "My Content",
+        removable: true,
       };
 
       if (strategy === "replace" && existingNames.has(baseName) && targetName === baseName) {
-        const existing = this.list().find((c) => c.id === `user:${baseName}`);
-        if (existing && existing.source === "user" && existing.name !== targetName) {
-          this.deleteFile(existing);
-        }
+        this.deleteFile(baseName);
       }
 
       this.writeFile(def);
+      if (!def.enabled) {
+        setContentDisabled(this.projectRoot, def.id, true);
+      }
       existingNames.add(targetName);
       result.imported += 1;
     }
 
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return result;
   }
 
   // ── Private helpers ──
 
-  private buildList(): CommandDef[] {
-    const userCommands = this.scanUserCommands();
-    const userNames = new Set(userCommands.map((c) => c.name));
-    const builtins = BUILTIN_COMMANDS.filter((c) => !userNames.has(c.name));
-    return [...builtins, ...userCommands];
+  /** Local Pack 的命令视图（export/import 作用域） */
+  private localCommands(): CommandDef[] {
+    return this.list().filter((c) => c.packId === LOCAL_PACK_ID);
   }
 
-  private scanUserCommands(): CommandDef[] {
-    if (!this.projectRoot) return [];
-    const dir = this.commandsDir;
-    if (!existsSync(dir)) return [];
-
-    const commands: CommandDef[] = [];
-    try {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        if (entry.endsWith(".disabled")) continue;
-        if (!entry.endsWith(".md") && !entry.endsWith(".mdx")) continue;
-
-        const filePath = join(dir, entry);
-        try {
-          const def = this.parseFile(filePath);
-          if (def) commands.push(def);
-        } catch (err: any) {
-          console.warn(`[commands] Skipping invalid command file ${entry}: ${err.message}`);
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[commands] Failed to scan ${dir}: ${err.message}`);
-    }
-
-    return commands;
-  }
-
-  private parseFile(filePath: string): CommandDef | null {
-    const raw = readFileSync(filePath, "utf-8");
-
-    // Parse YAML frontmatter (--- ... ---)
-    const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-    if (!fmMatch) {
-      // No frontmatter — entire file is the template
-      const name = basename(filePath, extname(filePath));
-      return {
-        id: `user:${name}`,
-        name,
-        description: "",
-        source: "user",
-        template: raw.trim(),
-        order: 1000,
-        enabled: true,
-      };
-    }
-
-    const fmRaw = fmMatch[1];
-    const body = fmMatch[2].trim();
-
-    // Simple YAML parser (flat keys only, no library needed)
-    const fm: Record<string, string> = {};
-    for (const line of fmRaw.split("\n")) {
-      const colonIdx = line.indexOf(":");
-      if (colonIdx === -1) continue;
-      const key = line.slice(0, colonIdx).trim();
-      const value = line.slice(colonIdx + 1).trim();
-      if (key) fm[key] = value;
-    }
-
-    const name = basename(filePath, extname(filePath));
-
-    return {
-      id: `user:${name}`,
-      name,
-      description: fm.description || "",
-      source: "user",
-      template: body,
-      action: fm.action || undefined,
-      agent: fm.agent || undefined,
-      model: fm.model || undefined,
-      order: 1000,
-      enabled: fm.enabled !== "false",
-    };
-  }
-
-  private filePath(name: string, enabled: boolean): string {
-    const ext = enabled ? ".md" : ".md.disabled";
-    return join(this.commandsDir, `${name}${ext}`);
+  private filePath(name: string): string {
+    return join(this.commandsDir, `${name}.md`);
   }
 
   private writeFile(def: CommandDef): void {
@@ -359,28 +258,56 @@ export class CommandRegistry {
       ...(def.action ? [`action: ${def.action}`] : []),
       ...(def.agent ? [`agent: ${def.agent}`] : []),
       ...(def.model ? [`model: ${def.model}`] : []),
-      `enabled: ${def.enabled}`,
       "---",
     ].join("\n");
 
     const content = `${frontmatter}\n\n${def.template || ""}\n`;
-    const path = this.filePath(def.name, def.enabled);
-    writeFileSync(path, content, "utf-8");
+    writeFileSync(this.filePath(def.name), content, "utf-8");
   }
 
-  private deleteFile(def: CommandDef): void {
-    const path = this.filePath(def.name, def.enabled);
-    if (existsSync(path)) unlinkSync(path);
-    const altPath = this.filePath(def.name, !def.enabled);
-    if (existsSync(altPath)) unlinkSync(altPath);
+  private deleteFile(name: string): void {
+    const path = this.filePath(name);
+    if (existsSync(path)) rmSync(path, { force: true });
   }
 
   private ensureDir(): void {
-    if (!this.projectRoot) throw new Error("No project root set");
-    const dir = this.commandsDir;
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (!existsSync(this.commandsDir)) mkdirSync(this.commandsDir, { recursive: true });
   }
 }
 
-/** Singleton */
-export const commandRegistry = new CommandRegistry();
+function toCommandDef(cmd: ResolvedCommand): CommandDef {
+  const packId = cmd.origin.packId;
+  return {
+    id: cmd.fqid,
+    name: cmd.name,
+    description: cmd.description,
+    source: packId === CORE_PACK_ID ? "builtin" : packId === LOCAL_PACK_ID ? "user" : "plugin",
+    template: cmd.template,
+    action: cmd.action,
+    agent: cmd.agent,
+    model: cmd.model,
+    order: cmd.order,
+    enabled: cmd.enabled,
+    packId,
+    packName: cmd.origin.packName,
+    removable: packId === LOCAL_PACK_ID,
+  };
+}
+
+// ── per-project 实例池（§5.6.3：删除全局可写态）─────────────────
+
+const registryPool = new Map<string, CommandRegistry>();
+
+export function getCommandRegistry(projectRoot: string): CommandRegistry {
+  let registry = registryPool.get(projectRoot);
+  if (!registry) {
+    registry = new CommandRegistry(projectRoot);
+    registryPool.set(projectRoot, registry);
+  }
+  return registry;
+}
+
+/** 测试专用：清空实例池 */
+export function __resetCommandRegistriesForTests(): void {
+  registryPool.clear();
+}

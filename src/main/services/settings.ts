@@ -342,6 +342,14 @@ export function updateSettings(patch: Partial<AppSettings>): void {
 }
 
 /**
+ * R11（Phase 3）：清空 legacy 的 builtin command 全局启停键。
+ * 状态已由 packs-state 迁移进首个迁移项目的 packs.json disabledContent。
+ */
+export function clearLegacyBuiltinCommandStates(): void {
+  store.delete("builtinCommands" as keyof AppSettings);
+}
+
+/**
  * GC for provider removals that predate the scrub in
  * buildRemoveCustomProviderPatch (≤ v0.6.7): per-provider maps can retain
  * entries for ids no longer listed in `aiCustomProviders`. Those orphans are

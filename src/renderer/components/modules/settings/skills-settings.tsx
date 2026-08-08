@@ -32,6 +32,7 @@ const CATEGORY_HEADER =
 const SKILLS_PAGE_INITIAL_COUNT = 10;
 
 interface InstalledSkill {
+  fqid: string;
   id: string;
   name: string;
   description: string;
@@ -41,7 +42,9 @@ interface InstalledSkill {
   installOrigin?:
     | { adapter: "github"; repo: string; ref: string; path: string }
     | { adapter: "discovery"; indexUrl: string };
-  origin: "bundled" | "registry" | "custom";
+  origin: "bundled" | "registry" | "custom" | "plugin";
+  originPackName?: string;
+  removable: boolean;
 }
 
 interface SkillUpdateRow {
@@ -96,16 +99,16 @@ export function SkillsSettings() {
     void loadSkills({ silent: skillsRefreshTick > 0 });
   }, [loadSkills, skillsRefreshTick]);
 
-  const toggleEnabled = async (skillId: string, enabled: boolean) => {
+  const toggleEnabled = async (skill: InstalledSkill, enabled: boolean) => {
     if (!projectRoot) return;
     deleteConfirm.clearPending();
     setSkills((current) =>
-      current.map((s) => (s.id === skillId ? { ...s, enabled } : s)),
+      current.map((s) => (s.fqid === skill.fqid ? { ...s, enabled } : s)),
     );
     try {
       const result = await window.electronAPI.agentSetSkillEnabled(
         projectRoot,
-        skillId,
+        skill.fqid,
         enabled,
       );
       if (result.skills) {
@@ -113,7 +116,7 @@ export function SkillsSettings() {
       }
     } catch {
       setSkills((current) =>
-        current.map((s) => (s.id === skillId ? { ...s, enabled: !enabled } : s)),
+        current.map((s) => (s.fqid === skill.fqid ? { ...s, enabled: !enabled } : s)),
       );
       toast.error(t("settings.skillsPage.toast.updateFailed"));
     }
@@ -166,22 +169,22 @@ export function SkillsSettings() {
     }
   };
 
-  const deleteSkill = async (skillId: string) => {
+  const deleteSkill = async (skill: InstalledSkill) => {
     if (!projectRoot) return;
     deleteConfirm.clearPending();
     setSaving(true);
     try {
-      await window.electronAPI.agentDeleteSkill(projectRoot, skillId);
+      await window.electronAPI.agentDeleteSkill(projectRoot, skill.fqid);
       await window.electronAPI.chatPrewarm(projectRoot);
       await loadSkills();
-      toast.success(t("settings.skillsPage.toast.removed", { name: skillId }));
+      toast.success(t("settings.skillsPage.toast.removed", { name: skill.id }));
     } finally {
       setSaving(false);
     }
   };
 
   const openSkillsFolder = () => {
-    revealProjectHiddenPath(".prismnext/agent/skills");
+    revealProjectHiddenPath(".prismnext/agent/local/skills");
   };
 
   const openCreateSkill = () => {
@@ -194,11 +197,22 @@ export function SkillsSettings() {
 
   const openSkillMarkdown = (skill: InstalledSkill) => {
     deleteConfirm.clearPending();
+    if (skill.removable) {
+      openSettingsPanel({
+        kind: "skill-markdown",
+        mode: "edit",
+        skillId: skill.id,
+        title: skill.name,
+      });
+      return;
+    }
+    // pack 内容只读预览；非 core pack 用绝对路径直接读文件
     openSettingsPanel({
       kind: "skill-markdown",
-      mode: "edit",
+      mode: "preview-bundled",
       skillId: skill.id,
       title: skill.name,
+      absPath: skill.origin === "bundled" ? undefined : `${skill.skillDirRel}/SKILL.md`,
     });
   };
 
@@ -234,9 +248,9 @@ export function SkillsSettings() {
             <p className="text-[length:var(--font-size-12)] text-muted-foreground -mt-2">
               Stored in{" "}
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/skills/&lt;name&gt;/SKILL.md
+                .prismnext/agent/local/skills/&lt;name&gt;/SKILL.md
               </code>
-              . New chat tabs pick up changes.
+              . Pack skills are referenced in place. New chat tabs pick up changes.
             </p>
 
             <div>
@@ -294,7 +308,7 @@ export function SkillsSettings() {
                     const update = updatesBySkillId[skill.id];
                     const hasUpdate = update?.updateAvailable === true;
                     return (
-                    <div key={skill.id} className={ROW}>
+                    <div key={skill.fqid} className={ROW}>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={cn(ROW_LABEL, "font-mono")}>{skill.name}</span>
@@ -318,6 +332,11 @@ export function SkillsSettings() {
                               {t("settings.skillsPage.origin.bundled")}
                             </span>
                           )}
+                          {skill.origin === "plugin" && (
+                            <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                              {skill.originPackName ?? "pack"}
+                            </span>
+                          )}
                           {hasUpdate && (
                             <span className={cn(BADGE, "bg-secondary text-warning")}>
                               update
@@ -332,7 +351,7 @@ export function SkillsSettings() {
                       </div>
                       <Switch
                         checked={skill.enabled}
-                        onCheckedChange={(v) => void toggleEnabled(skill.id, v)}
+                        onCheckedChange={(v) => void toggleEnabled(skill, v)}
                       />
                       {skill.installOrigin && (
                         <Button
@@ -355,13 +374,15 @@ export function SkillsSettings() {
                       >
                         <SquareArrowOutUpRightIcon className="size-3.5" />
                       </Button>
-                      <InlineDeleteButton
-                        itemId={skill.id}
-                        pending={deleteConfirm.isPending(skill.id)}
-                        disabled={saving}
-                        onRequest={() => deleteConfirm.setPendingId(skill.id)}
-                        onConfirm={() => void deleteSkill(skill.id)}
-                      />
+                      {skill.removable && (
+                        <InlineDeleteButton
+                          itemId={skill.fqid}
+                          pending={deleteConfirm.isPending(skill.fqid)}
+                          disabled={saving}
+                          onRequest={() => deleteConfirm.setPendingId(skill.fqid)}
+                          onConfirm={() => void deleteSkill(skill)}
+                        />
+                      )}
                     </div>
                     );
                   })}

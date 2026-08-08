@@ -128,6 +128,10 @@ const templatesNav: LeftNavDefinition = {
     closeLiteraturePanel(ctx);
     useLayoutStore.getState().setLeftSidebarView("templates");
   },
+  onToggleOff: () => {
+    // Do not fall through to LEFT_NAV_DEFAULT_ID (new-agent) — that creates a chat tab.
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
 };
 
 const texWorkspaceNav: LeftNavDefinition = {

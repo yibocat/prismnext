@@ -1199,8 +1199,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("commands:update", { projectRoot, id, payload }),
 	commandsDelete: (projectRoot: string, id: string) =>
 		ipcRenderer.invoke("commands:delete", { projectRoot, id }),
-	commandsToggle: (id: string, enabled: boolean) =>
-		ipcRenderer.invoke("commands:toggle", { id, enabled }),
+	commandsToggle: (projectRoot: string, id: string, enabled: boolean) =>
+		ipcRenderer.invoke("commands:toggle", { projectRoot, id, enabled }),
 	commandsReload: (projectRoot?: string | null) =>
 		ipcRenderer.invoke("commands:reload", { projectRoot }),
 	commandsPreviewImport: (projectRoot: string, pack: unknown) =>

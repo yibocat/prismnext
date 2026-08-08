@@ -158,7 +158,11 @@ function normalizeWatchPath(filePath: string): string {
 }
 
 function isPrismAgentSkillsWatchPath(normalized: string): boolean {
-  return normalized.includes("/.prismnext/agent/skills");
+  // local pack（用户内容）整体可见/可监听；legacy skills 路径保留兜底
+  return (
+    normalized.includes("/.prismnext/agent/skills") ||
+    normalized.includes("/.prismnext/agent/local")
+  );
 }
 
 /** chokidar ignored callback — allow `.prismnext/agent/skills` despite dot-dir rule. */

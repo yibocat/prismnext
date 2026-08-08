@@ -1425,9 +1425,8 @@ export function registerChatHandlers(): void {
         if (args.projectPath) {
           const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
           await ensureProjectChatPrewarm(args.projectPath);
-          const { commandRegistry } = await import("../commands/registry");
-          commandRegistry.setProjectRoot(args.projectPath);
-          commandRegistry.reload();
+          const { getCommandRegistry } = await import("../commands/registry");
+          getCommandRegistry(args.projectPath).reload();
           const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
           emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
         }

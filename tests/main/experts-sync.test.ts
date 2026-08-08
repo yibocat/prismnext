@@ -20,7 +20,20 @@ import {
   appendSubagentRosterSection,
   pruneAllowedExpertIds,
 } from "../../src/main/services/experts-sync";
-import { readBundledOrchestratorInstructions } from "../../src/main/services/bundled-orchestrators";
+
+/** Core-pack instructions（原 bundled loader 的读取对象，Phase 2 起直接在 core pack 目录）。 */
+function readCoreOrchestratorInstructions(orchestratorId: string): string | null {
+  const path = join(
+    process.cwd(),
+    "resources",
+    "plugins",
+    "prismnext.core",
+    "orchestrators",
+    orchestratorId,
+    "instructions.md",
+  );
+  return existsSync(path) ? readFileSync(path, "utf-8") : null;
+}
 
 describe("experts-sync", () => {
   let root: string;
@@ -270,7 +283,7 @@ describe("experts-sync", () => {
     expect(orchestratorMd).toContain("peer-reviewer");
     expect(orchestratorMd).toContain("## Orchestrator judgment");
     expect(orchestratorMd).toContain("## Chat paper citations");
-    const bundledInstructions = readBundledOrchestratorInstructions("research-prism") ?? "";
+    const bundledInstructions = readCoreOrchestratorInstructions("research-prism") ?? "";
     expect(orchestratorMd).toContain(bundledInstructions.trim());
     expect(bundledInstructions).not.toContain("## Chat paper citations");
     const synthesizerMd = readFileSync(join(agentsDir, "literature-synthesizer.md"), "utf-8");

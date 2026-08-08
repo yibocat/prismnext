@@ -33,7 +33,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   );
 
   const skillDirRel =
-    slot.mode === "edit" ? `.prismnext/agent/skills/${slot.skillId}` : null;
+    slot.mode === "edit" ? `.prismnext/agent/local/skills/${slot.skillId}` : null;
   const skillPath =
     projectRoot && skillDirRel
       ? `${projectRoot.replace(/[/\\]+$/, "")}/${skillDirRel}/SKILL.md`
@@ -52,8 +52,15 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
       if (slot.mode === "preview-bundled") {
         if (!silent) setLoading(true);
         try {
-          const text = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
-          if (text == null) throw new Error("bundled skill not found");
+          let text: string | null = null;
+          if (slot.absPath) {
+            // 非 core pack 的技能：直接读绝对路径（只读预览）
+            const result = await window.electronAPI.fsRead(slot.absPath);
+            text = result?.content ?? null;
+          } else {
+            text = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
+          }
+          if (text == null) throw new Error("pack skill not found");
           setContent(text);
           setSavedContent(text);
         } catch {
@@ -100,9 +107,10 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     setViewMode(slot.mode === "new" ? "source" : "preview");
   }, [loadContent, slot.mode, slot.mode === "new" ? null : slot.skillId]);
 
-  // Resolve what "reset" means for this skill: restore the bundled copy when
-  // one exists, reinstall from its registry/GitHub source otherwise. Custom
-  // skills have no default to recover, so they get no reset.
+  // Resolve what "reset" means for this skill: drop the local diverged copy
+  // when the core pack ships the same id (core original resurfaces), reinstall
+  // from its registry/GitHub source otherwise. Custom skills have no default
+  // to recover, so they get no reset.
   useEffect(() => {
     if (slot.mode !== "edit") {
       setResetSource(null);
@@ -121,7 +129,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         }
         if (projectRoot) {
           const list = await window.electronAPI.agentListSkills(projectRoot);
-          const info = list.find((s) => s.id === slot.skillId);
+          const info = list.find((s) => s.fqid === `user.local:${slot.skillId}`);
           if (!cancelled && info?.installOrigin) setResetSource("registry");
         }
       } catch {
@@ -138,10 +146,15 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     setResetting(true);
     try {
       if (resetSource === "bundled") {
-        await window.electronAPI.agentInstallBundledSkill(projectRoot, slot.skillId);
-      } else {
-        await window.electronAPI.agentReinstallSkill(projectRoot, slot.skillId);
+        // 引用模型：删除 local 分歧副本，core 原件自动浮现（遮蔽解除）
+        await window.electronAPI.agentDeleteSkill(projectRoot, `user.local:${slot.skillId}`);
+        await window.electronAPI.chatPrewarm(projectRoot);
+        bumpSkillsRefresh();
+        toast.success(t("settings.editor.skillMd.toast.restored"));
+        closePanel();
+        return;
       }
+      await window.electronAPI.agentReinstallSkill(projectRoot, slot.skillId);
       await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
       toast.success(t("settings.editor.skillMd.toast.restored"));

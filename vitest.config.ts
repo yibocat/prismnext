@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [sharedAliasPlugin(__dirname)],
   define: {
     __PRISM_UPDATER_BASE_URL__: '""',
+    __PRISM_PACKS_V2__: "false",
   },
   test: {
     globals: true,

@@ -1,9 +1,31 @@
+/**
+ * experts-sync.ts —— orchestrators / experts 的 legacy facade（Phase 2 重写）。
+ *
+ * 内容来源与启停判定已全部交给 Agent Pack 体系：
+ *   - core 内容 = `resources/plugins/prismnext.core/`（PackCatalog 扫描）
+ *   - 用户自建内容 = Local Pack `.prismnext/agent/local/`
+ *   - 启停 / override / 默认 orchestrator = packs.json（packs-state.ts）
+ *   - 「有什么、是否可用」唯一答案 = pack-resolver.ts
+ *
+ * 本文件保留重构前的对外契约（IPC / chat / stack-preview / 渲染引擎），
+ * 内部全部改为 resolver 驱动：
+ *   - ExpertInfo/OrchestratorInfo 形状不变（id 仍为裸 id；新增 fqid 字段）
+ *   - agent.md 渲染逻辑逐字节不变（golden 验收：tests/main/agent-plan-golden）
+ *   - 文件名规则：core/local 用裸 id（opencode 侧稳定），其余 pack 用
+ *     `<packId>--<id>`（§4.5.2）
+ *   - 裸 id 命名空间冲突时按 local > external > firstparty > core 遮蔽
+ *     （对齐旧 merge 语义：custom 覆盖 bundled）
+ *
+ * 已删除：experts/orchestrators manifest 文件读写（→ packs.json 适配器）、
+ * bundled-experts/bundled-orchestrators loader、merge/applyOverride 拼贴、
+ * listDisabledBuiltinExperts / expertsManifestModified（无消费方）。
+ */
+
 import { app } from "electron";
 import {
   existsSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -25,14 +47,6 @@ import {
   DEFAULT_ORCHESTRATOR_ID,
 } from "./agent-experts";
 import {
-  listBundledExpertDefinitions,
-  readBundledExpertInstructions,
-} from "./bundled-experts";
-import {
-  listBundledOrchestratorDefinitions,
-  readBundledOrchestratorInstructions,
-} from "./bundled-orchestrators";
-import {
   resolveOrchestratorActiveModuleKeys,
   resolveActiveModuleKeys,
   resolveExpertProfileModuleKeysFor,
@@ -41,147 +55,74 @@ import {
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
+import {
+  CORE_PACK_ID,
+  DEFAULT_ORCHESTRATOR_FQID,
+  LOCAL_PACK_ID,
+  type ExpertDef,
+  type Fqid,
+  type OrchestratorDef,
+  type ResolvedContent,
+} from "../../shared/packs/types";
+import { parseFqid, toFqid } from "../../shared/packs/state";
+import {
+  getContent,
+  listContent,
+  readInstructions,
+  resolveAllowedExperts,
+  resolveBareContentId,
+  resolveOrchestratorId as resolverResolveOrchestratorId,
+  invalidateResolver,
+} from "./pack-resolver";
+import {
+  readPacksState,
+  setContentDisabled,
+  saveContentOverride,
+  setDefaultOrchestratorFqid,
+  writePacksState,
+} from "./packs-state";
+import { getLocalPackDir } from "./pack-catalog";
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
-export const EXPERTS_MANIFEST_REL = ".prismnext/agent/experts-manifest.json";
-export const ORCHESTRATORS_MANIFEST_REL = ".prismnext/agent/orchestrators-manifest.json";
-export const CUSTOM_EXPERTS_REL = ".prismnext/agent/experts/custom";
-export const CUSTOM_ORCHESTRATORS_REL = ".prismnext/agent/orchestrators/custom";
 export const PRISM_EXPERTS_SYNC_REL = "prism-experts-sync.json";
 
-function defaultExpertsManifest(): ExpertsManifest {
-  return { disabledBuiltinIds: [] };
+// ── 裸 id / 文件名命名空间 ─────────────────────────────────
+
+/** pack 遮蔽优先级：数字小者胜（local 最强，core 兜底）。 */
+function packShadowRank(packId: string): number {
+  if (packId === LOCAL_PACK_ID) return 0;
+  if (packId === CORE_PACK_ID) return 3;
+  return 1; // firstparty / external
 }
 
-function defaultOrchestratorsManifest(): OrchestratorsManifest {
-  return { defaultOrchestratorId: DEFAULT_ORCHESTRATOR_ID, disabledBuiltinIds: [] };
+/**
+ * opencode agent 文件名基（§4.5.2）：core/local 用裸 id（与旧布局逐字节一致），
+ * 其余 pack 用 `<packId>--<id>` 防冲突。
+ */
+function agentFileBase(content: ResolvedContent): string {
+  return content.packId === CORE_PACK_ID || content.packId === LOCAL_PACK_ID
+    ? content.id
+    : `${content.packId}--${content.id}`;
 }
 
-export function readExpertsManifest(projectRoot: string): ExpertsManifest {
-  const path = join(projectRoot, EXPERTS_MANIFEST_REL);
-  if (!existsSync(path)) return defaultExpertsManifest();
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as ExpertsManifest;
-    return {
-      disabledBuiltinIds: Array.isArray(parsed.disabledBuiltinIds)
-        ? parsed.disabledBuiltinIds
-        : [],
-      builtinOverrides:
-        parsed.builtinOverrides && typeof parsed.builtinOverrides === "object"
-          ? parsed.builtinOverrides
-          : undefined,
-    };
-  } catch {
-    return defaultExpertsManifest();
-  }
-}
-
-export function writeExpertsManifest(projectRoot: string, manifest: ExpertsManifest): void {
-  const path = join(projectRoot, EXPERTS_MANIFEST_REL);
-  mkdirSync(join(projectRoot, ".prismnext", "agent"), { recursive: true });
-  writeFileSync(
-    path,
-    JSON.stringify(
-      {
-        disabledBuiltinIds: manifest.disabledBuiltinIds ?? [],
-        builtinOverrides: manifest.builtinOverrides,
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
-}
-
-export function readOrchestratorsManifest(projectRoot: string): OrchestratorsManifest {
-  const path = join(projectRoot, ORCHESTRATORS_MANIFEST_REL);
-  if (!existsSync(path)) return defaultOrchestratorsManifest();
-  try {
-    const parsed = JSON.parse(readFileSync(path, "utf-8")) as OrchestratorsManifest;
-    return {
-      defaultOrchestratorId:
-        parsed.defaultOrchestratorId || DEFAULT_ORCHESTRATOR_ID,
-      disabledBuiltinIds: Array.isArray(parsed.disabledBuiltinIds)
-        ? parsed.disabledBuiltinIds
-        : [],
-      builtinOverrides:
-        parsed.builtinOverrides && typeof parsed.builtinOverrides === "object"
-          ? parsed.builtinOverrides
-          : undefined,
-    };
-  } catch {
-    return defaultOrchestratorsManifest();
-  }
-}
-
-export function writeOrchestratorsManifest(
-  projectRoot: string,
-  manifest: OrchestratorsManifest,
-): void {
-  const path = join(projectRoot, ORCHESTRATORS_MANIFEST_REL);
-  mkdirSync(join(projectRoot, ".prismnext", "agent"), { recursive: true });
-  writeFileSync(
-    path,
-    JSON.stringify(
-      {
-        defaultOrchestratorId:
-          manifest.defaultOrchestratorId ?? DEFAULT_ORCHESTRATOR_ID,
-        disabledBuiltinIds: manifest.disabledBuiltinIds ?? [],
-        builtinOverrides: manifest.builtinOverrides,
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
-}
-
-function listCustomExpertDefinitions(projectRoot: string): ExpertDefinition[] {
-  const root = join(projectRoot, CUSTOM_EXPERTS_REL);
-  if (!existsSync(root)) return [];
-  const experts: ExpertDefinition[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const expertPath = join(root, entry.name, "expert.json");
-    if (!existsSync(expertPath)) continue;
-    try {
-      const def = JSON.parse(readFileSync(expertPath, "utf-8")) as ExpertDefinition;
-      experts.push({
-        ...def,
-        id: def.id || entry.name,
-        builtin: false,
-        removable: true,
-      });
-    } catch {
-      // skip invalid
+/**
+ * 按裸 id 分组取遮蔽胜者（旧 mergeExpertDefinitions 的 Map 覆盖语义：
+ * custom 覆盖 bundled —— 现在推广为 local > external/firstparty > core）。
+ */
+function shadowWinners(items: ResolvedContent[]): ResolvedContent[] {
+  const byBare = new Map<string, ResolvedContent>();
+  for (const item of items) {
+    const key = agentFileBase(item);
+    const prev = byBare.get(key);
+    if (!prev || packShadowRank(item.packId) < packShadowRank(prev.packId)) {
+      byBare.set(key, item);
     }
   }
-  return experts;
+  return [...byBare.values()];
 }
 
-function listCustomOrchestratorDefinitions(projectRoot: string): OrchestratorDefinition[] {
-  const root = join(projectRoot, CUSTOM_ORCHESTRATORS_REL);
-  if (!existsSync(root)) return [];
-  const orchestrators: OrchestratorDefinition[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const orchestratorPath = join(root, entry.name, "orchestrator.json");
-    if (!existsSync(orchestratorPath)) continue;
-    try {
-      const def = JSON.parse(readFileSync(orchestratorPath, "utf-8")) as OrchestratorDefinition;
-      orchestrators.push({
-        ...def,
-        id: def.id || entry.name,
-        builtin: false,
-        removable: true,
-      });
-    } catch {
-      // skip invalid
-    }
-  }
-  return orchestrators;
-}
+// ── ResolvedContent → legacy Info 视图 ─────────────────────
 
 function instructionsPreview(text: string, max = 120): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
@@ -189,169 +130,209 @@ function instructionsPreview(text: string, max = 120): string {
   return `${oneLine.slice(0, max)}…`;
 }
 
-function applyExpertOverride(
-  expert: ExpertDefinition,
-  override?: Partial<ExpertDefinition>,
-): ExpertDefinition {
-  if (!override) return expert;
+function toExpertInfo(projectRoot: string, content: ResolvedContent): ExpertInfo {
+  const def = content.definition as ExpertDef;
+  const instructions = readInstructions(projectRoot, content.fqid);
+  const effectiveModules = resolveActiveModuleKeys({
+    role: "expert",
+    profileModules: resolveExpertProfileModuleKeysFor(def as ExpertDefinition),
+  });
   return {
-    ...expert,
-    modules: override.modules !== undefined
-      ? override.modules.length ? override.modules : undefined
-      : expert.modules,
-    model: override.model !== undefined ? override.model || undefined : expert.model,
-    thoughtLevel: override.thoughtLevel !== undefined
-      ? override.thoughtLevel || undefined
-      : expert.thoughtLevel,
-    temperature: override.temperature !== undefined ? override.temperature : expert.temperature,
-    permission: override.permission !== undefined ? override.permission : expert.permission,
+    id: agentFileBase(content),
+    fqid: content.fqid,
+    name: def.name,
+    description: def.description,
+    builtin: content.packId === CORE_PACK_ID,
+    removable: content.removable,
+    model: def.model,
+    thoughtLevel: def.thoughtLevel,
+    temperature: def.temperature,
+    modules: def.modules,
+    permission: def.permission,
+    enabled: content.enabled,
+    instructionsPreview: instructionsPreview(instructions),
+    effectiveModules,
   };
 }
 
-function applyOrchestratorOverride(
-  orchestrator: OrchestratorDefinition,
-  override?: Partial<OrchestratorDefinition>,
-): OrchestratorDefinition {
-  if (!override) return orchestrator;
+/**
+ * OrchestratorInfo.allowedExperts 语义对齐旧版：
+ * - 定义了 allowedExperts 的 → 按启用 expert 过滤后的【文件名基】列表
+ * - 未定义的 → undefined（UI 显示「标准编排」，plan 视为全部启用 experts）
+ */
+function toOrchestratorInfo(projectRoot: string, content: ResolvedContent): OrchestratorInfo {
+  const def = content.definition as OrchestratorDef;
+  const instructions = readInstructions(projectRoot, content.fqid);
+  const effectiveModules = resolveOrchestratorActiveModuleKeys();
+  const allowed =
+    def.allowedExperts !== undefined
+      ? resolveAllowedRefs(projectRoot, content.fqid).map((ref) => ref.id)
+      : undefined;
   return {
-    ...orchestrator,
-    allowedExperts: override.allowedExperts !== undefined
-      ? override.allowedExperts
-      : orchestrator.allowedExperts,
-    model: override.model !== undefined ? override.model || undefined : orchestrator.model,
-    thoughtLevel: override.thoughtLevel !== undefined
-      ? override.thoughtLevel || undefined
-      : orchestrator.thoughtLevel,
-    temperature: override.temperature !== undefined ? override.temperature : orchestrator.temperature,
-    permission: override.permission !== undefined ? override.permission : orchestrator.permission,
+    id: agentFileBase(content),
+    fqid: content.fqid,
+    name: def.name,
+    description: def.description,
+    builtin: content.packId === CORE_PACK_ID,
+    // 旧版视图语义：core orchestrator 不带 removable 键；仅 local（可删除）为 true
+    ...(content.removable ? { removable: true } : {}),
+    model: def.model,
+    thoughtLevel: def.thoughtLevel,
+    temperature: def.temperature,
+    allowedExperts: allowed,
+    permission: def.permission,
+    enabled: content.enabled,
+    instructionsPreview: instructionsPreview(instructions),
+    effectiveModules,
   };
 }
 
-function mergeExpertDefinitions(projectRoot: string): ExpertDefinition[] {
-  const manifest = readExpertsManifest(projectRoot);
-  const bundled = listBundledExpertDefinitions().map((e) =>
-    applyExpertOverride(
-      { ...e, builtin: true, removable: false },
-      manifest.builtinOverrides?.[e.id],
-    ),
-  );
-  const custom = listCustomExpertDefinitions(projectRoot);
-  const byId = new Map<string, ExpertDefinition>();
-  for (const e of [...bundled, ...custom]) {
-    byId.set(e.id, e);
-  }
-  return Array.from(byId.values());
+export function listExperts(projectRoot: string): ExpertInfo[] {
+  const winners = shadowWinners(listContent(projectRoot, "expert"));
+  return winners.map((c) => toExpertInfo(projectRoot, c));
 }
 
-function mergeOrchestratorDefinitions(projectRoot: string): OrchestratorDefinition[] {
-  const manifest = readOrchestratorsManifest(projectRoot);
-  const bundled = listBundledOrchestratorDefinitions().map((o) =>
-    applyOrchestratorOverride(
-      { ...o, builtin: true },
-      manifest.builtinOverrides?.[o.id],
-    ),
-  );
-  const byId = new Map<string, OrchestratorDefinition>();
-  for (const o of bundled) {
-    byId.set(o.id, o);
-  }
-  for (const o of listCustomOrchestratorDefinitions(projectRoot)) {
-    byId.set(o.id, o);
-  }
-  return Array.from(byId.values());
+export function listOrchestrators(projectRoot: string): OrchestratorInfo[] {
+  const winners = shadowWinners(listContent(projectRoot, "orchestrator"));
+  return winners.map((c) => toOrchestratorInfo(projectRoot, c));
 }
+
+/** 裸 id 或 FQID → expert。 */
+export function getExpert(projectRoot: string, expertId: string): ExpertInfo | null {
+  const id = expertId.trim();
+  if (!id) return null;
+  return listExperts(projectRoot).find((e) => e.id === id || e.fqid === id) ?? null;
+}
+
+/** 裸 id 或 FQID → orchestrator。 */
+export function getOrchestrator(
+  projectRoot: string,
+  orchestratorId: string,
+): OrchestratorInfo | null {
+  const id = orchestratorId.trim();
+  if (!id) return null;
+  return listOrchestrators(projectRoot).find((o) => o.id === id || o.fqid === id) ?? null;
+}
+
+/**
+ * 解析当前应使用的 orchestrator，返回【文件名基】（core/local = 裸 id）。
+ * 链路与旧版一致：tab 指定（须启用）→ 项目默认（须启用）→ core 默认兜底。
+ */
+export function resolveOrchestratorId(
+  projectRoot: string,
+  tabOrchestratorId?: string | null,
+): string {
+  const fqid = resolverResolveOrchestratorId(projectRoot, tabOrchestratorId);
+  const content = getContent(projectRoot, fqid);
+  return content ? agentFileBase(content) : DEFAULT_ORCHESTRATOR_ID;
+}
+
+// ── allowedExperts 解析（渲染 / UI 共用）────────────────────
+
+/**
+ * orchestrator 实际可用的 expert 引用（文件名基 + 名称 + 描述）：
+ * resolver 解析 FQID → 遮蔽胜者 → 仅启用 → 按 spec 顺序去重。
+ * spec 未定义时由调用方自行退化为「全部启用 experts」（本函数不处理）。
+ */
+function resolveAllowedRefs(
+  projectRoot: string,
+  orchestratorFqid: Fqid,
+): Array<{ id: string; name: string; description: string }> {
+  const winners = shadowWinners(listContent(projectRoot, "expert"));
+  const byFqid = new Map(winners.map((c) => [c.fqid, c]));
+  const byBare = new Map(winners.map((c) => [agentFileBase(c), c]));
+  const refs: Array<{ id: string; name: string; description: string }> = [];
+  const seen = new Set<string>();
+  for (const fqid of resolveAllowedExperts(projectRoot, orchestratorFqid)) {
+    // resolver 返回的 FQID 可能被遮蔽（同名 local 内容胜出）→ 映射到胜者
+    const direct = byFqid.get(fqid);
+    const parsed = parseFqid(fqid);
+    const winner = direct ?? (parsed ? byBare.get(parsed.contentId) : undefined);
+    if (!winner || !winner.enabled) continue;
+    const base = agentFileBase(winner);
+    if (seen.has(base)) continue;
+    seen.add(base);
+    refs.push({ id: base, name: winner.name, description: winner.description });
+  }
+  return refs;
+}
+
+// ── legacy manifest 适配器（IPC 契约不变；存储 = packs.json）──
+
+function coreKindOf(projectRoot: string, fqid: Fqid): "expert" | "orchestrator" | null {
+  const content = getContent(projectRoot, fqid);
+  if (!content || content.packId !== CORE_PACK_ID) return null;
+  if (content.kind === "expert" || content.kind === "orchestrator") return content.kind;
+  return null;
+}
+
+function bareOverridesOfKind(
+  projectRoot: string,
+  kind: "expert" | "orchestrator",
+): Record<string, Partial<ExpertDefinition> & Partial<OrchestratorDefinition>> | undefined {
+  const state = readPacksState(projectRoot);
+  const out: Record<string, Partial<ExpertDefinition> & Partial<OrchestratorDefinition>> = {};
+  for (const [fqid, override] of Object.entries(state.contentOverrides)) {
+    if (coreKindOf(projectRoot, fqid) !== kind) continue;
+    const parsed = parseFqid(fqid);
+    if (!parsed) continue;
+    out[parsed.contentId] = { ...override };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function disabledCoreBareOfKind(projectRoot: string, kind: "expert" | "orchestrator"): string[] {
+  const state = readPacksState(projectRoot);
+  const out: string[] = [];
+  for (const fqid of state.disabledContent) {
+    if (coreKindOf(projectRoot, fqid) !== kind) continue;
+    const parsed = parseFqid(fqid);
+    if (parsed) out.push(parsed.contentId);
+  }
+  return out;
+}
+
+/** legacy `ExpertsManifest` 视图（适配 packs.json；写操作见下方各 setter）。 */
+export function readExpertsManifest(projectRoot: string): ExpertsManifest {
+  return {
+    disabledBuiltinIds: disabledCoreBareOfKind(projectRoot, "expert"),
+    builtinOverrides: bareOverridesOfKind(projectRoot, "expert"),
+  };
+}
+
+/** legacy `OrchestratorsManifest` 视图（适配 packs.json）。 */
+export function readOrchestratorsManifest(projectRoot: string): OrchestratorsManifest {
+  const state = readPacksState(projectRoot);
+  const parsed = state.defaultOrchestrator ? parseFqid(state.defaultOrchestrator) : null;
+  return {
+    defaultOrchestratorId: parsed?.contentId ?? DEFAULT_ORCHESTRATOR_ID,
+    disabledBuiltinIds: disabledCoreBareOfKind(projectRoot, "orchestrator"),
+    builtinOverrides: bareOverridesOfKind(projectRoot, "orchestrator"),
+  };
+}
+
+// ── instructions 读取 ───────────────────────────────────────
 
 export function readExpertInstructions(
   projectRoot: string,
   expert: ExpertDefinition,
 ): string {
-  if (expert.builtin) {
-    return readBundledExpertInstructions(expert.id)?.trim() || "";
-  }
-  const customPath = join(projectRoot, CUSTOM_EXPERTS_REL, expert.id, "instructions.md");
-  if (existsSync(customPath)) {
-    return readFileSync(customPath, "utf-8").trim();
-  }
-  return "";
+  const fqid =
+    (expert as ExpertInfo).fqid ?? resolveBareContentId(projectRoot, "expert", expert.id);
+  return fqid ? readInstructions(projectRoot, fqid) : "";
 }
 
 export function readOrchestratorInstructions(
   projectRoot: string,
   orchestrator: OrchestratorDefinition,
 ): string {
-  if (orchestrator.builtin) {
-    return readBundledOrchestratorInstructions(orchestrator.id)?.trim() || "";
-  }
-  const customPath = join(projectRoot, CUSTOM_ORCHESTRATORS_REL, orchestrator.id, "instructions.md");
-  if (existsSync(customPath)) {
-    return readFileSync(customPath, "utf-8").trim();
-  }
-  return "";
+  const fqid =
+    (orchestrator as OrchestratorInfo).fqid
+    ?? resolveBareContentId(projectRoot, "orchestrator", orchestrator.id);
+  return fqid ? readInstructions(projectRoot, fqid) : "";
 }
 
-export function listExperts(projectRoot: string): ExpertInfo[] {
-  const manifest = readExpertsManifest(projectRoot);
-  const disabled = new Set(manifest.disabledBuiltinIds ?? []);
-  return mergeExpertDefinitions(projectRoot).map((expert) => {
-    const instructions = readExpertInstructions(projectRoot, expert);
-    const effectiveModules = resolveActiveModuleKeys({
-      role: "expert",
-      profileModules: resolveExpertProfileModuleKeysFor(expert),
-    });
-    return {
-      ...expert,
-      enabled: expert.builtin ? !disabled.has(expert.id) : true,
-      instructionsPreview: instructionsPreview(instructions),
-      effectiveModules,
-    };
-  });
-}
-
-export function listOrchestrators(projectRoot: string): OrchestratorInfo[] {
-  const manifest = readOrchestratorsManifest(projectRoot);
-  const disabled = new Set(manifest.disabledBuiltinIds ?? []);
-  const enabledExpertIds = listExperts(projectRoot)
-    .filter((e) => e.enabled)
-    .map((e) => e.id);
-  return mergeOrchestratorDefinitions(projectRoot).map((orchestrator) => {
-    const instructions = readOrchestratorInstructions(projectRoot, orchestrator);
-    const effectiveModules = resolveOrchestratorActiveModuleKeys();
-    const prunedAllowed = pruneAllowedExpertIds(orchestrator.allowedExperts, enabledExpertIds);
-    return {
-      ...orchestrator,
-      allowedExperts: prunedAllowed,
-      enabled: orchestrator.builtin ? !disabled.has(orchestrator.id) : true,
-      instructionsPreview: instructionsPreview(instructions),
-      effectiveModules,
-    };
-  });
-}
-
-export function getExpert(projectRoot: string, expertId: string): ExpertInfo | null {
-  return listExperts(projectRoot).find((e) => e.id === expertId) ?? null;
-}
-
-export function getOrchestrator(
-  projectRoot: string,
-  orchestratorId: string,
-): OrchestratorInfo | null {
-  return listOrchestrators(projectRoot).find((o) => o.id === orchestratorId) ?? null;
-}
-
-export function resolveOrchestratorId(
-  projectRoot: string,
-  tabOrchestratorId?: string | null,
-): string {
-  const explicit = tabOrchestratorId?.trim();
-  if (explicit) {
-    const found = getOrchestrator(projectRoot, explicit);
-    if (found?.enabled) return found.id;
-  }
-  const manifest = readOrchestratorsManifest(projectRoot);
-  const defaultId = manifest.defaultOrchestratorId || DEFAULT_ORCHESTRATOR_ID;
-  const found = getOrchestrator(projectRoot, defaultId);
-  return found?.enabled ? found.id : DEFAULT_ORCHESTRATOR_ID;
-}
+// ── 渲染引擎（与重构前逐字节一致；勿动逻辑）──────────────────
 
 function appendCapabilityRefs(
   def: ExpertDefinition | OrchestratorDefinition,
@@ -364,7 +345,11 @@ function appendCapabilityRefs(
   const modulePrompts =
     role === "orchestrator"
       ? composeOrchestratorProfileModulePrompts(promptCtx)
-      : composeProfileModulePrompts(resolveExpertProfileModuleKeysFor(def), promptCtx);
+      : composeProfileModulePrompts(
+          // role === "expert" 时 def 必为 ExpertDefinition（调用方保证）
+          resolveExpertProfileModuleKeysFor(def as ExpertDefinition),
+          promptCtx,
+        );
   const sections: string[] = [body.trim()];
   if (modulePrompts) {
     sections.push("", "---", "", modulePrompts);
@@ -454,17 +439,6 @@ export function appendSubagentRosterSection(
   return [trimmed, "", "---", roster].join("\n");
 }
 
-function resolveAllowedExpertIds(
-  orchestrator: OrchestratorDefinition,
-  enabledExpertIds: string[],
-): string[] {
-  const enabled = new Set(enabledExpertIds);
-  if (orchestrator.allowedExperts !== undefined) {
-    return orchestrator.allowedExperts.filter((id) => enabled.has(id));
-  }
-  return enabledExpertIds;
-}
-
 /** Drop stale / disabled expert ids from a stored allowlist for UI + persistence. */
 export function pruneAllowedExpertIds(
   allowedExperts: string[] | undefined,
@@ -550,12 +524,16 @@ export function buildProjectExpertsAgentPlan(
   }
 
   const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
-  const enabledExpertIds = enabledExperts.map((e) => e.id);
-  const allowedExpertIds = resolveAllowedExpertIds(orchestrator, enabledExpertIds);
-  const allowedExpertRefs = allowedExpertIds
-    .map((id) => enabledExperts.find((e) => e.id === id))
-    .filter((e): e is ExpertInfo => !!e)
-    .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+  const enabledRefs: AllowedExpertRef[] = enabledExperts.map((e) => ({
+    id: e.id,
+    name: e.name,
+    description: e.description,
+  }));
+  const allowedRefsFor = (info: OrchestratorInfo): AllowedExpertRef[] =>
+    // spec 未定义 = 全部启用 experts（旧语义）；定义了 → resolver 解析后过滤
+    info.allowedExperts === undefined
+      ? enabledRefs
+      : resolveAllowedRefs(projectRoot, info.fqid!);
 
   const agentEntries: ProjectExpertsAgentEntry[] = [];
 
@@ -573,7 +551,7 @@ export function buildProjectExpertsAgentPlan(
   const orchestratorMd = renderOrchestratorAgentMarkdown(
     orchestrator,
     orchestratorInstructions,
-    allowedExpertRefs,
+    allowedRefsFor(orchestrator),
     promptCtx,
   );
   agentEntries.push({
@@ -584,15 +562,10 @@ export function buildProjectExpertsAgentPlan(
   for (const extra of listOrchestrators(projectRoot).filter(
     (o) => o.enabled && o.id !== orchestratorId,
   )) {
-    const extraAllowed = resolveAllowedExpertIds(extra, enabledExpertIds);
-    const extraAllowedRefs = extraAllowed
-      .map((id) => enabledExperts.find((e) => e.id === id))
-      .filter((e): e is ExpertInfo => !!e)
-      .map((e) => ({ id: e.id, name: e.name, description: e.description }));
     const extraInstructions = readOrchestratorInstructions(projectRoot, extra);
     agentEntries.push({
       filename: `${extra.id}.md`,
-      content: renderOrchestratorAgentMarkdown(extra, extraInstructions, extraAllowedRefs, promptCtx),
+      content: renderOrchestratorAgentMarkdown(extra, extraInstructions, allowedRefsFor(extra), promptCtx),
     });
   }
 
@@ -648,6 +621,8 @@ export function renderOrchestratorAgentMarkdown(
   const body = appendCapabilityRefs(def, bodyWithExperts, promptCtx, "orchestrator");
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
+
+// ── opencode 同步（与重构前一致）─────────────────────────────
 
 export function getOpencodeAgentsDir(): string {
   return join(app.getPath("userData"), "opencode-server", "config", "opencode", "agents");
@@ -729,6 +704,8 @@ export function syncProjectExpertsToOpencode(
   };
 }
 
+// ── local pack 内容读写（旧 custom experts/orchestrators 契约）──
+
 function slugifyId(name: string): string {
   const slug = name
     .trim()
@@ -738,15 +715,25 @@ function slugifyId(name: string): string {
   return slug || "custom-expert";
 }
 
-function uniqueCustomExpertId(projectRoot: string, base: string): string {
-  const existing = new Set(listCustomExpertDefinitions(projectRoot).map((e) => e.id));
-  for (const bundled of listBundledExpertDefinitions()) {
-    existing.add(bundled.id);
-  }
+function uniqueLocalExpertId(projectRoot: string, base: string): string {
+  const existing = new Set(listExperts(projectRoot).map((e) => e.id));
   if (!existing.has(base)) return base;
   let i = 2;
   while (existing.has(`${base}-${i}`)) i += 1;
   return `${base}-${i}`;
+}
+
+function uniqueLocalOrchestratorId(projectRoot: string, base: string): string {
+  const existing = new Set(listOrchestrators(projectRoot).map((o) => o.id));
+  if (!existing.has(base)) return base;
+  let i = 2;
+  while (existing.has(`${base}-${i}`)) i += 1;
+  return `${base}-${i}`;
+}
+
+/** local pack 目录写入后必须显式失效 resolver（fingerprint 有 mtime 精度边界）。 */
+function invalidateLocalViews(projectRoot: string): void {
+  invalidateResolver(projectRoot);
 }
 
 export function saveCustomExpert(
@@ -754,16 +741,15 @@ export function saveCustomExpert(
   payload: SaveCustomExpertPayload,
 ): ExpertInfo {
   const baseId = payload.id?.trim() || slugifyId(payload.name);
-  const id = payload.id ? baseId : uniqueCustomExpertId(projectRoot, baseId);
-  const dir = join(projectRoot, CUSTOM_EXPERTS_REL, id);
+  const id = payload.id ? baseId : uniqueLocalExpertId(projectRoot, baseId);
+  const dir = join(getLocalPackDir(projectRoot), "experts", id);
   mkdirSync(dir, { recursive: true });
 
-  const def: ExpertDefinition = {
+  // 新格式 expert.json：无 builtin/removable/pluginId 身份字段（§4.3.2）
+  const def: ExpertDef = {
     id,
     name: payload.name.trim(),
     description: payload.description.trim(),
-    builtin: false,
-    removable: true,
     model: payload.model?.trim() || undefined,
     thoughtLevel: payload.thoughtLevel?.trim() || undefined,
     temperature: payload.temperature,
@@ -771,8 +757,9 @@ export function saveCustomExpert(
     permission: payload.permission,
   };
 
-  writeFileSync(join(dir, "expert.json"), JSON.stringify(def, null, 2), "utf-8");
+  writeFileSync(join(dir, "expert.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
   writeFileSync(join(dir, "instructions.md"), payload.instructions.trim(), "utf-8");
+  invalidateLocalViews(projectRoot);
 
   const saved = getExpert(projectRoot, id);
   if (!saved) throw new Error(`Failed to save custom expert "${id}"`);
@@ -782,20 +769,12 @@ export function saveCustomExpert(
 export function deleteCustomExpert(projectRoot: string, expertId: string): void {
   const expert = getExpert(projectRoot, expertId);
   if (!expert) throw new Error(`Expert not found: ${expertId}`);
-  if (expert.builtin) throw new Error(`Cannot delete built-in expert: ${expertId}`);
-  const dir = join(projectRoot, CUSTOM_EXPERTS_REL, expertId);
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-}
-
-function uniqueCustomOrchestratorId(projectRoot: string, base: string): string {
-  const existing = new Set(listCustomOrchestratorDefinitions(projectRoot).map((o) => o.id));
-  for (const bundled of listBundledOrchestratorDefinitions()) {
-    existing.add(bundled.id);
+  if (expert.builtin || !expert.removable) {
+    throw new Error(`Cannot delete built-in expert: ${expertId}`);
   }
-  if (!existing.has(base)) return base;
-  let i = 2;
-  while (existing.has(`${base}-${i}`)) i += 1;
-  return `${base}-${i}`;
+  const dir = join(getLocalPackDir(projectRoot), "experts", expert.id);
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  invalidateLocalViews(projectRoot);
 }
 
 export function saveCustomOrchestrator(
@@ -803,18 +782,17 @@ export function saveCustomOrchestrator(
   payload: SaveCustomOrchestratorPayload,
 ): OrchestratorInfo {
   const baseId = payload.id?.trim() || slugifyId(payload.name);
-  const id = payload.id ? baseId : uniqueCustomOrchestratorId(projectRoot, baseId);
-  const dir = join(projectRoot, CUSTOM_ORCHESTRATORS_REL, id);
+  const id = payload.id ? baseId : uniqueLocalOrchestratorId(projectRoot, baseId);
+  const dir = join(getLocalPackDir(projectRoot), "orchestrators", id);
   mkdirSync(dir, { recursive: true });
 
   const enabledExpertIds = listExperts(projectRoot).filter((e) => e.enabled).map((e) => e.id);
   const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
-  const def: OrchestratorDefinition = {
+  // 新格式 orchestrator.json：无身份字段；allowedExperts 存裸 id（§4.3.1 可解析）
+  const def: OrchestratorDef = {
     id,
     name: payload.name.trim(),
     description: payload.description.trim(),
-    builtin: false,
-    removable: true,
     allowedExperts:
       payload.allowedExperts !== undefined
         ? pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds) ?? []
@@ -825,8 +803,9 @@ export function saveCustomOrchestrator(
     permission: payload.permission,
   };
 
-  writeFileSync(join(dir, "orchestrator.json"), JSON.stringify(def, null, 2), "utf-8");
+  writeFileSync(join(dir, "orchestrator.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
   writeFileSync(join(dir, "instructions.md"), payload.instructions.trim(), "utf-8");
+  invalidateLocalViews(projectRoot);
 
   const saved = getOrchestrator(projectRoot, id);
   if (!saved) throw new Error(`Failed to save custom orchestrator "${id}"`);
@@ -836,17 +815,141 @@ export function saveCustomOrchestrator(
 export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: string): void {
   const orchestrator = getOrchestrator(projectRoot, orchestratorId);
   if (!orchestrator) throw new Error(`Orchestrator not found: ${orchestratorId}`);
-  if (orchestrator.builtin) throw new Error(`Cannot delete built-in orchestrator: ${orchestratorId}`);
-  const dir = join(projectRoot, CUSTOM_ORCHESTRATORS_REL, orchestratorId);
+  if (orchestrator.builtin || !orchestrator.removable) {
+    throw new Error(`Cannot delete built-in orchestrator: ${orchestratorId}`);
+  }
+  const dir = join(getLocalPackDir(projectRoot), "orchestrators", orchestrator.id);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-  const manifest = readOrchestratorsManifest(projectRoot);
-  if (manifest.defaultOrchestratorId === orchestratorId) {
-    writeOrchestratorsManifest(projectRoot, {
-      ...manifest,
-      defaultOrchestratorId: DEFAULT_ORCHESTRATOR_ID,
-    });
+  invalidateLocalViews(projectRoot);
+  const state = readPacksState(projectRoot);
+  if (state.defaultOrchestrator === toFqid(LOCAL_PACK_ID, orchestrator.id)) {
+    setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
   }
 }
+
+// ── core 内容的状态操作（旧 builtin 契约 → packs.json）────────
+
+function requireCoreContent(
+  projectRoot: string,
+  kind: "expert" | "orchestrator",
+  bareId: string,
+  label: string,
+): ResolvedContent {
+  const content = getContent(projectRoot, toFqid(CORE_PACK_ID, bareId));
+  if (!content || content.kind !== kind) {
+    throw new Error(`Built-in ${label} not found: ${bareId}`);
+  }
+  return content;
+}
+
+export function setBuiltinExpertEnabled(
+  projectRoot: string,
+  expertId: string,
+  enabled: boolean,
+): void {
+  const content = requireCoreContent(projectRoot, "expert", expertId, "expert");
+  setContentDisabled(projectRoot, content.fqid, !enabled);
+}
+
+export function saveBuiltinExpertOverride(
+  projectRoot: string,
+  payload: SaveBuiltinExpertOverridePayload,
+): ExpertInfo {
+  const content = requireCoreContent(projectRoot, "expert", payload.expertId, "expert");
+  const patch: Record<string, unknown> = {};
+  if (payload.model !== undefined) patch.model = payload.model;
+  if (payload.thoughtLevel !== undefined) patch.thoughtLevel = payload.thoughtLevel;
+  if (payload.temperature !== undefined) patch.temperature = payload.temperature;
+  if (payload.permission !== undefined) patch.permission = payload.permission;
+  saveContentOverride(projectRoot, content.fqid, patch);
+
+  const saved = getExpert(projectRoot, payload.expertId);
+  if (!saved) throw new Error(`Failed to save built-in expert override "${payload.expertId}"`);
+  return saved;
+}
+
+export function resetBuiltinExpertOverride(
+  projectRoot: string,
+  expertId: string,
+): ExpertInfo {
+  const content = requireCoreContent(projectRoot, "expert", expertId, "expert");
+  saveContentOverride(projectRoot, content.fqid, {
+    model: undefined,
+    thoughtLevel: undefined,
+    temperature: undefined,
+    modules: undefined,
+    allowedExperts: undefined,
+    permission: undefined,
+  });
+
+  const saved = getExpert(projectRoot, expertId);
+  if (!saved) throw new Error(`Built-in expert not found: ${expertId}`);
+  return saved;
+}
+
+export function resetAllBuiltinExpertsToDefaults(projectRoot: string): ExpertsManifest {
+  const state = readPacksState(projectRoot);
+  const isCoreExpert = (fqid: string) => coreKindOf(projectRoot, fqid) === "expert";
+  const next = {
+    ...state,
+    disabledContent: state.disabledContent.filter((fqid) => !isCoreExpert(fqid)),
+    contentOverrides: Object.fromEntries(
+      Object.entries(state.contentOverrides).filter(([fqid]) => !isCoreExpert(fqid)),
+    ),
+  };
+  writePacksState(projectRoot, next);
+  return { disabledBuiltinIds: [], builtinOverrides: undefined };
+}
+
+export function setDefaultOrchestrator(projectRoot: string, orchestratorId: string): void {
+  const found = getOrchestrator(projectRoot, orchestratorId);
+  if (!found?.enabled) throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
+  setDefaultOrchestratorFqid(projectRoot, found.fqid!);
+}
+
+export function saveBuiltinOrchestratorOverride(
+  projectRoot: string,
+  payload: SaveBuiltinOrchestratorOverridePayload,
+): OrchestratorInfo {
+  const content = requireCoreContent(projectRoot, "orchestrator", payload.orchestratorId, "orchestrator");
+  const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
+  const patch: Record<string, unknown> = {};
+  if (payload.allowedExperts !== undefined) {
+    patch.allowedExperts = pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds) ?? [];
+  }
+  if (payload.model !== undefined) patch.model = payload.model;
+  if (payload.thoughtLevel !== undefined) patch.thoughtLevel = payload.thoughtLevel;
+  if (payload.temperature !== undefined) patch.temperature = payload.temperature;
+  if (payload.permission !== undefined) patch.permission = payload.permission;
+  saveContentOverride(projectRoot, content.fqid, patch);
+
+  const saved = getOrchestrator(projectRoot, payload.orchestratorId);
+  if (!saved) {
+    throw new Error(`Failed to save built-in orchestrator override "${payload.orchestratorId}"`);
+  }
+  return saved;
+}
+
+export function resetBuiltinOrchestratorOverride(
+  projectRoot: string,
+  orchestratorId: string,
+): OrchestratorInfo {
+  const content = requireCoreContent(projectRoot, "orchestrator", orchestratorId, "orchestrator");
+  saveContentOverride(projectRoot, content.fqid, {
+    model: undefined,
+    thoughtLevel: undefined,
+    temperature: undefined,
+    modules: undefined,
+    allowedExperts: undefined,
+    permission: undefined,
+  });
+
+  const saved = getOrchestrator(projectRoot, orchestratorId);
+  if (!saved) throw new Error(`Built-in orchestrator not found: ${orchestratorId}`);
+  return saved;
+}
+
+// ── 详情视图（IPC 契约）─────────────────────────────────────
 
 export function getOrchestratorDetail(
   projectRoot: string,
@@ -860,95 +963,6 @@ export function getOrchestratorDetail(
   };
 }
 
-export function setBuiltinExpertEnabled(
-  projectRoot: string,
-  expertId: string,
-  enabled: boolean,
-): void {
-  const bundled = listBundledExpertDefinitions().find((e) => e.id === expertId);
-  if (!bundled) throw new Error(`Built-in expert not found: ${expertId}`);
-  const manifest = readExpertsManifest(projectRoot);
-  const disabled = new Set(manifest.disabledBuiltinIds ?? []);
-  if (enabled) disabled.delete(expertId);
-  else disabled.add(expertId);
-  writeExpertsManifest(projectRoot, {
-    ...manifest,
-    disabledBuiltinIds: [...disabled],
-  });
-}
-
-export function saveBuiltinExpertOverride(
-  projectRoot: string,
-  payload: SaveBuiltinExpertOverridePayload,
-): ExpertInfo {
-  const bundled = listBundledExpertDefinitions().find((e) => e.id === payload.expertId);
-  if (!bundled) throw new Error(`Built-in expert not found: ${payload.expertId}`);
-  const manifest = readExpertsManifest(projectRoot);
-  const override: Partial<ExpertDefinition> = {};
-  if (payload.model !== undefined) override.model = payload.model;
-  if (payload.thoughtLevel !== undefined) override.thoughtLevel = payload.thoughtLevel;
-  if (payload.temperature !== undefined) override.temperature = payload.temperature;
-  if (payload.permission !== undefined) override.permission = payload.permission;
-
-  const hasOverride = Object.keys(override).length > 0;
-  const nextOverrides = { ...(manifest.builtinOverrides ?? {}) };
-  if (hasOverride) nextOverrides[payload.expertId] = override;
-  else delete nextOverrides[payload.expertId];
-
-  writeExpertsManifest(projectRoot, {
-    ...manifest,
-    builtinOverrides: Object.keys(nextOverrides).length ? nextOverrides : undefined,
-  });
-
-  const saved = getExpert(projectRoot, payload.expertId);
-  if (!saved) throw new Error(`Failed to save built-in expert override "${payload.expertId}"`);
-  return saved;
-}
-
-export function setDefaultOrchestrator(projectRoot: string, orchestratorId: string): void {
-  const found = getOrchestrator(projectRoot, orchestratorId);
-  if (!found?.enabled) throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
-  const manifest = readOrchestratorsManifest(projectRoot);
-  writeOrchestratorsManifest(projectRoot, {
-    ...manifest,
-    defaultOrchestratorId: orchestratorId,
-  });
-}
-
-export function saveBuiltinOrchestratorOverride(
-  projectRoot: string,
-  payload: SaveBuiltinOrchestratorOverridePayload,
-): OrchestratorInfo {
-  const bundled = listBundledOrchestratorDefinitions().find((o) => o.id === payload.orchestratorId);
-  if (!bundled) throw new Error(`Built-in orchestrator not found: ${payload.orchestratorId}`);
-  const manifest = readOrchestratorsManifest(projectRoot);
-  const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
-  const override: Partial<OrchestratorDefinition> = {};
-  if (payload.allowedExperts !== undefined) {
-    override.allowedExperts = pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds) ?? [];
-  }
-  if (payload.model !== undefined) override.model = payload.model;
-  if (payload.thoughtLevel !== undefined) override.thoughtLevel = payload.thoughtLevel;
-  if (payload.temperature !== undefined) override.temperature = payload.temperature;
-  if (payload.permission !== undefined) override.permission = payload.permission;
-
-  const hasOverride = Object.keys(override).length > 0;
-  const nextOverrides = { ...(manifest.builtinOverrides ?? {}) };
-  if (hasOverride) nextOverrides[payload.orchestratorId] = override;
-  else delete nextOverrides[payload.orchestratorId];
-
-  writeOrchestratorsManifest(projectRoot, {
-    ...manifest,
-    builtinOverrides: Object.keys(nextOverrides).length ? nextOverrides : undefined,
-  });
-
-  const saved = getOrchestrator(projectRoot, payload.orchestratorId);
-  if (!saved) {
-    throw new Error(`Failed to save built-in orchestrator override "${payload.orchestratorId}"`);
-  }
-  return saved;
-}
-
 export function getExpertDetail(
   projectRoot: string,
   expertId: string,
@@ -959,76 +973,4 @@ export function getExpertDetail(
     ...expert,
     instructions: readExpertInstructions(projectRoot, expert),
   };
-}
-
-export function listDisabledBuiltinExperts(projectRoot: string): ExpertInfo[] {
-  const manifest = readExpertsManifest(projectRoot);
-  const disabled = new Set(manifest.disabledBuiltinIds ?? []);
-  return listBundledExpertDefinitions()
-    .filter((e) => disabled.has(e.id))
-    .map((e) => {
-      const instructions = readBundledExpertInstructions(e.id)?.trim() || "";
-      const overridden = applyExpertOverride({ ...e, builtin: true, removable: false }, manifest.builtinOverrides?.[e.id]);
-      return {
-        ...overridden,
-        enabled: false,
-        instructionsPreview: instructionsPreview(instructions),
-        effectiveModules: resolveActiveModuleKeys({
-          role: "expert",
-          profileModules: resolveExpertProfileModuleKeysFor(overridden),
-        }),
-      };
-    });
-}
-
-export function resetBuiltinExpertOverride(
-  projectRoot: string,
-  expertId: string,
-): ExpertInfo {
-  const bundled = listBundledExpertDefinitions().find((e) => e.id === expertId);
-  if (!bundled) throw new Error(`Built-in expert not found: ${expertId}`);
-  const manifest = readExpertsManifest(projectRoot);
-  const nextOverrides = { ...(manifest.builtinOverrides ?? {}) };
-  delete nextOverrides[expertId];
-  writeExpertsManifest(projectRoot, {
-    ...manifest,
-    builtinOverrides: Object.keys(nextOverrides).length ? nextOverrides : undefined,
-  });
-  const saved = getExpert(projectRoot, expertId);
-  if (!saved) throw new Error(`Built-in expert not found: ${expertId}`);
-  return saved;
-}
-
-export function resetAllBuiltinExpertsToDefaults(projectRoot: string): ExpertsManifest {
-  const manifest = readExpertsManifest(projectRoot);
-  const next: ExpertsManifest = {
-    disabledBuiltinIds: [],
-    builtinOverrides: undefined,
-  };
-  writeExpertsManifest(projectRoot, next);
-  return next;
-}
-
-export function expertsManifestModified(manifest: ExpertsManifest): boolean {
-  if ((manifest.disabledBuiltinIds?.length ?? 0) > 0) return true;
-  if (manifest.builtinOverrides && Object.keys(manifest.builtinOverrides).length > 0) return true;
-  return false;
-}
-
-export function resetBuiltinOrchestratorOverride(
-  projectRoot: string,
-  orchestratorId: string,
-): OrchestratorInfo {
-  const bundled = listBundledOrchestratorDefinitions().find((o) => o.id === orchestratorId);
-  if (!bundled) throw new Error(`Built-in orchestrator not found: ${orchestratorId}`);
-  const manifest = readOrchestratorsManifest(projectRoot);
-  const nextOverrides = { ...(manifest.builtinOverrides ?? {}) };
-  delete nextOverrides[orchestratorId];
-  writeOrchestratorsManifest(projectRoot, {
-    ...manifest,
-    builtinOverrides: Object.keys(nextOverrides).length ? nextOverrides : undefined,
-  });
-  const saved = getOrchestrator(projectRoot, orchestratorId);
-  if (!saved) throw new Error(`Built-in orchestrator not found: ${orchestratorId}`);
-  return saved;
 }

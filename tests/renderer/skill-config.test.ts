@@ -8,7 +8,13 @@ import {
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const RESOURCES_SKILLS = join(process.cwd(), "resources", "skills");
+const RESOURCES_SKILLS = join(
+  process.cwd(),
+  "resources",
+  "plugins",
+  "prismnext.core",
+  "skills",
+);
 
 describe("skill-config", () => {
   it("round-trips SKILL.md", () => {

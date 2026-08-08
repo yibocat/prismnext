@@ -1315,6 +1315,7 @@ export interface ElectronAPI {
     error?: string;
   }>;
   agentListSkills: (projectPath: string) => Promise<Array<{
+    fqid: string;
     id: string;
     name: string;
     description: string;
@@ -1324,7 +1325,9 @@ export interface ElectronAPI {
     installOrigin?:
       | { adapter: "github"; repo: string; ref: string; path: string }
       | { adapter: "discovery"; indexUrl: string };
-    origin: "bundled" | "registry" | "custom";
+    origin: "bundled" | "registry" | "custom" | "plugin";
+    originPackName?: string;
+    removable: boolean;
   }>>;
   agentListRules: (projectPath: string) => Promise<Array<{
     id: string;
@@ -1498,6 +1501,7 @@ export interface ElectronAPI {
     configPath: string;
     registryUrls: string[];
     skills: Array<{
+      fqid: string;
       id: string;
       name: string;
       description: string;
@@ -1507,7 +1511,9 @@ export interface ElectronAPI {
       installOrigin?:
         | { adapter: "github"; repo: string; ref: string; path: string }
         | { adapter: "discovery"; indexUrl: string };
-      origin: "bundled" | "registry" | "custom";
+      origin: "bundled" | "registry" | "custom" | "plugin";
+      originPackName?: string;
+      removable: boolean;
     }>;
   }>;
   agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
@@ -1931,7 +1937,7 @@ export interface ElectronAPI {
     payload: import("@commands/types").UpdateCommandPayload,
   ) => Promise<import("@commands/types").CommandDef>;
   commandsDelete: (projectRoot: string, id: string) => Promise<void>;
-  commandsToggle: (id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
+  commandsToggle: (projectRoot: string, id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
   commandsReload: (projectRoot?: string | null) => Promise<import("@commands/types").CommandDef[]>;
   commandsPreviewImport: (
     projectRoot: string,

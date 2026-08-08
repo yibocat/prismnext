@@ -43,7 +43,7 @@ export type SettingsPanelSlot =
   | { kind: "mcp-server"; serverName: string; title?: string }
   | { kind: "skill-markdown"; mode: "new" }
   | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
-  | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string }
+  | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string; absPath?: string }
   | { kind: "skill-library" }
   | { kind: "shortcuts" }
   | { kind: "logs" }

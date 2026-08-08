@@ -401,10 +401,19 @@ app.whenReady().then(async () => {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
       }
 
-      const { commandRegistry } = await import("./commands/registry");
-      if ((settings as any).builtinCommands) {
-        commandRegistry.applyBuiltinStates((settings as any).builtinCommands as Record<string, boolean>);
-      }
+      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/packs-state");
+      const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
+      // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
+      // packs.json disabledContent；消费后清空 settings 键。
+      registerLegacyBuiltinCommandStatesHooks({
+        read: () => {
+          const states = (getSettings() as Record<string, unknown>).builtinCommands;
+          return states && typeof states === "object" && !Array.isArray(states)
+            ? (states as Record<string, boolean>)
+            : null;
+        },
+        clear: () => clearLegacyBuiltinCommandStates(),
+      });
 
       log.info("Prompt system initialized");
     } catch (err: any) {

@@ -1,0 +1,7 @@
+{
+  "id": "notes-lead",
+  "name": "Notes Lead",
+  "description": "Coordinates deep reading and structured note-taking across your library.",
+  "thoughtLevel": "medium",
+  "allowedExperts": ["reading-notes-coach"]
+}

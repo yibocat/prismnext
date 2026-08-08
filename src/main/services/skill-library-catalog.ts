@@ -1,5 +1,8 @@
 import type { LibraryCatalogItem } from "../../shared/skill-library-types";
-import { copyBundledSkillToProject, listBundledSkills } from "./bundled-skills";
+import { CORE_PACK_ID } from "../../shared/packs/types";
+import { toFqid } from "../../shared/packs/state";
+import { listCorePackSkills } from "./core-pack-skills";
+import { setContentDisabled } from "./packs-state";
 import {
   analyzeGitHubSkillSource,
   githubSourceToAnalyzeUrl,
@@ -9,9 +12,7 @@ import {
 import { fetchRegistryIndex, installRegistrySkill, type RegistrySkillEntry } from "./skills-registry";
 import { installSkillPackages } from "./skill-install";
 import {
-  deleteProjectSkill,
   listLibrarySources,
-  listProjectSkills,
   type SkillLibrarySourceInfo,
 } from "./skills-sync";
 
@@ -28,7 +29,7 @@ export async function fetchLibraryCatalogForSource(
   source: SkillLibrarySourceInfo,
 ): Promise<LibraryCatalogItem[]> {
   if (source.kind === "bundled") {
-    const bundled = listBundledSkills();
+    const bundled = listCorePackSkills();
     return bundled.map((skill) => ({
       key: `bundled:${skill.id}`,
       skillId: skill.id,
@@ -85,7 +86,8 @@ export async function installLibraryCatalogItem(
   item: LibraryCatalogItem,
 ): Promise<{ installedIds: string[] }> {
   if (item.sourceKind === "bundled") {
-    copyBundledSkillToProject(projectRoot, item.skillId);
+    // 引用模型：core pack 技能天然可用，「安装」= 确保启用（清禁用项，零拷贝）
+    setContentDisabled(projectRoot, toFqid(CORE_PACK_ID, item.skillId), false);
     return { installedIds: [item.skillId] };
   }
 
@@ -123,8 +125,8 @@ export async function installAllFromLibrarySource(
 
   if (source.kind === "bundled") {
     const installedIds: string[] = [];
-    for (const skill of listBundledSkills()) {
-      copyBundledSkillToProject(projectRoot, skill.id);
+    for (const skill of listCorePackSkills()) {
+      setContentDisabled(projectRoot, toFqid(CORE_PACK_ID, skill.id), false);
       installedIds.push(skill.id);
     }
     return { installedIds };
@@ -150,11 +152,10 @@ export async function uninstallAllFromLibrarySource(
   const source = findSource(projectRoot, sourceId);
 
   if (source.kind === "bundled") {
-    const bundledIds = new Set(listBundledSkills().map((skill) => skill.id));
+    // 引用模型：「卸载全部」= 禁用 core pack 全部技能（零文件删除）
     const removedIds: string[] = [];
-    for (const skill of listProjectSkills(projectRoot)) {
-      if (!bundledIds.has(skill.id)) continue;
-      deleteProjectSkill(projectRoot, skill.id);
+    for (const skill of listCorePackSkills()) {
+      setContentDisabled(projectRoot, toFqid(CORE_PACK_ID, skill.id), true);
       removedIds.push(skill.id);
     }
     return { removedIds };

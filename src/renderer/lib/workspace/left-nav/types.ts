@@ -41,8 +41,9 @@ export interface LeftNavDefinition {
    */
   deactivate?: (ctx: LeftNavContext) => void;
   /**
-   * true：再次点击返回默认项（LEFT_NAV_DEFAULT_ID = new-agent）。
-   * 可用 onToggleOff 覆盖默认返回行为（见 settingsNav）。
+   * true：再次点击时优先走 onToggleOff；若未提供则误落到 LEFT_NAV_DEFAULT_ID
+   *（new-agent，会新建 Chat）。沉浸式中心页（Settings / Templates）
+   * 必须自备 onToggleOff → sessions。
    */
   toggleable?: boolean;
   onToggleOff?: (ctx: LeftNavContext) => void;

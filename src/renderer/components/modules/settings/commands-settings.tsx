@@ -167,7 +167,7 @@ export default function CommandsSettings() {
             <p className={SUB_DESC}>
               {t("settings.commandsPage.customDesc")}{" "}
               <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/commands/
+                .prismnext/agent/local/commands/
               </code>
             </p>
             <div className={SETTINGS_CARD}>

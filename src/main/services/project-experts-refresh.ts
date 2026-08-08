@@ -121,7 +121,12 @@ export function isExpertsIntegrationPath(absPath: string, projectRoot: string): 
   const normalized = absPath.replace(/\\/g, "/");
   const root = projectRoot.replace(/\\/g, "/");
   return (
-    normalized.includes(`${root}/.prismnext/agent/experts/`)
+    // local pack（用户自建 orchestrators/experts/skills/commands）
+    normalized.includes(`${root}/.prismnext/agent/local/`)
+    // packs.json（启停 / override / 默认 orchestrator）
+    || normalized.endsWith(`${root}/.prismnext/agent/packs.json`)
+    // legacy 路径（迁移前/回滚期仍可能变动）
+    || normalized.includes(`${root}/.prismnext/agent/experts/`)
     || normalized.endsWith(`${root}/.prismnext/agent/experts-manifest.json`)
     || normalized.endsWith(`${root}/.prismnext/agent/orchestrators-manifest.json`)
   );

@@ -1,0 +1,9 @@
+{
+  "id": "research-design-coach",
+  "name": "Research Design Coach",
+  "description": "Pressure-tests research questions, hypotheses, and contribution before work is committed.",
+  "modules": ["research-design", "project-brief"],
+  "permission": {
+    "task": { "*": "deny" }
+  }
+}
