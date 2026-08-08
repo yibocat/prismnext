@@ -35,6 +35,7 @@ import {
   SlashCommandsSettings,
   ToolsMcpSettings,
   SkillsSettings,
+  PluginsSettings,
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
@@ -43,6 +44,7 @@ import {
   AboutSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
+import { PluginsCenter } from "@/components/modules/plugins/plugins-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
@@ -207,6 +209,16 @@ export function LeftMainArea() {
     );
   }
 
+  if (leftSidebarView === "plugins") {
+    return (
+      <div className="flex h-full flex-col min-w-0" data-surface="content">
+        <PluginsCenter
+          onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
+        />
+      </div>
+    );
+  }
+
   if (leftSidebarView === "settings") {
     const resolvedCategory =
       settingsCategory === "zotero" ? "literature" : settingsCategory;
@@ -223,6 +235,7 @@ export function LeftMainArea() {
       commands: SlashCommandsSettings,
       "tools-mcp": ToolsMcpSettings,
       skills: SkillsSettings,
+      plugins: PluginsSettings,
       compiler: CompilerSettings,
       texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,

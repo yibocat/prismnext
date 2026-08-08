@@ -19,6 +19,7 @@ export { PermissionsSettings } from "./permissions-settings";
 export { SlashCommandsSettings } from "./slash-commands-settings";
 export { ToolsMcpSettings } from "./tools-mcp-settings";
 export { SkillsSettings } from "./skills-settings";
+export { default as PluginsSettings } from "./plugins-settings";
 export { WorkspaceSettings } from "./workspace-settings";
 export { TerminalSettings } from "./terminal-settings";
 export { TexworkspaceSettings } from "./texworkspace-settings";

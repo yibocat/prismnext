@@ -1215,6 +1215,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	commandsReadImportFile: (filePath: string) =>
 		ipcRenderer.invoke("commands:readImportFile", { filePath }),
 
+	// Agent Packs（生命周期 + 视图，§9.5）
+	packsListCatalog: (projectRoot: string) =>
+		ipcRenderer.invoke("packs:listCatalog", { projectRoot }),
+	packsInstall: (projectRoot: string, packId: string) =>
+		ipcRenderer.invoke("packs:install", { projectRoot, packId }),
+	packsSetEnabled: (projectRoot: string, packId: string, enabled: boolean) =>
+		ipcRenderer.invoke("packs:setEnabled", { projectRoot, packId, enabled }),
+	packsUninstall: (projectRoot: string, packId: string) =>
+		ipcRenderer.invoke("packs:uninstall", { projectRoot, packId }),
+	packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) =>
+		ipcRenderer.invoke("packs:setContentEnabled", { projectRoot, fqid, enabled }),
+	packsResolveBadge: (projectRoot: string, fqidOrId: string) =>
+		ipcRenderer.invoke("packs:resolveBadge", { projectRoot, fqidOrId }),
+	packsGetContentView: (projectRoot: string, kind: string) =>
+		ipcRenderer.invoke("packs:getContentView", { projectRoot, kind }),
+	packsSetDefaultOrchestrator: (projectRoot: string, fqid: string) =>
+		ipcRenderer.invoke("packs:setDefaultOrchestrator", { projectRoot, fqid }),
+	packsGetPackContents: (packId: string) =>
+		ipcRenderer.invoke("packs:getPackContents", { packId }),
+
 	// Workspace operations
 	workspaceGetConfig: (projectRoot: string) =>
 		ipcRenderer.invoke("workspace:getConfig", { projectRoot }),

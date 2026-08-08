@@ -26,6 +26,7 @@ import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
 import { registerInteractionHandlers } from "./interaction";
 import { registerProLicenseHandlers } from "./pro-license";
+import { registerPacksHandlers } from "./packs";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();
@@ -56,6 +57,7 @@ export function registerIpcHandlers(): void {
   registerExperimentHandlers();
   registerProvenanceHandlers();
   registerInteractionHandlers();
+  registerPacksHandlers();
 }
 
 export { disposeChat };

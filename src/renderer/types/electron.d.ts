@@ -1951,6 +1951,43 @@ export interface ElectronAPI {
   commandsWriteExportFile: (filePath: string, projectRoot: string) => Promise<void>;
   commandsReadImportFile: (filePath: string) => Promise<unknown>;
 
+  // Agent Packs（生命周期 + 视图，§9.5）
+  packsListCatalog: (
+    projectRoot: string,
+  ) => Promise<import("../../shared/packs/types").ProjectPackView[]>;
+  packsInstall: (
+    projectRoot: string,
+    packId: string,
+  ) => Promise<{
+    record: import("../../shared/packs/types").PackRecord;
+    suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
+  }>;
+  packsSetEnabled: (
+    projectRoot: string,
+    packId: string,
+    enabled: boolean,
+  ) => Promise<{
+    record: import("../../shared/packs/types").PackRecord;
+    suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
+  }>;
+  packsUninstall: (projectRoot: string, packId: string) => Promise<void>;
+  packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
+  packsResolveBadge: (
+    projectRoot: string,
+    fqidOrId: string,
+  ) => Promise<import("../../shared/packs/types").BadgeInfo | null>;
+  packsGetContentView: (
+    projectRoot: string,
+    kind: import("../../shared/packs/types").ContentKind,
+  ) => Promise<import("../../shared/packs/types").ResolvedContent[]>;
+  packsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
+  packsGetPackContents: (packId: string) => Promise<{
+    kind: import("../../shared/packs/types").ContentKind;
+    id: string;
+    name: string;
+    description: string;
+  }[]>;
+
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;
   workspaceUpdateConfig: (projectRoot: string, dirs: import("./workspace").WorkspaceFolder[]) => Promise<{ success: boolean; errors?: string[] }>;

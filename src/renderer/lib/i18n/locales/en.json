@@ -64,6 +64,7 @@
       "commands": "Commands",
       "mcp": "MCP",
       "skills": "Skills",
+      "plugins": "Plugins",
       "texWorkspace": "TeX Workspace",
       "terminal": "Terminal",
       "browser": "Browser",
@@ -1411,6 +1412,35 @@
         "missingPayload": "Missing settings editor payload.",
         "placeholderReserved": "This slot is reserved for a settings editor that will migrate here from the main list."
       }
+    },
+    "pluginsPage": {
+      "noProject": "Open a project to manage plugins.",
+      "actions": {
+        "install": "Install",
+        "uninstall": "Uninstall"
+      },
+      "confirm": {
+        "disableCore": "Disable the entire core pack? All built-in agents, skills and commands will become inactive. You can re-enable it anytime."
+      },
+      "suggestion": {
+        "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",
+        "accept": "Set as default",
+        "dismiss": "Dismiss",
+        "done": "Default orchestrator updated."
+      },
+      "kinds": {
+        "orchestrator": "Orchestrators",
+        "expert": "Experts",
+        "skill": "Skills",
+        "command": "Commands",
+        "mcp": "MCP servers"
+      },
+      "manageHint": "Manage installed packs here. Browse and install new ones in the Plugins page.",
+      "browse": "Browse Plugins",
+      "empty": "No packs installed yet.",
+      "title": "Plugins",
+      "pageDesc": "Manage installed packs: enable, tune individual items, or uninstall.",
+      "installed": "Installed"
     }
   },
   "welcome": {
@@ -1659,6 +1689,7 @@
     "library": "Library",
     "experiments": "Experiments",
     "templates": "Templates",
+    "plugins": "Plugins",
     "texWorkspace": "TeX Workspace",
     "settings": "Settings",
     "updateToVersion": "Update to {{version}}",
@@ -3009,5 +3040,58 @@
       "optional": "(optional)",
       "descPlaceholder": "Brief description of what this command does"
     }
+  },
+  "pluginsCenter": {
+    "title": "Plugins",
+    "searchPlaceholder": "Search plugins…",
+    "tabs": {
+      "all": "All",
+      "installed": "Installed"
+    },
+    "noProject": "Open a project to browse and install plugins.",
+    "empty": "No plugins match.",
+    "categories": {
+      "general": "General",
+      "research": "Research"
+    },
+    "card": {
+      "install": "Install",
+      "added": "Installed",
+      "disabled": "Disabled",
+      "proLocked": "Pro",
+      "incompatible": "Incompatible",
+      "notInstalled": "Not installed"
+    },
+    "kinds": {
+      "orchestrator": "Orchestrators",
+      "expert": "Experts",
+      "skill": "Skills",
+      "command": "Commands",
+      "mcp": "MCP servers"
+    },
+    "meta": {
+      "title": "Info",
+      "status": "Status",
+      "publisher": "Publisher",
+      "version": "Version",
+      "tier": "Tier",
+      "category": "Category",
+      "tags": "Tags",
+      "minHostVersion": "Requires app"
+    },
+    "toast": {
+      "installed": "{{name}} installed."
+    },
+    "suggestion": {
+      "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",
+      "accept": "Set as default",
+      "done": "Default orchestrator updated."
+    },
+    "subtitle": "Install packs of agents, experts, skills and commands.",
+    "backToList": "Back to plugins",
+    "manage": "Manage in Settings",
+    "sidebar": "Browse",
+    "count": "{{count}} plugins",
+    "clearSearch": "Clear search"
   }
 }

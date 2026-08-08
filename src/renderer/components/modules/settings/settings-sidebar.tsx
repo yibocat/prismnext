@@ -26,6 +26,7 @@ import {
   Bot,
   BookOpenIcon,
   PuzzleIcon,
+  PackageIcon,
   PlugIcon,
   SlashIcon,
   ShieldIcon,
@@ -57,6 +58,7 @@ export const SETTINGS_GROUPS = [
       { id: "commands", labelKey: "settings.nav.commands", icon: SlashIcon },
       { id: "tools-mcp", labelKey: "settings.nav.mcp", icon: PlugIcon },
       { id: "skills", labelKey: "settings.nav.skills", icon: PuzzleIcon },
+      { id: "plugins", labelKey: "settings.nav.plugins", icon: PackageIcon },
     ],
   },
   {

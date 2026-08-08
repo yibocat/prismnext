@@ -54,6 +54,7 @@ const LEGACY_CUSTOM_ORCHESTRATORS_REL = ".prismnext/agent/orchestrators/custom";
 const LEGACY_SKILLS_REL = ".prismnext/agent/skills";
 const LEGACY_COMMANDS_REL = ".prismnext/agent/commands";
 const LEGACY_SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
+const LEGACY_PLUGINS_MANIFEST_REL = ".prismnext/agent/plugins-manifest.json";
 
 // ── 迁移框架 ───────────────────────────────────────────────
 
@@ -156,6 +157,7 @@ export function hasLegacyAgentState(projectRoot: string): boolean {
   if (legacyCommandFileNames(projectRoot).length > 0) return true;
   const skillsManifest = readLegacySkillsManifest(projectRoot);
   if ((skillsManifest?.disabled ?? []).length > 0) return true;
+  if (existsSync(join(projectRoot, LEGACY_PLUGINS_MANIFEST_REL))) return true;
   if (readLegacyBuiltinCommandStates() !== null) return true;
   return false;
 }
@@ -436,6 +438,158 @@ function legacyBackupDir(projectRoot: string): string {
   );
 }
 
+// ── R9：plugins-manifest.json → packs[] + 拷贝副本回收 ─────────────
+//
+// 拷贝时代的 plugins-manifest 记录的是「装了哪个 plugin」；引用模型下
+// 安装 = packs.json 一条记录。id 映射：`suite.X → prismnext.X`（spec §10.2
+// 的唯一既有 id）。同时把当年拷贝出去的 plugin 内容副本【回收】进
+// legacy-backup（不再进 local——内容改由 pack 引用解析），必须在
+// R4/R5/R6/R7 之前执行。无 plugins-manifest 的 pluginId 垃圾字段不受影响
+// （仍按 custom 内容处理，见 R4/R5/R7 的身份字段剥离）。
+
+interface LegacyPluginsManifestEntry {
+  packId?: string;
+  id?: string;
+  pluginId?: string;
+  version?: string;
+  enabled?: boolean;
+}
+
+/** 宽容解析：{installed:[...]} / {packs:[...]} / 顶层数组 三种形状都接受 */
+function readLegacyPluginsManifest(projectRoot: string): LegacyPluginsManifestEntry[] {
+  const raw = readLegacyJson<unknown>(join(projectRoot, LEGACY_PLUGINS_MANIFEST_REL));
+  if (!raw) return [];
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { installed?: unknown[] }).installed)
+      ? (raw as { installed: unknown[] }).installed
+      : Array.isArray((raw as { packs?: unknown[] }).packs)
+        ? (raw as { packs: unknown[] }).packs
+        : [];
+  return list.filter(
+    (e): e is LegacyPluginsManifestEntry =>
+      Boolean(e) && typeof e === "object" &&
+      Boolean(
+        (e as LegacyPluginsManifestEntry).packId ??
+          (e as LegacyPluginsManifestEntry).id ??
+          (e as LegacyPluginsManifestEntry).pluginId,
+      ),
+  );
+}
+
+/** 拷贝时代 id → 引用时代 id（suite.X → prismnext.X；其余原样） */
+function mapLegacyPluginId(id: string): string {
+  return id.startsWith("suite.") ? `prismnext.${id.slice("suite.".length)}` : id;
+}
+
+/** 移动文件/目录到 legacy-backup（保持相对路径），成功返回 true */
+function moveToLegacyBackup(projectRoot: string, rel: string): boolean {
+  const src = join(projectRoot, ".prismnext", "agent", rel);
+  if (!existsSync(src)) return false;
+  try {
+    const dest = join(legacyBackupDir(projectRoot), rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true });
+    renameSync(src, dest);
+    return true;
+  } catch (err) {
+    log.warn("R9 副本回收失败", { rel, error: String(err) });
+    return false;
+  }
+}
+
+/** 读取 legacy command frontmatter 的 pluginId（无 → null） */
+function legacyCommandPluginId(raw: string): string | null {
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!match) return null;
+  for (const line of match[1].split(/\r?\n/)) {
+    const idx = line.indexOf(":");
+    if (idx > 0 && line.slice(0, idx).trim() === "pluginId") {
+      return line.slice(idx + 1).trim() || null;
+    }
+  }
+  return null;
+}
+
+/**
+ * R9 主流程：返回追加的 PackRecord[]；副作用 = plugin 副本回收进 backup。
+ * 回收范围（pluginId 命中 manifest 记录的旧/新 id）：
+ * - experts/custom/<id>/、orchestrators/custom/<id>/（JSON 带 pluginId）
+ * - commands/*.md(|.disabled)（frontmatter 带 pluginId）
+ * - skills/<id>/（skills-manifest installs 里 origin 标记者）
+ */
+function migrateLegacyPluginsManifest(
+  projectRoot: string,
+  existingPacks: PackRecord[],
+): PackRecord[] {
+  const entries = readLegacyPluginsManifest(projectRoot);
+  if (entries.length === 0) return [];
+
+  const knownIds = new Set<string>();
+  const added: PackRecord[] = [];
+  for (const entry of entries) {
+    const rawId = (entry.packId ?? entry.id ?? entry.pluginId)!.trim();
+    if (!rawId) continue;
+    knownIds.add(rawId);
+    knownIds.add(mapLegacyPluginId(rawId));
+    const packId = mapLegacyPluginId(rawId);
+    if (existingPacks.some((p) => p.packId === packId)) continue;
+    if (added.some((p) => p.packId === packId)) continue;
+    added.push({
+      packId,
+      version: entry.version ?? "0.0.0",
+      enabled: entry.enabled !== false,
+      installedAt: new Date().toISOString(),
+    });
+  }
+
+  // 副本回收：experts / orchestrators custom 目录里 pluginId 命中者
+  for (const kind of ["experts", "orchestrators"] as const) {
+    const jsonName = kind === "experts" ? "expert.json" : "orchestrator.json";
+    const customRoot = join(projectRoot, ".prismnext", "agent", kind, "custom");
+    if (!existsSync(customRoot)) continue;
+    for (const entry of readdirSync(customRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      try {
+        const def = readLegacyJson<{ pluginId?: string }>(
+          join(customRoot, entry.name, jsonName),
+        );
+        if (def?.pluginId && knownIds.has(def.pluginId)) {
+          moveToLegacyBackup(projectRoot, join(kind, "custom", entry.name));
+        }
+      } catch {
+        // 单个失败不阻断
+      }
+    }
+  }
+
+  // 副本回收：commands frontmatter pluginId 命中者（.md 与 .md.disabled）
+  for (const fileName of legacyCommandFileNames(projectRoot)) {
+    try {
+      const raw = readFileSync(join(projectRoot, LEGACY_COMMANDS_REL, fileName), "utf-8");
+      const pluginId = legacyCommandPluginId(raw);
+      if (pluginId && knownIds.has(pluginId)) {
+        moveToLegacyBackup(projectRoot, join("commands", fileName));
+      }
+    } catch {
+      // 单个失败不阻断
+    }
+  }
+
+  // 副本回收：skills-manifest installs 里 origin 标记为 plugin 来源的技能
+  const skillsManifest = readLegacySkillsManifest(projectRoot);
+  for (const record of skillsManifest?.installs ?? []) {
+    const origin = (record as { origin?: { kind?: string; pluginId?: string } }).origin;
+    const isPluginCopy =
+      origin && (origin.kind === "plugin" || (origin.pluginId && knownIds.has(origin.pluginId)));
+    if (isPluginCopy && record.skillId) {
+      moveToLegacyBackup(projectRoot, join("skills", record.skillId));
+    }
+  }
+
+  return added;
+}
+
 /** R12（agent 部分）：legacy 文件/残余目录移入 legacy-backup-<date>/ */
 function backupLegacyAgentFiles(projectRoot: string): void {
   const agentDir = join(projectRoot, ".prismnext", "agent");
@@ -452,6 +606,7 @@ function backupLegacyAgentFiles(projectRoot: string): void {
   };
   move("experts-manifest.json");
   move("orchestrators-manifest.json");
+  move("plugins-manifest.json");
   move(join("experts", "custom"));
   move(join("orchestrators", "custom"));
   // skills/ 与 commands/ 在 R6/R7/R8 后应为空；有残余（junk 文件）则进 backup
@@ -469,7 +624,8 @@ function backupLegacyAgentFiles(projectRoot: string): void {
 }
 
 /**
- * R1–R8/R10/R11 文件级迁移（幂等）：
+ * R1–R11 文件级迁移（幂等）：
+ * - R9 plugins-manifest → packs[] + plugin 拷贝副本回收（最先执行）
  * - R1/R2 experts-manifest 的 disabledBuiltinIds / builtinOverrides → FQID 化
  * - R3 orchestrators-manifest：defaultOrchestratorId → FQID（custom 目录存在
  *   → user.local，否则 → prismnext.core）；disabled/overrides 同 R1/R2
@@ -485,6 +641,10 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
   const disabled = new Set(state.disabledContent);
   const overrides: PacksState["contentOverrides"] = { ...state.contentOverrides };
   let defaultOrchestrator = state.defaultOrchestrator;
+
+  // R9 必须最先执行：plugins-manifest → packs[]，并回收 plugin 拷贝副本
+  // （否则 R4/R5/R6/R7 会把副本当 custom 内容搬进 local）
+  const r9Added = migrateLegacyPluginsManifest(projectRoot, state.packs);
 
   const expertsManifest = readLegacyJson<LegacyExpertsManifest>(
     join(projectRoot, LEGACY_EXPERTS_MANIFEST_REL),
@@ -545,6 +705,7 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
 
   return {
     ...state,
+    packs: [...state.packs, ...r9Added],
     defaultOrchestrator,
     disabledContent: [...disabled].sort(),
     contentOverrides: overrides,

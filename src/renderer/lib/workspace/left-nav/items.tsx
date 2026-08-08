@@ -1,4 +1,4 @@
-import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, SettingsIcon } from "lucide-react";
+import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, Package, SettingsIcon } from "lucide-react";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -134,6 +134,27 @@ const templatesNav: LeftNavDefinition = {
   },
 };
 
+const pluginsNav: LeftNavDefinition = {
+  id: "plugins",
+  section: "primary",
+  label: "Plugins",
+  labelKey: "nav.plugins",
+  icon: Package,
+  order: 25,
+  centerView: "plugins",
+  immersive: true,
+  toggleable: true,
+  isActive: () => useLayoutStore.getState().leftSidebarView === "plugins",
+  activate: (ctx) => {
+    closeTexWorkspace(ctx);
+    closeLiteraturePanel(ctx);
+    useLayoutStore.getState().setLeftSidebarView("plugins");
+  },
+  onToggleOff: () => {
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
+};
+
 const texWorkspaceNav: LeftNavDefinition = {
   id: "tex-workspace",
   section: "primary",
@@ -186,6 +207,7 @@ export function registerLeftNavItems(): void {
   leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(experimentsNav);
   leftNavRegistry.register(templatesNav);
+  leftNavRegistry.register(pluginsNav);
   leftNavRegistry.register(settingsNav);
   // leftNavRegistry.register(yourNav);  // ← 新入口加在这里，或拆到 feature 模块再 import
 }

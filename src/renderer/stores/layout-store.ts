@@ -67,8 +67,8 @@ interface LayoutState {
   leftSidebarOverlay: boolean;
   setLeftSidebarOverlay: (show: boolean) => void;
   /** 中间主区域当前视图；centerView 型导航项激活时写入，见 left-nav/items.tsx */
-  leftSidebarView: "sessions" | "settings" | "templates";
-  setLeftSidebarView: (view: "sessions" | "settings" | "templates") => void;
+  leftSidebarView: "sessions" | "settings" | "templates" | "plugins";
+  setLeftSidebarView: (view: "sessions" | "settings" | "templates" | "plugins") => void;
   /** Set when settings/templates collapse the right area; restored on exit unless cleared. */
   pendingRightAreaRestore: boolean;
   setPendingRightAreaRestore: (pending: boolean) => void;

@@ -407,3 +407,116 @@ describe("packs-state legacy migration (R6–R11)", () => {
     }
   });
 });
+
+
+// ────────────────────────────────────────────────────────────
+// R9：plugins-manifest.json → packs[] + 拷贝副本回收（§10.2 Phase 4）
+// ────────────────────────────────────────────────────────────
+describe("packs-state legacy migration (R9)", () => {
+  it("plugins-manifest 记录迁移为 packs[]（suite.X → prismnext.X）并备份旧文件", () => {
+    makeRoot();
+    writeLegacy(
+      "plugins-manifest.json",
+      JSON.stringify({
+        installed: [
+          { pluginId: "suite.research-notes", version: "0.2.0" },
+          { pluginId: "third.party-tool", enabled: false },
+        ],
+      }),
+    );
+    expect(hasLegacyAgentState(root!)).toBe(true);
+
+    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    expect(migrated).toBe(true);
+    expect(state.packs).toEqual([
+      expect.objectContaining({
+        packId: "prismnext.research-notes",
+        version: "0.2.0",
+        enabled: true,
+      }),
+      expect.objectContaining({ packId: "third.party-tool", enabled: false }),
+    ]);
+    // 旧 manifest 进 legacy-backup
+    expect(existsSync(join(agentDir(), "plugins-manifest.json"))).toBe(false);
+    const backup = backupDir();
+    expect(backup).toBeTruthy();
+    expect(existsSync(join(backup!, "plugins-manifest.json"))).toBe(true);
+    expect(hasLegacyAgentState(root!)).toBe(false);
+  });
+
+  it("plugin 拷贝副本回收：experts/orchestrators 带 pluginId 者进 backup，不进 local", () => {
+    makeRoot();
+    writeLegacy(
+      "plugins-manifest.json",
+      JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),
+    );
+    // plugin 拷贝（带 pluginId 且命中记录）→ 回收
+    writeLegacy(
+      join("experts", "custom", "notes-helper", "expert.json"),
+      JSON.stringify({ id: "notes-helper", name: "NH", description: "d", pluginId: "suite.research-notes" }),
+    );
+    writeLegacy(join("experts", "custom", "notes-helper", "instructions.md"), "Body.\n");
+    // 真 custom（无 pluginId）→ 仍按 R4 进 local
+    writeLegacy(
+      join("experts", "custom", "my-expert", "expert.json"),
+      JSON.stringify({ id: "my-expert", name: "ME", description: "d" }),
+    );
+    writeLegacy(join("experts", "custom", "my-expert", "instructions.md"), "Mine.\n");
+
+    migratePacksStateIfNeeded(root!);
+    expect(existsSync(join(agentDir(), "local", "experts", "notes-helper"))).toBe(false);
+    const backup = backupDir();
+    expect(existsSync(join(backup!, "experts", "custom", "notes-helper", "expert.json"))).toBe(
+      true,
+    );
+    expect(existsSync(join(agentDir(), "local", "experts", "my-expert", "expert.json"))).toBe(true);
+  });
+
+  it("plugin 拷贝副本回收：commands frontmatter 带 pluginId 者进 backup", () => {
+    makeRoot();
+    writeLegacy(
+      "plugins-manifest.json",
+      JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),
+    );
+    writeLegacy(
+      join("commands", "rnotes.md"),
+      "---\ndescription: RN\npluginId: suite.research-notes\n---\n\nBody\n",
+    );
+    writeLegacy(join("commands", "mine.md"), "---\ndescription: M\n---\n\nMine\n");
+
+    migratePacksStateIfNeeded(root!);
+    expect(existsSync(join(agentDir(), "local", "commands", "rnotes.md"))).toBe(false);
+    const backup = backupDir();
+    expect(existsSync(join(backup!, "commands", "rnotes.md"))).toBe(true);
+    // 无 pluginId 的命令照常 R7 进 local
+    expect(existsSync(join(agentDir(), "local", "commands", "mine.md"))).toBe(true);
+  });
+
+  it("plugin 拷贝副本回收：skills-manifest installs 标记 plugin 来源的技能进 backup", () => {
+    makeRoot();
+    writeLegacy(
+      "plugins-manifest.json",
+      JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),
+    );
+    writeLegacy(
+      "skills-manifest.json",
+      JSON.stringify({
+        installs: [
+          { skillId: "plugin-skill", origin: { kind: "plugin", pluginId: "suite.research-notes" } },
+          { skillId: "registry-skill", origin: { kind: "github", repo: "a/b" } },
+        ],
+      }),
+    );
+    writeLegacy(join("skills", "plugin-skill", "SKILL.md"), "---\nname: plugin-skill\n---\nP\n");
+    writeLegacy(join("skills", "registry-skill", "SKILL.md"), "---\nname: registry-skill\n---\nR\n");
+
+    migratePacksStateIfNeeded(root!);
+    expect(existsSync(join(agentDir(), "local", "skills", "plugin-skill"))).toBe(false);
+    const backup = backupDir();
+    expect(existsSync(join(backup!, "skills", "plugin-skill", "SKILL.md"))).toBe(true);
+    // registry 安装照常 R6 进 local
+    expect(existsSync(join(agentDir(), "local", "skills", "registry-skill", "SKILL.md"))).toBe(
+      true,
+    );
+  });
+});

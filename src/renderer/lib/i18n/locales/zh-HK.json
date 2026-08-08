@@ -64,6 +64,7 @@
       "commands": "命令",
       "mcp": "MCP",
       "skills": "技能",
+      "plugins": "插件",
       "texWorkspace": "TeX 工作區",
       "terminal": "終端",
       "browser": "瀏覽器",
@@ -1411,6 +1412,35 @@
         "missingPayload": "缺少設定編輯器資料。",
         "placeholderReserved": "此槽位預留給將從主列表遷入的設定編輯器。"
       }
+    },
+    "pluginsPage": {
+      "noProject": "開啟一個項目後即可管理插件。",
+      "actions": {
+        "install": "安裝",
+        "uninstall": "卸載"
+      },
+      "confirm": {
+        "disableCore": "確定整體禁用 core 套件嗎？全部內置 Agent、技能和命令將不可用，隨時可重新啟用。"
+      },
+      "suggestion": {
+        "text": "將「{{pack}}」的主 Agent 設為預設？",
+        "accept": "設為預設",
+        "dismiss": "忽略",
+        "done": "預設主 Agent 已更新。"
+      },
+      "kinds": {
+        "orchestrator": "主 Agent",
+        "expert": "專家",
+        "skill": "技能",
+        "command": "命令",
+        "mcp": "MCP 服務"
+      },
+      "manageHint": "這裡管理已安裝的套件；瀏覽和安裝新套件請去「插件」頁。",
+      "browse": "瀏覽插件",
+      "empty": "還沒有安裝任何套件。",
+      "title": "插件",
+      "pageDesc": "管理已安裝的套件：整體啟停、逐項調整或卸載。",
+      "installed": "已安裝"
     }
   },
   "welcome": {
@@ -1659,6 +1689,7 @@
     "library": "文獻庫",
     "experiments": "實驗",
     "templates": "模板",
+    "plugins": "插件",
     "texWorkspace": "TeX 工作區",
     "settings": "設定",
     "updateToVersion": "更新到 {{version}}",
@@ -3035,5 +3066,58 @@
       "optional": "（可選）",
       "descPlaceholder": "簡要說明此命令的作用"
     }
+  },
+  "pluginsCenter": {
+    "title": "插件",
+    "searchPlaceholder": "搜尋插件…",
+    "tabs": {
+      "all": "全部",
+      "installed": "已安裝"
+    },
+    "noProject": "開啟一個項目後即可瀏覽和安裝插件。",
+    "empty": "沒有匹配的插件。",
+    "categories": {
+      "general": "通用",
+      "research": "研究"
+    },
+    "card": {
+      "install": "安裝",
+      "added": "已安裝",
+      "disabled": "已停用",
+      "proLocked": "Pro",
+      "incompatible": "不兼容",
+      "notInstalled": "未安裝"
+    },
+    "kinds": {
+      "orchestrator": "主 Agent",
+      "expert": "專家",
+      "skill": "技能",
+      "command": "命令",
+      "mcp": "MCP 服務"
+    },
+    "meta": {
+      "title": "資訊",
+      "status": "狀態",
+      "publisher": "發佈者",
+      "version": "版本",
+      "tier": "層級",
+      "category": "分類",
+      "tags": "標籤",
+      "minHostVersion": "需要應用版本"
+    },
+    "toast": {
+      "installed": "「{{name}}」已安裝。"
+    },
+    "suggestion": {
+      "text": "將「{{pack}}」的主 Agent 設為預設？",
+      "accept": "設為預設",
+      "done": "預設主 Agent 已更新。"
+    },
+    "subtitle": "安裝成套的主 Agent、專家、技能與命令。",
+    "backToList": "返回插件列表",
+    "manage": "在設定中管理",
+    "sidebar": "瀏覽",
+    "count": "{{count}} 個插件",
+    "clearSearch": "清除搜尋"
   }
 }
