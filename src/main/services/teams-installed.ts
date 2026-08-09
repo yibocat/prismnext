@@ -21,11 +21,8 @@ const log = createLogger("packs-installed");
 export const TEAMS_INSTALLED_VERSION = 1;
 export const TEAMS_INSTALLED_FILE = "packs-installed.json";
 
-export interface InstalledTeamRecord {
-  teamId: string;
-  /** ISO 8601 */
-  installedAt: string;
-}
+export type { InstalledTeamRecord } from "../../shared/teams/types";
+import type { InstalledTeamRecord } from "../../shared/teams/types";
 
 interface PacksInstalledFile {
   version: typeof TEAMS_INSTALLED_VERSION;

@@ -240,3 +240,113 @@ export interface TeamsProjectState {
   /** 非 local 内容的 override，by FQID。磁盘字段名冻结为 contentOverrides。 */
   contentOverrides: Record<Fqid, AssetOverride>;
 }
+
+// ═══════════════════════════════════════════════════════════
+// Team 架构 v2（design: 2026-08-10-teams-architecture-v2-design.md §5）
+//
+// 以下是 v2 的目标类型。T1 纯增量追加，与上方 v1 类型并行；
+// 现有消费路径仍走 v1，T2/T3 切换，T6 迁移后 v1 类型整体删除。
+// ═══════════════════════════════════════════════════════════
+
+// ── 两个正交维度（§3.1）──────────────────────────────────
+
+/** 作用域：组件在哪些项目可见。Team 的属性，组件继承之。 */
+export type TeamScope = "app" | "project";
+
+/** 来源：Team 从哪来（决定只读/可写、license 门控、优先级）。 */
+export type TeamSource = "core" | "bundled" | "pro" | "registry" | "user";
+
+// ── 名册（§3.4）──────────────────────────────────────────
+
+/** 名册项：FQID 精确引用，或 "@team"（本团队全部子 Agent，动态展开）。 */
+export type RosterRef = Fqid | "@team";
+
+/**
+ * 主 Agent 名册。缺省 = { mode: "all" }（全部启用的子 Agent，维持旧语义）。
+ * 名册是引用列表，不是所有权声明 —— 被引用的子 Agent 归属不变、可多册共存。
+ */
+export type RosterSpec =
+  | { mode: "all" }
+  | { mode: "list"; members: RosterRef[] };
+
+// ── MCP（v2：含 autoStart，治 B1）─────────────────────────
+
+/**
+ * 团队 mcp.json 数组元素（v2 唯一 MCP schema）。
+ * 与 v1 McpDef 的差别：新增 autoStart。
+ */
+export interface McpServerDef {
+  id: string;
+  /** 运行时服务名（跨团队唯一性冲突按 §7.5 优先级裁决） */
+  name: string;
+  description?: string;
+  /** 会话建立时立即连接；缺省 false = 懒加载（由 / 目录触发 session/load） */
+  autoStart?: boolean;
+  transport:
+    | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
+    | { type: "http"; url: string; headers?: Record<string, string> };
+}
+
+// ── 不可用原因（治 B8：UI 必须能解释每个灰掉的开关）─────────
+
+export type BlockReason =
+  | "not-installed"
+  | "license"
+  | "incompatible"
+  | "team-disabled-app"
+  | "team-disabled-project"
+  | "asset-disabled-app"
+  | "asset-disabled-project"
+  /** 被更高优先级的同名组件遮蔽（§7.5） */
+  | "shadowed";
+
+// ── 三态与状态文件（§5.1.3 / §5.1.4）──────────────────────
+
+/** 三态：true=启用 / false=停用 / 缺键=跟随上层。 */
+export type TriState = Record<string, boolean>;
+
+/** 应用级安装记录（teams-state.json 的 installed[] 元素）。 */
+export interface InstalledTeamRecord {
+  teamId: string;
+  /** ISO 8601 */
+  installedAt: string;
+}
+
+export const APP_TEAMS_STATE_VERSION = 1;
+export const PROJECT_TEAMS_STATE_VERSION = 1;
+/** 应用级状态文件（userData 下） */
+export const APP_TEAMS_STATE_FILE = "teams-state.json";
+/** 项目级状态文件（相对项目根） */
+export const PROJECT_TEAMS_STATE_REL = ".prismnext/agent/teams.json";
+/** 项目团队根目录（相对项目根） */
+export const PROJECT_TEAMS_REL = ".prismnext/agent/teams";
+/** 项目默认团队 id（user.local 的迁移目标，治 C1） */
+export const PROJECT_DEFAULT_TEAM_ID = "project.local";
+
+/** 应用级状态 `<userData>/teams-state.json`（v2） */
+export interface AppTeamsState {
+  version: typeof APP_TEAMS_STATE_VERSION;
+  /** 应用级安装记录（core / user / project 团队不入列） */
+  installed: InstalledTeamRecord[];
+  /** 应用级默认（活动）团队 */
+  defaultTeam?: string;
+  /** 团队级三态覆盖（缺键 = 跟随默认 true） */
+  teamEnabled: TriState;
+  /** 组件级三态覆盖（缺键 = 跟随默认 true） */
+  assetEnabled: TriState;
+  /** 全局级 override（预留） */
+  assetOverrides: Record<Fqid, AssetOverride>;
+}
+
+/** 项目级状态 `<projectRoot>/.prismnext/agent/teams.json`（v2） */
+export interface ProjectTeamsState {
+  version: typeof PROJECT_TEAMS_STATE_VERSION;
+  /** 项目级默认（活动）团队 */
+  defaultTeam?: string;
+  /** 团队级三态覆盖（可推翻应用级，§5.3） */
+  teamEnabled: TriState;
+  /** 组件级三态覆盖 */
+  assetEnabled: TriState;
+  /** 项目级 override */
+  assetOverrides: Record<Fqid, AssetOverride>;
+}
