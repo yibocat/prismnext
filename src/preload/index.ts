@@ -930,32 +930,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("experts:list", { projectPath }),
 	orchestratorsList: (projectPath: string) =>
 		ipcRenderer.invoke("orchestrators:list", { projectPath }),
-	expertsGetManifest: (projectPath: string) =>
-		ipcRenderer.invoke("experts:getManifest", { projectPath }),
-	orchestratorsGetManifest: (projectPath: string) =>
-		ipcRenderer.invoke("orchestrators:getManifest", { projectPath }),
 	expertsGetDetail: (projectPath: string, expertId: string) =>
 		ipcRenderer.invoke("experts:getDetail", { projectPath, expertId }),
-	expertsSetBuiltinEnabled: (projectPath: string, expertId: string, enabled: boolean) =>
-		ipcRenderer.invoke("experts:setBuiltinEnabled", { projectPath, expertId, enabled }),
 	expertsSaveCustom: (
 		projectPath: string,
 		payload: import("@shared/agent-experts").SaveCustomExpertPayload,
 	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload }),
-	expertsSaveBuiltinOverride: (
-		projectPath: string,
-		payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
-	) => ipcRenderer.invoke("experts:saveBuiltinOverride", { projectPath, payload }),
 	expertsDeleteCustom: (projectPath: string, expertId: string) =>
 		ipcRenderer.invoke("experts:deleteCustom", { projectPath, expertId }),
-	orchestratorsSetDefault: (projectPath: string, orchestratorId: string) =>
-		ipcRenderer.invoke("orchestrators:setDefault", { projectPath, orchestratorId }),
-	orchestratorsSaveBuiltinOverride: (
-		projectPath: string,
-		payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
-	) => ipcRenderer.invoke("orchestrators:saveBuiltinOverride", { projectPath, payload }),
-	orchestratorsResetBuiltinOverride: (projectPath: string, orchestratorId: string) =>
-		ipcRenderer.invoke("orchestrators:resetBuiltinOverride", { projectPath, orchestratorId }),
 	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:getDetail", { projectPath, orchestratorId }),
 	orchestratorsSaveCustom: (
@@ -964,10 +946,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
-	expertsResetBuiltinOverride: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:resetBuiltinOverride", { projectPath, expertId }),
-	expertsResetBuiltinsToDefaults: (projectPath: string) =>
-		ipcRenderer.invoke("experts:resetBuiltinsToDefaults", { projectPath }),
 	chatSend: (args: {
 		projectPath: string;
 		worktreePath?: string;
@@ -1226,6 +1204,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("packs:uninstall", { projectRoot, packId }),
 	packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) =>
 		ipcRenderer.invoke("packs:setContentEnabled", { projectRoot, fqid, enabled }),
+	packsSaveOverride: (
+		projectRoot: string,
+		fqid: string,
+		patch: import("@shared/packs/types").ContentOverride,
+	) => ipcRenderer.invoke("packs:saveOverride", { projectRoot, fqid, patch }),
+	packsGetCoreState: (projectRoot: string) =>
+		ipcRenderer.invoke("packs:getCoreState", { projectRoot }),
+	packsResetCoreDefaults: (projectRoot: string, kind: "expert" | "orchestrator") =>
+		ipcRenderer.invoke("packs:resetCoreDefaults", { projectRoot, kind }),
 	packsResolveBadge: (projectRoot: string, fqidOrId: string) =>
 		ipcRenderer.invoke("packs:resolveBadge", { projectRoot, fqidOrId }),
 	packsGetContentView: (projectRoot: string, kind: string) =>

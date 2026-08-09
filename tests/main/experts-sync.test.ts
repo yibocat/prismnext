@@ -14,12 +14,10 @@ import {
   buildTaskPermissionBlock,
   saveCustomExpert,
   deleteCustomExpert,
-  setBuiltinExpertEnabled,
-  resetAllBuiltinExpertsToDefaults,
-  saveBuiltinOrchestratorOverride,
   appendSubagentRosterSection,
   pruneAllowedExpertIds,
 } from "../../src/main/services/experts-sync";
+import { resetCoreContentToDefaults, saveContentOverride, setContentDisabled } from "../../src/main/services/packs-state";
 
 /** Core-pack instructions（原 bundled loader 的读取对象，Phase 2 起直接在 core pack 目录）。 */
 function readCoreOrchestratorInstructions(orchestratorId: string): string | null {
@@ -188,10 +186,7 @@ describe("experts-sync", () => {
   });
 
   it("empty allowedExperts override yields no task allows and explicit prompt", () => {
-    saveBuiltinOrchestratorOverride(root, {
-      orchestratorId: "research-prism",
-      allowedExperts: [],
-    });
+    saveContentOverride(root, "prismnext.core:research-prism", { allowedExperts: [] });
     const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
     expect(orchestratorMd).toContain("No project experts are currently allowed");
@@ -223,8 +218,7 @@ describe("experts-sync", () => {
   });
 
   it("listOrchestrators prunes stale allowedExperts from overrides", () => {
-    saveBuiltinOrchestratorOverride(root, {
-      orchestratorId: "research-prism",
+    saveContentOverride(root, "prismnext.core:research-prism", {
       allowedExperts: [
         "literature-synthesizer",
         "peer-reviewer",
@@ -238,7 +232,7 @@ describe("experts-sync", () => {
   });
 
   it("keeps disabled built-in experts in list with enabled false", () => {
-    setBuiltinExpertEnabled(root, "peer-reviewer", false);
+    setContentDisabled(root, "prismnext.core:peer-reviewer", true);
     const experts = listExperts(root);
     const disabled = experts.find((e) => e.id === "peer-reviewer");
     expect(disabled).toBeTruthy();
@@ -250,9 +244,9 @@ describe("experts-sync", () => {
     expect(sync.agentFiles).toContain("research-design-coach.md");
   });
 
-  it("resetAllBuiltinExpertsToDefaults re-enables disabled built-ins", () => {
-    setBuiltinExpertEnabled(root, "peer-reviewer", false);
-    resetAllBuiltinExpertsToDefaults(root);
+  it("resetCoreContentToDefaults re-enables disabled built-ins", () => {
+    setContentDisabled(root, "prismnext.core:peer-reviewer", true);
+    resetCoreContentToDefaults(root, ["prismnext.core:peer-reviewer"]);
     const expert = listExperts(root).find((e) => e.id === "peer-reviewer");
     expect(expert?.enabled).toBe(true);
   });

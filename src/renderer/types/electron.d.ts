@@ -1590,50 +1590,18 @@ export interface ElectronAPI {
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   expertsList: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertInfo[]>;
   orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorInfo[]>;
-  expertsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertsManifest>;
-  orchestratorsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorsManifest>;
   expertsGetDetail: (
     projectPath: string,
     expertId: string,
   ) => Promise<(import("@shared/agent-experts").ExpertInfo & { instructions: string }) | null>;
-  expertsSetBuiltinEnabled: (
-    projectPath: string,
-    expertId: string,
-    enabled: boolean,
-  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
   expertsSaveCustom: (
     projectPath: string,
     payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsSaveBuiltinOverride: (
-    projectPath: string,
-    payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
   ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
   expertsDeleteCustom: (
     projectPath: string,
     expertId: string,
   ) => Promise<{ experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  orchestratorsSetDefault: (
-    projectPath: string,
-    orchestratorId: string,
-  ) => Promise<{
-    manifest: import("@shared/agent-experts").OrchestratorsManifest;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
-  orchestratorsSaveBuiltinOverride: (
-    projectPath: string,
-    payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
-  ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
-  orchestratorsResetBuiltinOverride: (
-    projectPath: string,
-    orchestratorId: string,
-  ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
   orchestratorsGetDetail: (
     projectPath: string,
     orchestratorId: string,
@@ -1649,13 +1617,6 @@ export interface ElectronAPI {
     projectPath: string,
     orchestratorId: string,
   ) => Promise<{ orchestrators: import("@shared/agent-experts").OrchestratorInfo[] }>;
-  expertsResetBuiltinOverride: (
-    projectPath: string,
-    expertId: string,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsResetBuiltinsToDefaults: (
-    projectPath: string,
-  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;
@@ -1972,6 +1933,22 @@ export interface ElectronAPI {
   }>;
   packsUninstall: (projectRoot: string, packId: string) => Promise<void>;
   packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
+  packsSaveOverride: (
+    projectRoot: string,
+    fqid: string,
+    patch: import("../../shared/packs/types").ContentOverride,
+  ) => Promise<void>;
+  packsGetCoreState: (projectRoot: string) => Promise<{
+    defaultOrchestratorId: string | null;
+    coreExpertDisabledCount: number;
+    coreExpertOverrideCount: number;
+    coreOrchestratorDisabledCount: number;
+    coreOrchestratorOverrideCount: number;
+  }>;
+  packsResetCoreDefaults: (
+    projectRoot: string,
+    kind: "expert" | "orchestrator",
+  ) => Promise<void>;
   packsResolveBadge: (
     projectRoot: string,
     fqidOrId: string,

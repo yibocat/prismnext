@@ -76,10 +76,13 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     ...emptyProfileForm(),
     permissionPreset: "standard",
   });
+  // Fully-qualified id of the content being edited (needed by packs:* overrides).
+  const [contentFqid, setContentFqid] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
       setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
+      setContentFqid(null);
       setLoading(false);
       return;
     }
@@ -94,6 +97,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       try {
         if (isNew) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
+          setContentFqid(null);
           setLoading(false);
           return;
         }
@@ -106,6 +110,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           return;
         }
         setForm(formFromExpert(detail));
+        setContentFqid(detail.fqid ?? null);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.expert.toast.loadFailed"));
@@ -137,9 +142,8 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     try {
       const permission = permissionFromExpertPreset(form.permissionPreset);
 
-      if (builtinCustomize && form.id) {
-        await window.electronAPI.expertsSaveBuiltinOverride(projectRoot, {
-          expertId: form.id,
+      if (builtinCustomize && contentFqid) {
+        await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
           model: formatProfileModel(form.modelProvider, form.modelId),
           thoughtLevel: form.thoughtLevel.trim() || undefined,
           permission,
@@ -167,12 +171,21 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   }, [projectRoot, builtinCustomize, form, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
-    if (!projectRoot || !form.id || !builtinCustomize) return;
+    if (!projectRoot || !form.id || !builtinCustomize || !contentFqid) return;
     setSaving(true);
     try {
-      await window.electronAPI.expertsResetBuiltinOverride(projectRoot, form.id);
+      await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+        model: undefined,
+        thoughtLevel: undefined,
+        temperature: undefined,
+        modules: undefined,
+        permission: undefined,
+      });
       const full = await window.electronAPI.expertsGetDetail(projectRoot, form.id);
-      if (full) setForm(formFromExpert(full));
+      if (full) {
+        setForm(formFromExpert(full));
+        setContentFqid(full.fqid ?? null);
+      }
       toast.success(t("settings.editor.expert.toast.restoredDefaults"));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.resetFailed"));

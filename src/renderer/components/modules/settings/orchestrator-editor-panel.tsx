@@ -69,11 +69,14 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   const [form, setForm] = useState<ProfileFormState>(emptyProfileForm());
   const [allowedExperts, setAllowedExperts] = useState<string[]>([]);
   const [experts, setExperts] = useState<ExpertInfo[]>([]);
+  // Fully-qualified id of the content being edited (needed by packs:* overrides).
+  const [contentFqid, setContentFqid] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
       setForm(emptyProfileForm());
       setAllowedExperts([]);
+      setContentFqid(null);
       setLoading(false);
       return;
     }
@@ -99,6 +102,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         if (isNew) {
           setForm(emptyProfileForm());
           setAllowedExperts(enabledExpertIds);
+          setContentFqid(null);
           setLoading(false);
           return;
         }
@@ -122,6 +126,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
             thoughtLevel: detail.thoughtLevel ?? "",
           });
           setAllowedExperts(pruneAllowed(detail.allowedExperts));
+          setContentFqid(detail.fqid ?? null);
           setLoading(false);
           return;
         }
@@ -166,9 +171,8 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     try {
       const model = formatProfileModel(form.modelProvider, form.modelId);
 
-      if (builtinCustomize && form.id) {
-        await window.electronAPI.orchestratorsSaveBuiltinOverride(projectRoot, {
-          orchestratorId: form.id,
+      if (builtinCustomize && contentFqid) {
+        await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
           allowedExperts,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
@@ -198,10 +202,16 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   }, [projectRoot, builtinCustomize, form, allowedExperts, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
-    if (!projectRoot || !form.id || !builtinCustomize) return;
+    if (!projectRoot || !form.id || !builtinCustomize || !contentFqid) return;
     setSaving(true);
     try {
-      await window.electronAPI.orchestratorsResetBuiltinOverride(projectRoot, form.id);
+      await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+        allowedExperts: undefined,
+        model: undefined,
+        thoughtLevel: undefined,
+        temperature: undefined,
+        permission: undefined,
+      });
       toast.success(t("settings.editor.orchestrator.toast.restoredDefaults"));
       closePanel();
     } catch (err: unknown) {

@@ -12,6 +12,19 @@ import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import type { ExpertInfo, OrchestratorInfo } from "@shared/agent-experts";
+import type { BadgeInfo } from "@shared/packs/types";
+
+interface CoreState {
+  defaultOrchestratorId: string | null;
+  coreExpertDisabledCount: number;
+  coreExpertOverrideCount: number;
+}
+
+const EMPTY_CORE_STATE: CoreState = {
+  defaultOrchestratorId: null,
+  coreExpertDisabledCount: 0,
+  coreExpertOverrideCount: 0,
+};
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -63,13 +76,18 @@ function sortOrchestrators(orchestrators: OrchestratorInfo[]): OrchestratorInfo[
   return [...orchestrators].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function builtinsDifferFromManifest(manifest: {
-  disabledBuiltinIds?: string[];
-  builtinOverrides?: Record<string, unknown>;
-}): boolean {
-  if ((manifest.disabledBuiltinIds?.length ?? 0) > 0) return true;
-  if (manifest.builtinOverrides && Object.keys(manifest.builtinOverrides).length > 0) return true;
-  return false;
+function expertsBuiltinsModified(coreState: CoreState | null): boolean {
+  if (!coreState) return false;
+  return coreState.coreExpertDisabledCount + coreState.coreExpertOverrideCount > 0;
+}
+
+/** Origin badge: core pack → "Builtin"; other packs → their pack name (spec §9.3). */
+function renderBadge(badge: BadgeInfo | null | undefined, t: TFunction) {
+  if (!badge) return null;
+  if (badge.packId === "prismnext.core") {
+    return <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("settings.agent.builtin")}</span>;
+  }
+  return <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{badge.packName}</span>;
 }
 
 export function AgentSettings() {
@@ -77,41 +95,61 @@ export function AgentSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const [experts, setExperts] = useState<ExpertInfo[]>([]);
   const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([]);
-  const [defaultOrchestratorId, setDefaultOrchestratorId] = useState("research-prism");
-  const [expertsBuiltinsModified, setExpertsBuiltinsModified] = useState(false);
+  const [defaultOrchestratorId, setDefaultOrchestratorId] = useState<string | null>(null);
+  const [coreState, setCoreState] = useState<CoreState | null>(null);
+  const [badges, setBadges] = useState<Record<string, BadgeInfo | null>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const rowDeleteConfirm = useInlineDeleteConfirm();
   const expertResetConfirm = useInlineDeleteConfirm();
 
+  const loadBadges = useCallback(
+    async (projectRootArg: string, items: Array<{ fqid?: string; id: string }>) => {
+      const entries = await Promise.all(
+        items.map(async (item) => {
+          const key = item.fqid ?? item.id;
+          const badge = await window.electronAPI.packsResolveBadge(projectRootArg, key);
+          return [key, badge] as const;
+        }),
+      );
+      setBadges(Object.fromEntries(entries));
+    },
+    [],
+  );
+
   const loadAll = useCallback(async (options?: { silent?: boolean }) => {
     if (!projectRoot) {
       setExperts([]);
       setOrchestrators([]);
-      setDefaultOrchestratorId("research-prism");
-      setExpertsBuiltinsModified(false);
+      setDefaultOrchestratorId(null);
+      setCoreState(null);
+      setBadges({});
       return;
     }
     if (!options?.silent) setLoading(true);
     try {
-      const [expertList, expertManifest, orchestratorList, orchestratorManifest] = await Promise.all([
+      const [expertList, orchestratorList, coreStateResult] = await Promise.all([
         window.electronAPI.expertsList(projectRoot),
-        window.electronAPI.expertsGetManifest(projectRoot),
         window.electronAPI.orchestratorsList(projectRoot),
-        window.electronAPI.orchestratorsGetManifest(projectRoot),
+        window.electronAPI.packsGetCoreState(projectRoot),
       ]);
       setExperts(sortExperts(expertList));
       setOrchestrators(sortOrchestrators(orchestratorList));
-      setDefaultOrchestratorId(orchestratorManifest.defaultOrchestratorId ?? "research-prism");
-      setExpertsBuiltinsModified(builtinsDifferFromManifest(expertManifest));
+      setCoreState(coreStateResult);
+      setDefaultOrchestratorId(coreStateResult.defaultOrchestratorId ?? "research-prism");
+      await loadBadges(projectRoot, [
+        ...expertList.map((e) => ({ fqid: e.fqid, id: e.id })),
+        ...orchestratorList.map((o) => ({ fqid: o.fqid, id: o.id })),
+      ]);
     } catch {
       setExperts([]);
       setOrchestrators([]);
-      setExpertsBuiltinsModified(false);
+      setCoreState(null);
+      setBadges({});
     } finally {
       if (!options?.silent) setLoading(false);
     }
-  }, [projectRoot]);
+  }, [projectRoot, loadBadges]);
 
   useEffect(() => {
     void loadAll();
@@ -183,9 +221,7 @@ export function AgentSettings() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={ROW_LABEL}>{orchestrator.name}</span>
-                            {orchestrator.builtin ? (
-                              <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("settings.agent.builtin")}</span>
-                            ) : null}
+                            {renderBadge(badges[orchestrator.fqid ?? orchestrator.id], t)}
                             {isDefault ? (
                               <span className={cn(BADGE, "bg-primary/10 text-primary")}>Default</span>
                             ) : null}
@@ -203,16 +239,14 @@ export function AgentSettings() {
                               disabled={saving}
                               onClick={() => {
                                 void (async () => {
-                                  if (!projectRoot) return;
+                                  if (!projectRoot || !orchestrator.fqid) return;
                                   setSaving(true);
                                   try {
-                                    const result = await window.electronAPI.orchestratorsSetDefault(
+                                    await window.electronAPI.packsSetDefaultOrchestrator(
                                       projectRoot,
-                                      orchestrator.id,
+                                      orchestrator.fqid,
                                     );
-                                    setDefaultOrchestratorId(
-                                      result.manifest.defaultOrchestratorId ?? orchestrator.id,
-                                    );
+                                    setDefaultOrchestratorId(orchestrator.id);
                                     toast.success(t("settings.agent.toast.defaultOrchestratorUpdated"));
                                   } finally {
                                     setSaving(false);
@@ -274,10 +308,8 @@ export function AgentSettings() {
                         if (!projectRoot) return;
                         setSaving(true);
                         try {
-                          const { manifest, experts: nextExperts } =
-                            await window.electronAPI.expertsResetBuiltinsToDefaults(projectRoot);
-                          setExperts(sortExperts(nextExperts));
-                          setExpertsBuiltinsModified(builtinsDifferFromManifest(manifest));
+                          await window.electronAPI.packsResetCoreDefaults(projectRoot, "expert");
+                          await loadAll({ silent: true });
                           expertResetConfirm.clearPending();
                         } finally {
                           setSaving(false);
@@ -291,7 +323,7 @@ export function AgentSettings() {
                       variant="ghost"
                       size="xs"
                       className="text-muted-foreground"
-                      disabled={saving || !expertsBuiltinsModified}
+                      disabled={saving || !expertsBuiltinsModified(coreState)}
                       onClick={() => expertResetConfirm.setPendingId(BUILTIN_EXPERTS_RESET_ID)}
                     >
                       <RotateCcwIcon className="size-3 mr-1" />
@@ -323,9 +355,7 @@ export function AgentSettings() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={ROW_LABEL}>{expert.name}</span>
-                          {expert.builtin ? (
-                            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("settings.agent.builtin")}</span>
-                          ) : null}
+                          {renderBadge(badges[expert.fqid ?? expert.id], t)}
                         </div>
                         <p className={ROW_DESC}>{expert.description}</p>
                         <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
@@ -338,7 +368,7 @@ export function AgentSettings() {
                             checked={expert.enabled}
                             onCheckedChange={(enabled) => {
                               void (async () => {
-                                if (!projectRoot) return;
+                                if (!projectRoot || !expert.fqid) return;
                                 const prevExperts = experts;
                                 setExperts((current) =>
                                   sortExperts(
@@ -348,14 +378,17 @@ export function AgentSettings() {
                                   ),
                                 );
                                 try {
-                                  const { manifest, experts: nextExperts } =
-                                    await window.electronAPI.expertsSetBuiltinEnabled(
-                                      projectRoot,
-                                      expert.id,
-                                      enabled,
-                                    );
+                                  await window.electronAPI.packsSetContentEnabled(
+                                    projectRoot,
+                                    expert.fqid,
+                                    enabled,
+                                  );
+                                  const [nextExperts, coreStateResult] = await Promise.all([
+                                    window.electronAPI.expertsList(projectRoot),
+                                    window.electronAPI.packsGetCoreState(projectRoot),
+                                  ]);
                                   setExperts(sortExperts(nextExperts));
-                                  setExpertsBuiltinsModified(builtinsDifferFromManifest(manifest));
+                                  setCoreState(coreStateResult);
                                 } catch (err: unknown) {
                                   setExperts(prevExperts);
                                   toast.error(

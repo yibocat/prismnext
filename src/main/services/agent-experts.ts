@@ -33,7 +33,7 @@ export interface OrchestratorDefinition {
 }
 
 export interface ExpertInfo extends ExpertDefinition {
-  /** 全限定 id（`packId:contentId`）；facade 恒定提供，渲染/IPC 无需关心 */
+  /** Fully-qualified id (`packId:contentId`); the facade always fills it, so render/IPC need not care. */
   fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
@@ -41,22 +41,11 @@ export interface ExpertInfo extends ExpertDefinition {
 }
 
 export interface OrchestratorInfo extends OrchestratorDefinition {
-  /** 全限定 id（`packId:contentId`）；facade 恒定提供 */
+  /** Fully-qualified id (`packId:contentId`); the facade always fills it. */
   fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
   effectiveModules: string[];
-}
-
-export interface ExpertsManifest {
-  disabledBuiltinIds?: string[];
-  builtinOverrides?: Record<string, Partial<ExpertDefinition>>;
-}
-
-export interface OrchestratorsManifest {
-  defaultOrchestratorId?: string;
-  disabledBuiltinIds?: string[];
-  builtinOverrides?: Record<string, Partial<OrchestratorDefinition>>;
 }
 
 export interface PrismExpertsSyncState {
@@ -79,23 +68,6 @@ export interface SaveCustomExpertPayload {
   thoughtLevel?: string;
   temperature?: number;
   modules?: string[];
-  permission?: Record<string, unknown>;
-}
-
-export interface SaveBuiltinExpertOverridePayload {
-  expertId: string;
-  model?: string;
-  thoughtLevel?: string;
-  temperature?: number;
-  permission?: Record<string, unknown>;
-}
-
-export interface SaveBuiltinOrchestratorOverridePayload {
-  orchestratorId: string;
-  allowedExperts?: string[];
-  model?: string;
-  thoughtLevel?: string;
-  temperature?: number;
   permission?: Record<string, unknown>;
 }
 

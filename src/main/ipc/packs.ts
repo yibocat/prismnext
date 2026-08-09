@@ -1,8 +1,9 @@
-// prism-next/src/main/ipc/packs.ts
-// Pack 生命周期 IPC（§9.5）：listCatalog / install / setEnabled / uninstall /
-// setContentEnabled / resolveBadge / getContentView / setDefaultOrchestrator。
+// Pack lifecycle IPC (spec §9.5): listCatalog / install / setEnabled / uninstall /
+// setContentEnabled / saveOverride / resetCoreDefaults / getCoreState /
+// resolveBadge / getContentView / setDefaultOrchestrator.
 import { ipcMain } from "electron";
-import type { ContentKind, Fqid } from "../../shared/packs/types";
+import { CORE_PACK_ID } from "../../shared/packs/types";
+import type { ContentKind, ContentOverride, Fqid } from "../../shared/packs/types";
 import { getPackContents } from "../services/pack-catalog";
 import {
   isContentActive,
@@ -16,7 +17,14 @@ import {
   setPackEnabledFlow,
   uninstallPack,
 } from "../services/packs-lifecycle";
-import { setContentDisabled, setDefaultOrchestratorFqid } from "../services/packs-state";
+import {
+  getCoreContentModificationState,
+  readPacksState,
+  resetCoreContentToDefaults,
+  saveContentOverride,
+  setContentDisabled,
+  setDefaultOrchestratorFqid,
+} from "../services/packs-state";
 
 function requireProjectRoot(projectRoot: string | null | undefined): string {
   if (!projectRoot) throw new Error("No project root");
@@ -61,7 +69,7 @@ export function registerPacksHandlers(): void {
     },
   );
 
-  // badge 唯一来源（§9.3 治 P10）：FQID 或裸 id
+  // Badge single source (spec §9.3, fixes P10): FQID or bare id.
   ipcMain.handle(
     "packs:resolveBadge",
     async (_event, args?: { projectRoot?: string | null; fqidOrId?: string }) => {
@@ -70,7 +78,7 @@ export function registerPacksHandlers(): void {
     },
   );
 
-  // 设置页分组数据（§9.2 行展开 = pack 内容项清单）
+  // Settings grouped data (spec §9.2: expanded pack row = its content items).
   ipcMain.handle(
     "packs:getContentView",
     async (_event, args?: { projectRoot?: string | null; kind?: string }) => {
@@ -81,7 +89,73 @@ export function registerPacksHandlers(): void {
     },
   );
 
-  // catalog 级内容扫描（不要求安装；详情页展示「这个 pack 里有什么」用）
+  // Save an override for a content item (Phase 6: replaces legacy
+  // `experts:saveBuiltinOverride` / `orchestrators:saveBuiltinOverride`).
+  // An all-undefined patch removes the override (single-item reset).
+  ipcMain.handle(
+    "packs:saveOverride",
+    async (
+      _event,
+      args: { projectRoot: string; fqid: Fqid; patch: ContentOverride },
+    ) => {
+      const root = requireProjectRoot(args.projectRoot);
+      if (!args.fqid || typeof args.patch !== "object" || args.patch === null) {
+        throw new Error("Invalid override payload");
+      }
+      saveContentOverride(root, args.fqid, args.patch);
+      notifyPacksChanged(root);
+    },
+  );
+
+  // Core content modification state + default orchestrator (drives the
+  // "Reset to defaults" availability and the Default badge). Replaces the
+  // legacy `experts:getManifest` / `orchestrators:getManifest` consumers.
+  ipcMain.handle(
+    "packs:getCoreState",
+    async (_event, args?: { projectRoot?: string | null }) => {
+      if (!args?.projectRoot) return null;
+      const root = args.projectRoot;
+      const state = readPacksState(root);
+      const coreExperts = listContent(root, "expert").filter((c) => c.packId === CORE_PACK_ID);
+      const coreOrchs = listContent(root, "orchestrator").filter((c) => c.packId === CORE_PACK_ID);
+      const expertState = getCoreContentModificationState(
+        root,
+        coreExperts.map((c) => c.fqid),
+      );
+      const orchState = getCoreContentModificationState(
+        root,
+        coreOrchs.map((c) => c.fqid),
+      );
+      const defaultOrch = coreOrchs.find((c) => c.fqid === state.defaultOrchestrator);
+      return {
+        defaultOrchestratorId: defaultOrch?.id ?? null,
+        coreExpertDisabledCount: expertState.disabledCount,
+        coreExpertOverrideCount: expertState.overrideCount,
+        coreOrchestratorDisabledCount: orchState.disabledCount,
+        coreOrchestratorOverrideCount: orchState.overrideCount,
+      };
+    },
+  );
+
+  // Factory-reset core content of a kind (Phase 6: replaces legacy
+  // `experts:resetBuiltinsToDefaults`). The IPC layer resolves the kind-aware
+  // core FQID set from the resolver view so packs-state stays storage-only.
+  ipcMain.handle(
+    "packs:resetCoreDefaults",
+    async (_event, args: { projectRoot: string; kind: "expert" | "orchestrator" }) => {
+      const root = requireProjectRoot(args.projectRoot);
+      if (args.kind !== "expert" && args.kind !== "orchestrator") {
+        throw new Error("Invalid kind");
+      }
+      const fqids = listContent(root, args.kind)
+        .filter((c) => c.packId === CORE_PACK_ID)
+        .map((c) => c.fqid);
+      resetCoreContentToDefaults(root, fqids);
+      notifyPacksChanged(root);
+    },
+  );
+
+  // Catalog-level content scan (no install required; detail view "what's in this pack").
   ipcMain.handle("packs:getPackContents", async (_event, args?: { packId?: string }) => {
     if (!args?.packId) return [];
     try {
@@ -91,7 +165,7 @@ export function registerPacksHandlers(): void {
     }
   });
 
-  // §9.4 联动 UX 的确认动作：目标必须当前激活才允许设为默认
+  // Spec §9.4 link UX confirm: target must be currently active to become default.
   ipcMain.handle(
     "packs:setDefaultOrchestrator",
     async (_event, args: { projectRoot: string; fqid: Fqid }) => {

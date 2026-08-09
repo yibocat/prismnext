@@ -35,13 +35,9 @@ import type { PromptContext } from "../prompts/types";
 import {
   type ExpertDefinition,
   type ExpertInfo,
-  type ExpertsManifest,
   type OrchestratorDefinition,
   type OrchestratorInfo,
-  type OrchestratorsManifest,
   type PrismExpertsSyncState,
-  type SaveBuiltinExpertOverridePayload,
-  type SaveBuiltinOrchestratorOverridePayload,
   type SaveCustomExpertPayload,
   type SaveCustomOrchestratorPayload,
   DEFAULT_ORCHESTRATOR_ID,
@@ -255,60 +251,6 @@ function resolveAllowedRefs(
     refs.push({ id: base, name: winner.name, description: winner.description });
   }
   return refs;
-}
-
-// ── legacy manifest 适配器（IPC 契约不变；存储 = packs.json）──
-
-function coreKindOf(projectRoot: string, fqid: Fqid): "expert" | "orchestrator" | null {
-  const content = getContent(projectRoot, fqid);
-  if (!content || content.packId !== CORE_PACK_ID) return null;
-  if (content.kind === "expert" || content.kind === "orchestrator") return content.kind;
-  return null;
-}
-
-function bareOverridesOfKind(
-  projectRoot: string,
-  kind: "expert" | "orchestrator",
-): Record<string, Partial<ExpertDefinition> & Partial<OrchestratorDefinition>> | undefined {
-  const state = readPacksState(projectRoot);
-  const out: Record<string, Partial<ExpertDefinition> & Partial<OrchestratorDefinition>> = {};
-  for (const [fqid, override] of Object.entries(state.contentOverrides)) {
-    if (coreKindOf(projectRoot, fqid) !== kind) continue;
-    const parsed = parseFqid(fqid);
-    if (!parsed) continue;
-    out[parsed.contentId] = { ...override };
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-function disabledCoreBareOfKind(projectRoot: string, kind: "expert" | "orchestrator"): string[] {
-  const state = readPacksState(projectRoot);
-  const out: string[] = [];
-  for (const fqid of state.disabledContent) {
-    if (coreKindOf(projectRoot, fqid) !== kind) continue;
-    const parsed = parseFqid(fqid);
-    if (parsed) out.push(parsed.contentId);
-  }
-  return out;
-}
-
-/** legacy `ExpertsManifest` 视图（适配 packs.json；写操作见下方各 setter）。 */
-export function readExpertsManifest(projectRoot: string): ExpertsManifest {
-  return {
-    disabledBuiltinIds: disabledCoreBareOfKind(projectRoot, "expert"),
-    builtinOverrides: bareOverridesOfKind(projectRoot, "expert"),
-  };
-}
-
-/** legacy `OrchestratorsManifest` 视图（适配 packs.json）。 */
-export function readOrchestratorsManifest(projectRoot: string): OrchestratorsManifest {
-  const state = readPacksState(projectRoot);
-  const parsed = state.defaultOrchestrator ? parseFqid(state.defaultOrchestrator) : null;
-  return {
-    defaultOrchestratorId: parsed?.contentId ?? DEFAULT_ORCHESTRATOR_ID,
-    disabledBuiltinIds: disabledCoreBareOfKind(projectRoot, "orchestrator"),
-    builtinOverrides: bareOverridesOfKind(projectRoot, "orchestrator"),
-  };
 }
 
 // ── instructions 读取 ───────────────────────────────────────
@@ -827,127 +769,10 @@ export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: st
   }
 }
 
-// ── core 内容的状态操作（旧 builtin 契约 → packs.json）────────
-
-function requireCoreContent(
-  projectRoot: string,
-  kind: "expert" | "orchestrator",
-  bareId: string,
-  label: string,
-): ResolvedContent {
-  const content = getContent(projectRoot, toFqid(CORE_PACK_ID, bareId));
-  if (!content || content.kind !== kind) {
-    throw new Error(`Built-in ${label} not found: ${bareId}`);
-  }
-  return content;
-}
-
-export function setBuiltinExpertEnabled(
-  projectRoot: string,
-  expertId: string,
-  enabled: boolean,
-): void {
-  const content = requireCoreContent(projectRoot, "expert", expertId, "expert");
-  setContentDisabled(projectRoot, content.fqid, !enabled);
-}
-
-export function saveBuiltinExpertOverride(
-  projectRoot: string,
-  payload: SaveBuiltinExpertOverridePayload,
-): ExpertInfo {
-  const content = requireCoreContent(projectRoot, "expert", payload.expertId, "expert");
-  const patch: Record<string, unknown> = {};
-  if (payload.model !== undefined) patch.model = payload.model;
-  if (payload.thoughtLevel !== undefined) patch.thoughtLevel = payload.thoughtLevel;
-  if (payload.temperature !== undefined) patch.temperature = payload.temperature;
-  if (payload.permission !== undefined) patch.permission = payload.permission;
-  saveContentOverride(projectRoot, content.fqid, patch);
-
-  const saved = getExpert(projectRoot, payload.expertId);
-  if (!saved) throw new Error(`Failed to save built-in expert override "${payload.expertId}"`);
-  return saved;
-}
-
-export function resetBuiltinExpertOverride(
-  projectRoot: string,
-  expertId: string,
-): ExpertInfo {
-  const content = requireCoreContent(projectRoot, "expert", expertId, "expert");
-  saveContentOverride(projectRoot, content.fqid, {
-    model: undefined,
-    thoughtLevel: undefined,
-    temperature: undefined,
-    modules: undefined,
-    allowedExperts: undefined,
-    permission: undefined,
-  });
-
-  const saved = getExpert(projectRoot, expertId);
-  if (!saved) throw new Error(`Built-in expert not found: ${expertId}`);
-  return saved;
-}
-
-export function resetAllBuiltinExpertsToDefaults(projectRoot: string): ExpertsManifest {
-  const state = readPacksState(projectRoot);
-  const isCoreExpert = (fqid: string) => coreKindOf(projectRoot, fqid) === "expert";
-  const next = {
-    ...state,
-    disabledContent: state.disabledContent.filter((fqid) => !isCoreExpert(fqid)),
-    contentOverrides: Object.fromEntries(
-      Object.entries(state.contentOverrides).filter(([fqid]) => !isCoreExpert(fqid)),
-    ),
-  };
-  writePacksState(projectRoot, next);
-  return { disabledBuiltinIds: [], builtinOverrides: undefined };
-}
-
-export function setDefaultOrchestrator(projectRoot: string, orchestratorId: string): void {
-  const found = getOrchestrator(projectRoot, orchestratorId);
-  if (!found?.enabled) throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
-  setDefaultOrchestratorFqid(projectRoot, found.fqid!);
-}
-
-export function saveBuiltinOrchestratorOverride(
-  projectRoot: string,
-  payload: SaveBuiltinOrchestratorOverridePayload,
-): OrchestratorInfo {
-  const content = requireCoreContent(projectRoot, "orchestrator", payload.orchestratorId, "orchestrator");
-  const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
-  const patch: Record<string, unknown> = {};
-  if (payload.allowedExperts !== undefined) {
-    patch.allowedExperts = pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds) ?? [];
-  }
-  if (payload.model !== undefined) patch.model = payload.model;
-  if (payload.thoughtLevel !== undefined) patch.thoughtLevel = payload.thoughtLevel;
-  if (payload.temperature !== undefined) patch.temperature = payload.temperature;
-  if (payload.permission !== undefined) patch.permission = payload.permission;
-  saveContentOverride(projectRoot, content.fqid, patch);
-
-  const saved = getOrchestrator(projectRoot, payload.orchestratorId);
-  if (!saved) {
-    throw new Error(`Failed to save built-in orchestrator override "${payload.orchestratorId}"`);
-  }
-  return saved;
-}
-
-export function resetBuiltinOrchestratorOverride(
-  projectRoot: string,
-  orchestratorId: string,
-): OrchestratorInfo {
-  const content = requireCoreContent(projectRoot, "orchestrator", orchestratorId, "orchestrator");
-  saveContentOverride(projectRoot, content.fqid, {
-    model: undefined,
-    thoughtLevel: undefined,
-    temperature: undefined,
-    modules: undefined,
-    allowedExperts: undefined,
-    permission: undefined,
-  });
-
-  const saved = getOrchestrator(projectRoot, orchestratorId);
-  if (!saved) throw new Error(`Built-in orchestrator not found: ${orchestratorId}`);
-  return saved;
-}
+// Core content state operations (Phase 6): these moved to the packs IPC
+// surface (`packs:saveOverride` / `packs:setContentEnabled` /
+// `packs:resetCoreDefaults` / `packs:getCoreState`), implemented storage-only
+// in packs-state.ts. The legacy builtin manifest contract is gone.
 
 // ── 详情视图（IPC 契约）─────────────────────────────────────
 

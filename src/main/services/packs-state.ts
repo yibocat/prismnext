@@ -960,6 +960,51 @@ export function setDefaultOrchestratorFqid(projectRoot: string, fqid: Fqid): Pac
   return next;
 }
 
+// ── core 内容的状态查询与重置（Phase 6：取代旧 builtin manifest 契约）──
+//
+// FQID (`packId:contentId`) does not encode content kind, so kind filtering
+// must consult the resolver view (listContent). packs-state stays storage-only
+// and does NOT import the resolver to avoid a circular dependency; these two
+// helpers take the list of matching FQIDs as an argument.
+
+/** Count disabled/overridden entries from the given core FQID set. */
+export function getCoreContentModificationState(
+  projectRoot: string,
+  coreFqids: readonly Fqid[],
+): { disabledCount: number; overrideCount: number } {
+  const state = readPacksState(projectRoot);
+  const disabled = new Set(state.disabledContent);
+  const overridden = new Set(Object.keys(state.contentOverrides));
+  let disabledCount = 0;
+  let overrideCount = 0;
+  for (const fqid of coreFqids) {
+    if (disabled.has(fqid)) disabledCount += 1;
+    if (overridden.has(fqid)) overrideCount += 1;
+  }
+  return { disabledCount, overrideCount };
+}
+
+/**
+ * Clear disabledContent entries and contentOverrides for the given core FQID
+ * set (factory reset). Replaces the legacy `resetAllBuiltinExpertsToDefaults`.
+ */
+export function resetCoreContentToDefaults(
+  projectRoot: string,
+  coreFqids: readonly Fqid[],
+): PacksState {
+  const state = readPacksState(projectRoot);
+  const targets = new Set(coreFqids);
+  const next = {
+    ...state,
+    disabledContent: state.disabledContent.filter((fqid) => !targets.has(fqid)),
+    contentOverrides: Object.fromEntries(
+      Object.entries(state.contentOverrides).filter(([fqid]) => !targets.has(fqid)),
+    ),
+  };
+  writePacksState(projectRoot, next);
+  return next;
+}
+
 // ── legacy-backup 清理（spec §11 Phase 6）────────────────────────────
 //
 // 迁移备份目录 `<projectRoot>/.prismnext/agent/legacy-backup-<YYYY-MM-DD>/`
