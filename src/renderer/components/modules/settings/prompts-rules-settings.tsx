@@ -172,6 +172,7 @@ export function PromptsRulesSettings() {
   const [stackSummary, setStackSummary] = useState<{
     stableTokens: number;
     sectionCount: number;
+    orchestratorName?: string;
   } | null>(null);
   const [agentsMdLength, setAgentsMdLength] = useState(0);
   const [hasAgentsMd, setHasAgentsMd] = useState(false);
@@ -194,6 +195,7 @@ export function PromptsRulesSettings() {
       setStackSummary({
         stableTokens: stable?.tokenCount ?? 0,
         sectionCount: stack.sections.length,
+        orchestratorName: stack.orchestratorName,
       });
     } catch {
       setStackSummary(null);
@@ -237,6 +239,17 @@ export function PromptsRulesSettings() {
   useEffect(() => {
     void refreshSummaries();
   }, [refreshSummaries]);
+
+  // Live-update when main process re-syncs experts (e.g. the default main
+  // agent changed) — otherwise the base-agent summary stays stale until the
+  // page is reopened or a settings editor closes.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onExpertsIntegrationChanged(({ projectPath }) => {
+      if (!projectRoot || projectPath !== projectRoot) return;
+      void refreshSummaries();
+    });
+    return unsubscribe;
+  }, [projectRoot, refreshSummaries]);
 
   useOnSettingsEditorKindsClosed(["prompt-markdown", "prompt-stack-preview", "rule-markdown"], () => {
     void refreshSummaries();
@@ -379,6 +392,13 @@ export function PromptsRulesSettings() {
                       })
                     : t("settings.prompts.rowDesc.openForStack")}
                 </p>
+                {stackSummary?.orchestratorName ? (
+                  <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
+                    {t("settings.prompts.stackBaseAgent", {
+                      name: stackSummary.orchestratorName,
+                    })}
+                  </p>
+                ) : null}
               </div>
               <Button
                 variant="ghost"

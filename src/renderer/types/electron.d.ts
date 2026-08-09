@@ -1597,6 +1597,7 @@ export interface ElectronAPI {
   expertsSaveCustom: (
     projectPath: string,
     payload: import("@shared/agent-experts").SaveCustomExpertPayload,
+    targetPackId?: string,
   ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
   expertsDeleteCustom: (
     projectPath: string,
@@ -1609,6 +1610,7 @@ export interface ElectronAPI {
   orchestratorsSaveCustom: (
     projectPath: string,
     payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
+    targetPackId?: string,
   ) => Promise<{
     orchestrator: import("@shared/agent-experts").OrchestratorInfo;
     orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
@@ -1815,7 +1817,7 @@ export interface ElectronAPI {
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
   onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
-
+  onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
   // Settings operations
   settingsGet: () => Promise<{
     aiModel: string;
@@ -1920,7 +1922,7 @@ export interface ElectronAPI {
     projectRoot: string,
     packId: string,
   ) => Promise<{
-    record: import("../../shared/packs/types").PackRecord;
+    applied?: boolean;
     suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
   }>;
   packsSetEnabled: (
@@ -1928,8 +1930,9 @@ export interface ElectronAPI {
     packId: string,
     enabled: boolean,
   ) => Promise<{
-    record: import("../../shared/packs/types").PackRecord;
     suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
+    /** 停用该 pack 时，默认主 agent 若属于它 → 已转移回 core 默认 */
+    defaultMovedTo?: import("../../shared/packs/types").Fqid;
   }>;
   packsUninstall: (projectRoot: string, packId: string) => Promise<void>;
   packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
@@ -1940,6 +1943,7 @@ export interface ElectronAPI {
   ) => Promise<void>;
   packsGetCoreState: (projectRoot: string) => Promise<{
     defaultOrchestratorId: string | null;
+    defaultOrchestratorFqid: string | null;
     coreExpertDisabledCount: number;
     coreExpertOverrideCount: number;
     coreOrchestratorDisabledCount: number;
@@ -1964,6 +1968,19 @@ export interface ElectronAPI {
     name: string;
     description: string;
   }[]>;
+  packsListProjectMcps: (
+    projectRoot: string,
+  ) => Promise<import("../../shared/packs/types").ResolvedMcp[]>;
+
+  // User teams (app-level, like installed teams)
+  userPacksList: () => Promise<
+    Array<{ packId: string; name: string; description: string; version: string }>
+  >;
+  userPacksCreate: (
+    name: string,
+    description?: string,
+  ) => Promise<{ packId: string; name: string; description: string; version: string }>;
+  userPacksDelete: (packId: string) => Promise<void>;
 
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;

@@ -935,7 +935,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	expertsSaveCustom: (
 		projectPath: string,
 		payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload }),
+		targetPackId?: string,
+	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload, targetPackId }),
 	expertsDeleteCustom: (projectPath: string, expertId: string) =>
 		ipcRenderer.invoke("experts:deleteCustom", { projectPath, expertId }),
 	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
@@ -943,7 +944,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	orchestratorsSaveCustom: (
 		projectPath: string,
 		payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
-	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload }),
+		targetPackId?: string,
+	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetPackId }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
 	chatSend: (args: {
@@ -1221,6 +1223,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("packs:setDefaultOrchestrator", { projectRoot, fqid }),
 	packsGetPackContents: (packId: string) =>
 		ipcRenderer.invoke("packs:getPackContents", { packId }),
+	packsListProjectMcps: (projectRoot: string) =>
+		ipcRenderer.invoke("packs:listProjectMcps", { projectRoot }),
+
+	// User teams (app-level, like installed teams)
+	userPacksList: () =>
+		ipcRenderer.invoke("userPacks:list") as Promise<
+			Array<{ packId: string; name: string; description: string; version: string }>
+		>,
+	userPacksCreate: (name: string, description?: string) =>
+		ipcRenderer.invoke("userPacks:create", { name, description }) as Promise<{
+			packId: string;
+			name: string;
+			description: string;
+			version: string;
+		}>,
+	userPacksDelete: (packId: string) =>
+		ipcRenderer.invoke("userPacks:delete", { packId }),
 
 	// Workspace operations
 	workspaceGetConfig: (projectRoot: string) =>
@@ -1464,6 +1483,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
 		ipcRenderer.on("skills:integrationChanged", handler);
 		return () => ipcRenderer.removeListener("skills:integrationChanged", handler);
+	},
+	onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
+		ipcRenderer.on("experts:integrationChanged", handler);
+		return () => ipcRenderer.removeListener("experts:integrationChanged", handler);
 	},
 
 	// Log system

@@ -1,4 +1,4 @@
-// Plugins Center（§9.1 浏览页）—— LeftSidebar Nav 的沉浸式页面。
+// Teams Center（§9.1 浏览页）—— LeftSidebar Nav 的沉浸式页面。
 // 布局完全对齐 TemplateCenter：max-w-6xl 容器 + 页头 + 左侧栏（分类/
 // 信息）+ 右侧 @container（搜索 + 卡片网格 / 详情），卡片用 shadcn Card
 // + muted 图标带，按钮 shadow-none，全页无彩色元素。
@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import type { ContentKind, Fqid, ProjectPackView } from "@shared/packs/types";
 import { PackIcon } from "./pack-icon";
 
-export interface PluginsCenterProps {
+export interface TeamsCenterProps {
   onBack: () => void;
 }
 
@@ -42,16 +42,45 @@ interface PackContentEntry {
 const KIND_ORDER: ContentKind[] = ["orchestrator", "expert", "skill", "command", "mcp"];
 
 const KIND_META: Record<ContentKind, { icon: typeof Bot; labelKey: string }> = {
-  orchestrator: { icon: Bot, labelKey: "pluginsCenter.kinds.orchestrator" },
-  expert: { icon: SparklesIcon, labelKey: "pluginsCenter.kinds.expert" },
-  skill: { icon: PuzzleIcon, labelKey: "pluginsCenter.kinds.skill" },
-  command: { icon: SlashIcon, labelKey: "pluginsCenter.kinds.command" },
-  mcp: { icon: PlugIcon, labelKey: "pluginsCenter.kinds.mcp" },
+  orchestrator: { icon: Bot, labelKey: "teamsCenter.kinds.orchestrator" },
+  expert: { icon: SparklesIcon, labelKey: "teamsCenter.kinds.expert" },
+  skill: { icon: PuzzleIcon, labelKey: "teamsCenter.kinds.skill" },
+  command: { icon: SlashIcon, labelKey: "teamsCenter.kinds.command" },
+  mcp: { icon: PlugIcon, labelKey: "teamsCenter.kinds.mcp" },
 };
 
 type Filter = "all" | "installed" | `cat:${string}`;
 
-export function PluginsCenter({ onBack }: PluginsCenterProps) {
+/**
+ * §6.3 状态矩阵（layering spec）→ 卡片/详情显示态。
+ * - installed && enabled                    → 已安装·启用中
+ * - installed && !enabled && locked         → 已安装·Pro 锁定（授权失效，提示重新激活）
+ * - installed && !enabled && !locked        → 已安装·已停用（项目停用）
+ * - !installed && locked                    → Pro 锁定（不可装）
+ * - !installed && !locked                   → 可安装
+ */
+type PackDisplayState =
+  | "installedActive"
+  | "installedDisabled"
+  | "installedProLocked"
+  | "proLocked"
+  | "installable";
+
+function packDisplayState(pack: ProjectPackView): PackDisplayState {
+  if (pack.installed) {
+    if (pack.enabled) return "installedActive";
+    return pack.locked ? "installedProLocked" : "installedDisabled";
+  }
+  return pack.locked ? "proLocked" : "installable";
+}
+
+/** Deep-link to Settings → About (Pro activation surface). */
+function goActivate(): void {
+  useLayoutStore.getState().setLeftSidebarView("settings");
+  useLayoutStore.getState().setSettingsCategory("about");
+}
+
+export function TeamsCenter({ onBack }: TeamsCenterProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   // §8.5：license 激活/清除 → main 侧门控即时翻转，Gallery 重新拉 catalog
@@ -96,15 +125,15 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
         projectRoot,
         pack.manifest.id,
       );
-      toast.success(t("pluginsCenter.toast.installed", { name: pack.manifest.name }));
+      toast.success(t("teamsCenter.toast.installed", { name: pack.manifest.name }));
       if (suggestedOrchestrator) {
-        toast(t("pluginsCenter.suggestion.text", { pack: pack.manifest.name }), {
+        toast(t("teamsCenter.suggestion.text", { pack: pack.manifest.name }), {
           action: {
-            label: t("pluginsCenter.suggestion.accept"),
+            label: t("teamsCenter.suggestion.accept"),
             onClick: () => {
               void window.electronAPI
                 .packsSetDefaultOrchestrator(projectRoot, suggestedOrchestrator as Fqid)
-                .then(() => toast.success(t("pluginsCenter.suggestion.done")));
+                .then(() => toast.success(t("teamsCenter.suggestion.done")));
             },
           },
         });
@@ -151,16 +180,35 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
     }).length;
 
   const installButton = (pack: ProjectPackView, fullWidth = false) => {
-    if (pack.installed) {
+    const state = packDisplayState(pack);
+    const buttonClass = cn(
+      "gap-1 shadow-none",
+      fullWidth && "h-7 w-full text-[length:var(--font-size-12)]",
+    );
+    if (state === "installedProLocked") {
+      // Installed but license invalid → offer re-activation deep link.
       return (
         <Button
           size="sm"
           variant="secondary"
-          disabled
-          className={cn("gap-1 shadow-none", fullWidth && "h-7 w-full text-[length:var(--font-size-12)]")}
+          className={buttonClass}
+          onClick={(e) => {
+            e.stopPropagation();
+            goActivate();
+          }}
         >
+          {t("teamsCenter.card.installedProLocked")}
+          <span className="text-primary">{t("teamsCenter.card.goActivate")}</span>
+        </Button>
+      );
+    }
+    if (pack.installed) {
+      return (
+        <Button size="sm" variant="secondary" disabled className={buttonClass}>
           <CheckIcon className="size-3.5" />
-          {pack.enabled ? t("pluginsCenter.card.added") : t("pluginsCenter.card.disabled")}
+          {state === "installedActive"
+            ? t("teamsCenter.card.installedActive")
+            : t("teamsCenter.card.installedDisabled")}
         </Button>
       );
     }
@@ -168,14 +216,14 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
       <Button
         size="sm"
         variant={fullWidth ? "default" : "outline"}
-        className={cn("shadow-none", fullWidth && "h-7 w-full text-[length:var(--font-size-12)]")}
+        className={buttonClass}
         disabled={busy === pack.manifest.id || !pack.compatible || pack.locked}
         onClick={(e) => {
           e.stopPropagation();
           void install(pack);
         }}
       >
-        {pack.locked ? t("pluginsCenter.card.proLocked") : t("pluginsCenter.card.install")}
+        {pack.locked ? t("teamsCenter.card.proLocked") : t("teamsCenter.card.install")}
       </Button>
     );
   };
@@ -205,16 +253,16 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
         {/* 页头（与 TemplateCenter 一致） */}
         <div className="mb-6 hidden lg:block space-y-1">
           <h2 className="text-[length:var(--font-session-item)] font-semibold">
-            {selected ? selected.manifest.name : t("pluginsCenter.title")}
+            {selected ? selected.manifest.name : t("teamsCenter.title")}
           </h2>
           {!selected ? (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-              {t("pluginsCenter.subtitle")}
+              {t("teamsCenter.subtitle")}
             </p>
           ) : null}
           {!projectRoot ? (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-              {t("pluginsCenter.noProject")}
+              {t("teamsCenter.noProject")}
             </p>
           ) : null}
         </div>
@@ -234,36 +282,41 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
             {selected ? (
               <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
                 <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider hidden lg:block">
-                  {t("pluginsCenter.meta.title")}
+                  {t("teamsCenter.meta.title")}
                 </p>
                 <div className="flex flex-col gap-y-3 text-[length:var(--font-size-12)] text-muted-foreground px-2">
                   <div>
-                    <span>{t("pluginsCenter.meta.status")}</span>
+                    <span>{t("teamsCenter.meta.status")}</span>
                     <p className="text-foreground font-medium">
-                      {selected.installed
-                        ? selected.enabled
-                          ? t("pluginsCenter.card.added")
-                          : t("pluginsCenter.card.disabled")
-                        : t("pluginsCenter.card.notInstalled")}
+                      {packDisplayState(selected) === "installedActive" &&
+                        t("teamsCenter.card.installedActive")}
+                      {packDisplayState(selected) === "installedDisabled" &&
+                        t("teamsCenter.card.installedDisabled")}
+                      {packDisplayState(selected) === "installedProLocked" &&
+                        t("teamsCenter.card.installedProLocked")}
+                      {packDisplayState(selected) === "proLocked" &&
+                        t("teamsCenter.card.proLocked")}
+                      {packDisplayState(selected) === "installable" &&
+                        t("teamsCenter.card.notInstalled")}
                     </p>
                   </div>
                   <div>
-                    <span>{t("pluginsCenter.meta.publisher")}</span>
+                    <span>{t("teamsCenter.meta.publisher")}</span>
                     <p className="text-foreground">{selected.manifest.publisher}</p>
                   </div>
                   <div>
-                    <span>{t("pluginsCenter.meta.version")}</span>
+                    <span>{t("teamsCenter.meta.version")}</span>
                     <p className="text-foreground">v{selected.manifest.version}</p>
                   </div>
                   <div>
-                    <span>{t("pluginsCenter.meta.tier")}</span>
+                    <span>{t("teamsCenter.meta.tier")}</span>
                     <p className="text-foreground">
                       {selected.manifest.tier === "pro" ? "Pro" : "Free"}
                     </p>
                   </div>
                   {selected.manifest.category ? (
                     <div>
-                      <span>{t("pluginsCenter.meta.category")}</span>
+                      <span>{t("teamsCenter.meta.category")}</span>
                       <p className="text-foreground capitalize">{selected.manifest.category}</p>
                     </div>
                   ) : null}
@@ -272,15 +325,15 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
             ) : (
               <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
                 <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider hidden lg:block">
-                  {t("pluginsCenter.sidebar")}
+                  {t("teamsCenter.sidebar")}
                 </p>
                 <div className="flex flex-col gap-1">
-                  {sidebarItem("all", t("pluginsCenter.tabs.all"))}
-                  {sidebarItem("installed", t("pluginsCenter.tabs.installed"))}
+                  {sidebarItem("all", t("teamsCenter.tabs.all"))}
+                  {sidebarItem("installed", t("teamsCenter.tabs.installed"))}
                   {categories.map((cat) =>
                     sidebarItem(
                       `cat:${cat}`,
-                      t(`pluginsCenter.categories.${cat}`, { defaultValue: cat }),
+                      t(`teamsCenter.categories.${cat}`, { defaultValue: cat }),
                     ),
                   )}
                 </div>
@@ -299,7 +352,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                   onClick={() => setSelectedId(null)}
                 >
                   <ArrowLeftIcon className="size-3.5" />
-                  {t("pluginsCenter.backToList")}
+                  {t("teamsCenter.backToList")}
                 </button>
 
                 <div className="space-y-6">
@@ -313,11 +366,17 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                         {selected.manifest.tier === "pro" && <Badge>Pro</Badge>}
                         {!selected.compatible && (
                           <Badge variant="destructive">
-                            {t("pluginsCenter.card.incompatible")}
+                            {t("teamsCenter.card.incompatible")}
                           </Badge>
                         )}
                         {selected.installed && (
-                          <Badge variant="outline">{t("pluginsCenter.card.added")}</Badge>
+                          <Badge variant="outline">
+                            {packDisplayState(selected) === "installedActive"
+                              ? t("teamsCenter.card.installedActive")
+                              : packDisplayState(selected) === "installedDisabled"
+                                ? t("teamsCenter.card.installedDisabled")
+                                : t("teamsCenter.card.installedProLocked")}
+                          </Badge>
                         )}
                       </div>
                       <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed mt-1">
@@ -367,12 +426,22 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
 
                   {/* 操作 */}
                   <div className="flex items-center gap-2 pt-2">
-                    {!selected.installed &&
+                    {selected.installed &&
+                    packDisplayState(selected) === "installedProLocked" ? (
+                      <Button
+                        size="sm"
+                        className="shadow-none"
+                        onClick={goActivate}
+                      >
+                        {t("teamsCenter.card.goActivate")}
+                      </Button>
+                    ) : (
+                      !selected.installed &&
                       (selected.locked || !selected.compatible ? (
                         <Button size="sm" className="shadow-none" disabled>
                           {selected.locked
-                            ? t("pluginsCenter.card.proLocked")
-                            : t("pluginsCenter.card.incompatible")}
+                            ? t("teamsCenter.card.proLocked")
+                            : t("teamsCenter.card.incompatible")}
                         </Button>
                       ) : (
                         <Button
@@ -381,9 +450,10 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                           disabled={busy === selected.manifest.id}
                           onClick={() => void install(selected)}
                         >
-                          {t("pluginsCenter.card.install")}
+                          {t("teamsCenter.card.install")}
                         </Button>
-                      ))}
+                      ))
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -392,7 +462,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                         useLayoutStore.getState().setLeftSidebarView("settings")
                       }
                     >
-                      {t("pluginsCenter.manage")}
+                      {t("teamsCenter.manage")}
                     </Button>
                   </div>
                 </div>
@@ -405,7 +475,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                   <Input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t("pluginsCenter.searchPlaceholder")}
+                    placeholder={t("teamsCenter.searchPlaceholder")}
                     className="h-8 pl-8 pr-7 text-[length:var(--font-size-12)] rounded-md border border-border bg-transparent hover:border-border focus:border-primary focus:ring-1 focus:ring-ring transition-all shadow-none"
                   />
                   {search && (
@@ -421,7 +491,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
 
                 {browsable.length > 0 && (
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-4 text-[length:var(--font-size-11)] text-muted-foreground">
-                    <span>{t("pluginsCenter.count", { count: filtered.length })}</span>
+                    <span>{t("teamsCenter.count", { count: filtered.length })}</span>
                     {search.trim() ? (
                       <>
                         <span>·</span>
@@ -430,7 +500,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                           className="text-primary hover:underline underline-offset-2"
                           onClick={() => setSearch("")}
                         >
-                          {t("pluginsCenter.clearSearch")}
+                          {t("teamsCenter.clearSearch")}
                         </button>
                       </>
                     ) : null}
@@ -440,7 +510,7 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                 {filtered.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
                     <Package className="size-8 opacity-20" />
-                    <p className="text-[length:var(--font-size-13)]">{t("pluginsCenter.empty")}</p>
+                    <p className="text-[length:var(--font-size-13)]">{t("teamsCenter.empty")}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 @sm:grid-cols-2 @md:grid-cols-3 gap-3">
@@ -457,7 +527,11 @@ export function PluginsCenter({ onBack }: PluginsCenterProps) {
                           <Package className="size-5 text-muted-foreground" />
                           {pack.installed ? (
                             <Badge className="absolute top-1.5 right-1.5 h-5 px-1.5 text-[length:var(--font-size-10)]">
-                              {t("pluginsCenter.card.added")}
+                              {packDisplayState(pack) === "installedActive"
+                                ? t("teamsCenter.card.installedActive")
+                                : packDisplayState(pack) === "installedDisabled"
+                                  ? t("teamsCenter.card.installedDisabled")
+                                  : t("teamsCenter.card.installedProLocked")}
                             </Badge>
                           ) : null}
                         </div>

@@ -9,6 +9,8 @@
  * @see https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/acp/service.ts
  */
 
+import type { McpDef } from "../../shared/packs/types";
+
 export interface McpJsonServerRaw {
   type?: "local" | "remote";
   command?: string | string[];
@@ -106,4 +108,38 @@ export function mcpJsonToAcpServers(
   return Object.entries(mcpServers)
     .map(([name, raw]) => rawMcpEntryToAcp(name, raw))
     .filter((entry): entry is AcpMcpServer => entry !== null);
+}
+
+/** Convert a pack-declared MCP definition (McpDef) into the ACP wire format. */
+export function packMcpDefToAcp(def: McpDef): AcpMcpServer | null {
+  const name = def.name.trim();
+  if (!name) return null;
+  if (def.transport.type === "http") {
+    const url = def.transport.url.trim();
+    if (!url) return null;
+    const headers = def.transport.headers ?? {};
+    return {
+      name,
+      type: "http",
+      url,
+      headers: Object.entries(headers).map(([headerName, value]) => ({
+        name: headerName,
+        value,
+      })),
+    };
+  }
+  // stdio
+  const { command, args, env } = def.transport;
+  const argv = [command.trim(), ...(args ?? [])].filter((p) => p.length > 0);
+  if (argv.length === 0) return null;
+  const [cmd, ...rest] = argv;
+  return {
+    name,
+    command: cmd,
+    args: rest,
+    env: Object.entries(env ?? {}).map(([envName, value]) => ({
+      name: envName,
+      value,
+    })),
+  };
 }

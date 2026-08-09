@@ -145,7 +145,11 @@ export const MCP_PRESETS: McpPreset[] = [
     docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
     fields: [
       {
-        key: "__path__",
+        // NOTE: NOT "__path__" — that key is special-cased to prefill the
+        // project root for path-taking servers (Git / SQLite). A connection
+        // string is a URL, never a local path; giving it its own key keeps it
+        // empty for the user to fill in.
+        key: "connection_string",
         label: "Connection string",
         required: true,
         appendToCommand: true,

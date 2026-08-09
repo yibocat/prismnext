@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -78,6 +79,11 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   });
   // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
+  // Target team for new agents (null = this project's Local Pack).
+  const [userTeams, setUserTeams] = useState<
+    Array<{ packId: string; name: string; description: string; version: string }>
+  >([]);
+  const [targetPackId, setTargetPackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -98,6 +104,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         if (isNew) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
           setContentFqid(null);
+          setTargetPackId(null);
+          const teams = await window.electronAPI.userPacksList().catch(() => []);
+          if (cancelled) return;
+          setUserTeams(teams);
           setLoading(false);
           return;
         }
@@ -111,6 +121,9 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         }
         setForm(formFromExpert(detail));
         setContentFqid(detail.fqid ?? null);
+        // Editing a custom agent writes back to its owning pack (local or team).
+        const pid = detail.fqid?.split(":")[0];
+        setTargetPackId(pid && pid !== "user.local" ? pid : null);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.expert.toast.loadFailed"));
@@ -158,7 +171,11 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           thoughtLevel: form.thoughtLevel.trim() || undefined,
           permission,
         };
-        await window.electronAPI.expertsSaveCustom(projectRoot, payload);
+        await window.electronAPI.expertsSaveCustom(
+          projectRoot,
+          payload,
+          targetPackId ?? undefined,
+        );
       }
 
       toast.success(isNew ? t("settings.editor.expert.toast.created") : t("settings.editor.expert.toast.saved"));
@@ -244,6 +261,30 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           builtinCustomize={builtinCustomize}
           saving={saving}
         />
+
+        {isNew && (
+          <div className={cn(SETTINGS_DETAIL_SECTION, "!space-y-1.5")}>
+            <label className="text-[length:var(--font-size-12)] font-medium">
+              {t("settings.editor.expert.targetTeam")}
+            </label>
+            <select
+              value={targetPackId ?? ""}
+              onChange={(e) => setTargetPackId(e.target.value || null)}
+              disabled={saving}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
+            >
+              <option value="">{t("settings.editor.expert.localTarget")}</option>
+              {userTeams.map((team) => (
+                <option key={team.packId} value={team.packId}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+            <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
+              {t("settings.editor.expert.targetTeamDesc")}
+            </p>
+          </div>
+        )}
 
         <div className={SETTINGS_DETAIL_SECTION}>
           <SettingsFormField

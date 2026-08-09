@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { mcpJsonToAcpServers, rawMcpEntryToAcp } from "../../src/main/acp/mcp-transform";
+import {
+  mcpJsonToAcpServers,
+  packMcpDefToAcp,
+  rawMcpEntryToAcp,
+} from "../../src/main/acp/mcp-transform";
 
 describe("mcp-transform", () => {
   it("converts OpenCode local preset to ACP stdio without type field", () => {
@@ -55,5 +59,60 @@ describe("mcp-transform", () => {
     });
     expect(servers).toHaveLength(1);
     expect(servers[0].name).toBe("memory");
+  });
+
+  it("converts pack-declared stdio MCP to ACP wire format", () => {
+    const acp = packMcpDefToAcp({
+      id: "pg",
+      name: "postgres-local",
+      transport: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@modelcontextprotocol/server-postgres"],
+        env: { PGHOST: "localhost" },
+      },
+    });
+    expect(acp).toEqual({
+      name: "postgres-local",
+      command: "npx",
+      args: ["-y", "@modelcontextprotocol/server-postgres"],
+      env: [{ name: "PGHOST", value: "localhost" }],
+    });
+    expect(acp).not.toHaveProperty("type");
+  });
+
+  it("converts pack-declared http MCP with header array", () => {
+    const acp = packMcpDefToAcp({
+      id: "web",
+      name: "remote-web",
+      transport: {
+        type: "http",
+        url: "https://example.com/mcp",
+        headers: { Authorization: "Bearer x" },
+      },
+    });
+    expect(acp).toMatchObject({
+      name: "remote-web",
+      type: "http",
+      url: "https://example.com/mcp",
+      headers: [{ name: "Authorization", value: "Bearer x" }],
+    });
+  });
+
+  it("skips pack MCP with empty command or url", () => {
+    expect(
+      packMcpDefToAcp({
+        id: "bad",
+        name: "bad",
+        transport: { type: "stdio", command: "  " },
+      }),
+    ).toBeNull();
+    expect(
+      packMcpDefToAcp({
+        id: "bad2",
+        name: "bad2",
+        transport: { type: "http", url: "" },
+      }),
+    ).toBeNull();
   });
 });

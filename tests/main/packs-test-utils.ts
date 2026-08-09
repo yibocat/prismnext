@@ -7,7 +7,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// 测试密封：first-party 根指到空目录，真实 resources/plugins（core pack）
+// 测试密封：first-party 根指到空目录，真实 resources/teams（core pack）
 // 不进入 fixture 视图；fixture pack 一律走 registerExternalPackRoot。
 // pack-catalog 的 getFirstPartyPacksDir 优先读该环境变量。
 process.env.PRISM_FIRST_PARTY_PACKS_DIR = mkdtempSync(

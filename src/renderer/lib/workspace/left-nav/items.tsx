@@ -134,21 +134,21 @@ const templatesNav: LeftNavDefinition = {
   },
 };
 
-const pluginsNav: LeftNavDefinition = {
-  id: "plugins",
+const teamsNav: LeftNavDefinition = {
+  id: "teams",
   section: "primary",
-  label: "Plugins",
-  labelKey: "nav.plugins",
+  label: "Teams",
+  labelKey: "nav.teams",
   icon: Package,
   order: 25,
-  centerView: "plugins",
+  centerView: "teams",
   immersive: true,
   toggleable: true,
-  isActive: () => useLayoutStore.getState().leftSidebarView === "plugins",
+  isActive: () => useLayoutStore.getState().leftSidebarView === "teams",
   activate: (ctx) => {
     closeTexWorkspace(ctx);
     closeLiteraturePanel(ctx);
-    useLayoutStore.getState().setLeftSidebarView("plugins");
+    useLayoutStore.getState().setLeftSidebarView("teams");
   },
   onToggleOff: () => {
     useLayoutStore.getState().setLeftSidebarView("sessions");
@@ -207,7 +207,7 @@ export function registerLeftNavItems(): void {
   leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(experimentsNav);
   leftNavRegistry.register(templatesNav);
-  leftNavRegistry.register(pluginsNav);
+  leftNavRegistry.register(teamsNav);
   leftNavRegistry.register(settingsNav);
   // leftNavRegistry.register(yourNav);  // ← 新入口加在这里，或拆到 feature 模块再 import
 }

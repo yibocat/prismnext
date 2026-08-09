@@ -106,7 +106,7 @@ export interface ExpertDef {
   permission?: Record<string, unknown>;
 }
 
-/** mcp.json 数组元素（保留槽位，v1 不接运行时） */
+/** mcp.json 数组元素（pack 声明的 MCP 服务器定义） */
 export interface McpDef {
   id: string;
   name: string;
@@ -114,6 +114,19 @@ export interface McpDef {
   transport:
     | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
     | { type: "http"; url: string; headers?: Record<string, string> };
+}
+
+/**
+ * 解析后的 MCP 视图（resolver 收集，UI 与运行时共用）。
+ * enabled = pack 在本项目启用（pack.enabled，判定链与 content 一致）。
+ * 运行时注入只使用 enabled 的 pack MCP。
+ */
+export interface ResolvedMcp extends McpDef {
+  /** 全局唯一身份："<packId>:<mcpId>" */
+  fqid: Fqid;
+  packId: string;
+  origin: ContentOrigin;
+  enabled: boolean;
 }
 
 // ── 解析后视图（facade / UI 统一消费，§5.1）──────────────
@@ -134,7 +147,6 @@ export interface PackView {
 export interface ProjectPackView extends PackView {
   installed: boolean;
   enabled: boolean;
-  record?: PackRecord;
 }
 
 export interface ContentOrigin {
@@ -186,22 +198,23 @@ export interface BadgeInfo {
   packTier: PackTier;
 }
 
-// ── packs.json（项目状态，stateVersion 2，§4.4）──────────
+// ── packs.json（项目状态，stateVersion 3，§4.4 + 2026-08-09 分层 spec）──
 
-export const PACKS_STATE_VERSION = 2;
+export const PACKS_STATE_VERSION = 3;
 export const CORE_PACK_ID = "prismnext.core";
 export const LOCAL_PACK_ID = "user.local";
+/** Marker publisher for user-created teams (auto-installed app-level packs). */
+export const USER_TEAM_PUBLISHER = "user";
 export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_PACK_ID}:research-prism`;
 /** Local Pack 目录（相对项目根）；pack-catalog / packs-state 共用此常量拼绝对路径 */
 export const LOCAL_PACK_REL = ".prismnext/agent/local";
 
-export interface PackRecord {
-  packId: string;
-  /** 安装时的 pack 版本（升级调和用） */
-  version: string;
+/**
+ * Project-level enable/disable override for a pack (spec L2).
+ * Absent = automatically enabled once the pack is installed at app level.
+ */
+export interface ProjectPackState {
   enabled: boolean;
-  /** ISO 8601 */
-  installedAt: string;
 }
 
 export interface ContentOverride {
@@ -217,7 +230,8 @@ export interface PacksState {
   stateVersion: typeof PACKS_STATE_VERSION;
   /** FQID；缺省 = DEFAULT_ORCHESTRATOR_FQID */
   defaultOrchestrator?: Fqid;
-  packs: PackRecord[];
+  /** 项目启停覆盖（缺省 = 已装自动启用）；不再存安装记录（应用级 packs-installed.json） */
+  projectPackStates: Record<string, ProjectPackState>;
   /** 任意 FQID 的逐项禁用（统一替代 disabledBuiltinIds / skills.disabled / .md.disabled） */
   disabledContent: Fqid[];
   /** 非 local 内容的 override，by FQID */

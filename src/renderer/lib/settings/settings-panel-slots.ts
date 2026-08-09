@@ -45,6 +45,7 @@ export type SettingsPanelSlot =
   | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
   | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string; absPath?: string }
   | { kind: "skill-library" }
+  | { kind: "pack-detail"; packId: string; title?: string }
   | { kind: "shortcuts" }
   | { kind: "logs" }
   | { kind: "permission-rules"; field: "allowed-paths" | "allow-rules" | "deny-rules" };
@@ -124,6 +125,8 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     }
     case "skill-library":
       return tt("settings.slots.installSkills", "Install skills");
+    case "pack-detail":
+      return slot.title ?? tt("settings.slots.packDetail", "Team details");
     case "shortcuts":
       return tt("settings.slots.shortcuts", "Shortcuts");
     case "logs":

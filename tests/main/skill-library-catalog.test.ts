@@ -20,7 +20,7 @@ import { CORE_PACK_ID } from "../../src/shared/packs/types";
 /**
  * 引用模型（§5.6.2）：core pack 技能天然可用，「安装」= 启用、
  * 「卸载」= 禁用，全程零拷贝。这里不 import packs-test-utils ——
- * 需要命中真实 core pack（resources/plugins/prismnext.core）。
+ * 需要命中真实 core pack（resources/teams/prismnext.core）。
  */
 describe("skill-library-catalog bundled (reference model)", () => {
   let root: string;

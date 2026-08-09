@@ -11,7 +11,7 @@ import {
 export function emptyPacksState(): PacksState {
   return {
     stateVersion: PACKS_STATE_VERSION,
-    packs: [],
+    projectPackStates: {},
     disabledContent: [],
     contentOverrides: {},
   };
@@ -42,19 +42,14 @@ export function normalizePacksState(raw: unknown): PacksState {
   if (!raw || typeof raw !== "object") return emptyPacksState();
   const obj = raw as Record<string, unknown>;
 
-  const packs: PacksState["packs"] = [];
-  if (Array.isArray(obj.packs)) {
-    for (const entry of obj.packs) {
-      if (!entry || typeof entry !== "object") continue;
-      const rec = entry as Record<string, unknown>;
-      if (typeof rec.packId !== "string" || !rec.packId) continue;
-      packs.push({
-        packId: rec.packId,
-        version: typeof rec.version === "string" ? rec.version : "0.0.0",
-        enabled: rec.enabled !== false,
-        installedAt:
-          typeof rec.installedAt === "string" ? rec.installedAt : new Date(0).toISOString(),
-      });
+  // projectPackStates: { packId: { enabled } } — only records explicit overrides
+  const projectPackStates: PacksState["projectPackStates"] = {};
+  if (obj.projectPackStates && typeof obj.projectPackStates === "object") {
+    for (const [packId, value] of Object.entries(obj.projectPackStates as Record<string, unknown>)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const st = value as Record<string, unknown>;
+      if (typeof st.enabled !== "boolean") continue;
+      projectPackStates[packId] = { enabled: st.enabled };
     }
   }
 
@@ -77,7 +72,7 @@ export function normalizePacksState(raw: unknown): PacksState {
       typeof obj.defaultOrchestrator === "string" && parseFqid(obj.defaultOrchestrator)
         ? obj.defaultOrchestrator
         : undefined,
-    packs,
+    projectPackStates,
     disabledContent: [...new Set(disabledContent)],
     contentOverrides,
   };

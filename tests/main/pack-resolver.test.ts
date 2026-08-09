@@ -12,6 +12,7 @@ import {
   isContentActive,
   listCommands,
   listContent,
+  listProjectMcps,
   listProjectPacks,
   readInstructions,
   resolveAllowedExperts,
@@ -19,7 +20,10 @@ import {
   resolveOrchestratorId,
 } from "../../src/main/services/pack-resolver";
 import {
-  installPackRecord,
+  addInstalledPack,
+  setPacksInstalledDataDir,
+} from "../../src/main/services/packs-installed";
+import {
   saveContentOverride,
   setContentDisabled,
   setDefaultOrchestratorFqid,
@@ -36,9 +40,27 @@ function temp(): string {
   return dir;
 }
 
+/** Seal the app-level store to a fresh temp dir (never read real userData). */
+function sealStore(): void {
+  setPacksInstalledDataDir(temp());
+}
+
+function makeRoot(): string {
+  const root = makeProjectRoot();
+  tempDirs.push(root);
+  sealStore();
+  return root;
+}
+
+/** Record an install into the (already sealed) app-level store. */
+function installAppPack(packId: string): void {
+  addInstalledPack(packId);
+}
+
 afterEach(() => {
   for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
+  setPacksInstalledDataDir(null);
 });
 
 /** 一个 core pack（orchestrator + 2 experts）+ 一个 free pack + 一个 pro pack 的标配环境 */
@@ -75,8 +97,8 @@ function setupStandardPacks(): { coreRoot: string; freeRoot: string; proRoot: st
 describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
   it("core pack 隐式已装且启用；local 恒在", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
+    sealStore();
 
     const packs = listProjectPacks(root);
     const core = packs.find((p) => p.manifest.id === CORE_PACK_ID)!;
@@ -99,10 +121,8 @@ describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
 
   it("install → 内容激活；disable pack → 全部内容失活；enable → 恢复", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
-
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    const root = makeRoot();
+    installAppPack("test.notes");
     expect(isContentActive(root, "test.notes:reading-coach")).toBe(true);
     expect(isContentActive(root, "test.notes:notes-lead")).toBe(true);
 
@@ -116,8 +136,8 @@ describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
 
   it("disabledContent 逐项禁用立即可见（写入计数器失效缓存）", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
+    sealStore();
 
     expect(isContentActive(root, "prismnext.core:peer-reviewer")).toBe(true);
     setContentDisabled(root, "prismnext.core:peer-reviewer", true);
@@ -127,15 +147,16 @@ describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
     expect(isContentActive(root, "prismnext.core:peer-reviewer")).toBe(true);
   });
 
-  it("pro pack 已装且启用，但无 license → 内容不激活（§8.3 门控下沉）", () => {
+  it("pro pack 已装但无 license → pack 层 enabled=false + 内容不激活（bug 修复回归）", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
-
-    installPackRecord(root, { packId: "test.pro", version: "0.1.0" });
+    const root = makeRoot();
+    installAppPack("test.pro");
     const pack = listProjectPacks(root).find((p) => p.manifest.id === "test.pro")!;
     expect(pack.installed).toBe(true);
-    expect(pack.enabled).toBe(true);
+    // Layering spec §4.3: license gate is merged into pack-layer `enabled`
+    // (bug fix) — a pro pack without license is NOT shown as enabled.
+    expect(pack.enabled).toBe(false);
+    expect(pack.locked).toBe(true);
     expect(isContentActive(root, "test.pro:pro-expert")).toBe(false);
     const expert = getContent(root, "test.pro:pro-expert")!;
     expect(expert.enabled).toBe(false);
@@ -143,8 +164,8 @@ describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
 
   it("不存在的 fqid → false", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
+    sealStore();
     expect(isContentActive(root, "ghost.pack:nothing")).toBe(false);
   });
 });
@@ -152,8 +173,8 @@ describe("pack-resolver: 项目视图与启停判定（§5.3）", () => {
 describe("pack-resolver: overrides", () => {
   it("非 local 内容应用 contentOverrides；local 内容不应用", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
+    sealStore();
 
     saveContentOverride(root, "prismnext.core:methodology-auditor", { model: "user-model" });
     const expert = getContent(root, "prismnext.core:methodology-auditor")!;
@@ -177,9 +198,8 @@ describe("pack-resolver: overrides", () => {
 describe("pack-resolver: allowedExperts 解析（§5.4）", () => {
   it('"$pack" 展开 + FQID 引用 + 禁用修剪', () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    const root = makeRoot();
+    installAppPack("test.notes");
 
     // notes-lead.allowedExperts = ["$pack", "prismnext.core:peer-reviewer"]
     let allowed = resolveAllowedExperts(root, "test.notes:notes-lead");
@@ -196,10 +216,9 @@ describe("pack-resolver: allowedExperts 解析（§5.4）", () => {
 
   it("allowedExperts 缺省 = 全部可用 experts（不含未安装/锁定 pack 的）", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
-    installPackRecord(root, { packId: "test.pro", version: "0.1.0" });
+    const root = makeRoot();
+    installAppPack("test.notes");
+    installAppPack("test.pro");
 
     const allowed = resolveAllowedExperts(root, "prismnext.core:research-prism");
     expect(allowed).toContain("prismnext.core:peer-reviewer");
@@ -209,8 +228,7 @@ describe("pack-resolver: allowedExperts 解析（§5.4）", () => {
   });
 
   it("裸 id 解析：同 pack 优先", () => {
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
     // pack A 与 core 都有 "reviewer"；orch 在 pack A 内用裸 id 应解析到同 pack
     const coreRoot = temp();
     makePack(coreRoot, "prismnext.core", baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
@@ -223,7 +241,7 @@ describe("pack-resolver: allowedExperts 解析（§5.4）", () => {
       experts: [{ id: "reviewer" }],
     });
     registerExternalPackRoot(packA);
-    installPackRecord(root, { packId: "test.a", version: "0.1.0" });
+    installAppPack("test.a");
 
     const allowed = resolveAllowedExperts(root, "test.a:o");
     expect(allowed).toEqual(["test.a:reviewer"]);
@@ -233,8 +251,7 @@ describe("pack-resolver: allowedExperts 解析（§5.4）", () => {
 describe("pack-resolver: orchestrator 选择与 commands", () => {
   it("默认 / tab 指定 / fallback", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
 
     // 无状态 → core 默认
     expect(resolveOrchestratorId(root)).toBe(DEFAULT_ORCHESTRATOR_FQID);
@@ -244,7 +261,7 @@ describe("pack-resolver: orchestrator 选择与 commands", () => {
     expect(resolveOrchestratorId(root)).toBe(DEFAULT_ORCHESTRATOR_FQID);
 
     // 装上后项目默认生效
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    installAppPack("test.notes");
     expect(resolveOrchestratorId(root)).toBe("test.notes:notes-lead");
 
     // tab 显式指定优先
@@ -258,13 +275,12 @@ describe("pack-resolver: orchestrator 选择与 commands", () => {
 
   it("commands：跨 pack 汇总、排序、启停", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
 
     let commands = listCommands(root);
     expect(commands.map((c) => c.fqid)).toEqual(["prismnext.core:setup"]);
 
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    installAppPack("test.notes");
     commands = listCommands(root);
     expect(commands.map((c) => c.fqid).sort()).toEqual([
       "prismnext.core:setup",
@@ -277,14 +293,66 @@ describe("pack-resolver: orchestrator 选择与 commands", () => {
     expect(commands.find((c) => c.fqid === "prismnext.core:setup")!.enabled).toBe(false);
     expect(commands.find((c) => c.fqid === "test.notes:reading-notes")!.enabled).toBe(true);
   });
+
+  it("MCP：pack 声明随包收集，enabled 跟随 pack 项目启停", () => {
+    setupStandardPacks();
+    const root = makeRoot();
+
+    // core 未声明 MCP → 空
+    expect(listProjectMcps(root)).toEqual([]);
+
+    // 装一个带 MCP 的 pack
+    const mcpRoot = temp();
+    makePack(mcpRoot, "test.mcps", baseManifest("test.mcps", { name: "Mcp Pack" }), {
+      mcps: [
+        {
+          id: "pg",
+          name: "postgres-local",
+          description: "Postgres via stdio",
+          transport: { type: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-postgres"] },
+        },
+        {
+          id: "web",
+          name: "remote-web",
+          transport: { type: "http", url: "https://example.com/mcp" },
+        },
+      ],
+    });
+    registerExternalPackRoot(mcpRoot);
+    installAppPack("test.mcps");
+
+    let mcps = listProjectMcps(root);
+    expect(mcps).toHaveLength(2);
+    expect(mcps[0]).toMatchObject({
+      fqid: "test.mcps:pg",
+      packId: "test.mcps",
+      enabled: true,
+      name: "postgres-local",
+    });
+    expect(mcps[1]).toMatchObject({
+      fqid: "test.mcps:web",
+      enabled: true,
+      transport: { type: "http", url: "https://example.com/mcp" },
+    });
+
+    // pack 项目停用 → MCP 保留在列表但 enabled=false（UI 灰显，不注入）
+    setPackEnabled(root, "test.mcps", false);
+    mcps = listProjectMcps(root);
+    expect(mcps).toHaveLength(2);
+    expect(mcps.every((m) => m.enabled === false)).toBe(true);
+
+    // 恢复 → enabled=true
+    setPackEnabled(root, "test.mcps", true);
+    mcps = listProjectMcps(root);
+    expect(mcps.every((m) => m.enabled === true)).toBe(true);
+  });
 });
 
 describe("pack-resolver: badge / instructions / 杂项", () => {
   it("resolveBadge：fqid 命中；裸 id 优先 core", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    const root = makeRoot();
+    installAppPack("test.notes");
 
     expect(resolveBadge(root, "test.notes:reading-coach")).toEqual({
       packId: "test.notes",
@@ -300,8 +368,8 @@ describe("pack-resolver: badge / instructions / 杂项", () => {
 
   it("readInstructions 读取正文；listContent 按 kind 过滤", () => {
     setupStandardPacks();
-    const root = makeProjectRoot();
-    tempDirs.push(root);
+    const root = makeRoot();
+    sealStore();
 
     expect(readInstructions(root, "prismnext.core:peer-reviewer")).toBe(
       "Instructions for peer-reviewer.",

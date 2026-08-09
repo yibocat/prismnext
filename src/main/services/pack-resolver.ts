@@ -27,11 +27,13 @@ import type {
   ProjectPackView,
   ResolvedCommand,
   ResolvedContent,
+  ResolvedMcp,
 } from "../../shared/packs/types";
 import {
   CORE_PACK_ID,
   DEFAULT_ORCHESTRATOR_FQID,
   LOCAL_PACK_ID,
+  USER_TEAM_PUBLISHER,
 } from "../../shared/packs/types";
 import { fqidBelongsToPack, parseFqid, toFqid } from "../../shared/packs/state";
 import {
@@ -49,6 +51,11 @@ import {
 } from "./pack-catalog";
 import { licenseGrants, licenseStateVersion } from "./packs-license";
 import {
+  isPackInstalled,
+  onPacksInstalledChanged,
+  packsInstalledWriteCounter,
+} from "./packs-installed";
+import {
   onPacksStateWritten,
   packsStateMtime,
   packsStateWriteCounter,
@@ -64,6 +71,14 @@ onPacksStateWritten((root) => {
   invalidateResolver(root);
 });
 
+// App-level install file changes affect EVERY project's view (installed state
+// feeds the shared judgment chain) → invalidate all project views.
+// (Registered after the caches below are declared; the callback only runs on
+// actual writes, so no TDZ concern at module load.)
+onPacksInstalledChanged(() => {
+  invalidateResolver();
+});
+
 // ── 项目视图缓存 ──────────────────────────────────────────
 
 interface ProjectView {
@@ -71,7 +86,7 @@ interface ProjectView {
   packs: ProjectPackView[];
   contents: ResolvedContent[];
   commands: ResolvedCommand[];
-  mcps: McpDef[];
+  mcps: ResolvedMcp[];
   byFqid: Map<Fqid, ResolvedContent>;
 }
 
@@ -82,6 +97,7 @@ function viewKey(projectRoot: string): string {
     currentCatalogFingerprint(),
     String(packsStateMtime(projectRoot)),
     String(packsStateWriteCounter()),
+    String(packsInstalledWriteCounter()),
     String(licenseStateVersion()),
     contentDirFingerprint(getLocalPackDir(projectRoot)),
   ].join("#");
@@ -120,16 +136,22 @@ function buildProjectView(projectRoot: string): ProjectView {
   const allPackViews: PackView[] = [...appPacks, localView];
 
   const packs: ProjectPackView[] = allPackViews.map((view) => {
-    const record = state.packs.find((p) => p.packId === view.manifest.id);
-    const installed = view.installedByDefault || Boolean(record);
-    const enabled =
-      view.kind === "local" ? true : (record?.enabled ?? view.installedByDefault);
-    return { ...view, installed, enabled, record };
+    // Layering spec §4.3: single judgment chain shared by pack layer + content layer.
+    const licenseOk =
+      view.manifest.tier === "pro" ? licenseGrants(view.manifest.feature) : true;
+    const installed =
+      view.installedByDefault || isPackInstalled(view.manifest.id);
+    // Project override: absent = auto-enabled once installed (spec L2).
+    const projectState = state.projectPackStates[view.manifest.id];
+    const projectEnabled =
+      view.kind === "local" ? true : (projectState?.enabled ?? installed);
+    const enabled = licenseOk && projectEnabled;
+    return { ...view, installed, enabled, record: undefined };
   });
 
   const contents: ResolvedContent[] = [];
   const commands: ResolvedCommand[] = [];
-  const mcps: McpDef[] = [];
+  const mcps: ResolvedMcp[] = [];
   const byFqid = new Map<Fqid, ResolvedContent>();
 
   for (const pack of packs) {
@@ -141,9 +163,9 @@ function buildProjectView(projectRoot: string): ProjectView {
       packTier: pack.manifest.tier,
       publisher: pack.manifest.publisher,
     };
-    // §5.3 判定链：license 门 → pack 启停 → 逐项禁用
-    const licenseOk = pack.manifest.tier === "pro" ? licenseGrants(pack.manifest.feature) : true;
-    const packActive = licenseOk && pack.enabled;
+    // §5.3 判定链：pack.enabled 已并入 license 门（buildProjectView），
+    // 内容层直接复用，逐项禁用再叠加。
+    const packActive = pack.enabled;
 
     const items: ScannedContentItem[] =
       packId === LOCAL_PACK_ID ? scanLocalPackContents(projectRoot) : getPackContents(packId);
@@ -151,7 +173,10 @@ function buildProjectView(projectRoot: string): ProjectView {
     for (const item of items) {
       const fqid = toFqid(packId, item.id);
       const enabled = packActive && !disabled.has(fqid);
-      const removable = packId === LOCAL_PACK_ID;
+      // Content is user-editable (deletable) in the Local Pack and in
+      // user-created teams; plugin-provided content is read-only.
+      const removable =
+        packId === LOCAL_PACK_ID || pack.manifest.publisher === USER_TEAM_PUBLISHER;
       // overrides 只应用于非 local 内容（local 内容用户直接改文件）
       const override = removable ? undefined : state.contentOverrides[fqid];
 
@@ -198,7 +223,18 @@ function buildProjectView(projectRoot: string): ProjectView {
 
     const packMcps =
       packId === LOCAL_PACK_ID ? readPackMcpDefs(getLocalPackDir(projectRoot)) : getPackMcpDefs(packId);
-    mcps.push(...packMcps);
+    for (const mcp of packMcps) {
+      const fqid = toFqid(packId, mcp.id);
+      mcps.push({
+        ...mcp,
+        // 判定链与 content 一致：pack 在本项目停用 → MCP 不注入运行时；
+        // 逐项禁用（disabledContent）也可单独关闭某个 MCP。
+        fqid,
+        packId,
+        origin,
+        enabled: pack.enabled && !disabled.has(fqid),
+      });
+    }
   }
 
   return {
@@ -256,6 +292,16 @@ export function notifyPacksChanged(projectRoot?: string): void {
       .catch(() => {
         // 同上
       });
+    // Pack enable/disable changes the effective MCP set → drop the ACP
+    // agent-config cache so the next session/send re-reads mcp.json +
+    // enabled pack MCPs (project-chat-prewarm also re-syncs on invalidation).
+    void import("../acp/service")
+      .then((m) => {
+        m.AcpService.getInstance().invalidateAgentConfigCache(projectRoot);
+      })
+      .catch(() => {
+        // 同上
+      });
   }
 }
 
@@ -301,8 +347,14 @@ export function listCommands(projectRoot: string): ResolvedCommand[] {
   return getProjectView(projectRoot).commands;
 }
 
-export function listPackMcpDefs(projectRoot: string): McpDef[] {
+/** pack 提供的 MCP 视图（含 enabled/origin；UI 分组展示 + 运行时注入用）。 */
+export function listProjectMcps(projectRoot: string): ResolvedMcp[] {
   return getProjectView(projectRoot).mcps;
+}
+
+/** 兼容旧 API：仅返回启用 pack 的 MCP 定义（无 origin/enabled 包装）。 */
+export function listPackMcpDefs(projectRoot: string): McpDef[] {
+  return getProjectView(projectRoot).mcps.filter((m) => m.enabled);
 }
 
 // ── 引用解析 ──────────────────────────────────────────────

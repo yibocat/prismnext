@@ -30,12 +30,13 @@ import {
   PACKS_STATE_VERSION,
   type ContentOverride,
   type Fqid,
-  type PackRecord,
   type PacksState,
+  type ProjectPackState,
 } from "../../shared/packs/types";
 import { emptyPacksState, fqidBelongsToPack, normalizePacksState } from "../../shared/packs/state";
 import { getPack } from "./pack-catalog";
 import { createLogger } from "./logger";
+import { upsertInstalledPacks } from "./packs-installed";
 
 const log = createLogger("packs-state");
 
@@ -512,36 +513,40 @@ function legacyCommandPluginId(raw: string): string | null {
 }
 
 /**
- * R9 主流程：返回追加的 PackRecord[]；副作用 = plugin 副本回收进 backup。
+ * R9 主流程（layering spec M1/M2）：plugins-manifest 记录上卷到应用级
+ * installedPacks；enabled===false 的写入 projectPackStates 覆盖；副作用 =
+ * plugin 拷贝副本回收进 backup。
  * 回收范围（pluginId 命中 manifest 记录的旧/新 id）：
  * - experts/custom/<id>/、orchestrators/custom/<id>/（JSON 带 pluginId）
  * - commands/*.md(|.disabled)（frontmatter 带 pluginId）
  * - skills/<id>/（skills-manifest installs 里 origin 标记者）
+ *
+ * 返回 { projectPackStates }：本项目需要记录的启停覆盖（缺省 = 自动启用）。
  */
 function migrateLegacyPluginsManifest(
   projectRoot: string,
-  existingPacks: PackRecord[],
-): PackRecord[] {
+  existing: Record<string, ProjectPackState>,
+): Record<string, ProjectPackState> {
   const entries = readLegacyPluginsManifest(projectRoot);
-  if (entries.length === 0) return [];
+  if (entries.length === 0) return {};
 
   const knownIds = new Set<string>();
-  const added: PackRecord[] = [];
+  const upserts: Array<{ packId: string; installedAt?: string }> = [];
+  const states: Record<string, ProjectPackState> = { ...existing };
   for (const entry of entries) {
     const rawId = (entry.packId ?? entry.id ?? entry.pluginId)!.trim();
     if (!rawId) continue;
     knownIds.add(rawId);
     knownIds.add(mapLegacyPluginId(rawId));
     const packId = mapLegacyPluginId(rawId);
-    if (existingPacks.some((p) => p.packId === packId)) continue;
-    if (added.some((p) => p.packId === packId)) continue;
-    added.push({
-      packId,
-      version: entry.version ?? "0.0.0",
-      enabled: entry.enabled !== false,
-      installedAt: new Date().toISOString(),
-    });
+    // App-level install (dedup inside upsertInstalledPacks).
+    upserts.push({ packId, installedAt: entry.version ? undefined : new Date().toISOString() });
+    // Project-level override: explicit disable is recorded; otherwise auto-enable.
+    if (entry.enabled === false && !(packId in states)) {
+      states[packId] = { enabled: false };
+    }
   }
+  if (upserts.length > 0) upsertInstalledPacks(upserts);
 
   // 副本回收：experts / orchestrators custom 目录里 pluginId 命中者
   for (const kind of ["experts", "orchestrators"] as const) {
@@ -587,7 +592,7 @@ function migrateLegacyPluginsManifest(
     }
   }
 
-  return added;
+  return states;
 }
 
 /** R12（agent 部分）：legacy 文件/残余目录移入 legacy-backup-<date>/ */
@@ -640,11 +645,12 @@ function backupLegacyAgentFiles(projectRoot: string): void {
 export function migrateLegacyAgentState(projectRoot: string, state: PacksState): PacksState {
   const disabled = new Set(state.disabledContent);
   const overrides: PacksState["contentOverrides"] = { ...state.contentOverrides };
+  const projectPackStates: Record<string, ProjectPackState> = { ...state.projectPackStates };
   let defaultOrchestrator = state.defaultOrchestrator;
 
-  // R9 必须最先执行：plugins-manifest → packs[]，并回收 plugin 拷贝副本
-  // （否则 R4/R5/R6/R7 会把副本当 custom 内容搬进 local）
-  const r9Added = migrateLegacyPluginsManifest(projectRoot, state.packs);
+  // R9 必须最先执行：plugins-manifest → 应用级 installedPacks + 项目启停覆盖，
+  // 并回收 plugin 拷贝副本（否则 R4/R5/R6/R7 会把副本当 custom 内容搬进 local）
+  const r9States = migrateLegacyPluginsManifest(projectRoot, projectPackStates);
 
   const expertsManifest = readLegacyJson<LegacyExpertsManifest>(
     join(projectRoot, LEGACY_EXPERTS_MANIFEST_REL),
@@ -705,7 +711,7 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
 
   return {
     ...state,
-    packs: [...state.packs, ...r9Added],
+    projectPackStates: { ...projectPackStates, ...r9States },
     defaultOrchestrator,
     disabledContent: [...disabled].sort(),
     contentOverrides: overrides,
@@ -757,13 +763,19 @@ export function migratePacksStateIfNeeded(projectRoot: string): {
 
   let state = emptyPacksState();
   let version = 0;
+  let rawV2: Record<string, unknown> | null = null;
   if (exists) {
     try {
-      const raw = JSON.parse(readFileSync(path, "utf-8"));
+      const raw = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
       version =
-        raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).stateVersion === "number"
-          ? ((raw as Record<string, unknown>).stateVersion as number)
+        raw && typeof raw === "object" && typeof raw.stateVersion === "number"
+          ? (raw.stateVersion as number)
           : 0;
+      // Capture the v2 `packs[]` BEFORE normalize drops it (v3 schema reads
+      // projectPackStates only) — needed for the v2→v3 app-level upsert.
+      if (version === 2 && Array.isArray(raw.packs)) {
+        rawV2 = raw;
+      }
       state = normalizePacksState(raw);
     } catch (err) {
       log.error("packs.json 损坏，回退空状态", { projectRoot, error: String(err) });
@@ -786,6 +798,32 @@ export function migratePacksStateIfNeeded(projectRoot: string): {
         // 单条迁移失败不阻断后续——状态操作可重入，下版本再试
         log.error(`packs 迁移失败: ${migration.id}`, { projectRoot, error: String(err) });
       }
+    }
+  }
+
+  // v2 → v3: upsert legacy `packs[]` into the app-level installed store and
+  // map `enabled === false` into projectPackStates overrides (spec M1/M2).
+  if (needsVersionMigration && rawV2) {
+    try {
+      const legacyPacks = rawV2.packs as Array<{ packId?: string; enabled?: boolean; installedAt?: string }>;
+      const upserts = legacyPacks
+        .filter((p) => p && typeof p.packId === "string" && p.packId)
+        .map((p) => ({ packId: p.packId!, installedAt: p.installedAt }));
+      if (upserts.length > 0) {
+        upsertInstalledPacks(upserts);
+        for (const p of legacyPacks) {
+          if (p && typeof p.packId === "string" && p.enabled === false && !(p.packId in state.projectPackStates)) {
+            state = { ...state, projectPackStates: { ...state.projectPackStates, [p.packId]: { enabled: false } } };
+          }
+        }
+        log.info("packs v2→v3: installed records upserted to app level", {
+          projectRoot,
+          count: upserts.length,
+        });
+      }
+    } catch (err) {
+      // Upsert failure is non-fatal; state stays consistent, retried next read.
+      log.error("packs v2→v3 上卷失败", { projectRoot, error: String(err) });
     }
   }
 
@@ -855,52 +893,51 @@ export function packsStateWriteCounter(): number {
   return writeCounter;
 }
 
-// ── §6.2 状态操作 ─────────────────────────────────────────
+// ── §6.2 状态操作（layering spec：项目级只存启停覆盖）────────
 
-/** install：追加记录（enabled=true）。已存在 → 返回原记录（幂等 no-op）。 */
-export function installPackRecord(
-  projectRoot: string,
-  input: { packId: string; version: string },
-): PackRecord {
-  const state = readPacksState(projectRoot);
-  const existing = state.packs.find((p) => p.packId === input.packId);
-  if (existing) return existing;
-  const record: PackRecord = {
-    packId: input.packId,
-    version: input.version,
-    enabled: true,
-    installedAt: new Date().toISOString(),
-  };
-  writePacksState(projectRoot, { ...state, packs: [...state.packs, record] });
-  return record;
-}
-
-/** setEnabled：改写记录 enabled。记录不存在 → null（core/local 之外未装即无记录）。 */
+/**
+ * 项目启停：写 projectPackStates[packId] = { enabled }。
+ * enabled=true 且无现有记录 → 删键（缺省 = 自动启用，不落冗余记录）。
+ * enabled=false → 写记录（显式停用）。
+ */
 export function setPackEnabled(
   projectRoot: string,
   packId: string,
   enabled: boolean,
-): PackRecord | null {
+): ProjectPackState | null {
   const state = readPacksState(projectRoot);
-  const existing = state.packs.find((p) => p.packId === packId);
-  if (!existing) return null;
-  const record = { ...existing, enabled };
-  writePacksState(projectRoot, {
-    ...state,
-    packs: state.packs.map((p) => (p.packId === packId ? record : p)),
-  });
-  return record;
+  const states = { ...state.projectPackStates };
+  if (enabled) {
+    if (packId in states) delete states[packId];
+  } else {
+    states[packId] = { enabled: false };
+  }
+  writePacksState(projectRoot, { ...state, projectPackStates: states });
+  return states[packId] ?? null;
 }
 
 /**
- * uninstall：移除记录 + 惰性修剪该 pack 的 disabledContent / contentOverrides；
- * defaultOrchestrator 指向该 pack 时回退 core 默认。零文件删除（引用模型）。
+ * 项目启停覆盖读取：无记录 → null（即「缺省自动启用」）。
  */
-export function removePackRecord(projectRoot: string, packId: string): PacksState {
+export function getPackProjectState(
+  projectRoot: string,
+  packId: string,
+): ProjectPackState | null {
+  return readPacksState(projectRoot).projectPackStates[packId] ?? null;
+}
+
+/**
+ * uninstall 的项目侧清理：移除 projectPackStates 覆盖 + 惰性修剪该 pack 的
+ * disabledContent / contentOverrides；defaultOrchestrator 指向该 pack 时回退
+ * core 默认。零文件删除（引用模型）。应用级卸载由 packs-installed 负责。
+ */
+export function removePackProjectState(projectRoot: string, packId: string): PacksState {
   const state = readPacksState(projectRoot);
+  const states = { ...state.projectPackStates };
+  delete states[packId];
   const next: PacksState = {
     ...state,
-    packs: state.packs.filter((p) => p.packId !== packId),
+    projectPackStates: states,
     disabledContent: state.disabledContent.filter((f) => !fqidBelongsToPack(f, packId)),
     contentOverrides: Object.fromEntries(
       Object.entries(state.contentOverrides).filter(([f]) => !fqidBelongsToPack(f, packId)),

@@ -14,13 +14,27 @@ import {
   migratePacksStateIfNeeded,
   readPacksState,
 } from "../../src/main/services/packs-state";
+import {
+  listInstalledPacks,
+  setPacksInstalledDataDir,
+} from "../../src/main/services/packs-installed";
 
 let root: string | undefined;
+let appDir: string | undefined;
 
 afterEach(() => {
   if (root) rmSync(root, { recursive: true, force: true });
   root = undefined;
+  if (appDir) rmSync(appDir, { recursive: true, force: true });
+  appDir = undefined;
+  setPacksInstalledDataDir(null);
 });
+
+/** Seal the app-level installed store to a per-test temp dir. */
+function sealAppStore(): void {
+  appDir = mkdtempSync(join(tmpdir(), "packs-migration-app-"));
+  setPacksInstalledDataDir(appDir);
+}
 
 function makeRoot(): string {
   root = mkdtempSync(join(tmpdir(), "packs-migration-"));
@@ -49,7 +63,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     makeRoot();
     const { state, migrated } = migratePacksStateIfNeeded(root!);
     expect(migrated).toBe(false);
-    expect(state.packs).toEqual([]);
+    expect(state.projectPackStates).toEqual({});
     expect(state.disabledContent).toEqual([]);
     expect(existsSync(join(agentDir(), "packs.json"))).toBe(false);
   });
@@ -186,11 +200,11 @@ describe("packs-state legacy migration (R1–R5)", () => {
     writeLegacy("packs.json", "{ not json !!");
     const { state, migrated } = migratePacksStateIfNeeded(root!);
     expect(migrated).toBe(true);
-    expect(state.stateVersion).toBe(2);
-    expect(state.packs).toEqual([]);
+    expect(state.stateVersion).toBe(3);
+    expect(state.projectPackStates).toEqual({});
     // 重写后可正常读取
     const reread = readPacksState(root!);
-    expect(reread.stateVersion).toBe(2);
+    expect(reread.stateVersion).toBe(3);
   });
 
   it("R1 迁移结果与直接读 readPacksState 一致", () => {
@@ -413,8 +427,9 @@ describe("packs-state legacy migration (R6–R11)", () => {
 // R9：plugins-manifest.json → packs[] + 拷贝副本回收（§10.2 Phase 4）
 // ────────────────────────────────────────────────────────────
 describe("packs-state legacy migration (R9)", () => {
-  it("plugins-manifest 记录迁移为 packs[]（suite.X → prismnext.X）并备份旧文件", () => {
+  it("plugins-manifest 记录上卷到应用级 + projectPackStates（suite.X → prismnext.X）并备份旧文件", () => {
     makeRoot();
+    sealAppStore();
     writeLegacy(
       "plugins-manifest.json",
       JSON.stringify({
@@ -428,14 +443,12 @@ describe("packs-state legacy migration (R9)", () => {
 
     const { state, migrated } = migratePacksStateIfNeeded(root!);
     expect(migrated).toBe(true);
-    expect(state.packs).toEqual([
-      expect.objectContaining({
-        packId: "prismnext.research-notes",
-        version: "0.2.0",
-        enabled: true,
-      }),
-      expect.objectContaining({ packId: "third.party-tool", enabled: false }),
-    ]);
+    // App-level upsert: both packs installed; only the disabled one gets a
+    // project override (auto-enable for the rest).
+    const installed = listInstalledPacks().map((r: { packId: string }) => r.packId);
+    expect(installed).toContain("prismnext.research-notes");
+    expect(installed).toContain("third.party-tool");
+    expect(state.projectPackStates).toEqual({ "third.party-tool": { enabled: false } });
     // 旧 manifest 进 legacy-backup
     expect(existsSync(join(agentDir(), "plugins-manifest.json"))).toBe(false);
     const backup = backupDir();
@@ -446,6 +459,7 @@ describe("packs-state legacy migration (R9)", () => {
 
   it("plugin 拷贝副本回收：experts/orchestrators 带 pluginId 者进 backup，不进 local", () => {
     makeRoot();
+    sealAppStore();
     writeLegacy(
       "plugins-manifest.json",
       JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),
@@ -474,6 +488,7 @@ describe("packs-state legacy migration (R9)", () => {
 
   it("plugin 拷贝副本回收：commands frontmatter 带 pluginId 者进 backup", () => {
     makeRoot();
+    sealAppStore();
     writeLegacy(
       "plugins-manifest.json",
       JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),
@@ -494,6 +509,7 @@ describe("packs-state legacy migration (R9)", () => {
 
   it("plugin 拷贝副本回收：skills-manifest installs 标记 plugin 来源的技能进 backup", () => {
     makeRoot();
+    sealAppStore();
     writeLegacy(
       "plugins-manifest.json",
       JSON.stringify({ installed: [{ pluginId: "suite.research-notes" }] }),

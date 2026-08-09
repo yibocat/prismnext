@@ -4,13 +4,15 @@
 import { ipcMain } from "electron";
 import { CORE_PACK_ID } from "../../shared/packs/types";
 import type { ContentKind, ContentOverride, Fqid } from "../../shared/packs/types";
-import { getPackContents } from "../services/pack-catalog";
+import { getPackContentsWithMcp } from "../services/pack-catalog";
 import {
   isContentActive,
   listContent,
+  listProjectMcps,
   listProjectPacks,
   notifyPacksChanged,
   resolveBadge,
+  resolveOrchestratorId,
 } from "../services/pack-resolver";
 import {
   installPack,
@@ -127,8 +129,18 @@ export function registerPacksHandlers(): void {
         coreOrchs.map((c) => c.fqid),
       );
       const defaultOrch = coreOrchs.find((c) => c.fqid === state.defaultOrchestrator);
+      // The EFFECTIVE default: resolver falls back to the core default when the
+      // stored default's pack is disabled in this project (its content is not
+      // active). The UI must show the agent that actually runs, not the raw
+      // stored value — otherwise a disabled team keeps its DEFAULT badge even
+      // though chat already uses the core default.
+      const effectiveDefaultFqid = resolveOrchestratorId(root);
       return {
         defaultOrchestratorId: defaultOrch?.id ?? null,
+        // Full-fidelity default (any pack, not just core): UI matches against
+        // `orchestrator.fqid` so a non-core default is preserved across reloads
+        // instead of silently falling back to the core default.
+        defaultOrchestratorFqid: effectiveDefaultFqid,
         coreExpertDisabledCount: expertState.disabledCount,
         coreExpertOverrideCount: expertState.overrideCount,
         coreOrchestratorDisabledCount: orchState.disabledCount,
@@ -156,13 +168,21 @@ export function registerPacksHandlers(): void {
   );
 
   // Catalog-level content scan (no install required; detail view "what's in this pack").
+  // Includes MCP servers declared by the pack's mcp.json.
   ipcMain.handle("packs:getPackContents", async (_event, args?: { packId?: string }) => {
     if (!args?.packId) return [];
     try {
-      return getPackContents(args.packId);
+      return getPackContentsWithMcp(args.packId);
     } catch {
       return [];
     }
+  });
+
+  // Pack-declared MCP servers (app-level resource, project-gated) — the MCP
+  // settings page shows these under "From teams" with enabled/greyed state.
+  ipcMain.handle("packs:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
+    if (!args?.projectRoot) return [];
+    return listProjectMcps(args.projectRoot);
   });
 
   // Spec §9.4 link UX confirm: target must be currently active to become default.

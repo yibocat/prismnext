@@ -2,7 +2,7 @@
  * pack-catalog.ts —— pack 根的注册、发现与目录扫描（§4.1 / §8.2）。
  *
  * 三类 pack 根：
- * - first-party：`resources/plugins/`（随 app 打包，含 core pack）
+ * - first-party：`resources/teams/`（随 app 打包，含 core pack）
  * - external：运行期注册的目录（Pro 私有包 `packs/`，Phase 5 由 pro-packs-discovery 调用）
  * - local：`<projectRoot>/.prismnext/agent/local/`（用户自建内容，虚拟 manifest）
  *
@@ -22,7 +22,7 @@ import type {
   PackManifest,
   PackView,
 } from "../../shared/packs/types";
-import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../shared/packs/types";
+import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL, USER_TEAM_PUBLISHER } from "../../shared/packs/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/packs/frontmatter";
 import { createLogger } from "./logger";
 import { licenseGrants } from "./packs-license";
@@ -57,12 +57,12 @@ export function getFirstPartyPacksDir(): string {
   // 测试 / 工具可用环境变量把 first-party 根指到隔离目录（fixture 密封）。
   const override = process.env.PRISM_FIRST_PARTY_PACKS_DIR?.trim();
   if (override) return override;
-  const devFallback = join(process.cwd(), "resources", "plugins");
+  const devFallback = join(process.cwd(), "resources", "teams");
   try {
     if (!app) return devFallback;
-    if (app.isPackaged) return join(process.resourcesPath, "resources", "plugins");
+    if (app.isPackaged) return join(process.resourcesPath, "resources", "teams");
     const appPath = app.getAppPath();
-    return existsSync(appPath) ? join(appPath, "resources", "plugins") : devFallback;
+    return existsSync(appPath) ? join(appPath, "resources", "teams") : devFallback;
   } catch {
     return devFallback;
   }
@@ -258,6 +258,34 @@ export function scanPackContents(packDir: string): ScannedContentItem[] {
   ];
 }
 
+/** Catalog-level content view for a pack, INCLUDING MCP servers (detail view).
+ *  MCP defs are not ScannedContentItem (no dir/definition), so they're mapped
+ *  here so the teams marketplace / pack detail can show them. */
+export function getPackContentsWithMcp(packId: string): Array<{
+  kind: ContentKind;
+  id: string;
+  name: string;
+  description: string;
+}> {
+  const items = getPackContents(packId);
+  const out: Array<{ kind: ContentKind; id: string; name: string; description: string }> =
+    items.map((i) => ({
+      kind: i.kind,
+      id: i.id,
+      name: i.name,
+      description: i.description,
+    }));
+  for (const m of getPackMcpDefs(packId)) {
+    out.push({
+      kind: "mcp",
+      id: m.id,
+      name: m.name,
+      description: m.description ?? "",
+    });
+  }
+  return out;
+}
+
 /** contents 展示声明 vs 扫描结果校验（§4.2.2：永远以扫描为准，不一致记 warning） */
 function validateContentsDecl(manifest: PackManifest, items: ScannedContentItem[], mcps: McpDef[]): void {
   if (!manifest.contents) return;
@@ -320,7 +348,10 @@ function toPackView(
     manifest,
     kind,
     dir,
-    installedByDefault: kind === "core" || kind === "local",
+    // User-created teams (publisher "user") are implicitly installed — the
+    // user made them, no separate install step needed (like core / local).
+    installedByDefault:
+      kind === "core" || kind === "local" || manifest.publisher === USER_TEAM_PUBLISHER,
     locked: manifest.tier === "pro" && !licenseGrants(manifest.feature),
     compatible,
   };

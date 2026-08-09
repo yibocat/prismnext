@@ -316,7 +316,7 @@ to the project environment.
 
 ## Contributing a new bundled skill
 
-1. Create `resources/plugins/prismnext.core/skills/<skill-id>/`; the frontmatter
+1. Create `resources/teams/prismnext.core/skills/<skill-id>/`; the frontmatter
    `name` must equal the folder name.
 2. Frontmatter requires `name` and `description` (third person, "Use
    when…", trigger keywords first; no unquoted `: ` in the value).

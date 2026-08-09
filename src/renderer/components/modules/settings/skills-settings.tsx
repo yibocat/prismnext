@@ -1,5 +1,5 @@
 import { formatTokenCount } from "@shared/token-estimate";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   PuzzleIcon,
@@ -74,6 +74,39 @@ export function SkillsSettings() {
       ? skills
       : skills.slice(0, SKILLS_PAGE_INITIAL_COUNT);
   const hasMoreSkills = skills.length > SKILLS_PAGE_INITIAL_COUNT;
+
+  // Group skills by owning pack (spec: core / 各 pack / 我的), unified origin
+  // badge. Plugin skills group under their pack; bundled under core; everything
+  // else (custom + registry installs) under "Mine". `scope` makes the layering
+  // explicit: app-level (ships with / installed from packs) vs project-level
+  // (this project's own content).
+  const skillGroups = useMemo(() => {
+    const CORE_KEY = "__core__";
+    const MINE_KEY = "__mine__";
+    const map = new Map<
+      string,
+      { key: string; label: string; scope: "app" | "project"; skills: InstalledSkill[] }
+    >();
+    const push = (key: string, label: string, scope: "app" | "project", skill: InstalledSkill) => {
+      const entry = map.get(key) ?? { key, label, scope, skills: [] };
+      entry.skills.push(skill);
+      map.set(key, entry);
+    };
+    for (const s of visibleSkills) {
+      if (s.origin === "plugin") {
+        push(s.originPackName ?? "pack", s.originPackName ?? "pack", "app", s);
+      } else if (s.origin === "bundled") {
+        push(CORE_KEY, t("settings.skillsPage.group.core"), "app", s);
+      } else {
+        push(MINE_KEY, t("settings.skillsPage.group.mine"), "project", s);
+      }
+    }
+    const rank = (key: string) =>
+      key === CORE_KEY ? 0 : key === MINE_KEY ? 2 : 1;
+    return [...map.values()].sort(
+      (a, b) => rank(a.key) - rank(b.key) || a.label.localeCompare(b.label),
+    );
+  }, [visibleSkills, t]);
 
   useEffect(() => {
     setShowAllSkills(false);
@@ -304,88 +337,102 @@ export function SkillsSettings() {
                   </div>
                 ) : (
                   <>
-                  {visibleSkills.map((skill) => {
-                    const update = updatesBySkillId[skill.id];
-                    const hasUpdate = update?.updateAvailable === true;
-                    return (
-                    <div key={skill.fqid} className={ROW}>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={cn(ROW_LABEL, "font-mono")}>{skill.name}</span>
-                          <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
-                            {t("settings.editor.promptStack.tokens", {
-                              count: formatTokenCount(skill.tokenCount),
-                            })}
-                          </span>
-                          {!skill.enabled && (
-                            <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
-                              off
-                            </span>
+                  {skillGroups.map((group) => (
+                    <div key={group.key} className="divide-y divide-border">
+                      <div className={cn(ROW, "!pb-1")}>
+                        <p className="text-[length:var(--font-size-11)] font-semibold uppercase tracking-wide text-muted-foreground/70">
+                          {group.label}
+                        </p>
+                        <span className={cn(BADGE, "bg-muted/40 text-muted-foreground/70")}>
+                          {group.scope === "app"
+                            ? t("settings.skillsPage.scope.app")
+                            : t("settings.skillsPage.scope.project")}
+                        </span>
+                      </div>
+                      {group.skills.map((skill) => {
+                        const update = updatesBySkillId[skill.id];
+                        const hasUpdate = update?.updateAvailable === true;
+                        return (
+                        <div key={skill.fqid} className={ROW}>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={cn(ROW_LABEL, "font-mono")}>{skill.name}</span>
+                              <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
+                                {t("settings.editor.promptStack.tokens", {
+                                  count: formatTokenCount(skill.tokenCount),
+                                })}
+                              </span>
+                              {!skill.enabled && (
+                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
+                                  off
+                                </span>
+                              )}
+                              {skill.origin === "custom" && (
+                                <span className={cn(BADGE, "bg-secondary text-primary")}>
+                                  {t("settings.skillsPage.origin.custom")}
+                                </span>
+                              )}
+                              {skill.origin === "bundled" && (
+                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                                  {t("settings.skillsPage.origin.bundled")}
+                                </span>
+                              )}
+                              {skill.origin === "plugin" && (
+                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                                  {skill.originPackName ?? "pack"}
+                                </span>
+                              )}
+                              {hasUpdate && (
+                                <span className={cn(BADGE, "bg-secondary text-warning")}>
+                                  update
+                                </span>
+                              )}
+                            </div>
+                            <p className={ROW_DESC}>
+                              {hasUpdate && update?.message
+                                ? update.message
+                                : skill.description || skill.id}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={skill.enabled}
+                            onCheckedChange={(v) => void toggleEnabled(skill, v)}
+                          />
+                          {skill.installOrigin && (
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="h-7 px-2 shrink-0 text-[length:var(--font-size-11)]"
+                              disabled={saving}
+                              onClick={() => void reinstallSkill(skill)}
+                            >
+                              {hasUpdate ? "Update" : "Reinstall"}
+                            </Button>
                           )}
-                          {skill.origin === "custom" && (
-                            <span className={cn(BADGE, "bg-secondary text-primary")}>
-                              {t("settings.skillsPage.origin.custom")}
-                            </span>
-                          )}
-                          {skill.origin === "bundled" && (
-                            <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
-                              {t("settings.skillsPage.origin.bundled")}
-                            </span>
-                          )}
-                          {skill.origin === "plugin" && (
-                            <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
-                              {skill.originPackName ?? "pack"}
-                            </span>
-                          )}
-                          {hasUpdate && (
-                            <span className={cn(BADGE, "bg-secondary text-warning")}>
-                              update
-                            </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 shrink-0"
+                            disabled={saving}
+                            title="Open skill"
+                            onClick={() => openSkillMarkdown(skill)}
+                          >
+                            <SquareArrowOutUpRightIcon className="size-3.5" />
+                          </Button>
+                          {skill.removable && (
+                            <InlineDeleteButton
+                              itemId={skill.fqid}
+                              pending={deleteConfirm.isPending(skill.fqid)}
+                              disabled={saving}
+                              onRequest={() => deleteConfirm.setPendingId(skill.fqid)}
+                              onConfirm={() => void deleteSkill(skill)}
+                            />
                           )}
                         </div>
-                        <p className={ROW_DESC}>
-                          {hasUpdate && update?.message
-                            ? update.message
-                            : skill.description || skill.id}
-                        </p>
-                      </div>
-                      <Switch
-                        checked={skill.enabled}
-                        onCheckedChange={(v) => void toggleEnabled(skill, v)}
-                      />
-                      {skill.installOrigin && (
-                        <Button
-                          variant="ghost"
-                          size="xs"
-                          className="h-7 px-2 shrink-0 text-[length:var(--font-size-11)]"
-                          disabled={saving}
-                          onClick={() => void reinstallSkill(skill)}
-                        >
-                          {hasUpdate ? "Update" : "Reinstall"}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 shrink-0"
-                        disabled={saving}
-                        title="Open skill"
-                        onClick={() => openSkillMarkdown(skill)}
-                      >
-                        <SquareArrowOutUpRightIcon className="size-3.5" />
-                      </Button>
-                      {skill.removable && (
-                        <InlineDeleteButton
-                          itemId={skill.fqid}
-                          pending={deleteConfirm.isPending(skill.fqid)}
-                          disabled={saving}
-                          onRequest={() => deleteConfirm.setPendingId(skill.fqid)}
-                          onConfirm={() => void deleteSkill(skill)}
-                        />
-                      )}
+                        );
+                      })}
                     </div>
-                    );
-                  })}
+                  ))}
                   {hasMoreSkills && (
                     <div className="py-2.5 flex justify-center border-t border-border">
                       <Button

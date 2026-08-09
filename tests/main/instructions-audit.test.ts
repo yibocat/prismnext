@@ -11,7 +11,7 @@ import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-
 import type { PromptContext } from "../../src/main/prompts/types";
 
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
-const CORE_PACK_DIR = join(process.cwd(), "resources", "plugins", "prismnext.core");
+const CORE_PACK_DIR = join(process.cwd(), "resources", "teams", "prismnext.core");
 
 function getCoreAgentsDir(kind: "experts" | "orchestrators"): string {
   return join(CORE_PACK_DIR, kind);

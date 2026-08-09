@@ -2,7 +2,7 @@
  * experts-sync.ts —— orchestrators / experts 的 legacy facade（Phase 2 重写）。
  *
  * 内容来源与启停判定已全部交给 Agent Pack 体系：
- *   - core 内容 = `resources/plugins/prismnext.core/`（PackCatalog 扫描）
+ *   - core 内容 = `resources/teams/prismnext.core/`（PackCatalog 扫描）
  *   - 用户自建内容 = Local Pack `.prismnext/agent/local/`
  *   - 启停 / override / 默认 orchestrator = packs.json（packs-state.ts）
  *   - 「有什么、是否可用」唯一答案 = pack-resolver.ts
@@ -77,7 +77,8 @@ import {
   setDefaultOrchestratorFqid,
   writePacksState,
 } from "./packs-state";
-import { getLocalPackDir } from "./pack-catalog";
+import { getLocalPackDir, invalidateCatalog } from "./pack-catalog";
+import { listUserTeams } from "./user-packs";
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
@@ -300,7 +301,16 @@ function appendCapabilityRefs(
 }
 
 function yamlScalar(value: string): string {
-  if (/[:#\n"'&*]|^\s/.test(value)) return JSON.stringify(value);
+  // Quote strings that YAML would otherwise parse as a DIFFERENT type
+  // (numbers, booleans, null) — e.g. description "123" must stay a string or
+  // opencode rejects the agent config ("Expected string, got 123").
+  if (
+    /[:#\n"'&*]|^\s/.test(value) ||
+    /^[-+]?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(value) ||
+    /^(true|false|True|False|TRUE|FALSE|yes|no|Yes|No|on|off|null|Null|NULL|~)$/.test(value)
+  ) {
+    return JSON.stringify(value);
+  }
   return value;
 }
 
@@ -678,14 +688,51 @@ function invalidateLocalViews(projectRoot: string): void {
   invalidateResolver(projectRoot);
 }
 
+// ── 可写目标（Local Pack 或用户团队）───────────────────────
+
+/** Derive a content item's owning pack id from its fqid (`packId:contentId`). */
+function packIdOf(item: { fqid?: string }): string {
+  const pid = item.fqid?.split(":")[0];
+  return pid && pid.length > 0 ? pid : LOCAL_PACK_ID;
+}
+
+/**
+ * Resolve the directory a custom agent should be written into.
+ * - no target / LOCAL_PACK_ID → this project's Local Pack;
+ * - a user-team packId → that team's app-level directory.
+ */
+function resolveWritableTarget(
+  projectRoot: string,
+  targetPackId?: string,
+): { dir: string; packId: string } {
+  const tid = targetPackId?.trim();
+  if (!tid || tid === LOCAL_PACK_ID) {
+    return { dir: getLocalPackDir(projectRoot), packId: LOCAL_PACK_ID };
+  }
+  const team = listUserTeams().find((t) => t.packId === tid);
+  if (!team) throw new Error(`Target team not found: ${tid}`);
+  return { dir: team.dir, packId: team.packId };
+}
+
+/** Invalidate views after a write: local → this project; user team → catalog. */
+function invalidateWritableTarget(projectRoot: string, packId: string): void {
+  if (packId === LOCAL_PACK_ID) invalidateLocalViews(projectRoot);
+  else invalidateCatalog();
+}
+
 export function saveCustomExpert(
   projectRoot: string,
   payload: SaveCustomExpertPayload,
+  targetPackId?: string,
 ): ExpertInfo {
-  const baseId = payload.id?.trim() || slugifyId(payload.name);
-  const id = payload.id ? baseId : uniqueLocalExpertId(projectRoot, baseId);
-  const dir = join(getLocalPackDir(projectRoot), "experts", id);
-  mkdirSync(dir, { recursive: true });
+  const { dir, packId } = resolveWritableTarget(projectRoot, targetPackId);
+  const rawId = payload.id?.trim() || slugifyId(payload.name);
+  // Editing passes an agentFileBase id (`<packId>--<id>` for non-local packs);
+  // strip the pack prefix to get the bare id used as the directory name.
+  const bareId = rawId.includes("--") ? rawId.slice(rawId.lastIndexOf("--") + 2) : rawId;
+  const id = payload.id ? bareId : uniqueLocalExpertId(projectRoot, bareId);
+  const agentDir = join(dir, "experts", id);
+  mkdirSync(agentDir, { recursive: true });
 
   // 新格式 expert.json：无 builtin/removable/pluginId 身份字段（§4.3.2）
   const def: ExpertDef = {
@@ -699,11 +746,11 @@ export function saveCustomExpert(
     permission: payload.permission,
   };
 
-  writeFileSync(join(dir, "expert.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
-  writeFileSync(join(dir, "instructions.md"), payload.instructions.trim(), "utf-8");
-  invalidateLocalViews(projectRoot);
+  writeFileSync(join(agentDir, "expert.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
+  writeFileSync(join(agentDir, "instructions.md"), payload.instructions.trim(), "utf-8");
+  invalidateWritableTarget(projectRoot, packId);
 
-  const saved = getExpert(projectRoot, id);
+  const saved = getExpert(projectRoot, toFqid(packId, id));
   if (!saved) throw new Error(`Failed to save custom expert "${id}"`);
   return saved;
 }
@@ -711,45 +758,57 @@ export function saveCustomExpert(
 export function deleteCustomExpert(projectRoot: string, expertId: string): void {
   const expert = getExpert(projectRoot, expertId);
   if (!expert) throw new Error(`Expert not found: ${expertId}`);
-  if (expert.builtin || !expert.removable) {
-    throw new Error(`Cannot delete built-in expert: ${expertId}`);
+  if (!expert.removable) {
+    // Pack-provided experts (incl. first-party packs) are read-only —
+    // disable the pack instead of deleting its content.
+    throw new Error(
+      `Cannot delete a team-provided expert (disable the team or its expert instead): ${expertId}`,
+    );
   }
-  const dir = join(getLocalPackDir(projectRoot), "experts", expert.id);
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-  invalidateLocalViews(projectRoot);
+  const packId = packIdOf(expert);
+  const { dir } = resolveWritableTarget(projectRoot, packId);
+  const bareId = expert.id.includes("--") ? expert.id.slice(expert.id.lastIndexOf("--") + 2) : expert.id;
+  const agentDir = join(dir, "experts", bareId);
+  if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
+  invalidateWritableTarget(projectRoot, packId);
 }
 
 export function saveCustomOrchestrator(
   projectRoot: string,
   payload: SaveCustomOrchestratorPayload,
+  targetPackId?: string,
 ): OrchestratorInfo {
-  const baseId = payload.id?.trim() || slugifyId(payload.name);
-  const id = payload.id ? baseId : uniqueLocalOrchestratorId(projectRoot, baseId);
-  const dir = join(getLocalPackDir(projectRoot), "orchestrators", id);
-  mkdirSync(dir, { recursive: true });
+  const { dir, packId } = resolveWritableTarget(projectRoot, targetPackId);
+  const rawId = payload.id?.trim() || slugifyId(payload.name);
+  // Editing passes an agentFileBase id (`<packId>--<id>` for non-local packs);
+  // strip the pack prefix to get the bare id used as the directory name.
+  const bareId = rawId.includes("--") ? rawId.slice(rawId.lastIndexOf("--") + 2) : rawId;
+  const id = payload.id ? bareId : uniqueLocalOrchestratorId(projectRoot, bareId);
+  const agentDir = join(dir, "orchestrators", id);
+  mkdirSync(agentDir, { recursive: true });
 
-  const enabledExpertIds = listExperts(projectRoot).filter((e) => e.enabled).map((e) => e.id);
   const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
-  // 新格式 orchestrator.json：无身份字段；allowedExperts 存裸 id（§4.3.1 可解析）
+  // 新格式 orchestrator.json：无身份字段；allowedExperts 存裸 id（§4.3.1 可解析）。
+  // undefined = 不限制（默认全部可用专家，含将来新增）；仅用户显式勾选才落列表。
   const def: OrchestratorDef = {
     id,
     name: payload.name.trim(),
     description: payload.description.trim(),
     allowedExperts:
       payload.allowedExperts !== undefined
-        ? pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds) ?? []
-        : enabledExpertIds,
+        ? pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds)
+        : undefined,
     model: payload.model?.trim() || undefined,
     thoughtLevel: payload.thoughtLevel?.trim() || undefined,
     temperature: payload.temperature,
     permission: payload.permission,
   };
 
-  writeFileSync(join(dir, "orchestrator.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
-  writeFileSync(join(dir, "instructions.md"), payload.instructions.trim(), "utf-8");
-  invalidateLocalViews(projectRoot);
+  writeFileSync(join(agentDir, "orchestrator.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
+  writeFileSync(join(agentDir, "instructions.md"), payload.instructions.trim(), "utf-8");
+  invalidateWritableTarget(projectRoot, packId);
 
-  const saved = getOrchestrator(projectRoot, id);
+  const saved = getOrchestrator(projectRoot, toFqid(packId, id));
   if (!saved) throw new Error(`Failed to save custom orchestrator "${id}"`);
   return saved;
 }
@@ -757,14 +816,23 @@ export function saveCustomOrchestrator(
 export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: string): void {
   const orchestrator = getOrchestrator(projectRoot, orchestratorId);
   if (!orchestrator) throw new Error(`Orchestrator not found: ${orchestratorId}`);
-  if (orchestrator.builtin || !orchestrator.removable) {
-    throw new Error(`Cannot delete built-in orchestrator: ${orchestratorId}`);
+  if (!orchestrator.removable) {
+    // Pack-provided orchestrators (incl. first-party packs) are read-only —
+    // disable the pack instead of deleting its content.
+    throw new Error(
+      `Cannot delete a team-provided orchestrator (disable the team or its orchestrator instead): ${orchestratorId}`,
+    );
   }
-  const dir = join(getLocalPackDir(projectRoot), "orchestrators", orchestrator.id);
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-  invalidateLocalViews(projectRoot);
+  const packId = packIdOf(orchestrator);
+  const { dir } = resolveWritableTarget(projectRoot, packId);
+  const bareId = orchestrator.id.includes("--")
+    ? orchestrator.id.slice(orchestrator.id.lastIndexOf("--") + 2)
+    : orchestrator.id;
+  const agentDir = join(dir, "orchestrators", bareId);
+  if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
+  invalidateWritableTarget(projectRoot, packId);
   const state = readPacksState(projectRoot);
-  if (state.defaultOrchestrator === toFqid(LOCAL_PACK_ID, orchestrator.id)) {
+  if (state.defaultOrchestrator === toFqid(packId, bareId)) {
     setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
   }
 }

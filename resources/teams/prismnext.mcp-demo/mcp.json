@@ -1,0 +1,21 @@
+[
+  {
+    "id": "demo-memory",
+    "name": "demo-memory",
+    "description": "A local SQLite-backed memory server (stdio).",
+    "transport": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    }
+  },
+  {
+    "id": "demo-remote",
+    "name": "demo-remote",
+    "description": "A remote HTTP placeholder server (http).",
+    "transport": {
+      "type": "http",
+      "url": "https://example.com/mcp"
+    }
+  }
+]

@@ -106,7 +106,9 @@ export function McpCatalogPanel() {
     await persist(projectRoot, mergeMcpEntries(servers, [entry]));
     cancelInstall();
     toast.success(t("settings.editor.mcp.toast.added", { name: preset.name }));
-    closePanel();
+    // Stay on the catalog so installing several MCP servers in a row is
+    // frictionless — the row flips to "installed" and the next one can be
+    // picked immediately (previously the panel closed after every install).
   };
 
   const oneClickInstall = async (preset: McpPreset) => {
@@ -119,7 +121,7 @@ export function McpCatalogPanel() {
     if (!entry) return;
     await persist(projectRoot, mergeMcpEntries(servers, [entry]));
     toast.success(t("settings.mcp.toast.installed", { name: preset.name }));
-    closePanel();
+    // Same as above — stay open for batch installs.
   };
 
   if (!projectRoot) {
@@ -145,10 +147,6 @@ export function McpCatalogPanel() {
               {preset.builtin ? (
                 <span className={cn(BADGE, "bg-muted text-primary normal-case tracking-normal")}>
                   {t("settings.editor.mcp.badgeBuiltin")}
-                </span>
-              ) : preset.recommended ? (
-                <span className={cn(BADGE, "bg-muted text-primary normal-case tracking-normal")}>
-                  {t("settings.editor.mcp.badgeRecommended")}
                 </span>
               ) : null}
             </div>

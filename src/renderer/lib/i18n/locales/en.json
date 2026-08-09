@@ -64,12 +64,12 @@
       "commands": "Commands",
       "mcp": "MCP",
       "skills": "Skills",
-      "plugins": "Plugins",
       "texWorkspace": "TeX Workspace",
       "terminal": "Terminal",
       "browser": "Browser",
       "literature": "Literature",
-      "pro": "Pro"
+      "pro": "Pro",
+      "teamsAgents": "Teams & Agents"
     },
     "general": {
       "title": "General",
@@ -119,7 +119,8 @@
       "logs": "Logs",
       "editor": "Editor",
       "settingsEditor": "Settings editor",
-      "mcpJson": "mcp.json"
+      "mcpJson": "mcp.json",
+      "packDetail": "Team details"
     },
     "appearance": {
       "title": "Appearance",
@@ -247,6 +248,7 @@
       "default": "Default",
       "toast": {
         "defaultOrchestratorUpdated": "Default orchestrator updated.",
+        "defaultOrchestratorFailed": "Failed to set default orchestrator.",
         "orchestratorDeleted": "Orchestrator deleted.",
         "expertDeleted": "Expert deleted.",
         "deleteFailed": "Failed to delete.",
@@ -319,7 +321,13 @@
         "appliedNoSessions": "MCP configuration applied (no open chat sessions yet).",
         "fillRequired": "Fill in all required fields.",
         "installed": "{{name}} installed — start a new chat to use it."
-      }
+      },
+      "disabledInProject": "Disabled in this project",
+      "sourceTeam": "From team {{team}}",
+      "sourceProject": "This project",
+      "sourceBuiltin": "Built-in",
+      "active": "Active",
+      "applyToChatsHint": "Re-push MCP tools into already-open chats (normally automatic)."
     },
     "prompts": {
       "title": "Prompts & Rules",
@@ -370,7 +378,8 @@
       "empty": {
         "openForRules": "Open a project to manage project rules.",
         "noRules": "No project rules yet."
-      }
+      },
+      "stackBaseAgent": "Based on main agent: {{name}}"
     },
     "workspace": {
       "title": "Workspace",
@@ -648,6 +657,14 @@
         "updateFailed": "Failed to update skill.",
         "reinstalled": "Reinstalled \"{{name}}\" — start a new chat to use it.",
         "removed": "Removed \"{{name}}\"."
+      },
+      "group": {
+        "core": "Built-in",
+        "mine": "Mine"
+      },
+      "scope": {
+        "app": "App-level",
+        "project": "This project"
       }
     },
     "permissions": {
@@ -793,19 +810,19 @@
         "renamed": "{{count}} renamed",
         "failed": "Import failed."
       },
-      "builtinSection": "Built-in commands",
-      "builtinDesc": "App slash shortcuts (compile, setup, checkpoints). Toggle visibility in the composer / menu.",
-      "appShortcuts": "App shortcuts",
-      "enabledCount": "{{enabled}} of {{total}} enabled in the composer menu.",
-      "loadingBuiltin": "Loading built-in commands…",
-      "viewBuiltin": "View built-in commands",
-      "customSection": "Custom commands",
-      "customOpenProject": "Open a project to create and manage custom commands.",
-      "customDesc": "Per-project prompt templates in",
-      "emptyCustom": "No custom commands yet.",
       "addCustom": "+ Add custom command",
       "export": "Export",
-      "importBtn": "Import"
+      "importBtn": "Import",
+      "mine": "My commands",
+      "emptyCommands": "No commands yet.",
+      "openProject": "Open a project to manage slash commands.",
+      "disabledInProject": "Disabled in this project",
+      "showAll": "Show all ({{count}})",
+      "showLess": "Show less",
+      "scope": {
+        "app": "App-level",
+        "project": "This project"
+      }
     },
     "texWorkspacePage": {
       "title": "TeX Workspace",
@@ -994,7 +1011,10 @@
           "standardDesc": "Read tools + ask before edit/bash",
           "fullDesc": "All tools allowed (still no subagent delegation)"
         },
-        "openProject": "Open a project to edit experts."
+        "openProject": "Open a project to edit experts.",
+        "targetTeam": "Target team",
+        "localTarget": "This project (local)",
+        "targetTeamDesc": "New experts live in the project Local Pack by default; choose a team to create app-level experts shared across projects."
       },
       "orchestrator": {
         "allowedExperts": "Allowed experts",
@@ -1023,7 +1043,11 @@
         "noExperts": "No enabled experts available.",
         "resetDefaults": "Reset defaults",
         "deleteDesc": "Delete this orchestrator from the project? This cannot be undone.",
-        "openProject": "Open a project to edit orchestrators."
+        "openProject": "Open a project to edit orchestrators.",
+        "allExperts": "All available experts",
+        "targetTeam": "Target team",
+        "localTarget": "This project (local)",
+        "targetTeamDesc": "New agents live in the project Local Pack by default; choose a team to create app-level agents shared across projects."
       },
       "command": {
         "add": "Add command",
@@ -1194,8 +1218,9 @@
             "__path__": "Database file path"
           },
           "postgres": {
-            "__path__": "Connection string"
-          }
+            "connection_string": "Connection string"
+          },
+          "connection_string": "Connection string"
         },
         "documentation": "Documentation"
       },
@@ -1329,7 +1354,7 @@
         },
         "openProject": "Open a project to edit MCP configuration.",
         "loading": "Loading…",
-        "intro": "Edit .prismnext/agent/mcp.json for this project. Invalid JSON cannot be saved."
+        "intro": "Edit this project's .prismnext/agent/mcp.json — the servers YOU add here. MCP servers shipped by teams live in the team's own mcp.json and are managed from the MCP list, not this file. Invalid JSON cannot be saved."
       },
       "brief": {
         "toast": {
@@ -1413,34 +1438,59 @@
         "placeholderReserved": "This slot is reserved for a settings editor that will migrate here from the main list."
       }
     },
-    "pluginsPage": {
-      "noProject": "Open a project to manage plugins.",
+    "teamsAgents": {
+      "title": "Teams & Agents",
+      "pageDesc": "Manage teams (installed packs and your own) and the main agents and experts they bring.",
+      "browse": "Browse teams",
+      "noProject": "Open a project to manage packs and agents.",
+      "emptyPacks": "No teams installed yet.",
+      "coreTeam": "PrismNext Core",
+      "mine": "Mine",
+      "default": "Default",
+      "setDefault": "Set default",
+      "confirmReset": "Confirm reset",
+      "reset": "Reset",
+      "confirm": {
+        "disableCore": "Disabling the core pack disables all built-in agents. Continue?"
+      },
       "actions": {
-        "install": "Install",
         "uninstall": "Uninstall"
       },
-      "confirm": {
-        "disableCore": "Disable the entire core pack? All built-in agents, skills and commands will become inactive. You can re-enable it anytime."
-      },
-      "suggestion": {
-        "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",
-        "accept": "Set as default",
-        "dismiss": "Dismiss",
-        "done": "Default orchestrator updated."
-      },
       "kinds": {
-        "orchestrator": "Orchestrators",
+        "orchestrator": "Main agents",
         "expert": "Experts",
         "skill": "Skills",
         "command": "Commands",
-        "mcp": "MCP servers"
+        "mcp": "MCP"
       },
-      "manageHint": "Manage installed packs here. Browse and install new ones in the Plugins page.",
-      "browse": "Browse Plugins",
-      "empty": "No packs installed yet.",
-      "title": "Plugins",
-      "pageDesc": "Manage installed packs: enable, tune individual items, or uninstall.",
-      "installed": "Installed"
+      "tabProject": "This project",
+      "tabApp": "App-level",
+      "projectEnabled": "Enabled in this project",
+      "projectDisabled": "Disabled in this project",
+      "defaultMainAgent": "Default: {{name}}",
+      "disableInProject": "Disable in this project",
+      "enableInProject": "Enable in this project",
+      "emptyTeamCards": "No teams yet.",
+      "appInstalled": "Installed packs",
+      "coreLabel": "Built-in",
+      "localLabel": "Local",
+      "browseMore": "Browse more teams",
+      "teamEmptyAgentsHint": "This team has no main agents or experts yet. Its skills and commands are managed in the Skills and Commands pages.",
+      "createTeam": "Create team",
+      "teamNamePlaceholder": "Team name",
+      "teamDescPlaceholder": "Description (optional)",
+      "teamCreated": "Team created.",
+      "deleteTeam": "Delete team",
+      "myTeam": "My team",
+      "cancel": "Cancel",
+      "viewDetails": "Details",
+      "packDetailEmpty": "This team has no content yet.",
+      "enableInProjectDesc": "When enabled, this team's main agents, experts, skills and commands are available in this project. Disabled teams are greyed out.",
+      "setDefaultDisabledHint": "This main agent is disabled in this project and cannot be set as default.",
+      "setDefaultNotActive": "This main agent is not enabled in this project and cannot be set as default.",
+      "toast": {
+        "defaultMovedToBuiltin": "This team's default main agent was disabled — the default main agent has moved back to the built-in agent."
+      }
     }
   },
   "welcome": {
@@ -1689,7 +1739,6 @@
     "library": "Library",
     "experiments": "Experiments",
     "templates": "Templates",
-    "plugins": "Plugins",
     "texWorkspace": "TeX Workspace",
     "settings": "Settings",
     "updateToVersion": "Update to {{version}}",
@@ -1722,7 +1771,8 @@
       "newProject": "New Project...",
       "openProject": "Open Project...",
       "closeProject": "Close Project"
-    }
+    },
+    "teams": "Teams"
   },
   "chat": {
     "activity": {
@@ -3041,15 +3091,15 @@
       "descPlaceholder": "Brief description of what this command does"
     }
   },
-  "pluginsCenter": {
-    "title": "Plugins",
-    "searchPlaceholder": "Search plugins…",
+  "teamsCenter": {
+    "title": "Teams",
+    "searchPlaceholder": "Search teams…",
     "tabs": {
       "all": "All",
       "installed": "Installed"
     },
-    "noProject": "Open a project to browse and install plugins.",
-    "empty": "No plugins match.",
+    "noProject": "Open a project to browse and install teams.",
+    "empty": "No teams match.",
     "categories": {
       "general": "General",
       "research": "Research"
@@ -3060,7 +3110,11 @@
       "disabled": "Disabled",
       "proLocked": "Pro",
       "incompatible": "Incompatible",
-      "notInstalled": "Not installed"
+      "notInstalled": "Not installed",
+      "installedActive": "Installed · Active",
+      "installedDisabled": "Installed · Disabled",
+      "installedProLocked": "Installed · Pro locked",
+      "goActivate": "Activate"
     },
     "kinds": {
       "orchestrator": "Orchestrators",
@@ -3080,18 +3134,18 @@
       "minHostVersion": "Requires app"
     },
     "toast": {
-      "installed": "{{name}} installed."
+      "installed": "Team installed."
     },
     "suggestion": {
       "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",
       "accept": "Set as default",
       "done": "Default orchestrator updated."
     },
-    "subtitle": "Install packs of agents, experts, skills and commands.",
-    "backToList": "Back to plugins",
+    "subtitle": "Install teams of main agents, experts, skills and commands.",
+    "backToList": "Back to teams",
     "manage": "Manage in Settings",
     "sidebar": "Browse",
-    "count": "{{count}} plugins",
+    "count": "{{count}} teams",
     "clearSearch": "Clear search"
   }
 }

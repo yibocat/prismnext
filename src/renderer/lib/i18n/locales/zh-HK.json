@@ -64,12 +64,12 @@
       "commands": "命令",
       "mcp": "MCP",
       "skills": "技能",
-      "plugins": "插件",
       "texWorkspace": "TeX 工作區",
       "terminal": "終端",
       "browser": "瀏覽器",
       "literature": "文獻",
-      "pro": "Pro"
+      "pro": "Pro",
+      "teamsAgents": "團隊與專家"
     },
     "general": {
       "title": "通用",
@@ -119,7 +119,8 @@
       "logs": "日誌",
       "editor": "編輯器",
       "settingsEditor": "設定編輯器",
-      "mcpJson": "mcp.json"
+      "mcpJson": "mcp.json",
+      "packDetail": "團隊詳情"
     },
     "appearance": {
       "title": "外觀",
@@ -247,6 +248,7 @@
       "default": "預設",
       "toast": {
         "defaultOrchestratorUpdated": "預設編排器已更新。",
+        "defaultOrchestratorFailed": "設定預設編排器失敗。",
         "orchestratorDeleted": "編排器已刪除。",
         "expertDeleted": "專家已刪除。",
         "deleteFailed": "刪除失敗。",
@@ -319,7 +321,13 @@
         "appliedNoSessions": "MCP 配置已應用（當前尚無開啟的對話）。",
         "fillRequired": "請填寫所有必填項。",
         "installed": "已安裝 {{name}} — 請開新對話以使用。"
-      }
+      },
+      "disabledInProject": "此專案已停用",
+      "sourceTeam": "來自團隊 {{team}}",
+      "sourceProject": "此專案",
+      "sourceBuiltin": "內建",
+      "active": "已啟用",
+      "applyToChatsHint": "將 MCP 工具重新推送到已開啟的對話（通常自動執行）。"
     },
     "prompts": {
       "title": "提示與規則",
@@ -370,7 +378,8 @@
       "empty": {
         "openForRules": "開啟專案以管理專案規則。",
         "noRules": "尚無專案規則。"
-      }
+      },
+      "stackBaseAgent": "基於主 Agent：{{name}}"
     },
     "workspace": {
       "title": "工作區",
@@ -648,6 +657,14 @@
         "updateFailed": "更新技能失敗。",
         "reinstalled": "已重新安裝「{{name}}」— 請開新對話以使用。",
         "removed": "已移除「{{name}}」。"
+      },
+      "group": {
+        "core": "內建",
+        "mine": "我的"
+      },
+      "scope": {
+        "app": "應用級",
+        "project": "此專案"
       }
     },
     "permissions": {
@@ -793,19 +810,19 @@
         "renamed": "已重新命名 {{count}} 個",
         "failed": "匯入失敗。"
       },
-      "builtinSection": "內建命令",
-      "builtinDesc": "應用斜槓快捷命令（編譯、設定、檢查點）。可在輸入框 / 選單中切換可見性。",
-      "appShortcuts": "應用快捷命令",
-      "enabledCount": "輸入框選單中已啟用 {{enabled}} / {{total}}。",
-      "loadingBuiltin": "正在載入內建命令…",
-      "viewBuiltin": "檢視內建命令",
-      "customSection": "自定義命令",
-      "customOpenProject": "請先開啟專案以建立和管理自定義命令。",
-      "customDesc": "專案級提示詞模板，位於",
-      "emptyCustom": "暫無自定義命令。",
       "addCustom": "+ 新增自定義命令",
       "export": "匯出",
-      "importBtn": "匯入"
+      "importBtn": "匯入",
+      "mine": "我的命令",
+      "emptyCommands": "暫無命令。",
+      "openProject": "開啟專案以管理斜線命令。",
+      "disabledInProject": "此專案已停用",
+      "showAll": "顯示全部（{{count}}）",
+      "showLess": "收起",
+      "scope": {
+        "app": "應用級",
+        "project": "此專案"
+      }
     },
     "texWorkspacePage": {
       "title": "TeX 工作區",
@@ -994,7 +1011,10 @@
           "standardDesc": "可讀工具，編輯/終端前詢問",
           "fullDesc": "允許全部工具（仍不可委託子智慧體）"
         },
-        "openProject": "請先開啟專案以編輯專家。"
+        "openProject": "請先開啟專案以編輯專家。",
+        "targetTeam": "目標團隊",
+        "localTarget": "此專案（本機）",
+        "targetTeamDesc": "預設建立在此專案本地；選擇團隊可建立跨專案複用的應用級專家。"
       },
       "orchestrator": {
         "allowedExperts": "允許的專家",
@@ -1023,7 +1043,11 @@
         "noExperts": "暫無已啟用的專家。",
         "resetDefaults": "恢復預設",
         "deleteDesc": "從專案中刪除此編排器？此操作無法撤銷。",
-        "openProject": "請先開啟專案以編輯編排器。"
+        "openProject": "請先開啟專案以編輯編排器。",
+        "allExperts": "預設全部可用專家",
+        "targetTeam": "目標團隊",
+        "localTarget": "此專案（本機）",
+        "targetTeamDesc": "預設建立在此專案本地；選擇團隊可建立跨專案複用的應用級主 Agent。"
       },
       "command": {
         "add": "新增命令",
@@ -1194,8 +1218,9 @@
             "__path__": "資料庫檔案路徑"
           },
           "postgres": {
-            "__path__": "連線字串"
-          }
+            "connection_string": "連線字串"
+          },
+          "connection_string": "連線字串"
         },
         "documentation": "文件"
       },
@@ -1329,7 +1354,7 @@
         },
         "openProject": "請先開啟專案以編輯 MCP 配置。",
         "loading": "載入中…",
-        "intro": "編輯本專案的 .prismnext/agent/mcp.json。無效 JSON 無法儲存。"
+        "intro": "編輯此專案的 .prismnext/agent/mcp.json — 這裡只儲存你手動新增的伺服器。團隊自帶的 MCP 存放在團隊自己的 mcp.json 中,請在 MCP 列表裡管理,不在此檔案。無效 JSON 無法儲存。"
       },
       "brief": {
         "toast": {
@@ -1413,34 +1438,59 @@
         "placeholderReserved": "此槽位預留給將從主列表遷入的設定編輯器。"
       }
     },
-    "pluginsPage": {
-      "noProject": "開啟一個項目後即可管理插件。",
-      "actions": {
-        "install": "安裝",
-        "uninstall": "卸載"
-      },
+    "teamsAgents": {
+      "title": "團隊與專家",
+      "pageDesc": "管理團隊（已安裝的與自建的團隊）及其帶來的主 Agent 與專家。",
+      "browse": "瀏覽團隊",
+      "noProject": "開啟專案以管理團隊和專家。",
+      "emptyPacks": "尚未安裝團隊。",
+      "coreTeam": "PrismNext Core",
+      "mine": "我的",
+      "default": "預設",
+      "setDefault": "設為預設",
+      "confirmReset": "確認重設",
+      "reset": "重設",
       "confirm": {
-        "disableCore": "確定整體禁用 core 套件嗎？全部內置 Agent、技能和命令將不可用，隨時可重新啟用。"
+        "disableCore": "停用核心團隊會停用全部內建 Agent。是否繼續？"
       },
-      "suggestion": {
-        "text": "將「{{pack}}」的主 Agent 設為預設？",
-        "accept": "設為預設",
-        "dismiss": "忽略",
-        "done": "預設主 Agent 已更新。"
+      "actions": {
+        "uninstall": "解除安裝"
       },
       "kinds": {
         "orchestrator": "主 Agent",
         "expert": "專家",
         "skill": "技能",
         "command": "命令",
-        "mcp": "MCP 服務"
+        "mcp": "MCP"
       },
-      "manageHint": "這裡管理已安裝的套件；瀏覽和安裝新套件請去「插件」頁。",
-      "browse": "瀏覽插件",
-      "empty": "還沒有安裝任何套件。",
-      "title": "插件",
-      "pageDesc": "管理已安裝的套件：整體啟停、逐項調整或卸載。",
-      "installed": "已安裝"
+      "tabProject": "此專案",
+      "tabApp": "應用級",
+      "projectEnabled": "此專案已啟用",
+      "projectDisabled": "此專案已停用",
+      "defaultMainAgent": "預設：{{name}}",
+      "disableInProject": "在此專案停用",
+      "enableInProject": "在此專案啟用",
+      "emptyTeamCards": "暫無團隊。",
+      "appInstalled": "已安裝團隊",
+      "coreLabel": "內建",
+      "localLabel": "本機",
+      "browseMore": "瀏覽更多團隊",
+      "teamEmptyAgentsHint": "該團隊暫無主 Agent 或專家。其技能與命令請在「技能」「命令」頁面管理。",
+      "createTeam": "建立團隊",
+      "teamNamePlaceholder": "團隊名稱",
+      "teamDescPlaceholder": "描述（可選）",
+      "teamCreated": "團隊已建立。",
+      "deleteTeam": "刪除團隊",
+      "myTeam": "我的團隊",
+      "cancel": "取消",
+      "viewDetails": "詳情",
+      "packDetailEmpty": "該團隊暫無內容。",
+      "enableInProjectDesc": "啟用後，該團隊的主 Agent、專家、技能與命令可在目前專案使用；停用的團隊會灰顯。",
+      "setDefaultDisabledHint": "該主 Agent 已在此專案停用，無法設為預設。",
+      "setDefaultNotActive": "該主 Agent 未在此專案啟用，無法設為預設。",
+      "toast": {
+        "defaultMovedToBuiltin": "該團隊的預設主 Agent 已停用，預設主 Agent 已轉移回內建主 Agent。"
+      }
     }
   },
   "welcome": {
@@ -1689,7 +1739,6 @@
     "library": "文獻庫",
     "experiments": "實驗",
     "templates": "模板",
-    "plugins": "插件",
     "texWorkspace": "TeX 工作區",
     "settings": "設定",
     "updateToVersion": "更新到 {{version}}",
@@ -1722,7 +1771,8 @@
       "newProject": "新建專案…",
       "openProject": "開啟專案…",
       "closeProject": "關閉專案"
-    }
+    },
+    "teams": "團隊"
   },
   "chat": {
     "activity": {
@@ -3067,15 +3117,15 @@
       "descPlaceholder": "簡要說明此命令的作用"
     }
   },
-  "pluginsCenter": {
-    "title": "插件",
-    "searchPlaceholder": "搜尋插件…",
+  "teamsCenter": {
+    "title": "團隊",
+    "searchPlaceholder": "搜尋團隊…",
     "tabs": {
       "all": "全部",
       "installed": "已安裝"
     },
-    "noProject": "開啟一個項目後即可瀏覽和安裝插件。",
-    "empty": "沒有匹配的插件。",
+    "noProject": "開啟一個項目後即可瀏覽和安裝團隊。",
+    "empty": "沒有匹配的團隊。",
     "categories": {
       "general": "通用",
       "research": "研究"
@@ -3086,7 +3136,11 @@
       "disabled": "已停用",
       "proLocked": "Pro",
       "incompatible": "不兼容",
-      "notInstalled": "未安裝"
+      "notInstalled": "未安裝",
+      "installedActive": "已安裝·啟用中",
+      "installedDisabled": "已安裝·已停用",
+      "installedProLocked": "已安裝·Pro 鎖定",
+      "goActivate": "前往啟用"
     },
     "kinds": {
       "orchestrator": "主 Agent",
@@ -3106,18 +3160,18 @@
       "minHostVersion": "需要應用版本"
     },
     "toast": {
-      "installed": "「{{name}}」已安裝。"
+      "installed": "團隊已安裝。"
     },
     "suggestion": {
       "text": "將「{{pack}}」的主 Agent 設為預設？",
       "accept": "設為預設",
       "done": "預設主 Agent 已更新。"
     },
-    "subtitle": "安裝成套的主 Agent、專家、技能與命令。",
-    "backToList": "返回插件列表",
+    "subtitle": "安裝由主 Agent、專家、技能和命令組成的團隊。",
+    "backToList": "返回團隊列表",
     "manage": "在設定中管理",
     "sidebar": "瀏覽",
-    "count": "{{count}} 個插件",
+    "count": "{{count}} 個團隊",
     "clearSearch": "清除搜尋"
   }
 }

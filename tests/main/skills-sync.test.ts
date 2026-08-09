@@ -29,11 +29,14 @@ import {
   unregisterExternalPackRoot,
 } from "../../src/main/services/pack-catalog";
 import {
-  installPackRecord,
   readPacksState,
   setContentDisabled,
   setPackEnabled,
 } from "../../src/main/services/packs-state";
+import {
+  addInstalledPack,
+  setPacksInstalledDataDir,
+} from "../../src/main/services/packs-installed";
 import { CORE_PACK_ID } from "../../src/shared/packs/types";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
@@ -59,7 +62,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
   for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
+  setPacksInstalledDataDir(null);
 });
+
+/** Seal the app-level installed store into a per-test temp dir. */
+function sealAppStore(): string {
+  const dir = makeTempDir("packs-app-");
+  setPacksInstalledDataDir(dir);
+  tempDirs.push(dir);
+  return dir;
+}
 
 describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
   it("lists local skills from the Local Pack", () => {
@@ -150,7 +162,8 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     registerExternalPackRoot(packsRoot);
 
     const root = temp();
-    installPackRecord(root, { packId: "aaa.pack", version: "0.1.0" });
+    sealAppStore();
+    addInstalledPack("aaa.pack");
 
     const result = syncProjectSkillsIntegration(root);
     expect(result.skillsPaths).toEqual([
@@ -171,7 +184,8 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     registerExternalPackRoot(packsRoot);
 
     const root = temp();
-    installPackRecord(root, { packId: "aaa.pack", version: "0.1.0" });
+    sealAppStore();
+    addInstalledPack("aaa.pack");
 
     // pack.a 整包禁用 → 目录出 paths；shared 仍有 core 激活实例 → 不 deny；
     // solo 无激活实例 → deny

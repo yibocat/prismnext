@@ -197,32 +197,38 @@ describe("experiment-log-service", () => {
     expect(result.error).toBe("unsafe_lab_path");
   });
 
-  it("readExperiment returns meta + runs (tail-limited)", () => {
-    const c = setup();
-    const created = createExperiment(c, { title: "Read test" }, { ensureVenv: false });
-    expect(created.ok).toBe(true);
-    if (!created.ok) return;
-    const { id } = created;
-    for (let i = 0; i < 25; i++) {
-      appendRun(c, id, { command: `echo ${i}`, exitCode: 0, stdoutTail: `out${i}` });
-    }
-    const read = readExperiment(c, id, 5, { includeOutput: true });
-    expect(read.ok).toBe(true);
-    if (!read.ok) return;
-    expect(read.runs.length).toBe(5);
-    expect(read.runs[4]!.stdoutTail).toBe("out24");
-    expect(read.runs[0]!.command).toBe("echo 20");
-    expect(read.oldestRun?.command).toBe("echo 0");
-    expect(read.latestRun?.command).toBe("echo 24");
-    expect(read.runsOrder).toBe("chronological_oldest_first");
-    expect(read.meta.title).toBe("Read test");
-    expect(read.runCount).toBe(25);
-    expect(read.lastRunAt).toBeTruthy();
-    const statsPath = join(c.registryRoot, id, "runs.stats.json");
-    expect(existsSync(statsPath)).toBe(true);
-    const stats = JSON.parse(readFileSync(statsPath, "utf-8")) as { runCount: number };
-    expect(stats.runCount).toBe(25);
-  });
+  it(
+    "readExperiment returns meta + runs (tail-limited)",
+    () => {
+      const c = setup();
+      const created = createExperiment(c, { title: "Read test" }, { ensureVenv: false });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      const { id } = created;
+      for (let i = 0; i < 25; i++) {
+        appendRun(c, id, { command: `echo ${i}`, exitCode: 0, stdoutTail: `out${i}` });
+      }
+      const read = readExperiment(c, id, 5, { includeOutput: true });
+      expect(read.ok).toBe(true);
+      if (!read.ok) return;
+      expect(read.runs.length).toBe(5);
+      expect(read.runs[4]!.stdoutTail).toBe("out24");
+      expect(read.runs[0]!.command).toBe("echo 20");
+      expect(read.oldestRun?.command).toBe("echo 0");
+      expect(read.latestRun?.command).toBe("echo 24");
+      expect(read.runsOrder).toBe("chronological_oldest_first");
+      expect(read.meta.title).toBe("Read test");
+      expect(read.runCount).toBe(25);
+      expect(read.lastRunAt).toBeTruthy();
+      const statsPath = join(c.registryRoot, id, "runs.stats.json");
+      expect(existsSync(statsPath)).toBe(true);
+      const stats = JSON.parse(readFileSync(statsPath, "utf-8")) as { runCount: number };
+      expect(stats.runCount).toBe(25);
+    },
+    // Heavy IO loop (25 appends + stats rewrite); can exceed the 5s default
+    // under full-suite parallel load.
+    15_000,
+  );
 
   it("readExperiment lean mode strips stdout/stderr but keeps oldest/latest", () => {
     const c = setup();

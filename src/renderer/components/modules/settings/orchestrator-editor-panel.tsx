@@ -71,6 +71,11 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   const [experts, setExperts] = useState<ExpertInfo[]>([]);
   // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
+  // Target team for new agents (null = this project's Local Pack).
+  const [userTeams, setUserTeams] = useState<
+    Array<{ packId: string; name: string; description: string; version: string }>
+  >([]);
+  const [targetPackId, setTargetPackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -94,15 +99,20 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         setExperts(expertList.filter((e) => e.enabled));
 
         const enabledExpertIds = expertList.filter((e) => e.enabled).map((e) => e.id);
+        // undefined allowlist = unrestricted (default: all available experts).
+        // Never pre-fill every enabled expert into a NEW orchestrator — that
+        // would lock it to today's roster and leak core experts into new agents.
         const pruneAllowed = (ids: string[] | undefined) =>
-          ids?.length
-            ? ids.filter((id) => enabledExpertIds.includes(id))
-            : enabledExpertIds;
+          ids?.length ? ids.filter((id) => enabledExpertIds.includes(id)) : [];
 
         if (isNew) {
           setForm(emptyProfileForm());
-          setAllowedExperts(enabledExpertIds);
+          setAllowedExperts([]);
           setContentFqid(null);
+          setTargetPackId(null);
+          const teams = await window.electronAPI.userPacksList().catch(() => []);
+          if (cancelled) return;
+          setUserTeams(teams);
           setLoading(false);
           return;
         }
@@ -140,6 +150,10 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         }
         setForm(formFromOrchestrator(detail));
         setAllowedExperts(pruneAllowed(detail.allowedExperts));
+        setContentFqid(detail.fqid ?? null);
+        // Editing a custom agent writes back to its owning pack (local or team).
+        const pid = detail.fqid?.split(":")[0];
+        setTargetPackId(pid && pid !== "user.local" ? pid : null);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.orchestrator.toast.loadFailed"));
@@ -170,10 +184,12 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     setSaving(true);
     try {
       const model = formatProfileModel(form.modelProvider, form.modelId);
+      // Empty allowlist → undefined (unrestricted = all available experts).
+      const allowedExpertsField = allowedExperts.length > 0 ? allowedExperts : undefined;
 
       if (builtinCustomize && contentFqid) {
         await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
-          allowedExperts,
+          allowedExperts: allowedExpertsField,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
         });
@@ -183,11 +199,15 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           name: form.name.trim(),
           description: form.description.trim(),
           instructions: form.instructions,
-          allowedExperts,
+          allowedExperts: allowedExpertsField,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
         };
-        await window.electronAPI.orchestratorsSaveCustom(projectRoot, payload);
+        await window.electronAPI.orchestratorsSaveCustom(
+          projectRoot,
+          payload,
+          targetPackId ?? undefined,
+        );
       }
 
       toast.success(isNew ? t("settings.editor.orchestrator.toast.created") : t("settings.editor.orchestrator.toast.saved"));
@@ -288,11 +308,35 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           saving={saving}
         />
 
+        {isNew && (
+          <div className={cn(SETTINGS_DETAIL_SECTION, "!space-y-1.5")}>
+            <label className="text-[length:var(--font-size-12)] font-medium">
+              {t("settings.editor.orchestrator.targetTeam")}
+            </label>
+            <select
+              value={targetPackId ?? ""}
+              onChange={(e) => setTargetPackId(e.target.value || null)}
+              disabled={saving}
+              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
+            >
+              <option value="">{t("settings.editor.orchestrator.localTarget")}</option>
+              {userTeams.map((team) => (
+                <option key={team.packId} value={team.packId}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+            <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
+              {t("settings.editor.orchestrator.targetTeamDesc")}
+            </p>
+          </div>
+        )}
+
         <CollapsibleFormSection
           title={t("settings.editor.orchestrator.allowedExperts")}
           summary={
             allowedExperts.length === 0
-              ? t("settings.editor.orchestrator.noneSelected")
+              ? t("settings.editor.orchestrator.allExperts")
               : t("settings.editor.orchestrator.allowedCount", {
                   selected: allowedExperts.filter((id) =>
                     expertRows.some((e) => e.id === id),

@@ -1,0 +1,27 @@
+{
+  "id": "prismnext.mcp-demo",
+  "name": "MCP Demo Stack",
+  "description": "A demo team that bundles MCP servers — install it, enable it in this project, and its MCP servers appear in Settings → MCP under From teams.",
+  "longDescription": "Shows how a team can ship MCP servers. It declares two MCP servers in its own mcp.json: a local SQLite-backed memory server (stdio) and a remote HTTP placeholder (http). Installing this team at app level and enabling it in a project makes both servers available to chats in that project; disabling the team greys them out and stops injection.",
+  "version": "0.1.0",
+  "packFormatVersion": 1,
+  "tier": "free",
+  "publisher": "prismnext",
+  "domain": "demo",
+  "category": "demo",
+  "tags": ["demo", "mcp", "example"],
+  "developer": "PrismNext",
+  "contents": {
+    "orchestrators": [
+      {
+        "id": "mcp-demo-lead",
+        "name": "MCP Demo Lead",
+        "description": "Coordinates the demo team's workflows."
+      }
+    ],
+    "mcps": [
+      { "id": "demo-memory", "name": "demo-memory" },
+      { "id": "demo-remote", "name": "demo-remote" }
+    ]
+  }
+}

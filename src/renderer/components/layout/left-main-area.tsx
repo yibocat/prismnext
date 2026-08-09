@@ -29,13 +29,12 @@ import {
   CompilerSettings,
   ModelSettings,
   BackupsSettings,
-  AgentSettings,
+  TeamsAgentsSettings,
   PromptsRulesSettings,
   PermissionsSettings,
   SlashCommandsSettings,
   ToolsMcpSettings,
   SkillsSettings,
-  PluginsSettings,
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
@@ -44,7 +43,7 @@ import {
   AboutSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
-import { PluginsCenter } from "@/components/modules/plugins/plugins-center";
+import { TeamsCenter } from "@/components/modules/teams/teams-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
@@ -209,10 +208,10 @@ export function LeftMainArea() {
     );
   }
 
-  if (leftSidebarView === "plugins") {
+  if (leftSidebarView === "teams") {
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
-        <PluginsCenter
+        <TeamsCenter
           onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
         />
       </div>
@@ -226,7 +225,7 @@ export function LeftMainArea() {
       general: GeneralSettings,
       appearance: AppearanceSettings,
       models: ModelSettings,
-      agent: AgentSettings,
+      "teams-agents": TeamsAgentsSettings,
       terminal: TerminalSettings,
       browser: BrowserSettings,
       "prompts-rules": PromptsRulesSettings,
@@ -235,7 +234,6 @@ export function LeftMainArea() {
       commands: SlashCommandsSettings,
       "tools-mcp": ToolsMcpSettings,
       skills: SkillsSettings,
-      plugins: PluginsSettings,
       compiler: CompilerSettings,
       texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,

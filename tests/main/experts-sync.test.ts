@@ -24,7 +24,7 @@ function readCoreOrchestratorInstructions(orchestratorId: string): string | null
   const path = join(
     process.cwd(),
     "resources",
-    "plugins",
+    "teams",
     "prismnext.core",
     "orchestrators",
     orchestratorId,
@@ -66,6 +66,32 @@ describe("experts-sync", () => {
     expect(md).toContain("You search the library.");
     expect(md).toContain("## Project literature library");
     expect(md).not.toMatch(/^tools:/m);
+  });
+
+  it("quotes numeric/boolean description so opencode keeps it a string (ACP crash regression)", () => {
+    // description "123" must serialize as a quoted string — an unquoted number
+    // makes opencode reject the whole agent config ("Expected string, got 123")
+    // and the ACP process exits 1 on every spawn.
+    const md = renderExpertAgentMarkdown(
+      {
+        id: "123",
+        name: "123",
+        description: "123",
+      },
+      "222",
+    );
+    expect(md).toContain('description: "123"');
+    expect(md).not.toMatch(/^description: 123$/m);
+
+    const boolMd = renderExpertAgentMarkdown(
+      {
+        id: "flag",
+        name: "Flag",
+        description: "true",
+      },
+      "body",
+    );
+    expect(boolMd).toContain('description: "true"');
   });
 
   it("always injects nested Task deny for experts without requiring author config", () => {

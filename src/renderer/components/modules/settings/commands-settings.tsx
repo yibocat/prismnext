@@ -1,15 +1,27 @@
-import { useEffect, useState } from "react";
+// Commands settings — unified single-card list (mirrors Teams & Agents).
+// Every slash command is one row: /name + description + origin badge
+// (Built-in / pack name / My commands) + an enable switch. When the list
+// grows long it folds to a preview with "Show all (N) / Show less".
+// App-level vs project-level follows the owning TEAM: a command whose pack is
+// installed at app level but DISABLED in this project is greyed out (row dimmed
+// + switch disabled) — same visual language as the team cards.
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { PlusIcon } from "lucide-react";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { usePacksStore } from "@/stores/packs-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { CommandsImportDialog } from "./commands-import-dialog";
+import type { CommandDef } from "@commands/types";
+import { CORE_PACK_ID, LOCAL_PACK_ID } from "@shared/packs/types";
 import {
   SETTINGS_CARD,
   SETTINGS_ROW,
@@ -17,8 +29,40 @@ import {
   SETTINGS_ROW_LABEL,
 } from "./settings-tokens";
 
-const SUB_HEADER = "text-[length:var(--font-size-12)] font-medium text-foreground mb-1.5";
-const SUB_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mb-2";
+const BADGE =
+  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
+/** Fold long lists after this many rows (like Skills). */
+const COMMANDS_PAGE_INITIAL_COUNT = 10;
+
+/** Origin badge: core pack → "Built-in"; local → "My commands"; else pack name. */
+function originBadge(cmd: CommandDef, t: (key: string) => string) {
+  if (cmd.packId === CORE_PACK_ID) {
+    return (
+      <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+        {t("settings.commandsPage.builtin")}
+      </span>
+    );
+  }
+  if (cmd.packId === LOCAL_PACK_ID) {
+    return (
+      <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+        {t("settings.commandsPage.mine")}
+      </span>
+    );
+  }
+  return (
+    <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{cmd.packName}</span>
+  );
+}
+
+/** Sort: core built-ins first, then packs alphabetically, then my commands. */
+function sortCommands(cmds: CommandDef[]): CommandDef[] {
+  const rank = (c: CommandDef) =>
+    c.packId === CORE_PACK_ID ? 0 : c.packId === LOCAL_PACK_ID ? 2 : 1;
+  return [...cmds].sort(
+    (a, b) => rank(a) - rank(b) || a.packName.localeCompare(b.packName) || a.name.localeCompare(b.name),
+  );
+}
 
 export default function CommandsSettings() {
   const { t } = useTranslation();
@@ -27,9 +71,18 @@ export default function CommandsSettings() {
   const loaded = useCommandStore((s) => s.loaded);
   const loadCommands = useCommandStore((s) => s.loadCommands);
   const deleteCommand = useCommandStore((s) => s.deleteCommand);
+  const toggleCommand = useCommandStore((s) => s.toggleCommand);
   const writeExportFile = useCommandStore((s) => s.writeExportFile);
   const readImportFile = useCommandStore((s) => s.readImportFile);
   const previewImport = useCommandStore((s) => s.previewImport);
+
+  // App-level install → project-level enable lives on the owning pack.
+  const packs = usePacksStore((s) => s.catalog);
+  const packEnabledById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const p of packs) map.set(p.manifest.id, p.enabled);
+    return map;
+  }, [packs]);
 
   const deleteConfirm = useInlineDeleteConfirm();
 
@@ -41,18 +94,39 @@ export default function CommandsSettings() {
     invalid: string[];
   } | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showAllCommands, setShowAllCommands] = useState(false);
 
   useEffect(() => {
     void loadCommands();
   }, [loadCommands]);
 
+  // Reload when the packs store changes (install / enable / disable at app or
+  // project level) — command enabled flags follow the resolver view.
+  useEffect(() => {
+    void loadCommands();
+  }, [packs, loadCommands]);
+
+  useEffect(() => {
+    setShowAllCommands(false);
+  }, [projectRoot]);
+
   useOnSettingsEditorKindsClosed(["custom-command", "builtin-commands"], () => {
     void loadCommands();
   });
 
-  const customCommands = commands.filter((c) => c.source === "user");
-  const builtInCount = commands.filter((c) => c.source === "builtin").length;
-  const builtInEnabledCount = commands.filter((c) => c.source === "builtin" && c.enabled).length;
+  const sorted = useMemo(() => sortCommands(commands), [commands]);
+  const visibleCommands =
+    showAllCommands || sorted.length <= COMMANDS_PAGE_INITIAL_COUNT
+      ? sorted
+      : sorted.slice(0, COMMANDS_PAGE_INITIAL_COUNT);
+  const hasMoreCommands = sorted.length > COMMANDS_PAGE_INITIAL_COUNT;
+  const customCount = commands.filter((c) => c.packId === LOCAL_PACK_ID).length;
+
+  /** A command's owning pack must be enabled in THIS project for it to run. */
+  const packEnabled = (cmd: CommandDef): boolean => {
+    if (cmd.packId === LOCAL_PACK_ID) return true;
+    return packEnabledById.get(cmd.packId) ?? true;
+  };
 
   const openEdit = (commandId: string, title: string) => {
     deleteConfirm.clearPending();
@@ -105,88 +179,91 @@ export default function CommandsSettings() {
     }
   };
 
+  if (!projectRoot) {
+    return (
+      <div className={SETTINGS_CARD}>
+        <div className={cn(SETTINGS_ROW, "!block")}>
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("settings.commandsPage.openProject")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className={SUB_HEADER}>{t("settings.commandsPage.builtinSection")}</p>
-        <p className={SUB_DESC}>{t("settings.commandsPage.builtinDesc")}</p>
-        <div className={SETTINGS_CARD}>
-          <div className={SETTINGS_ROW}>
-            <div className="min-w-0 flex-1 pr-4">
-              <p className={SETTINGS_ROW_LABEL}>{t("settings.commandsPage.appShortcuts")}</p>
-              <p className={SETTINGS_ROW_DESC}>
-                {loaded && builtInCount > 0
-                  ? t("settings.commandsPage.enabledCount", {
-                      enabled: builtInEnabledCount,
-                      total: builtInCount,
-                    })
-                  : t("settings.commandsPage.loadingBuiltin")}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0"
-              onClick={() => openSettingsPanel({ kind: "builtin-commands" })}
-            >
-              {t("settings.commandsPage.viewBuiltin")}
-            </Button>
-          </div>
+      {/* Toolbar: create / import / export (project-level, My commands) */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => openSettingsPanel({ kind: "custom-command", mode: "new" })}
+          >
+            <PlusIcon className="size-3 mr-1" />
+            {t("settings.commandsPage.addCustom")}
+          </Button>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            variant="ghost"
+            size="xs"
+            className="shrink-0"
+            disabled={exporting || customCount === 0}
+            onClick={() => void handleExport()}
+          >
+            {t("settings.commandsPage.export")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="shrink-0"
+            onClick={() => void handleImportPick()}
+          >
+            {t("settings.commandsPage.importBtn")}
+          </Button>
         </div>
       </div>
 
-      <div>
-        <div className="flex items-start justify-between gap-3 mb-1.5">
-          <p className={SUB_HEADER}>{t("settings.commandsPage.customSection")}</p>
-          {projectRoot ? (
-            <div className="flex items-center gap-1 shrink-0">
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                disabled={exporting || customCommands.length === 0}
-                onClick={() => void handleExport()}
-              >
-                {t("settings.commandsPage.export")}
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                onClick={() => void handleImportPick()}
-              >
-                {t("settings.commandsPage.importBtn")}
-              </Button>
-            </div>
-          ) : null}
+      {!loaded ? (
+        <div className={cn(SETTINGS_CARD, "py-3")}>
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("common.loading")}
+          </p>
         </div>
-        {!projectRoot ? (
-          <p className={SUB_DESC}>{t("settings.commandsPage.customOpenProject")}</p>
-        ) : (
-          <>
-            <p className={SUB_DESC}>
-              {t("settings.commandsPage.customDesc")}{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/local/commands/
-              </code>
+      ) : sorted.length === 0 ? (
+        <div className={cn(SETTINGS_CARD, "!divide-y-0")}>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+              {t("settings.commandsPage.emptyCommands")}
             </p>
-            <div className={SETTINGS_CARD}>
-              {customCommands.length === 0 ? (
-                <div className={cn(SETTINGS_ROW, "!block")}>
-                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    {t("settings.commandsPage.emptyCustom")}
-                  </p>
+          </div>
+        </div>
+      ) : (
+        <div className={SETTINGS_CARD}>
+          {visibleCommands.map((cmd) => {
+            const packOn = packEnabled(cmd);
+            return (
+              <div
+                key={cmd.id}
+                className={cn(SETTINGS_ROW, !packOn && "opacity-60")}
+              >
+                <div className="min-w-0 flex-1 pr-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className={SETTINGS_ROW_LABEL}>/{cmd.name}</p>
+                    {originBadge(cmd, t)}
+                    {!packOn && (
+                      <span className={cn(BADGE, "bg-destructive/10 text-destructive")}>
+                        {t("settings.commandsPage.disabledInProject")}
+                      </span>
+                    )}
+                  </div>
+                  <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
                 </div>
-              ) : (
-                customCommands.map((cmd) => (
-                  <div key={cmd.id} className={SETTINGS_ROW}>
-                    <div className="min-w-0 flex-1 pr-4">
-                      <div className="flex items-center gap-2">
-                        <p className={SETTINGS_ROW_LABEL}>/{cmd.name}</p>
-                      </div>
-                      <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
+                  {cmd.packId === LOCAL_PACK_ID ? (
+                    <>
                       <Button
                         variant="ghost"
                         size="xs"
@@ -201,25 +278,34 @@ export default function CommandsSettings() {
                         onRequest={() => deleteConfirm.setPendingId(cmd.id)}
                         onConfirm={() => void confirmDelete(cmd.id)}
                       />
-                    </div>
-                  </div>
-                ))
-              )}
-              <div className="py-2.5">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() =>
-                    openSettingsPanel({ kind: "custom-command", mode: "new" })
-                  }
-                >
-                  {t("settings.commandsPage.addCustom")}
-                </Button>
+                    </>
+                  ) : null}
+                  <Switch
+                    checked={cmd.enabled}
+                    disabled={!packOn}
+                    onCheckedChange={(enabled) => void toggleCommand(cmd.id, enabled)}
+                    aria-label={`Enable /${cmd.name}`}
+                  />
+                </div>
               </div>
+            );
+          })}
+          {hasMoreCommands && (
+            <div className="py-2.5 flex justify-center border-t border-border">
+              <Button
+                variant="ghost"
+                size="xs"
+                className="text-[length:var(--font-size-12)] text-muted-foreground"
+                onClick={() => setShowAllCommands((v) => !v)}
+              >
+                {showAllCommands
+                  ? t("settings.commandsPage.showLess")
+                  : t("settings.commandsPage.showAll", { count: sorted.length })}
+              </Button>
             </div>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {projectRoot && importPreview && importPack ? (
         <CommandsImportDialog

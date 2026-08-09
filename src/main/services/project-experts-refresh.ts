@@ -111,8 +111,21 @@ export function scheduleExpertsRefresh(projectRoot: string): void {
     setTimeout(() => {
       pendingTimers.delete(projectRoot);
       void refreshProjectExpertsIntegrationWithReload(projectRoot).catch((err) => {
-        console.error("[experts-refresh] failed:", err);
+        // Recoverable: agent.md payloads are already on disk and the next
+        // packs change (or the next chat send prewarm) retries the reload.
+        console.warn("[experts-refresh] deferred (will retry):", err?.message ?? err);
       });
+      // Pack install/enable/disable changes the effective MCP set — push the
+      // re-resolved set into already-open sessions (session/load), not only
+      // into sessions created after the change.
+      void import("../acp/service")
+        .then(({ AcpService }) => AcpService.getInstance().applyProjectMcpConfig(projectRoot))
+        .catch((err: unknown) => {
+          console.warn(
+            "[experts-refresh] MCP push deferred:",
+            err instanceof Error ? err.message : String(err),
+          );
+        });
     }, EXPERTS_REFRESH_DEBOUNCE_MS),
   );
 }

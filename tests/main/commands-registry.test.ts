@@ -18,7 +18,11 @@ import {
   listExternalPackRoots,
   unregisterExternalPackRoot,
 } from "../../src/main/services/pack-catalog";
-import { installPackRecord, setPackEnabled } from "../../src/main/services/packs-state";
+import { setPackEnabled } from "../../src/main/services/packs-state";
+import {
+  addInstalledPack,
+  setPacksInstalledDataDir,
+} from "../../src/main/services/packs-installed";
 import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../src/shared/packs/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
@@ -40,7 +44,16 @@ afterEach(() => {
   __resetCommandRegistriesForTests();
   for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
+  setPacksInstalledDataDir(null);
 });
+
+/** Seal the app-level installed store into a per-test temp dir. */
+function sealAppStore(): string {
+  const dir = makeTempDir("packs-app-");
+  setPacksInstalledDataDir(dir);
+  tempDirs.push(dir);
+  return dir;
+}
 
 /** fake core（setup/shared 两条命令）+ free pack（notes-cmd） */
 function setupPacks(): void {
@@ -83,7 +96,8 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const root = project();
     const reg = getCommandRegistry(root);
 
-    installPackRecord(root, { packId: "test.notes", version: "0.1.0" });
+    sealAppStore();
+    addInstalledPack("test.notes");
     const cmd = reg.list().find((c) => c.id === "test.notes:notes-cmd");
     expect(cmd).toBeDefined();
     expect(cmd!.source).toBe("plugin");

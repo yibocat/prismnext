@@ -17,26 +17,34 @@ import {
   CORE_PACK_ID,
   DEFAULT_ORCHESTRATOR_FQID,
   LOCAL_PACK_ID,
+  USER_TEAM_PUBLISHER,
   type Fqid,
   type PackManifest,
-  type PackRecord,
 } from "../../shared/packs/types";
-import { toFqid as _toFqid } from "../../shared/packs/state";
-import { getPack, listPacks } from "./pack-catalog";
+import { toFqid as _toFqid, fqidBelongsToPack } from "../../shared/packs/state";
+import { getPack } from "./pack-catalog";
 import { getContent, notifyPacksChanged } from "./pack-resolver";
 import {
-  installPackRecord,
+  addInstalledPack,
+  isPackInstalled,
+  removeInstalledPack,
+} from "./packs-installed";
+import {
+  getPackProjectState,
   readPacksState,
-  removePackRecord,
+  removePackProjectState,
+  setDefaultOrchestratorFqid,
   setPackEnabled,
-  writePacksState,
 } from "./packs-state";
 import { licenseGrants } from "./packs-license";
 
 export interface PackMutationResult {
-  record: PackRecord;
+  /** App-level install was applied (true) or already present (false). */
+  applied?: boolean;
   /** §9.4：建议设为默认的 orchestrator FQID（无建议 → undefined） */
   suggestedOrchestrator?: Fqid;
+  /** 关闭 pack 时，原默认主 agent 属于该 pack → 已转移回 core 默认（UI 提示用） */
+  defaultMovedTo?: Fqid;
 }
 
 function manifestOf(packId: string): PackManifest {
@@ -58,8 +66,8 @@ function orchestratorSuggestion(projectRoot: string, manifest: PackManifest): Fq
 }
 
 /**
- * install（§6.2）：校验（存在/兼容/tier 门）→ packs.json 追加 record。
- * 已安装 → 幂等返回原记录（不重复通知）。未安装成功的校验失败一律抛错。
+ * install（layering spec §5.1）：校验（存在/兼容/tier 门）→ 应用级 installedPacks
+ * 追加记录（所有项目可见）。已装 → 幂等（不重复通知）。校验失败一律抛错。
  */
 export function installPack(projectRoot: string, packId: string): PackMutationResult {
   const view = getPack(packId);
@@ -71,22 +79,22 @@ export function installPack(projectRoot: string, packId: string): PackMutationRe
     throw new Error(`Pack requires an active Pro license: ${packId}`);
   }
 
-  const already = readPacksState(projectRoot).packs.find((p) => p.packId === packId);
-  if (already) return { record: already };
-
-  const record = installPackRecord(projectRoot, {
-    packId,
-    version: view.manifest.version,
-  });
+  const already = isPackInstalled(packId);
+  addInstalledPack(packId);
   notifyPacksChanged(projectRoot);
-  return { record, suggestedOrchestrator: orchestratorSuggestion(projectRoot, view.manifest) };
+  return {
+    applied: !already,
+    suggestedOrchestrator: orchestratorSuggestion(projectRoot, view.manifest),
+  };
 }
 
 /**
  * setEnabled（§6.2）：改 record.enabled。
  * - local：结构性不可禁用（它是用户自己的内容容器）；
  * - core / 隐式已装的 pack 无记录时按需补记录（否则整包禁用无处落）；
- * - 启用成功且满足条件时返回 §9.4 联动建议。
+ * - 启用成功且满足条件时返回 §9.4 联动建议；
+ * - 停用 pack 时若默认主 agent 属于该 pack，默认自动转移回 core 默认
+ *   （否则本项目聊天会落到一个被禁用的 agent 上；UI 用 defaultMovedTo 提示）。
  */
 export function setPackEnabledFlow(
   projectRoot: string,
@@ -98,40 +106,44 @@ export function setPackEnabledFlow(
   }
   const manifest = manifestOf(packId);
 
-  let record = setPackEnabled(projectRoot, packId, enabled);
-  if (!record) {
-    // core / installedByDefault 的 pack 没有 install 记录 → 补一条承载 enabled 态
-    const catalogView = listPacks().find((p) => p.manifest.id === packId);
-    if (!catalogView?.installedByDefault) {
-      throw new Error(`Pack is not installed: ${packId}`);
+  // Project-level override only; install state lives at app level.
+  setPackEnabled(projectRoot, packId, enabled);
+
+  // Disabling a pack that owns the current default main agent → move the
+  // default to the core fallback so chat keeps a live agent. Must run after
+  // setPackEnabled so the resolver view reflects the disabled pack.
+  let defaultMovedTo: Fqid | undefined;
+  if (!enabled) {
+    const current = readPacksState(projectRoot).defaultOrchestrator;
+    if (current && fqidBelongsToPack(current, packId)) {
+      setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
+      defaultMovedTo = DEFAULT_ORCHESTRATOR_FQID;
     }
-    const state = readPacksState(projectRoot);
-    record = {
-      packId,
-      version: manifest.version,
-      enabled,
-      installedAt: new Date().toISOString(),
-    };
-    writePacksState(projectRoot, { ...state, packs: [...state.packs, record] });
   }
+
   notifyPacksChanged(projectRoot);
   return {
-    record,
     suggestedOrchestrator: enabled ? orchestratorSuggestion(projectRoot, manifest) : undefined,
+    defaultMovedTo,
   };
 }
 
 /**
- * uninstall（§6.2）：移除记录 + 修剪 disabledContent / contentOverrides +
- * 默认 orchestrator 回退（均在 removePackRecord 内）。core / local 拒绝。
- * 未安装 → 幂等 no-op。
+ * uninstall（layering spec §5.1）：应用级移除记录 + 项目侧修剪
+ * projectPackStates / disabledContent / contentOverrides / 默认 orchestrator 回退。
+ * core / local 拒绝。未安装 → 幂等 no-op。
  */
 export function uninstallPack(projectRoot: string, packId: string): void {
   if (packId === CORE_PACK_ID || packId === LOCAL_PACK_ID) {
     throw new Error(`Pack cannot be uninstalled: ${packId}`);
   }
-  const installed = readPacksState(projectRoot).packs.some((p) => p.packId === packId);
+  // User-created teams are deleted via the user-packs surface, not uninstalled.
+  if (manifestOf(packId).publisher === USER_TEAM_PUBLISHER) {
+    throw new Error("User-created teams are deleted, not uninstalled.");
+  }
+  const installed = isPackInstalled(packId);
   if (!installed) return;
-  removePackRecord(projectRoot, packId);
+  removeInstalledPack(packId);
+  removePackProjectState(projectRoot, packId);
   notifyPacksChanged(projectRoot);
 }

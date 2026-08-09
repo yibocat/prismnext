@@ -11,7 +11,7 @@ import { join } from "node:path";
 const RESOURCES_SKILLS = join(
   process.cwd(),
   "resources",
-  "plugins",
+  "teams",
   "prismnext.core",
   "skills",
 );

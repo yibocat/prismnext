@@ -3,16 +3,20 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   PACKS_STATE_REL,
-  installPackRecord,
+  getPackProjectState,
   migratePacksStateIfNeeded,
   readPacksState,
-  removePackRecord,
+  removePackProjectState,
   saveContentOverride,
   setContentDisabled,
   setDefaultOrchestratorFqid,
   setPackEnabled,
   writePacksState,
 } from "../../src/main/services/packs-state";
+import {
+  listInstalledPacks,
+  setPacksInstalledDataDir,
+} from "../../src/main/services/packs-installed";
 import { emptyPacksState, normalizePacksState } from "../../src/shared/packs/state";
 import { PACKS_STATE_VERSION } from "../../src/shared/packs/types";
 import { makeProjectRoot, makeTempDir } from "./packs-test-utils";
@@ -30,12 +34,7 @@ describe("packs-state: 读写", () => {
     const root = makeProjectRoot();
     const state = emptyPacksState();
     state.defaultOrchestrator = "prismnext.core:research-prism";
-    state.packs.push({
-      packId: "test.pack",
-      version: "0.1.0",
-      enabled: true,
-      installedAt: new Date().toISOString(),
-    });
+    state.projectPackStates = { "test.pack": { enabled: false } };
     writePacksState(root, state);
     expect(readPacksState(root)).toEqual(state);
     rmSync(root, { recursive: true, force: true });
@@ -57,37 +56,34 @@ describe("packs-state: 读写", () => {
   });
 });
 
-describe("packs-state: §6.2 状态操作", () => {
-  it("installPackRecord 追加记录；重复安装幂等 no-op", () => {
+describe("packs-state: §6.2 状态操作（layering）", () => {
+  it("setPackEnabled(false) 写覆盖；再设 true 删键（缺省自动启用）", () => {
     const root = makeProjectRoot();
-    const rec1 = installPackRecord(root, { packId: "test.pack", version: "0.1.0" });
-    expect(rec1.enabled).toBe(true);
-    const rec2 = installPackRecord(root, { packId: "test.pack", version: "0.2.0" });
-    expect(rec2.installedAt).toBe(rec1.installedAt);
-    expect(readPacksState(root).packs).toHaveLength(1);
+    setPackEnabled(root, "test.pack", false);
+    expect(getPackProjectState(root, "test.pack")).toEqual({ enabled: false });
+    setPackEnabled(root, "test.pack", true);
+    expect(getPackProjectState(root, "test.pack")).toBeNull();
+    expect(readPacksState(root).projectPackStates).toEqual({});
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("setPackEnabled 改写；未知 packId 返回 null", () => {
+  it("getPackProjectState 无记录 → null", () => {
     const root = makeProjectRoot();
-    installPackRecord(root, { packId: "test.pack", version: "0.1.0" });
-    expect(setPackEnabled(root, "test.pack", false)?.enabled).toBe(false);
-    expect(readPacksState(root).packs[0].enabled).toBe(false);
-    expect(setPackEnabled(root, "ghost.pack", true)).toBeNull();
+    expect(getPackProjectState(root, "ghost.pack")).toBeNull();
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("removePackRecord 修剪 disabledContent / overrides / 默认 orchestrator", () => {
+  it("removePackProjectState 修剪覆盖 / disabledContent / overrides / 默认 orchestrator", () => {
     const root = makeProjectRoot();
-    installPackRecord(root, { packId: "test.pack", version: "0.1.0" });
-    installPackRecord(root, { packId: "other.pack", version: "0.1.0" });
+    setPackEnabled(root, "test.pack", false);
+    setPackEnabled(root, "other.pack", false);
     setContentDisabled(root, "test.pack:skill-a", true);
     setContentDisabled(root, "other.pack:skill-b", true);
     saveContentOverride(root, "test.pack:expert-x", { model: "m1" });
     setDefaultOrchestratorFqid(root, "test.pack:orch");
 
-    const next = removePackRecord(root, "test.pack");
-    expect(next.packs.map((p) => p.packId)).toEqual(["other.pack"]);
+    const next = removePackProjectState(root, "test.pack");
+    expect(Object.keys(next.projectPackStates)).toEqual(["other.pack"]);
     expect(next.disabledContent).toEqual(["other.pack:skill-b"]);
     expect(next.contentOverrides).toEqual({});
     expect(next.defaultOrchestrator).toBe("prismnext.core:research-prism");
@@ -143,6 +139,52 @@ describe("packs-state: 迁移框架（空转）", () => {
     expect(existsSync(join(root, PACKS_STATE_REL))).toBe(false);
     rmSync(root, { recursive: true, force: true });
   });
+
+  it("v2 → v3：packs[] 上卷到应用级 + enabled=false 映射 projectPackStates", () => {
+    // Seal the app-level store into a temp dir so we can assert the upsert.
+    const appDir = makeTempDir("packs-app-");
+    setPacksInstalledDataDir(appDir);
+    try {
+      const root = makeProjectRoot();
+      writeFileSync(
+        join(root, PACKS_STATE_REL),
+        JSON.stringify(
+          {
+            stateVersion: 2,
+            defaultOrchestrator: "prismnext.core:research-prism",
+            packs: [
+              { packId: "test.notes", version: "0.1.0", enabled: true, installedAt: "2026-01-01T00:00:00.000Z" },
+              { packId: "test.peer", version: "0.2.0", enabled: false, installedAt: "2026-01-02T00:00:00.000Z" },
+            ],
+            disabledContent: [],
+            contentOverrides: {},
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+
+      const first = migratePacksStateIfNeeded(root);
+      expect(first.migrated).toBe(true);
+      expect(first.state.stateVersion).toBe(PACKS_STATE_VERSION);
+      expect(first.state.projectPackStates).toEqual({ "test.peer": { enabled: false } });
+      expect(Object.keys(first.state.projectPackStates)).not.toContain("test.notes");
+
+      const installed = listInstalledPacks().map((r) => r.packId);
+      expect(installed).toContain("test.notes");
+      expect(installed).toContain("test.peer");
+
+      const second = migratePacksStateIfNeeded(root);
+      expect(second.migrated).toBe(false);
+      expect(listInstalledPacks().map((r) => r.packId)).toEqual(installed);
+
+      rmSync(root, { recursive: true, force: true });
+    } finally {
+      setPacksInstalledDataDir(null);
+      rmSync(appDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("shared/packs/state: normalizePacksState 防御", () => {
@@ -150,11 +192,11 @@ describe("shared/packs/state: normalizePacksState 防御", () => {
     const state = normalizePacksState({
       stateVersion: 99,
       defaultOrchestrator: "not-an-fqid",
-      packs: [
-        { packId: "ok.pack", version: 1, enabled: true },
-        { packId: "" },
-        "garbage",
-      ],
+      projectPackStates: {
+        "ok.pack": { enabled: false },
+        "bad.pack": { enabled: "yes" },
+        "other.pack": "garbage",
+      },
       disabledContent: ["ok.pack:x", "no-colon", 42],
       contentOverrides: {
         "ok.pack:e": { model: "m" },
@@ -164,8 +206,7 @@ describe("shared/packs/state: normalizePacksState 防御", () => {
     });
     expect(state.stateVersion).toBe(PACKS_STATE_VERSION);
     expect(state.defaultOrchestrator).toBeUndefined();
-    expect(state.packs).toHaveLength(1);
-    expect(state.packs[0].version).toBe("0.0.0");
+    expect(Object.keys(state.projectPackStates)).toEqual(["ok.pack"]);
     expect(state.disabledContent).toEqual(["ok.pack:x"]);
     expect(Object.keys(state.contentOverrides)).toEqual(["ok.pack:e"]);
   });

@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
 import { discoverAndRegisterProPacks } from "./services/pro-packs-discovery";
+import { ensureUserPacksRegistered } from "./services/user-packs";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -329,6 +330,9 @@ registerNewWindowHandler(createWindow);
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
+  // User-created teams live in userData and are registered as an external pack
+  // root so the catalog/resolver treat them like installed packs.
+  ensureUserPacksRegistered();
   // Inject CSP on the default session (renderer only — browser webviews use a
   // separate persist:browser partition). Must run before createWindow().
   installCsp(session.defaultSession);

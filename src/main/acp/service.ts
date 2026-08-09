@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
+import type { ResolvedMcp } from "../../shared/packs/types";
 import {
   isPrimaryOpenCodeStreamError,
   openCodeLogEndOffset,
@@ -26,7 +27,7 @@ import {
   getSessionTaskAllowlist,
   resolveChatTabId,
 } from "../services/chat-session-registry";
-import { mcpJsonToAcpServers, type AcpMcpServer } from "./mcp-transform";
+import { mcpJsonToAcpServers, packMcpDefToAcp, type AcpMcpServer } from "./mcp-transform";
 import { ensureDefaultMcpServers, isEagerMcpServer, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
 import {
   getPermissionRulesForMode,
@@ -1566,6 +1567,37 @@ export class AcpService {
       }
     }
 
+    // Pack-declared MCP servers (app-level resource, project-gated): every
+    // ENABLED pack's MCP definitions join the runtime set. Project mcp.json
+    // wins on name collisions — an explicit project config overrides the
+    // pack's declaration.
+    // (require, not import: readAgentConfig is sync and pack-resolver is a
+    // heavy module loaded lazily to keep ACP startup light.)
+    try {
+      const { listProjectMcps } = require("../services/pack-resolver") as {
+        listProjectMcps: (root: string) => ResolvedMcp[];
+      };
+      const packMcps = listProjectMcps(projectRoot).filter((m) => m.enabled);
+      if (packMcps.length > 0) {
+        const existingNames = new Set(mcpServers.map((s) => s.name));
+        for (const def of packMcps) {
+          if (existingNames.has(def.name)) continue;
+          const acp = packMcpDefToAcp(def);
+          if (acp) {
+            mcpServers.push(acp);
+            existingNames.add(acp.name);
+          }
+        }
+        log.info("Merged pack MCP servers", {
+          projectRoot,
+          packCount: packMcps.length,
+          names: packMcps.map((m) => m.name),
+        });
+      }
+    } catch (err: unknown) {
+      log.warn(`Pack MCP merge failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     return { mcpServers, additionalDirectories };
   }
 
@@ -1586,6 +1618,17 @@ export class AcpService {
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`Experts integration refresh failed during prewarm: ${message}`);
       });
+  }
+
+  /**
+   * Drop the cached agent config for a project so the next session/send
+   * re-reads mcp.json + enabled pack MCPs from disk. Called on pack
+   * install/enable/disable (notifyPacksChanged) — MCP membership changed.
+   */
+  invalidateAgentConfigCache(projectRoot: string): void {
+    if (this.cachedAgentConfig?.projectRoot === projectRoot) {
+      this.cachedAgentConfig = null;
+    }
   }
 
   /**
@@ -1724,6 +1767,19 @@ export class AcpService {
     log.info("Restarting OpenCode to apply experts integration");
     this.suppressExitLifecycle = true;
     try {
+      // Join any in-flight initialize BEFORE tearing down — shutting down a
+      // child that is mid-handshake (app startup prewarm, credential restart,
+      // or another concurrent reload) makes that handshake fail with
+      // "ACP connection closed". initialize() also joins initInflight, but its
+      // own shutdown happens inside initializeExclusive; here we must not
+      // shutdown() while someone else is still spawning.
+      while (this.initInflight) {
+        try {
+          await this.initInflight;
+        } catch {
+          // Shared attempt failed — fall through and re-initialize below.
+        }
+      }
       await this.shutdown();
       await this.initialize();
     } finally {

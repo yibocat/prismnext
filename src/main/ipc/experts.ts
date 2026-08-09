@@ -38,8 +38,8 @@ export function registerExpertsHandlers(): void {
 
   ipcMain.handle(
     "experts:saveCustom",
-    async (_event, args: { projectPath: string; payload: SaveCustomExpertPayload }) => {
-      const expert = saveCustomExpert(args.projectPath, args.payload);
+    async (_event, args: { projectPath: string; payload: SaveCustomExpertPayload; targetPackId?: string }) => {
+      const expert = saveCustomExpert(args.projectPath, args.payload, args.targetPackId);
       scheduleExpertsRefresh(args.projectPath);
       return { expert, experts: listExperts(args.projectPath) };
     },
@@ -64,8 +64,8 @@ export function registerExpertsHandlers(): void {
 
   ipcMain.handle(
     "orchestrators:saveCustom",
-    async (_event, args: { projectPath: string; payload: SaveCustomOrchestratorPayload }) => {
-      const orchestrator = saveCustomOrchestrator(args.projectPath, args.payload);
+    async (_event, args: { projectPath: string; payload: SaveCustomOrchestratorPayload; targetPackId?: string }) => {
+      const orchestrator = saveCustomOrchestrator(args.projectPath, args.payload, args.targetPackId);
       scheduleExpertsRefresh(args.projectPath);
       return { orchestrator, orchestrators: listOrchestrators(args.projectPath) };
     },
