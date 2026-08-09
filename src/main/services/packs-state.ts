@@ -959,3 +959,58 @@ export function setDefaultOrchestratorFqid(projectRoot: string, fqid: Fqid): Pac
   writePacksState(projectRoot, next);
   return next;
 }
+
+// ── legacy-backup 清理（spec §11 Phase 6）────────────────────────────
+//
+// 迁移备份目录 `<projectRoot>/.prismnext/agent/legacy-backup-<YYYY-MM-DD>/`
+// 只在迁移当次兜底用；spec 要求「保留一个版本周期后由清理任务删除」。
+// 代码里没有迁移时的 app 版本号可判，唯一现成信号是目录名内嵌的 ISO 日期，
+// 故清理判据 = 备份满 LEGACY_BACKUP_RETENTION_DAYS 天即删除。
+// 跨零点/重跑可能产生多个日期目录，故按前缀扫描而非假设唯一。
+
+/** legacy-backup 保留天数（近似 spec 的「一个版本周期」） */
+export const LEGACY_BACKUP_RETENTION_DAYS = 30;
+
+const LEGACY_BACKUP_PREFIX = "legacy-backup-";
+const LEGACY_BACKUP_NAME_RE = /^legacy-backup-(\d{4})-(\d{2})-(\d{2})$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 删除超过保留期的迁移备份目录。返回删除的目录名列表。
+ * 在项目激活（registerProjectRoot）时调用；任何失败只记 warn，不阻断。
+ */
+export function cleanupLegacyBackups(
+  projectRoot: string,
+  retentionDays: number = LEGACY_BACKUP_RETENTION_DAYS,
+  now: Date = new Date(),
+): string[] {
+  const agentDir = join(projectRoot, ".prismnext", "agent");
+  const removed: string[] = [];
+  let entries: import("node:fs").Dirent[];
+  try {
+    if (!existsSync(agentDir)) return removed;
+    entries = readdirSync(agentDir, { withFileTypes: true });
+  } catch (err) {
+    log.warn("legacy-backup 清理：读取 agent 目录失败", { projectRoot, error: String(err) });
+    return removed;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const m = LEGACY_BACKUP_NAME_RE.exec(entry.name);
+    if (!m) continue;
+    const backupDate = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (Number.isNaN(backupDate)) continue;
+    const ageDays = (now.getTime() - backupDate) / DAY_MS;
+    if (ageDays < retentionDays) continue;
+    try {
+      rmSync(join(agentDir, entry.name), { recursive: true, force: true });
+      removed.push(entry.name);
+    } catch (err) {
+      log.warn("legacy-backup 清理：删除失败", { dir: entry.name, error: String(err) });
+    }
+  }
+  if (removed.length > 0) {
+    log.info("legacy-backup 清理完成", { projectRoot, removed });
+  }
+  return removed;
+}

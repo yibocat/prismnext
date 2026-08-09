@@ -66,7 +66,15 @@ export function registerProjectRoot(abs: string): boolean {
     log.warn("rejected project root registration", { abs });
     return false;
   }
-  _roots.add(resolve(abs));
+  const root = resolve(abs);
+  _roots.add(root);
+  // spec §11 Phase 6：项目激活时顺手清理过期的迁移备份（满 30 天）。
+  // 动态导入避免把 packs 状态层拉进本模块的静态依赖（本模块被 fs IPC 高频引用）。
+  void import("./packs-state")
+    .then((m) => m.cleanupLegacyBackups(root))
+    .catch(() => {
+      // 清理失败不阻断项目注册
+    });
   return true;
 }
 
