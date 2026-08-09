@@ -2,11 +2,14 @@ import { BrowserWindow } from "electron";
 import { AcpService } from "../acp/service";
 import type { PromptContext } from "../prompts/types";
 import {
-  buildProjectSubagentsAgentPlan,
-  clearSyncedAgentFiles,
+  buildAgentsPlan,
+  getAgentsSyncState,
   getOpencodeAgentsDir,
+  syncAgentsToOpencode,
+} from "../teams/agents-sync";
+import {
+  clearSyncedAgentFiles,
   readPrismExpertsSyncState,
-  syncProjectSubagentsToOpencode,
 } from "./subagents-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { normalizeProjectRoot } from "./skills-sync";
@@ -35,22 +38,30 @@ export interface RefreshProjectExpertsResult {
   skipped: boolean;
 }
 
-/** Sync project experts to app-level OpenCode agents directory (write only — no OpenCode restart). */
+/** Sync project agents to the app-level OpenCode agents dir (write only — no restart). */
 export async function refreshProjectSubagentsIntegration(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
   const agentsDir = getOpencodeAgentsDir();
-  const prev = readPrismExpertsSyncState();
-  if (prev?.agentFiles?.length) {
-    clearSyncedAgentFiles(agentsDir, prev.agentFiles);
+  // Clean up files recorded by the LEGACY on-disk sync state (pre-T3) on the
+  // first switch; the new in-memory sync state handles staleness after that.
+  const legacyPrev = readPrismExpertsSyncState();
+  if (legacyPrev?.agentFiles?.length && !getAgentsSyncState(projectRoot)) {
+    clearSyncedAgentFiles(agentsDir, legacyPrev.agentFiles);
   }
-  const result = syncProjectSubagentsToOpencode(projectRoot, {
+  const result = syncAgentsToOpencode(projectRoot, {
     agentsDir,
     promptCtx: options?.promptCtx,
   });
   notifyExpertsIntegrationChanged(projectRoot);
-  return { ...result, skipped: false };
+  return {
+    agentFiles: result.agentFiles,
+    orchestratorId: result.activeOrchestratorId,
+    orchestratorContentHash: result.orchestratorContentHash,
+    syncContentHash: result.syncContentHash,
+    skipped: false,
+  };
 }
 
 /**
@@ -61,19 +72,14 @@ export async function refreshProjectSubagentsIntegrationIfNeeded(
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
   const root = normalizeProjectRoot(projectRoot);
-  const plan = buildProjectSubagentsAgentPlan(projectRoot, options);
-  const prev = readPrismExpertsSyncState();
+  const plan = buildAgentsPlan(projectRoot, options);
+  const prev = getAgentsSyncState(root);
 
-  if (
-    prev?.projectRoot
-    && normalizeProjectRoot(prev.projectRoot) === root
-    && prev.syncContentHash
-    && prev.syncContentHash === plan.syncContentHash
-  ) {
+  if (prev && prev.syncContentHash && prev.syncContentHash === plan.syncContentHash) {
     return {
       agentFiles: prev.agentFiles,
-      orchestratorId: prev.orchestratorId,
-      orchestratorContentHash: prev.orchestratorContentHash ?? plan.orchestratorContentHash,
+      orchestratorId: prev.activeOrchestratorId,
+      orchestratorContentHash: prev.orchestratorContentHash,
       syncContentHash: plan.syncContentHash,
       skipped: true,
     };

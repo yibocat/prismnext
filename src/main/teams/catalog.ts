@@ -146,8 +146,13 @@ function readManifest(dir: string): TeamManifest | null {
 
 // ── Asset scanning ────────────────────────────────────────
 
-/** Parse a roster field: accepts RosterSpec object or a legacy string array. */
-function parseRoster(raw: unknown): RosterSpec | undefined {
+/**
+ * Parse a roster field: accepts a RosterSpec object or a legacy string array.
+ * Legacy bare ids (allowedExperts) are lifted to same-team FQIDs (the legacy
+ * "same pack first" rule); "$pack" → "@team". The on-disk format stays legacy
+ * (T0 froze it); only the in-memory RosterSpec is normalized.
+ */
+function parseRoster(raw: unknown, teamId: string): RosterSpec | undefined {
   if (!raw) return undefined;
   if (typeof raw === "object" && !Array.isArray(raw)) {
     const o = raw as Record<string, unknown>;
@@ -157,24 +162,28 @@ function parseRoster(raw: unknown): RosterSpec | undefined {
     }
     return undefined;
   }
-  // Legacy: allowedExperts string[] → list of refs ("$pack" → "@team").
+  // Legacy: allowedExperts string[] → list of refs.
   if (Array.isArray(raw)) {
     const members = raw
       .filter((m): m is string => typeof m === "string")
-      .map((m) => (m === "$pack" ? "@team" : m));
+      .map((m) => {
+        if (m === "$pack") return "@team";
+        // Already an FQID → keep; bare id → same-team FQID.
+        return m.includes(":") ? m : `${teamId}:${m}`;
+      });
     return { mode: "list", members };
   }
   return undefined;
 }
 
-function scanOrchestrator(teamDir: string): { def: ScannedAsset; orchestratorId: string } | null {
+function scanOrchestrator(teamDir: string, teamId: string): { def: ScannedAsset; orchestratorId: string } | null {
   // New layout: orchestrator/ (singular, at most one). Legacy: orchestrators/<id>/.
   const singular = join(teamDir, "orchestrator");
   const legacy = join(teamDir, "orchestrators");
   if (existsSync(singular)) {
     const jsonPath = join(singular, "orchestrator.json");
     if (existsSync(jsonPath)) {
-      const def = readAgentDef(jsonPath, "orchestrator", "orchestrator");
+      const def = readAgentDef(jsonPath, "orchestrator", "orchestrator", teamId);
       if (def) return { def, orchestratorId: def.id };
     }
   }
@@ -193,7 +202,7 @@ function scanOrchestrator(teamDir: string): { def: ScannedAsset; orchestratorId:
     if (first) {
       const jsonPath = join(legacy, first.name, "orchestrator.json");
       if (existsSync(jsonPath)) {
-        const def = readAgentDef(jsonPath, "orchestrator", first.name);
+        const def = readAgentDef(jsonPath, "orchestrator", first.name, teamId);
         if (def) return { def, orchestratorId: first.name };
       }
     }
@@ -205,6 +214,7 @@ function readAgentDef(
   jsonPath: string,
   kind: "orchestrator" | "subagent",
   dirName: string,
+  teamId: string,
 ): (ScannedAsset & { definition: OrchestratorDefV2 | SubagentDefV2 }) | null {
   try {
     const raw = JSON.parse(readFileSync(jsonPath, "utf-8")) as Record<string, unknown>;
@@ -225,7 +235,7 @@ function readAgentDef(
     };
     const definition =
       kind === "orchestrator"
-        ? ({ ...base, roster: parseRoster(raw.roster ?? raw.allowedExperts) } as OrchestratorDefV2)
+        ? ({ ...base, roster: parseRoster(raw.roster ?? raw.allowedExperts, teamId) } as OrchestratorDefV2)
         : ({
             ...base,
             modules: Array.isArray(raw.modules) ? (raw.modules as string[]) : undefined,
@@ -244,7 +254,7 @@ function readAgentDef(
   }
 }
 
-function scanSubagents(teamDir: string): ScannedAsset[] {
+function scanSubagents(teamDir: string, teamId: string): ScannedAsset[] {
   // New layout: subagents/. Legacy: experts/.
   const newRoot = join(teamDir, "subagents");
   const legacyRoot = join(teamDir, "experts");
@@ -257,7 +267,7 @@ function scanSubagents(teamDir: string): ScannedAsset[] {
     const legacyJsonPath = join(root, entry.name, "expert.json");
     const path = existsSync(jsonPath) ? jsonPath : existsSync(legacyJsonPath) ? legacyJsonPath : null;
     if (!path) continue;
-    const def = readAgentDef(path, "subagent", entry.name);
+    const def = readAgentDef(path, "subagent", entry.name, teamId);
     if (def) out.push(def);
   }
   return out;
@@ -369,8 +379,8 @@ function scanTeam(
     return null;
   }
 
-  const orchestrator = scanOrchestrator(dir);
-  const subagents = scanSubagents(dir);
+  const orchestrator = scanOrchestrator(dir, manifest.id);
+  const subagents = scanSubagents(dir, manifest.id);
   const skills = scanSkills(dir);
   const commands = scanCommands(dir);
   const assets: ScannedAsset[] = [

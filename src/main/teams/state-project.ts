@@ -29,10 +29,47 @@ function statePath(projectRoot: string): string {
   return join(projectRoot, PROJECT_TEAMS_STATE_REL);
 }
 
-/** Read project state; missing/corrupt → empty (self-heal). */
+/**
+ * Read-time fallback (decided for T3): when teams.json does not exist yet,
+ * derive the project state from the legacy packs.json so existing projects keep
+ * their enable/disable state after the T3 switch. Read-only — never writes.
+ * The T6 migration moves packs.json → teams.json on disk and removes this.
+ */
+function deriveFromLegacyPacks(projectRoot: string): ProjectTeamsState | null {
+  const legacyPath = join(projectRoot, ".prismnext", "agent", "packs.json");
+  if (!existsSync(legacyPath)) return null;
+  try {
+    // Dynamic import: the new layer reads the legacy store without a hard
+    // module dependency (removed in T6).
+    const { readTeamsState } = require("../services/teams-state") as typeof import("../services/teams-state");
+    const old = readTeamsState(projectRoot);
+    const teamEnabled: Record<string, boolean> = {};
+    for (const [teamId, st] of Object.entries(old.projectPackStates)) {
+      if (typeof st?.enabled === "boolean") teamEnabled[teamId] = st.enabled;
+    }
+    const assetEnabled: Record<string, boolean> = {};
+    for (const fqid of old.disabledContent) assetEnabled[fqid] = false;
+    // defaultOrchestrator (an orchestrator FQID) → defaultTeam (its teamId).
+    const defaultTeam = old.defaultOrchestrator?.split(":")[0];
+    return {
+      version: 1,
+      defaultTeam: defaultTeam || undefined,
+      teamEnabled,
+      assetEnabled,
+      assetOverrides: old.contentOverrides,
+    };
+  } catch (err) {
+    log.error("legacy packs.json fallback failed", { projectRoot, error: String(err) });
+    return null;
+  }
+}
+
+/** Read project state; teams.json → legacy packs.json fallback → empty. */
 export function readProjectTeamsState(projectRoot: string): ProjectTeamsState {
   const path = statePath(projectRoot);
-  if (!existsSync(path)) return emptyProjectTeamsState();
+  if (!existsSync(path)) {
+    return deriveFromLegacyPacks(projectRoot) ?? emptyProjectTeamsState();
+  }
   try {
     return normalizeProjectTeamsState(JSON.parse(readFileSync(path, "utf-8")));
   } catch (err) {

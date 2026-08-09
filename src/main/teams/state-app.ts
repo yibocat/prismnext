@@ -41,10 +41,28 @@ function filePath(): string {
   }
 }
 
-/** Read app state; missing/corrupt → empty (self-heal). */
+/**
+ * Read-time fallback (decided for T3): when teams-state.json does not exist yet,
+ * derive the install records from the legacy packs-installed.json so installed
+ * teams survive the T3 switch. Read-only — never writes. Removed in T6.
+ */
+function deriveInstalledFromLegacy(): AppTeamsState["installed"] | null {
+  try {
+    const { listInstalledTeams } = require("../services/teams-installed") as typeof import("../services/teams-installed");
+    const list = listInstalledTeams();
+    return list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt }));
+  } catch {
+    return null;
+  }
+}
+
+/** Read app state; teams-state.json → legacy packs-installed.json fallback → empty. */
 export function readAppTeamsState(): AppTeamsState {
   const path = filePath();
-  if (!existsSync(path)) return emptyAppTeamsState();
+  if (!existsSync(path)) {
+    const installed = deriveInstalledFromLegacy();
+    return { ...emptyAppTeamsState(), installed: installed ?? [] };
+  }
   try {
     return normalizeAppTeamsState(JSON.parse(readFileSync(path, "utf-8")));
   } catch (err) {
