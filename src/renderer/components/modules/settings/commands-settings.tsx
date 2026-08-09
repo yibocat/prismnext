@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import { PlusIcon } from "lucide-react";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { usePacksStore } from "@/stores/packs-store";
+import { usePacksStore } from "@/stores/teams-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { CommandsImportDialog } from "./commands-import-dialog";
 import type { CommandDef } from "@commands/types";
-import { CORE_PACK_ID, LOCAL_PACK_ID } from "@shared/packs/types";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
 import {
   SETTINGS_CARD,
   SETTINGS_ROW,
@@ -36,14 +36,14 @@ const COMMANDS_PAGE_INITIAL_COUNT = 10;
 
 /** Origin badge: core pack → "Built-in"; local → "My commands"; else pack name. */
 function originBadge(cmd: CommandDef, t: (key: string) => string) {
-  if (cmd.packId === CORE_PACK_ID) {
+  if (cmd.teamId === CORE_TEAM_ID) {
     return (
       <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
         {t("settings.commandsPage.builtin")}
       </span>
     );
   }
-  if (cmd.packId === LOCAL_PACK_ID) {
+  if (cmd.teamId === LOCAL_TEAM_ID) {
     return (
       <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
         {t("settings.commandsPage.mine")}
@@ -51,16 +51,16 @@ function originBadge(cmd: CommandDef, t: (key: string) => string) {
     );
   }
   return (
-    <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{cmd.packName}</span>
+    <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{cmd.teamName}</span>
   );
 }
 
 /** Sort: core built-ins first, then packs alphabetically, then my commands. */
 function sortCommands(cmds: CommandDef[]): CommandDef[] {
   const rank = (c: CommandDef) =>
-    c.packId === CORE_PACK_ID ? 0 : c.packId === LOCAL_PACK_ID ? 2 : 1;
+    c.teamId === CORE_TEAM_ID ? 0 : c.teamId === LOCAL_TEAM_ID ? 2 : 1;
   return [...cmds].sort(
-    (a, b) => rank(a) - rank(b) || a.packName.localeCompare(b.packName) || a.name.localeCompare(b.name),
+    (a, b) => rank(a) - rank(b) || a.teamName.localeCompare(b.teamName) || a.name.localeCompare(b.name),
   );
 }
 
@@ -120,12 +120,12 @@ export default function CommandsSettings() {
       ? sorted
       : sorted.slice(0, COMMANDS_PAGE_INITIAL_COUNT);
   const hasMoreCommands = sorted.length > COMMANDS_PAGE_INITIAL_COUNT;
-  const customCount = commands.filter((c) => c.packId === LOCAL_PACK_ID).length;
+  const customCount = commands.filter((c) => c.teamId === LOCAL_TEAM_ID).length;
 
   /** A command's owning pack must be enabled in THIS project for it to run. */
-  const packEnabled = (cmd: CommandDef): boolean => {
-    if (cmd.packId === LOCAL_PACK_ID) return true;
-    return packEnabledById.get(cmd.packId) ?? true;
+  const teamEnabled = (cmd: CommandDef): boolean => {
+    if (cmd.teamId === LOCAL_TEAM_ID) return true;
+    return packEnabledById.get(cmd.teamId) ?? true;
   };
 
   const openEdit = (commandId: string, title: string) => {
@@ -243,7 +243,7 @@ export default function CommandsSettings() {
       ) : (
         <div className={SETTINGS_CARD}>
           {visibleCommands.map((cmd) => {
-            const packOn = packEnabled(cmd);
+            const packOn = teamEnabled(cmd);
             return (
               <div
                 key={cmd.id}
@@ -262,7 +262,7 @@ export default function CommandsSettings() {
                   <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {cmd.packId === LOCAL_PACK_ID ? (
+                  {cmd.teamId === LOCAL_TEAM_ID ? (
                     <>
                       <Button
                         variant="ghost"

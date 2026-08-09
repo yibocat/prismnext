@@ -100,7 +100,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   };
 
   const handleCompile = async () => {
-    const { projectRoot, files, getContent } = useDocumentStore.getState();
+    const { projectRoot, files, getAsset } = useDocumentStore.getState();
     if (!projectRoot) {
       console.warn("[texworkspace-toolbar] Compile blocked: no project root");
       return;
@@ -110,7 +110,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       toast.error(t("modes.texworkspace.compileNoFile"));
       return;
     }
-    const resolved = resolveCompileTarget(compileFile, files, getContent);
+    const resolved = resolveCompileTarget(compileFile, files, getAsset);
     if (resolved) {
       await compile(projectRoot, resolved.targetPath);
     } else {
@@ -120,10 +120,10 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
   };
 
   const resolveExportMainFile = (): { projectRoot: string; mainFile: string } | null => {
-    const { projectRoot, files, getContent } = useDocumentStore.getState();
+    const { projectRoot, files, getAsset } = useDocumentStore.getState();
     if (!projectRoot) return null;
     if (compileFile) {
-      const resolved = resolveCompileTarget(compileFile, files, getContent);
+      const resolved = resolveCompileTarget(compileFile, files, getAsset);
       if (resolved) return { projectRoot, mainFile: resolved.targetPath };
     }
     const manuscript = useWorkspaceConfigStore.getState().manuscriptConfig;

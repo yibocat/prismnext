@@ -71,7 +71,7 @@ export async function buildPromptStackPreview(
   let orchestratorName: string | undefined;
 
   if (projectRoot) {
-    const { resolveOrchestratorId, getOrchestrator } = await import("../services/experts-sync");
+    const { resolveOrchestratorId, getOrchestrator } = await import("../services/subagents-sync");
 
     orchestratorId = resolveOrchestratorId(projectRoot, explicitOrchestratorId ?? null);
     orchestratorName = getOrchestrator(projectRoot, orchestratorId)?.name;
@@ -121,15 +121,15 @@ export async function buildPromptStackPreview(
       getOrchestrator,
       readOrchestratorInstructions,
       renderOrchestratorAgentMarkdown,
-      listExperts,
-    } = await import("../services/experts-sync");
+      listSubagents,
+    } = await import("../services/subagents-sync");
 
     const orchestrator = getOrchestrator(projectRoot, orchestratorId);
     if (orchestrator?.enabled) {
-      const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
+      const enabledExperts = listSubagents(projectRoot).filter((e) => e.enabled);
       const enabledIds = new Set(enabledExperts.map((e) => e.id));
-      const allowedIds = orchestrator.allowedExperts?.length
-        ? orchestrator.allowedExperts.filter((id) => enabledIds.has(id))
+      const allowedIds = orchestrator.roster?.length
+        ? orchestrator.roster.filter((id) => enabledIds.has(id))
         : enabledExperts.map((e) => e.id);
       const allowedRefs = allowedIds
         .map((id) => enabledExperts.find((e) => e.id === id))

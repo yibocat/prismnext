@@ -8,7 +8,7 @@
  * packs: app-level sharing across projects, project-level enable/disable, and
  * the same content model (orchestrators / experts / skills / commands / MCP).
  *
- * Because packDirFingerprint aggregates every content file, any change inside
+ * Because teamDirFingerprint aggregates every content file, any change inside
  * a user team (new orchestrator, edited expert, …) bumps the catalog
  * fingerprint and invalidates every project view automatically.
  */
@@ -16,18 +16,18 @@
 import { app } from "electron";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { USER_TEAM_PUBLISHER } from "../../shared/packs/types";
-import { contentDirFingerprint, invalidateCatalog, registerExternalPackRoot } from "./pack-catalog";
+import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
+import { contentDirFingerprint, invalidateCatalog, registerExternalTeamRoot } from "./team-catalog";
 import { createLogger } from "./logger";
 
-const log = createLogger("user-packs");
+const log = createLogger("user-teams");
 
 export const USER_PACKS_REL = "user-packs";
 
 /** Test-injectable root (sealed fixture per test), like packs-installed. */
 let dataDirOverride: string | null = null;
 
-export function setUserPacksDataDir(dir: string | null): void {
+export function setUserTeamsDataDir(dir: string | null): void {
   dataDirOverride = dir;
 }
 
@@ -42,28 +42,28 @@ function rootDir(): string {
 }
 
 /** Absolute path of the user-packs root (for fingerprinting). */
-export function userPacksRootDir(): string {
+export function userTeamsRootDir(): string {
   return rootDir();
 }
 
 let registeredRoot: string | null = null;
 
 /** Register the current `user-packs/` root as an external pack root (idempotent per dir). */
-export function ensureUserPacksRegistered(): void {
+export function ensureUserTeamsRegistered(): void {
   const dir = rootDir();
   if (registeredRoot === dir) return;
-  registerExternalPackRoot(dir);
+  registerExternalTeamRoot(dir);
   invalidateCatalog();
   registeredRoot = dir;
 }
 
 /** Content fingerprint of the whole user-packs tree (resolver cache key). */
-export function userPacksContentFingerprint(): string {
+export function userTeamsContentFingerprint(): string {
   return contentDirFingerprint(rootDir());
 }
 
 export interface UserTeam {
-  packId: string;
+  teamId: string;
   name: string;
   description: string;
   version: string;
@@ -90,7 +90,7 @@ export function listUserTeams(): UserTeam[] {
       };
       if (m?.publisher === USER_TEAM_PUBLISHER && typeof m.id === "string" && m.id) {
         out.push({
-          packId: m.id,
+          teamId: m.id,
           name: m.name ?? entry.name,
           description: m.description ?? "",
           version: m.version ?? "0.1.0",
@@ -114,7 +114,7 @@ function slugify(input: string): string {
 }
 
 function uniqueTeamId(base: string): string {
-  const existing = new Set(listUserTeams().map((t) => t.packId));
+  const existing = new Set(listUserTeams().map((t) => t.teamId));
   for (let i = 0; i < 100; i++) {
     const suffix = Math.random().toString(36).slice(2, 6);
     const id = `user.${base}-${suffix}`;
@@ -150,14 +150,14 @@ export function createUserTeam(name: string, description = ""): UserTeam {
   );
   invalidateCatalog();
   log.info("user team created", { id });
-  return { packId: id, name: trimmedName, description: description.trim(), version: "0.1.0", dir };
+  return { teamId: id, name: trimmedName, description: description.trim(), version: "0.1.0", dir };
 }
 
 /** Delete a user team (app-level). Invalidates the catalog. */
-export function deleteUserTeam(packId: string): void {
-  const team = listUserTeams().find((t) => t.packId === packId);
-  if (!team) throw new Error(`User team not found: ${packId}`);
+export function deleteUserTeam(teamId: string): void {
+  const team = listUserTeams().find((t) => t.teamId === teamId);
+  if (!team) throw new Error(`User team not found: ${teamId}`);
   rmSync(team.dir, { recursive: true, force: true });
   invalidateCatalog();
-  log.info("user team deleted", { packId });
+  log.info("user team deleted", { teamId });
 }

@@ -7,7 +7,7 @@ import {
 } from "@/lib/settings/settings-panel-slots";
 import { WorkspaceFolderEditor } from "./workspace-folder-editor";
 import { ProviderEditorPanel } from "./provider-editor-panel";
-import { ExpertEditorPanel } from "./expert-editor-panel";
+import { ExpertEditorPanel } from "./subagent-editor-panel";
 import { OrchestratorEditorPanel } from "./orchestrator-editor-panel";
 import { PromptMarkdownPanel } from "./prompt-markdown-panel";
 import { PromptStackPreviewPanel } from "./prompt-stack-preview-panel";
@@ -23,7 +23,7 @@ import { AgentToolsPanel } from "./agent-tools-panel";
 import { KnowledgeModulesPanel } from "./knowledge-modules-panel";
 import { BuiltinCommandsPanel } from "./builtin-commands-panel";
 import { ResearchBriefPanel } from "./research-brief-panel";
-import { PackDetailPanel } from "./pack-detail-panel";
+import { PackDetailPanel } from "./team-detail-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 import { PermissionRulesEditorPanel } from "./permission-rules-editor-panel";

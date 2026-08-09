@@ -297,7 +297,7 @@
         "skills": "{{count}} 个技能",
         "mcp": "{{count}} 个 MCP",
         "standardExpert": "标准子智能体预设",
-        "allowedExperts": "{{count}} 个允许的专家",
+        "roster": "{{count}} 个允许的专家",
         "modules": "{{count}} 个模块",
         "standardOrchestrator": "研究编排器"
       }
@@ -1017,7 +1017,7 @@
         "targetTeamDesc": "默认创建在项目本地；选择团队可创建跨项目复用的应用级专家。"
       },
       "orchestrator": {
-        "allowedExperts": "允许的专家",
+        "roster": "允许的专家",
         "deleteTitle": "删除编排器？",
         "toast": {
           "created": "编排器已创建。",

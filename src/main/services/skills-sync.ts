@@ -3,17 +3,17 @@ import { basename, dirname, join } from "node:path";
 import { countPromptTokens } from "../lib/token-estimate";
 import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
-import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../shared/packs/types";
-import { parseFqid } from "../../shared/packs/state";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/types";
+import { parseFqid } from "../../shared/teams/state";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
-import { listContent, resolveBareContentId } from "./pack-resolver";
-import { setContentDisabled } from "./packs-state";
+import { listAssets, resolveBareContentId } from "./team-resolver";
+import { setAssetDisabled } from "./teams-state";
 
 /** legacy 项目技能目录（R6 迁移的输入；新代码不再写入这里） */
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 /** Local Pack 技能目录 —— 项目级技能的唯一写入位置（Phase 3 起） */
-export const PRISM_LOCAL_SKILLS_REL = `${LOCAL_PACK_REL}/skills`;
+export const PRISM_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
 /**
  * OpenCode `skills.paths` entry (relative to session cwd).
@@ -120,7 +120,7 @@ export interface SkillLibrarySourceInfo extends SkillLibrarySource {
 }
 
 export interface InstalledSkillInfo {
-  /** 全局唯一身份（`${packId}:${contentId}`）；启停/删除按 FQID 操作 */
+  /** 全局唯一身份（`${teamId}:${contentId}`）；启停/删除按 FQID 操作 */
   fqid: string;
   /** pack 内 id（目录名；OpenCode 的技能名） */
   id: string;
@@ -138,7 +138,7 @@ export interface InstalledSkillInfo {
    */
   origin: "bundled" | "registry" | "custom" | "plugin";
   /** origin === "plugin" 时的 pack 展示名（badge 用） */
-  originPackName?: string;
+  originTeamName?: string;
   /** 是否可删除（= local 内容；pack 内容只能禁用，结构上杜绝误删） */
   removable: boolean;
 }
@@ -275,12 +275,12 @@ export function removeSkillInstallRecord(projectRoot: string, skillId: string): 
 function resolveLocalSkillId(projectRoot: string, fqidOrBareId: string): string | null {
   const parsed = parseFqid(fqidOrBareId);
   if (parsed) {
-    return parsed.packId === LOCAL_PACK_ID ? parsed.contentId : null;
+    return parsed.teamId === LOCAL_TEAM_ID ? parsed.contentId : null;
   }
   const fqid = resolveBareContentId(projectRoot, "skill", fqidOrBareId);
   if (!fqid) return null;
   const resolved = parseFqid(fqid);
-  return resolved?.packId === LOCAL_PACK_ID ? resolved.contentId : null;
+  return resolved?.teamId === LOCAL_TEAM_ID ? resolved.contentId : null;
 }
 
 /**
@@ -299,7 +299,7 @@ export function deleteProjectSkill(projectRoot: string, fqidOrBareId: string): v
     rmSync(skillDir, { recursive: true, force: true });
   }
   removeSkillInstallRecord(projectRoot, localId);
-  setContentDisabled(projectRoot, `${LOCAL_PACK_ID}:${localId}`, false);
+  setAssetDisabled(projectRoot, `${LOCAL_TEAM_ID}:${localId}`, false);
 }
 
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
@@ -311,7 +311,7 @@ export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifes
 /**
  * 项目技能列表 —— 唯一来源 = PackResolver（§5.6.2）：
  * core / firstparty / external packs + Local Pack 的统一视图，
- * enabled 直接取 resolver 的 isContentActive 判定（D3）。
+ * enabled 直接取 resolver 的 isAssetActive 判定（D3）。
  */
 export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
   const manifest = readSkillsManifest(projectRoot);
@@ -320,14 +320,14 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
   );
 
   const results: InstalledSkillInfo[] = [];
-  for (const skill of listContent(projectRoot, "skill")) {
+  for (const skill of listAssets(projectRoot, "skill")) {
     let tokenCount = 0;
     try {
       tokenCount = countPromptTokens(readFileSync(join(skill.dir, "SKILL.md"), "utf-8")).tokenCount;
     } catch {
       // 读不到按 0 处理（目录扫描已确认 SKILL.md 存在，极端竞态才到这里）
     }
-    const isLocal = skill.packId === LOCAL_PACK_ID;
+    const isLocal = skill.teamId === LOCAL_TEAM_ID;
     const installOrigin = isLocal ? installBySkillId.get(skill.id) : undefined;
     results.push({
       fqid: skill.fqid,
@@ -342,11 +342,11 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
         ? installOrigin
           ? "registry"
           : "custom"
-        : skill.packId === CORE_PACK_ID
+        : skill.teamId === CORE_TEAM_ID
           ? "bundled"
           : "plugin",
-      originPackName:
-        !isLocal && skill.packId !== CORE_PACK_ID ? skill.origin.packName : undefined,
+      originTeamName:
+        !isLocal && skill.teamId !== CORE_TEAM_ID ? skill.origin.teamName : undefined,
       removable: skill.removable,
     });
   }
@@ -368,7 +368,7 @@ export function setSkillContentEnabled(
     ? fqidOrBareId
     : resolveBareContentId(projectRoot, "skill", fqidOrBareId);
   if (!fqid) return null;
-  setContentDisabled(projectRoot, fqid, !enabled);
+  setAssetDisabled(projectRoot, fqid, !enabled);
   return fqid;
 }
 
@@ -386,7 +386,7 @@ export function computeProfileSkillDisabled(
   projectRoot: string,
   _profileSkillAllowlist?: string[],
 ): string[] {
-  const skills = listContent(projectRoot, "skill");
+  const skills = listAssets(projectRoot, "skill");
   const activeIds = new Set(skills.filter((s) => s.enabled).map((s) => s.id));
   const denied = new Set<string>();
   for (const skill of skills) {
@@ -514,17 +514,17 @@ export function syncProjectSkillsIntegration(
     mkdirSync(localSkillsRoot, { recursive: true });
   }
 
-  // 有激活技能的 pack 目录（去重）：非 core 按 packId 字典序在前，core 随后
-  const packDirs = new Map<string, string>(); // packId → packDir
-  for (const skill of listContent(root, "skill")) {
-    if (!skill.enabled || skill.packId === LOCAL_PACK_ID) continue;
-    if (!packDirs.has(skill.packId)) {
-      packDirs.set(skill.packId, dirname(dirname(skill.dir)));
+  // 有激活技能的 pack 目录（去重）：非 core 按 teamId 字典序在前，core 随后
+  const teamDirs = new Map<string, string>(); // teamId → packDir
+  for (const skill of listAssets(root, "skill")) {
+    if (!skill.enabled || skill.teamId === LOCAL_TEAM_ID) continue;
+    if (!teamDirs.has(skill.teamId)) {
+      teamDirs.set(skill.teamId, dirname(dirname(skill.dir)));
     }
   }
-  const orderedPackIds = [...packDirs.keys()].sort((a, b) => {
-    if (a === CORE_PACK_ID) return 1;
-    if (b === CORE_PACK_ID) return -1;
+  const orderedPackIds = [...teamDirs.keys()].sort((a, b) => {
+    if (a === CORE_TEAM_ID) return 1;
+    if (b === CORE_TEAM_ID) return -1;
     return a.localeCompare(b);
   });
 
@@ -533,7 +533,7 @@ export function syncProjectSkillsIntegration(
   return {
     skillsCount: listProjectSkills(root).length,
     skillsPaths: [
-      ...orderedPackIds.map((packId) => normalizeOpencodeConfigPath(packDirs.get(packId)!)),
+      ...orderedPackIds.map((teamId) => normalizeOpencodeConfigPath(teamDirs.get(teamId)!)),
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ],
     skillPermissions: buildSkillPermissions(disabled),

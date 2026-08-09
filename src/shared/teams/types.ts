@@ -6,25 +6,25 @@
  *
  * 核心约定：
  * - Pack 是唯一一等实体；内容项永远从 pack 目录直接读取（引用，不拷贝）。
- * - 全局唯一身份 = FQID（`${packId}:${contentId}`）。
+ * - 全局唯一身份 = FQID（`${teamId}:${contentId}`）。
  * - 启停/可见性的唯一判定在 main 侧 PackResolver（§5），本文件只承载数据形状。
  */
 
 // ── 基础枚举 ──────────────────────────────────────────────
 
-export type PackTier = "free" | "pro";
+export type TeamTier = "free" | "pro";
 
 /** core = 内置核心包；firstparty = 官方免费包；external = 运行期注册的外部根（Pro）；local = 项目本地用户包 */
-export type PackKind = "core" | "firstparty" | "external" | "local";
+export type TeamKind = "core" | "firstparty" | "external" | "local";
 
-export type ContentKind = "orchestrator" | "expert" | "skill" | "command" | "mcp";
+export type AssetKind = "orchestrator" | "subagent" | "skill" | "command" | "mcp";
 
-/** 全限定内容 id：`${packId}:${contentId}`，如 `prismnext.core:peer-reviewer` */
+/** 全限定内容 id：`${teamId}:${contentId}`，如 `prismnext.core:peer-reviewer` */
 export type Fqid = string;
 
 // ── plugin.json（包清单，§4.2）────────────────────────────
 
-export interface PackContentDecl {
+export interface TeamAssetDecl {
   id: string;
   name: string;
   description?: string;
@@ -34,16 +34,16 @@ export interface PackContentDecl {
  * contents 仅为 Gallery / 详情页 / badge 的【展示声明】。
  * 安装与解析永远以目录扫描为准；声明与扫描不一致时以扫描结果为准并记 warning。
  */
-export interface PackContentsDecl {
-  orchestrators?: PackContentDecl[];
-  experts?: PackContentDecl[];
-  skills?: PackContentDecl[];
-  commands?: PackContentDecl[];
+export interface TeamContentsDecl {
+  orchestrators?: TeamAssetDecl[];
+  experts?: TeamAssetDecl[];
+  skills?: TeamAssetDecl[];
+  commands?: TeamAssetDecl[];
   /** 保留槽位：MCP server 声明（v1 不接运行时） */
-  mcps?: PackContentDecl[];
+  mcps?: TeamAssetDecl[];
 }
 
-export interface PackManifest {
+export interface TeamManifest {
   /** pack id，全局唯一。规范 `<publisher>.<name>`；保留 `prismnext.core` / `user.local` */
   id: string;
   name: string;
@@ -54,7 +54,7 @@ export interface PackManifest {
   version: string;
   /** 布局格式版本，当前恒为 1 */
   packFormatVersion: 1;
-  tier: PackTier;
+  tier: TeamTier;
   /** 发布者标识，如 `prismnext` / `prismnext.pro` / 第三方 */
   publisher: string;
   /** 对应的 license feature id；缺省 = 仅要求 plan=pro（tier=pro 时生效） */
@@ -69,7 +69,7 @@ export interface PackManifest {
   minHostVersion?: string;
   /** 本包内某 orchestrator 的 content id；启用 pack 时用于「设为默认」联动 */
   preferredOrchestrator?: string;
-  contents?: PackContentsDecl;
+  contents?: TeamContentsDecl;
 }
 
 // ── 内容定义（pack 内文件格式，§4.3）─────────────────────
@@ -89,19 +89,19 @@ export interface OrchestratorDef {
    * 元素取值："$pack"（本包全部 experts）| 裸 id（同 pack → core → 全局唯一）| FQID。
    * 缺省 / 省略 = 全部当前可用 experts（维持旧语义）。
    */
-  allowedExperts?: string[];
+  roster?: string[];
   permission?: Record<string, unknown>;
 }
 
 /** expert.json。同样不含 builtin/removable/pluginId。 */
-export interface ExpertDef {
+export interface SubagentDef {
   id: string;
   name: string;
   description: string;
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  /** shared prompt module keys（语义同旧 ExpertDefinition.modules） */
+  /** shared prompt module keys（语义同旧 SubagentDefinition.modules） */
   modules?: string[];
   permission?: Record<string, unknown>;
 }
@@ -122,18 +122,18 @@ export interface McpDef {
  * 运行时注入只使用 enabled 的 pack MCP。
  */
 export interface ResolvedMcp extends McpDef {
-  /** 全局唯一身份："<packId>:<mcpId>" */
+  /** 全局唯一身份："<teamId>:<mcpId>" */
   fqid: Fqid;
-  packId: string;
-  origin: ContentOrigin;
+  teamId: string;
+  origin: AssetOrigin;
   enabled: boolean;
 }
 
 // ── 解析后视图（facade / UI 统一消费，§5.1）──────────────
 
-export interface PackView {
-  manifest: PackManifest;
-  kind: PackKind;
+export interface TeamView {
+  manifest: TeamManifest;
+  kind: TeamKind;
   /** pack 目录绝对路径（local = <projectRoot>/.prismnext/agent/local） */
   dir: string;
   /** core / local = true（隐式已装） */
@@ -144,39 +144,39 @@ export interface PackView {
   compatible: boolean;
 }
 
-export interface ProjectPackView extends PackView {
+export interface ProjectTeamView extends TeamView {
   installed: boolean;
   enabled: boolean;
 }
 
-export interface ContentOrigin {
-  packId: string;
-  packName: string;
-  packTier: PackTier;
+export interface AssetOrigin {
+  teamId: string;
+  teamName: string;
+  teamTier: TeamTier;
   publisher: string;
 }
 
-export interface ResolvedContent<TDef = unknown> {
+export interface AssetView<TDef = unknown> {
   fqid: Fqid;
-  kind: ContentKind;
-  packId: string;
+  kind: AssetKind;
+  teamId: string;
   /** pack 内 id */
   id: string;
   name: string;
   description: string;
-  /** overrides 已应用的定义（OrchestratorDef / ExpertDef / …） */
+  /** overrides 已应用的定义（OrchestratorDef / SubagentDef / …） */
   definition: TDef;
-  /** = PackResolver.isContentActive 的结果（唯一启停答案） */
+  /** = PackResolver.isAssetActive 的结果（唯一启停答案） */
   enabled: boolean;
-  /** = packId === LOCAL_PACK_ID */
+  /** = teamId === LOCAL_TEAM_ID */
   removable: boolean;
-  origin: ContentOrigin;
+  origin: AssetOrigin;
   /** 内容目录绝对路径（commands 为 .md 文件路径） */
   dir: string;
 }
 
-export type ResolvedOrchestrator = ResolvedContent<OrchestratorDef> & { kind: "orchestrator" };
-export type ResolvedExpert = ResolvedContent<ExpertDef> & { kind: "expert" };
+export type ResolvedOrchestrator = AssetView<OrchestratorDef> & { kind: "orchestrator" };
+export type ResolvedSubagent = AssetView<SubagentDef> & { kind: "subagent" };
 
 export interface ResolvedCommand {
   fqid: Fqid;
@@ -189,51 +189,54 @@ export interface ResolvedCommand {
   model?: string;
   order: number;
   enabled: boolean;
-  origin: ContentOrigin;
+  origin: AssetOrigin;
 }
 
-export interface BadgeInfo {
-  packId: string;
-  packName: string;
-  packTier: PackTier;
+export interface OriginInfo {
+  teamId: string;
+  teamName: string;
+  teamTier: TeamTier;
 }
 
 // ── packs.json（项目状态，stateVersion 3，§4.4 + 2026-08-09 分层 spec）──
 
-export const PACKS_STATE_VERSION = 3;
-export const CORE_PACK_ID = "prismnext.core";
-export const LOCAL_PACK_ID = "user.local";
+export const TEAMS_STATE_VERSION = 3;
+export const CORE_TEAM_ID = "prismnext.core";
+export const LOCAL_TEAM_ID = "user.local";
 /** Marker publisher for user-created teams (auto-installed app-level packs). */
 export const USER_TEAM_PUBLISHER = "user";
-export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_PACK_ID}:research-prism`;
+export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_TEAM_ID}:research-prism`;
 /** Local Pack 目录（相对项目根）；pack-catalog / packs-state 共用此常量拼绝对路径 */
-export const LOCAL_PACK_REL = ".prismnext/agent/local";
+export const LOCAL_TEAM_REL = ".prismnext/agent/local";
 
 /**
  * Project-level enable/disable override for a pack (spec L2).
  * Absent = automatically enabled once the pack is installed at app level.
  */
-export interface ProjectPackState {
+export interface ProjectTeamState {
   enabled: boolean;
 }
 
-export interface ContentOverride {
+export interface AssetOverride {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
   modules?: string[];
+  /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层；T6 迁移为 roster） */
   allowedExperts?: string[];
   permission?: Record<string, unknown>;
 }
 
-export interface PacksState {
-  stateVersion: typeof PACKS_STATE_VERSION;
+export interface TeamsProjectState {
+  stateVersion: typeof TEAMS_STATE_VERSION;
   /** FQID；缺省 = DEFAULT_ORCHESTRATOR_FQID */
   defaultOrchestrator?: Fqid;
-  /** 项目启停覆盖（缺省 = 已装自动启用）；不再存安装记录（应用级 packs-installed.json） */
-  projectPackStates: Record<string, ProjectPackState>;
-  /** 任意 FQID 的逐项禁用（统一替代 disabledBuiltinIds / skills.disabled / .md.disabled） */
+  /** 项目启停覆盖（缺省 = 已装自动启用）；不再存安装记录（应用级 packs-installed.json）。
+   *  磁盘字段名冻结为 projectPackStates（T0；T6 迁移时统一改）。 */
+  projectPackStates: Record<string, ProjectTeamState>;
+  /** 任意 FQID 的逐项禁用（统一替代 disabledBuiltinIds / skills.disabled / .md.disabled）。
+   *  磁盘字段名冻结为 disabledContent。 */
   disabledContent: Fqid[];
-  /** 非 local 内容的 override，by FQID */
-  contentOverrides: Record<Fqid, ContentOverride>;
+  /** 非 local 内容的 override，by FQID。磁盘字段名冻结为 contentOverrides。 */
+  contentOverrides: Record<Fqid, AssetOverride>;
 }

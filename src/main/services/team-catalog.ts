@@ -14,32 +14,32 @@ import { app } from "electron";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type {
-  ContentKind,
-  ExpertDef,
+  AssetKind,
+  SubagentDef,
   McpDef,
   OrchestratorDef,
-  PackKind,
-  PackManifest,
-  PackView,
-} from "../../shared/packs/types";
-import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL, USER_TEAM_PUBLISHER } from "../../shared/packs/types";
-import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/packs/frontmatter";
+  TeamKind,
+  TeamManifest,
+  TeamView,
+} from "../../shared/teams/types";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, USER_TEAM_PUBLISHER } from "../../shared/teams/types";
+import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
 import { createLogger } from "./logger";
-import { licenseGrants } from "./packs-license";
+import { licenseGrants } from "./teams-license";
 
 const log = createLogger("pack-catalog");
 
 // ── 扫描结果 ──────────────────────────────────────────────
 
-export interface ScannedContentItem {
-  kind: ContentKind;
+export interface ScannedAssetItem {
+  kind: AssetKind;
   id: string;
   name: string;
   description: string;
   /** 内容目录绝对路径（command 为 .md 文件路径） */
   path: string;
   /** orchestrator/expert 的解析定义（已剔除身份字段，身份由 pack 归属推导） */
-  definition?: OrchestratorDef | ExpertDef;
+  definition?: OrchestratorDef | SubagentDef;
   /** command 的解析负载 */
   command?: {
     template: string;
@@ -53,7 +53,7 @@ export interface ScannedContentItem {
 // ── pack 根 ───────────────────────────────────────────────
 
 /** first-party packs 目录（dev + packaged；vitest 回退仓库布局） */
-export function getFirstPartyPacksDir(): string {
+export function getFirstPartyTeamsDir(): string {
   // 测试 / 工具可用环境变量把 first-party 根指到隔离目录（fixture 密封）。
   const override = process.env.PRISM_FIRST_PARTY_PACKS_DIR?.trim();
   if (override) return override;
@@ -75,28 +75,28 @@ function normalizeDir(dir: string): string {
   return dir.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-export function registerExternalPackRoot(dir: string): void {
+export function registerExternalTeamRoot(dir: string): void {
   const key = normalizeDir(dir);
   if (externalRoots.has(key)) return;
   externalRoots.set(key, dir);
   invalidateCatalog();
 }
 
-export function unregisterExternalPackRoot(dir: string): void {
+export function unregisterExternalTeamRoot(dir: string): void {
   if (externalRoots.delete(normalizeDir(dir))) invalidateCatalog();
 }
 
-export function listExternalPackRoots(): string[] {
+export function listExternalTeamRoots(): string[] {
   return [...externalRoots.values()];
 }
 
-export function getLocalPackDir(projectRoot: string): string {
-  return join(projectRoot, LOCAL_PACK_REL);
+export function getLocalTeamDir(projectRoot: string): string {
+  return join(projectRoot, LOCAL_TEAM_REL);
 }
 
 // ── manifest 读取与校验 ───────────────────────────────────
 
-function readPackManifest(dir: string): PackManifest | null {
+function readPackManifest(dir: string): TeamManifest | null {
   const path = join(dir, "plugin.json");
   if (!existsSync(path)) return null;
   let raw: unknown;
@@ -106,7 +106,7 @@ function readPackManifest(dir: string): PackManifest | null {
     log.warn("plugin.json 解析失败，跳过该 pack", { dir, error: String(err) });
     return null;
   }
-  const m = raw as Partial<PackManifest>;
+  const m = raw as Partial<TeamManifest>;
   if (
     !m ||
     typeof m.id !== "string" ||
@@ -122,20 +122,20 @@ function readPackManifest(dir: string): PackManifest | null {
     log.warn("plugin.json 不符合 packFormatVersion 1，跳过该 pack", { dir });
     return null;
   }
-  return m as PackManifest;
+  return m as TeamManifest;
 }
 
 // ── 内容扫描 ──────────────────────────────────────────────
 
 function scanAgentDefs(
   packDir: string,
-  kind: "orchestrator" | "expert",
-): ScannedContentItem[] {
+  kind: "orchestrator" | "subagent",
+): ScannedAssetItem[] {
   const subdir = kind === "orchestrator" ? "orchestrators" : "experts";
   const jsonName = kind === "orchestrator" ? "orchestrator.json" : "expert.json";
   const root = join(packDir, subdir);
   if (!existsSync(root)) return [];
-  const out: ScannedContentItem[] = [];
+  const out: ScannedAssetItem[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const dir = join(root, entry.name);
@@ -154,14 +154,16 @@ function scanAgentDefs(
         model: typeof raw.model === "string" ? raw.model : undefined,
         thoughtLevel: typeof raw.thoughtLevel === "string" ? raw.thoughtLevel : undefined,
         temperature: typeof raw.temperature === "number" ? raw.temperature : undefined,
+        // 磁盘 JSON 的 key 仍是 allowedExperts（T0 保留旧磁盘格式；T6 统一迁移为 roster）。
+        // 内存模型字段叫 roster。
         ...(kind === "orchestrator"
-          ? { allowedExperts: Array.isArray(raw.allowedExperts) ? (raw.allowedExperts as string[]) : undefined }
+          ? { roster: Array.isArray(raw.allowedExperts) ? (raw.allowedExperts as string[]) : undefined }
           : { modules: Array.isArray(raw.modules) ? (raw.modules as string[]) : undefined }),
         permission:
           raw.permission && typeof raw.permission === "object" && !Array.isArray(raw.permission)
             ? (raw.permission as Record<string, unknown>)
             : undefined,
-      } as OrchestratorDef | ExpertDef;
+      } as OrchestratorDef | SubagentDef;
       out.push({
         kind,
         id: entry.name,
@@ -177,10 +179,10 @@ function scanAgentDefs(
   return out;
 }
 
-function scanSkills(packDir: string): ScannedContentItem[] {
+function scanSkills(packDir: string): ScannedAssetItem[] {
   const root = join(packDir, "skills");
   if (!existsSync(root)) return [];
-  const out: ScannedContentItem[] = [];
+  const out: ScannedAssetItem[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const dir = join(root, entry.name);
@@ -202,10 +204,10 @@ function scanSkills(packDir: string): ScannedContentItem[] {
   return out;
 }
 
-function scanCommands(packDir: string): ScannedContentItem[] {
+function scanCommands(packDir: string): ScannedAssetItem[] {
   const root = join(packDir, "commands");
   if (!existsSync(root)) return [];
-  const out: ScannedContentItem[] = [];
+  const out: ScannedAssetItem[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith(".md")) continue;
     const id = entry.name.replace(/\.md$/, "");
@@ -234,7 +236,7 @@ function scanCommands(packDir: string): ScannedContentItem[] {
   return out;
 }
 
-export function readPackMcpDefs(packDir: string): McpDef[] {
+export function readTeamMcpDefs(packDir: string): McpDef[] {
   const path = join(packDir, "mcp.json");
   if (!existsSync(path)) return [];
   try {
@@ -249,33 +251,33 @@ export function readPackMcpDefs(packDir: string): McpDef[] {
   }
 }
 
-export function scanPackContents(packDir: string): ScannedContentItem[] {
+export function scanTeamContents(packDir: string): ScannedAssetItem[] {
   return [
     ...scanAgentDefs(packDir, "orchestrator"),
-    ...scanAgentDefs(packDir, "expert"),
+    ...scanAgentDefs(packDir, "subagent"),
     ...scanSkills(packDir),
     ...scanCommands(packDir),
   ];
 }
 
 /** Catalog-level content view for a pack, INCLUDING MCP servers (detail view).
- *  MCP defs are not ScannedContentItem (no dir/definition), so they're mapped
+ *  MCP defs are not ScannedAssetItem (no dir/definition), so they're mapped
  *  here so the teams marketplace / pack detail can show them. */
-export function getPackContentsWithMcp(packId: string): Array<{
-  kind: ContentKind;
+export function getTeamContentsWithMcp(teamId: string): Array<{
+  kind: AssetKind;
   id: string;
   name: string;
   description: string;
 }> {
-  const items = getPackContents(packId);
-  const out: Array<{ kind: ContentKind; id: string; name: string; description: string }> =
+  const items = getTeamContents(teamId);
+  const out: Array<{ kind: AssetKind; id: string; name: string; description: string }> =
     items.map((i) => ({
       kind: i.kind,
       id: i.id,
       name: i.name,
       description: i.description,
     }));
-  for (const m of getPackMcpDefs(packId)) {
+  for (const m of getTeamMcpDefs(teamId)) {
     out.push({
       kind: "mcp",
       id: m.id,
@@ -287,13 +289,13 @@ export function getPackContentsWithMcp(packId: string): Array<{
 }
 
 /** contents 展示声明 vs 扫描结果校验（§4.2.2：永远以扫描为准，不一致记 warning） */
-function validateContentsDecl(manifest: PackManifest, items: ScannedContentItem[], mcps: McpDef[]): void {
+function validateContentsDecl(manifest: TeamManifest, items: ScannedAssetItem[], mcps: McpDef[]): void {
   if (!manifest.contents) return;
   const found = new Set(items.map((i) => `${i.kind}:${i.id}`));
   for (const m of mcps) found.add(`mcp:${m.id}`);
-  const groups: Array<[keyof NonNullable<PackManifest["contents"]>, ContentKind]> = [
+  const groups: Array<[keyof NonNullable<TeamManifest["contents"]>, AssetKind]> = [
     ["orchestrators", "orchestrator"],
-    ["experts", "expert"],
+    ["experts", "subagent"],
     ["skills", "skill"],
     ["commands", "command"],
     ["mcps", "mcp"],
@@ -302,14 +304,14 @@ function validateContentsDecl(manifest: PackManifest, items: ScannedContentItem[
     for (const decl of manifest.contents[key] ?? []) {
       if (!found.has(`${kind}:${decl.id}`)) {
         log.warn(`plugin.json contents 声明了目录中不存在的 ${kind}「${decl.id}」，以扫描为准`, {
-          packId: manifest.id,
+          teamId: manifest.id,
         });
       }
     }
   }
 }
 
-// ── PackView 计算 ─────────────────────────────────────────
+// ── TeamView 计算 ─────────────────────────────────────────
 
 function hostVersion(): string | null {
   try {
@@ -330,16 +332,16 @@ function semverGte(a: string, b: string): boolean {
   return true;
 }
 
-function classify(manifest: PackManifest, rootKind: "firstparty" | "external"): PackKind {
-  if (manifest.id === CORE_PACK_ID) return "core";
+function classify(manifest: TeamManifest, rootKind: "firstparty" | "external"): TeamKind {
+  if (manifest.id === CORE_TEAM_ID) return "core";
   return rootKind;
 }
 
 function toPackView(
-  manifest: PackManifest,
+  manifest: TeamManifest,
   dir: string,
   rootKind: "firstparty" | "external",
-): PackView {
+): TeamView {
   const kind = classify(manifest, rootKind);
   const host = hostVersion();
   const compatible =
@@ -358,10 +360,10 @@ function toPackView(
 }
 
 /** Local Pack 虚拟 manifest（§4.5.3：不落盘；name 为占位，UI 阶段按 id 本地化） */
-export function getLocalPackView(projectRoot: string): PackView {
+export function getLocalTeamView(projectRoot: string): TeamView {
   return {
     manifest: {
-      id: LOCAL_PACK_ID,
+      id: LOCAL_TEAM_ID,
       name: "My Content",
       description: "Orchestrators, experts, skills and commands created in this project.",
       version: "0.0.0",
@@ -370,7 +372,7 @@ export function getLocalPackView(projectRoot: string): PackView {
       publisher: "user",
     },
     kind: "local",
-    dir: getLocalPackDir(projectRoot),
+    dir: getLocalTeamDir(projectRoot),
     installedByDefault: true,
     locked: false,
     compatible: true,
@@ -381,9 +383,9 @@ export function getLocalPackView(projectRoot: string): PackView {
 
 interface CatalogSnapshot {
   fingerprint: string;
-  packs: PackView[];
-  byId: Map<string, PackView>;
-  contents: Map<string, ScannedContentItem[]>;
+  packs: TeamView[];
+  byId: Map<string, TeamView>;
+  contents: Map<string, ScannedAssetItem[]>;
   mcps: Map<string, McpDef[]>;
 }
 
@@ -396,7 +398,7 @@ function djb2(input: string): string {
 }
 
 /** 收集影响缓存的文件（plugin.json + 各内容文件）的 stat 指纹 */
-function packDirFingerprint(packDir: string): string {
+function teamDirFingerprint(packDir: string): string {
   const parts: string[] = [];
   const addFile = (p: string) => {
     try {
@@ -433,7 +435,7 @@ function packDirFingerprint(packDir: string): string {
 }
 
 function computeFingerprint(): string {
-  const roots = [getFirstPartyPacksDir(), ...listExternalPackRoots()];
+  const roots = [getFirstPartyTeamsDir(), ...listExternalTeamRoots()];
   const parts: string[] = [];
   for (const root of roots) {
     if (!existsSync(root)) continue;
@@ -441,21 +443,21 @@ function computeFingerprint(): string {
       if (!entry.isDirectory()) continue;
       const dir = join(root, entry.name);
       if (!existsSync(join(dir, "plugin.json"))) continue;
-      parts.push(packDirFingerprint(dir));
+      parts.push(teamDirFingerprint(dir));
     }
   }
   return djb2(parts.sort().join("||"));
 }
 
 function buildSnapshot(): CatalogSnapshot {
-  const packs: PackView[] = [];
-  const byId = new Map<string, PackView>();
-  const contents = new Map<string, ScannedContentItem[]>();
+  const packs: TeamView[] = [];
+  const byId = new Map<string, TeamView>();
+  const contents = new Map<string, ScannedAssetItem[]>();
   const mcps = new Map<string, McpDef[]>();
 
   const roots: Array<{ dir: string; kind: "firstparty" | "external" }> = [
-    { dir: getFirstPartyPacksDir(), kind: "firstparty" },
-    ...listExternalPackRoots().map((dir) => ({ dir, kind: "external" as const })),
+    { dir: getFirstPartyTeamsDir(), kind: "firstparty" },
+    ...listExternalTeamRoots().map((dir) => ({ dir, kind: "external" as const })),
   ];
 
   for (const root of roots) {
@@ -466,12 +468,12 @@ function buildSnapshot(): CatalogSnapshot {
       const manifest = readPackManifest(dir);
       if (!manifest) continue;
       if (byId.has(manifest.id)) {
-        log.warn("pack id 冲突，后到者被忽略", { packId: manifest.id, dir, kept: byId.get(manifest.id)!.dir });
+        log.warn("pack id 冲突，后到者被忽略", { teamId: manifest.id, dir, kept: byId.get(manifest.id)!.dir });
         continue;
       }
       const view = toPackView(manifest, dir, root.kind);
-      const items = scanPackContents(dir);
-      const mcpDefs = readPackMcpDefs(dir);
+      const items = scanTeamContents(dir);
+      const mcpDefs = readTeamMcpDefs(dir);
       validateContentsDecl(manifest, items, mcpDefs);
       packs.push(view);
       byId.set(manifest.id, view);
@@ -502,31 +504,31 @@ export function currentCatalogFingerprint(): string {
 /** 任意 pack 布局目录的内容指纹（resolver 用于 local pack 目录） */
 export function contentDirFingerprint(dir: string): string {
   if (!existsSync(dir)) return "absent";
-  return djb2(packDirFingerprint(dir));
+  return djb2(teamDirFingerprint(dir));
 }
 
 // ── 对外查询 ──────────────────────────────────────────────
 
-/** 全部已发现的 app 级 pack（first-party + external；不含 local——local 走 getLocalPackView） */
-export function listPacks(): PackView[] {
+/** 全部已发现的 app 级 pack（first-party + external；不含 local——local 走 getLocalTeamView） */
+export function listTeams(): TeamView[] {
   return getCatalog().packs;
 }
 
-export function getPack(packId: string): PackView | null {
-  return getCatalog().byId.get(packId) ?? null;
+export function getTeam(teamId: string): TeamView | null {
+  return getCatalog().byId.get(teamId) ?? null;
 }
 
-export function getPackContents(packId: string): ScannedContentItem[] {
-  return getCatalog().contents.get(packId) ?? [];
+export function getTeamContents(teamId: string): ScannedAssetItem[] {
+  return getCatalog().contents.get(teamId) ?? [];
 }
 
-export function getPackMcpDefs(packId: string): McpDef[] {
-  return getCatalog().mcps.get(packId) ?? [];
+export function getTeamMcpDefs(teamId: string): McpDef[] {
+  return getCatalog().mcps.get(teamId) ?? [];
 }
 
 /** Local Pack 的内容扫描（目录可能不存在 → 空） */
-export function scanLocalPackContents(projectRoot: string): ScannedContentItem[] {
-  const dir = getLocalPackDir(projectRoot);
+export function scanLocalTeamContents(projectRoot: string): ScannedAssetItem[] {
+  const dir = getLocalTeamDir(projectRoot);
   if (!existsSync(dir)) return [];
-  return scanPackContents(dir);
+  return scanTeamContents(dir);
 }

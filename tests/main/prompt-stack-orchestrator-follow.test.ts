@@ -6,17 +6,17 @@ import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
 import { promptManager } from "../../src/main/prompts";
 import { buildPromptStackPreview } from "../../src/main/prompts/stack-preview";
-import { registerExternalPackRoot, unregisterExternalPackRoot } from "../../src/main/services/pack-catalog";
-import { resolveOrchestratorId } from "../../src/main/services/pack-resolver";
-import { setPacksInstalledDataDir } from "../../src/main/services/packs-installed";
-import { setDefaultOrchestratorFqid, setPackEnabled } from "../../src/main/services/packs-state";
-import { addInstalledPack } from "../../src/main/services/packs-installed";
-import { CORE_PACK_ID } from "../../src/shared/packs/types";
+import { registerExternalTeamRoot, unregisterExternalTeamRoot } from "../../src/main/services/team-catalog";
+import { resolveOrchestratorId } from "../../src/main/services/team-resolver";
+import { setTeamsInstalledDataDir } from "../../src/main/services/teams-installed";
+import { setDefaultOrchestratorFqid, setTeamEnabled } from "../../src/main/services/teams-state";
+import { addInstalledTeam } from "../../src/main/services/teams-installed";
+import { CORE_TEAM_ID } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
 const externalRoots: string[] = [];
 function registerRoot(dir: string): void {
-  registerExternalPackRoot(dir);
+  registerExternalTeamRoot(dir);
   externalRoots.push(dir);
 }
 
@@ -33,15 +33,15 @@ function temp(): string {
 function makeRoot(): string {
   const root = makeProjectRoot();
   tempDirs.push(root);
-  setPacksInstalledDataDir(temp());
+  setTeamsInstalledDataDir(temp());
   return root;
 }
 
 afterEach(() => {
-  for (const dir of externalRoots) unregisterExternalPackRoot(dir);
+  for (const dir of externalRoots) unregisterExternalTeamRoot(dir);
   externalRoots.length = 0;
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
-  setPacksInstalledDataDir(null);
+  setTeamsInstalledDataDir(null);
   promptManager.invalidate();
 });
 
@@ -49,12 +49,12 @@ describe("prompt stack follows default orchestrator", () => {
   it("preview switches with the default main agent", async () => {
     const root = makeRoot();
     const coreRoot = temp();
-    makePack(coreRoot, CORE_PACK_ID, baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
+    makePack(coreRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       orchestrators: [{ id: "research-prism" }],
       experts: [{ id: "peer-reviewer" }],
     });
     registerRoot(coreRoot);
-    addInstalledPack(CORE_PACK_ID);
+    addInstalledTeam(CORE_TEAM_ID);
 
     const freeRoot = temp();
     makePack(freeRoot, "test.notes", baseManifest("test.notes", { name: "Notes" }), {
@@ -62,7 +62,7 @@ describe("prompt stack follows default orchestrator", () => {
       experts: [{ id: "note-expert" }],
     });
     registerRoot(freeRoot);
-    addInstalledPack("test.notes");
+    addInstalledTeam("test.notes");
 
     // 默认 = core research-prism
     expect(resolveOrchestratorId(root)).toBe("prismnext.core:research-prism");
@@ -87,12 +87,12 @@ describe("prompt stack follows default orchestrator", () => {
   it("falls back to the core default when the default's pack is disabled in this project", async () => {
     const root = makeRoot();
     const coreRoot = temp();
-    makePack(coreRoot, CORE_PACK_ID, baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
+    makePack(coreRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       orchestrators: [{ id: "research-prism" }],
       experts: [{ id: "peer-reviewer" }],
     });
     registerRoot(coreRoot);
-    addInstalledPack(CORE_PACK_ID);
+    addInstalledTeam(CORE_TEAM_ID);
 
     const freeRoot = temp();
     makePack(freeRoot, "test.notes", baseManifest("test.notes", { name: "Notes" }), {
@@ -100,7 +100,7 @@ describe("prompt stack follows default orchestrator", () => {
       experts: [{ id: "note-expert" }],
     });
     registerRoot(freeRoot);
-    addInstalledPack("test.notes");
+    addInstalledTeam("test.notes");
 
     // User set the notes team as default…
     setDefaultOrchestratorFqid(root, "test.notes:notes-lead");
@@ -110,7 +110,7 @@ describe("prompt stack follows default orchestrator", () => {
     // fall back to the core agent (its content is no longer active) — the UI
     // reads `defaultOrchestratorFqid` from getCoreState, so the DEFAULT badge
     // must NOT stay on a project-disabled team.
-    setPackEnabled(root, "test.notes", false);
+    setTeamEnabled(root, "test.notes", false);
     expect(resolveOrchestratorId(root)).toBe("prismnext.core:research-prism");
     const preview = await buildPromptStackPreview({ projectRoot: root });
     expect(preview.orchestratorId).toBe("research-prism");

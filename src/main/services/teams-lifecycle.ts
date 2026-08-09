@@ -9,36 +9,36 @@
  * - 联动 UX：install / enable 后若 pack 声明 preferredOrchestrator 且当前
  *   默认仍是 core 默认 → 返回建议 FQID，由 UI 弹确认条（§9.4）。
  *
- * 每个变更操作末尾统一 notifyPacksChanged（resolver 失效 + experts/skills
+ * 每个变更操作末尾统一 notifyTeamsChanged（resolver 失效 + experts/skills
  * OpenCode 再同步，§5.5）。
  */
 
 import {
-  CORE_PACK_ID,
+  CORE_TEAM_ID,
   DEFAULT_ORCHESTRATOR_FQID,
-  LOCAL_PACK_ID,
+  LOCAL_TEAM_ID,
   USER_TEAM_PUBLISHER,
   type Fqid,
-  type PackManifest,
-} from "../../shared/packs/types";
-import { toFqid as _toFqid, fqidBelongsToPack } from "../../shared/packs/state";
-import { getPack } from "./pack-catalog";
-import { getContent, notifyPacksChanged } from "./pack-resolver";
+  type TeamManifest,
+} from "../../shared/teams/types";
+import { toFqid as _toFqid, fqidBelongsToPack } from "../../shared/teams/state";
+import { getTeam } from "./team-catalog";
+import { getAsset, notifyTeamsChanged } from "./team-resolver";
 import {
-  addInstalledPack,
-  isPackInstalled,
-  removeInstalledPack,
-} from "./packs-installed";
+  addInstalledTeam,
+  isTeamInstalled,
+  removeInstalledTeam,
+} from "./teams-installed";
 import {
-  getPackProjectState,
-  readPacksState,
-  removePackProjectState,
+  getTeamProjectState,
+  readTeamsState,
+  removeTeamProjectState,
   setDefaultOrchestratorFqid,
-  setPackEnabled,
-} from "./packs-state";
-import { licenseGrants } from "./packs-license";
+  setTeamEnabled,
+} from "./teams-state";
+import { licenseGrants } from "./teams-license";
 
-export interface PackMutationResult {
+export interface TeamMutationResult {
   /** App-level install was applied (true) or already present (false). */
   applied?: boolean;
   /** §9.4：建议设为默认的 orchestrator FQID（无建议 → undefined） */
@@ -47,20 +47,20 @@ export interface PackMutationResult {
   defaultMovedTo?: Fqid;
 }
 
-function manifestOf(packId: string): PackManifest {
-  const view = getPack(packId);
-  if (!view) throw new Error(`Pack not found in catalog: ${packId}`);
+function manifestOf(teamId: string): TeamManifest {
+  const view = getTeam(teamId);
+  if (!view) throw new Error(`Pack not found in catalog: ${teamId}`);
   return view.manifest;
 }
 
 /** §9.4：pack 声明了 preferredOrchestrator 且项目默认仍是 core 默认 → 给出建议 */
-function orchestratorSuggestion(projectRoot: string, manifest: PackManifest): Fqid | undefined {
+function orchestratorSuggestion(projectRoot: string, manifest: TeamManifest): Fqid | undefined {
   const preferred = manifest.preferredOrchestrator?.trim();
   if (!preferred) return undefined;
-  const current = readPacksState(projectRoot).defaultOrchestrator;
+  const current = readTeamsState(projectRoot).defaultOrchestrator;
   if (current && current !== DEFAULT_ORCHESTRATOR_FQID) return undefined;
   const fqid = _toFqid(manifest.id, preferred);
-  const content = getContent(projectRoot, fqid);
+  const content = getAsset(projectRoot, fqid);
   if (!content || content.kind !== "orchestrator" || !content.enabled) return undefined;
   return fqid;
 }
@@ -69,19 +69,19 @@ function orchestratorSuggestion(projectRoot: string, manifest: PackManifest): Fq
  * install（layering spec §5.1）：校验（存在/兼容/tier 门）→ 应用级 installedPacks
  * 追加记录（所有项目可见）。已装 → 幂等（不重复通知）。校验失败一律抛错。
  */
-export function installPack(projectRoot: string, packId: string): PackMutationResult {
-  const view = getPack(packId);
-  if (!view) throw new Error(`Pack not found in catalog: ${packId}`);
+export function installTeam(projectRoot: string, teamId: string): TeamMutationResult {
+  const view = getTeam(teamId);
+  if (!view) throw new Error(`Pack not found in catalog: ${teamId}`);
   if (!view.compatible) {
-    throw new Error(`Pack is incompatible with this app version: ${packId}`);
+    throw new Error(`Pack is incompatible with this app version: ${teamId}`);
   }
   if (view.manifest.tier === "pro" && !licenseGrants(view.manifest.feature)) {
-    throw new Error(`Pack requires an active Pro license: ${packId}`);
+    throw new Error(`Pack requires an active Pro license: ${teamId}`);
   }
 
-  const already = isPackInstalled(packId);
-  addInstalledPack(packId);
-  notifyPacksChanged(projectRoot);
+  const already = isTeamInstalled(teamId);
+  addInstalledTeam(teamId);
+  notifyTeamsChanged(projectRoot);
   return {
     applied: !already,
     suggestedOrchestrator: orchestratorSuggestion(projectRoot, view.manifest),
@@ -96,32 +96,32 @@ export function installPack(projectRoot: string, packId: string): PackMutationRe
  * - 停用 pack 时若默认主 agent 属于该 pack，默认自动转移回 core 默认
  *   （否则本项目聊天会落到一个被禁用的 agent 上；UI 用 defaultMovedTo 提示）。
  */
-export function setPackEnabledFlow(
+export function setTeamEnabledFlow(
   projectRoot: string,
-  packId: string,
+  teamId: string,
   enabled: boolean,
-): PackMutationResult {
-  if (packId === LOCAL_PACK_ID) {
+): TeamMutationResult {
+  if (teamId === LOCAL_TEAM_ID) {
     throw new Error("The Local Pack cannot be disabled.");
   }
-  const manifest = manifestOf(packId);
+  const manifest = manifestOf(teamId);
 
   // Project-level override only; install state lives at app level.
-  setPackEnabled(projectRoot, packId, enabled);
+  setTeamEnabled(projectRoot, teamId, enabled);
 
   // Disabling a pack that owns the current default main agent → move the
   // default to the core fallback so chat keeps a live agent. Must run after
-  // setPackEnabled so the resolver view reflects the disabled pack.
+  // setTeamEnabled so the resolver view reflects the disabled pack.
   let defaultMovedTo: Fqid | undefined;
   if (!enabled) {
-    const current = readPacksState(projectRoot).defaultOrchestrator;
-    if (current && fqidBelongsToPack(current, packId)) {
+    const current = readTeamsState(projectRoot).defaultOrchestrator;
+    if (current && fqidBelongsToPack(current, teamId)) {
       setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
       defaultMovedTo = DEFAULT_ORCHESTRATOR_FQID;
     }
   }
 
-  notifyPacksChanged(projectRoot);
+  notifyTeamsChanged(projectRoot);
   return {
     suggestedOrchestrator: enabled ? orchestratorSuggestion(projectRoot, manifest) : undefined,
     defaultMovedTo,
@@ -133,17 +133,17 @@ export function setPackEnabledFlow(
  * projectPackStates / disabledContent / contentOverrides / 默认 orchestrator 回退。
  * core / local 拒绝。未安装 → 幂等 no-op。
  */
-export function uninstallPack(projectRoot: string, packId: string): void {
-  if (packId === CORE_PACK_ID || packId === LOCAL_PACK_ID) {
-    throw new Error(`Pack cannot be uninstalled: ${packId}`);
+export function uninstallTeam(projectRoot: string, teamId: string): void {
+  if (teamId === CORE_TEAM_ID || teamId === LOCAL_TEAM_ID) {
+    throw new Error(`Pack cannot be uninstalled: ${teamId}`);
   }
   // User-created teams are deleted via the user-packs surface, not uninstalled.
-  if (manifestOf(packId).publisher === USER_TEAM_PUBLISHER) {
+  if (manifestOf(teamId).publisher === USER_TEAM_PUBLISHER) {
     throw new Error("User-created teams are deleted, not uninstalled.");
   }
-  const installed = isPackInstalled(packId);
+  const installed = isTeamInstalled(teamId);
   if (!installed) return;
-  removeInstalledPack(packId);
-  removePackProjectState(projectRoot, packId);
-  notifyPacksChanged(projectRoot);
+  removeInstalledTeam(teamId);
+  removeTeamProjectState(projectRoot, teamId);
+  notifyTeamsChanged(projectRoot);
 }

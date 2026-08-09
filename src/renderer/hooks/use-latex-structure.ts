@@ -237,7 +237,7 @@ function parseBibEntries(content: string): Map<string, { entryType: string; auth
 
 function computeStructure(
   files: ProjectFile[],
-  getContent: (id: string) => string,
+  getAsset: (id: string) => string,
 ): TeXStructure {
   const texFiles = files.filter((f) => f.name.endsWith(".tex"));
 
@@ -248,7 +248,7 @@ function computeStructure(
   const todos: TodoEntry[] = [];
 
   for (const file of texFiles) {
-    const content = getContent(file.id);
+    const content = getAsset(file.id);
     if (!content) continue;
     const lines = content.split("\n");
 
@@ -263,7 +263,7 @@ function computeStructure(
   const bibFiles = files.filter((f) => f.name.endsWith(".bib"));
   const bibMap = new Map<string, { entryType: string; author?: string; title?: string; year?: string }>();
   for (const bibFile of bibFiles) {
-    const content = getContent(bibFile.id);
+    const content = getAsset(bibFile.id);
     if (!content) continue;
     const entries = parseBibEntries(content);
     for (const [key, entry] of entries) {
@@ -290,23 +290,23 @@ function computeStructure(
 
 export function useLatexStructure(
   files: ProjectFile[],
-  getContent: (id: string) => string,
+  getAsset: (id: string) => string,
 ): TeXStructure {
   const [structure, setStructure] = useState<TeXStructure>(
-    () => computeStructure(files, getContent),
+    () => computeStructure(files, getAsset),
   );
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      setStructure(computeStructure(files, getContent));
+      setStructure(computeStructure(files, getAsset));
     }, TOC_PARSE_DEBOUNCE);
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [files, getContent]);
+  }, [files, getAsset]);
 
   return structure;
 }

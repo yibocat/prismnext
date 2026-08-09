@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import type { ResolvedMcp } from "../../shared/packs/types";
+import type { ResolvedMcp } from "../../shared/teams/types";
 import {
   isPrimaryOpenCodeStreamError,
   openCodeLogEndOffset,
@@ -1574,13 +1574,13 @@ export class AcpService {
     // (require, not import: readAgentConfig is sync and pack-resolver is a
     // heavy module loaded lazily to keep ACP startup light.)
     try {
-      const { listProjectMcps } = require("../services/pack-resolver") as {
+      const { listProjectMcps } = require("../services/team-resolver") as {
         listProjectMcps: (root: string) => ResolvedMcp[];
       };
-      const packMcps = listProjectMcps(projectRoot).filter((m) => m.enabled);
-      if (packMcps.length > 0) {
+      const teamMcps = listProjectMcps(projectRoot).filter((m) => m.enabled);
+      if (teamMcps.length > 0) {
         const existingNames = new Set(mcpServers.map((s) => s.name));
-        for (const def of packMcps) {
+        for (const def of teamMcps) {
           if (existingNames.has(def.name)) continue;
           const acp = packMcpDefToAcp(def);
           if (acp) {
@@ -1590,8 +1590,8 @@ export class AcpService {
         }
         log.info("Merged pack MCP servers", {
           projectRoot,
-          packCount: packMcps.length,
-          names: packMcps.map((m) => m.name),
+          packCount: teamMcps.length,
+          names: teamMcps.map((m) => m.name),
         });
       }
     } catch (err: unknown) {
@@ -1610,9 +1610,9 @@ export class AcpService {
       mcpServers: mcpServers.length,
       mcpNames: mcpServers.map((s) => s.name),
     });
-    void import("../services/project-experts-refresh")
-      .then(({ refreshProjectExpertsIntegration }) =>
-        refreshProjectExpertsIntegration(projectRoot),
+    void import("../services/project-subagents-refresh")
+      .then(({ refreshProjectSubagentsIntegration }) =>
+        refreshProjectSubagentsIntegration(projectRoot),
       )
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
@@ -1623,7 +1623,7 @@ export class AcpService {
   /**
    * Drop the cached agent config for a project so the next session/send
    * re-reads mcp.json + enabled pack MCPs from disk. Called on pack
-   * install/enable/disable (notifyPacksChanged) — MCP membership changed.
+   * install/enable/disable (notifyTeamsChanged) — MCP membership changed.
    */
   invalidateAgentConfigCache(projectRoot: string): void {
     if (this.cachedAgentConfig?.projectRoot === projectRoot) {

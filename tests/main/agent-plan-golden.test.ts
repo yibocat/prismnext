@@ -16,10 +16,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  buildProjectExpertsAgentPlan,
-  listExperts,
+  buildProjectSubagentsAgentPlan,
+  listSubagents,
   listOrchestrators,
-} from "../../src/main/services/experts-sync";
+} from "../../src/main/services/subagents-sync";
 
 const GOLDEN_DIR = join(__dirname, "golden");
 
@@ -46,7 +46,7 @@ function normalize(root: string, text: string): string {
   return text.split(root).join("<PROJECT_ROOT>");
 }
 
-function expertView(e: ReturnType<typeof listExperts>[number]) {
+function expertView(e: ReturnType<typeof listSubagents>[number]) {
   return {
     id: e.id,
     builtin: e.builtin,
@@ -67,7 +67,7 @@ function orchestratorView(o: ReturnType<typeof listOrchestrators>[number]) {
     builtin: o.builtin,
     removable: o.removable,
     enabled: o.enabled,
-    allowedExperts: o.allowedExperts,
+    roster: o.roster,
     model: o.model,
     thoughtLevel: o.thoughtLevel,
     temperature: o.temperature,
@@ -82,7 +82,7 @@ function byId<T extends { id: string }>(items: T[]): T[] {
 
 function assertPlanMatchesGolden(root: string, fixture: string): void {
   const golden = loadGolden(fixture);
-  const plan = buildProjectExpertsAgentPlan(root, { defaultSubagentModel: null });
+  const plan = buildProjectSubagentsAgentPlan(root, { defaultSubagentModel: null });
 
   expect(plan.orchestratorId).toBe(golden.orchestratorId);
   expect([...plan.agentFiles].sort()).toEqual([...golden.agentFiles].sort());
@@ -100,7 +100,7 @@ function assertPlanMatchesGolden(root: string, fixture: string): void {
   }
   expect(actualByName.size).toBe(golden.entries.length);
 
-  expect(byId(listExperts(root).map(expertView))).toEqual(byId(golden.views.experts));
+  expect(byId(listSubagents(root).map(expertView))).toEqual(byId(golden.views.experts));
   expect(byId(listOrchestrators(root).map(orchestratorView))).toEqual(
     byId(golden.views.orchestrators),
   );

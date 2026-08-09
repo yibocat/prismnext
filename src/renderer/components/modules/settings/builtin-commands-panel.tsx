@@ -30,14 +30,14 @@ export function BuiltinCommandsPanel() {
     .sort((a, b) => a.order - b.order);
 
   // 其余 pack 的命令按 pack 分组（badge = pack 名）
-  const packGroups = new Map<string, { packName: string; commands: typeof commands }>();
+  const packGroups = new Map<string, { teamName: string; commands: typeof commands }>();
   for (const cmd of commands.filter((c) => c.source === "plugin")) {
-    const group = packGroups.get(cmd.packId) ?? { packName: cmd.packName, commands: [] };
+    const group = packGroups.get(cmd.teamId) ?? { teamName: cmd.teamName, commands: [] };
     group.commands.push(cmd);
-    packGroups.set(cmd.packId, group);
+    packGroups.set(cmd.teamId, group);
   }
   const sortedPackGroups = [...packGroups.values()].sort((a, b) =>
-    a.packName.localeCompare(b.packName),
+    a.teamName.localeCompare(b.teamName),
   );
 
   if (!loaded) {
@@ -114,8 +114,8 @@ export function BuiltinCommandsPanel() {
       </section>
 
       {sortedPackGroups.map((group) => (
-        <section key={group.packName} className="space-y-3">
-          <h3 className={SETTINGS_CATEGORY_HEADER}>{group.packName}</h3>
+        <section key={group.teamName} className="space-y-3">
+          <h3 className={SETTINGS_CATEGORY_HEADER}>{group.teamName}</h3>
           <div className="space-y-3">
             {group.commands
               .sort((a, b) => a.order - b.order)
@@ -136,7 +136,7 @@ export function BuiltinCommandsPanel() {
                           </span>
                         ) : null}
                         <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-                          {group.packName}
+                          {group.teamName}
                         </span>
                       </div>
                       <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>

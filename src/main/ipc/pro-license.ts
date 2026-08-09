@@ -4,7 +4,7 @@ import {
   clearProLicense,
   readProLicense,
 } from "../services/pro-license";
-import { handleProLicenseChanged } from "../services/pro-packs-discovery";
+import { handleProLicenseChanged } from "../services/pro-teams-discovery";
 
 export function registerProLicenseHandlers(): void {
   ipcMain.handle("pro:getLicense", async () => {

@@ -45,7 +45,7 @@ export type SettingsPanelSlot =
   | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
   | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string; absPath?: string }
   | { kind: "skill-library" }
-  | { kind: "pack-detail"; packId: string; title?: string }
+  | { kind: "pack-detail"; teamId: string; title?: string }
   | { kind: "shortcuts" }
   | { kind: "logs" }
   | { kind: "permission-rules"; field: "allowed-paths" | "allow-rules" | "deny-rules" };

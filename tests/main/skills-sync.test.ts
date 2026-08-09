@@ -24,20 +24,20 @@ import {
   projectRootFromAgentPath,
 } from "../../src/main/services/skills-sync";
 import {
-  listExternalPackRoots,
-  registerExternalPackRoot,
-  unregisterExternalPackRoot,
-} from "../../src/main/services/pack-catalog";
+  listExternalTeamRoots,
+  registerExternalTeamRoot,
+  unregisterExternalTeamRoot,
+} from "../../src/main/services/team-catalog";
 import {
-  readPacksState,
-  setContentDisabled,
-  setPackEnabled,
-} from "../../src/main/services/packs-state";
+  readTeamsState,
+  setAssetDisabled,
+  setTeamEnabled,
+} from "../../src/main/services/teams-state";
 import {
-  addInstalledPack,
-  setPacksInstalledDataDir,
-} from "../../src/main/services/packs-installed";
-import { CORE_PACK_ID } from "../../src/shared/packs/types";
+  addInstalledTeam,
+  setTeamsInstalledDataDir,
+} from "../../src/main/services/teams-installed";
+import { CORE_TEAM_ID } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -60,15 +60,15 @@ function writeLocalSkill(root: string, id: string, extra = ""): void {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
+  for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
-  setPacksInstalledDataDir(null);
+  setTeamsInstalledDataDir(null);
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
-  setPacksInstalledDataDir(dir);
+  setTeamsInstalledDataDir(dir);
   tempDirs.push(dir);
   return dir;
 }
@@ -112,11 +112,11 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     // 裸 id 解析（唯一匹配 → local）
     const fqid = setSkillContentEnabled(root, "citations", false);
     expect(fqid).toBe("user.local:citations");
-    expect(readPacksState(root).disabledContent).toContain("user.local:citations");
+    expect(readTeamsState(root).disabledContent).toContain("user.local:citations");
     expect(listProjectSkills(root)[0].enabled).toBe(false);
 
     setSkillContentEnabled(root, "user.local:citations", true);
-    expect(readPacksState(root).disabledContent).not.toContain("user.local:citations");
+    expect(readTeamsState(root).disabledContent).not.toContain("user.local:citations");
     expect(listProjectSkills(root)[0].enabled).toBe(true);
   });
 
@@ -152,54 +152,54 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
   });
 
   it("skillsPaths: pack dirs（非 core 字典序 → core）→ local 扫描位最后", () => {
-    const packsRoot = temp("packs-root-");
-    makePack(packsRoot, "aaa.pack", baseManifest("aaa.pack"), {
+    const teamsRoot = temp("packs-root-");
+    makePack(teamsRoot, "aaa.pack", baseManifest("aaa.pack"), {
       skills: [{ id: "skill-a" }],
     });
-    makePack(packsRoot, CORE_PACK_ID, baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
+    makePack(teamsRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       skills: [{ id: "skill-core" }],
     });
-    registerExternalPackRoot(packsRoot);
+    registerExternalTeamRoot(teamsRoot);
 
     const root = temp();
     sealAppStore();
-    addInstalledPack("aaa.pack");
+    addInstalledTeam("aaa.pack");
 
     const result = syncProjectSkillsIntegration(root);
     expect(result.skillsPaths).toEqual([
-      join(packsRoot, "aaa.pack").replace(/\\/g, "/"),
-      join(packsRoot, CORE_PACK_ID).replace(/\\/g, "/"),
+      join(teamsRoot, "aaa.pack").replace(/\\/g, "/"),
+      join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ]);
   });
 
   it("pack 级禁用 → 目录整体移出 paths；同名遮蔽豁免 deny", () => {
-    const packsRoot = temp("packs-root-");
-    makePack(packsRoot, "aaa.pack", baseManifest("aaa.pack"), {
+    const teamsRoot = temp("packs-root-");
+    makePack(teamsRoot, "aaa.pack", baseManifest("aaa.pack"), {
       skills: [{ id: "shared" }, { id: "solo" }],
     });
-    makePack(packsRoot, CORE_PACK_ID, baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
+    makePack(teamsRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       skills: [{ id: "shared" }],
     });
-    registerExternalPackRoot(packsRoot);
+    registerExternalTeamRoot(teamsRoot);
 
     const root = temp();
     sealAppStore();
-    addInstalledPack("aaa.pack");
+    addInstalledTeam("aaa.pack");
 
     // pack.a 整包禁用 → 目录出 paths；shared 仍有 core 激活实例 → 不 deny；
     // solo 无激活实例 → deny
-    setPackEnabled(root, "aaa.pack", false);
+    setTeamEnabled(root, "aaa.pack", false);
     let result = syncProjectSkillsIntegration(root);
     expect(result.skillsPaths).toEqual([
-      join(packsRoot, CORE_PACK_ID).replace(/\\/g, "/"),
+      join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ]);
     expect(result.skillPermissions["solo"]).toBe("deny");
     expect(result.skillPermissions["shared"]).toBeUndefined();
 
     // core 的 shared 也被逐项禁用 → 无激活实例 → deny
-    setContentDisabled(root, `${CORE_PACK_ID}:shared`, true);
+    setAssetDisabled(root, `${CORE_TEAM_ID}:shared`, true);
     result = syncProjectSkillsIntegration(root);
     expect(result.skillPermissions["shared"]).toBe("deny");
   });

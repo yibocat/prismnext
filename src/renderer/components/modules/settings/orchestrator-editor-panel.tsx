@@ -16,10 +16,10 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import type {
-  ExpertInfo,
+  SubagentInfo,
   OrchestratorInfo,
   SaveCustomOrchestratorPayload,
-} from "@shared/agent-experts";
+} from "@shared/agent-subagents";
 import { buildSubagentRosterMarkdown } from "@shared/subagent-roster";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
@@ -67,15 +67,15 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [form, setForm] = useState<ProfileFormState>(emptyProfileForm());
-  const [allowedExperts, setAllowedExperts] = useState<string[]>([]);
-  const [experts, setExperts] = useState<ExpertInfo[]>([]);
+  const [roster, setAllowedExperts] = useState<string[]>([]);
+  const [experts, setExperts] = useState<SubagentInfo[]>([]);
   // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
   // Target team for new agents (null = this project's Local Pack).
   const [userTeams, setUserTeams] = useState<
-    Array<{ packId: string; name: string; description: string; version: string }>
+    Array<{ teamId: string; name: string; description: string; version: string }>
   >([]);
-  const [targetPackId, setTargetPackId] = useState<string | null>(null);
+  const [targetTeamId, setTargetPackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -94,7 +94,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       setLoading(true);
       setDeleteDialogOpen(false);
       try {
-        const expertList = await window.electronAPI.expertsList(root);
+        const expertList = await window.electronAPI.subagentsList(root);
         if (cancelled) return;
         setExperts(expertList.filter((e) => e.enabled));
 
@@ -110,7 +110,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           setAllowedExperts([]);
           setContentFqid(null);
           setTargetPackId(null);
-          const teams = await window.electronAPI.userPacksList().catch(() => []);
+          const teams = await window.electronAPI.teamsListUserTeams().catch(() => []);
           if (cancelled) return;
           setUserTeams(teams);
           setLoading(false);
@@ -135,7 +135,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
             modelId,
             thoughtLevel: detail.thoughtLevel ?? "",
           });
-          setAllowedExperts(pruneAllowed(detail.allowedExperts));
+          setAllowedExperts(pruneAllowed(detail.roster));
           setContentFqid(detail.fqid ?? null);
           setLoading(false);
           return;
@@ -149,7 +149,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           return;
         }
         setForm(formFromOrchestrator(detail));
-        setAllowedExperts(pruneAllowed(detail.allowedExperts));
+        setAllowedExperts(pruneAllowed(detail.roster));
         setContentFqid(detail.fqid ?? null);
         // Editing a custom agent writes back to its owning pack (local or team).
         const pid = detail.fqid?.split(":")[0];
@@ -185,10 +185,10 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     try {
       const model = formatProfileModel(form.modelProvider, form.modelId);
       // Empty allowlist → undefined (unrestricted = all available experts).
-      const allowedExpertsField = allowedExperts.length > 0 ? allowedExperts : undefined;
+      const allowedExpertsField = roster.length > 0 ? roster : undefined;
 
       if (builtinCustomize && contentFqid) {
-        await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+        await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
           allowedExperts: allowedExpertsField,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
@@ -199,14 +199,14 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           name: form.name.trim(),
           description: form.description.trim(),
           instructions: form.instructions,
-          allowedExperts: allowedExpertsField,
+          roster: allowedExpertsField,
           model,
           thoughtLevel: form.thoughtLevel.trim() || undefined,
         };
         await window.electronAPI.orchestratorsSaveCustom(
           projectRoot,
           payload,
-          targetPackId ?? undefined,
+          targetTeamId ?? undefined,
         );
       }
 
@@ -219,13 +219,13 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     } finally {
       setSaving(false);
     }
-  }, [projectRoot, builtinCustomize, form, allowedExperts, isNew, closePanel, t]);
+  }, [projectRoot, builtinCustomize, form, roster, isNew, closePanel, t]);
 
   const resetBuiltinCustomization = async () => {
     if (!projectRoot || !form.id || !builtinCustomize || !contentFqid) return;
     setSaving(true);
     try {
-      await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+      await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
         allowedExperts: undefined,
         model: undefined,
         thoughtLevel: undefined,
@@ -261,14 +261,14 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   };
 
   const subagentRosterMarkdown = useMemo(() => {
-    const refs = allowedExperts
+    const refs = roster
       .filter((id) => experts.some((e) => e.id === id))
       .map((id) => {
         const expert = experts.find((e) => e.id === id)!;
         return { id: expert.id, name: expert.name, description: expert.description };
       });
     return buildSubagentRosterMarkdown(refs);
-  }, [allowedExperts, experts]);
+  }, [roster, experts]);
 
   if (!projectRoot) {
     return (
@@ -314,14 +314,14 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
               {t("settings.editor.orchestrator.targetTeam")}
             </label>
             <select
-              value={targetPackId ?? ""}
+              value={targetTeamId ?? ""}
               onChange={(e) => setTargetPackId(e.target.value || null)}
               disabled={saving}
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
             >
               <option value="">{t("settings.editor.orchestrator.localTarget")}</option>
               {userTeams.map((team) => (
-                <option key={team.packId} value={team.packId}>
+                <option key={team.teamId} value={team.teamId}>
                   {team.name}
                 </option>
               ))}
@@ -333,18 +333,18 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         )}
 
         <CollapsibleFormSection
-          title={t("settings.editor.orchestrator.allowedExperts")}
+          title={t("settings.editor.orchestrator.roster")}
           summary={
-            allowedExperts.length === 0
+            roster.length === 0
               ? t("settings.editor.orchestrator.allExperts")
               : t("settings.editor.orchestrator.allowedCount", {
-                  selected: allowedExperts.filter((id) =>
+                  selected: roster.filter((id) =>
                     expertRows.some((e) => e.id === id),
                   ).length,
                   total: expertRows.length,
                 })
           }
-          defaultOpen={allowedExperts.length > 0 && allowedExperts.length < expertRows.length}
+          defaultOpen={roster.length > 0 && roster.length < expertRows.length}
         >
           <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
             {t("settings.editor.orchestrator.allowedExpertsDesc")}
@@ -356,7 +356,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
               </p>
             ) : (
               expertRows.map((expert) => {
-                const checked = allowedExperts.includes(expert.id);
+                const checked = roster.includes(expert.id);
                 return (
                   <label
                     key={expert.id}
@@ -391,7 +391,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         <CollapsibleFormSection
           title={t("settings.editor.orchestrator.subagentRoster")}
           summary={t("settings.editor.orchestrator.allowedCount", {
-            selected: allowedExperts.filter((id) => expertRows.some((e) => e.id === id)).length,
+            selected: roster.filter((id) => expertRows.some((e) => e.id === id)).length,
             total: expertRows.length,
           })}
           defaultOpen

@@ -1326,7 +1326,7 @@ export interface ElectronAPI {
       | { adapter: "github"; repo: string; ref: string; path: string }
       | { adapter: "discovery"; indexUrl: string };
     origin: "bundled" | "registry" | "custom" | "plugin";
-    originPackName?: string;
+    originTeamName?: string;
     removable: boolean;
   }>>;
   agentListRules: (projectPath: string) => Promise<Array<{
@@ -1512,7 +1512,7 @@ export interface ElectronAPI {
         | { adapter: "github"; repo: string; ref: string; path: string }
         | { adapter: "discovery"; indexUrl: string };
       origin: "bundled" | "registry" | "custom" | "plugin";
-      originPackName?: string;
+      originTeamName?: string;
       removable: boolean;
     }>;
   }>;
@@ -1588,37 +1588,37 @@ export interface ElectronAPI {
     }>
   >;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
-  expertsList: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertInfo[]>;
-  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorInfo[]>;
-  expertsGetDetail: (
+  subagentsList: (projectPath: string) => Promise<import("@shared/agent-subagents").SubagentInfo[]>;
+  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-subagents").OrchestratorInfo[]>;
+  subagentsGetDetail: (
     projectPath: string,
     expertId: string,
-  ) => Promise<(import("@shared/agent-experts").ExpertInfo & { instructions: string }) | null>;
-  expertsSaveCustom: (
+  ) => Promise<(import("@shared/agent-subagents").SubagentInfo & { instructions: string }) | null>;
+  subagentsSaveCustom: (
     projectPath: string,
-    payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-    targetPackId?: string,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsDeleteCustom: (
+    payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+    targetTeamId?: string,
+  ) => Promise<{ expert: import("@shared/agent-subagents").SubagentInfo; experts: import("@shared/agent-subagents").SubagentInfo[] }>;
+  subagentsDeleteCustom: (
     projectPath: string,
     expertId: string,
-  ) => Promise<{ experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  ) => Promise<{ experts: import("@shared/agent-subagents").SubagentInfo[] }>;
   orchestratorsGetDetail: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<(import("@shared/agent-experts").OrchestratorInfo & { instructions: string }) | null>;
+  ) => Promise<(import("@shared/agent-subagents").OrchestratorInfo & { instructions: string }) | null>;
   orchestratorsSaveCustom: (
     projectPath: string,
-    payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
-    targetPackId?: string,
+    payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+    targetTeamId?: string,
   ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
+    orchestrator: import("@shared/agent-subagents").OrchestratorInfo;
+    orchestrators: import("@shared/agent-subagents").OrchestratorInfo[];
   }>;
   orchestratorsDeleteCustom: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<{ orchestrators: import("@shared/agent-experts").OrchestratorInfo[] }>;
+  ) => Promise<{ orchestrators: import("@shared/agent-subagents").OrchestratorInfo[] }>;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;
@@ -1915,72 +1915,72 @@ export interface ElectronAPI {
   commandsReadImportFile: (filePath: string) => Promise<unknown>;
 
   // Agent Packs（生命周期 + 视图，§9.5）
-  packsListCatalog: (
+  teamsList: (
     projectRoot: string,
-  ) => Promise<import("../../shared/packs/types").ProjectPackView[]>;
-  packsInstall: (
+  ) => Promise<import("../../shared/teams/types").ProjectTeamView[]>;
+  teamsInstall: (
     projectRoot: string,
-    packId: string,
+    teamId: string,
   ) => Promise<{
     applied?: boolean;
-    suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
+    suggestedOrchestrator?: import("../../shared/teams/types").Fqid;
   }>;
-  packsSetEnabled: (
+  teamsSetEnabled: (
     projectRoot: string,
-    packId: string,
+    teamId: string,
     enabled: boolean,
   ) => Promise<{
-    suggestedOrchestrator?: import("../../shared/packs/types").Fqid;
+    suggestedOrchestrator?: import("../../shared/teams/types").Fqid;
     /** 停用该 pack 时，默认主 agent 若属于它 → 已转移回 core 默认 */
-    defaultMovedTo?: import("../../shared/packs/types").Fqid;
+    defaultMovedTo?: import("../../shared/teams/types").Fqid;
   }>;
-  packsUninstall: (projectRoot: string, packId: string) => Promise<void>;
-  packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
-  packsSaveOverride: (
+  teamsUninstall: (projectRoot: string, teamId: string) => Promise<void>;
+  teamsSetAssetEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
+  teamsSaveAssetOverride: (
     projectRoot: string,
     fqid: string,
-    patch: import("../../shared/packs/types").ContentOverride,
+    patch: import("../../shared/teams/types").AssetOverride,
   ) => Promise<void>;
-  packsGetCoreState: (projectRoot: string) => Promise<{
+  teamsGetCoreState: (projectRoot: string) => Promise<{
     defaultOrchestratorId: string | null;
     defaultOrchestratorFqid: string | null;
-    coreExpertDisabledCount: number;
-    coreExpertOverrideCount: number;
+    coreSubagentDisabledCount: number;
+    coreSubagentOverrideCount: number;
     coreOrchestratorDisabledCount: number;
     coreOrchestratorOverrideCount: number;
   }>;
-  packsResetCoreDefaults: (
+  teamsResetCoreDefaults: (
     projectRoot: string,
-    kind: "expert" | "orchestrator",
+    kind: "subagent" | "orchestrator",
   ) => Promise<void>;
-  packsResolveBadge: (
+  teamsResolveOrigin: (
     projectRoot: string,
     fqidOrId: string,
-  ) => Promise<import("../../shared/packs/types").BadgeInfo | null>;
-  packsGetContentView: (
+  ) => Promise<import("../../shared/teams/types").OriginInfo | null>;
+  teamsListAssets: (
     projectRoot: string,
-    kind: import("../../shared/packs/types").ContentKind,
-  ) => Promise<import("../../shared/packs/types").ResolvedContent[]>;
-  packsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
-  packsGetPackContents: (packId: string) => Promise<{
-    kind: import("../../shared/packs/types").ContentKind;
+    kind: import("../../shared/teams/types").AssetKind,
+  ) => Promise<import("../../shared/teams/types").AssetView[]>;
+  teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
+  teamsGetTeamContents: (teamId: string) => Promise<{
+    kind: import("../../shared/teams/types").AssetKind;
     id: string;
     name: string;
     description: string;
   }[]>;
-  packsListProjectMcps: (
+  teamsListProjectMcps: (
     projectRoot: string,
-  ) => Promise<import("../../shared/packs/types").ResolvedMcp[]>;
+  ) => Promise<import("../../shared/teams/types").ResolvedMcp[]>;
 
   // User teams (app-level, like installed teams)
-  userPacksList: () => Promise<
-    Array<{ packId: string; name: string; description: string; version: string }>
+  teamsListUserTeams: () => Promise<
+    Array<{ teamId: string; name: string; description: string; version: string }>
   >;
-  userPacksCreate: (
+  teamsCreateUserTeam: (
     name: string,
     description?: string,
-  ) => Promise<{ packId: string; name: string; description: string; version: string }>;
-  userPacksDelete: (packId: string) => Promise<void>;
+  ) => Promise<{ teamId: string; name: string; description: string; version: string }>;
+  teamsDeleteUserTeam: (teamId: string) => Promise<void>;
 
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;

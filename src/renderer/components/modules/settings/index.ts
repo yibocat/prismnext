@@ -13,7 +13,7 @@ export { LiteratureSettings } from "./literature-settings";
 export { ShortcutsSettings } from "./shortcuts-settings";
 export { LogViewer } from "./log-viewer";
 export { BackupsSettings } from "./backups-settings";
-export { TeamsAgentsSettings } from "./teams-agents-settings";
+export { TeamsAgentsSettings } from "./teams-settings";
 export { PromptsRulesSettings } from "./prompts-rules-settings";
 export { PermissionsSettings } from "./permissions-settings";
 export { SlashCommandsSettings } from "./slash-commands-settings";

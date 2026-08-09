@@ -297,7 +297,7 @@
         "skills": "{{count}} skills",
         "mcp": "{{count}} MCP",
         "standardExpert": "Standard subagent preset",
-        "allowedExperts": "{{count}} allowed experts",
+        "roster": "{{count}} allowed experts",
         "modules": "{{count}} modules",
         "standardOrchestrator": "Research orchestrator"
       }
@@ -1017,7 +1017,7 @@
         "targetTeamDesc": "New experts live in the project Local Pack by default; choose a team to create app-level experts shared across projects."
       },
       "orchestrator": {
-        "allowedExperts": "Allowed experts",
+        "roster": "Allowed experts",
         "deleteTitle": "Delete orchestrator?",
         "toast": {
           "created": "Orchestrator created.",

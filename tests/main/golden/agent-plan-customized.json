@@ -169,7 +169,7 @@
         "id": "research-prism",
         "builtin": true,
         "enabled": true,
-        "allowedExperts": [
+        "roster": [
           "literature-synthesizer",
           "methodology-auditor"
         ],
@@ -195,7 +195,7 @@
         "builtin": false,
         "removable": true,
         "enabled": true,
-        "allowedExperts": [
+        "roster": [
           "latex-polisher",
           "literature-synthesizer"
         ],

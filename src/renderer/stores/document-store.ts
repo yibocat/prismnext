@@ -123,7 +123,7 @@ interface DocumentState {
 
   // Sync actions
   setActiveFile: (id: string) => void;
-  getContent: (id: string) => string;
+  getAsset: (id: string) => string;
   /** Project-relative paths of files with unsaved edits. */
   getDirtyRelativePaths: () => string[];
   /** Dirty + open tex-related files with in-memory content (for live compile flush). */
@@ -1426,7 +1426,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     get().openFile(id);
   },
 
-  getContent: (id: string) => get().openedContents.get(id)?.content ?? "",
+  getAsset: (id: string) => get().openedContents.get(id)?.content ?? "",
 
   getDirtyRelativePaths: () => {
     const state = get();

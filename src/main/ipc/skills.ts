@@ -30,9 +30,9 @@ import {
   validateRegistryIndex,
   type RegistrySkillEntry,
 } from "../services/skills-registry";
-import { CORE_PACK_ID } from "../../shared/packs/types";
-import { toFqid } from "../../shared/packs/state";
-import { listCorePackSkills, readCoreSkillMd } from "../services/core-pack-skills";
+import { CORE_TEAM_ID } from "../../shared/teams/types";
+import { toFqid } from "../../shared/teams/state";
+import { listCorePackSkills, readCoreSkillMd } from "../services/core-team-skills";
 
 function refreshProjectSkills(
   projectPath: string,
@@ -97,7 +97,7 @@ export function registerSkillsHandlers(): void {
     "agent:installBundledSkill",
     async (_event, args: { projectPath: string; skillId: string }) => {
       // 引用模型：core pack 技能天然可用，「安装」= 确保启用（零拷贝）
-      setSkillContentEnabled(args.projectPath, toFqid(CORE_PACK_ID, args.skillId), true);
+      setSkillContentEnabled(args.projectPath, toFqid(CORE_TEAM_ID, args.skillId), true);
       return refreshProjectSkills(args.projectPath);
     },
   );

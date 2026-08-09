@@ -9,10 +9,10 @@
  *
  * 本文件保留重构前的对外契约（IPC / chat / stack-preview / 渲染引擎），
  * 内部全部改为 resolver 驱动：
- *   - ExpertInfo/OrchestratorInfo 形状不变（id 仍为裸 id；新增 fqid 字段）
+ *   - SubagentInfo/OrchestratorInfo 形状不变（id 仍为裸 id；新增 fqid 字段）
  *   - agent.md 渲染逻辑逐字节不变（golden 验收：tests/main/agent-plan-golden）
  *   - 文件名规则：core/local 用裸 id（opencode 侧稳定），其余 pack 用
- *     `<packId>--<id>`（§4.5.2）
+ *     `<teamId>--<id>`（§4.5.2）
  *   - 裸 id 命名空间冲突时按 local > external > firstparty > core 遮蔽
  *     （对齐旧 merge 语义：custom 覆盖 bundled）
  *
@@ -33,52 +33,52 @@ import {
 import { join } from "node:path";
 import type { PromptContext } from "../prompts/types";
 import {
-  type ExpertDefinition,
-  type ExpertInfo,
+  type SubagentDefinition,
+  type SubagentInfo,
   type OrchestratorDefinition,
   type OrchestratorInfo,
   type PrismExpertsSyncState,
-  type SaveCustomExpertPayload,
+  type SaveCustomSubagentPayload,
   type SaveCustomOrchestratorPayload,
   DEFAULT_ORCHESTRATOR_ID,
-} from "./agent-experts";
+} from "./agent-subagents";
 import {
   resolveOrchestratorActiveModuleKeys,
   resolveActiveModuleKeys,
-  resolveExpertProfileModuleKeysFor,
+  resolveSubagentProfileModuleKeysFor,
   composeOrchestratorProfileModulePrompts,
   composeProfileModulePrompts,
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 import {
-  CORE_PACK_ID,
+  CORE_TEAM_ID,
   DEFAULT_ORCHESTRATOR_FQID,
-  LOCAL_PACK_ID,
-  type ExpertDef,
+  LOCAL_TEAM_ID,
+  type SubagentDef,
   type Fqid,
   type OrchestratorDef,
-  type ResolvedContent,
-} from "../../shared/packs/types";
-import { parseFqid, toFqid } from "../../shared/packs/state";
+  type AssetView,
+} from "../../shared/teams/types";
+import { parseFqid, toFqid } from "../../shared/teams/state";
 import {
-  getContent,
-  listContent,
+  getAsset,
+  listAssets,
   readInstructions,
-  resolveAllowedExperts,
+  resolveRosterRefs,
   resolveBareContentId,
   resolveOrchestratorId as resolverResolveOrchestratorId,
   invalidateResolver,
-} from "./pack-resolver";
+} from "./team-resolver";
 import {
-  readPacksState,
-  setContentDisabled,
-  saveContentOverride,
+  readTeamsState,
+  setAssetDisabled,
+  saveAssetOverride,
   setDefaultOrchestratorFqid,
-  writePacksState,
-} from "./packs-state";
-import { getLocalPackDir, invalidateCatalog } from "./pack-catalog";
-import { listUserTeams } from "./user-packs";
+  writeTeamsState,
+} from "./teams-state";
+import { getLocalTeamDir, invalidateCatalog } from "./team-catalog";
+import { listUserTeams } from "./user-teams";
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
@@ -87,39 +87,39 @@ export const PRISM_EXPERTS_SYNC_REL = "prism-experts-sync.json";
 // ── 裸 id / 文件名命名空间 ─────────────────────────────────
 
 /** pack 遮蔽优先级：数字小者胜（local 最强，core 兜底）。 */
-function packShadowRank(packId: string): number {
-  if (packId === LOCAL_PACK_ID) return 0;
-  if (packId === CORE_PACK_ID) return 3;
+function packShadowRank(teamId: string): number {
+  if (teamId === LOCAL_TEAM_ID) return 0;
+  if (teamId === CORE_TEAM_ID) return 3;
   return 1; // firstparty / external
 }
 
 /**
  * opencode agent 文件名基（§4.5.2）：core/local 用裸 id（与旧布局逐字节一致），
- * 其余 pack 用 `<packId>--<id>` 防冲突。
+ * 其余 pack 用 `<teamId>--<id>` 防冲突。
  */
-function agentFileBase(content: ResolvedContent): string {
-  return content.packId === CORE_PACK_ID || content.packId === LOCAL_PACK_ID
+function agentFileBase(content: AssetView): string {
+  return content.teamId === CORE_TEAM_ID || content.teamId === LOCAL_TEAM_ID
     ? content.id
-    : `${content.packId}--${content.id}`;
+    : `${content.teamId}--${content.id}`;
 }
 
 /**
  * 按裸 id 分组取遮蔽胜者（旧 mergeExpertDefinitions 的 Map 覆盖语义：
  * custom 覆盖 bundled —— 现在推广为 local > external/firstparty > core）。
  */
-function shadowWinners(items: ResolvedContent[]): ResolvedContent[] {
-  const byBare = new Map<string, ResolvedContent>();
+function shadowWinners(items: AssetView[]): AssetView[] {
+  const byBare = new Map<string, AssetView>();
   for (const item of items) {
     const key = agentFileBase(item);
     const prev = byBare.get(key);
-    if (!prev || packShadowRank(item.packId) < packShadowRank(prev.packId)) {
+    if (!prev || packShadowRank(item.teamId) < packShadowRank(prev.teamId)) {
       byBare.set(key, item);
     }
   }
   return [...byBare.values()];
 }
 
-// ── ResolvedContent → legacy Info 视图 ─────────────────────
+// ── AssetView → legacy Info 视图 ─────────────────────
 
 function instructionsPreview(text: string, max = 120): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
@@ -127,19 +127,19 @@ function instructionsPreview(text: string, max = 120): string {
   return `${oneLine.slice(0, max)}…`;
 }
 
-function toExpertInfo(projectRoot: string, content: ResolvedContent): ExpertInfo {
-  const def = content.definition as ExpertDef;
+function toExpertInfo(projectRoot: string, content: AssetView): SubagentInfo {
+  const def = content.definition as SubagentDef;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveActiveModuleKeys({
-    role: "expert",
-    profileModules: resolveExpertProfileModuleKeysFor(def as ExpertDefinition),
+    role: "subagent",
+    profileModules: resolveSubagentProfileModuleKeysFor(def as SubagentDefinition),
   });
   return {
     id: agentFileBase(content),
     fqid: content.fqid,
     name: def.name,
     description: def.description,
-    builtin: content.packId === CORE_PACK_ID,
+    builtin: content.teamId === CORE_TEAM_ID,
     removable: content.removable,
     model: def.model,
     thoughtLevel: def.thoughtLevel,
@@ -153,16 +153,16 @@ function toExpertInfo(projectRoot: string, content: ResolvedContent): ExpertInfo
 }
 
 /**
- * OrchestratorInfo.allowedExperts 语义对齐旧版：
- * - 定义了 allowedExperts 的 → 按启用 expert 过滤后的【文件名基】列表
+ * OrchestratorInfo.roster 语义对齐旧版：
+ * - 定义了 roster 的 → 按启用 expert 过滤后的【文件名基】列表
  * - 未定义的 → undefined（UI 显示「标准编排」，plan 视为全部启用 experts）
  */
-function toOrchestratorInfo(projectRoot: string, content: ResolvedContent): OrchestratorInfo {
+function toOrchestratorInfo(projectRoot: string, content: AssetView): OrchestratorInfo {
   const def = content.definition as OrchestratorDef;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveOrchestratorActiveModuleKeys();
   const allowed =
-    def.allowedExperts !== undefined
+    def.roster !== undefined
       ? resolveAllowedRefs(projectRoot, content.fqid).map((ref) => ref.id)
       : undefined;
   return {
@@ -170,13 +170,13 @@ function toOrchestratorInfo(projectRoot: string, content: ResolvedContent): Orch
     fqid: content.fqid,
     name: def.name,
     description: def.description,
-    builtin: content.packId === CORE_PACK_ID,
+    builtin: content.teamId === CORE_TEAM_ID,
     // 旧版视图语义：core orchestrator 不带 removable 键；仅 local（可删除）为 true
     ...(content.removable ? { removable: true } : {}),
     model: def.model,
     thoughtLevel: def.thoughtLevel,
     temperature: def.temperature,
-    allowedExperts: allowed,
+    roster: allowed,
     permission: def.permission,
     enabled: content.enabled,
     instructionsPreview: instructionsPreview(instructions),
@@ -184,21 +184,21 @@ function toOrchestratorInfo(projectRoot: string, content: ResolvedContent): Orch
   };
 }
 
-export function listExperts(projectRoot: string): ExpertInfo[] {
-  const winners = shadowWinners(listContent(projectRoot, "expert"));
+export function listSubagents(projectRoot: string): SubagentInfo[] {
+  const winners = shadowWinners(listAssets(projectRoot, "subagent"));
   return winners.map((c) => toExpertInfo(projectRoot, c));
 }
 
 export function listOrchestrators(projectRoot: string): OrchestratorInfo[] {
-  const winners = shadowWinners(listContent(projectRoot, "orchestrator"));
+  const winners = shadowWinners(listAssets(projectRoot, "orchestrator"));
   return winners.map((c) => toOrchestratorInfo(projectRoot, c));
 }
 
 /** 裸 id 或 FQID → expert。 */
-export function getExpert(projectRoot: string, expertId: string): ExpertInfo | null {
+export function getSubagent(projectRoot: string, expertId: string): SubagentInfo | null {
   const id = expertId.trim();
   if (!id) return null;
-  return listExperts(projectRoot).find((e) => e.id === id || e.fqid === id) ?? null;
+  return listSubagents(projectRoot).find((e) => e.id === id || e.fqid === id) ?? null;
 }
 
 /** 裸 id 或 FQID → orchestrator。 */
@@ -220,11 +220,11 @@ export function resolveOrchestratorId(
   tabOrchestratorId?: string | null,
 ): string {
   const fqid = resolverResolveOrchestratorId(projectRoot, tabOrchestratorId);
-  const content = getContent(projectRoot, fqid);
+  const content = getAsset(projectRoot, fqid);
   return content ? agentFileBase(content) : DEFAULT_ORCHESTRATOR_ID;
 }
 
-// ── allowedExperts 解析（渲染 / UI 共用）────────────────────
+// ── roster 解析（渲染 / UI 共用）────────────────────
 
 /**
  * orchestrator 实际可用的 expert 引用（文件名基 + 名称 + 描述）：
@@ -235,12 +235,12 @@ function resolveAllowedRefs(
   projectRoot: string,
   orchestratorFqid: Fqid,
 ): Array<{ id: string; name: string; description: string }> {
-  const winners = shadowWinners(listContent(projectRoot, "expert"));
+  const winners = shadowWinners(listAssets(projectRoot, "subagent"));
   const byFqid = new Map(winners.map((c) => [c.fqid, c]));
   const byBare = new Map(winners.map((c) => [agentFileBase(c), c]));
   const refs: Array<{ id: string; name: string; description: string }> = [];
   const seen = new Set<string>();
-  for (const fqid of resolveAllowedExperts(projectRoot, orchestratorFqid)) {
+  for (const fqid of resolveRosterRefs(projectRoot, orchestratorFqid)) {
     // resolver 返回的 FQID 可能被遮蔽（同名 local 内容胜出）→ 映射到胜者
     const direct = byFqid.get(fqid);
     const parsed = parseFqid(fqid);
@@ -256,12 +256,12 @@ function resolveAllowedRefs(
 
 // ── instructions 读取 ───────────────────────────────────────
 
-export function readExpertInstructions(
+export function readSubagentInstructions(
   projectRoot: string,
-  expert: ExpertDefinition,
+  expert: SubagentDefinition,
 ): string {
   const fqid =
-    (expert as ExpertInfo).fqid ?? resolveBareContentId(projectRoot, "expert", expert.id);
+    (expert as SubagentInfo).fqid ?? resolveBareContentId(projectRoot, "subagent", expert.id);
   return fqid ? readInstructions(projectRoot, fqid) : "";
 }
 
@@ -278,10 +278,10 @@ export function readOrchestratorInstructions(
 // ── 渲染引擎（与重构前逐字节一致；勿动逻辑）──────────────────
 
 function appendCapabilityRefs(
-  def: ExpertDefinition | OrchestratorDefinition,
+  def: SubagentDefinition | OrchestratorDefinition,
   body: string,
   promptCtx: PromptContext = {},
-  role: "orchestrator" | "expert",
+  role: "orchestrator" | "subagent",
 ): string {
   // Experts compose from their manifest `modules` subset — an expert Task
   // call pays the full system-side cost of every module we attach.
@@ -289,8 +289,8 @@ function appendCapabilityRefs(
     role === "orchestrator"
       ? composeOrchestratorProfileModulePrompts(promptCtx)
       : composeProfileModulePrompts(
-          // role === "expert" 时 def 必为 ExpertDefinition（调用方保证）
-          resolveExpertProfileModuleKeysFor(def as ExpertDefinition),
+          // role === "subagent" 时 def 必为 SubagentDefinition（调用方保证）
+          resolveSubagentProfileModuleKeysFor(def as SubagentDefinition),
           promptCtx,
         );
   const sections: string[] = [body.trim()];
@@ -384,21 +384,21 @@ export interface AllowedExpertRef {
 /** Appended at sync time — open built-ins + orchestrator allowlist experts. */
 export function appendSubagentRosterSection(
   body: string,
-  allowedExperts: AllowedExpertRef[],
+  subagents: AllowedExpertRef[],
 ): string {
   const trimmed = body.trim();
-  const roster = buildSubagentRosterMarkdown(allowedExperts);
+  const roster = buildSubagentRosterMarkdown(subagents);
   return [trimmed, "", "---", roster].join("\n");
 }
 
 /** Drop stale / disabled expert ids from a stored allowlist for UI + persistence. */
-export function pruneAllowedExpertIds(
-  allowedExperts: string[] | undefined,
+export function pruneRosterRefIds(
+  roster: string[] | undefined,
   knownExpertIds: string[],
 ): string[] | undefined {
-  if (allowedExperts === undefined) return undefined;
+  if (roster === undefined) return undefined;
   const known = new Set(knownExpertIds);
-  return allowedExperts.filter((id) => known.has(id));
+  return roster.filter((id) => known.has(id));
 }
 
 function mergePermissions(
@@ -452,7 +452,7 @@ function computeSyncContentHash(entries: ProjectExpertsAgentEntry[]): string {
 }
 
 /** Build agent.md payloads without writing — used to skip redundant sync on chat send. */
-export function buildProjectExpertsAgentPlan(
+export function buildProjectSubagentsAgentPlan(
   projectRoot: string,
   options?: { promptCtx?: PromptContext; defaultSubagentModel?: string | null },
 ): ProjectExpertsAgentPlan {
@@ -475,7 +475,7 @@ export function buildProjectExpertsAgentPlan(
     throw new Error(`Orchestrator not found or disabled: ${orchestratorId}`);
   }
 
-  const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
+  const enabledExperts = listSubagents(projectRoot).filter((e) => e.enabled);
   const enabledRefs: AllowedExpertRef[] = enabledExperts.map((e) => ({
     id: e.id,
     name: e.name,
@@ -483,17 +483,17 @@ export function buildProjectExpertsAgentPlan(
   }));
   const allowedRefsFor = (info: OrchestratorInfo): AllowedExpertRef[] =>
     // spec 未定义 = 全部启用 experts（旧语义）；定义了 → resolver 解析后过滤
-    info.allowedExperts === undefined
+    info.roster === undefined
       ? enabledRefs
       : resolveAllowedRefs(projectRoot, info.fqid!);
 
   const agentEntries: ProjectExpertsAgentEntry[] = [];
 
   for (const expert of enabledExperts) {
-    const instructions = readExpertInstructions(projectRoot, expert);
+    const instructions = readSubagentInstructions(projectRoot, expert);
     agentEntries.push({
       filename: `${expert.id}.md`,
-      content: renderExpertAgentMarkdown(expert, instructions, promptCtx, {
+      content: renderSubagentAgentMarkdown(expert, instructions, promptCtx, {
         defaultModel: defaultSubagentModel,
       }),
     });
@@ -530,8 +530,8 @@ export function buildProjectExpertsAgentPlan(
   };
 }
 
-export function renderExpertAgentMarkdown(
-  def: ExpertDefinition,
+export function renderSubagentAgentMarkdown(
+  def: SubagentDefinition,
   instructionsBody: string,
   promptCtx: PromptContext = {},
   options?: { defaultModel?: string | null },
@@ -550,17 +550,17 @@ export function renderExpertAgentMarkdown(
   frontmatter.permission = mergePermissions(def.permission, {
     task: { "*": "deny" },
   });
-  const body = appendCapabilityRefs(def, instructionsBody, promptCtx, "expert");
+  const body = appendCapabilityRefs(def, instructionsBody, promptCtx, "subagent");
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
 
 export function renderOrchestratorAgentMarkdown(
   def: OrchestratorDefinition,
   instructionsBody: string,
-  allowedExperts: AllowedExpertRef[],
+  roster: AllowedExpertRef[],
   promptCtx: PromptContext = {},
 ): string {
-  const taskRules = buildTaskPermissionBlock(allowedExperts.map((e) => e.id));
+  const taskRules = buildTaskPermissionBlock(roster.map((e) => e.id));
   const permission = mergePermissions(def.permission, { task: taskRules });
   const frontmatter: Record<string, unknown> = {
     description: def.description,
@@ -569,7 +569,7 @@ export function renderOrchestratorAgentMarkdown(
   };
   if (def.model) frontmatter.model = def.model;
   if (def.temperature !== undefined) frontmatter.temperature = def.temperature;
-  const bodyWithExperts = appendSubagentRosterSection(instructionsBody, allowedExperts);
+  const bodyWithExperts = appendSubagentRosterSection(instructionsBody, roster);
   const body = appendCapabilityRefs(def, bodyWithExperts, promptCtx, "orchestrator");
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
 }
@@ -615,7 +615,7 @@ export function clearSyncedAgentFiles(agentsDir: string, agentFiles: string[]): 
   }
 }
 
-export function syncProjectExpertsToOpencode(
+export function syncProjectSubagentsToOpencode(
   projectRoot: string,
   options?: {
     agentsDir?: string;
@@ -627,7 +627,7 @@ export function syncProjectExpertsToOpencode(
   const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
   mkdirSync(agentsDir, { recursive: true });
 
-  const plan = buildProjectExpertsAgentPlan(projectRoot, options);
+  const plan = buildProjectSubagentsAgentPlan(projectRoot, options);
   for (const entry of plan.agentEntries) {
     writeFileSync(join(agentsDir, entry.filename), entry.content, "utf-8");
   }
@@ -668,7 +668,7 @@ function slugifyId(name: string): string {
 }
 
 function uniqueLocalExpertId(projectRoot: string, base: string): string {
-  const existing = new Set(listExperts(projectRoot).map((e) => e.id));
+  const existing = new Set(listSubagents(projectRoot).map((e) => e.id));
   if (!existing.has(base)) return base;
   let i = 2;
   while (existing.has(`${base}-${i}`)) i += 1;
@@ -690,44 +690,44 @@ function invalidateLocalViews(projectRoot: string): void {
 
 // ── 可写目标（Local Pack 或用户团队）───────────────────────
 
-/** Derive a content item's owning pack id from its fqid (`packId:contentId`). */
+/** Derive a content item's owning pack id from its fqid (`teamId:contentId`). */
 function packIdOf(item: { fqid?: string }): string {
   const pid = item.fqid?.split(":")[0];
-  return pid && pid.length > 0 ? pid : LOCAL_PACK_ID;
+  return pid && pid.length > 0 ? pid : LOCAL_TEAM_ID;
 }
 
 /**
  * Resolve the directory a custom agent should be written into.
- * - no target / LOCAL_PACK_ID → this project's Local Pack;
- * - a user-team packId → that team's app-level directory.
+ * - no target / LOCAL_TEAM_ID → this project's Local Pack;
+ * - a user-team teamId → that team's app-level directory.
  */
 function resolveWritableTarget(
   projectRoot: string,
-  targetPackId?: string,
-): { dir: string; packId: string } {
-  const tid = targetPackId?.trim();
-  if (!tid || tid === LOCAL_PACK_ID) {
-    return { dir: getLocalPackDir(projectRoot), packId: LOCAL_PACK_ID };
+  targetTeamId?: string,
+): { dir: string; teamId: string } {
+  const tid = targetTeamId?.trim();
+  if (!tid || tid === LOCAL_TEAM_ID) {
+    return { dir: getLocalTeamDir(projectRoot), teamId: LOCAL_TEAM_ID };
   }
-  const team = listUserTeams().find((t) => t.packId === tid);
+  const team = listUserTeams().find((t) => t.teamId === tid);
   if (!team) throw new Error(`Target team not found: ${tid}`);
-  return { dir: team.dir, packId: team.packId };
+  return { dir: team.dir, teamId: team.teamId };
 }
 
 /** Invalidate views after a write: local → this project; user team → catalog. */
-function invalidateWritableTarget(projectRoot: string, packId: string): void {
-  if (packId === LOCAL_PACK_ID) invalidateLocalViews(projectRoot);
+function invalidateWritableTarget(projectRoot: string, teamId: string): void {
+  if (teamId === LOCAL_TEAM_ID) invalidateLocalViews(projectRoot);
   else invalidateCatalog();
 }
 
-export function saveCustomExpert(
+export function saveCustomSubagent(
   projectRoot: string,
-  payload: SaveCustomExpertPayload,
-  targetPackId?: string,
-): ExpertInfo {
-  const { dir, packId } = resolveWritableTarget(projectRoot, targetPackId);
+  payload: SaveCustomSubagentPayload,
+  targetTeamId?: string,
+): SubagentInfo {
+  const { dir, teamId } = resolveWritableTarget(projectRoot, targetTeamId);
   const rawId = payload.id?.trim() || slugifyId(payload.name);
-  // Editing passes an agentFileBase id (`<packId>--<id>` for non-local packs);
+  // Editing passes an agentFileBase id (`<teamId>--<id>` for non-local packs);
   // strip the pack prefix to get the bare id used as the directory name.
   const bareId = rawId.includes("--") ? rawId.slice(rawId.lastIndexOf("--") + 2) : rawId;
   const id = payload.id ? bareId : uniqueLocalExpertId(projectRoot, bareId);
@@ -735,7 +735,7 @@ export function saveCustomExpert(
   mkdirSync(agentDir, { recursive: true });
 
   // 新格式 expert.json：无 builtin/removable/pluginId 身份字段（§4.3.2）
-  const def: ExpertDef = {
+  const def: SubagentDef = {
     id,
     name: payload.name.trim(),
     description: payload.description.trim(),
@@ -748,15 +748,15 @@ export function saveCustomExpert(
 
   writeFileSync(join(agentDir, "expert.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
   writeFileSync(join(agentDir, "instructions.md"), payload.instructions.trim(), "utf-8");
-  invalidateWritableTarget(projectRoot, packId);
+  invalidateWritableTarget(projectRoot, teamId);
 
-  const saved = getExpert(projectRoot, toFqid(packId, id));
+  const saved = getSubagent(projectRoot, toFqid(teamId, id));
   if (!saved) throw new Error(`Failed to save custom expert "${id}"`);
   return saved;
 }
 
-export function deleteCustomExpert(projectRoot: string, expertId: string): void {
-  const expert = getExpert(projectRoot, expertId);
+export function deleteCustomSubagent(projectRoot: string, expertId: string): void {
+  const expert = getSubagent(projectRoot, expertId);
   if (!expert) throw new Error(`Expert not found: ${expertId}`);
   if (!expert.removable) {
     // Pack-provided experts (incl. first-party packs) are read-only —
@@ -765,50 +765,52 @@ export function deleteCustomExpert(projectRoot: string, expertId: string): void 
       `Cannot delete a team-provided expert (disable the team or its expert instead): ${expertId}`,
     );
   }
-  const packId = packIdOf(expert);
-  const { dir } = resolveWritableTarget(projectRoot, packId);
+  const teamId = packIdOf(expert);
+  const { dir } = resolveWritableTarget(projectRoot, teamId);
   const bareId = expert.id.includes("--") ? expert.id.slice(expert.id.lastIndexOf("--") + 2) : expert.id;
   const agentDir = join(dir, "experts", bareId);
   if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
-  invalidateWritableTarget(projectRoot, packId);
+  invalidateWritableTarget(projectRoot, teamId);
 }
 
 export function saveCustomOrchestrator(
   projectRoot: string,
   payload: SaveCustomOrchestratorPayload,
-  targetPackId?: string,
+  targetTeamId?: string,
 ): OrchestratorInfo {
-  const { dir, packId } = resolveWritableTarget(projectRoot, targetPackId);
+  const { dir, teamId } = resolveWritableTarget(projectRoot, targetTeamId);
   const rawId = payload.id?.trim() || slugifyId(payload.name);
-  // Editing passes an agentFileBase id (`<packId>--<id>` for non-local packs);
+  // Editing passes an agentFileBase id (`<teamId>--<id>` for non-local packs);
   // strip the pack prefix to get the bare id used as the directory name.
   const bareId = rawId.includes("--") ? rawId.slice(rawId.lastIndexOf("--") + 2) : rawId;
   const id = payload.id ? bareId : uniqueLocalOrchestratorId(projectRoot, bareId);
   const agentDir = join(dir, "orchestrators", id);
   mkdirSync(agentDir, { recursive: true });
 
-  const knownExpertIds = listExperts(projectRoot).map((e) => e.id);
-  // 新格式 orchestrator.json：无身份字段；allowedExperts 存裸 id（§4.3.1 可解析）。
+  const knownExpertIds = listSubagents(projectRoot).map((e) => e.id);
+  // 新格式 orchestrator.json：无身份字段；roster 存裸 id（§4.3.1 可解析）。
   // undefined = 不限制（默认全部可用专家，含将来新增）；仅用户显式勾选才落列表。
-  const def: OrchestratorDef = {
+  const roster =
+    payload.roster !== undefined
+      ? pruneRosterRefIds(payload.roster, knownExpertIds)
+      : undefined;
+  // 磁盘 JSON 的 key 仍是 allowedExperts（T0 保留旧磁盘格式；T6 统一迁移为 roster）。
+  const diskDef: Record<string, unknown> = {
     id,
     name: payload.name.trim(),
     description: payload.description.trim(),
-    allowedExperts:
-      payload.allowedExperts !== undefined
-        ? pruneAllowedExpertIds(payload.allowedExperts, knownExpertIds)
-        : undefined,
+    allowedExperts: roster,
     model: payload.model?.trim() || undefined,
     thoughtLevel: payload.thoughtLevel?.trim() || undefined,
     temperature: payload.temperature,
     permission: payload.permission,
   };
 
-  writeFileSync(join(agentDir, "orchestrator.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
+  writeFileSync(join(agentDir, "orchestrator.json"), `${JSON.stringify(diskDef, null, 2)}\n`, "utf-8");
   writeFileSync(join(agentDir, "instructions.md"), payload.instructions.trim(), "utf-8");
-  invalidateWritableTarget(projectRoot, packId);
+  invalidateWritableTarget(projectRoot, teamId);
 
-  const saved = getOrchestrator(projectRoot, toFqid(packId, id));
+  const saved = getOrchestrator(projectRoot, toFqid(teamId, id));
   if (!saved) throw new Error(`Failed to save custom orchestrator "${id}"`);
   return saved;
 }
@@ -823,16 +825,16 @@ export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: st
       `Cannot delete a team-provided orchestrator (disable the team or its orchestrator instead): ${orchestratorId}`,
     );
   }
-  const packId = packIdOf(orchestrator);
-  const { dir } = resolveWritableTarget(projectRoot, packId);
+  const teamId = packIdOf(orchestrator);
+  const { dir } = resolveWritableTarget(projectRoot, teamId);
   const bareId = orchestrator.id.includes("--")
     ? orchestrator.id.slice(orchestrator.id.lastIndexOf("--") + 2)
     : orchestrator.id;
   const agentDir = join(dir, "orchestrators", bareId);
   if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
-  invalidateWritableTarget(projectRoot, packId);
-  const state = readPacksState(projectRoot);
-  if (state.defaultOrchestrator === toFqid(packId, bareId)) {
+  invalidateWritableTarget(projectRoot, teamId);
+  const state = readTeamsState(projectRoot);
+  if (state.defaultOrchestrator === toFqid(teamId, bareId)) {
     setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
   }
 }
@@ -856,14 +858,14 @@ export function getOrchestratorDetail(
   };
 }
 
-export function getExpertDetail(
+export function getSubagentDetail(
   projectRoot: string,
   expertId: string,
-): (ExpertInfo & { instructions: string }) | null {
-  const expert = getExpert(projectRoot, expertId);
+): (SubagentInfo & { instructions: string }) | null {
+  const expert = getSubagent(projectRoot, expertId);
   if (!expert) return null;
   return {
     ...expert,
-    instructions: readExpertInstructions(projectRoot, expert),
+    instructions: readSubagentInstructions(projectRoot, expert),
   };
 }

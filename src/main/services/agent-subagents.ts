@@ -1,4 +1,4 @@
-export interface ExpertDefinition {
+export interface SubagentDefinition {
   id: string;
   name: string;
   description: string;
@@ -28,12 +28,12 @@ export interface OrchestratorDefinition {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  allowedExperts?: string[];
+  roster?: string[];
   permission?: Record<string, unknown>;
 }
 
-export interface ExpertInfo extends ExpertDefinition {
-  /** Fully-qualified id (`packId:contentId`); the facade always fills it, so render/IPC need not care. */
+export interface SubagentInfo extends SubagentDefinition {
+  /** Fully-qualified id (`teamId:contentId`); the facade always fills it, so render/IPC need not care. */
   fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
@@ -41,7 +41,7 @@ export interface ExpertInfo extends ExpertDefinition {
 }
 
 export interface OrchestratorInfo extends OrchestratorDefinition {
-  /** Fully-qualified id (`packId:contentId`); the facade always fills it. */
+  /** Fully-qualified id (`teamId:contentId`); the facade always fills it. */
   fqid?: string;
   enabled: boolean;
   instructionsPreview: string;
@@ -59,7 +59,7 @@ export interface PrismExpertsSyncState {
   syncContentHash?: string;
 }
 
-export interface SaveCustomExpertPayload {
+export interface SaveCustomSubagentPayload {
   id?: string;
   name: string;
   description: string;
@@ -76,7 +76,7 @@ export interface SaveCustomOrchestratorPayload {
   name: string;
   description: string;
   instructions: string;
-  allowedExperts?: string[];
+  roster?: string[];
   model?: string;
   thoughtLevel?: string;
   temperature?: number;

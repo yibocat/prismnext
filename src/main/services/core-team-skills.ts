@@ -10,9 +10,9 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CORE_PACK_ID } from "../../shared/packs/types";
-import { parseFlatFrontmatter, fmString } from "../../shared/packs/frontmatter";
-import { getPack } from "./pack-catalog";
+import { CORE_TEAM_ID } from "../../shared/teams/types";
+import { parseFlatFrontmatter, fmString } from "../../shared/teams/frontmatter";
+import { getTeam } from "./team-catalog";
 import { createLogger } from "./logger";
 
 const log = createLogger("core-pack-skills");
@@ -32,7 +32,7 @@ interface CoreSkillsManifest {
 }
 
 function corePackDir(): string | null {
-  return getPack(CORE_PACK_ID)?.dir ?? null;
+  return getTeam(CORE_TEAM_ID)?.dir ?? null;
 }
 
 /**

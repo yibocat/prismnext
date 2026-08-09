@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
-import { discoverAndRegisterProPacks } from "./services/pro-packs-discovery";
-import { ensureUserPacksRegistered } from "./services/user-packs";
+import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
+import { ensureUserTeamsRegistered } from "./services/user-teams";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -320,7 +320,7 @@ function createWindow(): BrowserWindow {
 
 // Pro 私有包的 packs 发现与注册必须先于 IPC 注册（§8.2）：
 // catalog 在任何 packs:* handler 服务前就要包含 pro pack（locked 与否由 resolver 门控）。
-discoverAndRegisterProPacks();
+discoverAndRegisterProTeams();
 
 // Register IPC handlers that don't need the window reference
 registerIpcHandlers();
@@ -332,7 +332,7 @@ app.whenReady().then(async () => {
   installMainProcessNetwork();
   // User-created teams live in userData and are registered as an external pack
   // root so the catalog/resolver treat them like installed packs.
-  ensureUserPacksRegistered();
+  ensureUserTeamsRegistered();
   // Inject CSP on the default session (renderer only — browser webviews use a
   // separate persist:browser partition). Must run before createWindow().
   installCsp(session.defaultSession);
@@ -410,7 +410,7 @@ app.whenReady().then(async () => {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
       }
 
-      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/packs-state");
+      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/teams-state");
       const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
       // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
       // packs.json disabledContent；消费后清空 settings 键。

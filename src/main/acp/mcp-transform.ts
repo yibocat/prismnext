@@ -9,7 +9,7 @@
  * @see https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/acp/service.ts
  */
 
-import type { McpDef } from "../../shared/packs/types";
+import type { McpDef } from "../../shared/teams/types";
 
 export interface McpJsonServerRaw {
   type?: "local" | "remote";

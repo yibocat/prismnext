@@ -18,18 +18,18 @@ import { createLogger } from "./logger";
 
 const log = createLogger("packs-installed");
 
-export const PACKS_INSTALLED_VERSION = 1;
-export const PACKS_INSTALLED_FILE = "packs-installed.json";
+export const TEAMS_INSTALLED_VERSION = 1;
+export const TEAMS_INSTALLED_FILE = "packs-installed.json";
 
-export interface InstalledPackRecord {
-  packId: string;
+export interface InstalledTeamRecord {
+  teamId: string;
   /** ISO 8601 */
   installedAt: string;
 }
 
 interface PacksInstalledFile {
-  version: typeof PACKS_INSTALLED_VERSION;
-  installedPacks: InstalledPackRecord[];
+  version: typeof TEAMS_INSTALLED_VERSION;
+  installedPacks: InstalledTeamRecord[];
 }
 
 /**
@@ -38,17 +38,17 @@ interface PacksInstalledFile {
  */
 let dataDirOverride: string | null = null;
 
-export function setPacksInstalledDataDir(dir: string | null): void {
+export function setTeamsInstalledDataDir(dir: string | null): void {
   dataDirOverride = dir;
 }
 
 function filePath(): string {
-  if (dataDirOverride) return join(dataDirOverride, PACKS_INSTALLED_FILE);
+  if (dataDirOverride) return join(dataDirOverride, TEAMS_INSTALLED_FILE);
   try {
-    return join(app.getPath("userData"), PACKS_INSTALLED_FILE);
+    return join(app.getPath("userData"), TEAMS_INSTALLED_FILE);
   } catch {
     // Non-Electron context (vitest without mock) → throwaway tmp dir.
-    return join(app_less_fallback(), PACKS_INSTALLED_FILE);
+    return join(app_less_fallback(), TEAMS_INSTALLED_FILE);
   }
 }
 
@@ -58,7 +58,7 @@ function app_less_fallback(): string {
 }
 
 function empty(): PacksInstalledFile {
-  return { version: PACKS_INSTALLED_VERSION, installedPacks: [] };
+  return { version: TEAMS_INSTALLED_VERSION, installedPacks: [] };
 }
 
 /** Read the app-level install file; missing/corrupt → empty (self-heal). */
@@ -70,11 +70,11 @@ function readFileState(): PacksInstalledFile {
     if (!raw || typeof raw !== "object") return empty();
     const list = Array.isArray(raw.installedPacks)
       ? raw.installedPacks.filter(
-          (e): e is InstalledPackRecord =>
-            Boolean(e) && typeof e.packId === "string" && Boolean(e.packId),
+          (e): e is InstalledTeamRecord =>
+            Boolean(e) && typeof e.teamId === "string" && Boolean(e.teamId),
         )
       : [];
-    return { version: PACKS_INSTALLED_VERSION, installedPacks: list };
+    return { version: TEAMS_INSTALLED_VERSION, installedPacks: list };
   } catch (err) {
     log.error("packs-installed.json corrupt, falling back to empty", { error: String(err) });
     return empty();
@@ -99,55 +99,55 @@ const writeListeners = new Set<InstalledChangedListener>();
 let writeCounter = 0;
 
 /** Subscribe to app-level install file writes (resolver invalidation). */
-export function onPacksInstalledChanged(listener: InstalledChangedListener): { dispose: () => void } {
+export function onTeamsInstalledChanged(listener: InstalledChangedListener): { dispose: () => void } {
   writeListeners.add(listener);
   return { dispose: () => writeListeners.delete(listener) };
 }
 
 /** Monotonic write counter — part of the resolver view key. */
-export function packsInstalledWriteCounter(): number {
+export function teamsInstalledWriteCounter(): number {
   return writeCounter;
 }
 
 /** All app-level installed packs (non-core, non-local). */
-export function listInstalledPacks(): InstalledPackRecord[] {
+export function listInstalledTeams(): InstalledTeamRecord[] {
   return readFileState().installedPacks;
 }
 
-/** True iff `packId` is recorded at app level. */
-export function isPackInstalled(packId: string): boolean {
-  return listInstalledPacks().some((r) => r.packId === packId);
+/** True iff `teamId` is recorded at app level. */
+export function isTeamInstalled(teamId: string): boolean {
+  return listInstalledTeams().some((r) => r.teamId === teamId);
 }
 
 /** Record an installation (idempotent: already installed → no-op). */
-export function addInstalledPack(packId: string): void {
+export function addInstalledTeam(teamId: string): void {
   const state = readFileState();
-  if (state.installedPacks.some((r) => r.packId === packId)) return;
-  state.installedPacks.push({ packId, installedAt: new Date().toISOString() });
+  if (state.installedPacks.some((r) => r.teamId === teamId)) return;
+  state.installedPacks.push({ teamId, installedAt: new Date().toISOString() });
   writeFileState(state);
-  log.info("pack installed (app-level)", { packId });
+  log.info("pack installed (app-level)", { teamId });
 }
 
 /** Remove an installation record (idempotent). */
-export function removeInstalledPack(packId: string): void {
+export function removeInstalledTeam(teamId: string): void {
   const state = readFileState();
-  const next = state.installedPacks.filter((r) => r.packId !== packId);
+  const next = state.installedPacks.filter((r) => r.teamId !== teamId);
   if (next.length === state.installedPacks.length) return;
   writeFileState({ ...state, installedPacks: next });
-  log.info("pack uninstalled (app-level)", { packId });
+  log.info("pack uninstalled (app-level)", { teamId });
 }
 
 /** Merge records (used by migration M1: upsert project packs into app store). */
-export function upsertInstalledPacks(records: Array<{ packId: string; installedAt?: string }>): void {
+export function upsertInstalledTeams(records: Array<{ teamId: string; installedAt?: string }>): void {
   const state = readFileState();
-  const byId = new Map(state.installedPacks.map((r) => [r.packId, r]));
+  const byId = new Map(state.installedPacks.map((r) => [r.teamId, r]));
   for (const rec of records) {
-    if (!byId.has(rec.packId)) {
-      byId.set(rec.packId, { packId: rec.packId, installedAt: rec.installedAt ?? new Date().toISOString() });
+    if (!byId.has(rec.teamId)) {
+      byId.set(rec.teamId, { teamId: rec.teamId, installedAt: rec.installedAt ?? new Date().toISOString() });
     }
   }
   const next: PacksInstalledFile = {
-    version: PACKS_INSTALLED_VERSION,
+    version: TEAMS_INSTALLED_VERSION,
     installedPacks: [...byId.values()],
   };
   if (next.installedPacks.length !== state.installedPacks.length) writeFileState(next);

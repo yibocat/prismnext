@@ -1,18 +1,18 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
-import { registerExternalPackRoot, unregisterExternalPackRoot } from "../../src/main/services/pack-catalog";
-import { getPackMcpDefs } from "../../src/main/services/pack-catalog";
+import { registerExternalTeamRoot, unregisterExternalTeamRoot } from "../../src/main/services/team-catalog";
+import { getTeamMcpDefs } from "../../src/main/services/team-catalog";
 import { packMcpDefToAcp } from "../../src/main/acp/mcp-transform";
-import { setPacksInstalledDataDir, addInstalledPack } from "../../src/main/services/packs-installed";
+import { setTeamsInstalledDataDir, addInstalledTeam } from "../../src/main/services/teams-installed";
 import { makeProjectRoot, makeTempDir } from "./packs-test-utils";
-import { listProjectMcps } from "../../src/main/services/pack-resolver";
-import { setPackEnabled } from "../../src/main/services/packs-state";
+import { listProjectMcps } from "../../src/main/services/team-resolver";
+import { setTeamEnabled } from "../../src/main/services/teams-state";
 import { baseManifest, makePack } from "./packs-test-utils";
 
 const roots: string[] = [];
 const tempDirs: string[] = [];
 function reg(dir: string) {
-  registerExternalPackRoot(dir);
+  registerExternalTeamRoot(dir);
   roots.push(dir);
 }
 function temp(): string {
@@ -21,10 +21,10 @@ function temp(): string {
   return d;
 }
 afterEach(() => {
-  for (const r of roots) unregisterExternalPackRoot(r);
+  for (const r of roots) unregisterExternalTeamRoot(r);
   roots.length = 0;
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
-  setPacksInstalledDataDir(null);
+  setTeamsInstalledDataDir(null);
 });
 
 describe("mcp-demo pack semantics (fixture pack)", () => {
@@ -50,7 +50,7 @@ describe("mcp-demo pack semantics (fixture pack)", () => {
     });
     reg(demoDir);
 
-    const defs = getPackMcpDefs("prismnext.mcp-demo");
+    const defs = getTeamMcpDefs("prismnext.mcp-demo");
     expect(defs).toHaveLength(2);
     expect(defs.map((d) => d.name)).toEqual(["demo-memory", "demo-remote"]);
 
@@ -66,14 +66,14 @@ describe("mcp-demo pack semantics (fixture pack)", () => {
 
     const root = makeProjectRoot();
     tempDirs.push(root);
-    setPacksInstalledDataDir(temp());
-    addInstalledPack("prismnext.mcp-demo");
+    setTeamsInstalledDataDir(temp());
+    addInstalledTeam("prismnext.mcp-demo");
 
     let mcps = listProjectMcps(root);
     expect(mcps).toHaveLength(2);
     expect(mcps.every((m) => m.enabled === true)).toBe(true);
 
-    setPackEnabled(root, "prismnext.mcp-demo", false);
+    setTeamEnabled(root, "prismnext.mcp-demo", false);
     mcps = listProjectMcps(root);
     expect(mcps.every((m) => m.enabled === false)).toBe(true);
   });

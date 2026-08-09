@@ -9,7 +9,7 @@
 export type CommandSource = "builtin" | "user" | "plugin";
 
 export interface CommandDef {
-  /** 全局唯一身份（FQID）："prismnext.core:setup" | "user.local:review-section" | "<packId>:<name>" */
+  /** 全局唯一身份（FQID）："prismnext.core:setup" | "user.local:review-section" | "<teamId>:<name>" */
   id: string;
   /** Command name WITHOUT / prefix（pack 内 id） */
   name: string;
@@ -32,9 +32,9 @@ export interface CommandDef {
   /** Toggle state — disabled commands are hidden from / dropdown（唯一判定 = resolver） */
   enabled: boolean;
   /** 所属 pack */
-  packId: string;
+  teamId: string;
   /** pack 展示名（badge 用） */
-  packName: string;
+  teamName: string;
   /** 是否可删除（= Local Pack 内容；pack 内容只能禁用） */
   removable: boolean;
 }

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import {
   cleanupLegacyBackups,
   LEGACY_BACKUP_RETENTION_DAYS,
-} from "../../src/main/services/packs-state";
+} from "../../src/main/services/teams-state";
 
 let root: string | undefined;
 

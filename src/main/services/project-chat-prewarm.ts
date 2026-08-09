@@ -9,13 +9,13 @@ import { AcpService } from "../acp/service";
 import { buildPromptContext } from "../prompts/context";
 import { createLogger } from "./logger";
 import {
-  refreshProjectExpertsIntegrationIfNeeded,
-} from "./project-experts-refresh";
+  refreshProjectSubagentsIntegrationIfNeeded,
+} from "./project-subagents-refresh";
 import {
   refreshProjectSkillsIntegrationIfNeeded,
 } from "./project-skills-refresh";
 import { syncProjectPromptFile } from "./prompt-sync";
-import { readPrismExpertsSyncState } from "./experts-sync";
+import { readPrismExpertsSyncState } from "./subagents-sync";
 import { normalizeProjectRoot } from "./skills-sync";
 import type { ProjectWarmPhase } from "../../shared/agent-status";
 
@@ -111,13 +111,13 @@ async function runProjectChatPrewarm(
 
   const {
     resolveOrchestratorId,
-  } = await import("./experts-sync");
+  } = await import("./subagents-sync");
 
   const orchestratorId = resolveOrchestratorId(projectRoot, null);
   const promptCtx = await buildPromptContext(projectRoot);
 
   const prevExpertsState = readPrismExpertsSyncState();
-  const expertsResult = await refreshProjectExpertsIntegrationIfNeeded(projectRoot, { promptCtx });
+  const expertsResult = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, { promptCtx });
   const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
 
   syncProjectPromptFile(projectRoot, promptCtx);

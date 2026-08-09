@@ -14,7 +14,7 @@ import { useCommandStore } from "@/stores/command-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
-import type { ExpertInfo } from "@shared/agent-experts";
+import type { SubagentInfo } from "@shared/agent-subagents";
 import type { ContentBlock } from "@/stores/chat-store";
 import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/chat/vision-fallback-send";
 import {
@@ -120,7 +120,7 @@ export function useChatComposer() {
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const selectionRange = useDocumentStore((s) => s.selectionRange);
 
-  const [experts, setExperts] = useState<ExpertInfo[]>([]);
+  const [experts, setExperts] = useState<SubagentInfo[]>([]);
   const [slashSkills, setSlashSkills] = useState<{ id: string; name: string; enabled: boolean }[]>([]);
   const [slashMcps, setSlashMcps] = useState<{ name: string }[]>([]);
   const [pinnedContexts, setPinnedContexts] = useState<PinnedContext[]>([]);
@@ -169,7 +169,7 @@ export function useChatComposer() {
     }
     const loadMentions = async () => {
       try {
-        const expertList = await window.electronAPI.expertsList(projectRoot);
+        const expertList = await window.electronAPI.subagentsList(projectRoot);
         setExperts(expertList.filter((e) => e.enabled));
       } catch {
         setExperts([]);
@@ -224,7 +224,7 @@ export function useChatComposer() {
     if (!selectionRange) return null;
     const file = files.find((f) => f.id === activeFileId);
     if (!file) return null;
-    const content = useDocumentStore.getState().getContent(activeFileId!);
+    const content = useDocumentStore.getState().getAsset(activeFileId!);
     if (!content) return null;
     const start = offsetToLineCol(content, selectionRange.start);
     const end = offsetToLineCol(content, selectionRange.end);
@@ -239,7 +239,7 @@ export function useChatComposer() {
 
     const file = files.find((f) => f.id === activeFileId);
     if (!file) return;
-    const content = useDocumentStore.getState().getContent(activeFileId!);
+    const content = useDocumentStore.getState().getAsset(activeFileId!);
     if (!content) return;
 
     const selectedText = content.slice(selectionRange.start, selectionRange.end);

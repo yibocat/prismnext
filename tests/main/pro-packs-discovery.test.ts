@@ -2,18 +2,18 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  discoverAndRegisterProPacks,
+  discoverAndRegisterProTeams,
   findProPackageDirUp,
   handleProLicenseChanged,
-  resolvePacksRootDir,
+  resolveTeamsRootDir,
   resolveProPackageDir,
-} from "../../src/main/services/pro-packs-discovery";
+} from "../../src/main/services/pro-teams-discovery";
 import {
-  getPack,
-  listExternalPackRoots,
-  unregisterExternalPackRoot,
-} from "../../src/main/services/pack-catalog";
-import { licenseStateVersion } from "../../src/main/services/packs-license";
+  getTeam,
+  listExternalTeamRoots,
+  unregisterExternalTeamRoot,
+} from "../../src/main/services/team-catalog";
+import { licenseStateVersion } from "../../src/main/services/teams-license";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -25,13 +25,13 @@ function temp(): string {
   return dir;
 }
 
-/** 构造一个 pro 包布局：package.json + src/index.ts + packsRoot/ */
+/** 构造一个 pro 包布局：package.json + src/index.ts + teamsRoot/ */
 function makeProPackage(
   root: string,
-  opts: { packsRoot?: string; withPrismnextField?: boolean } = {},
+  opts: { teamsRoot?: string; withPrismnextField?: boolean } = {},
 ): { packageDir: string; entryFile: string; packsDir: string } {
   const packageDir = join(root, "pro-pkg");
-  const packsRootName = opts.packsRoot ?? "packs";
+  const packsRootName = opts.teamsRoot ?? "packs";
   mkdirSync(join(packageDir, "src"), { recursive: true });
   const pkg: Record<string, unknown> = { name: "@prismnext/pro", private: true };
   if (opts.withPrismnextField !== false) {
@@ -50,8 +50,8 @@ afterEach(() => {
   if (savedEnv === undefined) delete process.env.PRISM_PRO_PATH;
   else process.env.PRISM_PRO_PATH = savedEnv;
   delete process.env.PRISM_PRO_PATH;
-  discoverAndRegisterProPacks();
-  for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
+  discoverAndRegisterProTeams();
+  for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
 });
 
@@ -82,45 +82,45 @@ describe("pro-packs-discovery: 路径解析", () => {
   });
 });
 
-describe("pro-packs-discovery: packsRoot 解析", () => {
-  it("默认 packsRoot = packs；自定义 packsRoot 生效", () => {
+describe("pro-packs-discovery: teamsRoot 解析", () => {
+  it("默认 teamsRoot = packs；自定义 teamsRoot 生效", () => {
     const root = temp();
     const a = makeProPackage(join(root, "a"), { withPrismnextField: false });
-    expect(resolvePacksRootDir(a.packageDir)).toBe(a.packsDir);
-    const b = makeProPackage(join(root, "b"), { packsRoot: "suites" });
-    expect(resolvePacksRootDir(b.packageDir)).toBe(b.packsDir);
+    expect(resolveTeamsRootDir(a.packageDir)).toBe(a.packsDir);
+    const b = makeProPackage(join(root, "b"), { teamsRoot: "suites" });
+    expect(resolveTeamsRootDir(b.packageDir)).toBe(b.packsDir);
   });
 
-  it("packsRoot 逃逸包目录（../）→ null；目录不存在 → null", () => {
+  it("teamsRoot 逃逸包目录（../）→ null；目录不存在 → null", () => {
     const root = temp();
     const packageDir = join(root, "evil");
     mkdirSync(packageDir, { recursive: true });
     writeFileSync(
       join(packageDir, "package.json"),
-      JSON.stringify({ name: "evil", prismnext: { packsRoot: "../outside" } }),
+      JSON.stringify({ name: "evil", prismnext: { teamsRoot: "../outside" } }),
     );
-    expect(resolvePacksRootDir(packageDir)).toBeNull();
+    expect(resolveTeamsRootDir(packageDir)).toBeNull();
 
     const empty = join(root, "empty-pkg");
     mkdirSync(empty, { recursive: true });
     writeFileSync(join(empty, "package.json"), JSON.stringify({ name: "x" }));
-    expect(resolvePacksRootDir(empty)).toBeNull();
+    expect(resolveTeamsRootDir(empty)).toBeNull();
   });
 });
 
 describe("pro-packs-discovery: 注册与注销", () => {
-  it("扫描 packsRoot → 注册含 plugin.json 的 pack；无 plugin.json 的目录跳过", () => {
+  it("扫描 teamsRoot → 注册含 plugin.json 的 pack；无 plugin.json 的目录跳过", () => {
     const root = temp();
     const { entryFile, packsDir } = makeProPackage(root);
     makePack(packsDir, "test.pro.alpha", baseManifest("test.pro.alpha", { tier: "pro", publisher: "prismnext.pro" }));
     mkdirSync(join(packsDir, "broken")); // 无 plugin.json
 
     process.env.PRISM_PRO_PATH = entryFile;
-    const result = discoverAndRegisterProPacks();
+    const result = discoverAndRegisterProTeams();
 
     expect(result.registered).toEqual(["test.pro.alpha"]);
     expect(result.skipped).toEqual(["broken"]);
-    const pack = getPack("test.pro.alpha");
+    const pack = getTeam("test.pro.alpha");
     expect(pack).not.toBeNull();
     expect(pack!.kind).toBe("external");
     expect(pack!.manifest.tier).toBe("pro");
@@ -134,17 +134,17 @@ describe("pro-packs-discovery: 注册与注销", () => {
     makePack(b.packsDir, "test.pro.b", baseManifest("test.pro.b", { tier: "pro", publisher: "prismnext.pro" }));
 
     process.env.PRISM_PRO_PATH = a.entryFile;
-    discoverAndRegisterProPacks();
-    expect(getPack("test.pro.a")).not.toBeNull();
+    discoverAndRegisterProTeams();
+    expect(getTeam("test.pro.a")).not.toBeNull();
 
     process.env.PRISM_PRO_PATH = b.entryFile;
-    discoverAndRegisterProPacks();
-    expect(getPack("test.pro.a")).toBeNull(); // 旧 root 注销
-    expect(getPack("test.pro.b")).not.toBeNull();
+    discoverAndRegisterProTeams();
+    expect(getTeam("test.pro.a")).toBeNull(); // 旧 root 注销
+    expect(getTeam("test.pro.b")).not.toBeNull();
 
     delete process.env.PRISM_PRO_PATH; // pro 消失
-    discoverAndRegisterProPacks();
-    expect(getPack("test.pro.b")).toBeNull();
+    discoverAndRegisterProTeams();
+    expect(getTeam("test.pro.b")).toBeNull();
   });
 
   it("重复调用幂等：无差量时注册集合不变", () => {
@@ -152,10 +152,10 @@ describe("pro-packs-discovery: 注册与注销", () => {
     const { entryFile, packsDir } = makeProPackage(root);
     makePack(packsDir, "test.pro.alpha", baseManifest("test.pro.alpha", { tier: "pro", publisher: "prismnext.pro" }));
     process.env.PRISM_PRO_PATH = entryFile;
-    discoverAndRegisterProPacks();
-    const second = discoverAndRegisterProPacks();
+    discoverAndRegisterProTeams();
+    const second = discoverAndRegisterProTeams();
     expect(second.registered).toEqual(["test.pro.alpha"]);
-    expect(getPack("test.pro.alpha")).not.toBeNull();
+    expect(getTeam("test.pro.alpha")).not.toBeNull();
   });
 });
 

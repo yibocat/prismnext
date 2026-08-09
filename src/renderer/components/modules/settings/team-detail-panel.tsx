@@ -10,7 +10,7 @@ import { StoreIcon, PackageIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { usePacksStore } from "@/stores/packs-store";
+import { usePacksStore } from "@/stores/teams-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,23 +20,23 @@ import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { SETTINGS_DETAIL_SHELL, SETTINGS_ROW_DESC } from "./settings-tokens";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import { PackIcon } from "../teams/pack-icon";
-import type { ContentKind } from "@shared/packs/types";
+import { PackIcon } from "../teams/team-icon";
+import type { AssetKind } from "@shared/teams/types";
 
 type PackDetailSlot = Extract<SettingsPanelSlot, { kind: "pack-detail" }>;
 
 interface PackContentEntry {
-  kind: ContentKind;
+  kind: AssetKind;
   id: string;
   name: string;
   description: string;
 }
 
-const KIND_ORDER: ContentKind[] = ["orchestrator", "expert", "skill", "command", "mcp"];
+const KIND_ORDER: AssetKind[] = ["orchestrator", "subagent", "skill", "command", "mcp"];
 
-const KIND_LABEL_KEYS: Record<ContentKind, string> = {
+const KIND_LABEL_KEYS: Record<AssetKind, string> = {
   orchestrator: "settings.teamsAgents.kinds.orchestrator",
-  expert: "settings.teamsAgents.kinds.expert",
+  subagent: "settings.teamsAgents.kinds.expert",
   skill: "settings.teamsAgents.kinds.skill",
   command: "settings.teamsAgents.kinds.command",
   mcp: "settings.teamsAgents.kinds.mcp",
@@ -47,7 +47,7 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const license = useProLicenseStore((s) => s.license);
   const pack = usePacksStore((s) =>
-    s.catalog.find((p) => p.manifest.id === slot.packId) ?? null,
+    s.catalog.find((p) => p.manifest.id === slot.teamId) ?? null,
   );
   const [contents, setContents] = useState<PackContentEntry[]>([]);
   const [busy, setBusy] = useState(false);
@@ -57,11 +57,11 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
     if (!projectRoot) return;
     try {
       await usePacksStore.getState().load(projectRoot, { force: true });
-      setContents(await window.electronAPI.packsGetPackContents(slot.packId));
+      setContents(await window.electronAPI.teamsGetTeamContents(slot.teamId));
     } catch {
       setContents([]);
     }
-  }, [projectRoot, slot.packId]);
+  }, [projectRoot, slot.teamId]);
 
   useEffect(() => {
     void load();
@@ -74,9 +74,9 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
     try {
       const isUserTeam = pack.manifest.publisher === "user";
       if (isUserTeam) {
-        await window.electronAPI.userPacksDelete(pack.manifest.id);
+        await window.electronAPI.teamsDeleteUserTeam(pack.manifest.id);
       } else {
-        await window.electronAPI.packsUninstall(projectRoot, pack.manifest.id);
+        await window.electronAPI.teamsUninstall(projectRoot, pack.manifest.id);
       }
       closeSettingsPanel();
     } catch (err) {

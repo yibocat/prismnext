@@ -2,12 +2,12 @@ import { BrowserWindow } from "electron";
 import { AcpService } from "../acp/service";
 import type { PromptContext } from "../prompts/types";
 import {
-  buildProjectExpertsAgentPlan,
+  buildProjectSubagentsAgentPlan,
   clearSyncedAgentFiles,
   getOpencodeAgentsDir,
   readPrismExpertsSyncState,
-  syncProjectExpertsToOpencode,
-} from "./experts-sync";
+  syncProjectSubagentsToOpencode,
+} from "./subagents-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { normalizeProjectRoot } from "./skills-sync";
 
@@ -17,7 +17,7 @@ const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 export function notifyExpertsIntegrationChanged(projectPath: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("experts:integrationChanged", { projectPath });
+      win.webContents.send("subagents:integrationChanged", { projectPath });
     }
   }
 }
@@ -36,7 +36,7 @@ export interface RefreshProjectExpertsResult {
 }
 
 /** Sync project experts to app-level OpenCode agents directory (write only — no OpenCode restart). */
-export async function refreshProjectExpertsIntegration(
+export async function refreshProjectSubagentsIntegration(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
@@ -45,7 +45,7 @@ export async function refreshProjectExpertsIntegration(
   if (prev?.agentFiles?.length) {
     clearSyncedAgentFiles(agentsDir, prev.agentFiles);
   }
-  const result = syncProjectExpertsToOpencode(projectRoot, {
+  const result = syncProjectSubagentsToOpencode(projectRoot, {
     agentsDir,
     promptCtx: options?.promptCtx,
   });
@@ -56,12 +56,12 @@ export async function refreshProjectExpertsIntegration(
 /**
  * Skip disk rewrite when agent.md payloads are unchanged — saves hundreds of ms on chat send.
  */
-export async function refreshProjectExpertsIntegrationIfNeeded(
+export async function refreshProjectSubagentsIntegrationIfNeeded(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
   const root = normalizeProjectRoot(projectRoot);
-  const plan = buildProjectExpertsAgentPlan(projectRoot, options);
+  const plan = buildProjectSubagentsAgentPlan(projectRoot, options);
   const prev = readPrismExpertsSyncState();
 
   if (
@@ -79,7 +79,7 @@ export async function refreshProjectExpertsIntegrationIfNeeded(
     };
   }
 
-  return refreshProjectExpertsIntegration(projectRoot, options);
+  return refreshProjectSubagentsIntegration(projectRoot, options);
 }
 
 /** Sync experts then restart OpenCode when orchestrator agent.md content changed. */
@@ -88,7 +88,7 @@ export async function refreshProjectExpertsIntegrationWithReload(
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
   const prev = readPrismExpertsSyncState();
-  const result = await refreshProjectExpertsIntegrationIfNeeded(projectRoot, options);
+  const result = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, options);
   const hashChanged =
     !result.skipped
     && (
@@ -102,7 +102,7 @@ export async function refreshProjectExpertsIntegrationWithReload(
   return result;
 }
 
-export function scheduleExpertsRefresh(projectRoot: string): void {
+export function scheduleSubagentsRefresh(projectRoot: string): void {
   invalidateProjectChatPrewarm(projectRoot);
   const existing = pendingTimers.get(projectRoot);
   if (existing) clearTimeout(existing);
@@ -151,5 +151,5 @@ export function scheduleExpertsRefreshFromPaths(
 ): void {
   if (!paths?.length) return;
   if (!paths.some((p) => isExpertsIntegrationPath(p, projectRoot))) return;
-  scheduleExpertsRefresh(projectRoot);
+  scheduleSubagentsRefresh(projectRoot);
 }

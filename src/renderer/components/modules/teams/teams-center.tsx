@@ -25,25 +25,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { ContentKind, Fqid, ProjectPackView } from "@shared/packs/types";
-import { PackIcon } from "./pack-icon";
+import type { AssetKind, Fqid, ProjectTeamView } from "@shared/teams/types";
+import { PackIcon } from "./team-icon";
 
 export interface TeamsCenterProps {
   onBack: () => void;
 }
 
 interface PackContentEntry {
-  kind: ContentKind;
+  kind: AssetKind;
   id: string;
   name: string;
   description: string;
 }
 
-const KIND_ORDER: ContentKind[] = ["orchestrator", "expert", "skill", "command", "mcp"];
+const KIND_ORDER: AssetKind[] = ["orchestrator", "subagent", "skill", "command", "mcp"];
 
-const KIND_META: Record<ContentKind, { icon: typeof Bot; labelKey: string }> = {
+const KIND_META: Record<AssetKind, { icon: typeof Bot; labelKey: string }> = {
   orchestrator: { icon: Bot, labelKey: "teamsCenter.kinds.orchestrator" },
-  expert: { icon: SparklesIcon, labelKey: "teamsCenter.kinds.expert" },
+  subagent: { icon: SparklesIcon, labelKey: "teamsCenter.kinds.expert" },
   skill: { icon: PuzzleIcon, labelKey: "teamsCenter.kinds.skill" },
   command: { icon: SlashIcon, labelKey: "teamsCenter.kinds.command" },
   mcp: { icon: PlugIcon, labelKey: "teamsCenter.kinds.mcp" },
@@ -66,7 +66,7 @@ type PackDisplayState =
   | "proLocked"
   | "installable";
 
-function packDisplayState(pack: ProjectPackView): PackDisplayState {
+function packDisplayState(pack: ProjectTeamView): PackDisplayState {
   if (pack.installed) {
     if (pack.enabled) return "installedActive";
     return pack.locked ? "installedProLocked" : "installedDisabled";
@@ -87,7 +87,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
   //（locked 标记与可安装性随授权变化即时更新）。
   const license = useProLicenseStore((s) => s.license);
 
-  const [packs, setPacks] = useState<ProjectPackView[]>([]);
+  const [packs, setPacks] = useState<ProjectTeamView[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setPacks([]);
       return;
     }
-    setPacks(await window.electronAPI.packsListCatalog(projectRoot));
+    setPacks(await window.electronAPI.teamsList(projectRoot));
   }, [projectRoot]);
 
   useEffect(() => {
@@ -112,16 +112,16 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setContents([]);
       return;
     }
-    void window.electronAPI.packsGetPackContents(selectedId).then(setContents);
+    void window.electronAPI.teamsGetTeamContents(selectedId).then(setContents);
   }, [selectedId]);
 
   const selected = packs.find((p) => p.manifest.id === selectedId) ?? null;
 
-  const install = async (pack: ProjectPackView) => {
+  const install = async (pack: ProjectTeamView) => {
     if (!projectRoot) return;
     setBusy(pack.manifest.id);
     try {
-      const { suggestedOrchestrator } = await window.electronAPI.packsInstall(
+      const { suggestedOrchestrator } = await window.electronAPI.teamsInstall(
         projectRoot,
         pack.manifest.id,
       );
@@ -132,7 +132,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
             label: t("teamsCenter.suggestion.accept"),
             onClick: () => {
               void window.electronAPI
-                .packsSetDefaultOrchestrator(projectRoot, suggestedOrchestrator as Fqid)
+                .teamsSetDefaultOrchestrator(projectRoot, suggestedOrchestrator as Fqid)
                 .then(() => toast.success(t("teamsCenter.suggestion.done")));
             },
           },
@@ -179,7 +179,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       return (p.manifest.category?.trim() || "general") === f.slice(4);
     }).length;
 
-  const installButton = (pack: ProjectPackView, fullWidth = false) => {
+  const installButton = (pack: ProjectTeamView, fullWidth = false) => {
     const state = packDisplayState(pack);
     const buttonClass = cn(
       "gap-1 shadow-none",

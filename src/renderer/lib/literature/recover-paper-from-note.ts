@@ -70,7 +70,7 @@ export async function loadNotebookNoteContents(
 
   for (const f of files) {
     if (!f.relativePath.startsWith(prefix) || !f.relativePath.endsWith(".md")) continue;
-    let content = f.id ? doc.getContent(f.id) : undefined;
+    let content = f.id ? doc.getAsset(f.id) : undefined;
     if (!content) {
       try {
         const { content: disk } = await window.electronAPI.fsRead(

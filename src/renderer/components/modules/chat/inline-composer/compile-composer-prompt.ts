@@ -85,7 +85,7 @@ async function resolveProjectFileContent(
   relativePath: string,
 ): Promise<string> {
   if (fileId) {
-    const fromStore = useDocumentStore.getState().getContent(fileId);
+    const fromStore = useDocumentStore.getState().getAsset(fileId);
     if (fromStore) return fromStore;
   }
   const projectRoot = useDocumentStore.getState().projectRoot;
@@ -219,7 +219,7 @@ export async function compileComposerPrompt(
   const promptImages: PromptImageAttachment[] = [];
   const promptFiles: PromptFileAttachment[] = [];
   for (const fp of fileParts) {
-    let content = useDocumentStore.getState().getContent(fp.fileId);
+    let content = useDocumentStore.getState().getAsset(fp.fileId);
     if (!content && isExternalFileId(fp.fileId)) {
       const abs = resolveExternalPath(fp.fileId);
       if (abs) {
@@ -262,7 +262,7 @@ export async function compileComposerPrompt(
   const linkedLiteratureFromNotes: string[] = [];
   for (const fp of fileParts) {
     if (!fp.filePath.toLowerCase().endsWith(".md")) continue;
-    let content = useDocumentStore.getState().getContent(fp.fileId);
+    let content = useDocumentStore.getState().getAsset(fp.fileId);
     if (!content && isExternalFileId(fp.fileId)) {
       const abs = resolveExternalPath(fp.fileId);
       if (abs) {

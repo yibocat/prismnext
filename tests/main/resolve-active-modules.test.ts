@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  composeExpertProfileModulePrompts,
+  composeSubagentProfileModulePrompts,
   composeOrchestratorProfileModulePrompts,
   composeProfileModulePrompts,
-  resolveExpertActiveModuleKeys,
-  resolveExpertProfileModuleKeys,
+  resolveSubagentActiveModuleKeys,
+  resolveSubagentProfileModuleKeys,
   resolveOrchestratorActiveModuleKeys,
   resolveOrchestratorProfileModuleKeys,
   resolveSharedProfileModules,
@@ -41,7 +41,7 @@ describe("resolve-active-modules", () => {
   });
 
   it("expert profile keys exclude orchestrator-judgment and include subagent-role", () => {
-    const keys = resolveExpertProfileModuleKeys();
+    const keys = resolveSubagentProfileModuleKeys();
     expect(keys).not.toContain("orchestrator-judgment");
     expect(keys).toContain("literature-library");
     expect(keys).toContain("subagent-role");
@@ -53,8 +53,8 @@ describe("resolve-active-modules", () => {
     expect(text).toContain("## Orchestrator judgment");
   });
 
-  it("composeExpertProfileModulePrompts inlines experiments and subagent role, not orchestrator judgment", () => {
-    const text = composeExpertProfileModulePrompts({});
+  it("composeSubagentProfileModulePrompts inlines experiments and subagent role, not orchestrator judgment", () => {
+    const text = composeSubagentProfileModulePrompts({});
     expect(text).toContain(EXPERIMENTS_PROMPT.split("\n")[0]);
     expect(text).toContain("## Subagent role");
     expect(text).not.toContain("## Orchestrator judgment");
@@ -79,8 +79,8 @@ describe("resolve-active-modules", () => {
     expect(keys).not.toContain("subagent-role");
   });
 
-  it("resolveExpertActiveModuleKeys excludes orchestrator-only and includes expert-only", () => {
-    const keys = resolveExpertActiveModuleKeys();
+  it("resolveSubagentActiveModuleKeys excludes orchestrator-only and includes expert-only", () => {
+    const keys = resolveSubagentActiveModuleKeys();
     expect(keys).toContain("literature-library");
     expect(keys).toContain("subagent-role");
     expect(keys).not.toContain("orchestrator-judgment");

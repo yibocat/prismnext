@@ -926,26 +926,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:checkSkillUpdates", { projectPath }),
 	agentDeleteSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:deleteSkill", { projectPath, skillId }),
-	expertsList: (projectPath: string) =>
-		ipcRenderer.invoke("experts:list", { projectPath }),
+	subagentsList: (projectPath: string) =>
+		ipcRenderer.invoke("subagents:list", { projectPath }),
 	orchestratorsList: (projectPath: string) =>
 		ipcRenderer.invoke("orchestrators:list", { projectPath }),
-	expertsGetDetail: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:getDetail", { projectPath, expertId }),
-	expertsSaveCustom: (
+	subagentsGetDetail: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:getDetail", { projectPath, expertId }),
+	subagentsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-		targetPackId?: string,
-	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload, targetPackId }),
-	expertsDeleteCustom: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:deleteCustom", { projectPath, expertId }),
+		payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+		targetTeamId?: string,
+	) => ipcRenderer.invoke("subagents:saveCustom", { projectPath, payload, targetTeamId }),
+	subagentsDeleteCustom: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:deleteCustom", { projectPath, expertId }),
 	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:getDetail", { projectPath, orchestratorId }),
 	orchestratorsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
-		targetPackId?: string,
-	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetPackId }),
+		payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+		targetTeamId?: string,
+	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetTeamId }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
 	chatSend: (args: {
@@ -1196,50 +1196,50 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("commands:readImportFile", { filePath }),
 
 	// Agent Packs（生命周期 + 视图，§9.5）
-	packsListCatalog: (projectRoot: string) =>
-		ipcRenderer.invoke("packs:listCatalog", { projectRoot }),
-	packsInstall: (projectRoot: string, packId: string) =>
-		ipcRenderer.invoke("packs:install", { projectRoot, packId }),
-	packsSetEnabled: (projectRoot: string, packId: string, enabled: boolean) =>
-		ipcRenderer.invoke("packs:setEnabled", { projectRoot, packId, enabled }),
-	packsUninstall: (projectRoot: string, packId: string) =>
-		ipcRenderer.invoke("packs:uninstall", { projectRoot, packId }),
-	packsSetContentEnabled: (projectRoot: string, fqid: string, enabled: boolean) =>
-		ipcRenderer.invoke("packs:setContentEnabled", { projectRoot, fqid, enabled }),
-	packsSaveOverride: (
+	teamsList: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:list", { projectRoot }),
+	teamsInstall: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:install", { projectRoot, teamId }),
+	teamsSetEnabled: (projectRoot: string, teamId: string, enabled: boolean) =>
+		ipcRenderer.invoke("teams:setEnabled", { projectRoot, teamId, enabled }),
+	teamsUninstall: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:uninstall", { projectRoot, teamId }),
+	teamsSetAssetEnabled: (projectRoot: string, fqid: string, enabled: boolean) =>
+		ipcRenderer.invoke("teams:setAssetEnabled", { projectRoot, fqid, enabled }),
+	teamsSaveAssetOverride: (
 		projectRoot: string,
 		fqid: string,
-		patch: import("@shared/packs/types").ContentOverride,
-	) => ipcRenderer.invoke("packs:saveOverride", { projectRoot, fqid, patch }),
-	packsGetCoreState: (projectRoot: string) =>
-		ipcRenderer.invoke("packs:getCoreState", { projectRoot }),
-	packsResetCoreDefaults: (projectRoot: string, kind: "expert" | "orchestrator") =>
-		ipcRenderer.invoke("packs:resetCoreDefaults", { projectRoot, kind }),
-	packsResolveBadge: (projectRoot: string, fqidOrId: string) =>
-		ipcRenderer.invoke("packs:resolveBadge", { projectRoot, fqidOrId }),
-	packsGetContentView: (projectRoot: string, kind: string) =>
-		ipcRenderer.invoke("packs:getContentView", { projectRoot, kind }),
-	packsSetDefaultOrchestrator: (projectRoot: string, fqid: string) =>
-		ipcRenderer.invoke("packs:setDefaultOrchestrator", { projectRoot, fqid }),
-	packsGetPackContents: (packId: string) =>
-		ipcRenderer.invoke("packs:getPackContents", { packId }),
-	packsListProjectMcps: (projectRoot: string) =>
-		ipcRenderer.invoke("packs:listProjectMcps", { projectRoot }),
+		patch: import("@shared/teams/types").AssetOverride,
+	) => ipcRenderer.invoke("teams:saveAssetOverride", { projectRoot, fqid, patch }),
+	teamsGetCoreState: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:getCoreState", { projectRoot }),
+	teamsResetCoreDefaults: (projectRoot: string, kind: "subagent" | "orchestrator") =>
+		ipcRenderer.invoke("teams:resetCoreDefaults", { projectRoot, kind }),
+	teamsResolveOrigin: (projectRoot: string, fqidOrId: string) =>
+		ipcRenderer.invoke("teams:resolveOrigin", { projectRoot, fqidOrId }),
+	teamsListAssets: (projectRoot: string, kind: string) =>
+		ipcRenderer.invoke("teams:listAssets", { projectRoot, kind }),
+	teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) =>
+		ipcRenderer.invoke("teams:setDefaultOrchestrator", { projectRoot, fqid }),
+	teamsGetTeamContents: (teamId: string) =>
+		ipcRenderer.invoke("teams:getTeamContents", { teamId }),
+	teamsListProjectMcps: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:listProjectMcps", { projectRoot }),
 
 	// User teams (app-level, like installed teams)
-	userPacksList: () =>
-		ipcRenderer.invoke("userPacks:list") as Promise<
-			Array<{ packId: string; name: string; description: string; version: string }>
+	teamsListUserTeams: () =>
+		ipcRenderer.invoke("teams:listUserTeams") as Promise<
+			Array<{ teamId: string; name: string; description: string; version: string }>
 		>,
-	userPacksCreate: (name: string, description?: string) =>
-		ipcRenderer.invoke("userPacks:create", { name, description }) as Promise<{
-			packId: string;
+	teamsCreateUserTeam: (name: string, description?: string) =>
+		ipcRenderer.invoke("teams:createUserTeam", { name, description }) as Promise<{
+			teamId: string;
 			name: string;
 			description: string;
 			version: string;
 		}>,
-	userPacksDelete: (packId: string) =>
-		ipcRenderer.invoke("userPacks:delete", { packId }),
+	teamsDeleteUserTeam: (teamId: string) =>
+		ipcRenderer.invoke("teams:deleteUserTeam", { teamId }),
 
 	// Workspace operations
 	workspaceGetConfig: (projectRoot: string) =>
@@ -1486,8 +1486,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
-		ipcRenderer.on("experts:integrationChanged", handler);
-		return () => ipcRenderer.removeListener("experts:integrationChanged", handler);
+		ipcRenderer.on("subagents:integrationChanged", handler);
+		return () => ipcRenderer.removeListener("subagents:integrationChanged", handler);
 	},
 
 	// Log system

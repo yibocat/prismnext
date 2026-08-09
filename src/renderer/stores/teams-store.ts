@@ -6,24 +6,24 @@
 // shared store first (optimistic), then persists via IPC and reconciles with
 // the authoritative catalog from main. No more "close the panel to refresh".
 import { create } from "zustand";
-import type { Fqid, ProjectPackView, ResolvedMcp } from "@shared/packs/types";
+import type { Fqid, ProjectTeamView, ResolvedMcp } from "@shared/teams/types";
 
 interface PacksStoreState {
-  catalog: ProjectPackView[];
+  catalog: ProjectTeamView[];
   /** Pack-declared MCP servers (app-level resource, project-gated). */
-  packMcps: ResolvedMcp[];
+  teamMcps: ResolvedMcp[];
   loadedRoot: string | null;
   loading: boolean;
   /** Load the catalog from main. Cached per project root unless `force`. */
   load: (projectRoot: string, options?: { force?: boolean }) => Promise<void>;
   /** Optimistic local flip — instant UI feedback; reconciled by next load. */
-  setEnabledLocal: (packId: string, enabled: boolean) => void;
+  setEnabledLocal: (teamId: string, enabled: boolean) => void;
   /** Optimistic per-MCP flip (pack-declared server, disabledContent). */
   setEnabledLocalMcp: (fqid: string, enabled: boolean) => void;
   /** Persist project-level enable/disable to main, then re-load catalog. */
   setEnabled: (
     projectRoot: string,
-    packId: string,
+    teamId: string,
     enabled: boolean,
   ) => Promise<{ defaultMovedTo?: Fqid } | void>;
   setPackMcps: (mcps: ResolvedMcp[]) => void;
@@ -32,7 +32,7 @@ interface PacksStoreState {
 
 export const usePacksStore = create<PacksStoreState>((set, get) => ({
   catalog: [],
-  packMcps: [],
+  teamMcps: [],
   loadedRoot: null,
   loading: false,
 
@@ -47,30 +47,30 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
     }
     set({ loading: true });
     try {
-      const catalog = await window.electronAPI.packsListCatalog(projectRoot);
+      const catalog = await window.electronAPI.teamsList(projectRoot);
       // Pack enable/disable changes the effective MCP set — keep the pack MCP
       // view in sync so the MCP settings page greys out / restores live.
-      let packMcps = get().packMcps;
+      let teamMcps = get().teamMcps;
       try {
-        packMcps = await window.electronAPI.packsListProjectMcps(projectRoot);
+        teamMcps = await window.electronAPI.teamsListProjectMcps(projectRoot);
       } catch {
         // non-fatal; pack MCP view stays stale until next load
       }
-      set({ catalog, packMcps, loadedRoot: projectRoot });
+      set({ catalog, teamMcps, loadedRoot: projectRoot });
     } finally {
       set({ loading: false });
     }
   },
 
-  setEnabledLocal: (packId, enabled) => {
+  setEnabledLocal: (teamId, enabled) => {
     set((s) => ({
       catalog: s.catalog.map((p) =>
-        p.manifest.id === packId ? { ...p, enabled } : p,
+        p.manifest.id === teamId ? { ...p, enabled } : p,
       ),
       // Flip the owning pack's MCP view too — the MCP settings page greys out
       // in real time while the IPC round trip completes.
-      packMcps: s.packMcps.map((m) =>
-        m.packId === packId ? { ...m, enabled } : m,
+      teamMcps: s.teamMcps.map((m) =>
+        m.teamId === teamId ? { ...m, enabled } : m,
       ),
     }));
   },
@@ -78,18 +78,18 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
   /** Per-item optimistic flip for a pack-declared MCP (disabledContent). */
   setEnabledLocalMcp: (fqid, enabled) => {
     set((s) => ({
-      packMcps: s.packMcps.map((m) => (m.fqid === fqid ? { ...m, enabled } : m)),
+      teamMcps: s.teamMcps.map((m) => (m.fqid === fqid ? { ...m, enabled } : m)),
     }));
   },
 
-  setEnabled: async (projectRoot, packId, enabled) => {
+  setEnabled: async (projectRoot, teamId, enabled) => {
     // Optimistic: flip the UI immediately, then persist + reconcile.
-    get().setEnabledLocal(packId, enabled);
+    get().setEnabledLocal(teamId, enabled);
     let result: { defaultMovedTo?: Fqid } | undefined;
     try {
-      result = (await window.electronAPI.packsSetEnabled(
+      result = (await window.electronAPI.teamsSetEnabled(
         projectRoot,
-        packId,
+        teamId,
         enabled,
       )) as { defaultMovedTo?: Fqid } | undefined;
     } catch (err) {
@@ -101,7 +101,7 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
     return result;
   },
 
-  setPackMcps: (packMcps) => set({ packMcps }),
+  setPackMcps: (teamMcps) => set({ teamMcps }),
 
-  clear: () => set({ catalog: [], packMcps: [], loadedRoot: null, loading: false }),
+  clear: () => set({ catalog: [], teamMcps: [], loadedRoot: null, loading: false }),
 }));

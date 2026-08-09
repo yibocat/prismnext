@@ -762,7 +762,7 @@ export function useOpenCodeEvents() {
                   );
                   if (file) {
                     void docState.refreshFileContent(file.id).then(() => {
-                      const diskContent = docState.getContent(file.id) || "";
+                      const diskContent = docState.getAsset(file.id) || "";
                       if (diskContent && relPath) {
                         fileContentTrackerRef.current.set(relPath, diskContent);
                       }

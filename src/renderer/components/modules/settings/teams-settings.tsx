@@ -23,7 +23,7 @@ import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { usePacksStore } from "@/stores/packs-store";
+import { usePacksStore } from "@/stores/teams-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Badge } from "@/components/ui/badge";
@@ -40,21 +40,21 @@ import {
 } from "./settings-tokens";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import { PackIcon } from "../teams/pack-icon";
-import type { ExpertInfo, OrchestratorInfo } from "@shared/agent-experts";
-import type { BadgeInfo, ProjectPackView } from "@shared/packs/types";
-import { CORE_PACK_ID, LOCAL_PACK_ID } from "@shared/packs/types";
+import { PackIcon } from "../teams/team-icon";
+import type { SubagentInfo, OrchestratorInfo } from "@shared/agent-subagents";
+import type { OriginInfo, ProjectTeamView } from "@shared/teams/types";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
 
 interface CoreState {
-  coreExpertDisabledCount: number;
-  coreExpertOverrideCount: number;
+  coreSubagentDisabledCount: number;
+  coreSubagentOverrideCount: number;
 }
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const BUILTIN_EXPERTS_RESET_ID = "builtin-experts-reset";
 
-function expertBundleSummary(expert: ExpertInfo, t: TFunction): string {
+function expertBundleSummary(expert: SubagentInfo, t: TFunction): string {
   const parts: string[] = [];
   if (expert.model) parts.push(t("settings.agent.summary.customModel"));
   if (expert.effectiveModules?.length) {
@@ -68,9 +68,9 @@ function expertBundleSummary(expert: ExpertInfo, t: TFunction): string {
 function orchestratorBundleSummary(orchestrator: OrchestratorInfo, t: TFunction): string {
   const parts: string[] = [];
   if (orchestrator.model) parts.push(t("settings.agent.summary.customModel"));
-  if (orchestrator.allowedExperts?.length) {
+  if (orchestrator.roster?.length) {
     parts.push(
-      t("settings.agent.summary.allowedExperts", { count: orchestrator.allowedExperts.length }),
+      t("settings.agent.summary.roster", { count: orchestrator.roster.length }),
     );
   }
   if (orchestrator.effectiveModules?.length) {
@@ -83,7 +83,7 @@ function orchestratorBundleSummary(orchestrator: OrchestratorInfo, t: TFunction)
     : t("settings.agent.summary.standardOrchestrator");
 }
 
-function sortExperts(experts: ExpertInfo[]): ExpertInfo[] {
+function sortExperts(experts: SubagentInfo[]): SubagentInfo[] {
   return [...experts].sort((a, b) => {
     if (a.builtin !== b.builtin) return a.builtin ? -1 : 1;
     return a.name.localeCompare(b.name);
@@ -96,33 +96,33 @@ function sortOrchestrators(orchestrators: OrchestratorInfo[]): OrchestratorInfo[
 
 function expertsBuiltinsModified(coreState: CoreState | null): boolean {
   if (!coreState) return false;
-  return coreState.coreExpertDisabledCount + coreState.coreExpertOverrideCount > 0;
+  return coreState.coreSubagentDisabledCount + coreState.coreSubagentOverrideCount > 0;
 }
 
 /** Origin badge: core pack → "Built-in"; other packs → their pack name. */
-function renderBadge(badge: BadgeInfo | null | undefined, t: TFunction) {
+function renderBadge(badge: OriginInfo | null | undefined, t: TFunction) {
   if (!badge) return null;
-  if (badge.packId === CORE_PACK_ID) {
+  if (badge.teamId === CORE_TEAM_ID) {
     return (
       <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
         {t("settings.agent.builtin")}
       </span>
     );
   }
-  return <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{badge.packName}</span>;
+  return <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{badge.teamName}</span>;
 }
 
-/** Derive a content item's owning pack id from its fqid (`packId:contentId`). */
+/** Derive a content item's owning pack id from its fqid (`teamId:contentId`). */
 function packIdOf(fqid?: string): string {
   const pid = fqid?.split(":")[0];
-  return pid && pid.length > 0 ? pid : LOCAL_PACK_ID;
+  return pid && pid.length > 0 ? pid : LOCAL_TEAM_ID;
 }
 
 interface TeamGroup {
-  packId: string;
+  teamId: string;
   label: string;
   orchestrators: OrchestratorInfo[];
-  experts: ExpertInfo[];
+  experts: SubagentInfo[];
 }
 
 export function TeamsAgentsSettings() {
@@ -132,11 +132,11 @@ export function TeamsAgentsSettings() {
 
   // Project-first when a project is open (workspace mental model); fall back
   // to the app tab when there is no project to show.
-  const [experts, setExperts] = useState<ExpertInfo[]>([]);
+  const [experts, setExperts] = useState<SubagentInfo[]>([]);
   const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([]);
   const [defaultOrchestratorFqid, setDefaultOrchestratorFqid] = useState<string | null>(null);
   const [coreState, setCoreState] = useState<CoreState | null>(null);
-  const [badges, setBadges] = useState<Record<string, BadgeInfo | null>>({});
+  const [badges, setBadges] = useState<Record<string, OriginInfo | null>>({});
   // Shared packs catalog: the detail panel flips `enabled` in this store, so
   // the card list greys out / restores in real time (no close-to-refresh).
   const catalog = usePacksStore((s) => s.catalog);
@@ -160,7 +160,7 @@ export function TeamsAgentsSettings() {
       const entries = await Promise.all(
         items.map(async (item) => {
           const key = item.fqid ?? item.id;
-          const badge = await window.electronAPI.packsResolveBadge(projectRootArg, key);
+          const badge = await window.electronAPI.teamsResolveOrigin(projectRootArg, key);
           return [key, badge] as const;
         }),
       );
@@ -183,9 +183,9 @@ export function TeamsAgentsSettings() {
       if (!options?.silent) setLoading(true);
       try {
         const [expertList, orchestratorList, coreStateResult] = await Promise.all([
-          window.electronAPI.expertsList(projectRoot),
+          window.electronAPI.subagentsList(projectRoot),
           window.electronAPI.orchestratorsList(projectRoot),
-          window.electronAPI.packsGetCoreState(projectRoot),
+          window.electronAPI.teamsGetCoreState(projectRoot),
         ]);
         await usePacksStore.getState().load(projectRoot, { force: true });
         setExperts(sortExperts(expertList));
@@ -224,7 +224,7 @@ export function TeamsAgentsSettings() {
   );
 
   const packById = useMemo(() => {
-    const map = new Map<string, ProjectPackView>();
+    const map = new Map<string, ProjectTeamView>();
     for (const p of packs) map.set(p.manifest.id, p);
     return map;
   }, [packs]);
@@ -243,7 +243,7 @@ export function TeamsAgentsSettings() {
       list.push(o);
       orch.set(pid, list);
     }
-    const exp = new Map<string, ExpertInfo[]>();
+    const exp = new Map<string, SubagentInfo[]>();
     for (const e of experts) {
       const pid = packIdOf(e.fqid);
       const list = exp.get(pid) ?? [];
@@ -253,19 +253,19 @@ export function TeamsAgentsSettings() {
     // Every installed pack gets a card: core, app-level installed packs, and
     // the project-scoped Local Pack (My Content).
     const pids = new Set<string>([...packs.map((p) => p.manifest.id)]);
-    pids.add(CORE_PACK_ID);
-    pids.add(LOCAL_PACK_ID);
+    pids.add(CORE_TEAM_ID);
+    pids.add(LOCAL_TEAM_ID);
     // Safety net: packs that provide agents but somehow missed `packs`.
     for (const pid of [...orch.keys(), ...exp.keys()]) pids.add(pid);
-    const rank = (pid: string) => (pid === CORE_PACK_ID ? 0 : pid === LOCAL_PACK_ID ? 2 : 1);
+    const rank = (pid: string) => (pid === CORE_TEAM_ID ? 0 : pid === LOCAL_TEAM_ID ? 2 : 1);
     return [...pids]
-      .map((packId) => ({
-        packId,
-        label: groupLabel(packId, badges, packById, t),
-        orchestrators: sortOrchestrators(orch.get(packId) ?? []),
-        experts: sortExperts(exp.get(packId) ?? []),
+      .map((teamId) => ({
+        teamId,
+        label: groupLabel(teamId, badges, packById, t),
+        orchestrators: sortOrchestrators(orch.get(teamId) ?? []),
+        experts: sortExperts(exp.get(teamId) ?? []),
       }))
-      .sort((a, b) => rank(a.packId) - rank(b.packId) || a.label.localeCompare(b.label));
+      .sort((a, b) => rank(a.teamId) - rank(b.teamId) || a.label.localeCompare(b.label));
   }, [orchestrators, experts, badges, packById, t]);
 
   const openOrchestrator = (orchestrator: OrchestratorInfo) => {
@@ -287,7 +287,7 @@ export function TeamsAgentsSettings() {
     );
   };
 
-  const openExpert = (expert: ExpertInfo) => {
+  const openExpert = (expert: SubagentInfo) => {
     openSettingsPanel(
       expert.builtin
         ? {
@@ -309,7 +309,7 @@ export function TeamsAgentsSettings() {
     if (!projectRoot || !orchestrator.fqid) return;
     setSaving(true);
     try {
-      await window.electronAPI.packsSetDefaultOrchestrator(projectRoot, orchestrator.fqid);
+      await window.electronAPI.teamsSetDefaultOrchestrator(projectRoot, orchestrator.fqid);
       setDefaultOrchestratorFqid(orchestrator.fqid ?? null);
       toast.success(t("settings.agent.toast.defaultOrchestratorUpdated"));
     } catch (err: unknown) {
@@ -330,7 +330,7 @@ export function TeamsAgentsSettings() {
     if (!teamName.trim()) return;
     setSaving(true);
     try {
-      await window.electronAPI.userPacksCreate(teamName.trim(), teamDesc.trim());
+      await window.electronAPI.teamsCreateUserTeam(teamName.trim(), teamDesc.trim());
       setTeamName("");
       setTeamDesc("");
       setCreatingTeam(false);
@@ -343,17 +343,17 @@ export function TeamsAgentsSettings() {
     }
   };
 
-  const toggleExpertEnabled = async (expert: ExpertInfo, enabled: boolean) => {
+  const toggleExpertEnabled = async (expert: SubagentInfo, enabled: boolean) => {
     if (!projectRoot || !expert.fqid) return;
     const prev = experts;
     setExperts((current) =>
       sortExperts(current.map((e) => (e.id === expert.id ? { ...e, enabled } : e))),
     );
     try {
-      await window.electronAPI.packsSetContentEnabled(projectRoot, expert.fqid, enabled);
+      await window.electronAPI.teamsSetAssetEnabled(projectRoot, expert.fqid, enabled);
       const [nextExperts, coreStateResult] = await Promise.all([
-        window.electronAPI.expertsList(projectRoot),
-        window.electronAPI.packsGetCoreState(projectRoot),
+        window.electronAPI.subagentsList(projectRoot),
+        window.electronAPI.teamsGetCoreState(projectRoot),
       ]);
       setExperts(sortExperts(nextExperts));
       setCoreState(coreStateResult);
@@ -369,7 +369,7 @@ export function TeamsAgentsSettings() {
     if (!projectRoot) return;
     setSaving(true);
     try {
-      await window.electronAPI.packsResetCoreDefaults(projectRoot, "expert");
+      await window.electronAPI.teamsResetCoreDefaults(projectRoot, "subagent");
       await loadAll({ silent: true });
       expertResetConfirm.clearPending();
     } finally {
@@ -519,10 +519,10 @@ export function TeamsAgentsSettings() {
                 </div>
               ) : (
                 teamGroups.map((group) => {
-                  const isCore = group.packId === CORE_PACK_ID;
-                  const isLocal = group.packId === LOCAL_PACK_ID;
-                  const groupPack = packById.get(group.packId);
-                  const isOpen = expandedCard === group.packId;
+                  const isCore = group.teamId === CORE_TEAM_ID;
+                  const isLocal = group.teamId === LOCAL_TEAM_ID;
+                  const groupPack = packById.get(group.teamId);
+                  const isOpen = expandedCard === group.teamId;
                   const defaultMain = group.orchestrators.find(
                     (o) => (o.fqid ?? "") === (defaultOrchestratorFqid ?? ""),
                   );
@@ -530,7 +530,7 @@ export function TeamsAgentsSettings() {
                   const projectEnabled = groupPack ? groupPack.enabled : true;
                   return (
                     <div
-                      key={group.packId}
+                      key={group.teamId}
                       className={cn(
                         CARD,
                         "!divide-y-0 overflow-hidden",
@@ -542,7 +542,7 @@ export function TeamsAgentsSettings() {
                         <button
                           type="button"
                           className="flex flex-1 min-w-0 items-center gap-2 py-1 text-left"
-                          onClick={() => setExpandedCard(isOpen ? null : group.packId)}
+                          onClick={() => setExpandedCard(isOpen ? null : group.teamId)}
                         >
                           <span className="shrink-0 text-muted-foreground">
                             {isOpen ? (
@@ -584,7 +584,7 @@ export function TeamsAgentsSettings() {
                           onClick={() =>
                             openSettingsPanel({
                               kind: "pack-detail",
-                              packId: group.packId,
+                              teamId: group.teamId,
                               title: group.label,
                             })
                           }
@@ -746,7 +746,7 @@ export function TeamsAgentsSettings() {
                                               if (!projectRoot) return;
                                               setSaving(true);
                                               try {
-                                                await window.electronAPI.expertsDeleteCustom(
+                                                await window.electronAPI.subagentsDeleteCustom(
                                                   projectRoot,
                                                   expert.id,
                                                 );
@@ -786,18 +786,18 @@ export function TeamsAgentsSettings() {
 }
 
 function groupLabel(
-  packId: string,
-  badges: Record<string, BadgeInfo | null>,
-  packById: Map<string, ProjectPackView>,
+  teamId: string,
+  badges: Record<string, OriginInfo | null>,
+  packById: Map<string, ProjectTeamView>,
   t: TFunction,
 ): string {
-  if (packId === CORE_PACK_ID) return t("settings.teamsAgents.coreTeam");
-  if (packId === LOCAL_PACK_ID) return t("settings.teamsAgents.mine");
-  const pack = packById.get(packId);
+  if (teamId === CORE_TEAM_ID) return t("settings.teamsAgents.coreTeam");
+  if (teamId === LOCAL_TEAM_ID) return t("settings.teamsAgents.mine");
+  const pack = packById.get(teamId);
   if (pack) return pack.manifest.name;
   // Fall back to any badge carrying this pack's name.
   for (const badge of Object.values(badges)) {
-    if (badge?.packId === packId) return badge.packName;
+    if (badge?.teamId === teamId) return badge.teamName;
   }
-  return packId;
+  return teamId;
 }

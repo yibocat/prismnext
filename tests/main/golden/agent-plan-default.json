@@ -144,7 +144,7 @@
         "id": "research-prism",
         "builtin": true,
         "enabled": true,
-        "allowedExperts": [
+        "roster": [
           "literature-synthesizer",
           "research-design-coach",
           "methodology-auditor",

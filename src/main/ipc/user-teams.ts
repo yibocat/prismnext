@@ -5,25 +5,25 @@ import { ipcMain } from "electron";
 import {
   createUserTeam,
   deleteUserTeam,
-  ensureUserPacksRegistered,
+  ensureUserTeamsRegistered,
   listUserTeams,
-} from "../services/user-packs";
+} from "../services/user-teams";
 
 export function registerUserPacksHandlers(): void {
-  ensureUserPacksRegistered();
+  ensureUserTeamsRegistered();
 
-  ipcMain.handle("userPacks:list", async () => {
+  ipcMain.handle("teams:listUserTeams", async () => {
     return listUserTeams();
   });
 
   ipcMain.handle(
-    "userPacks:create",
+    "teams:createUserTeam",
     async (_event, args: { name: string; description?: string }) => {
       return createUserTeam(args.name ?? "", args.description ?? "");
     },
   );
 
-  ipcMain.handle("userPacks:delete", async (_event, args: { packId: string }) => {
-    deleteUserTeam(args.packId);
+  ipcMain.handle("teams:deleteUserTeam", async (_event, args: { teamId: string }) => {
+    deleteUserTeam(args.teamId);
   });
 }

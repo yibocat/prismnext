@@ -11,13 +11,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   hasLegacyAgentState,
-  migratePacksStateIfNeeded,
-  readPacksState,
-} from "../../src/main/services/packs-state";
+  migrateTeamsStateIfNeeded,
+  readTeamsState,
+} from "../../src/main/services/teams-state";
 import {
-  listInstalledPacks,
-  setPacksInstalledDataDir,
-} from "../../src/main/services/packs-installed";
+  listInstalledTeams,
+  setTeamsInstalledDataDir,
+} from "../../src/main/services/teams-installed";
 
 let root: string | undefined;
 let appDir: string | undefined;
@@ -27,13 +27,13 @@ afterEach(() => {
   root = undefined;
   if (appDir) rmSync(appDir, { recursive: true, force: true });
   appDir = undefined;
-  setPacksInstalledDataDir(null);
+  setTeamsInstalledDataDir(null);
 });
 
 /** Seal the app-level installed store to a per-test temp dir. */
 function sealAppStore(): void {
   appDir = mkdtempSync(join(tmpdir(), "packs-migration-app-"));
-  setPacksInstalledDataDir(appDir);
+  setTeamsInstalledDataDir(appDir);
 }
 
 function makeRoot(): string {
@@ -61,7 +61,7 @@ function backupDir(): string | null {
 describe("packs-state legacy migration (R1–R5)", () => {
   it("fresh 项目：无 packs.json 无 legacy → 空状态且不落盘", () => {
     makeRoot();
-    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    const { state, migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(false);
     expect(state.projectPackStates).toEqual({});
     expect(state.disabledContent).toEqual([]);
@@ -81,7 +81,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     );
     expect(hasLegacyAgentState(root!)).toBe(true);
 
-    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    const { state, migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
     expect(state.disabledContent).toEqual(["prismnext.core:peer-reviewer"]);
     expect(state.contentOverrides["prismnext.core:methodology-auditor"]).toEqual({
@@ -97,7 +97,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     expect(existsSync(join(backup!, "experts-manifest.json"))).toBe(true);
 
     // 幂等：第二次无操作
-    const again = migratePacksStateIfNeeded(root!);
+    const again = migrateTeamsStateIfNeeded(root!);
     expect(again.migrated).toBe(false);
     expect(again.state).toEqual(state);
   });
@@ -118,7 +118,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     writeLegacy(join("orchestrators", "custom", "notes-local", "instructions.md"), "Body.\n");
 
     // 案例 1：core 默认
-    let result = migratePacksStateIfNeeded(root!);
+    let result = migrateTeamsStateIfNeeded(root!);
     expect(result.state.defaultOrchestrator).toBe("prismnext.core:research-prism");
     expect(result.state.disabledContent).toEqual(["prismnext.core:research-prism"]);
     // R5：custom orchestrator 已移动到 local
@@ -137,7 +137,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
       JSON.stringify({ defaultOrchestratorId: "notes-local" }),
     );
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     expect(state.defaultOrchestrator).toBe("user.local:notes-local");
   });
 
@@ -159,7 +159,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     );
     writeLegacy(join("experts", "custom", "latex-polisher", "instructions.md"), "Polish.\n");
 
-    const { migrated } = migratePacksStateIfNeeded(root!);
+    const { migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
 
     const movedJson = join(agentDir(), "local", "experts", "latex-polisher", "expert.json");
@@ -189,7 +189,7 @@ describe("packs-state legacy migration (R1–R5)", () => {
     );
     writeLegacy("experts-manifest.json", JSON.stringify({ disabledBuiltinIds: ["peer-reviewer"] }));
 
-    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    const { state, migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
     expect(state.disabledContent).toEqual(["prismnext.core:peer-reviewer"]);
     expect(hasLegacyAgentState(root!)).toBe(false);
@@ -198,19 +198,19 @@ describe("packs-state legacy migration (R1–R5)", () => {
   it("损坏的 packs.json → 回退空状态并自愈重写", () => {
     makeRoot();
     writeLegacy("packs.json", "{ not json !!");
-    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    const { state, migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
     expect(state.stateVersion).toBe(3);
     expect(state.projectPackStates).toEqual({});
     // 重写后可正常读取
-    const reread = readPacksState(root!);
+    const reread = readTeamsState(root!);
     expect(reread.stateVersion).toBe(3);
   });
 
-  it("R1 迁移结果与直接读 readPacksState 一致", () => {
+  it("R1 迁移结果与直接读 readTeamsState 一致", () => {
     makeRoot();
     writeLegacy("experts-manifest.json", JSON.stringify({ disabledBuiltinIds: ["peer-reviewer"] }));
-    const viaRead = readPacksState(root!);
+    const viaRead = readTeamsState(root!);
     expect(viaRead.disabledContent).toEqual(["prismnext.core:peer-reviewer"]);
     expect(existsSync(join(agentDir(), "packs.json"))).toBe(true);
   });
@@ -224,12 +224,12 @@ import { vi } from "vitest";
 import {
   registerLegacyBuiltinCommandStatesHooks,
   __resetLegacyBuiltinCommandStatesHooksForTests,
-} from "../../src/main/services/packs-state";
-import { getPack } from "../../src/main/services/pack-catalog";
-import { CORE_PACK_ID } from "../../src/shared/packs/types";
+} from "../../src/main/services/teams-state";
+import { getTeam } from "../../src/main/services/team-catalog";
+import { CORE_TEAM_ID } from "../../src/shared/teams/types";
 
 function coreSkillMd(id: string): string {
-  const dir = getPack(CORE_PACK_ID)!.dir;
+  const dir = getTeam(CORE_TEAM_ID)!.dir;
   return readFileSync(join(dir, "skills", id, "SKILL.md"), "utf-8");
 }
 
@@ -246,7 +246,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
     );
     expect(hasLegacyAgentState(root!)).toBe(true);
 
-    const { migrated } = migratePacksStateIfNeeded(root!);
+    const { migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
     expect(
       readFileSync(join(agentDir(), "local", "skills", "my-skill", "SKILL.md"), "utf-8"),
@@ -260,7 +260,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
     const md = coreSkillMd("critical-review");
     writeLegacy(join("skills", "critical-review", "SKILL.md"), md);
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     // 冗余副本不进入 local（core 原件直接可用）
     expect(existsSync(join(agentDir(), "local", "skills", "critical-review"))).toBe(false);
     // 进 legacy-backup
@@ -275,7 +275,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
     const diverged = `${coreSkillMd("critical-review")}\n\nuser tweak\n`;
     writeLegacy(join("skills", "critical-review", "SKILL.md"), diverged);
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     expect(
       readFileSync(join(agentDir(), "local", "skills", "critical-review", "SKILL.md"), "utf-8"),
     ).toBe(diverged);
@@ -292,7 +292,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
       }),
     );
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     expect(existsSync(join(agentDir(), "local", "skills", "critical-review", "SKILL.md"))).toBe(
       true,
     );
@@ -305,7 +305,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
       "---\ndescription: Notes\npluginId: suite.old\nenabled: false\norder: 5\n---\n\nBody $ARGUMENTS\n",
     );
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     const moved = readFileSync(join(agentDir(), "local", "commands", "notes.md"), "utf-8");
     expect(moved).not.toContain("pluginId");
     expect(moved).not.toMatch(/^enabled:/m);
@@ -319,7 +319,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
     makeRoot();
     writeLegacy(join("commands", "archive.md.disabled"), "---\ndescription: A\n---\n\nBody\n");
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     expect(existsSync(join(agentDir(), "local", "commands", "archive.md"))).toBe(true);
     expect(existsSync(join(agentDir(), "local", "commands", "archive.md.disabled"))).toBe(false);
     expect(state.disabledContent).toEqual(["user.local:archive"]);
@@ -330,7 +330,7 @@ describe("packs-state legacy migration (R6–R11)", () => {
     writeLegacy(join("commands", "dup.md"), "---\ndescription: winner\n---\n\nW\n");
     writeLegacy(join("commands", "dup.md.disabled"), "---\ndescription: loser\n---\n\nL\n");
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     expect(readFileSync(join(agentDir(), "local", "commands", "dup.md"), "utf-8")).toContain(
       "winner",
     );
@@ -350,9 +350,9 @@ describe("packs-state legacy migration (R6–R11)", () => {
       }),
     );
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     expect(state.disabledContent).toEqual([
-      `${CORE_PACK_ID}:critical-review`,
+      `${CORE_TEAM_ID}:critical-review`,
       "user.local:my-skill",
     ]);
 
@@ -378,9 +378,9 @@ describe("packs-state legacy migration (R6–R11)", () => {
     );
     writeLegacy("skills-manifest.json", JSON.stringify({ disabled: ["critical-review"] }));
 
-    const { state } = migratePacksStateIfNeeded(root!);
+    const { state } = migrateTeamsStateIfNeeded(root!);
     expect(state.disabledContent).toEqual([
-      `${CORE_PACK_ID}:critical-review`,
+      `${CORE_TEAM_ID}:critical-review`,
       "user.local:critical-review",
     ]);
   });
@@ -394,8 +394,8 @@ describe("packs-state legacy migration (R6–R11)", () => {
     makeRoot();
     expect(hasLegacyAgentState(root!)).toBe(true);
 
-    const { state } = migratePacksStateIfNeeded(root!);
-    expect(state.disabledContent).toEqual([`${CORE_PACK_ID}:compact`]);
+    const { state } = migrateTeamsStateIfNeeded(root!);
+    expect(state.disabledContent).toEqual([`${CORE_TEAM_ID}:compact`]);
     expect(clear).toHaveBeenCalledTimes(1);
     // 消费后不再继承（全局时代结束）
     expect(hasLegacyAgentState(root!)).toBe(false);
@@ -407,13 +407,13 @@ describe("packs-state legacy migration (R6–R11)", () => {
       clear: () => {},
     });
     makeRoot();
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
 
     // 消费标记已置位：同一进程内另一个项目读不到全局状态
     const second = mkdtempSync(join(tmpdir(), "packs-migration-r11b-"));
     try {
       expect(hasLegacyAgentState(second)).toBe(false);
-      const { migrated, state } = migratePacksStateIfNeeded(second);
+      const { migrated, state } = migrateTeamsStateIfNeeded(second);
       expect(migrated).toBe(false);
       expect(state.disabledContent).toEqual([]);
     } finally {
@@ -441,11 +441,11 @@ describe("packs-state legacy migration (R9)", () => {
     );
     expect(hasLegacyAgentState(root!)).toBe(true);
 
-    const { state, migrated } = migratePacksStateIfNeeded(root!);
+    const { state, migrated } = migrateTeamsStateIfNeeded(root!);
     expect(migrated).toBe(true);
     // App-level upsert: both packs installed; only the disabled one gets a
     // project override (auto-enable for the rest).
-    const installed = listInstalledPacks().map((r: { packId: string }) => r.packId);
+    const installed = listInstalledTeams().map((r: { teamId: string }) => r.teamId);
     expect(installed).toContain("prismnext.research-notes");
     expect(installed).toContain("third.party-tool");
     expect(state.projectPackStates).toEqual({ "third.party-tool": { enabled: false } });
@@ -477,7 +477,7 @@ describe("packs-state legacy migration (R9)", () => {
     );
     writeLegacy(join("experts", "custom", "my-expert", "instructions.md"), "Mine.\n");
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     expect(existsSync(join(agentDir(), "local", "experts", "notes-helper"))).toBe(false);
     const backup = backupDir();
     expect(existsSync(join(backup!, "experts", "custom", "notes-helper", "expert.json"))).toBe(
@@ -499,7 +499,7 @@ describe("packs-state legacy migration (R9)", () => {
     );
     writeLegacy(join("commands", "mine.md"), "---\ndescription: M\n---\n\nMine\n");
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     expect(existsSync(join(agentDir(), "local", "commands", "rnotes.md"))).toBe(false);
     const backup = backupDir();
     expect(existsSync(join(backup!, "commands", "rnotes.md"))).toBe(true);
@@ -526,7 +526,7 @@ describe("packs-state legacy migration (R9)", () => {
     writeLegacy(join("skills", "plugin-skill", "SKILL.md"), "---\nname: plugin-skill\n---\nP\n");
     writeLegacy(join("skills", "registry-skill", "SKILL.md"), "---\nname: registry-skill\n---\nR\n");
 
-    migratePacksStateIfNeeded(root!);
+    migrateTeamsStateIfNeeded(root!);
     expect(existsSync(join(agentDir(), "local", "skills", "plugin-skill"))).toBe(false);
     const backup = backupDir();
     expect(existsSync(join(backup!, "skills", "plugin-skill", "SKILL.md"))).toBe(true);

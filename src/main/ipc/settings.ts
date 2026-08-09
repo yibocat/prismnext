@@ -61,10 +61,10 @@ export function registerSettingsHandlers(): void {
             ? getSettings().lastProjectPath!.trim()
             : "";
         if (lastProjectPath) {
-          const { refreshProjectExpertsIntegration } = await import(
-            "../services/project-experts-refresh"
+          const { refreshProjectSubagentsIntegration } = await import(
+            "../services/project-subagents-refresh"
           );
-          await refreshProjectExpertsIntegration(lastProjectPath);
+          await refreshProjectSubagentsIntegration(lastProjectPath);
         }
         // OpenCode reads agent model at process start — restart to apply.
         await service.reloadAfterExpertsIntegration();

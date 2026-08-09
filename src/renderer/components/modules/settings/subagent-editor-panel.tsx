@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/app-select";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
-import type { ExpertInfo, SaveCustomExpertPayload } from "@shared/agent-experts";
+import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent-subagents";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   detectExpertPermissionPreset,
@@ -47,7 +47,7 @@ import {
 type AgentExpertSlot = Extract<SettingsPanelSlot, { kind: "agent-expert" }>;
 
 function formFromExpert(
-  detail: ExpertInfo & { instructions: string },
+  detail: SubagentInfo & { instructions: string },
 ): ProfileFormState & { permissionPreset: ExpertPermissionPreset } {
   const { providerId, modelId } = parseProfileModel(detail.model);
   return {
@@ -81,9 +81,9 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   const [contentFqid, setContentFqid] = useState<string | null>(null);
   // Target team for new agents (null = this project's Local Pack).
   const [userTeams, setUserTeams] = useState<
-    Array<{ packId: string; name: string; description: string; version: string }>
+    Array<{ teamId: string; name: string; description: string; version: string }>
   >([]);
-  const [targetPackId, setTargetPackId] = useState<string | null>(null);
+  const [targetTeamId, setTargetPackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -105,14 +105,14 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
           setContentFqid(null);
           setTargetPackId(null);
-          const teams = await window.electronAPI.userPacksList().catch(() => []);
+          const teams = await window.electronAPI.teamsListUserTeams().catch(() => []);
           if (cancelled) return;
           setUserTeams(teams);
           setLoading(false);
           return;
         }
 
-        const detail = await window.electronAPI.expertsGetDetail(root, expertId!);
+        const detail = await window.electronAPI.subagentsGetDetail(root, expertId!);
         if (cancelled) return;
         if (!detail) {
           toast.error(t("settings.editor.expert.toast.notFound"));
@@ -156,13 +156,13 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       const permission = permissionFromExpertPreset(form.permissionPreset);
 
       if (builtinCustomize && contentFqid) {
-        await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+        await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
           model: formatProfileModel(form.modelProvider, form.modelId),
           thoughtLevel: form.thoughtLevel.trim() || undefined,
           permission,
         });
       } else {
-        const payload: SaveCustomExpertPayload = {
+        const payload: SaveCustomSubagentPayload = {
           id: form.id,
           name: form.name.trim(),
           description: form.description.trim(),
@@ -171,10 +171,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           thoughtLevel: form.thoughtLevel.trim() || undefined,
           permission,
         };
-        await window.electronAPI.expertsSaveCustom(
+        await window.electronAPI.subagentsSaveCustom(
           projectRoot,
           payload,
-          targetPackId ?? undefined,
+          targetTeamId ?? undefined,
         );
       }
 
@@ -191,14 +191,14 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     if (!projectRoot || !form.id || !builtinCustomize || !contentFqid) return;
     setSaving(true);
     try {
-      await window.electronAPI.packsSaveOverride(projectRoot, contentFqid, {
+      await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
         model: undefined,
         thoughtLevel: undefined,
         temperature: undefined,
         modules: undefined,
         permission: undefined,
       });
-      const full = await window.electronAPI.expertsGetDetail(projectRoot, form.id);
+      const full = await window.electronAPI.subagentsGetDetail(projectRoot, form.id);
       if (full) {
         setForm(formFromExpert(full));
         setContentFqid(full.fqid ?? null);
@@ -216,7 +216,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     setDeleteDialogOpen(false);
     setSaving(true);
     try {
-      await window.electronAPI.expertsDeleteCustom(projectRoot, form.id);
+      await window.electronAPI.subagentsDeleteCustom(projectRoot, form.id);
       toast.success(t("settings.editor.expert.toast.deleted"));
       closePanel();
     } catch (err: unknown) {
@@ -268,14 +268,14 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
               {t("settings.editor.expert.targetTeam")}
             </label>
             <select
-              value={targetPackId ?? ""}
+              value={targetTeamId ?? ""}
               onChange={(e) => setTargetPackId(e.target.value || null)}
               disabled={saving}
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
             >
               <option value="">{t("settings.editor.expert.localTarget")}</option>
               {userTeams.map((team) => (
-                <option key={team.packId} value={team.packId}>
+                <option key={team.teamId} value={team.teamId}>
                   {team.name}
                 </option>
               ))}

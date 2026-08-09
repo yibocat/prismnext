@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { listCorePackSkills } from "../../src/main/services/core-pack-skills";
+import { listCorePackSkills } from "../../src/main/services/core-team-skills";
 import {
   installAllFromLibrarySource,
   installLibraryCatalogItem,
@@ -14,8 +14,8 @@ import {
   PRISM_LOCAL_SKILLS_REL,
   setSkillContentEnabled,
 } from "../../src/main/services/skills-sync";
-import { readPacksState } from "../../src/main/services/packs-state";
-import { CORE_PACK_ID } from "../../src/shared/packs/types";
+import { readTeamsState } from "../../src/main/services/teams-state";
+import { CORE_TEAM_ID } from "../../src/shared/teams/types";
 
 /**
  * 引用模型（§5.6.2）：core pack 技能天然可用，「安装」= 启用、
@@ -54,7 +54,7 @@ describe("skill-library-catalog bundled (reference model)", () => {
     // 零拷贝：项目里不存在任何 local 技能副本
     expect(existsSync(join(r, PRISM_LOCAL_SKILLS_REL))).toBe(false);
     // 零状态污染：未禁用任何东西时 disabledContent 为空
-    expect(readPacksState(r).disabledContent).toEqual([]);
+    expect(readTeamsState(r).disabledContent).toEqual([]);
   });
 
   it("uninstallAllFromLibrarySource disables core skills but keeps local custom ones", async () => {
@@ -75,7 +75,7 @@ describe("skill-library-catalog bundled (reference model)", () => {
 
     const installed = listProjectSkills(r);
     for (const skill of core) {
-      const row = installed.find((s) => s.fqid === `${CORE_PACK_ID}:${skill.id}`);
+      const row = installed.find((s) => s.fqid === `${CORE_TEAM_ID}:${skill.id}`);
       expect(row?.enabled).toBe(false);
     }
     const custom = installed.find((s) => s.fqid === `user.local:my-custom-skill`);
@@ -88,7 +88,7 @@ describe("skill-library-catalog bundled (reference model)", () => {
     const r = makeRoot();
     const core = listCorePackSkills();
     const first = core[0]!;
-    const fqid = `${CORE_PACK_ID}:${first.id}`;
+    const fqid = `${CORE_TEAM_ID}:${first.id}`;
 
     // 预禁用单个 core 技能
     expect(setSkillContentEnabled(r, fqid, false)).toBe(fqid);

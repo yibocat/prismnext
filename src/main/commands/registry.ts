@@ -12,11 +12,11 @@ import {
   type CommandPack,
 } from "./export-import";
 import { isValidCommandName } from "./template-utils";
-import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../shared/packs/types";
-import { parseFqid } from "../../shared/packs/state";
-import type { ResolvedCommand } from "../../shared/packs/types";
-import { invalidateResolver, listCommands, resolveBareContentId } from "../services/pack-resolver";
-import { setContentDisabled } from "../services/packs-state";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/types";
+import { parseFqid } from "../../shared/teams/state";
+import type { ResolvedCommand } from "../../shared/teams/types";
+import { invalidateResolver, listCommands, resolveBareContentId } from "../services/team-resolver";
+import { setAssetDisabled } from "../services/teams-state";
 
 /**
  * CommandRegistry（§5.6.3）—— resolver 之上的命令门面，per-project 实例。
@@ -33,7 +33,7 @@ export class CommandRegistry {
 
   /** Local Pack commands 目录 */
   private get commandsDir(): string {
-    return join(this.projectRoot, LOCAL_PACK_REL, "commands");
+    return join(this.projectRoot, LOCAL_TEAM_REL, "commands");
   }
 
   list(): CommandDef[] {
@@ -49,9 +49,9 @@ export class CommandRegistry {
     const matches = this.list().filter((c) => c.name === name && c.enabled);
     if (matches.length === 0) return undefined;
     return (
-      matches.find((c) => c.packId === LOCAL_PACK_ID) ??
-      matches.find((c) => c.packId === CORE_PACK_ID) ??
-      matches.sort((a, b) => a.packId.localeCompare(b.packId))[0]
+      matches.find((c) => c.teamId === LOCAL_TEAM_ID) ??
+      matches.find((c) => c.teamId === CORE_TEAM_ID) ??
+      matches.sort((a, b) => a.teamId.localeCompare(b.teamId))[0]
     );
   }
 
@@ -88,7 +88,7 @@ export class CommandRegistry {
     this.ensureDir();
 
     const def: CommandDef = {
-      id: `${LOCAL_PACK_ID}:${payload.name}`,
+      id: `${LOCAL_TEAM_ID}:${payload.name}`,
       name: payload.name,
       description: payload.description,
       source: "user",
@@ -98,8 +98,8 @@ export class CommandRegistry {
       model: payload.model,
       order: 1000,
       enabled: true,
-      packId: LOCAL_PACK_ID,
-      packName: "My Content",
+      teamId: LOCAL_TEAM_ID,
+      teamName: "My Content",
       removable: true,
     };
 
@@ -124,7 +124,7 @@ export class CommandRegistry {
     const updated: CommandDef = {
       ...existing,
       name: payload.name ?? existing.name,
-      id: `${LOCAL_PACK_ID}:${payload.name ?? existing.name}`,
+      id: `${LOCAL_TEAM_ID}:${payload.name ?? existing.name}`,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
       action:
@@ -150,7 +150,7 @@ export class CommandRegistry {
     if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
     this.deleteFile(existing.name);
     // 清理可能残留的逐项禁用
-    setContentDisabled(this.projectRoot, existing.id, false);
+    setAssetDisabled(this.projectRoot, existing.id, false);
     invalidateResolver(this.projectRoot);
   }
 
@@ -163,7 +163,7 @@ export class CommandRegistry {
       ? id
       : resolveBareContentId(this.projectRoot, "command", id);
     if (!fqid) throw new Error(`Command not found: ${id}`);
-    setContentDisabled(this.projectRoot, fqid, !enabled);
+    setAssetDisabled(this.projectRoot, fqid, !enabled);
   }
 
   // ── Export / import（作用域 = Local Pack commands）──
@@ -207,7 +207,7 @@ export class CommandRegistry {
       }
 
       const def: CommandDef = {
-        id: `${LOCAL_PACK_ID}:${targetName}`,
+        id: `${LOCAL_TEAM_ID}:${targetName}`,
         name: targetName,
         description: entry.description ?? "",
         source: "user",
@@ -217,8 +217,8 @@ export class CommandRegistry {
         model: entry.model || undefined,
         order: 1000,
         enabled: entry.enabled !== false,
-        packId: LOCAL_PACK_ID,
-        packName: "My Content",
+        teamId: LOCAL_TEAM_ID,
+        teamName: "My Content",
         removable: true,
       };
 
@@ -228,7 +228,7 @@ export class CommandRegistry {
 
       this.writeFile(def);
       if (!def.enabled) {
-        setContentDisabled(this.projectRoot, def.id, true);
+        setAssetDisabled(this.projectRoot, def.id, true);
       }
       existingNames.add(targetName);
       result.imported += 1;
@@ -242,7 +242,7 @@ export class CommandRegistry {
 
   /** Local Pack 的命令视图（export/import 作用域） */
   private localCommands(): CommandDef[] {
-    return this.list().filter((c) => c.packId === LOCAL_PACK_ID);
+    return this.list().filter((c) => c.teamId === LOCAL_TEAM_ID);
   }
 
   private filePath(name: string): string {
@@ -276,21 +276,21 @@ export class CommandRegistry {
 }
 
 function toCommandDef(cmd: ResolvedCommand): CommandDef {
-  const packId = cmd.origin.packId;
+  const teamId = cmd.origin.teamId;
   return {
     id: cmd.fqid,
     name: cmd.name,
     description: cmd.description,
-    source: packId === CORE_PACK_ID ? "builtin" : packId === LOCAL_PACK_ID ? "user" : "plugin",
+    source: teamId === CORE_TEAM_ID ? "builtin" : teamId === LOCAL_TEAM_ID ? "user" : "plugin",
     template: cmd.template,
     action: cmd.action,
     agent: cmd.agent,
     model: cmd.model,
     order: cmd.order,
     enabled: cmd.enabled,
-    packId,
-    packName: cmd.origin.packName,
-    removable: packId === LOCAL_PACK_ID,
+    teamId,
+    teamName: cmd.origin.teamName,
+    removable: teamId === LOCAL_TEAM_ID,
   };
 }
 

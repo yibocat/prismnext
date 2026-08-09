@@ -11,7 +11,7 @@
  *   复制进 `resources/pro-package/`，随 extraResources 整体发货；
  * - OSS 构建（无 pro 包）→ null，discovery 为无操作。
  *
- * 注册入口 = pack-catalog 的 `registerExternalPackRoot`（唯一注册口）。
+ * 注册入口 = pack-catalog 的 `registerExternalTeamRoot`（唯一注册口）。
  * license 不激活时**照常注册**（catalog 可见 → upsell），门控在 resolver（§8.3）。
  */
 
@@ -20,11 +20,11 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import {
   invalidateCatalog,
-  registerExternalPackRoot,
-  unregisterExternalPackRoot,
-} from "./pack-catalog";
-import { invalidateLicenseCache } from "./packs-license";
-import { notifyPacksChanged } from "./pack-resolver";
+  registerExternalTeamRoot,
+  unregisterExternalTeamRoot,
+} from "./team-catalog";
+import { invalidateLicenseCache } from "./teams-license";
+import { notifyTeamsChanged } from "./team-resolver";
 import { _registeredRoots } from "./active-project-roots";
 import { createLogger } from "./logger";
 
@@ -93,22 +93,22 @@ export function resolveProPackageDir(env: string | undefined = process.env.PRISM
   return null;
 }
 
-/** 读 pro 包 package.json → packsRoot 绝对路径（默认 "packs"）；目录不存在 → null */
-export function resolvePacksRootDir(packageDir: string): string | null {
-  let packsRoot = "packs";
+/** 读 pro 包 package.json → teamsRoot 绝对路径（默认 "packs"）；目录不存在 → null */
+export function resolveTeamsRootDir(packageDir: string): string | null {
+  let teamsRoot = "packs";
   try {
     const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf-8")) as {
       prismnext?: { packsRoot?: string };
     };
     if (typeof pkg.prismnext?.packsRoot === "string" && pkg.prismnext.packsRoot.trim()) {
-      packsRoot = pkg.prismnext.packsRoot.trim();
+      teamsRoot = pkg.prismnext.packsRoot.trim();
     }
   } catch (err) {
     log.warn("pro 包 package.json 解析失败", { packageDir, error: String(err) });
     return null;
   }
-  // 防逃逸：packsRoot 必须仍在包目录内
-  const dir = resolve(packageDir, packsRoot);
+  // 防逃逸：teamsRoot 必须仍在包目录内
+  const dir = resolve(packageDir, teamsRoot);
   if (!dir.startsWith(resolve(packageDir) + "/")) return null;
   return existsSync(dir) ? dir : null;
 }
@@ -121,37 +121,37 @@ function normalizeDir(dir: string): string {
 let lastRegisteredRoots = new Set<string>();
 
 /**
- * 扫描 pro 包 packsRoot → 把 packsRoot 自身注册为 external pack root。
+ * 扫描 pro 包 teamsRoot → 把 teamsRoot 自身注册为 external pack root。
  * pack-catalog 把 external root 视为「pack 的父目录」并扫描其下的 pack 子目录。
  * 幂等：重复调用只增删差量；pro 包消失时注销上一轮全部注册。
  * 调用时机：app 启动（registerIpcHandlers 之前）、license 激活/清除后、
  * PRISM_PRO_PATH 变化（dev 重启进程即覆盖）。
  */
-export function discoverAndRegisterProPacks(): { registered: string[]; skipped: string[] } {
+export function discoverAndRegisterProTeams(): { registered: string[]; skipped: string[] } {
   const registered: string[] = [];
   const skipped: string[] = [];
   const found = new Set<string>();
 
   const packageDir = resolveProPackageDir();
   if (packageDir) {
-    const packsRoot = resolvePacksRootDir(packageDir);
-    if (packsRoot) {
-      registerExternalPackRoot(packsRoot);
-      found.add(normalizeDir(packsRoot));
-      for (const entry of readdirSync(packsRoot, { withFileTypes: true })) {
+    const teamsRoot = resolveTeamsRootDir(packageDir);
+    if (teamsRoot) {
+      registerExternalTeamRoot(teamsRoot);
+      found.add(normalizeDir(teamsRoot));
+      for (const entry of readdirSync(teamsRoot, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        if (existsSync(join(packsRoot, entry.name, "plugin.json"))) {
+        if (existsSync(join(teamsRoot, entry.name, "plugin.json"))) {
           registered.push(entry.name);
         } else {
           skipped.push(entry.name);
-          log.warn("packsRoot 下存在无 plugin.json 的目录，跳过", { dir: join(packsRoot, entry.name) });
+          log.warn("teamsRoot 下存在无 plugin.json 的目录，跳过", { dir: join(teamsRoot, entry.name) });
         }
       }
     }
   }
 
   for (const prev of lastRegisteredRoots) {
-    if (!found.has(prev)) unregisterExternalPackRoot(prev);
+    if (!found.has(prev)) unregisterExternalTeamRoot(prev);
   }
   lastRegisteredRoots = found;
 
@@ -171,12 +171,12 @@ export function discoverAndRegisterProPacks(): { registered: string[]; skipped: 
  */
 export function handleProLicenseChanged(): void {
   invalidateLicenseCache();
-  discoverAndRegisterProPacks();
+  discoverAndRegisterProTeams();
   invalidateCatalog();
   const roots = _registeredRoots();
   if (roots.length === 0) {
-    notifyPacksChanged();
+    notifyTeamsChanged();
     return;
   }
-  for (const root of roots) notifyPacksChanged(root);
+  for (const root of roots) notifyTeamsChanged(root);
 }

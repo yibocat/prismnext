@@ -12,7 +12,7 @@ import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
 import { registerSkillsHandlers } from "./skills";
 import { registerRulesHandlers } from "./rules";
-import { registerExpertsHandlers } from "./experts";
+import { registerExpertsHandlers } from "./subagents";
 import { registerShellHandlers } from "./shell";
 import { registerLiteratureHandlers } from "./literature";
 import { registerLiteratureExtractHandlers } from "./literature-extract";
@@ -26,8 +26,8 @@ import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
 import { registerInteractionHandlers } from "./interaction";
 import { registerProLicenseHandlers } from "./pro-license";
-import { registerPacksHandlers } from "./packs";
-import { registerUserPacksHandlers } from "./user-packs";
+import { registerPacksHandlers } from "./teams";
+import { registerUserPacksHandlers } from "./user-teams";
 
 export function registerIpcHandlers(): void {
   registerFsHandlers();

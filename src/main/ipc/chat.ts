@@ -367,8 +367,8 @@ export function registerChatHandlers(): void {
         const {
           resolveOrchestratorId,
           getOrchestrator,
-          getExpert,
-        } = await import("../services/experts-sync");
+          getSubagent,
+        } = await import("../services/subagents-sync");
 
         orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
         const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
@@ -398,9 +398,9 @@ export function registerChatHandlers(): void {
           skipOpenCodeReload: credentialRestartPending,
         });
 
-        const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
+        const { refreshProjectSubagentsIntegrationIfNeeded } = await import("../services/project-subagents-refresh");
         try {
-          await refreshProjectExpertsIntegrationIfNeeded(args.projectPath, { promptCtx });
+          await refreshProjectSubagentsIntegrationIfNeeded(args.projectPath, { promptCtx });
         } catch (err: unknown) {
           const message = err instanceof Error ? err.message : String(err);
           log.error(`Experts integration refresh failed: ${message}`);
@@ -416,9 +416,9 @@ export function registerChatHandlers(): void {
 
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
-          const { buildExpertTeamPreamble } = await import("../../shared/expert-team-preamble");
+          const { buildExpertTeamPreamble } = await import("../../shared/subagent-team-preamble");
           const entries = expertIds
-            .map((id) => getExpert(args.projectPath!, id))
+            .map((id) => getSubagent(args.projectPath!, id))
             .filter((e): e is NonNullable<typeof e> => !!e?.enabled)
             .map((e) => ({ id: e.id, name: e.name, description: e.description }));
           const preamble = buildExpertTeamPreamble(entries);
@@ -442,7 +442,7 @@ export function registerChatHandlers(): void {
       }
 
       const expertsSync = args.projectPath
-        ? await import("../services/experts-sync")
+        ? await import("../services/subagents-sync")
         : null;
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
       const mcpServerAllowlist = composerMcps.length > 0 ? composerMcps : undefined;

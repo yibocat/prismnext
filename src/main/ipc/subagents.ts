@@ -1,26 +1,26 @@
 import { ipcMain } from "electron";
 import {
-  deleteCustomExpert,
+  deleteCustomSubagent,
   deleteCustomOrchestrator,
-  getExpertDetail,
+  getSubagentDetail,
   getOrchestratorDetail,
-  listExperts,
+  listSubagents,
   listOrchestrators,
-  saveCustomExpert,
+  saveCustomSubagent,
   saveCustomOrchestrator,
-} from "../services/experts-sync";
-import { scheduleExpertsRefresh } from "../services/project-experts-refresh";
+} from "../services/subagents-sync";
+import { scheduleSubagentsRefresh } from "../services/project-subagents-refresh";
 import type {
-  ExpertInfo,
+  SubagentInfo,
   OrchestratorInfo,
-  SaveCustomExpertPayload,
+  SaveCustomSubagentPayload,
   SaveCustomOrchestratorPayload,
-} from "../services/agent-experts";
+} from "../services/agent-subagents";
 
 export function registerExpertsHandlers(): void {
-  ipcMain.handle("experts:list", async (_event, args: { projectPath: string }) => {
-    if (!args.projectPath) return [] as ExpertInfo[];
-    return listExperts(args.projectPath);
+  ipcMain.handle("subagents:list", async (_event, args: { projectPath: string }) => {
+    if (!args.projectPath) return [] as SubagentInfo[];
+    return listSubagents(args.projectPath);
   });
 
   ipcMain.handle("orchestrators:list", async (_event, args: { projectPath: string }) => {
@@ -29,28 +29,28 @@ export function registerExpertsHandlers(): void {
   });
 
   ipcMain.handle(
-    "experts:getDetail",
+    "subagents:getDetail",
     async (_event, args: { projectPath: string; expertId: string }) => {
       if (!args.projectPath) return null;
-      return getExpertDetail(args.projectPath, args.expertId);
+      return getSubagentDetail(args.projectPath, args.expertId);
     },
   );
 
   ipcMain.handle(
-    "experts:saveCustom",
-    async (_event, args: { projectPath: string; payload: SaveCustomExpertPayload; targetPackId?: string }) => {
-      const expert = saveCustomExpert(args.projectPath, args.payload, args.targetPackId);
-      scheduleExpertsRefresh(args.projectPath);
-      return { expert, experts: listExperts(args.projectPath) };
+    "subagents:saveCustom",
+    async (_event, args: { projectPath: string; payload: SaveCustomSubagentPayload; targetTeamId?: string }) => {
+      const expert = saveCustomSubagent(args.projectPath, args.payload, args.targetTeamId);
+      scheduleSubagentsRefresh(args.projectPath);
+      return { expert, experts: listSubagents(args.projectPath) };
     },
   );
 
   ipcMain.handle(
-    "experts:deleteCustom",
+    "subagents:deleteCustom",
     async (_event, args: { projectPath: string; expertId: string }) => {
-      deleteCustomExpert(args.projectPath, args.expertId);
-      scheduleExpertsRefresh(args.projectPath);
-      return { experts: listExperts(args.projectPath) };
+      deleteCustomSubagent(args.projectPath, args.expertId);
+      scheduleSubagentsRefresh(args.projectPath);
+      return { experts: listSubagents(args.projectPath) };
     },
   );
 
@@ -64,9 +64,9 @@ export function registerExpertsHandlers(): void {
 
   ipcMain.handle(
     "orchestrators:saveCustom",
-    async (_event, args: { projectPath: string; payload: SaveCustomOrchestratorPayload; targetPackId?: string }) => {
-      const orchestrator = saveCustomOrchestrator(args.projectPath, args.payload, args.targetPackId);
-      scheduleExpertsRefresh(args.projectPath);
+    async (_event, args: { projectPath: string; payload: SaveCustomOrchestratorPayload; targetTeamId?: string }) => {
+      const orchestrator = saveCustomOrchestrator(args.projectPath, args.payload, args.targetTeamId);
+      scheduleSubagentsRefresh(args.projectPath);
       return { orchestrator, orchestrators: listOrchestrators(args.projectPath) };
     },
   );
@@ -75,7 +75,7 @@ export function registerExpertsHandlers(): void {
     "orchestrators:deleteCustom",
     async (_event, args: { projectPath: string; orchestratorId: string }) => {
       deleteCustomOrchestrator(args.projectPath, args.orchestratorId);
-      scheduleExpertsRefresh(args.projectPath);
+      scheduleSubagentsRefresh(args.projectPath);
       return { orchestrators: listOrchestrators(args.projectPath) };
     },
   );

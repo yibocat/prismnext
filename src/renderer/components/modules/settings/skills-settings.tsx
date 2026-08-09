@@ -43,7 +43,7 @@ interface InstalledSkill {
     | { adapter: "github"; repo: string; ref: string; path: string }
     | { adapter: "discovery"; indexUrl: string };
   origin: "bundled" | "registry" | "custom" | "plugin";
-  originPackName?: string;
+  originTeamName?: string;
   removable: boolean;
 }
 
@@ -94,7 +94,7 @@ export function SkillsSettings() {
     };
     for (const s of visibleSkills) {
       if (s.origin === "plugin") {
-        push(s.originPackName ?? "pack", s.originPackName ?? "pack", "app", s);
+        push(s.originTeamName ?? "pack", s.originTeamName ?? "pack", "app", s);
       } else if (s.origin === "bundled") {
         push(CORE_KEY, t("settings.skillsPage.group.core"), "app", s);
       } else {
@@ -379,7 +379,7 @@ export function SkillsSettings() {
                               )}
                               {skill.origin === "plugin" && (
                                 <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
-                                  {skill.originPackName ?? "pack"}
+                                  {skill.originTeamName ?? "pack"}
                                 </span>
                               )}
                               {hasUpdate && (

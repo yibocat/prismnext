@@ -21,7 +21,7 @@ import {
   useSettingsEditorSlotOfKind,
 } from "@/hooks/use-settings-editor";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
-import { usePacksStore } from "@/stores/packs-store";
+import { usePacksStore } from "@/stores/teams-store";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { isBuiltinMcpServer, serverIsConfigurable } from "@/lib/agent/mcp-presets";
 import type { McpServerEntry } from "@/lib/agent/mcp-config";
-import type { ResolvedMcp } from "@shared/packs/types";
+import type { ResolvedMcp } from "@shared/teams/types";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -62,7 +62,7 @@ export function ToolsMcpSettings() {
   const saving = useMcpServersStore((s) => s.saving);
   const load = useMcpServersStore((s) => s.load);
   const persist = useMcpServersStore((s) => s.persist);
-  const packMcps = usePacksStore((s) => s.packMcps);
+  const teamMcps = usePacksStore((s) => s.teamMcps);
 
   const openMcpServerSlot = useSettingsEditorSlotOfKind("mcp-server");
   const deleteConfirm = useInlineDeleteConfirm();
@@ -131,7 +131,7 @@ export function ToolsMcpSettings() {
     if (!projectRoot) return;
     usePacksStore.getState().setEnabledLocalMcp(fqid, enabled);
     try {
-      await window.electronAPI.packsSetContentEnabled(projectRoot, fqid, enabled);
+      await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled);
       await usePacksStore.getState().load(projectRoot, { force: true });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -235,7 +235,7 @@ export function ToolsMcpSettings() {
               <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">
                 Loading…
               </div>
-            ) : servers.length === 0 && packMcps.length === 0 ? (
+            ) : servers.length === 0 && teamMcps.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-10 text-center">
                 <PlugIcon className="size-8 text-muted-foreground/30" />
                 <p className="text-[length:var(--font-size-13)] text-muted-foreground">
@@ -314,7 +314,7 @@ export function ToolsMcpSettings() {
 
                 {/* Pack-declared MCP (from teams) — per-item toggle available;
                     the owning team must be enabled in this project too. */}
-                {packMcps.map((mcp) => (
+                {teamMcps.map((mcp) => (
                   <div
                     key={mcp.fqid}
                     className={cn(ROW, !mcp.enabled && "opacity-60")}
@@ -323,7 +323,7 @@ export function ToolsMcpSettings() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={cn(ROW_LABEL, "font-mono")}>{mcp.name}</span>
                         <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-                          {t("settings.mcp.sourceTeam", { team: mcp.origin.packName })}
+                          {t("settings.mcp.sourceTeam", { team: mcp.origin.teamName })}
                         </span>
                         {!mcp.enabled && (
                           <span className={cn(BADGE, "bg-destructive/10 text-destructive")}>

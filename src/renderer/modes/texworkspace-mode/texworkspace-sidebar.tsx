@@ -196,8 +196,8 @@ export function TexworkspaceSidebar() {
   // hook that scopes to the configured manuscript directory and triggers
   // auto-compile when enabled. No duplicate logic here.
 
-  const getContent = useCallback((id: string) => openedContents.get(id)?.content ?? "", [openedContents]);
-  const { toc, labels, citations, figureTables, todos, texFiles } = useLatexStructure(files, getContent);
+  const getAsset = useCallback((id: string) => openedContents.get(id)?.content ?? "", [openedContents]);
+  const { toc, labels, citations, figureTables, todos, texFiles } = useLatexStructure(files, getAsset);
 
   const manuscriptTree = useMemo(() => {
     const scopedFiles = filterFilesByMode(files, "manuscript", manuscriptDir);
@@ -225,14 +225,14 @@ export function TexworkspaceSidebar() {
   const wordCount = useMemo(() => {
     let total = 0;
     for (const f of texFiles) {
-      const content = getContent(f.id);
+      const content = getAsset(f.id);
       if (!content) continue;
       const stripped = content.replace(/%.*/g, " ").replace(/\\(?:[a-zA-Z@]+|.)/g, " ")
         .replace(/[\[\{][^}\]\[]*[\]\}]/g, " ").replace(/[{}[\]]/g, " ");
       total += stripped.split(/\s+/).filter((w) => w.length > 0).length;
     }
     return total;
-  }, [texFiles, getContent]);
+  }, [texFiles, getAsset]);
 
   const tocCount = toc.reduce((sum, e) => sum + 1 + countChildren(e), 0);
   const allExpanded = accordionValue.length > 0;

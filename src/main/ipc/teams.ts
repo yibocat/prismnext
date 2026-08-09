@@ -1,93 +1,93 @@
 // Pack lifecycle IPC (spec §9.5): listCatalog / install / setEnabled / uninstall /
 // setContentEnabled / saveOverride / resetCoreDefaults / getCoreState /
-// resolveBadge / getContentView / setDefaultOrchestrator.
+// resolveOrigin / getContentView / setDefaultOrchestrator.
 import { ipcMain } from "electron";
-import { CORE_PACK_ID } from "../../shared/packs/types";
-import type { ContentKind, ContentOverride, Fqid } from "../../shared/packs/types";
-import { getPackContentsWithMcp } from "../services/pack-catalog";
+import { CORE_TEAM_ID } from "../../shared/teams/types";
+import type { AssetKind, AssetOverride, Fqid } from "../../shared/teams/types";
+import { getTeamContentsWithMcp } from "../services/team-catalog";
 import {
-  isContentActive,
-  listContent,
+  isAssetActive,
+  listAssets,
   listProjectMcps,
-  listProjectPacks,
-  notifyPacksChanged,
-  resolveBadge,
+  listProjectTeams,
+  notifyTeamsChanged,
+  resolveOrigin,
   resolveOrchestratorId,
-} from "../services/pack-resolver";
+} from "../services/team-resolver";
 import {
-  installPack,
-  setPackEnabledFlow,
-  uninstallPack,
-} from "../services/packs-lifecycle";
+  installTeam,
+  setTeamEnabledFlow,
+  uninstallTeam,
+} from "../services/teams-lifecycle";
 import {
-  getCoreContentModificationState,
-  readPacksState,
-  resetCoreContentToDefaults,
-  saveContentOverride,
-  setContentDisabled,
+  getCoreAssetModificationState,
+  readTeamsState,
+  resetCoreAssetsToDefaults,
+  saveAssetOverride,
+  setAssetDisabled,
   setDefaultOrchestratorFqid,
-} from "../services/packs-state";
+} from "../services/teams-state";
 
 function requireProjectRoot(projectRoot: string | null | undefined): string {
   if (!projectRoot) throw new Error("No project root");
   return projectRoot;
 }
 
-const CONTENT_KINDS: ContentKind[] = ["orchestrator", "expert", "skill", "command"];
+const CONTENT_KINDS: AssetKind[] = ["orchestrator", "subagent", "skill", "command"];
 
 export function registerPacksHandlers(): void {
-  // catalog ∪ 项目状态（ProjectPackView[]：installed/enabled/locked/compatible）
-  ipcMain.handle("packs:listCatalog", async (_event, args?: { projectRoot?: string | null }) => {
+  // catalog ∪ 项目状态（ProjectTeamView[]：installed/enabled/locked/compatible）
+  ipcMain.handle("teams:list", async (_event, args?: { projectRoot?: string | null }) => {
     if (!args?.projectRoot) return [];
-    return listProjectPacks(args.projectRoot);
+    return listProjectTeams(args.projectRoot);
   });
 
   ipcMain.handle(
-    "packs:install",
-    async (_event, args: { projectRoot: string; packId: string }) => {
-      return installPack(requireProjectRoot(args.projectRoot), args.packId);
+    "teams:install",
+    async (_event, args: { projectRoot: string; teamId: string }) => {
+      return installTeam(requireProjectRoot(args.projectRoot), args.teamId);
     },
   );
 
   ipcMain.handle(
-    "packs:setEnabled",
-    async (_event, args: { projectRoot: string; packId: string; enabled: boolean }) => {
-      return setPackEnabledFlow(requireProjectRoot(args.projectRoot), args.packId, args.enabled);
+    "teams:setEnabled",
+    async (_event, args: { projectRoot: string; teamId: string; enabled: boolean }) => {
+      return setTeamEnabledFlow(requireProjectRoot(args.projectRoot), args.teamId, args.enabled);
     },
   );
 
   ipcMain.handle(
-    "packs:uninstall",
-    async (_event, args: { projectRoot: string; packId: string }) => {
-      uninstallPack(requireProjectRoot(args.projectRoot), args.packId);
+    "teams:uninstall",
+    async (_event, args: { projectRoot: string; teamId: string }) => {
+      uninstallTeam(requireProjectRoot(args.projectRoot), args.teamId);
     },
   );
 
   // 逐项启停（§6.2 轻量操作：disabledContent 增删，视图经写入订阅即时失效）
   ipcMain.handle(
-    "packs:setContentEnabled",
+    "teams:setAssetEnabled",
     async (_event, args: { projectRoot: string; fqid: Fqid; enabled: boolean }) => {
-      setContentDisabled(requireProjectRoot(args.projectRoot), args.fqid, !args.enabled);
+      setAssetDisabled(requireProjectRoot(args.projectRoot), args.fqid, !args.enabled);
     },
   );
 
   // Badge single source (spec §9.3, fixes P10): FQID or bare id.
   ipcMain.handle(
-    "packs:resolveBadge",
+    "teams:resolveOrigin",
     async (_event, args?: { projectRoot?: string | null; fqidOrId?: string }) => {
       if (!args?.projectRoot || !args.fqidOrId) return null;
-      return resolveBadge(args.projectRoot, args.fqidOrId);
+      return resolveOrigin(args.projectRoot, args.fqidOrId);
     },
   );
 
   // Settings grouped data (spec §9.2: expanded pack row = its content items).
   ipcMain.handle(
-    "packs:getContentView",
+    "teams:listAssets",
     async (_event, args?: { projectRoot?: string | null; kind?: string }) => {
       if (!args?.projectRoot) return [];
-      const kind = args.kind as ContentKind | undefined;
+      const kind = args.kind as AssetKind | undefined;
       if (!kind || !CONTENT_KINDS.includes(kind)) return [];
-      return listContent(args.projectRoot, kind);
+      return listAssets(args.projectRoot, kind);
     },
   );
 
@@ -95,17 +95,17 @@ export function registerPacksHandlers(): void {
   // `experts:saveBuiltinOverride` / `orchestrators:saveBuiltinOverride`).
   // An all-undefined patch removes the override (single-item reset).
   ipcMain.handle(
-    "packs:saveOverride",
+    "teams:saveAssetOverride",
     async (
       _event,
-      args: { projectRoot: string; fqid: Fqid; patch: ContentOverride },
+      args: { projectRoot: string; fqid: Fqid; patch: AssetOverride },
     ) => {
       const root = requireProjectRoot(args.projectRoot);
       if (!args.fqid || typeof args.patch !== "object" || args.patch === null) {
         throw new Error("Invalid override payload");
       }
-      saveContentOverride(root, args.fqid, args.patch);
-      notifyPacksChanged(root);
+      saveAssetOverride(root, args.fqid, args.patch);
+      notifyTeamsChanged(root);
     },
   );
 
@@ -113,18 +113,18 @@ export function registerPacksHandlers(): void {
   // "Reset to defaults" availability and the Default badge). Replaces the
   // legacy `experts:getManifest` / `orchestrators:getManifest` consumers.
   ipcMain.handle(
-    "packs:getCoreState",
+    "teams:getCoreState",
     async (_event, args?: { projectRoot?: string | null }) => {
       if (!args?.projectRoot) return null;
       const root = args.projectRoot;
-      const state = readPacksState(root);
-      const coreExperts = listContent(root, "expert").filter((c) => c.packId === CORE_PACK_ID);
-      const coreOrchs = listContent(root, "orchestrator").filter((c) => c.packId === CORE_PACK_ID);
-      const expertState = getCoreContentModificationState(
+      const state = readTeamsState(root);
+      const coreExperts = listAssets(root, "subagent").filter((c) => c.teamId === CORE_TEAM_ID);
+      const coreOrchs = listAssets(root, "orchestrator").filter((c) => c.teamId === CORE_TEAM_ID);
+      const expertState = getCoreAssetModificationState(
         root,
         coreExperts.map((c) => c.fqid),
       );
-      const orchState = getCoreContentModificationState(
+      const orchState = getCoreAssetModificationState(
         root,
         coreOrchs.map((c) => c.fqid),
       );
@@ -141,8 +141,8 @@ export function registerPacksHandlers(): void {
         // `orchestrator.fqid` so a non-core default is preserved across reloads
         // instead of silently falling back to the core default.
         defaultOrchestratorFqid: effectiveDefaultFqid,
-        coreExpertDisabledCount: expertState.disabledCount,
-        coreExpertOverrideCount: expertState.overrideCount,
+        coreSubagentDisabledCount: expertState.disabledCount,
+        coreSubagentOverrideCount: expertState.overrideCount,
         coreOrchestratorDisabledCount: orchState.disabledCount,
         coreOrchestratorOverrideCount: orchState.overrideCount,
       };
@@ -153,26 +153,26 @@ export function registerPacksHandlers(): void {
   // `experts:resetBuiltinsToDefaults`). The IPC layer resolves the kind-aware
   // core FQID set from the resolver view so packs-state stays storage-only.
   ipcMain.handle(
-    "packs:resetCoreDefaults",
-    async (_event, args: { projectRoot: string; kind: "expert" | "orchestrator" }) => {
+    "teams:resetCoreDefaults",
+    async (_event, args: { projectRoot: string; kind: "subagent" | "orchestrator" }) => {
       const root = requireProjectRoot(args.projectRoot);
-      if (args.kind !== "expert" && args.kind !== "orchestrator") {
+      if (args.kind !== "subagent" && args.kind !== "orchestrator") {
         throw new Error("Invalid kind");
       }
-      const fqids = listContent(root, args.kind)
-        .filter((c) => c.packId === CORE_PACK_ID)
+      const fqids = listAssets(root, args.kind)
+        .filter((c) => c.teamId === CORE_TEAM_ID)
         .map((c) => c.fqid);
-      resetCoreContentToDefaults(root, fqids);
-      notifyPacksChanged(root);
+      resetCoreAssetsToDefaults(root, fqids);
+      notifyTeamsChanged(root);
     },
   );
 
   // Catalog-level content scan (no install required; detail view "what's in this pack").
   // Includes MCP servers declared by the pack's mcp.json.
-  ipcMain.handle("packs:getPackContents", async (_event, args?: { packId?: string }) => {
-    if (!args?.packId) return [];
+  ipcMain.handle("teams:getTeamContents", async (_event, args?: { teamId?: string }) => {
+    if (!args?.teamId) return [];
     try {
-      return getPackContentsWithMcp(args.packId);
+      return getTeamContentsWithMcp(args.teamId);
     } catch {
       return [];
     }
@@ -180,21 +180,21 @@ export function registerPacksHandlers(): void {
 
   // Pack-declared MCP servers (app-level resource, project-gated) — the MCP
   // settings page shows these under "From teams" with enabled/greyed state.
-  ipcMain.handle("packs:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
+  ipcMain.handle("teams:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
     if (!args?.projectRoot) return [];
     return listProjectMcps(args.projectRoot);
   });
 
   // Spec §9.4 link UX confirm: target must be currently active to become default.
   ipcMain.handle(
-    "packs:setDefaultOrchestrator",
+    "teams:setDefaultOrchestrator",
     async (_event, args: { projectRoot: string; fqid: Fqid }) => {
       const root = requireProjectRoot(args.projectRoot);
-      if (!isContentActive(root, args.fqid)) {
+      if (!isAssetActive(root, args.fqid)) {
         throw new Error(`Orchestrator is not active: ${args.fqid}`);
       }
       setDefaultOrchestratorFqid(root, args.fqid);
-      notifyPacksChanged(root);
+      notifyTeamsChanged(root);
     },
   );
 }

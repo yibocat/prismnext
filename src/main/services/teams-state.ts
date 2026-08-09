@@ -23,27 +23,27 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import {
-  CORE_PACK_ID,
+  CORE_TEAM_ID,
   DEFAULT_ORCHESTRATOR_FQID,
-  LOCAL_PACK_ID,
-  LOCAL_PACK_REL,
-  PACKS_STATE_VERSION,
-  type ContentOverride,
+  LOCAL_TEAM_ID,
+  LOCAL_TEAM_REL,
+  TEAMS_STATE_VERSION,
+  type AssetOverride,
   type Fqid,
-  type PacksState,
-  type ProjectPackState,
-} from "../../shared/packs/types";
-import { emptyPacksState, fqidBelongsToPack, normalizePacksState } from "../../shared/packs/state";
-import { getPack } from "./pack-catalog";
+  type TeamsProjectState,
+  type ProjectTeamState,
+} from "../../shared/teams/types";
+import { emptyPacksState, fqidBelongsToPack, normalizePacksState } from "../../shared/teams/state";
+import { getTeam } from "./team-catalog";
 import { createLogger } from "./logger";
-import { upsertInstalledPacks } from "./packs-installed";
+import { upsertInstalledTeams } from "./teams-installed";
 
 const log = createLogger("packs-state");
 
-export const PACKS_STATE_REL = ".prismnext/agent/packs.json";
+export const TEAMS_STATE_REL = ".prismnext/agent/packs.json";
 
 function statePath(projectRoot: string): string {
-  return join(projectRoot, PACKS_STATE_REL);
+  return join(projectRoot, TEAMS_STATE_REL);
 }
 
 // ── legacy 布局常量（R1–R8/R10 迁移的输入；新代码不再使用这些路径）──
@@ -59,14 +59,14 @@ const LEGACY_PLUGINS_MANIFEST_REL = ".prismnext/agent/plugins-manifest.json";
 
 // ── 迁移框架 ───────────────────────────────────────────────
 
-export interface PacksMigration {
+export interface TeamsMigration {
   /** 迁移 id，如 "R4-move-custom-experts"（执行顺序 = 数组顺序） */
   id: string;
-  apply(projectRoot: string, state: PacksState): PacksState;
+  apply(projectRoot: string, state: TeamsProjectState): TeamsProjectState;
 }
 
 /** 未来 stateVersion 3+ 在此追加版本迁移；R1–R12 是文件级迁移，见下方。 */
-const MIGRATIONS: PacksMigration[] = [];
+const MIGRATIONS: TeamsMigration[] = [];
 
 interface LegacySkillsManifest {
   disabled?: string[];
@@ -181,13 +181,14 @@ function readLegacyJson<T>(path: string): T | null {
   }
 }
 
-/** legacy builtinOverrides → ContentOverride（白名单字段，剔 junk） */
-function sanitizeOverride(raw: Record<string, unknown>): ContentOverride {
-  const out: ContentOverride = {};
+/** legacy builtinOverrides → AssetOverride（白名单字段，剔 junk） */
+function sanitizeOverride(raw: Record<string, unknown>): AssetOverride {
+  const out: AssetOverride = {};
   if (typeof raw.model === "string") out.model = raw.model;
   if (typeof raw.thoughtLevel === "string") out.thoughtLevel = raw.thoughtLevel;
   if (typeof raw.temperature === "number") out.temperature = raw.temperature;
   if (Array.isArray(raw.modules)) out.modules = raw.modules.filter((m): m is string => typeof m === "string");
+  // legacy builtinOverrides 的磁盘 key 是 allowedExperts（旧格式）。
   if (Array.isArray(raw.allowedExperts)) {
     out.allowedExperts = raw.allowedExperts.filter((m): m is string => typeof m === "string");
   }
@@ -208,7 +209,7 @@ function moveCustomAgentDirs(projectRoot: string, kind: "experts" | "orchestrato
   const jsonName = kind === "experts" ? "expert.json" : "orchestrator.json";
   const legacyRoot = join(projectRoot, ".prismnext", "agent", kind, "custom");
   if (!existsSync(legacyRoot)) return;
-  const localRoot = join(projectRoot, LOCAL_PACK_REL, kind);
+  const localRoot = join(projectRoot, LOCAL_TEAM_REL, kind);
   for (const entry of readdirSync(legacyRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const src = join(legacyRoot, entry.name);
@@ -253,7 +254,7 @@ function migrateLegacySkillDirs(
   const installIds = new Set(
     (manifest?.installs ?? []).map((r) => r.skillId).filter((x): x is string => Boolean(x)),
   );
-  const localRoot = join(projectRoot, LOCAL_PACK_REL, "skills");
+  const localRoot = join(projectRoot, LOCAL_TEAM_REL, "skills");
   const backupRoot = legacyBackupDir(projectRoot);
 
   for (const id of legacySkillDirNames(projectRoot)) {
@@ -327,7 +328,7 @@ function stripLegacyCommandFrontmatter(raw: string): { content: string; enabled:
 function migrateLegacyCommands(projectRoot: string, disabled: Set<string>): void {
   const legacyRoot = join(projectRoot, LEGACY_COMMANDS_REL);
   if (!existsSync(legacyRoot)) return;
-  const localRoot = join(projectRoot, LOCAL_PACK_REL, "commands");
+  const localRoot = join(projectRoot, LOCAL_TEAM_REL, "commands");
   const backupRoot = legacyBackupDir(projectRoot);
   const seen = new Set<string>();
 
@@ -356,7 +357,7 @@ function migrateLegacyCommands(projectRoot: string, disabled: Set<string>): void
       mkdirSync(localRoot, { recursive: true });
       writeFileSync(dest, content, "utf-8");
       rmSync(src, { force: true });
-      if (forceDisabled || !enabled) disabled.add(`${LOCAL_PACK_ID}:${name}`);
+      if (forceDisabled || !enabled) disabled.add(`${LOCAL_TEAM_ID}:${name}`);
     } catch (err) {
       log.error(`迁移 legacy command 失败: ${fileName}`, { projectRoot, error: String(err) });
     }
@@ -397,10 +398,10 @@ function migrateLegacySkillsManifestDisabled(
 
   for (const id of legacyDisabled) {
     if (coreSkillIds.has(id)) {
-      disabled.add(`${CORE_PACK_ID}:${id}`);
-      if (legacySkillIds.has(id)) disabled.add(`${LOCAL_PACK_ID}:${id}`);
+      disabled.add(`${CORE_TEAM_ID}:${id}`);
+      if (legacySkillIds.has(id)) disabled.add(`${LOCAL_TEAM_ID}:${id}`);
     } else {
-      disabled.add(`${LOCAL_PACK_ID}:${id}`);
+      disabled.add(`${LOCAL_TEAM_ID}:${id}`);
     }
   }
 
@@ -449,7 +450,7 @@ function legacyBackupDir(projectRoot: string): string {
 // （仍按 custom 内容处理，见 R4/R5/R7 的身份字段剥离）。
 
 interface LegacyPluginsManifestEntry {
-  packId?: string;
+  teamId?: string;
   id?: string;
   pluginId?: string;
   version?: string;
@@ -471,7 +472,7 @@ function readLegacyPluginsManifest(projectRoot: string): LegacyPluginsManifestEn
     (e): e is LegacyPluginsManifestEntry =>
       Boolean(e) && typeof e === "object" &&
       Boolean(
-        (e as LegacyPluginsManifestEntry).packId ??
+        (e as LegacyPluginsManifestEntry).teamId ??
           (e as LegacyPluginsManifestEntry).id ??
           (e as LegacyPluginsManifestEntry).pluginId,
       ),
@@ -525,28 +526,28 @@ function legacyCommandPluginId(raw: string): string | null {
  */
 function migrateLegacyPluginsManifest(
   projectRoot: string,
-  existing: Record<string, ProjectPackState>,
-): Record<string, ProjectPackState> {
+  existing: Record<string, ProjectTeamState>,
+): Record<string, ProjectTeamState> {
   const entries = readLegacyPluginsManifest(projectRoot);
   if (entries.length === 0) return {};
 
   const knownIds = new Set<string>();
-  const upserts: Array<{ packId: string; installedAt?: string }> = [];
-  const states: Record<string, ProjectPackState> = { ...existing };
+  const upserts: Array<{ teamId: string; installedAt?: string }> = [];
+  const states: Record<string, ProjectTeamState> = { ...existing };
   for (const entry of entries) {
-    const rawId = (entry.packId ?? entry.id ?? entry.pluginId)!.trim();
+    const rawId = (entry.teamId ?? entry.id ?? entry.pluginId)!.trim();
     if (!rawId) continue;
     knownIds.add(rawId);
     knownIds.add(mapLegacyPluginId(rawId));
-    const packId = mapLegacyPluginId(rawId);
-    // App-level install (dedup inside upsertInstalledPacks).
-    upserts.push({ packId, installedAt: entry.version ? undefined : new Date().toISOString() });
+    const teamId = mapLegacyPluginId(rawId);
+    // App-level install (dedup inside upsertInstalledTeams).
+    upserts.push({ teamId, installedAt: entry.version ? undefined : new Date().toISOString() });
     // Project-level override: explicit disable is recorded; otherwise auto-enable.
-    if (entry.enabled === false && !(packId in states)) {
-      states[packId] = { enabled: false };
+    if (entry.enabled === false && !(teamId in states)) {
+      states[teamId] = { enabled: false };
     }
   }
-  if (upserts.length > 0) upsertInstalledPacks(upserts);
+  if (upserts.length > 0) upsertInstalledTeams(upserts);
 
   // 副本回收：experts / orchestrators custom 目录里 pluginId 命中者
   for (const kind of ["experts", "orchestrators"] as const) {
@@ -642,10 +643,10 @@ function backupLegacyAgentFiles(projectRoot: string): void {
  * - R11 settings 的 builtin command 全局启停 → disabledContent（消费后清空键）
  * - 收尾 legacy 文件进 legacy-backup
  */
-export function migrateLegacyAgentState(projectRoot: string, state: PacksState): PacksState {
+export function migrateLegacyAgentState(projectRoot: string, state: TeamsProjectState): TeamsProjectState {
   const disabled = new Set(state.disabledContent);
-  const overrides: PacksState["contentOverrides"] = { ...state.contentOverrides };
-  const projectPackStates: Record<string, ProjectPackState> = { ...state.projectPackStates };
+  const overrides: TeamsProjectState["contentOverrides"] = { ...state.contentOverrides };
+  const projectPackStates: Record<string, ProjectTeamState> = { ...state.projectPackStates };
   let defaultOrchestrator = state.defaultOrchestrator;
 
   // R9 必须最先执行：plugins-manifest → 应用级 installedPacks + 项目启停覆盖，
@@ -657,10 +658,10 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
   );
   if (expertsManifest) {
     for (const id of expertsManifest.disabledBuiltinIds ?? []) {
-      if (id) disabled.add(`${CORE_PACK_ID}:${id}`);
+      if (id) disabled.add(`${CORE_TEAM_ID}:${id}`);
     }
     for (const [id, override] of Object.entries(expertsManifest.builtinOverrides ?? {})) {
-      if (id) overrides[`${CORE_PACK_ID}:${id}`] = sanitizeOverride(override);
+      if (id) overrides[`${CORE_TEAM_ID}:${id}`] = sanitizeOverride(override);
     }
   }
 
@@ -669,16 +670,16 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
   );
   if (orchManifest) {
     for (const id of orchManifest.disabledBuiltinIds ?? []) {
-      if (id) disabled.add(`${CORE_PACK_ID}:${id}`);
+      if (id) disabled.add(`${CORE_TEAM_ID}:${id}`);
     }
     for (const [id, override] of Object.entries(orchManifest.builtinOverrides ?? {})) {
-      if (id) overrides[`${CORE_PACK_ID}:${id}`] = sanitizeOverride(override);
+      if (id) overrides[`${CORE_TEAM_ID}:${id}`] = sanitizeOverride(override);
     }
     // 注意：必须在 R5 移动 custom 目录【之前】判定 custom 归属
     const legacyDefault = orchManifest.defaultOrchestratorId?.trim();
     if (legacyDefault) {
       const isCustom = existsSync(join(projectRoot, LEGACY_CUSTOM_ORCHESTRATORS_REL, legacyDefault));
-      defaultOrchestrator = `${isCustom ? LOCAL_PACK_ID : CORE_PACK_ID}:${legacyDefault}`;
+      defaultOrchestrator = `${isCustom ? LOCAL_TEAM_ID : CORE_TEAM_ID}:${legacyDefault}`;
     }
   }
 
@@ -697,7 +698,7 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
   const builtinStates = readLegacyBuiltinCommandStates();
   if (builtinStates) {
     for (const [name, enabled] of Object.entries(builtinStates)) {
-      if (name && enabled === false) disabled.add(`${CORE_PACK_ID}:${name}`);
+      if (name && enabled === false) disabled.add(`${CORE_TEAM_ID}:${name}`);
     }
     legacyBuiltinStatesConsumed = true;
     try {
@@ -722,7 +723,7 @@ export function migrateLegacyAgentState(projectRoot: string, state: PacksState):
 function listCorePackSkills(): Map<string, string> {
   const out = new Map<string, string>();
   try {
-    const core = getPack(CORE_PACK_ID);
+    const core = getTeam(CORE_TEAM_ID);
     if (!core) return out;
     const skillsRoot = join(core.dir, "skills");
     if (!existsSync(skillsRoot)) return out;
@@ -750,8 +751,8 @@ function listCorePackSkills(): Map<string, string> {
  * - stateVersion 旧 → 版本迁移（MIGRATIONS，当前为空）+ 落盘
  * - packs.json 损坏 → 回退空状态（可自愈重写）；仍有 legacy 时照常迁移
  */
-export function migratePacksStateIfNeeded(projectRoot: string): {
-  state: PacksState;
+export function migrateTeamsStateIfNeeded(projectRoot: string): {
+  state: TeamsProjectState;
   migrated: boolean;
 } {
   const path = statePath(projectRoot);
@@ -784,7 +785,7 @@ export function migratePacksStateIfNeeded(projectRoot: string): {
     }
   }
 
-  const needsVersionMigration = version !== PACKS_STATE_VERSION;
+  const needsVersionMigration = version !== TEAMS_STATE_VERSION;
   if (!needsVersionMigration && !hasLegacy) {
     return { state, migrated: false };
   }
@@ -805,15 +806,15 @@ export function migratePacksStateIfNeeded(projectRoot: string): {
   // map `enabled === false` into projectPackStates overrides (spec M1/M2).
   if (needsVersionMigration && rawV2) {
     try {
-      const legacyPacks = rawV2.packs as Array<{ packId?: string; enabled?: boolean; installedAt?: string }>;
+      const legacyPacks = rawV2.packs as Array<{ teamId?: string; enabled?: boolean; installedAt?: string }>;
       const upserts = legacyPacks
-        .filter((p) => p && typeof p.packId === "string" && p.packId)
-        .map((p) => ({ packId: p.packId!, installedAt: p.installedAt }));
+        .filter((p) => p && typeof p.teamId === "string" && p.teamId)
+        .map((p) => ({ teamId: p.teamId!, installedAt: p.installedAt }));
       if (upserts.length > 0) {
-        upsertInstalledPacks(upserts);
+        upsertInstalledTeams(upserts);
         for (const p of legacyPacks) {
-          if (p && typeof p.packId === "string" && p.enabled === false && !(p.packId in state.projectPackStates)) {
-            state = { ...state, projectPackStates: { ...state.projectPackStates, [p.packId]: { enabled: false } } };
+          if (p && typeof p.teamId === "string" && p.enabled === false && !(p.teamId in state.projectPackStates)) {
+            state = { ...state, projectPackStates: { ...state.projectPackStates, [p.teamId]: { enabled: false } } };
           }
         }
         log.info("packs v2→v3: installed records upserted to app level", {
@@ -832,18 +833,18 @@ export function migratePacksStateIfNeeded(projectRoot: string): {
     log.info("legacy agent 状态已迁移（R1–R8/R10/R11）", { projectRoot });
   }
 
-  writePacksState(projectRoot, state);
+  writeTeamsState(projectRoot, state);
   return { state, migrated: true };
 }
 
 // ── 读写 ──────────────────────────────────────────────────
 
-export function readPacksState(projectRoot: string): PacksState {
-  return migratePacksStateIfNeeded(projectRoot).state;
+export function readTeamsState(projectRoot: string): TeamsProjectState {
+  return migrateTeamsStateIfNeeded(projectRoot).state;
 }
 
 /** 原子写：先写 tmp 再 rename，避免半截文件。 */
-export function writePacksState(projectRoot: string, state: PacksState): void {
+export function writeTeamsState(projectRoot: string, state: TeamsProjectState): void {
   const path = statePath(projectRoot);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
@@ -860,7 +861,7 @@ export function writePacksState(projectRoot: string, state: PacksState): void {
 }
 
 /** packs.json 的 mtime（resolver 缓存键的一部分）；不存在返回 0 */
-export function packsStateMtime(projectRoot: string): number {
+export function teamsStateMtime(projectRoot: string): number {
   try {
     const path = statePath(projectRoot);
     if (!existsSync(path)) return 0;
@@ -875,7 +876,7 @@ export function packsStateMtime(projectRoot: string): number {
 type PacksStateWriteListener = (projectRoot: string) => void;
 const writeListeners = new Set<PacksStateWriteListener>();
 
-export function onPacksStateWritten(listener: PacksStateWriteListener): {
+export function onTeamsStateWritten(listener: PacksStateWriteListener): {
   dispose: () => void;
 } {
   writeListeners.add(listener);
@@ -889,41 +890,41 @@ export function onPacksStateWritten(listener: PacksStateWriteListener): {
  */
 let writeCounter = 0;
 
-export function packsStateWriteCounter(): number {
+export function teamsStateWriteCounter(): number {
   return writeCounter;
 }
 
 // ── §6.2 状态操作（layering spec：项目级只存启停覆盖）────────
 
 /**
- * 项目启停：写 projectPackStates[packId] = { enabled }。
+ * 项目启停：写 projectPackStates[teamId] = { enabled }。
  * enabled=true 且无现有记录 → 删键（缺省 = 自动启用，不落冗余记录）。
  * enabled=false → 写记录（显式停用）。
  */
-export function setPackEnabled(
+export function setTeamEnabled(
   projectRoot: string,
-  packId: string,
+  teamId: string,
   enabled: boolean,
-): ProjectPackState | null {
-  const state = readPacksState(projectRoot);
+): ProjectTeamState | null {
+  const state = readTeamsState(projectRoot);
   const states = { ...state.projectPackStates };
   if (enabled) {
-    if (packId in states) delete states[packId];
+    if (teamId in states) delete states[teamId];
   } else {
-    states[packId] = { enabled: false };
+    states[teamId] = { enabled: false };
   }
-  writePacksState(projectRoot, { ...state, projectPackStates: states });
-  return states[packId] ?? null;
+  writeTeamsState(projectRoot, { ...state, projectPackStates: states });
+  return states[teamId] ?? null;
 }
 
 /**
  * 项目启停覆盖读取：无记录 → null（即「缺省自动启用」）。
  */
-export function getPackProjectState(
+export function getTeamProjectState(
   projectRoot: string,
-  packId: string,
-): ProjectPackState | null {
-  return readPacksState(projectRoot).projectPackStates[packId] ?? null;
+  teamId: string,
+): ProjectTeamState | null {
+  return readTeamsState(projectRoot).projectPackStates[teamId] ?? null;
 }
 
 /**
@@ -931,50 +932,50 @@ export function getPackProjectState(
  * disabledContent / contentOverrides；defaultOrchestrator 指向该 pack 时回退
  * core 默认。零文件删除（引用模型）。应用级卸载由 packs-installed 负责。
  */
-export function removePackProjectState(projectRoot: string, packId: string): PacksState {
-  const state = readPacksState(projectRoot);
+export function removeTeamProjectState(projectRoot: string, teamId: string): TeamsProjectState {
+  const state = readTeamsState(projectRoot);
   const states = { ...state.projectPackStates };
-  delete states[packId];
-  const next: PacksState = {
+  delete states[teamId];
+  const next: TeamsProjectState = {
     ...state,
     projectPackStates: states,
-    disabledContent: state.disabledContent.filter((f) => !fqidBelongsToPack(f, packId)),
+    disabledContent: state.disabledContent.filter((f) => !fqidBelongsToPack(f, teamId)),
     contentOverrides: Object.fromEntries(
-      Object.entries(state.contentOverrides).filter(([f]) => !fqidBelongsToPack(f, packId)),
+      Object.entries(state.contentOverrides).filter(([f]) => !fqidBelongsToPack(f, teamId)),
     ),
     defaultOrchestrator:
-      state.defaultOrchestrator && fqidBelongsToPack(state.defaultOrchestrator, packId)
+      state.defaultOrchestrator && fqidBelongsToPack(state.defaultOrchestrator, teamId)
         ? DEFAULT_ORCHESTRATOR_FQID
         : state.defaultOrchestrator,
   };
-  writePacksState(projectRoot, next);
+  writeTeamsState(projectRoot, next);
   return next;
 }
 
 /** 逐项禁用/启用（disabledContent 增删，幂等）。 */
-export function setContentDisabled(
+export function setAssetDisabled(
   projectRoot: string,
   fqid: Fqid,
   disabled: boolean,
-): PacksState {
-  const state = readPacksState(projectRoot);
+): TeamsProjectState {
+  const state = readTeamsState(projectRoot);
   const set = new Set(state.disabledContent);
   if (disabled) set.add(fqid);
   else set.delete(fqid);
   const next = { ...state, disabledContent: [...set].sort() };
-  writePacksState(projectRoot, next);
+  writeTeamsState(projectRoot, next);
   return next;
 }
 
 /** 写 override（增量合并）；patch 为空对象 → 删除该键。 */
-export function saveContentOverride(
+export function saveAssetOverride(
   projectRoot: string,
   fqid: Fqid,
-  patch: ContentOverride,
-): PacksState {
-  const state = readPacksState(projectRoot);
+  patch: AssetOverride,
+): TeamsProjectState {
+  const state = readTeamsState(projectRoot);
   const overrides = { ...state.contentOverrides };
-  const merged: ContentOverride = { ...(overrides[fqid] ?? {}) };
+  const merged: AssetOverride = { ...(overrides[fqid] ?? {}) };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) {
       delete (merged as Record<string, unknown>)[key];
@@ -985,31 +986,31 @@ export function saveContentOverride(
   if (Object.keys(merged).length > 0) overrides[fqid] = merged;
   else delete overrides[fqid];
   const next = { ...state, contentOverrides: overrides };
-  writePacksState(projectRoot, next);
+  writeTeamsState(projectRoot, next);
   return next;
 }
 
 /** 设置默认 orchestrator（FQID）。 */
-export function setDefaultOrchestratorFqid(projectRoot: string, fqid: Fqid): PacksState {
-  const state = readPacksState(projectRoot);
+export function setDefaultOrchestratorFqid(projectRoot: string, fqid: Fqid): TeamsProjectState {
+  const state = readTeamsState(projectRoot);
   const next = { ...state, defaultOrchestrator: fqid };
-  writePacksState(projectRoot, next);
+  writeTeamsState(projectRoot, next);
   return next;
 }
 
 // ── core 内容的状态查询与重置（Phase 6：取代旧 builtin manifest 契约）──
 //
-// FQID (`packId:contentId`) does not encode content kind, so kind filtering
-// must consult the resolver view (listContent). packs-state stays storage-only
+// FQID (`teamId:contentId`) does not encode content kind, so kind filtering
+// must consult the resolver view (listAssets). packs-state stays storage-only
 // and does NOT import the resolver to avoid a circular dependency; these two
 // helpers take the list of matching FQIDs as an argument.
 
 /** Count disabled/overridden entries from the given core FQID set. */
-export function getCoreContentModificationState(
+export function getCoreAssetModificationState(
   projectRoot: string,
   coreFqids: readonly Fqid[],
 ): { disabledCount: number; overrideCount: number } {
-  const state = readPacksState(projectRoot);
+  const state = readTeamsState(projectRoot);
   const disabled = new Set(state.disabledContent);
   const overridden = new Set(Object.keys(state.contentOverrides));
   let disabledCount = 0;
@@ -1025,11 +1026,11 @@ export function getCoreContentModificationState(
  * Clear disabledContent entries and contentOverrides for the given core FQID
  * set (factory reset). Replaces the legacy `resetAllBuiltinExpertsToDefaults`.
  */
-export function resetCoreContentToDefaults(
+export function resetCoreAssetsToDefaults(
   projectRoot: string,
   coreFqids: readonly Fqid[],
-): PacksState {
-  const state = readPacksState(projectRoot);
+): TeamsProjectState {
+  const state = readTeamsState(projectRoot);
   const targets = new Set(coreFqids);
   const next = {
     ...state,
@@ -1038,7 +1039,7 @@ export function resetCoreContentToDefaults(
       Object.entries(state.contentOverrides).filter(([fqid]) => !targets.has(fqid)),
     ),
   };
-  writePacksState(projectRoot, next);
+  writeTeamsState(projectRoot, next);
   return next;
 }
 

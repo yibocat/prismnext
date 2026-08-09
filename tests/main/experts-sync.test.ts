@@ -3,21 +3,21 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, readdirSync } from "node
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
-  renderExpertAgentMarkdown,
+  renderSubagentAgentMarkdown,
   renderOrchestratorAgentMarkdown,
-  buildProjectExpertsAgentPlan,
-  syncProjectExpertsToOpencode,
+  buildProjectSubagentsAgentPlan,
+  syncProjectSubagentsToOpencode,
   clearSyncedAgentFiles,
-  listExperts,
+  listSubagents,
   listOrchestrators,
   resolveOrchestratorId,
   buildTaskPermissionBlock,
-  saveCustomExpert,
-  deleteCustomExpert,
+  saveCustomSubagent,
+  deleteCustomSubagent,
   appendSubagentRosterSection,
-  pruneAllowedExpertIds,
-} from "../../src/main/services/experts-sync";
-import { resetCoreContentToDefaults, saveContentOverride, setContentDisabled } from "../../src/main/services/packs-state";
+  pruneRosterRefIds,
+} from "../../src/main/services/subagents-sync";
+import { resetCoreAssetsToDefaults, saveAssetOverride, setAssetDisabled } from "../../src/main/services/teams-state";
 
 /** Core-pack instructions（原 bundled loader 的读取对象，Phase 2 起直接在 core pack 目录）。 */
 function readCoreOrchestratorInstructions(orchestratorId: string): string | null {
@@ -51,7 +51,7 @@ describe("experts-sync", () => {
   });
 
   it("renders subagent markdown with mode and description", () => {
-    const md = renderExpertAgentMarkdown(
+    const md = renderSubagentAgentMarkdown(
       {
         id: "literature-synthesizer",
         name: "Literature Synthesizer",
@@ -72,7 +72,7 @@ describe("experts-sync", () => {
     // description "123" must serialize as a quoted string — an unquoted number
     // makes opencode reject the whole agent config ("Expected string, got 123")
     // and the ACP process exits 1 on every spawn.
-    const md = renderExpertAgentMarkdown(
+    const md = renderSubagentAgentMarkdown(
       {
         id: "123",
         name: "123",
@@ -83,7 +83,7 @@ describe("experts-sync", () => {
     expect(md).toContain('description: "123"');
     expect(md).not.toMatch(/^description: 123$/m);
 
-    const boolMd = renderExpertAgentMarkdown(
+    const boolMd = renderSubagentAgentMarkdown(
       {
         id: "flag",
         name: "Flag",
@@ -95,7 +95,7 @@ describe("experts-sync", () => {
   });
 
   it("always injects nested Task deny for experts without requiring author config", () => {
-    const md = renderExpertAgentMarkdown(
+    const md = renderSubagentAgentMarkdown(
       {
         id: "custom-writer",
         name: "Custom Writer",
@@ -110,7 +110,7 @@ describe("experts-sync", () => {
   });
 
   it("injects default subagent model when expert has none", () => {
-    const md = renderExpertAgentMarkdown(
+    const md = renderSubagentAgentMarkdown(
       {
         id: "peer-reviewer",
         name: "Peer Reviewer",
@@ -124,7 +124,7 @@ describe("experts-sync", () => {
   });
 
   it("keeps expert-specific model over the global default", () => {
-    const md = renderExpertAgentMarkdown(
+    const md = renderSubagentAgentMarkdown(
       {
         id: "peer-reviewer",
         name: "Peer Reviewer",
@@ -145,7 +145,7 @@ describe("experts-sync", () => {
         id: "research-prism",
         name: "prismnext",
         description: "Orchestrator",
-        allowedExperts: ["peer-reviewer", "research-design-coach"],
+        roster: ["peer-reviewer", "research-design-coach"],
       },
       "You orchestrate.",
       [
@@ -211,9 +211,9 @@ describe("experts-sync", () => {
     expect(rules["peer-reviewer"]).toBeUndefined();
   });
 
-  it("empty allowedExperts override yields no task allows and explicit prompt", () => {
-    saveContentOverride(root, "prismnext.core:research-prism", { allowedExperts: [] });
-    const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+  it("empty roster override yields no task allows and explicit prompt", () => {
+    saveAssetOverride(root, "prismnext.core:research-prism", { allowedExperts: [] });
+    const sync = syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
     const orchestratorMd = readFileSync(join(agentsDir, "research-prism.md"), "utf-8");
     expect(orchestratorMd).toContain("No project experts are currently allowed");
     expect(orchestratorMd).toContain("### Built-in");
@@ -226,25 +226,25 @@ describe("experts-sync", () => {
   });
 
   it("lists bundled experts and orchestrators", () => {
-    const experts = listExperts(root);
+    const experts = listSubagents(root);
     expect(experts.some((e) => e.id === "peer-reviewer")).toBe(true);
     expect(experts.some((e) => e.id === "research-design-coach")).toBe(true);
     const orchestrators = listOrchestrators(root);
     expect(orchestrators.some((o) => o.id === "research-prism")).toBe(true);
   });
 
-  it("pruneAllowedExpertIds drops stale ids for UI counts", () => {
+  it("pruneRosterRefIds drops stale ids for UI counts", () => {
     expect(
-      pruneAllowedExpertIds(
+      pruneRosterRefIds(
         ["literature-synthesizer", "ghost-a", "peer-reviewer", "ghost-b"],
         ["literature-synthesizer", "peer-reviewer", "methodology-auditor"],
       ),
     ).toEqual(["literature-synthesizer", "peer-reviewer"]);
-    expect(pruneAllowedExpertIds(undefined, ["peer-reviewer"])).toBeUndefined();
+    expect(pruneRosterRefIds(undefined, ["peer-reviewer"])).toBeUndefined();
   });
 
-  it("listOrchestrators prunes stale allowedExperts from overrides", () => {
-    saveContentOverride(root, "prismnext.core:research-prism", {
+  it("listOrchestrators prunes stale roster from overrides", () => {
+    saveAssetOverride(root, "prismnext.core:research-prism", {
       allowedExperts: [
         "literature-synthesizer",
         "peer-reviewer",
@@ -254,26 +254,26 @@ describe("experts-sync", () => {
       ],
     });
     const orch = listOrchestrators(root).find((o) => o.id === "research-prism");
-    expect(orch?.allowedExperts).toEqual(["literature-synthesizer", "peer-reviewer"]);
+    expect(orch?.roster).toEqual(["literature-synthesizer", "peer-reviewer"]);
   });
 
   it("keeps disabled built-in experts in list with enabled false", () => {
-    setContentDisabled(root, "prismnext.core:peer-reviewer", true);
-    const experts = listExperts(root);
+    setAssetDisabled(root, "prismnext.core:peer-reviewer", true);
+    const experts = listSubagents(root);
     const disabled = experts.find((e) => e.id === "peer-reviewer");
     expect(disabled).toBeTruthy();
     expect(disabled?.enabled).toBe(false);
     expect(experts.some((e) => e.id === "research-design-coach" && e.enabled)).toBe(true);
 
-    const sync = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+    const sync = syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
     expect(sync.agentFiles).not.toContain("peer-reviewer.md");
     expect(sync.agentFiles).toContain("research-design-coach.md");
   });
 
-  it("resetCoreContentToDefaults re-enables disabled built-ins", () => {
-    setContentDisabled(root, "prismnext.core:peer-reviewer", true);
-    resetCoreContentToDefaults(root, ["prismnext.core:peer-reviewer"]);
-    const expert = listExperts(root).find((e) => e.id === "peer-reviewer");
+  it("resetCoreAssetsToDefaults re-enables disabled built-ins", () => {
+    setAssetDisabled(root, "prismnext.core:peer-reviewer", true);
+    resetCoreAssetsToDefaults(root, ["prismnext.core:peer-reviewer"]);
+    const expert = listSubagents(root).find((e) => e.id === "peer-reviewer");
     expect(expert?.enabled).toBe(true);
   });
 
@@ -281,15 +281,15 @@ describe("experts-sync", () => {
     expect(resolveOrchestratorId(root, null)).toBe("research-prism");
   });
 
-  it("buildProjectExpertsAgentPlan produces stable syncContentHash", () => {
-    const first = buildProjectExpertsAgentPlan(root);
-    const second = buildProjectExpertsAgentPlan(root);
+  it("buildProjectSubagentsAgentPlan produces stable syncContentHash", () => {
+    const first = buildProjectSubagentsAgentPlan(root);
+    const second = buildProjectSubagentsAgentPlan(root);
     expect(first.syncContentHash).toBe(second.syncContentHash);
     expect(first.agentFiles.length).toBeGreaterThan(0);
   });
 
   it("syncs project experts to agents directory", () => {
-    const result = syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+    const result = syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
     expect(result.orchestratorId).toBe("research-prism");
     expect(result.agentFiles).toContain("peer-reviewer.md");
     expect(result.agentFiles).toContain("research-design-coach.md");
@@ -316,13 +316,13 @@ describe("experts-sync", () => {
   });
 
   it("clears previously synced agent files", () => {
-    syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
-    const custom = saveCustomExpert(root, {
+    syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
+    const custom = saveCustomSubagent(root, {
       name: "My Expert",
       description: "Custom",
       instructions: "Do custom things.",
     });
-    syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+    syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
     expect(existsSync(join(agentsDir, `${custom.id}.md`))).toBe(true);
 
     const state = JSON.parse(readFileSync(syncStatePath, "utf-8"));
@@ -333,34 +333,34 @@ describe("experts-sync", () => {
   });
 
   it("saves and deletes custom experts", () => {
-    const saved = saveCustomExpert(root, {
+    const saved = saveCustomSubagent(root, {
       name: "Reviewer",
       description: "Reviews prose",
       instructions: "Review carefully.",
       modules: ["literature-library"],
     });
     expect(saved.id).toBeTruthy();
-    expect(listExperts(root).some((e) => e.id === saved.id)).toBe(true);
-    deleteCustomExpert(root, saved.id);
-    expect(listExperts(root).some((e) => e.id === saved.id)).toBe(false);
+    expect(listSubagents(root).some((e) => e.id === saved.id)).toBe(true);
+    deleteCustomSubagent(root, saved.id);
+    expect(listSubagents(root).some((e) => e.id === saved.id)).toBe(false);
   });
 
   it("replaces agent slice when switching projects", () => {
     const rootB = mkdtempSync(join(tmpdir(), "prism-experts-b-"));
     try {
-      syncProjectExpertsToOpencode(root, { agentsDir, syncStatePath });
+      syncProjectSubagentsToOpencode(root, { agentsDir, syncStatePath });
       const stateA = JSON.parse(readFileSync(syncStatePath, "utf-8"));
       clearSyncedAgentFiles(agentsDir, stateA.agentFiles);
 
-      saveCustomExpert(rootB, {
+      saveCustomSubagent(rootB, {
         name: "Project B Expert",
         description: "B only",
         instructions: "B instructions.",
       });
-      syncProjectExpertsToOpencode(rootB, { agentsDir, syncStatePath });
+      syncProjectSubagentsToOpencode(rootB, { agentsDir, syncStatePath });
       expect(existsSync(join(agentsDir, "peer-reviewer.md"))).toBe(true);
       expect(
-        listExperts(rootB).some((e) => e.name === "Project B Expert"),
+        listSubagents(rootB).some((e) => e.name === "Project B Expert"),
       ).toBe(true);
       const bFiles = readdirSync(agentsDir).filter((f) => f.endsWith(".md"));
       expect(bFiles.some((f) => f.startsWith("project-b-expert"))).toBe(true);

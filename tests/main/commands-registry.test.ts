@@ -2,7 +2,7 @@
  * CommandRegistry（§5.6.3）测试 —— resolver 之上的命令门面。
  *
  * 测试密封（packs-test-utils）：真实 core pack 不可见，fake core / free
- * pack 走 registerExternalPackRoot。覆盖：FQID 身份、source 分层、pack
+ * pack 走 registerExternalTeamRoot。覆盖：FQID 身份、source 分层、pack
  * 安装/启停联动、local 遮蔽 core、逐项启停、CRUD 仅 local（P9）、
  * export/import 作用域。
  */
@@ -14,16 +14,16 @@ import {
   __resetCommandRegistriesForTests,
 } from "../../src/main/commands/registry";
 import {
-  registerExternalPackRoot,
-  listExternalPackRoots,
-  unregisterExternalPackRoot,
-} from "../../src/main/services/pack-catalog";
-import { setPackEnabled } from "../../src/main/services/packs-state";
+  registerExternalTeamRoot,
+  listExternalTeamRoots,
+  unregisterExternalTeamRoot,
+} from "../../src/main/services/team-catalog";
+import { setTeamEnabled } from "../../src/main/services/teams-state";
 import {
-  addInstalledPack,
-  setPacksInstalledDataDir,
-} from "../../src/main/services/packs-installed";
-import { CORE_PACK_ID, LOCAL_PACK_ID, LOCAL_PACK_REL } from "../../src/shared/packs/types";
+  addInstalledTeam,
+  setTeamsInstalledDataDir,
+} from "../../src/main/services/teams-installed";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -42,15 +42,15 @@ function project(): string {
 
 afterEach(() => {
   __resetCommandRegistriesForTests();
-  for (const dir of listExternalPackRoots()) unregisterExternalPackRoot(dir);
+  for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
-  setPacksInstalledDataDir(null);
+  setTeamsInstalledDataDir(null);
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
-  setPacksInstalledDataDir(dir);
+  setTeamsInstalledDataDir(dir);
   tempDirs.push(dir);
   return dir;
 }
@@ -58,19 +58,19 @@ function sealAppStore(): string {
 /** fake core（setup/shared 两条命令）+ free pack（notes-cmd） */
 function setupPacks(): void {
   const coreRoot = temp();
-  makePack(coreRoot, "prismnext.core", baseManifest(CORE_PACK_ID, { publisher: "prismnext" }), {
+  makePack(coreRoot, "prismnext.core", baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
     commands: [
       { name: "setup", md: "---\ndescription: Setup\norder: 0\n---\nSetup body\n" },
       { name: "shared", md: "---\ndescription: Shared\norder: 1\n---\nShared body\n" },
     ],
   });
-  registerExternalPackRoot(coreRoot);
+  registerExternalTeamRoot(coreRoot);
 
   const notesRoot = temp();
   makePack(notesRoot, "test.notes", baseManifest("test.notes", { name: "Notes" }), {
     commands: [{ name: "notes-cmd", md: "---\ndescription: NC\norder: 2\n---\nNC body\n" }],
   });
-  registerExternalPackRoot(notesRoot);
+  registerExternalTeamRoot(notesRoot);
 }
 
 describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
@@ -80,10 +80,10 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const reg = getCommandRegistry(root);
 
     const list = reg.list();
-    const setup = list.find((c) => c.id === `${CORE_PACK_ID}:setup`);
+    const setup = list.find((c) => c.id === `${CORE_TEAM_ID}:setup`);
     expect(setup).toBeDefined();
     expect(setup!.source).toBe("builtin");
-    expect(setup!.packId).toBe(CORE_PACK_ID);
+    expect(setup!.teamId).toBe(CORE_TEAM_ID);
     expect(setup!.removable).toBe(false);
     expect(setup!.enabled).toBe(true);
     expect(setup!.template).toBe("Setup body");
@@ -97,15 +97,15 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const reg = getCommandRegistry(root);
 
     sealAppStore();
-    addInstalledPack("test.notes");
+    addInstalledTeam("test.notes");
     const cmd = reg.list().find((c) => c.id === "test.notes:notes-cmd");
     expect(cmd).toBeDefined();
     expect(cmd!.source).toBe("plugin");
-    expect(cmd!.packName).toBe("Notes");
+    expect(cmd!.teamName).toBe("Notes");
     expect(cmd!.removable).toBe(false);
 
     // pack 禁用不摘除内容，而是整条判定链落到 enabled=false（§5.3：license → pack 启停 → 逐项禁用）
-    setPackEnabled(root, "test.notes", false);
+    setTeamEnabled(root, "test.notes", false);
     expect(reg.list().find((c) => c.id === "test.notes:notes-cmd")!.enabled).toBe(false);
     // 禁用后不可被斜杠命中
     expect(reg.lookup("notes-cmd")).toBeUndefined();
@@ -117,18 +117,18 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const reg = getCommandRegistry(root);
 
     // 无 local 副本时命中 core
-    expect(reg.lookup("setup")!.id).toBe(`${CORE_PACK_ID}:setup`);
+    expect(reg.lookup("setup")!.id).toBe(`${CORE_TEAM_ID}:setup`);
 
     // local 创建同名命令 → 遮蔽 core
     reg.create({ name: "setup", description: "Mine", template: "My body" });
     const hit = reg.lookup("setup")!;
-    expect(hit.id).toBe(`${LOCAL_PACK_ID}:setup`);
+    expect(hit.id).toBe(`${LOCAL_TEAM_ID}:setup`);
     expect(hit.source).toBe("user");
     expect(hit.template).toBe("My body");
 
     // 禁用 local 遮蔽副本 → core 原件重新可见
-    reg.setEnabled(`${LOCAL_PACK_ID}:setup`, false);
-    expect(reg.lookup("setup")!.id).toBe(`${CORE_PACK_ID}:setup`);
+    reg.setEnabled(`${LOCAL_TEAM_ID}:setup`, false);
+    expect(reg.lookup("setup")!.id).toBe(`${CORE_TEAM_ID}:setup`);
   });
 
   it("lookup 跳过禁用命令：唯一实例禁用 → undefined", () => {
@@ -136,11 +136,11 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const root = project();
     const reg = getCommandRegistry(root);
 
-    reg.setEnabled(`${CORE_PACK_ID}:shared`, false);
+    reg.setEnabled(`${CORE_TEAM_ID}:shared`, false);
     expect(reg.lookup("shared")).toBeUndefined();
     // 重新启用（FQID 原样）
-    reg.setEnabled(`${CORE_PACK_ID}:shared`, true);
-    expect(reg.lookup("shared")!.id).toBe(`${CORE_PACK_ID}:shared`);
+    reg.setEnabled(`${CORE_TEAM_ID}:shared`, true);
+    expect(reg.lookup("shared")!.id).toBe(`${CORE_TEAM_ID}:shared`);
   });
 
   it("setEnabled 支持裸 id（按 resolver bare-id 规则解析）", () => {
@@ -150,7 +150,7 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
 
     reg.setEnabled("shared", false);
     expect(
-      reg.list().find((c) => c.id === `${CORE_PACK_ID}:shared`)!.enabled,
+      reg.list().find((c) => c.id === `${CORE_TEAM_ID}:shared`)!.enabled,
     ).toBe(false);
     expect(() => reg.setEnabled("no-such-cmd", false)).toThrow(/not found/i);
   });
@@ -168,10 +168,10 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
       template: "Do $ARGUMENTS",
       action: "compile",
     });
-    expect(def.id).toBe(`${LOCAL_PACK_ID}:my-cmd`);
+    expect(def.id).toBe(`${LOCAL_TEAM_ID}:my-cmd`);
     expect(def.removable).toBe(true);
 
-    const file = join(root, LOCAL_PACK_REL, "commands", "my-cmd.md");
+    const file = join(root, LOCAL_TEAM_REL, "commands", "my-cmd.md");
     expect(existsSync(file)).toBe(true);
     const raw = readFileSync(file, "utf-8");
     expect(raw).not.toContain("pluginId");
@@ -180,7 +180,7 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     expect(raw).toContain("Do $ARGUMENTS");
 
     // 立即可被 resolver 视图看到
-    expect(reg.list().some((c) => c.id === `${LOCAL_PACK_ID}:my-cmd`)).toBe(true);
+    expect(reg.list().some((c) => c.id === `${LOCAL_TEAM_ID}:my-cmd`)).toBe(true);
   });
 
   it("update 改名：旧文件删除、新 FQID 生效", () => {
@@ -189,11 +189,11 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     const reg = getCommandRegistry(root);
 
     reg.create({ name: "before", description: "d", template: "t" });
-    const updated = reg.update(`${LOCAL_PACK_ID}:before`, { name: "after", template: "t2" });
-    expect(updated.id).toBe(`${LOCAL_PACK_ID}:after`);
+    const updated = reg.update(`${LOCAL_TEAM_ID}:before`, { name: "after", template: "t2" });
+    expect(updated.id).toBe(`${LOCAL_TEAM_ID}:after`);
     expect(updated.template).toBe("t2");
-    expect(existsSync(join(root, LOCAL_PACK_REL, "commands", "before.md"))).toBe(false);
-    expect(existsSync(join(root, LOCAL_PACK_REL, "commands", "after.md"))).toBe(true);
+    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "before.md"))).toBe(false);
+    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "after.md"))).toBe(true);
   });
 
   it("remove：local 命令删除成功；core/plugin 命令抛错（只能禁用）", () => {
@@ -202,11 +202,11 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     const reg = getCommandRegistry(root);
 
     reg.create({ name: "doomed", description: "d", template: "t" });
-    reg.remove(`${LOCAL_PACK_ID}:doomed`);
-    expect(existsSync(join(root, LOCAL_PACK_REL, "commands", "doomed.md"))).toBe(false);
+    reg.remove(`${LOCAL_TEAM_ID}:doomed`);
+    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "doomed.md"))).toBe(false);
     expect(reg.list().some((c) => c.name === "doomed")).toBe(false);
 
-    expect(() => reg.remove(`${CORE_PACK_ID}:setup`)).toThrow(/cannot delete/i);
+    expect(() => reg.remove(`${CORE_TEAM_ID}:setup`)).toThrow(/cannot delete/i);
   });
 });
 
@@ -237,11 +237,11 @@ describe("commands registry: export/import 作用域 = Local Pack", () => {
 
     const names = reg
       .list()
-      .filter((c) => c.packId === LOCAL_PACK_ID)
+      .filter((c) => c.teamId === LOCAL_TEAM_ID)
       .map((c) => c.name)
       .sort();
     expect(names).toEqual(["fresh", "keep", "keep-2"]);
     // enabled:false 的导入项落为 disabledContent
-    expect(reg.list().find((c) => c.id === `${LOCAL_PACK_ID}:fresh`)!.enabled).toBe(false);
+    expect(reg.list().find((c) => c.id === `${LOCAL_TEAM_ID}:fresh`)!.enabled).toBe(false);
   });
 });
