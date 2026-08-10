@@ -32,7 +32,7 @@ export function TeamCard({ team, isActive, trailing, onClick, expanded, classNam
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-accent/40"
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted"
         aria-expanded={expanded}
       >
         <PackIcon size="sm" />

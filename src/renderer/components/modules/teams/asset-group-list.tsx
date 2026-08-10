@@ -95,7 +95,7 @@ export function AssetGroupList({
             <button
               type="button"
               onClick={() => toggleGroup(group.teamId)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/40"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
             >
               {isCollapsed ? (
                 <ChevronRightIcon className="size-4 text-muted-foreground" />
