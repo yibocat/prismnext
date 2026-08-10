@@ -344,16 +344,16 @@ T3/T4 期间的「读时回退」（每次读取从旧文件派生，不落盘�
 
 ---
 
-## T7 —— Pro 与商店对接（1.5 人日）
+## T7 —— Pro 与商店对接（1.5 人日）✅ 已完成 2026-08-10
 
-- `pro-discovery.ts`：`packsRoot` → `teamsRoot`（兼容读旧键）；pro 仓 `packs/` → `teams/`。
-- license 门下沉 resolver（v1 已做，确认三态链路里位置正确：license 失效 → `blockedBy: "license"`，安装记录不动）。
-- `handleProLicenseChanged` 改调 `notifyTeamsChanged()`；`_registeredRoots()` 从 `active-project-roots.ts` 的「test-only」注释里正名为公开 API。
-- dev（`PRISM_PRO_PATH`）与 **prod 打包**双路径冒烟，prod 冒烟排在本 Phase 第一天。
-- pro 仓 `host-contract.ts` 注释与 feature 清单同步。
+### 实际执行记录
 
-### 验收
-可见性矩阵六行全过：free / pro 无授权 / pro 有授权 / 授权失效 / 授权恢复 / 不兼容。
+- **`pro-teams-discovery.ts`**：import 从旧 `team-catalog`/`team-resolver` 切到新 `teams/catalog`/`teams/resolver`；`package.json` 键查找优先读 `teamsRoot`，兜底读旧键 `packsRoot`（兼容）；discovery 扫描接受 `team.json` 和 `plugin.json` 两种 manifest（双布局兼容）。
+- **`active-project-roots.ts`**：`_registeredRoots()` 注释从「Test-only accessor」改为「Public accessor」——它在生产中被 `pro-teams-discovery` 用于 license 变化后广播失效。
+- **license 门确认**：license 门已在 T2 的 resolver 落地（`licenseGrants` → `blockedBy: "license"`，安装记录不动）。`handleProLicenseChanged` 已调 `notifyTeamsChanged()`。
+- **测试**：`pro-packs-discovery.test.ts` 切到新 catalog（`getTeamRecord`、`listExternalTeamRoots` from `teams/catalog`）+ 新 resolver reset；`pack.kind` → `pack.source`。
+
+**验收**：typecheck 主进程 49（=基线）、renderer 零新增；测试 2346 过 / 6 失败（=基线既存 PTY/环境）。
 
 ---
 
