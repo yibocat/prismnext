@@ -1,72 +1,36 @@
-// Commands settings — unified single-card list (mirrors Teams & Agents).
-// Every slash command is one row: /name + description + origin badge
-// (Built-in / pack name / My commands) + an enable switch. When the list
-// grows long it folds to a preview with "Show all (N) / Show less".
-// App-level vs project-level follows the owning TEAM: a command whose pack is
-// installed at app level but DISABLED in this project is greyed out (row dimmed
-// + switch disabled) — same visual language as the team cards.
-import { useEffect, useMemo, useState } from "react";
+// Commands settings — uses AssetGroupList (design §8.4) as the list
+// component, with teamsListAssets as the primary data source. The legacy
+// useCommandStore is kept for export/import/edit/delete operations, bridged
+// through renderActions by fqid lookup.
+// Standard settings shell: max-w-3xl + SETTINGS_CARD + shadcn controls.
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { PlusIcon } from "lucide-react";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { usePacksStore } from "@/stores/teams-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { CommandsImportDialog } from "./commands-import-dialog";
-import type { CommandDef } from "@commands/types";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
 import {
-  SETTINGS_CARD,
-  SETTINGS_ROW,
-  SETTINGS_ROW_DESC,
-  SETTINGS_ROW_LABEL,
+  SETTINGS_CARD as CARD,
 } from "./settings-tokens";
-
-const BADGE =
-  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
-/** Fold long lists after this many rows (like Skills). */
-const COMMANDS_PAGE_INITIAL_COUNT = 10;
-
-/** Origin badge: core pack → "Built-in"; local → "My commands"; else pack name. */
-function originBadge(cmd: CommandDef, t: (key: string) => string) {
-  if (cmd.teamId === CORE_TEAM_ID) {
-    return (
-      <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-        {t("settings.commandsPage.builtin")}
-      </span>
-    );
-  }
-  if (cmd.teamId === LOCAL_TEAM_ID) {
-    return (
-      <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-        {t("settings.commandsPage.mine")}
-      </span>
-    );
-  }
-  return (
-    <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{cmd.teamName}</span>
-  );
-}
-
-/** Sort: core built-ins first, then packs alphabetically, then my commands. */
-function sortCommands(cmds: CommandDef[]): CommandDef[] {
-  const rank = (c: CommandDef) =>
-    c.teamId === CORE_TEAM_ID ? 0 : c.teamId === LOCAL_TEAM_ID ? 2 : 1;
-  return [...cmds].sort(
-    (a, b) => rank(a) - rank(b) || a.teamName.localeCompare(b.teamName) || a.name.localeCompare(b.name),
-  );
-}
+import { AssetGroupList } from "../teams/asset-group-list";
+import type { AssetViewV2 } from "@shared/teams/view";
+import { LOCAL_TEAM_ID } from "@shared/teams/types";
+import type { CommandDef } from "@commands/types";
 
 export default function CommandsSettings() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  // Primary data: AssetViewV2[] from the new resolver.
+  const [assets, setAssets] = useState<AssetViewV2[]>([]);
+  // Secondary data: CommandDef[] from useCommandStore (for edit/delete/export/import).
   const commands = useCommandStore((s) => s.commands);
   const loaded = useCommandStore((s) => s.loaded);
   const loadCommands = useCommandStore((s) => s.loadCommands);
@@ -76,71 +40,68 @@ export default function CommandsSettings() {
   const readImportFile = useCommandStore((s) => s.readImportFile);
   const previewImport = useCommandStore((s) => s.previewImport);
 
-  // App-level install → project-level enable lives on the owning pack.
-  const packs = usePacksStore((s) => s.catalog);
-  const packEnabledById = useMemo(() => {
-    const map = new Map<string, boolean>();
-    for (const p of packs) map.set(p.manifest.id, p.enabled);
-    return map;
-  }, [packs]);
-
   const deleteConfirm = useInlineDeleteConfirm();
-
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importPack, setImportPack] = useState<unknown>(null);
   const [importPreview, setImportPreview] = useState<{
-    incoming: string[];
-    conflicts: string[];
-    invalid: string[];
+    incoming: string[]; conflicts: string[]; invalid: string[];
   } | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [showAllCommands, setShowAllCommands] = useState(false);
 
-  useEffect(() => {
-    void loadCommands();
-  }, [loadCommands]);
+  // Index CommandDef by fqid for renderActions lookup.
+  const cmdByFqid = useMemo(() => {
+    const map = new Map<string, CommandDef>();
+    for (const c of commands) map.set(c.id, c);
+    return map;
+  }, [commands]);
 
-  // Reload when the packs store changes (install / enable / disable at app or
-  // project level) — command enabled flags follow the resolver view.
-  useEffect(() => {
-    void loadCommands();
-  }, [packs, loadCommands]);
+  const loadAll = useCallback(async () => {
+    if (!projectRoot) {
+      setAssets([]);
+      return;
+    }
+    try {
+      const [assetList] = await Promise.all([
+        window.electronAPI.teamsListAssets(projectRoot, "command"),
+        loadCommands(),
+      ]);
+      setAssets(assetList);
+    } catch {
+      setAssets([]);
+    }
+  }, [projectRoot, loadCommands]);
 
-  useEffect(() => {
-    setShowAllCommands(false);
-  }, [projectRoot]);
+  useEffect(() => { void loadAll(); }, [loadAll]);
+  useEffect(() => { void loadAll(); }, [loadAll, commands]);
 
   useOnSettingsEditorKindsClosed(["custom-command", "builtin-commands"], () => {
-    void loadCommands();
+    void loadAll();
   });
 
-  const sorted = useMemo(() => sortCommands(commands), [commands]);
-  const visibleCommands =
-    showAllCommands || sorted.length <= COMMANDS_PAGE_INITIAL_COUNT
-      ? sorted
-      : sorted.slice(0, COMMANDS_PAGE_INITIAL_COUNT);
-  const hasMoreCommands = sorted.length > COMMANDS_PAGE_INITIAL_COUNT;
   const customCount = commands.filter((c) => c.teamId === LOCAL_TEAM_ID).length;
 
-  /** A command's owning pack must be enabled in THIS project for it to run. */
-  const teamEnabled = (cmd: CommandDef): boolean => {
-    if (cmd.teamId === LOCAL_TEAM_ID) return true;
-    return packEnabledById.get(cmd.teamId) ?? true;
-  };
+  const handleSetEnabled = useCallback(async (fqid: string, enabled: boolean | null) => {
+    if (!projectRoot) return;
+    deleteConfirm.clearPending();
+    setAssets((cur) => cur.map((a) => (a.fqid === fqid ? { ...a, enabled: enabled ?? true } : a)));
+    try {
+      await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled, "project");
+      await loadAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      await loadAll();
+    }
+  }, [projectRoot, deleteConfirm, loadAll]);
 
   const openEdit = (commandId: string, title: string) => {
     deleteConfirm.clearPending();
-    openSettingsPanel({
-      kind: "custom-command",
-      mode: "edit",
-      commandId,
-      title,
-    });
+    openSettingsPanel({ kind: "custom-command", mode: "edit", commandId, title });
   };
 
   const confirmDelete = async (id: string) => {
     deleteConfirm.clearPending();
     await deleteCommand(id);
+    await loadAll();
   };
 
   const handleExport = async () => {
@@ -151,7 +112,7 @@ export default function CommandsSettings() {
       if (dlg.canceled || !dlg.path) return;
       await writeExportFile(dlg.path, projectRoot);
       toast.success(t("settings.commandsPage.toast.exported"));
-    } catch (err: unknown) {
+    } catch (err) {
       toast.error(err instanceof Error ? err.message : "Export failed.");
     } finally {
       setExporting(false);
@@ -172,153 +133,93 @@ export default function CommandsSettings() {
       setImportPack(pack);
       setImportPreview(preview);
       setImportDialogOpen(true);
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : t("settings.commandsPage.toast.importReadFailed"),
-      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.commandsPage.toast.importReadFailed"));
     }
+  };
+
+  const renderActions = (asset: AssetViewV2) => {
+    const cmd = cmdByFqid.get(asset.fqid);
+    if (!cmd || cmd.teamId !== LOCAL_TEAM_ID) return null;
+    return (
+      <div className="flex items-center gap-2 shrink-0">
+        <Button variant="ghost" size="xs" className="shrink-0" onClick={() => openEdit(cmd.id, cmd.name)}>
+          {t("common.edit")}
+        </Button>
+        <InlineDeleteButton itemId={cmd.id} pending={deleteConfirm.isPending(cmd.id)} disabled={false}
+          onRequest={() => deleteConfirm.setPendingId(cmd.id)}
+          onConfirm={() => void confirmDelete(cmd.id)} />
+      </div>
+    );
   };
 
   if (!projectRoot) {
     return (
-      <div className={SETTINGS_CARD}>
-        <div className={cn(SETTINGS_ROW, "!block")}>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            {t("settings.commandsPage.openProject")}
-          </p>
+      <div className={cn(CARD, "!divide-y-0")}>
+        <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">
+          {t("settings.commandsPage.openProject")}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Toolbar: create / import / export (project-level, My commands) */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => openSettingsPanel({ kind: "custom-command", mode: "new" })}
-          >
-            <PlusIcon className="size-3 mr-1" />
-            {t("settings.commandsPage.addCustom")}
-          </Button>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="xs"
-            className="shrink-0"
-            disabled={exporting || customCount === 0}
-            onClick={() => void handleExport()}
-          >
-            {t("settings.commandsPage.export")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="shrink-0"
-            onClick={() => void handleImportPick()}
-          >
-            {t("settings.commandsPage.importBtn")}
-          </Button>
-        </div>
-      </div>
-
-      {!loaded ? (
-        <div className={cn(SETTINGS_CARD, "py-3")}>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-            {t("common.loading")}
-          </p>
-        </div>
-      ) : sorted.length === 0 ? (
-        <div className={cn(SETTINGS_CARD, "!divide-y-0")}>
-          <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-              {t("settings.commandsPage.emptyCommands")}
-            </p>
+    <div className="flex-1 overflow-auto">
+      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.commandsPage.title")}</h2>
+            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">{t("settings.commandsPage.pageDesc")}</p>
           </div>
         </div>
-      ) : (
-        <div className={SETTINGS_CARD}>
-          {visibleCommands.map((cmd) => {
-            const packOn = teamEnabled(cmd);
-            return (
-              <div
-                key={cmd.id}
-                className={cn(SETTINGS_ROW, !packOn && "opacity-60")}
-              >
-                <div className="min-w-0 flex-1 pr-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className={SETTINGS_ROW_LABEL}>/{cmd.name}</p>
-                    {originBadge(cmd, t)}
-                    {!packOn && (
-                      <span className={cn(BADGE, "bg-destructive text-destructive-foreground")}>
-                        {t("settings.commandsPage.disabledInProject")}
-                      </span>
-                    )}
-                  </div>
-                  <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {cmd.teamId === LOCAL_TEAM_ID ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="shrink-0"
-                        onClick={() => openEdit(cmd.id, cmd.name)}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <InlineDeleteButton
-                        itemId={cmd.id}
-                        pending={deleteConfirm.isPending(cmd.id)}
-                        onRequest={() => deleteConfirm.setPendingId(cmd.id)}
-                        onConfirm={() => void confirmDelete(cmd.id)}
-                      />
-                    </>
-                  ) : null}
-                  <Switch
-                    checked={cmd.enabled}
-                    disabled={!packOn}
-                    onCheckedChange={(enabled) => void toggleCommand(cmd.id, enabled)}
-                    aria-label={`Enable /${cmd.name}`}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          {hasMoreCommands && (
-            <div className="py-2.5 flex justify-center border-t border-border">
-              <Button
-                variant="ghost"
-                size="xs"
-                className="text-[length:var(--font-size-12)] text-muted-foreground"
-                onClick={() => setShowAllCommands((v) => !v)}
-              >
-                {showAllCommands
-                  ? t("settings.commandsPage.showLess")
-                  : t("settings.commandsPage.showAll", { count: sorted.length })}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
 
-      {projectRoot && importPreview && importPack ? (
-        <CommandsImportDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-          projectRoot={projectRoot}
-          conflictCount={importPreview.conflicts.length}
-          invalidCount={importPreview.invalid.length}
-          incomingCount={importPreview.incoming.length}
-          pack={importPack}
-          onComplete={() => void loadCommands()}
-        />
-      ) : null}
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="outline" size="xs" onClick={() => openSettingsPanel({ kind: "custom-command", mode: "new" })}>
+            <PlusIcon className="size-3 mr-1" />{t("settings.commandsPage.addCustom")}
+          </Button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="xs" className="shrink-0" disabled={exporting || customCount === 0}
+              onClick={() => void handleExport()}>
+              {t("settings.commandsPage.export")}
+            </Button>
+            <Button variant="ghost" size="xs" className="shrink-0" onClick={() => void handleImportPick()}>
+              {t("settings.commandsPage.importBtn")}
+            </Button>
+          </div>
+        </div>
+
+        {!loaded ? (
+          <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+            {t("common.loading")}
+          </div>
+        ) : assets.length === 0 ? (
+          <div className={cn(CARD, "!divide-y-0")}>
+            <div className="flex flex-col items-center gap-3 py-10 text-center">
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.commandsPage.emptyCommands")}</p>
+            </div>
+          </div>
+        ) : (
+          <AssetGroupList
+            assets={assets}
+            onSetEnabled={handleSetEnabled}
+            renderActions={renderActions}
+            emptyHint={t("settings.commandsPage.emptyCommands")}
+          />
+        )}
+
+        {projectRoot && importPreview && importPack ? (
+          <CommandsImportDialog
+            open={importDialogOpen}
+            onOpenChange={setImportDialogOpen}
+            projectRoot={projectRoot}
+            conflictCount={importPreview.conflicts.length}
+            invalidCount={importPreview.invalid.length}
+            incomingCount={importPreview.incoming.length}
+            pack={importPack}
+            onComplete={() => void loadAll()}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
