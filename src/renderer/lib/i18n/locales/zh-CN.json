@@ -1438,6 +1438,60 @@
         "placeholderReserved": "此槽位预留给将从主列表迁入的设置编辑器。"
       }
     },
+    "teams": {
+      "scope": {
+        "app": "全局",
+        "project": "本项目",
+        "appDesc": "在所有项目可用",
+        "projectDesc": "仅在本项目可用"
+      },
+      "origin": {
+        "builtin": "内置",
+        "official": "官方",
+        "pro": "Pro",
+        "registry": "市场",
+        "mine": "我的"
+      },
+      "override": {
+        "label": "已覆盖",
+        "ariaLabel": "本项目覆盖了全局设置",
+        "tooltip": "本项目覆盖了全局设置（全局：{{global}}）。点击恢复跟随全局。",
+        "globalDefault": "默认",
+        "globalOn": "启用",
+        "globalOff": "停用"
+      },
+      "assets": {
+        "empty": "暂无内容",
+        "count": "{{count}} 项"
+      },
+      "card": {
+        "active": "活动"
+      },
+      "roster": {
+        "allAvailable": "全部可用子 Agent",
+        "specificList": "指定名单",
+        "crossScope": "跨作用域",
+        "empty": "暂无可用子 Agent"
+      },
+      "picker": {
+        "placeholder": "选择团队",
+        "projectGroup": "本项目",
+        "appGroup": "全局",
+        "newProjectTeam": "新建项目团队…",
+        "newAppTeam": "新建全局团队…"
+      },
+      "blocked": {
+        "notInstalled": "未安装",
+        "license": "需要 Pro 授权",
+        "incompatible": "与当前应用版本不兼容",
+        "teamDisabledApp": "团队「{{team}}」已在所有项目停用",
+        "teamDisabledProject": "团队「{{team}}」已在本项目停用",
+        "assetDisabledApp": "已在所有项目停用",
+        "assetDisabledProject": "已在本项目停用",
+        "shadowed": "被「{{team}}」中的同名项覆盖",
+        "outOfScope": "无法跨作用域引用"
+      }
+    },
     "teamsAgents": {
       "title": "团队与专家",
       "pageDesc": "管理团队（已安装的与自建的团队）及其带来的主 Agent 与专家。",

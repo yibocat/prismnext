@@ -1438,6 +1438,60 @@
         "placeholderReserved": "This slot is reserved for a settings editor that will migrate here from the main list."
       }
     },
+    "teams": {
+      "scope": {
+        "app": "Global",
+        "project": "This project",
+        "appDesc": "Available in all projects",
+        "projectDesc": "Only available in this project"
+      },
+      "origin": {
+        "builtin": "Built-in",
+        "official": "Official",
+        "pro": "Pro",
+        "registry": "Registry",
+        "mine": "Mine"
+      },
+      "override": {
+        "label": "Overridden",
+        "ariaLabel": "This project overrides the global setting",
+        "tooltip": "This project overrides the global setting (global: {{global}}). Click to follow the global setting.",
+        "globalDefault": "default",
+        "globalOn": "on",
+        "globalOff": "off"
+      },
+      "assets": {
+        "empty": "Nothing here yet",
+        "count": "{{count}} items"
+      },
+      "card": {
+        "active": "Active"
+      },
+      "roster": {
+        "allAvailable": "All available subagents",
+        "specificList": "Specific list",
+        "crossScope": "Cross-scope",
+        "empty": "No subagents available"
+      },
+      "picker": {
+        "placeholder": "Select a team",
+        "projectGroup": "This project",
+        "appGroup": "Global",
+        "newProjectTeam": "New project team…",
+        "newAppTeam": "New global team…"
+      },
+      "blocked": {
+        "notInstalled": "Not installed",
+        "license": "Requires Pro",
+        "incompatible": "Incompatible with this app version",
+        "teamDisabledApp": "Team \"{{team}}\" is disabled in all projects",
+        "teamDisabledProject": "Team \"{{team}}\" is disabled in this project",
+        "assetDisabledApp": "Disabled in all projects",
+        "assetDisabledProject": "Disabled in this project",
+        "shadowed": "Shadowed by a same-named item in \"{{team}}\"",
+        "outOfScope": "Can't be referenced across scopes"
+      }
+    },
     "teamsAgents": {
       "title": "Teams & Agents",
       "pageDesc": "Manage teams (installed packs and your own) and the main agents and experts they bring.",
