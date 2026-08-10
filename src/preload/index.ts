@@ -1225,6 +1225,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("teams:getTeamContents", { teamId }),
 	teamsListProjectMcps: (projectRoot: string) =>
 		ipcRenderer.invoke("teams:listProjectMcps", { projectRoot }),
+	teamsListMcp: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:listMcp", { projectRoot }) as Promise<
+			Array<{ name: string; enabled: boolean; origin: string; autoStart: boolean }>
+		>,
 
 	// User teams (app-level, like installed teams)
 	teamsListUserTeams: () =>

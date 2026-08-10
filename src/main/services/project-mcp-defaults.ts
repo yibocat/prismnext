@@ -7,16 +7,6 @@ const log = createLogger("project-mcp-defaults");
 /** Legacy built-in MCP id — stripped on project open (replaced by literature-discover). */
 export const PAPER_SEARCH_MCP_ID = "paper-search-mcp";
 
-/**
- * MCP servers connected at session/new (before first model turn).
- * Empty on purpose: MCP loads only via session/load when @-mentioned or allowlist requires them.
- */
-export const EAGER_MCP_SERVER_IDS = [] as const;
-
-export function isEagerMcpServer(id: string): boolean {
-  return (EAGER_MCP_SERVER_IDS as readonly string[]).includes(id);
-}
-
 /** Dedupe explicit allowlist only — does not inject legacy Paper Search. */
 export function mergeMcpAllowlist(allowlist?: string[] | null): string[] {
   const merged = new Set<string>();
@@ -41,14 +31,6 @@ export interface EnsureDefaultMcpResult {
   /** True when legacy paper-search-mcp was removed from mcp.json. */
   removed: boolean;
   path: string;
-}
-
-/** Pass-through — no built-in MCP is forced into allowlists. */
-export function ensureBuiltinMcpInAllowlist(
-  allowlist: string[] | undefined | null,
-): string[] | undefined {
-  if (!allowlist?.length) return allowlist ?? undefined;
-  return allowlist;
 }
 
 function readMcpServers(

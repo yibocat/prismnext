@@ -1971,6 +1971,9 @@ export interface ElectronAPI {
   teamsListProjectMcps: (
     projectRoot: string,
   ) => Promise<import("../../shared/teams/types").ResolvedMcp[]>;
+  teamsListMcp: (
+    projectRoot: string,
+  ) => Promise<Array<{ name: string; enabled: boolean; origin: string; autoStart: boolean }>>;
 
   // User teams (app-level, like installed teams)
   teamsListUserTeams: () => Promise<

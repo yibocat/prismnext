@@ -3,11 +3,12 @@ import { basename, dirname, join } from "node:path";
 import { countPromptTokens } from "../lib/token-estimate";
 import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/types";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, type TeamSource } from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
-import { listAssets, resolveBareContentId } from "./team-resolver";
+import { listAssets, resolveRef } from "../teams/resolver";
+import { precedenceRank } from "../teams/precedence";
 import { setAssetDisabled } from "./teams-state";
 
 /** legacy 项目技能目录（R6 迁移的输入；新代码不再写入这里） */
@@ -277,7 +278,7 @@ function resolveLocalSkillId(projectRoot: string, fqidOrBareId: string): string 
   if (parsed) {
     return parsed.teamId === LOCAL_TEAM_ID ? parsed.contentId : null;
   }
-  const fqid = resolveBareContentId(projectRoot, "skill", fqidOrBareId);
+  const fqid = resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
   const resolved = parseFqid(fqid);
   return resolved?.teamId === LOCAL_TEAM_ID ? resolved.contentId : null;
@@ -347,7 +348,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
           : "plugin",
       originTeamName:
         !isLocal && skill.teamId !== CORE_TEAM_ID ? skill.origin.teamName : undefined,
-      removable: skill.removable,
+      removable: skill.editable,
     });
   }
 
@@ -366,7 +367,7 @@ export function setSkillContentEnabled(
 ): string | null {
   const fqid = parseFqid(fqidOrBareId)
     ? fqidOrBareId
-    : resolveBareContentId(projectRoot, "skill", fqidOrBareId);
+    : resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
   setAssetDisabled(projectRoot, fqid, !enabled);
   return fqid;
@@ -514,18 +515,26 @@ export function syncProjectSkillsIntegration(
     mkdirSync(localSkillsRoot, { recursive: true });
   }
 
-  // 有激活技能的 pack 目录（去重）：非 core 按 teamId 字典序在前，core 随后
-  const teamDirs = new Map<string, string>(); // teamId → packDir
+  // 有激活技能的团队目录（去重）。skills.paths 顺序 = OpenCode 同名遮蔽优先级
+  // （later wins），按 §7.5 优先级 rank 降序排列：core（rank 5，最弱）最前，
+  // 项目团队（rank 0，最强）最后。这修正了 v1 把 core 排在其他 pack 之后、
+  // 等于内置团队反而覆盖用户安装团队的问题（D-9 行为变更）。
+  const teamDirs = new Map<string, string>(); // teamId → teamDir
+  const teamMeta = new Map<string, { scope: "app" | "project"; source: TeamSource }>();
   for (const skill of listAssets(root, "skill")) {
     if (!skill.enabled || skill.teamId === LOCAL_TEAM_ID) continue;
     if (!teamDirs.has(skill.teamId)) {
       teamDirs.set(skill.teamId, dirname(dirname(skill.dir)));
+      teamMeta.set(skill.teamId, { scope: skill.origin.scope, source: skill.origin.source });
     }
   }
   const orderedPackIds = [...teamDirs.keys()].sort((a, b) => {
-    if (a === CORE_TEAM_ID) return 1;
-    if (b === CORE_TEAM_ID) return -1;
-    return a.localeCompare(b);
+    const ma = teamMeta.get(a)!;
+    const mb = teamMeta.get(b)!;
+    // rank 降序（数字大的在前 = 更通用的排最前，later-wins 下最弱）。
+    const d = precedenceRank({ scope: mb.scope, source: mb.source })
+      - precedenceRank({ scope: ma.scope, source: ma.source });
+    return d !== 0 ? d : a.localeCompare(b);
   });
 
   const disabled = computeProfileSkillDisabled(root, options?.profileSkillAllowlist);

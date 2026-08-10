@@ -61,6 +61,18 @@ const log = createLogger("teams-resolver");
 onAppTeamsStateWritten(() => invalidateResolver());
 onProjectTeamsStateWritten((root) => invalidateResolver(root));
 
+// Read-time fallback invalidation (T3/T4): while teams.json / teams-state.json
+// don't exist yet, the resolver derives state from the legacy packs.json /
+// packs-installed.json. Those legacy writes must also invalidate the view, or
+// enable/disable toggles won't take effect. Removed in T6 once the migration
+// writes the new files and the fallback is gone.
+// Static import: a dynamic import().then() registers the listener too late for
+// synchronous write→read sequences in tests and IPC handlers.
+import { onTeamsStateWritten as onLegacyPacksStateWritten } from "../services/teams-state";
+import { onTeamsInstalledChanged as onLegacyPacksInstalledChanged } from "../services/teams-installed";
+onLegacyPacksStateWritten((root) => invalidateResolver(root));
+onLegacyPacksInstalledChanged(() => invalidateResolver());
+
 // ── View cache ────────────────────────────────────────────
 
 interface ProjectView {
@@ -208,6 +220,10 @@ function buildProjectView(projectRoot: string): ProjectView {
   // ── Index assets ──
   const assets: AssetViewV2[] = [];
   for (const team of teams) {
+    // Assets of a team that isn't installed in this project never enter the
+    // runtime set (matches the legacy resolver's `if (!pack.installed) continue`).
+    // The team itself still surfaces in listTeams with blockedBy:"not-installed".
+    if (!team.installed) continue;
     const record = records.find((r) => r.manifest.id === team.manifest.id)!;
     const origin = {
       teamId: team.manifest.id,
@@ -425,16 +441,19 @@ export function resolveRef(
   projectRoot: string,
   ref: string,
   fromTeamId?: string,
+  kind?: AssetKind,
 ): Fqid | null {
   const view = getProjectView(projectRoot);
   if (parseFqid(ref)) {
-    return view.byFqid.has(ref) ? ref : null;
+    const asset = view.byFqid.get(ref);
+    return asset && (!kind || asset.kind === kind) ? ref : null;
   }
   if (fromTeamId) {
     const same = toFqid(fromTeamId, ref);
-    if (view.byFqid.has(same)) return same;
+    const asset = view.byFqid.get(same);
+    if (asset && (!kind || asset.kind === kind)) return same;
   }
-  const matches = view.assets.filter((a) => a.id === ref);
+  const matches = view.assets.filter((a) => a.id === ref && (!kind || a.kind === kind));
   if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0].fqid;
   const sorted = [...matches].sort((a, b) => {

@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
-import type { ResolvedMcp } from "../../shared/teams/types";
+import type { McpServerDef } from "../../shared/teams/types";
 import {
   isPrimaryOpenCodeStreamError,
   openCodeLogEndOffset,
@@ -28,7 +28,7 @@ import {
   resolveChatTabId,
 } from "../services/chat-session-registry";
 import { mcpJsonToAcpServers, packMcpDefToAcp, type AcpMcpServer } from "./mcp-transform";
-import { ensureDefaultMcpServers, isEagerMcpServer, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
+import { ensureDefaultMcpServers, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
 import {
   getPermissionRulesForMode,
   resolvePermissionMode,
@@ -267,12 +267,13 @@ export class AcpService {
    * child mid-handshake → "ACP connection closed".
    */
   private initInflight: Promise<void> | null = null;
-  /** Cached agent config from project prewarm — avoids re-reading on session create. */
-  private cachedAgentConfig: {
-    projectRoot: string;
-    mcpServers: AcpMcpServer[];
-    additionalDirectories: string[];
-  } | null = null;
+  /** Cached agent config per projectRoot — avoids re-reading on session create.
+   *  A Map (not a single slot) so switching between two projects doesn't
+   *  thrash the cache (B11). */
+  private cachedAgentConfig = new Map<
+    string,
+    { mcpServers: AcpMcpServer[]; additionalDirectories: string[] }
+  >();
 
   /** Session IDs that are sub-agent sessions (created by the task tool).
    *  These are filtered from the sidebar session list. Persisted to disk
@@ -1567,20 +1568,24 @@ export class AcpService {
       }
     }
 
-    // Pack-declared MCP servers (app-level resource, project-gated): every
-    // ENABLED pack's MCP definitions join the runtime set. Project mcp.json
-    // wins on name collisions — an explicit project config overrides the
-    // pack's declaration.
-    // (require, not import: readAgentConfig is sync and pack-resolver is a
+    // Team-declared MCP servers (app-level resource, project-gated): every
+    // ENABLED team's MCP definitions join the runtime set, resolved by the
+    // TeamResolver (single source). Project mcp.json wins on name collisions —
+    // an explicit project config overrides the team's declaration.
+    // (require, not import: readAgentConfig is sync and the resolver is a
     // heavy module loaded lazily to keep ACP startup light.)
     try {
-      const { listProjectMcps } = require("../services/team-resolver") as {
-        listProjectMcps: (root: string) => ResolvedMcp[];
+      const { listMcpServers } = require("../teams/resolver") as {
+        listMcpServers: (root: string) => Array<{
+          enabled: boolean;
+          definition: McpServerDef;
+        }>;
       };
-      const teamMcps = listProjectMcps(projectRoot).filter((m) => m.enabled);
+      const teamMcps = listMcpServers(projectRoot).filter((m) => m.enabled);
       if (teamMcps.length > 0) {
         const existingNames = new Set(mcpServers.map((s) => s.name));
-        for (const def of teamMcps) {
+        for (const asset of teamMcps) {
+          const def = asset.definition;
           if (existingNames.has(def.name)) continue;
           const acp = packMcpDefToAcp(def);
           if (acp) {
@@ -1588,22 +1593,38 @@ export class AcpService {
             existingNames.add(acp.name);
           }
         }
-        log.info("Merged pack MCP servers", {
+        log.info("Merged team MCP servers", {
           projectRoot,
           packCount: teamMcps.length,
-          names: teamMcps.map((m) => m.name),
+          names: teamMcps.map((m) => m.definition.name),
         });
       }
     } catch (err: unknown) {
-      log.warn(`Pack MCP merge failed: ${err instanceof Error ? err.message : String(err)}`);
+      log.warn(`Team MCP merge failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     return { mcpServers, additionalDirectories };
   }
 
+  /** Names of team MCP servers declared autoStart:true (eager session/new set). */
+  private autoStartMcpNames(projectRoot: string): Set<string> {
+    try {
+      const { listMcpServers } = require("../teams/resolver") as {
+        listMcpServers: (root: string) => Array<{ enabled: boolean; definition: McpServerDef }>;
+      };
+      const names = new Set<string>();
+      for (const asset of listMcpServers(projectRoot)) {
+        if (asset.enabled && asset.definition.autoStart === true) names.add(asset.definition.name);
+      }
+      return names;
+    } catch {
+      return new Set();
+    }
+  }
+
   prewarmProject(projectRoot: string): void {
     const { mcpServers, additionalDirectories } = this.readAgentConfig(projectRoot);
-    this.cachedAgentConfig = { projectRoot, mcpServers, additionalDirectories };
+    this.cachedAgentConfig.set(projectRoot, { mcpServers, additionalDirectories });
     log.info("Project agent config cached", {
       projectRoot,
       skillsActive: additionalDirectories.length > 0,
@@ -1626,9 +1647,7 @@ export class AcpService {
    * install/enable/disable (notifyTeamsChanged) — MCP membership changed.
    */
   invalidateAgentConfigCache(projectRoot: string): void {
-    if (this.cachedAgentConfig?.projectRoot === projectRoot) {
-      this.cachedAgentConfig = null;
-    }
+    this.cachedAgentConfig.delete(projectRoot);
   }
 
   /**
@@ -2175,18 +2194,17 @@ export class AcpService {
     mcpServers: AcpMcpServer[];
     additionalDirectories: string[];
   } {
-    const base =
-      this.cachedAgentConfig?.projectRoot === projectRoot
-        ? {
-            mcpServers: this.cachedAgentConfig.mcpServers,
-            additionalDirectories: this.cachedAgentConfig.additionalDirectories,
-          }
-        : this.readAgentConfig(projectRoot);
+    const cached = this.cachedAgentConfig.get(projectRoot);
+    const base = cached ?? this.readAgentConfig(projectRoot);
 
     if (options?.eagerOnly) {
+      // Eager set = team MCP servers declared autoStart:true (design §7.4),
+      // replacing the always-empty EAGER_MCP_SERVER_IDS. Project mcp.json
+      // entries stay lazy (user MCP has no autoStart field).
+      const autoStartNames = this.autoStartMcpNames(projectRoot);
       return {
         ...base,
-        mcpServers: base.mcpServers.filter((s) => isEagerMcpServer(s.name)),
+        mcpServers: base.mcpServers.filter((s) => autoStartNames.has(s.name)),
       };
     }
 
@@ -2968,7 +2986,7 @@ export class AcpService {
    */
   async applyProjectMcpConfig(projectRoot: string): Promise<{ reloadedSessions: number }> {
     const { listSessionsForProject } = await import("../services/chat-session-registry");
-    this.cachedAgentConfig = null;
+    this.cachedAgentConfig.delete(projectRoot);
     this.prewarmProject(projectRoot);
     const sessions = listSessionsForProject(projectRoot);
     let reloadedSessions = 0;

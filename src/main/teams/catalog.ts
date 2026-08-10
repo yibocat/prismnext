@@ -29,7 +29,7 @@ import type {
   TeamSource,
 } from "../../shared/teams/types";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
-import { CORE_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
 import { createLogger } from "../services/logger";
 import { appTeamsDir, projectTeamsDir } from "./scope";
@@ -107,8 +107,14 @@ export function unregisterExternalTeamRoot(dir: string): void {
   if (externalRoots.delete(normalizeDir(dir))) invalidateCatalog();
 }
 
-export function listExternalTeamRoots(): Array<{ dir: string; source: TeamSource }> {
-  return [...externalRoots.values()];
+/** External root dirs (matches the legacy catalog's string[] shape). */
+export function listExternalTeamRoots(): string[] {
+  return [...externalRoots.values()].map((r) => r.dir);
+}
+
+/** Source of a registered external root (default "pro"). */
+export function getExternalTeamRootSource(dir: string): TeamSource {
+  return externalRoots.get(normalizeDir(dir))?.source ?? "pro";
 }
 
 // ── Manifest read + validate ──────────────────────────────
@@ -359,15 +365,35 @@ function scanTeam(
   scope: TeamScope,
   rootSource: TeamSource,
   writable: boolean,
+  idOverride?: string,
 ): TeamRecord | null {
-  const manifest = readManifest(dir);
+  // idOverride (the legacy Local Pack surfaced as project.local) synthesizes a
+  // manifest when the dir has no team.json/plugin.json.
+  let manifest = readManifest(dir);
+  if (!manifest && idOverride) {
+    manifest = {
+      id: idOverride,
+      name: "This project",
+      description: "Skills, agents and commands created in this project.",
+      version: "0.0.0",
+      packFormatVersion: 1,
+      tier: "free",
+      publisher: "user",
+    };
+  }
   if (!manifest) return null;
-  // teamId must equal the directory name.
+  // teamId must equal the directory name (unless overridden for the fallback).
   const dirName = dir.replace(/\\/g, "/").split("/").pop()!;
-  if (manifest.id !== dirName) {
+  if (!idOverride && manifest.id !== dirName) {
     log.warn("teamId mismatches dir name, skipping team", { dir, teamId: manifest.id, dirName });
     return null;
   }
+  if (idOverride && manifest.id !== idOverride) {
+    // A real manifest inside the fallback dir disagrees with the override → skip.
+    log.warn("fallback dir manifest id mismatches the override, skipping", { dir, manifestId: manifest.id, idOverride });
+    return null;
+  }
+  manifest = { ...manifest, id: idOverride ?? manifest.id };
   // Reserved ids may only come from their proper root: prismnext.core from the
   // bundled root, project.local from a project root. Anything else is rejected.
   if (manifest.id === CORE_TEAM_ID && rootSource !== "bundled") {
@@ -460,7 +486,7 @@ function teamDirFingerprint(teamDir: string): string {
 function computeFingerprint(projectRoots: string[]): string {
   const roots = [
     getBundledTeamsDir(),
-    ...listExternalTeamRoots().map((r) => r.dir),
+    ...listExternalTeamRoots(),
     appTeamsDir(),
     ...projectRoots.map((r) => projectTeamsDir(r)),
   ];
@@ -472,6 +498,13 @@ function computeFingerprint(projectRoots: string[]): string {
       parts.push(teamDirFingerprint(join(root, entry.name)));
     }
   }
+  // The legacy Local Pack fallback dir (.prismnext/agent/local/) is part of the
+  // fingerprint too — its content feeds the project.default team, and it does
+  // NOT live under teams/, so without this two projects would share a stale
+  // catalog cache entry.
+  for (const projectRoot of projectRoots) {
+    parts.push(`local:${teamDirFingerprint(join(projectRoot, LOCAL_TEAM_REL))}`);
+  }
   return djb2(parts.sort().join("||"));
 }
 
@@ -481,10 +514,10 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
 
   const roots: Array<{ dir: string; scope: TeamScope; source: TeamSource; writable: boolean }> = [
     { dir: getBundledTeamsDir(), scope: "app", source: "bundled", writable: false },
-    ...listExternalTeamRoots().map((r) => ({
-      dir: r.dir,
+    ...listExternalTeamRoots().map((dir) => ({
+      dir,
       scope: "app" as const,
-      source: r.source,
+      source: getExternalTeamRootSource(dir),
       writable: false,
     })),
     { dir: appTeamsDir(), scope: "app", source: "user", writable: true },
@@ -510,6 +543,21 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
         });
         continue;
       }
+      teams.push(team);
+      byId.set(team.manifest.id, team);
+    }
+  }
+
+  // Read-time fallback (T0 froze the disk format; T6 migrates it): a project's
+  // legacy Local Pack at .prismnext/agent/local/ is surfaced as a project team.
+  // The teamId stays LOCAL_TEAM_ID ("user.local") so FQID prefixes don't split
+  // from the legacy packs.json state; the project.local rename is T6 (M10).
+  for (const projectRoot of projectRoots) {
+    if (byId.has(LOCAL_TEAM_ID)) continue;
+    const legacyLocal = join(projectRoot, LOCAL_TEAM_REL);
+    if (!existsSync(legacyLocal)) continue;
+    const team = scanTeam(legacyLocal, "project", "user", true, LOCAL_TEAM_ID);
+    if (team) {
       teams.push(team);
       byId.set(team.manifest.id, team);
     }

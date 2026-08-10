@@ -21,6 +21,7 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyProjectTeamsState, normalizeProjectTeamsState } from "../../shared/teams/state";
+import { hasLegacyAgentState, readTeamsState } from "../services/teams-state";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("teams-state-project");
@@ -36,19 +37,25 @@ function statePath(projectRoot: string): string {
  * The T6 migration moves packs.json → teams.json on disk and removes this.
  */
 function deriveFromLegacyPacks(projectRoot: string): ProjectTeamsState | null {
+  // Trigger when packs.json exists OR when legacy content (skills/ etc.) exists
+  // without packs.json — readTeamsState runs the legacy migration (R6 etc.) in
+  // both cases, and the migration is what moves legacy dirs into the Local Pack.
   const legacyPath = join(projectRoot, ".prismnext", "agent", "packs.json");
-  if (!existsSync(legacyPath)) return null;
+  if (!existsSync(legacyPath) && !hasLegacyAgentState(projectRoot)) return null;
   try {
-    // Dynamic import: the new layer reads the legacy store without a hard
-    // module dependency (removed in T6).
-    const { readTeamsState } = require("../services/teams-state") as typeof import("../services/teams-state");
+    // Static import (a dynamic require() is undefined under vitest ESM). The new
+    // layer reads the legacy store; removed in T6.
     const old = readTeamsState(projectRoot);
     const teamEnabled: Record<string, boolean> = {};
     for (const [teamId, st] of Object.entries(old.projectPackStates)) {
       if (typeof st?.enabled === "boolean") teamEnabled[teamId] = st.enabled;
     }
+    // The legacy Local Pack keeps its user.local id across the T3/T4 switch
+    // (the project.local rename is T6 / M10), so FQID prefixes pass through
+    // unchanged and the legacy packs.json state stays consistent.
     const assetEnabled: Record<string, boolean> = {};
     for (const fqid of old.disabledContent) assetEnabled[fqid] = false;
+    const assetOverrides: ProjectTeamsState["assetOverrides"] = { ...old.contentOverrides };
     // defaultOrchestrator (an orchestrator FQID) → defaultTeam (its teamId).
     const defaultTeam = old.defaultOrchestrator?.split(":")[0];
     return {
@@ -56,7 +63,7 @@ function deriveFromLegacyPacks(projectRoot: string): ProjectTeamsState | null {
       defaultTeam: defaultTeam || undefined,
       teamEnabled,
       assetEnabled,
-      assetOverrides: old.contentOverrides,
+      assetOverrides,
     };
   } catch (err) {
     log.error("legacy packs.json fallback failed", { projectRoot, error: String(err) });

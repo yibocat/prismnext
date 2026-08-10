@@ -14,8 +14,8 @@ import {
 import { isValidCommandName } from "./template-utils";
 import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
-import type { ResolvedCommand } from "../../shared/teams/types";
-import { invalidateResolver, listCommands, resolveBareContentId } from "../services/team-resolver";
+import type { AssetViewV2 } from "../../shared/teams/view";
+import { invalidateResolver, listAssets, resolveInvocation, resolveRef } from "../teams/resolver";
 import { setAssetDisabled } from "../services/teams-state";
 
 /**
@@ -37,22 +37,17 @@ export class CommandRegistry {
   }
 
   list(): CommandDef[] {
-    return listCommands(this.projectRoot).map((cmd) => toCommandDef(cmd));
+    return listAssets(this.projectRoot, "command").map((cmd) => toCommandDef(cmd));
   }
 
   /**
    * Look up a single command by name for slash execution.
-   * 同名遮蔽优先级：local > core > 其他 pack（与 resolver bare-id 语义一致）。
-   * Returns undefined if not found or disabled.
+   * Goes through the resolver's single precedence table (§7.5) — no local
+   * shadowing logic here. Returns undefined if not found or disabled.
    */
   lookup(name: string): CommandDef | undefined {
-    const matches = this.list().filter((c) => c.name === name && c.enabled);
-    if (matches.length === 0) return undefined;
-    return (
-      matches.find((c) => c.teamId === LOCAL_TEAM_ID) ??
-      matches.find((c) => c.teamId === CORE_TEAM_ID) ??
-      matches.sort((a, b) => a.teamId.localeCompare(b.teamId))[0]
-    );
+    const asset = resolveInvocation(this.projectRoot, "command", name);
+    return asset ? toCommandDef(asset) : undefined;
   }
 
   /**
@@ -86,6 +81,11 @@ export class CommandRegistry {
    */
   create(payload: CreateCommandPayload): CommandDef {
     this.ensureDir();
+    // Reject creating a command whose name already exists in the Local Pack
+    // (silent overwrite is a data-loss footgun).
+    if (this.localCommands().some((c) => c.name === payload.name)) {
+      throw new Error(`Command already exists: ${payload.name}`);
+    }
 
     const def: CommandDef = {
       id: `${LOCAL_TEAM_ID}:${payload.name}`,
@@ -161,7 +161,7 @@ export class CommandRegistry {
   setEnabled(id: string, enabled: boolean): void {
     const fqid = parseFqid(id)
       ? id
-      : resolveBareContentId(this.projectRoot, "command", id);
+      : resolveRef(this.projectRoot, id, undefined, "command");
     if (!fqid) throw new Error(`Command not found: ${id}`);
     setAssetDisabled(this.projectRoot, fqid, !enabled);
   }
@@ -252,12 +252,17 @@ export class CommandRegistry {
   private writeFile(def: CommandDef): void {
     this.ensureDir();
 
+    // Frontmatter values are single-line; collapse newlines so a multi-line
+    // description can't corrupt the file (the flat parser splits on ":").
+    const fmValue = (v: string) => v.replace(/\s+/g, " ").trim();
     const frontmatter = [
       "---",
-      `description: ${def.description || ""}`,
-      ...(def.action ? [`action: ${def.action}`] : []),
-      ...(def.agent ? [`agent: ${def.agent}`] : []),
-      ...(def.model ? [`model: ${def.model}`] : []),
+      `description: ${fmValue(def.description || "")}`,
+      ...(def.action ? [`action: ${fmValue(def.action)}`] : []),
+      ...(def.agent ? [`agent: ${fmValue(def.agent)}`] : []),
+      ...(def.model ? [`model: ${fmValue(def.model)}`] : []),
+      // order is persisted so user-defined ordering survives a reload (B12).
+      `order: ${def.order ?? 1000}`,
       "---",
     ].join("\n");
 
@@ -275,22 +280,30 @@ export class CommandRegistry {
   }
 }
 
-function toCommandDef(cmd: ResolvedCommand): CommandDef {
-  const teamId = cmd.origin.teamId;
+/** Map a resolved command asset to the legacy CommandDef shape. */
+function toCommandDef(asset: AssetViewV2): CommandDef {
+  const teamId = asset.teamId;
+  const cmd = (asset.definition ?? {}) as {
+    template?: string;
+    action?: string;
+    agent?: string;
+    model?: string;
+    order?: number;
+  };
   return {
-    id: cmd.fqid,
-    name: cmd.name,
-    description: cmd.description,
+    id: asset.fqid,
+    name: asset.id,
+    description: asset.description,
     source: teamId === CORE_TEAM_ID ? "builtin" : teamId === LOCAL_TEAM_ID ? "user" : "plugin",
-    template: cmd.template,
+    template: cmd.template ?? "",
     action: cmd.action,
     agent: cmd.agent,
     model: cmd.model,
-    order: cmd.order,
-    enabled: cmd.enabled,
+    order: cmd.order ?? 1000,
+    enabled: asset.enabled,
     teamId,
-    teamName: cmd.origin.teamName,
-    removable: teamId === LOCAL_TEAM_ID,
+    teamName: asset.origin.teamName,
+    removable: asset.editable,
   };
 }
 

@@ -27,7 +27,7 @@ import {
   listExternalTeamRoots,
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
-} from "../../src/main/services/team-catalog";
+} from "../../src/main/teams/catalog";
 import {
   readTeamsState,
   setAssetDisabled,
@@ -37,6 +37,8 @@ import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
+import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
+import { __resetTeamsResolverForTests, listAssets as listAssetsV2 } from "../../src/main/teams/resolver";
 import { CORE_TEAM_ID } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
@@ -63,12 +65,15 @@ afterEach(() => {
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setTeamsInstalledDataDir(null);
+  setAppTeamsStateDataDir(null);
+  __resetTeamsResolverForTests();
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setTeamsInstalledDataDir(dir);
+  setAppTeamsStateDataDir(dir);
   tempDirs.push(dir);
   return dir;
 }
@@ -159,16 +164,19 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     makePack(teamsRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       skills: [{ id: "skill-core" }],
     });
-    registerExternalTeamRoot(teamsRoot);
+    // bundled source so the reserved core id is accepted (design: reserved-id guard).
+    registerExternalTeamRoot(teamsRoot, "bundled");
 
     const root = temp();
     sealAppStore();
     addInstalledTeam("aaa.pack");
 
     const result = syncProjectSkillsIntegration(root);
+    // §7.5 rank descending (later-wins): core (rank 5, weakest) first, then
+    // bundled aaa.pack (rank 4), project scan entry last (strongest).
     expect(result.skillsPaths).toEqual([
-      join(teamsRoot, "aaa.pack").replace(/\\/g, "/"),
       join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
+      join(teamsRoot, "aaa.pack").replace(/\\/g, "/"),
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ]);
   });
@@ -181,7 +189,8 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     makePack(teamsRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       skills: [{ id: "shared" }],
     });
-    registerExternalTeamRoot(teamsRoot);
+    // bundled source so the reserved core id is accepted (reserved-id guard).
+    registerExternalTeamRoot(teamsRoot, "bundled");
 
     const root = temp();
     sealAppStore();

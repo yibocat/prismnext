@@ -17,12 +17,14 @@ import {
   registerExternalTeamRoot,
   listExternalTeamRoots,
   unregisterExternalTeamRoot,
-} from "../../src/main/services/team-catalog";
+} from "../../src/main/teams/catalog";
 import { setTeamEnabled } from "../../src/main/services/teams-state";
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
+import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
+import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
@@ -42,15 +44,18 @@ function project(): string {
 
 afterEach(() => {
   __resetCommandRegistriesForTests();
+  __resetTeamsResolverForTests();
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setTeamsInstalledDataDir(null);
+  setAppTeamsStateDataDir(null);
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setTeamsInstalledDataDir(dir);
+  setAppTeamsStateDataDir(dir);
   tempDirs.push(dir);
   return dir;
 }
@@ -64,7 +69,8 @@ function setupPacks(): void {
       { name: "shared", md: "---\ndescription: Shared\norder: 1\n---\nShared body\n" },
     ],
   });
-  registerExternalTeamRoot(coreRoot);
+  // bundled source so the reserved core id is accepted (reserved-id guard).
+  registerExternalTeamRoot(coreRoot, "bundled");
 
   const notesRoot = temp();
   makePack(notesRoot, "test.notes", baseManifest("test.notes", { name: "Notes" }), {
@@ -77,6 +83,7 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
   it("core 命令以 FQID 身份出现（source=builtin）；未安装 pack 的命令不出现", () => {
     setupPacks();
     const root = project();
+    sealAppStore();
     const reg = getCommandRegistry(root);
 
     const list = reg.list();

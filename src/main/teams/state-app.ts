@@ -21,6 +21,7 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyAppTeamsState, normalizeAppTeamsState } from "../../shared/teams/state";
+import { listInstalledTeams } from "../services/teams-installed";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("teams-state-app");
@@ -48,7 +49,7 @@ function filePath(): string {
  */
 function deriveInstalledFromLegacy(): AppTeamsState["installed"] | null {
   try {
-    const { listInstalledTeams } = require("../services/teams-installed") as typeof import("../services/teams-installed");
+    // Static import (a dynamic require() is undefined under vitest ESM).
     const list = listInstalledTeams();
     return list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt }));
   } catch {

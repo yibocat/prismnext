@@ -2,9 +2,12 @@
 // setContentEnabled / saveOverride / resetCoreDefaults / getCoreState /
 // resolveOrigin / getContentView / setDefaultOrchestrator.
 import { ipcMain } from "electron";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import type { AssetKind, AssetOverride, Fqid } from "../../shared/teams/types";
 import { getTeamContentsWithMcp } from "../services/team-catalog";
+import { listMcpServers } from "../teams/resolver";
 import {
   isAssetActive,
   listAssets,
@@ -34,6 +37,58 @@ function requireProjectRoot(projectRoot: string | null | undefined): string {
 }
 
 const CONTENT_KINDS: AssetKind[] = ["orchestrator", "subagent", "skill", "command"];
+
+/** A unified MCP entry for the slash catalog (project entries + team entries). */
+interface UnifiedMcpEntry {
+  name: string;
+  enabled: boolean;
+  /** "project" = user-defined in .prismnext/agent/mcp.json; otherwise the team name. */
+  origin: string;
+  autoStart: boolean;
+}
+
+/**
+ * Merge project mcp.json entries with team-provided MCP servers (B1 fix).
+ * Project entries win on name collisions (explicit project config overrides a
+ * team's declaration), matching the ACP merge in acp/service.ts.
+ */
+function listUnifiedMcpServers(projectRoot: string): UnifiedMcpEntry[] {
+  const out: UnifiedMcpEntry[] = [];
+  const seen = new Set<string>();
+
+  // Project mcp.json (object-map schema) first — highest precedence.
+  const mcpPath = join(projectRoot, ".prismnext", "agent", "mcp.json");
+  if (existsSync(mcpPath)) {
+    try {
+      const config = JSON.parse(readFileSync(mcpPath, "utf-8")) as {
+        mcpServers?: Record<string, { enabled?: boolean }>;
+      };
+      for (const [name, raw] of Object.entries(config.mcpServers ?? {})) {
+        if (seen.has(name)) continue;
+        seen.add(name);
+        out.push({ name, enabled: raw.enabled !== false, origin: "project", autoStart: false });
+      }
+    } catch {
+      // Corrupt project mcp.json → skip project entries, teams still merge.
+    }
+  }
+
+  // Team-provided MCP servers (TeamResolver, enabled only).
+  for (const asset of listMcpServers(projectRoot)) {
+    if (!asset.enabled) continue;
+    const def = asset.definition as { name: string; autoStart?: boolean };
+    if (seen.has(def.name)) continue;
+    seen.add(def.name);
+    out.push({
+      name: def.name,
+      enabled: true,
+      origin: asset.origin.teamName,
+      autoStart: def.autoStart === true,
+    });
+  }
+
+  return out;
+}
 
 export function registerPacksHandlers(): void {
   // catalog ∪ 项目状态（ProjectTeamView[]：installed/enabled/locked/compatible）
@@ -183,6 +238,15 @@ export function registerPacksHandlers(): void {
   ipcMain.handle("teams:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
     if (!args?.projectRoot) return [];
     return listProjectMcps(args.projectRoot);
+  });
+
+  // Unified MCP list for the slash catalog (B1 fix): project mcp.json entries
+  // PLUS every enabled team's MCP servers (resolved by the TeamResolver). The
+  // composer `/` menu reads this so team-provided MCPs can actually be invoked
+  // (previously they were invisible to the lazy-load allowlist).
+  ipcMain.handle("teams:listMcp", async (_event, args?: { projectRoot?: string | null }) => {
+    if (!args?.projectRoot) return [];
+    return listUnifiedMcpServers(args.projectRoot);
   });
 
   // Spec §9.4 link UX confirm: target must be currently active to become default.
