@@ -51,6 +51,7 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
   );
   const [contents, setContents] = useState<PackContentEntry[]>([]);
   const [busy, setBusy] = useState(false);
+  const [confirmDisableCore, setConfirmDisableCore] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
 
   const load = useCallback(async () => {
@@ -90,7 +91,11 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
   const toggleProjectEnabled = async (enabled: boolean) => {
     if (!projectRoot || !pack) return;
     if (!enabled && pack.kind === "core") {
-      if (!window.confirm(t("settings.teamsAgents.confirm.disableCore"))) return;
+      if (!confirmDisableCore) {
+        setConfirmDisableCore(true);
+        return;
+      }
+      setConfirmDisableCore(false);
     }
     setBusy(true);
     try {
@@ -214,9 +219,9 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
               <Button
                 size="xs"
                 className="shadow-none"
-                onClick={() => {
+                    onClick={() => {
                   useLayoutStore.getState().setLeftSidebarView("settings");
-                  useLayoutStore.getState().setSettingsCategory("about");
+                  useLayoutStore.getState().setSettingsCategory("teams");
                   closeSettingsPanel();
                 }}
               >
@@ -249,15 +254,28 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
               {t("settings.teamsAgents.enableInProject")}
             </p>
             <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
-              {t("settings.teamsAgents.enableInProjectDesc")}
+              {confirmDisableCore
+                ? t("settings.teamsAgents.confirm.disableCore")
+                : t("settings.teamsAgents.enableInProjectDesc")}
             </p>
           </div>
-          <Switch
-            checked={pack.enabled}
-            disabled={isLocal || busy || pack.locked}
-            onCheckedChange={(enabled) => void toggleProjectEnabled(enabled)}
-            aria-label={t("settings.teamsAgents.enableInProject")}
-          />
+          {confirmDisableCore ? (
+            <Button
+              variant="destructive"
+              size="xs"
+              disabled={busy}
+              onClick={() => void toggleProjectEnabled(false)}
+            >
+              {t("settings.teamsAgents.confirmReset")}
+            </Button>
+          ) : (
+            <Switch
+              checked={pack.enabled}
+              disabled={isLocal || busy || pack.locked}
+              onCheckedChange={(enabled) => void toggleProjectEnabled(enabled)}
+              aria-label={t("settings.teamsAgents.enableInProject")}
+            />
+          )}
         </div>
 
         {/* Content inventory */}

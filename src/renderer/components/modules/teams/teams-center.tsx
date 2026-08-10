@@ -9,7 +9,6 @@ import {
   ArrowLeftIcon,
   Bot,
   CheckIcon,
-  Package,
   PuzzleIcon,
   SearchIcon,
   SlashIcon,
@@ -457,9 +456,10 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                       variant="outline"
                       size="sm"
                       className="shadow-none"
-                      onClick={() =>
-                        useLayoutStore.getState().setLeftSidebarView("settings")
-                      }
+                      onClick={() => {
+                        useLayoutStore.getState().setLeftSidebarView("settings");
+                        useLayoutStore.getState().setSettingsCategory("teams");
+                      }}
                     >
                       {t("teamsCenter.manage")}
                     </Button>
@@ -508,7 +508,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
 
                 {filtered.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-                    <Package className="size-8 opacity-20" />
+                    <PackIcon size="lg" />
                     <p className="text-[length:var(--font-size-13)]">{t("teamsCenter.empty")}</p>
                   </div>
                 ) : (
@@ -523,7 +523,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                         onClick={() => setSelectedId(pack.manifest.id)}
                       >
                         <div className="relative h-14 flex items-center justify-center bg-muted">
-                          <Package className="size-5 text-muted-foreground" />
+                          <PackIcon size="md" />
                           {pack.installed ? (
                             <Badge className="absolute top-1.5 right-1.5 h-5 px-1.5 text-[length:var(--font-size-10)]">
                               {packDisplayState(pack) === "installedActive"
