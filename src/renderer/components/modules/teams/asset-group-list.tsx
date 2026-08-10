@@ -1,7 +1,9 @@
 // AssetGroupList — the shared template for the Skills / Commands / MCP pages
-// (design §8.4). Groups by owning team; group header carries ScopeChip +
-// OriginChip + count; each row has a project-level tri-state switch, a
-// BlockedHint (no fake toggles), and an OverrideDot.
+// (design §8.4). Built ENTIRELY on the app's existing Settings design tokens
+// (SETTINGS_CARD / SETTINGS_ROW / SETTINGS_ROW_LABEL / SETTINGS_ROW_DESC /
+// SETTINGS_CATEGORY_HEADER) — NOT hand-crafted CSS. This ensures visual
+// parity with appearance-settings, skills-settings, and every other Settings
+// page in the app.
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
@@ -9,10 +11,20 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import type { AssetViewV2 } from "@shared/teams/view";
 import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
+import {
+  SETTINGS_CARD as CARD,
+  SETTINGS_ROW as ROW,
+  SETTINGS_ROW_LABEL as ROW_LABEL,
+  SETTINGS_ROW_DESC as ROW_DESC,
+  SETTINGS_CATEGORY_HEADER as CATEGORY_HEADER,
+} from "../settings/settings-tokens";
 import { ScopeChip } from "./scope-chip";
 import { OriginChip } from "./origin-chip";
 import { BlockedHint } from "./blocked-hint";
 import { OverrideDot } from "./override-dot";
+
+const BADGE =
+  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 
 export interface AssetGroupListProps {
   assets: AssetViewV2[];
@@ -44,7 +56,7 @@ export function AssetGroupList({
   className,
 }: AssetGroupListProps) {
   const { t } = useTranslation();
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const groups = useMemo<Group[]>(() => {
     const map = new Map<string, Group>();
@@ -61,7 +73,6 @@ export function AssetGroupList({
       entry.assets.push(a);
       map.set(key, entry);
     }
-    // core first, then app teams (alphabetical), then the project team last.
     const rank = (g: Group) =>
       g.teamId === CORE_TEAM_ID ? 0 : g.scope === "project" || g.teamId === LOCAL_TEAM_ID ? 2 : 1;
     return [...map.values()].sort(
@@ -69,64 +80,53 @@ export function AssetGroupList({
     );
   }, [assets]);
 
-  const toggleGroup = (teamId: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(teamId)) next.delete(teamId);
-      else next.add(teamId);
-      return next;
-    });
-  };
-
   if (assets.length === 0) {
     return (
-      <p className="py-8 text-center text-[length:var(--font-size-13)] text-muted-foreground">
-        {emptyHint ?? t("settings.teams.assets.empty")}
-      </p>
+      <div className={cn(CARD, "!divide-y-0")}>
+        <div className="flex flex-col items-center gap-3 py-10 text-center">
+          <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+            {emptyHint ?? t("settings.teams.assets.empty")}
+          </p>
+        </div>
+      </div>
     );
   }
 
   return (
     <div className={cn("space-y-2", className)}>
       {groups.map((group) => {
-        const isCollapsed = collapsed.has(group.teamId);
+        const isOpen = expanded === group.teamId;
         return (
-          <div key={group.teamId} className="rounded-md border border-border">
+          <div key={group.teamId} className={cn(CARD, "!divide-y-0 overflow-hidden")}>
+            {/* Group header — same density as a SETTINGS_ROW, with Chevron toggle */}
             <button
               type="button"
-              onClick={() => toggleGroup(group.teamId)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
+              className="flex w-full items-center gap-2 py-2.5 pl-2 pr-4 text-left"
+              onClick={() => setExpanded(isOpen ? null : group.teamId)}
             >
-              {isCollapsed ? (
-                <ChevronRightIcon className="size-4 text-muted-foreground" />
-              ) : (
-                <ChevronDownIcon className="size-4 text-muted-foreground" />
-              )}
-              <span className="truncate font-medium">{group.teamName}</span>
+              <span className="shrink-0 text-muted-foreground">
+                {isOpen ? <ChevronDownIcon className="size-4" /> : <ChevronRightIcon className="size-4" />}
+              </span>
+              <span className={cn(ROW_LABEL, "truncate")}>{group.teamName}</span>
               <ScopeChip scope={group.scope} />
               <OriginChip source={group.source} tier={group.tier} />
-              <span className="ml-auto text-[length:var(--font-size-11)] text-muted-foreground">
+              <span className="ml-auto text-[length:var(--font-size-11)] text-muted-foreground tabular-nums shrink-0">
                 {t("settings.teams.assets.count", { count: group.assets.length })}
               </span>
             </button>
-            {!isCollapsed && (
-              <div className="border-t border-border px-3 py-1.5">
+
+            {/* Rows — same density as SETTINGS_ROW, divide-y like every Settings card */}
+            {isOpen && (
+              <div className="divide-y divide-border">
                 {group.assets.map((asset) => {
                   const overridden =
                     asset.enabledProject !== undefined &&
                     asset.enabledProject !== asset.enabledApp;
                   return (
-                    <div key={asset.fqid} className="flex items-center gap-2 py-1.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={cn(
-                              "truncate font-mono text-[length:var(--font-size-13)]",
-                              !asset.enabled && "text-muted-foreground",
-                            )}
-                          >
-                            {asset.name}
-                          </span>
+                    <div key={asset.fqid} className={cn(ROW, !asset.enabled && "opacity-60")}>
+                      <div className="min-w-0 flex-1 pr-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={cn(ROW_LABEL, "font-mono")}>{asset.name}</span>
                           <OverrideDot
                             overridden={overridden}
                             appValue={asset.enabledApp}
@@ -134,22 +134,30 @@ export function AssetGroupList({
                           />
                         </div>
                         {asset.blockedBy ? (
-                          <BlockedHint blockedBy={asset.blockedBy} teamName={asset.origin.teamName} />
+                          <p className={ROW_DESC}>
+                            <BlockedHint blockedBy={asset.blockedBy} teamName={asset.origin.teamName} />
+                          </p>
                         ) : (
-                          renderMeta && <div className="text-[length:var(--font-size-11)] text-muted-foreground">{renderMeta(asset)}</div>
+                          <>
+                            <p className={ROW_DESC}>{asset.description}</p>
+                            {renderMeta && (
+                              <p className={cn(ROW_DESC, "!mt-0.5")}>{renderMeta(asset)}</p>
+                            )}
+                          </>
                         )}
                       </div>
-                      {renderActions?.(asset)}
-                      {asset.blockedBy && asset.blockedBy !== "asset-disabled-project" && asset.blockedBy !== "asset-disabled-app" ? (
-                        // No fake toggle for license / not-installed / shadowed / etc.
-                        <span className="w-9" />
-                      ) : (
-                        <Switch
-                          checked={asset.enabled}
-                          onCheckedChange={(v) => onSetEnabled(asset.fqid, v)}
-                          aria-label={asset.name}
-                        />
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {renderActions?.(asset)}
+                        {asset.blockedBy && asset.blockedBy !== "asset-disabled-project" && asset.blockedBy !== "asset-disabled-app" ? (
+                          <span className="w-9" />
+                        ) : (
+                          <Switch
+                            checked={asset.enabled}
+                            onCheckedChange={(v) => onSetEnabled(asset.fqid, v)}
+                            aria-label={asset.name}
+                          />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
