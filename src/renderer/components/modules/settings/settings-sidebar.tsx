@@ -51,7 +51,7 @@ export const SETTINGS_GROUPS = [
     labelKey: "settings.nav.agentAi",
     items: [
       { id: "models", labelKey: "settings.nav.models", icon: GlobeIcon },
-      { id: "teams-agents", labelKey: "settings.nav.teamsAgents", icon: Bot },
+      { id: "teams-agents", labelKey: "settings.nav.teams", icon: Bot },
       { id: "prompts-rules", labelKey: "settings.nav.promptsRules", icon: FileTextIcon },
       { id: "permissions", labelKey: "settings.nav.permissions", icon: ShieldIcon },
       { id: "commands", labelKey: "settings.nav.commands", icon: SlashIcon },

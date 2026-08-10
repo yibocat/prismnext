@@ -35,11 +35,11 @@ interface PackContentEntry {
 const KIND_ORDER: AssetKind[] = ["orchestrator", "subagent", "skill", "command", "mcp"];
 
 const KIND_LABEL_KEYS: Record<AssetKind, string> = {
-  orchestrator: "settings.teamsAgents.kinds.orchestrator",
-  subagent: "settings.teamsAgents.kinds.expert",
-  skill: "settings.teamsAgents.kinds.skill",
-  command: "settings.teamsAgents.kinds.command",
-  mcp: "settings.teamsAgents.kinds.mcp",
+  orchestrator: "settings.teams.kinds.lead",
+  subagent: "settings.teams.kinds.subagent",
+  skill: "settings.teams.kinds.skill",
+  command: "settings.teams.kinds.command",
+  mcp: "settings.teams.kinds.mcp",
 };
 
 export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
@@ -110,7 +110,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
       // Disabling a team that owns the default main agent moves the default
       // back to the built-in agent — tell the user so it isn't a surprise.
       if (!enabled && result?.defaultMovedTo) {
-        toast.info(t("settings.teamsAgents.toast.defaultMovedToBuiltin"));
+        toast.info(t("settings.teams.toast.defaultMovedToBuiltin"));
       }
     } catch (err) {
       toast.error(String(err instanceof Error ? err.message : err));
@@ -123,7 +123,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     return (
       <div className="flex flex-1 items-center justify-center px-8 py-8">
         <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-          {t("settings.teamsAgents.noProject")}
+          {t("settings.teams.noProject")}
         </p>
       </div>
     );
@@ -164,17 +164,17 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
               </Badge>
               {isUserTeam && (
                 <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)]">
-                  {t("settings.teamsAgents.myTeam")}
+                  {t("settings.teams.myTeam")}
                 </Badge>
               )}
               {isCore && (
                 <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)]">
-                  {t("settings.teamsAgents.coreLabel")}
+                  {t("settings.teams.coreLabel")}
                 </Badge>
               )}
               {isLocal && (
                 <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)]">
-                  {t("settings.teamsAgents.localLabel")}
+                  {t("settings.teams.localLabel")}
                 </Badge>
               )}
               {!pack.compatible && (
@@ -213,7 +213,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
               onClick={() => useLayoutStore.getState().setLeftSidebarView("teams")}
             >
               <StoreIcon className="size-3 mr-1" />
-              {t("settings.teamsAgents.browse")}
+              {t("settings.teams.browse")}
             </Button>
             {pack.locked && (
               <Button
@@ -236,8 +236,8 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
                 disabled={busy}
                 requestLabel={
                   isUserTeam
-                    ? t("settings.teamsAgents.deleteTeam")
-                    : t("settings.teamsAgents.actions.uninstall")
+                    ? t("settings.teams.deleteTeam")
+                    : t("settings.teams.actions.uninstall")
                 }
                 onRequest={() => deleteConfirm.setPendingId(`pack:${pack.manifest.id}`)}
                 onConfirm={() => void uninstall()}
@@ -251,12 +251,12 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
         <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
           <div className="min-w-0">
             <p className="text-[length:var(--font-size-12)] font-medium">
-              {t("settings.teamsAgents.enableInProject")}
+              {t("settings.teams.enableInProject")}
             </p>
             <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
               {confirmDisableCore
-                ? t("settings.teamsAgents.confirm.disableCore")
-                : t("settings.teamsAgents.enableInProjectDesc")}
+                ? t("settings.teams.confirm.disableCore")
+                : t("settings.teams.enableInProjectDesc")}
             </p>
           </div>
           {confirmDisableCore ? (
@@ -266,14 +266,14 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
               disabled={busy}
               onClick={() => void toggleProjectEnabled(false)}
             >
-              {t("settings.teamsAgents.confirmReset")}
+              {t("settings.teams.confirmReset")}
             </Button>
           ) : (
             <Switch
               checked={pack.enabled}
               disabled={isLocal || busy || pack.locked}
               onCheckedChange={(enabled) => void toggleProjectEnabled(enabled)}
-              aria-label={t("settings.teamsAgents.enableInProject")}
+              aria-label={t("settings.teams.enableInProject")}
             />
           )}
         </div>
@@ -310,7 +310,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
             <div className="flex flex-col items-center gap-3 py-8 text-center rounded-lg border border-border">
               <PackageIcon className="size-8 text-muted-foreground/30" />
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("settings.teamsAgents.packDetailEmpty")}
+                {t("settings.teams.teamDetailEmpty")}
               </p>
             </div>
           )}

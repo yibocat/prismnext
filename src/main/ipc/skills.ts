@@ -152,7 +152,7 @@ export function registerSkillsHandlers(): void {
   ipcMain.handle(
     "agent:setSkillEnabled",
     async (_event, args: { projectPath: string; skillId: string; enabled: boolean }) => {
-      // 启停唯一状态操作 = packs.json disabledContent（D3）；skillId 为 FQID
+      // 启停唯一状态操作 = teams.json assetEnabled（D3）；skillId 为 FQID
       // （列表项自带），裸 id 按 resolver 规则解析兜底。
       const fqid = setSkillContentEnabled(args.projectPath, args.skillId, args.enabled);
       if (!fqid) throw new Error(`Skill not found: ${args.skillId}`);

@@ -23,7 +23,7 @@ export function registerCommandsHandlers(): void {
   ipcMain.handle(
     "commands:list",
     async (_event, args?: { projectRoot?: string | null }) => {
-      // 无项目 → 空列表（命令解析需要项目态 packs.json）
+      // 无项目 → 空列表（命令解析需要项目态 teams.json）
       if (!args?.projectRoot) return [];
       return engine.list(args.projectRoot);
     },
@@ -73,7 +73,7 @@ export function registerCommandsHandlers(): void {
     "commands:toggle",
     async (_event, args: { projectRoot: string; id: string; enabled: boolean }) => {
       const root = requireProjectRoot(args.projectRoot);
-      // 启停唯一状态操作 = packs.json disabledContent（registry 内完成）；
+      // 启停唯一状态操作 = teams.json assetEnabled（registry 内完成）；
       // settings 的 builtinCommands 全局持久化已在 Phase 3 移除（R11 迁移）。
       getCommandRegistry(root).setEnabled(args.id, args.enabled);
       return engine.list(root);

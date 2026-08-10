@@ -421,7 +421,7 @@ app.whenReady().then(async () => {
       const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/teams-state");
       const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
       // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
-      // packs.json disabledContent；消费后清空 settings 键。
+      // legacy settings.builtinCommands → teams.json migration; consumed once.。
       registerLegacyBuiltinCommandStatesHooks({
         read: () => {
           const states = (getSettings() as Record<string, unknown>).builtinCommands;

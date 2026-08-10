@@ -11,7 +11,7 @@
  *   复制进 `resources/pro-package/`，随 extraResources 整体发货；
  * - OSS 构建（无 pro 包）→ null，discovery 为无操作。
  *
- * 注册入口 = pack-catalog 的 `registerExternalTeamRoot`（唯一注册口）。
+ * 注册入口 = teams/catalog 的 `registerExternalTeamRoot`（唯一注册口）。
  * license 不激活时**照常注册**（catalog 可见 → upsell），门控在 resolver（§8.3）。
  */
 
@@ -125,7 +125,7 @@ let lastRegisteredRoots = new Set<string>();
 
 /**
  * 扫描 pro 包 teamsRoot → 把 teamsRoot 自身注册为 external pack root。
- * pack-catalog 把 external root 视为「pack 的父目录」并扫描其下的 pack 子目录。
+ * teams/catalog 把 external root 视为「Team 的父目录」并扫描其下的 Team 子目录。
  * 幂等：重复调用只增删差量；pro 包消失时注销上一轮全部注册。
  * 调用时机：app 启动（registerIpcHandlers 之前）、license 激活/清除后、
  * PRISM_PRO_PATH 变化（dev 重启进程即覆盖）。

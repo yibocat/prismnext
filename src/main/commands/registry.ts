@@ -28,7 +28,7 @@ import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
  *
  * 内容唯一来源 = PackResolver.listCommands（core + local + 启用 packs）。
  * 本类不持有内容缓存（resolver 视图自校验新鲜度）：
- * - 启停 = packs.json disabledContent（废弃 .md ↔ .md.disabled 改名与
+ * - 启停 = teams.json assetEnabled (tri-state)（废弃 .md ↔ .md.disabled 改名与
  *   applyBuiltinStates/dumpBuiltinStates 全局态）；
  * - CRUD 只允许 Local Pack（remove 对非 local 直接报错——结构上杜绝 P9）；
  * - 斜杠重名遮蔽优先级：local > core > 其他 pack（id 字典序）。
@@ -160,8 +160,8 @@ export class CommandRegistry {
   }
 
   /**
-   * Enable or disable any command by id —— 唯一状态操作 = packs.json
-   * disabledContent（FQID 原样；裸 id 按 resolver 规则解析兜底）。
+   * Enable or disable any command by id —— 唯一状态操作 = teams.json
+   * assetEnabled (tri-state)（FQID 原样；裸 id 按 resolver 规则解析兜底）。
    */
   setEnabled(id: string, enabled: boolean): void {
     const fqid = parseFqid(id)

@@ -361,23 +361,15 @@ export function registerFsHandlers(): void {
     }
 
     // Create new directory structure
-    const skillsDir = join(newAgentDir, "skills");
     if (!existsSync(newAgentDir)) {
       mkdirSync(newAgentDir, { recursive: true });
     }
-    if (!existsSync(skillsDir)) {
-      mkdirSync(skillsDir, { recursive: true });
-    }
 
     // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
+    // M11 moves this to teams/project.local/mcp.json — the old agent/mcp.json
+    // is only a migration input now.
     const { ensureDefaultMcpServers } = await import("../services/project-mcp-defaults");
     ensureDefaultMcpServers(newAgentDir);
-
-    // Create .gitkeep in skills/
-    const gitkeepPath = join(skillsDir, ".gitkeep");
-    if (!existsSync(gitkeepPath)) {
-      writeFileSync(gitkeepPath, "", "utf-8");
-    }
 
     // Create AGENTS.md template (empty, ready for user to fill in)
     const agentsMdPath = join(newAgentDir, "AGENTS.md");
@@ -441,8 +433,7 @@ export function registerFsHandlers(): void {
     writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
     writeWorkspaceDirs(prismDir, workspaceDirs);
 
-    writeFileSync(join(prismDir, "state.json"), JSON.stringify({}, null, 2));
-    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\n");
+    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\ncache/\nstate/\n");
 
     // Create agent-config templates
     await createAgentConfig(prismDir);
@@ -494,9 +485,6 @@ export function registerFsHandlers(): void {
     if (!existsSync(prismDir)) {
       mkdirSync(prismDir, { recursive: true });
     }
-    if (!existsSync(join(prismDir, "sessions"))) {
-      mkdirSync(join(prismDir, "sessions"), { recursive: true });
-    }
     if (!existsSync(join(prismDir, "compile"))) {
       mkdirSync(join(prismDir, "compile"), { recursive: true });
     }
@@ -532,8 +520,8 @@ export function registerFsHandlers(): void {
     const { existsSync } = require("node:fs");
 
     const PRISM_DIR = ".prismnext";
-    const PRISM_FILES = ["settings.json", "state.json", ".gitignore"];
-    const PRISM_SUBDIRS = ["sessions", "compile"];
+    const PRISM_FILES = ["settings.json", ".gitignore"];
+    const PRISM_SUBDIRS = ["compile"];
 
     const missing: string[] = [];
 

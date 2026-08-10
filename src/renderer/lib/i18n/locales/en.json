@@ -69,7 +69,7 @@
       "browser": "Browser",
       "literature": "Literature",
       "pro": "Pro",
-      "teamsAgents": "Teams & Agents"
+      "teams": "Teams"
     },
     "general": {
       "title": "General",
@@ -1489,6 +1489,43 @@
       "card": {
         "active": "Active"
       },
+      "coreTeam": "PrismNext Core",
+      "noProject": "Open a project to manage teams and subagents.",
+      "emptyTeamCards": "No teams yet.",
+      "coreLabel": "Built-in",
+      "localLabel": "Local",
+      "myTeam": "My team",
+      "viewDetails": "Details",
+      "teamEmptyAgentsHint": "This team has no lead agents or subagents yet. Its skills and commands are managed in the Skills and Commands pages.",
+      "teamNamePlaceholder": "Team name",
+      "teamDescPlaceholder": "Description (optional)",
+      "cancel": "Cancel",
+      "confirmReset": "Confirm reset",
+      "reset": "Reset",
+      "deleteTeam": "Delete team",
+      "enableInProject": "Enable in this project",
+      "enableInProjectDesc": "When enabled, this team's lead agents, subagents, skills and commands are available in this project. Disabled teams are greyed out.",
+      "newLead": "New lead agent",
+      "newSubagent": "New subagent",
+      "teamDetailEmpty": "This team has no content yet.",
+      "confirm": {
+        "disableCore": "Disabling the core pack disables all built-in agents. Continue?"
+      },
+      "actions": {
+        "uninstall": "Uninstall"
+      },
+      "kinds": {
+        "lead": "Lead agents",
+        "subagent": "Subagents",
+        "skill": "Skills",
+        "command": "Commands",
+        "mcp": "MCP"
+      },
+      "toast": {
+        "activeUpdated": "Active team updated",
+        "teamCreated": "Team created",
+        "defaultMovedToBuiltin": "This team's default lead agent was disabled — the default lead agent has moved back to the built-in agent."
+      },
       "roster": {
         "allAvailable": "All available subagents",
         "specificList": "Specific list",
@@ -1512,53 +1549,6 @@
         "assetDisabledProject": "Disabled in this project",
         "shadowed": "Shadowed by a same-named item in \"{{team}}\"",
         "outOfScope": "Can't be referenced across scopes"
-      }
-    },
-    "teamsAgents": {
-      "title": "Teams & Agents",
-      "pageDesc": "Manage teams (installed packs and your own) and the main agents and experts they bring.",
-      "browse": "Browse teams",
-      "noProject": "Open a project to manage packs and agents.",
-      "emptyPacks": "No teams installed yet.",
-      "coreTeam": "PrismNext Core",
-      "mine": "Mine",
-      "default": "Default",
-      "setDefault": "Set default",
-      "confirmReset": "Confirm reset",
-      "reset": "Reset",
-      "confirm": {
-        "disableCore": "Disabling the core pack disables all built-in agents. Continue?"
-      },
-      "actions": {
-        "uninstall": "Uninstall"
-      },
-      "kinds": {
-        "orchestrator": "Main agents",
-        "expert": "Experts",
-        "skill": "Skills",
-        "command": "Commands",
-        "mcp": "MCP"
-      },
-      "defaultMainAgent": "Default: {{name}}",
-      "enableInProject": "Enable in this project",
-      "emptyTeamCards": "No teams yet.",
-      "coreLabel": "Built-in",
-      "localLabel": "Local",
-      "teamEmptyAgentsHint": "This team has no main agents or experts yet. Its skills and commands are managed in the Skills and Commands pages.",
-      "createTeam": "Create team",
-      "teamNamePlaceholder": "Team name",
-      "teamDescPlaceholder": "Description (optional)",
-      "teamCreated": "Team created.",
-      "deleteTeam": "Delete team",
-      "myTeam": "My team",
-      "cancel": "Cancel",
-      "viewDetails": "Details",
-      "packDetailEmpty": "This team has no content yet.",
-      "enableInProjectDesc": "When enabled, this team's main agents, experts, skills and commands are available in this project. Disabled teams are greyed out.",
-      "setDefaultDisabledHint": "This main agent is disabled in this project and cannot be set as default.",
-      "setDefaultNotActive": "This main agent is not enabled in this project and cannot be set as default.",
-      "toast": {
-        "defaultMovedToBuiltin": "This team's default main agent was disabled — the default main agent has moved back to the built-in agent."
       }
     }
   },

@@ -1,5 +1,5 @@
 /**
- * packs.json —— 项目级唯一 Agent Pack 状态文件（stateVersion 2）。
+ * teams-state.ts — legacy packs.json migration reader (migration-only)（stateVersion 2）。
  *
  * 设计：docs-private/specs/2026-08-08-agent-pack-architecture-refactor.md §4.4 / §6 / §10。
  *
@@ -38,7 +38,7 @@ import { getTeamRecord } from "../teams/catalog";
 import { createLogger } from "./logger";
 import { upsertInstalledTeams } from "./teams-installed";
 
-const log = createLogger("packs-state");
+const log = createLogger("packs-state (legacy migration)");
 
 export const TEAMS_STATE_REL = ".prismnext/agent/packs.json";
 
@@ -107,7 +107,7 @@ function legacyCommandFileNames(projectRoot: string): string[] {
 
 // ── R11：app 级 settings 的 builtin command 启停（全局 → 项目态）──────────
 //
-// settings.json 是 app 级、packs.json 是项目级；packs-state 不反向依赖
+// settings.json 是 app 级、packs.json 是项目级；packs-state (legacy migration) 不反向依赖
 // settings 服务（测试隔离），由应用启动时注入 read/clear 钩子。
 // 语义：第一个执行迁移的项目继承全局状态，随后 settings 键清空（全局时代结束）。
 

@@ -1,10 +1,10 @@
 /**
- * packs-installed.ts —— App-level pack installation store (spec
+ * teams-installed.ts — App-level team installation store —— App-level pack installation store (spec
  * 2026-08-09-pack-app-project-layering.md §4.1).
  *
  * "Is this pack installed on this machine?" has exactly one answer, stored in
  * userData (shared by all projects). Project-level enable/disable lives in
- * packs.json (projectPackStates), and core/local packs are implicitly
+ * teams.json (assetEnabled), and core/local packs are implicitly
  * installed and never recorded here.
  *
  * File: `app.getPath("userData")/packs-installed.json`

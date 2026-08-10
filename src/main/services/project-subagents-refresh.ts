@@ -163,7 +163,7 @@ export function isExpertsIntegrationPath(absPath: string, projectRoot: string): 
     // project teams root + teams.json（v2 启停 / 默认活动团队）
     || normalized.includes(`${root}/.prismnext/agent/teams/`)
     || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
-    // packs.json（legacy 启停 / override / 默认 orchestrator）
+    // packs.json (legacy — migration input only)
     || normalized.endsWith(`${root}/.prismnext/agent/packs.json`)
     // legacy 路径（迁移前/回滚期仍可能变动）
     || normalized.includes(`${root}/.prismnext/agent/experts/`)

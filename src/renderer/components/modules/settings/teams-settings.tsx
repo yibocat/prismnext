@@ -50,7 +50,7 @@ function packIdOf(fqid: string): string {
 }
 
 function groupLabel(teamId: string, pack: TeamCardView | undefined, t: TFunction): string {
-  if (teamId === CORE_TEAM_ID) return t("settings.teamsAgents.coreTeam");
+  if (teamId === CORE_TEAM_ID) return t("settings.teams.coreTeam");
   if (teamId === PROJECT_DEFAULT_TEAM_ID) return pack?.manifest.name ?? t("settings.teams.scope.project");
   return pack?.manifest.name ?? teamId;
 }
@@ -246,7 +246,7 @@ export function TeamsAgentsSettings() {
     try {
       await window.electronAPI.teamsCreate(teamName.trim(), teamDesc.trim(), teamScope, projectRoot);
       setTeamName(""); setTeamDesc(""); setCreatingTeam(false);
-      toast.success(t("settings.teamsAgents.teamCreated"));
+      toast.success(t("settings.teams.toast.teamCreated"));
       await loadAll({ silent: true });
     } catch (err) { toast.error(String(err instanceof Error ? err.message : err)); }
     finally { setSaving(false); }
@@ -296,7 +296,7 @@ export function TeamsAgentsSettings() {
           <div className={cn(CARD, "!divide-y-0")}>
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <BotIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teamsAgents.noProject")}</p>
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.noProject")}</p>
             </div>
           </div>
         ) : (
@@ -326,20 +326,20 @@ export function TeamsAgentsSettings() {
                   <PlusIcon className="size-3 mr-1" />{t("settings.teams.createTeam")}
                 </Button>
                 <Button variant="outline" size="xs" disabled={saving} onClick={() => openSettingsPanel({ kind: "agent-orchestrator", mode: "new" })}>
-                  <PlusIcon className="size-3 mr-1" />{t("settings.agent.newOrchestrator")}
+                  <PlusIcon className="size-3 mr-1" />{t("settings.teams.newLead")}
                 </Button>
                 <Button variant="outline" size="xs" disabled={saving} onClick={() => openSettingsPanel({ kind: "agent-expert", mode: "new" })}>
-                  <PlusIcon className="size-3 mr-1" />{t("settings.agent.newExpert")}
+                  <PlusIcon className="size-3 mr-1" />{t("settings.teams.newSubagent")}
                 </Button>
               </div>
               {expertResetConfirm.isPending(BUILTIN_EXPERTS_RESET_ID) ? (
                 <Button variant="destructive" size="xs" disabled={saving} onClick={() => void resetBuiltinExperts()}>
-                  {t("settings.teamsAgents.confirmReset")}
+                  {t("settings.teams.confirmReset")}
                 </Button>
               ) : (
                 <Button variant="ghost" size="xs" className="text-muted-foreground" disabled={saving || !expertsBuiltinsModified}
                   onClick={() => expertResetConfirm.setPendingId(BUILTIN_EXPERTS_RESET_ID)}>
-                  <RotateCcwIcon className="size-3 mr-1" />{t("settings.teamsAgents.reset")}
+                  <RotateCcwIcon className="size-3 mr-1" />{t("settings.teams.reset")}
                 </Button>
               )}
             </div>
@@ -347,8 +347,8 @@ export function TeamsAgentsSettings() {
             {creatingTeam && (
               <div className={cn(CARD, "!divide-y-0")}>
                 <div className="flex flex-col gap-2 py-2.5">
-                  <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder={t("settings.teamsAgents.teamNamePlaceholder")} className="h-8 text-[length:var(--font-size-12)]" autoFocus />
-                  <Input value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} placeholder={t("settings.teamsAgents.teamDescPlaceholder")} className="h-8 text-[length:var(--font-size-12)]" />
+                  <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder={t("settings.teams.teamNamePlaceholder")} className="h-8 text-[length:var(--font-size-12)]" autoFocus />
+                  <Input value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} placeholder={t("settings.teams.teamDescPlaceholder")} className="h-8 text-[length:var(--font-size-12)]" />
                   <div className="flex gap-1">
                     <Button size="xs" variant={teamScope === "project" ? "secondary" : "ghost"} onClick={() => setTeamScope("project")}>
                       {t("settings.teams.scope.project")}
@@ -358,7 +358,7 @@ export function TeamsAgentsSettings() {
                     </Button>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <Button size="xs" variant="ghost" disabled={saving} onClick={() => { setCreatingTeam(false); setTeamName(""); setTeamDesc(""); }}>{t("settings.teamsAgents.cancel")}</Button>
+                    <Button size="xs" variant="ghost" disabled={saving} onClick={() => { setCreatingTeam(false); setTeamName(""); setTeamDesc(""); }}>{t("settings.teams.cancel")}</Button>
                     <Button size="xs" disabled={saving || !teamName.trim()} onClick={() => void createTeam()}>{t("settings.teams.createTeam")}</Button>
                   </div>
                 </div>
@@ -372,7 +372,7 @@ export function TeamsAgentsSettings() {
                 <div className={cn(CARD, "!divide-y-0")}>
                   <div className="flex flex-col items-center gap-3 py-10 text-center">
                     <BotIcon className="size-8 text-muted-foreground/30" />
-                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teamsAgents.emptyTeamCards")}</p>
+                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.emptyTeamCards")}</p>
                   </div>
                 </div>
               ) : (
@@ -393,12 +393,12 @@ export function TeamsAgentsSettings() {
                           <span className={cn(ROW_LABEL, "truncate")}>{group.label}</span>
                           {groupPack && <ScopeChip scope={groupPack.scope} />}
                           {groupPack && <OriginChip source={groupPack.source} tier={groupPack.manifest.tier} />}
-                          {groupPack?.manifest.publisher === "user" && <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)] shrink-0">{t("settings.teamsAgents.myTeam")}</Badge>}
+                          {groupPack?.manifest.publisher === "user" && <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)] shrink-0">{t("settings.teams.myTeam")}</Badge>}
                           {isActive && <span className={cn(BADGE, "shrink-0 bg-secondary text-secondary-foreground")}>{t("settings.teams.card.active")}</span>}
                           <OverrideDot overridden={overridden} appValue={groupPack?.enabledApp}
                             onReset={() => void window.electronAPI.teamsSetEnabled(projectRoot, group.teamId, null, "project").then(() => loadAll())} />
                         </button>
-                        <Button variant="ghost" size="icon" className="size-7 shrink-0" title={t("settings.teamsAgents.viewDetails")}
+                        <Button variant="ghost" size="icon" className="size-7 shrink-0" title={t("settings.teams.viewDetails")}
                           onClick={() => openSettingsPanel({ kind: "team-detail", teamId: group.teamId, title: group.label })}>
                           <InfoIcon className="size-3.5" />
                         </Button>
@@ -410,18 +410,18 @@ export function TeamsAgentsSettings() {
                       {isOpen && (
                         <div className="border-t border-border">
                           {group.orchestrators.length === 0 && group.experts.length === 0 && (
-                            <p className="px-3 py-3 text-[length:var(--font-size-12)] text-muted-foreground">{t("settings.teamsAgents.teamEmptyAgentsHint")}</p>
+                            <p className="px-3 py-3 text-[length:var(--font-size-12)] text-muted-foreground">{t("settings.teams.teamEmptyAgentsHint")}</p>
                           )}
                           {group.orchestrators.length > 0 && (
                             <div>
-                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">{t("settings.teamsAgents.kinds.orchestrator")}</p>
+                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">{t("settings.teams.kinds.lead")}</p>
                               <div className="divide-y divide-border">
                                 {group.orchestrators.map((o) => (
                                   <div key={o.fqid} className={cn(ROW, "px-3")}>
                                     <div className="min-w-0 flex-1">
                                       <div className="flex flex-wrap items-center gap-2">
                                         <span className={ROW_LABEL}>{o.name}</span>
-                                        {isActive && packIdOf(o.fqid) === activeTeamId && <span className={cn(BADGE, "shrink-0 bg-secondary text-secondary-foreground")}>{t("settings.teamsAgents.default")}</span>}
+                                        {isActive && packIdOf(o.fqid) === activeTeamId && <span className={cn(BADGE, "shrink-0 bg-secondary text-secondary-foreground")}>{t("settings.teams.card.active")}</span>}
                                       </div>
                                       <p className={ROW_DESC}>{o.description}</p>
                                     </div>
@@ -452,7 +452,7 @@ export function TeamsAgentsSettings() {
                           )}
                           {group.experts.length > 0 && (
                             <div>
-                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">{t("settings.teamsAgents.kinds.expert")}</p>
+                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">{t("settings.teams.kinds.subagent")}</p>
                               <div className="divide-y divide-border pb-1">
                                 {group.experts.map((e) => (
                                   <div key={e.fqid} className={cn(ROW, "px-3")}>

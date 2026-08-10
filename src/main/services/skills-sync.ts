@@ -116,7 +116,7 @@ export interface SkillLibrarySource {
 }
 
 export interface SkillsManifest {
-  /** @deprecated 启停已迁入 packs.json disabledContent（R10）；仅为迁移输入保留读取 */
+  /** @deprecated 启停已迁入 teams.json assetEnabled（R10）；仅为迁移输入保留读取 */
   disabled?: string[];
   /** @deprecated migrated to `sources` on read */
   registryUrls?: string[];
@@ -366,7 +366,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
 }
 
 /**
- * 逐项启停 —— 唯一状态操作 = packs.json disabledContent（§5.6.2 / D3）。
+ * 逐项启停 —— 唯一状态操作 = teams.json assetEnabled（§5.6.2 / D3）。
  * FQID 原样使用；裸 id 按 resolver 规则解析（core → 全局唯一）。
  * 返回解析后的 FQID（未命中 → null）。
  */

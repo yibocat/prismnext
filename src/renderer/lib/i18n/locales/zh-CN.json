@@ -69,7 +69,7 @@
       "browser": "浏览器",
       "literature": "文献",
       "pro": "Pro",
-      "teamsAgents": "团队与专家"
+      "teams": "团队"
     },
     "general": {
       "title": "通用",
@@ -1489,6 +1489,43 @@
       "card": {
         "active": "活动"
       },
+      "coreTeam": "PrismNext Core",
+      "noProject": "打开项目以管理团队和子 Agent。",
+      "emptyTeamCards": "暂无团队。",
+      "coreLabel": "内置",
+      "localLabel": "本地",
+      "myTeam": "我的团队",
+      "viewDetails": "详情",
+      "teamEmptyAgentsHint": "该团队暂无主 Agent 或子 Agent。其技能与命令请在「技能」「命令」页面管理。",
+      "teamNamePlaceholder": "团队名称",
+      "teamDescPlaceholder": "描述（可选）",
+      "cancel": "取消",
+      "confirmReset": "确认重置",
+      "reset": "重置",
+      "deleteTeam": "删除团队",
+      "enableInProject": "在此项目启用",
+      "enableInProjectDesc": "启用后，该团队的主 Agent、子 Agent、技能与命令可在当前项目使用；停用的团队会灰显。",
+      "newLead": "新建主 Agent",
+      "newSubagent": "新建子 Agent",
+      "teamDetailEmpty": "该团队暂无内容。",
+      "confirm": {
+        "disableCore": "停用核心团队会禁用全部内置 Agent。是否继续？"
+      },
+      "actions": {
+        "uninstall": "卸载"
+      },
+      "kinds": {
+        "lead": "主 Agent",
+        "subagent": "子 Agent",
+        "skill": "技能",
+        "command": "命令",
+        "mcp": "MCP"
+      },
+      "toast": {
+        "activeUpdated": "活动团队已更新",
+        "teamCreated": "团队已创建",
+        "defaultMovedToBuiltin": "该团队的默认主 Agent 已停用，默认主 Agent 已转移回内置主 Agent。"
+      },
       "roster": {
         "allAvailable": "全部可用子 Agent",
         "specificList": "指定名单",
@@ -1512,53 +1549,6 @@
         "assetDisabledProject": "已在本项目停用",
         "shadowed": "被「{{team}}」中的同名项覆盖",
         "outOfScope": "无法跨作用域引用"
-      }
-    },
-    "teamsAgents": {
-      "title": "团队与专家",
-      "pageDesc": "管理团队（已安装的与自建的团队）及其带来的主 Agent 与专家。",
-      "browse": "浏览团队",
-      "noProject": "打开项目以管理团队和专家。",
-      "emptyPacks": "尚未安装团队。",
-      "coreTeam": "PrismNext Core",
-      "mine": "我的",
-      "default": "默认",
-      "setDefault": "设为默认",
-      "confirmReset": "确认重置",
-      "reset": "重置",
-      "confirm": {
-        "disableCore": "停用核心团队会禁用全部内置 Agent。是否继续？"
-      },
-      "actions": {
-        "uninstall": "卸载"
-      },
-      "kinds": {
-        "orchestrator": "主 Agent",
-        "expert": "专家",
-        "skill": "技能",
-        "command": "命令",
-        "mcp": "MCP"
-      },
-      "defaultMainAgent": "默认：{{name}}",
-      "enableInProject": "在此项目启用",
-      "emptyTeamCards": "暂无团队。",
-      "coreLabel": "内置",
-      "localLabel": "本地",
-      "teamEmptyAgentsHint": "该团队暂无主 Agent 或专家。其技能与命令请在「技能」「命令」页面管理。",
-      "createTeam": "创建团队",
-      "teamNamePlaceholder": "团队名称",
-      "teamDescPlaceholder": "描述（可选）",
-      "teamCreated": "团队已创建。",
-      "deleteTeam": "删除团队",
-      "myTeam": "我的团队",
-      "cancel": "取消",
-      "viewDetails": "详情",
-      "packDetailEmpty": "该团队暂无内容。",
-      "enableInProjectDesc": "启用后，该团队的主 Agent、专家、技能与命令可在当前项目使用；停用的团队会灰显。",
-      "setDefaultDisabledHint": "该主 Agent 已在此项目停用，无法设为默认。",
-      "setDefaultNotActive": "该主 Agent 未在此项目启用，无法设为默认。",
-      "toast": {
-        "defaultMovedToBuiltin": "该团队的默认主 Agent 已停用，默认主 Agent 已转移回内置主 Agent。"
       }
     }
   },
