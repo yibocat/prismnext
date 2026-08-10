@@ -385,7 +385,6 @@ export function setSkillContentEnabled(
  */
 export function computeProfileSkillDisabled(
   projectRoot: string,
-  _profileSkillAllowlist?: string[],
 ): string[] {
   const skills = listAssets(projectRoot, "skill");
   const activeIds = new Set(skills.filter((s) => s.enabled).map((s) => s.id));
@@ -498,12 +497,10 @@ export interface ProjectSkillsOpencodePatch {
  */
 export function syncProjectSkillsIntegration(
   projectRoot: string,
-  options?: { profileSkillAllowlist?: string[] },
 ): {
   skillsCount: number;
   skillsPaths: string[];
   skillPermissions: Record<string, string>;
-  registryUrls: string[];
 } {
   const root = normalizeProjectRoot(projectRoot);
   cleanupProjectOpenCodeArtifacts(root);
@@ -537,7 +534,7 @@ export function syncProjectSkillsIntegration(
     return d !== 0 ? d : a.localeCompare(b);
   });
 
-  const disabled = computeProfileSkillDisabled(root, options?.profileSkillAllowlist);
+  const disabled = computeProfileSkillDisabled(root);
 
   return {
     skillsCount: listProjectSkills(root).length,
@@ -546,7 +543,6 @@ export function syncProjectSkillsIntegration(
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ],
     skillPermissions: buildSkillPermissions(disabled),
-    registryUrls: [] as string[],
   };
 }
 

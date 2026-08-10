@@ -36,9 +36,8 @@ import { listCorePackSkills, readCoreSkillMd } from "../services/core-team-skill
 
 function refreshProjectSkills(
   projectPath: string,
-  options?: { profileSkillAllowlist?: string[] },
 ) {
-  return refreshProjectSkillsIntegrationWithReload(projectPath, options);
+  return refreshProjectSkillsIntegrationWithReload(projectPath);
 }
 
 export function registerSkillsHandlers(): void {

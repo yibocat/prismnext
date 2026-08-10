@@ -349,7 +349,6 @@ describe("skills-sync: 技能库来源（manifest 元数据，不变）", () => 
     mockRegistryFetch(registryUrl);
     await addSkillLibrarySource(root, registryUrl);
     const result = syncProjectSkillsIntegration(root);
-    expect(result.registryUrls).toEqual([]);
     expect(listLibrarySources(root).some((s) => s.url === registryUrl)).toBe(true);
   });
 
