@@ -1,803 +1,435 @@
-// Settings → Teams & Agents (merged page, layering spec §6).
-// A single unified card list — every installed pack / user team / My Content
-// is one card: click the header to expand its main agents + experts (each row
-// opens the right-side editor panel), and click the info button to open the
-// pack detail panel (meta + content inventory + uninstall).
-// A card is greyed out (opacity) when the pack is NOT enabled in this project
-// — still clickable and inspectable, just visually muted as a project-scope
-// indicator. Per-project enable/disable of agents, skills and commands lives in
-// those pages; app-level uninstall lives in the pack detail panel.
+// Settings → Teams (design 2026-08-10 §8.2). The single management home for
+// teams and the orchestration-class assets (lead agent / subagents / roster /
+// scope). Structure: active team on top, then all teams (TeamCard) with one
+// project-level switch each, and an expanded row rendering the user's mental
+// model: lead agent → roster → this team's subagents → capabilities → scope.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
-import {
-  BotIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  InfoIcon,
-  PlusIcon,
-  RotateCcwIcon,
-  StoreIcon,
-} from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, PlusIcon, StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { usePacksStore } from "@/stores/teams-store";
+import { useTeamsStore, toCardView, type TeamCardView } from "@/stores/teams-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
-import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import {
-  SETTINGS_CARD as CARD,
-  SETTINGS_ROW as ROW,
-  SETTINGS_ROW_DESC as ROW_DESC,
-  SETTINGS_ROW_LABEL as ROW_LABEL,
-  SETTINGS_CATEGORY_HEADER as CATEGORY_HEADER,
-} from "./settings-tokens";
-import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
-import { InlineDeleteButton } from "./inline-delete-button";
-import { PackIcon } from "../teams/team-icon";
-import type { SubagentInfo, OrchestratorInfo } from "@shared/agent-subagents";
-import type { OriginInfo, ProjectTeamView } from "@shared/teams/types";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
-
-interface CoreState {
-  coreSubagentDisabledCount: number;
-  coreSubagentOverrideCount: number;
-}
-
-const BADGE =
-  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
-const BUILTIN_EXPERTS_RESET_ID = "builtin-experts-reset";
-
-function expertBundleSummary(expert: SubagentInfo, t: TFunction): string {
-  const parts: string[] = [];
-  if (expert.model) parts.push(t("settings.agent.summary.customModel"));
-  if (expert.effectiveModules?.length) {
-    parts.push(
-      t("settings.agent.summary.activeModules", { count: expert.effectiveModules.length }),
-    );
-  }
-  return parts.length > 0 ? parts.join(" · ") : t("settings.agent.summary.standardExpert");
-}
-
-function orchestratorBundleSummary(orchestrator: OrchestratorInfo, t: TFunction): string {
-  const parts: string[] = [];
-  if (orchestrator.model) parts.push(t("settings.agent.summary.customModel"));
-  if (orchestrator.roster?.length) {
-    parts.push(
-      t("settings.agent.summary.roster", { count: orchestrator.roster.length }),
-    );
-  }
-  if (orchestrator.effectiveModules?.length) {
-    parts.push(
-      t("settings.agent.summary.modules", { count: orchestrator.effectiveModules.length }),
-    );
-  }
-  return parts.length > 0
-    ? parts.join(" · ")
-    : t("settings.agent.summary.standardOrchestrator");
-}
-
-function sortExperts(experts: SubagentInfo[]): SubagentInfo[] {
-  return [...experts].sort((a, b) => {
-    if (a.builtin !== b.builtin) return a.builtin ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  });
-}
-
-function sortOrchestrators(orchestrators: OrchestratorInfo[]): OrchestratorInfo[] {
-  return [...orchestrators].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function expertsBuiltinsModified(coreState: CoreState | null): boolean {
-  if (!coreState) return false;
-  return coreState.coreSubagentDisabledCount + coreState.coreSubagentOverrideCount > 0;
-}
-
-/** Origin badge: core pack → "Built-in"; other packs → their pack name. */
-function renderBadge(badge: OriginInfo | null | undefined, t: TFunction) {
-  if (!badge) return null;
-  if (badge.teamId === CORE_TEAM_ID) {
-    return (
-      <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
-        {t("settings.agent.builtin")}
-      </span>
-    );
-  }
-  return <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{badge.teamName}</span>;
-}
-
-/** Derive a content item's owning pack id from its fqid (`teamId:contentId`). */
-function packIdOf(fqid?: string): string {
-  const pid = fqid?.split(":")[0];
-  return pid && pid.length > 0 ? pid : LOCAL_TEAM_ID;
-}
-
-interface TeamGroup {
-  teamId: string;
-  label: string;
-  orchestrators: OrchestratorInfo[];
-  experts: SubagentInfo[];
-}
+import { SETTINGS_CARD as CARD } from "./settings-tokens";
+import { TeamCard } from "../teams/team-card";
+import { ScopeChip } from "../teams/scope-chip";
+import { OriginChip } from "../teams/origin-chip";
+import { OverrideDot } from "../teams/override-dot";
+import { BlockedHint } from "../teams/blocked-hint";
+import { RosterEditor } from "../teams/roster-editor";
+import type { AssetViewV2, RosterView } from "@shared/teams/view";
+import { CORE_TEAM_ID } from "@shared/teams/types";
 
 export function TeamsAgentsSettings() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const license = useProLicenseStore((s) => s.license);
+  const catalog = useTeamsStore((s) => s.catalog);
 
-  // Project-first when a project is open (workspace mental model); fall back
-  // to the app tab when there is no project to show.
-  const [experts, setExperts] = useState<SubagentInfo[]>([]);
-  const [orchestrators, setOrchestrators] = useState<OrchestratorInfo[]>([]);
-  const [defaultOrchestratorFqid, setDefaultOrchestratorFqid] = useState<string | null>(null);
-  const [coreState, setCoreState] = useState<CoreState | null>(null);
-  const [badges, setBadges] = useState<Record<string, OriginInfo | null>>({});
-  // Shared packs catalog: the detail panel flips `enabled` in this store, so
-  // the card list greys out / restores in real time (no close-to-refresh).
-  const catalog = usePacksStore((s) => s.catalog);
-  // Card set = installed app-level packs (core + installed), Local Pack aside
-  // (teamGroups adds it back as its own card).
-  const packs = useMemo(
-    () => catalog.filter((p) => p.installed && p.kind !== "local"),
-    [catalog],
-  );
-  const [expandedCard, setExpandedCard] = useState<string | null>(null);
-  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [subagents, setSubagents] = useState<AssetViewV2[]>([]);
+  const [orchestrators, setOrchestrators] = useState<AssetViewV2[]>([]);
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+  const [rosters, setRosters] = useState<Record<string, RosterView | null>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [creating, setCreating] = useState<"app" | "project" | null>(null);
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const rowDeleteConfirm = useInlineDeleteConfirm();
-  const expertResetConfirm = useInlineDeleteConfirm();
-
-  const loadBadges = useCallback(
-    async (projectRootArg: string, items: Array<{ fqid?: string; id: string }>) => {
-      const entries = await Promise.all(
-        items.map(async (item) => {
-          const key = item.fqid ?? item.id;
-          const badge = await window.electronAPI.teamsResolveOrigin(projectRootArg, key);
-          return [key, badge] as const;
-        }),
-      );
-      setBadges(Object.fromEntries(entries));
-    },
-    [],
-  );
 
   const loadAll = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!projectRoot) {
-        setExperts([]);
+        setSubagents([]);
         setOrchestrators([]);
-        setDefaultOrchestratorFqid(null);
-        setCoreState(null);
-        setBadges({});
-        usePacksStore.getState().clear();
+        setActiveTeamId(null);
+        setRosters({});
+        useTeamsStore.getState().clear();
         return;
       }
-      if (!options?.silent) setLoading(true);
       try {
-        const [expertList, orchestratorList, coreStateResult] = await Promise.all([
-          window.electronAPI.subagentsList(projectRoot),
-          window.electronAPI.orchestratorsList(projectRoot),
-          window.electronAPI.teamsGetCoreState(projectRoot),
+        const [subs, orchs, active] = await Promise.all([
+          window.electronAPI.teamsListAssets(projectRoot, "subagent"),
+          window.electronAPI.teamsListAssets(projectRoot, "orchestrator"),
+          window.electronAPI.teamsGetActiveTeam(projectRoot),
+          useTeamsStore.getState().load(projectRoot, { force: true }),
         ]);
-        await usePacksStore.getState().load(projectRoot, { force: true });
-        setExperts(sortExperts(expertList));
-        setOrchestrators(sortOrchestrators(orchestratorList));
-        setCoreState(coreStateResult);
-        setDefaultOrchestratorFqid(coreStateResult.defaultOrchestratorFqid ?? null);
-        // Unified card list: app-level installed packs (core + installed) feed
-        // the card set; the project-scoped Local Pack stays out of `packs`
-        // (teamGroups adds it back as its own card).
-        await loadBadges(projectRoot, [
-          ...expertList.map((e) => ({ fqid: e.fqid, id: e.id })),
-          ...orchestratorList.map((o) => ({ fqid: o.fqid, id: o.id })),
-        ]);
+        setSubagents(subs);
+        setOrchestrators(orchs);
+        setActiveTeamId(active?.manifest.id ?? null);
       } catch {
-        setExperts([]);
-        setOrchestrators([]);
-        setCoreState(null);
-        setBadges({});
-        usePacksStore.getState().clear();
-      } finally {
-        if (!options?.silent) setLoading(false);
+        // leave previous state on transient failure
       }
     },
-    [projectRoot, loadBadges],
+    [projectRoot],
   );
 
   useEffect(() => {
     void loadAll();
   }, [loadAll, license]);
 
-  useOnSettingsEditorKindsClosed(
-    ["agent-expert", "agent-orchestrator", "pack-detail"],
-    () => {
-      void loadAll({ silent: true });
+  // Load the roster for an expanded team on demand.
+  const loadRoster = useCallback(
+    async (teamId: string) => {
+      if (!projectRoot) return;
+      const roster = await window.electronAPI.teamsGetRoster(projectRoot, teamId);
+      setRosters((prev) => ({ ...prev, [teamId]: roster }));
     },
+    [projectRoot],
   );
 
-  const packById = useMemo(() => {
-    const map = new Map<string, ProjectTeamView>();
-    for (const p of packs) map.set(p.manifest.id, p);
-    return map;
-  }, [packs]);
-
-  // One card per team. The card set comes from the INSTALLED packs (core +
-  // app-level installed packs + the project-scoped Local Pack), NOT from
-  // "packs that happen to have agents" — otherwise a freshly installed pack
-  // without agents would be invisible in the project tab. Group each pack's
-  // orchestrators and experts under it (core first, packs alphabetically,
-  // "Mine" last).
-  const teamGroups = useMemo<TeamGroup[]>(() => {
-    const orch = new Map<string, OrchestratorInfo[]>();
-    for (const o of orchestrators) {
-      const pid = packIdOf(o.fqid);
-      const list = orch.get(pid) ?? [];
-      list.push(o);
-      orch.set(pid, list);
-    }
-    const exp = new Map<string, SubagentInfo[]>();
-    for (const e of experts) {
-      const pid = packIdOf(e.fqid);
-      const list = exp.get(pid) ?? [];
-      list.push(e);
-      exp.set(pid, list);
-    }
-    // Every installed pack gets a card: core, app-level installed packs, and
-    // the project-scoped Local Pack (My Content).
-    const pids = new Set<string>([...packs.map((p) => p.manifest.id)]);
-    pids.add(CORE_TEAM_ID);
-    pids.add(LOCAL_TEAM_ID);
-    // Safety net: packs that provide agents but somehow missed `packs`.
-    for (const pid of [...orch.keys(), ...exp.keys()]) pids.add(pid);
-    const rank = (pid: string) => (pid === CORE_TEAM_ID ? 0 : pid === LOCAL_TEAM_ID ? 2 : 1);
-    return [...pids]
-      .map((teamId) => ({
-        teamId,
-        label: groupLabel(teamId, badges, packById, t),
-        orchestrators: sortOrchestrators(orch.get(teamId) ?? []),
-        experts: sortExperts(exp.get(teamId) ?? []),
-      }))
-      .sort((a, b) => rank(a.teamId) - rank(b.teamId) || a.label.localeCompare(b.label));
-  }, [orchestrators, experts, badges, packById, t]);
-
-  const openOrchestrator = (orchestrator: OrchestratorInfo) => {
-    rowDeleteConfirm.clearPending();
-    openSettingsPanel(
-      orchestrator.builtin
-        ? {
-            kind: "agent-orchestrator",
-            mode: "customize-builtin",
-            orchestratorId: orchestrator.id,
-            title: orchestrator.name,
-          }
-        : {
-            kind: "agent-orchestrator",
-            mode: "edit",
-            orchestratorId: orchestrator.id,
-            title: orchestrator.name,
-          },
-    );
+  const toggleExpand = (teamId: string) => {
+    const next = expanded === teamId ? null : teamId;
+    setExpanded(next);
+    if (next) void loadRoster(next);
   };
 
-  const openExpert = (expert: SubagentInfo) => {
-    openSettingsPanel(
-      expert.builtin
-        ? {
-            kind: "agent-expert",
-            mode: "customize-builtin",
-            expertId: expert.id,
-            title: expert.name,
-          }
-        : {
-            kind: "agent-expert",
-            mode: "edit",
-            expertId: expert.id,
-            title: expert.name,
-          },
-    );
-  };
-
-  const setDefault = async (orchestrator: OrchestratorInfo) => {
-    if (!projectRoot || !orchestrator.fqid) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.teamsSetDefaultOrchestrator(projectRoot, orchestrator.fqid);
-      setDefaultOrchestratorFqid(orchestrator.fqid ?? null);
-      toast.success(t("settings.agent.toast.defaultOrchestratorUpdated"));
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error && /not active/i.test(err.message)
-          ? t("settings.teamsAgents.setDefaultNotActive")
-          : err instanceof Error
-            ? err.message
-            : t("settings.agent.toast.defaultOrchestratorFailed"),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Create / delete user teams (app-level, like installed teams).
-  const createTeam = async () => {
-    if (!teamName.trim()) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.teamsCreateUserTeam(teamName.trim(), teamDesc.trim());
-      setTeamName("");
-      setTeamDesc("");
-      setCreatingTeam(false);
-      toast.success(t("settings.teamsAgents.teamCreated"));
-      await loadAll({ silent: true });
-    } catch (err) {
-      toast.error(String(err instanceof Error ? err.message : err));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleExpertEnabled = async (expert: SubagentInfo, enabled: boolean) => {
-    if (!projectRoot || !expert.fqid) return;
-    const prev = experts;
-    setExperts((current) =>
-      sortExperts(current.map((e) => (e.id === expert.id ? { ...e, enabled } : e))),
-    );
-    try {
-      await window.electronAPI.teamsSetAssetEnabled(projectRoot, expert.fqid, enabled);
-      const [nextExperts, coreStateResult] = await Promise.all([
-        window.electronAPI.subagentsList(projectRoot),
-        window.electronAPI.teamsGetCoreState(projectRoot),
-      ]);
-      setExperts(sortExperts(nextExperts));
-      setCoreState(coreStateResult);
-    } catch (err: unknown) {
-      setExperts(prev);
-      toast.error(
-        err instanceof Error ? err.message : t("settings.agent.toast.updateExpertFailed"),
-      );
-    }
-  };
-
-  const resetBuiltinExperts = async () => {
+  const setActive = async (teamId: string) => {
     if (!projectRoot) return;
     setSaving(true);
     try {
-      await window.electronAPI.teamsResetCoreDefaults(projectRoot, "subagent");
-      await loadAll({ silent: true });
-      expertResetConfirm.clearPending();
+      await window.electronAPI.teamsSetActiveTeam(projectRoot, teamId, "project");
+      setActiveTeamId(teamId);
+      toast.success(t("settings.teams.toast.activeUpdated"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
-              {t("settings.teamsAgents.title")}
-            </h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              {t("settings.teamsAgents.pageDesc")}
-            </p>
-          </div>
-          {projectRoot && (
-            <Button
-              variant="outline"
-              size="xs"
-              className="shrink-0"
-              onClick={() => useLayoutStore.getState().setLeftSidebarView("teams")}
-            >
-              <StoreIcon className="size-3 mr-1" />
-              {t("settings.teamsAgents.browse")}
-            </Button>
-          )}
-        </div>
+  const setTeamEnabled = async (team: TeamCardView, enabled: boolean) => {
+    if (!projectRoot) return;
+    try {
+      await window.electronAPI.teamsSetEnabled(projectRoot, team.manifest.id, enabled, "project");
+      await loadAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
 
-        {!projectRoot ? (
-          <div className={cn(CARD, "!divide-y-0")}>
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <BotIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                {t("settings.teamsAgents.noProject")}
+  const setAssetEnabled = async (fqid: string, enabled: boolean) => {
+    if (!projectRoot) return;
+    try {
+      await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled, "project");
+      await loadAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const createTeam = async () => {
+    if (!projectRoot || !creating || !teamName.trim()) return;
+    setSaving(true);
+    try {
+      await window.electronAPI.teamsCreate(teamName.trim(), teamDesc.trim(), creating, projectRoot);
+      setTeamName("");
+      setTeamDesc("");
+      setCreating(null);
+      toast.success(t("settings.teams.toast.teamCreated"));
+      await loadAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activeTeam = useMemo(
+    () => catalog.find((tm) => tm.manifest.id === activeTeamId) ?? null,
+    [catalog, activeTeamId],
+  );
+
+  const subagentsByTeam = useMemo(() => {
+    const map = new Map<string, AssetViewV2[]>();
+    for (const s of subagents) {
+      const list = map.get(s.teamId) ?? [];
+      list.push(s);
+      map.set(s.teamId, list);
+    }
+    return map;
+  }, [subagents]);
+
+  const orchestratorByTeam = useMemo(() => {
+    const map = new Map<string, AssetViewV2>();
+    for (const o of orchestrators) map.set(o.teamId, o);
+    return map;
+  }, [orchestrators]);
+
+  if (!projectRoot) {
+    return (
+      <div className={cn(CARD, "flex flex-col items-center gap-2 py-12 text-center")}>
+        <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+          {t("settings.teamsAgents.noProject")}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-[length:var(--font-size-16)] font-semibold">{t("settings.teams.title")}</h2>
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">{t("settings.teams.pageDesc")}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="xs" onClick={() => setCreating(creating ? null : "project")}>
+            <PlusIcon className="size-3.5" />
+            {t("settings.teams.createTeam")}
+          </Button>
+          <Button variant="outline" size="xs" onClick={() => useLayoutStore.getState().setLeftSidebarView("teams")}>
+            <StoreIcon className="size-3.5" />
+            {t("settings.teams.browse")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Create-team inline form */}
+      {creating && (
+        <div className={cn(CARD, "space-y-2 p-3")}>
+          <div className="flex items-center gap-2">
+            <ScopeChip scope={creating} />
+            <span className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {creating === "app" ? t("settings.teams.scope.appDesc") : t("settings.teams.scope.projectDesc")}
+            </span>
+            <button
+              type="button"
+              className="ml-auto text-[length:var(--font-size-11)] text-primary hover:underline"
+              onClick={() => setCreating(creating === "app" ? "project" : "app")}
+            >
+              {creating === "app" ? t("settings.teams.scope.project") : t("settings.teams.scope.app")}
+            </button>
+          </div>
+          <Input
+            placeholder={t("settings.teams.teamNamePlaceholder")}
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+          />
+          <Input
+            placeholder={t("settings.teams.teamDescPlaceholder")}
+            value={teamDesc}
+            onChange={(e) => setTeamDesc(e.target.value)}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="xs" onClick={() => setCreating(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button size="xs" disabled={!teamName.trim() || saving} onClick={() => void createTeam()}>
+              {t("common.create")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Active team */}
+      {activeTeam && (
+        <div className={cn(CARD, "p-3")}>
+          <p className="mb-2 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground">
+            {t("settings.teams.activeTeam")}
+          </p>
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium">{activeTeam.manifest.name}</span>
+                <ScopeChip scope={activeTeam.scope} />
+                <OriginChip source={activeTeam.source} tier={activeTeam.manifest.tier} />
+              </div>
+              <p className="truncate text-[length:var(--font-size-12)] text-muted-foreground">
+                {activeTeam.orchestratorId
+                  ? orchestratorByTeam.get(activeTeam.manifest.id)?.name ?? activeTeam.orchestratorId
+                  : t("settings.teams.noLead")}
               </p>
             </div>
           </div>
-        ) : (
-          <>
-            {/* 顶部工具栏 */}
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="xs"
-                  disabled={saving}
-                  onClick={() => setCreatingTeam((v) => !v)}
-                >
-                  <PlusIcon className="size-3 mr-1" />
-                  {t("settings.teamsAgents.createTeam")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => openSettingsPanel({ kind: "agent-orchestrator", mode: "new" })}
-                  disabled={saving}
-                >
-                  <PlusIcon className="size-3 mr-1" />
-                  {t("settings.agent.newOrchestrator")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => openSettingsPanel({ kind: "agent-expert", mode: "new" })}
-                  disabled={saving}
-                >
-                  <PlusIcon className="size-3 mr-1" />
-                  {t("settings.agent.newExpert")}
-                </Button>
-              </div>
-                {expertResetConfirm.isPending(BUILTIN_EXPERTS_RESET_ID) ? (
-                  <Button variant="destructive" size="xs" disabled={saving} onClick={() => void resetBuiltinExperts()}>
-                    {t("settings.teamsAgents.confirmReset")}
-                  </Button>
+        </div>
+      )}
+
+      {/* All teams */}
+      <div className="space-y-2">
+        {catalog.map((team) => {
+          const isExpanded = expanded === team.manifest.id;
+          const isActive = team.manifest.id === activeTeamId;
+          const orch = orchestratorByTeam.get(team.manifest.id);
+          const teamSubagents = subagentsByTeam.get(team.manifest.id) ?? [];
+          const roster = rosters[team.manifest.id];
+          const overridden = team.enabledProject !== undefined && team.enabledProject !== team.enabledApp;
+          return (
+            <div key={team.manifest.id} className="rounded-md border border-border">
+              <div className="flex items-center gap-2 px-3 py-2">
+                <button type="button" onClick={() => toggleExpand(team.manifest.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  {isExpanded ? (
+                    <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className={cn("truncate font-medium", !team.enabled && "text-muted-foreground")}>
+                    {team.manifest.name}
+                  </span>
+                  <ScopeChip scope={team.scope} />
+                  <OriginChip source={team.source} tier={team.manifest.tier} />
+                  {isActive && (
+                    <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[length:var(--font-size-11)] font-medium text-secondary-foreground">
+                      {t("settings.teams.card.active")}
+                    </span>
+                  )}
+                  <OverrideDot
+                    overridden={overridden}
+                    appValue={team.enabledApp}
+                    onReset={() => void window.electronAPI.teamsSetEnabled(projectRoot, team.manifest.id, null, "project").then(() => loadAll())}
+                  />
+                </button>
+                {team.blockedBy && team.blockedBy !== "team-disabled-project" && team.blockedBy !== "team-disabled-app" ? (
+                  <BlockedHint blockedBy={team.blockedBy} teamName={team.manifest.name} />
                 ) : (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="text-muted-foreground"
-                    disabled={saving || !expertsBuiltinsModified(coreState)}
-                    onClick={() => expertResetConfirm.setPendingId(BUILTIN_EXPERTS_RESET_ID)}
-                  >
-                    <RotateCcwIcon className="size-3 mr-1" />
-                    {t("settings.teamsAgents.reset")}
-                  </Button>
+                  <Switch
+                    checked={team.enabled}
+                    disabled={saving || team.manifest.id === CORE_TEAM_ID || team.scope === "project"}
+                    onCheckedChange={(v) => void setTeamEnabled(team, v)}
+                    aria-label={team.manifest.name}
+                  />
                 )}
               </div>
 
-              {creatingTeam && (
-                <div className={cn(CARD, "!divide-y-0")}>
-                  <div className="flex flex-col gap-2 py-2.5">
-                    <Input
-                      value={teamName}
-                      onChange={(e) => setTeamName(e.target.value)}
-                      placeholder={t("settings.teamsAgents.teamNamePlaceholder")}
-                      className="h-8 text-[length:var(--font-size-12)]"
-                      autoFocus
-                    />
-                    <Input
-                      value={teamDesc}
-                      onChange={(e) => setTeamDesc(e.target.value)}
-                      placeholder={t("settings.teamsAgents.teamDescPlaceholder")}
-                      className="h-8 text-[length:var(--font-size-12)]"
-                    />
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        disabled={saving}
-                        onClick={() => {
-                          setCreatingTeam(false);
-                          setTeamName("");
-                          setTeamDesc("");
-                        }}
-                      >
-                        {t("settings.teamsAgents.cancel")}
-                      </Button>
-                      <Button
-                        size="xs"
-                        disabled={saving || !teamName.trim()}
-                        onClick={() => void createTeam()}
-                      >
-                        {t("settings.teamsAgents.createTeam")}
-                      </Button>
-                    </div>
+              {isExpanded && (
+                <div className="space-y-4 border-t border-border px-4 py-3">
+                  {/* Lead agent */}
+                  <div>
+                    <p className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t("settings.teams.leadAgent")}
+                    </p>
+                    {orch ? (
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium">{orch.name}</span>
+                        <span className="truncate text-[length:var(--font-size-12)] text-muted-foreground">{orch.description}</span>
+                        <div className="ml-auto flex items-center gap-2">
+                          {!isActive && team.hasOrchestrator && (
+                            <Button variant="ghost" size="xs" disabled={saving || !team.enabled} onClick={() => void setActive(team.manifest.id)}>
+                              {t("settings.teams.setActive")}
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() =>
+                              openSettingsPanel({
+                                kind: "agent-orchestrator",
+                                mode: team.writable ? "edit" : "customize-builtin",
+                                orchestratorId: orch.id,
+                                title: orch.name,
+                              })
+                            }
+                          >
+                            {team.writable ? t("settings.agent.edit") : t("settings.agent.customize")}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[length:var(--font-size-12)] text-muted-foreground">{t("settings.teams.noLeadCapability")}</p>
+                    )}
                   </div>
-                </div>
-              )}
 
-              <div className="space-y-2">
-                {loading ? (
-                <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
-                  {t("common.loading")}
-                </div>
-              ) : teamGroups.length === 0 ? (
-                <div className={cn(CARD, "!divide-y-0")}>
-                  <div className="flex flex-col items-center gap-3 py-10 text-center">
-                    <BotIcon className="size-8 text-muted-foreground/30" />
-                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                      {t("settings.teamsAgents.emptyTeamCards")}
+                  {/* Roster */}
+                  {orch && (
+                      <div>
+                        <p className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground">
+                          {t("settings.teams.rosterTitle")}
+                        </p>
+                        <RosterEditor
+                          roster={roster ?? null}
+                          subagents={subagents}
+                          teamId={team.manifest.id}
+                          onChange={(spec) => {
+                            if (!projectRoot) return;
+                            void window.electronAPI.teamsSaveAssetOverride(
+                              projectRoot,
+                              orch.fqid,
+                              { allowedExperts: spec.mode === "all" ? undefined : spec.members },
+                              "project",
+                            ).then(() => loadRoster(team.manifest.id));
+                          }}
+                        />
+                      </div>
+                    )}
+
+                  {/* This team's subagents */}
+                  <div>
+                    <p className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t("settings.teams.teamSubagents")}
+                    </p>
+                    <p className="mb-1.5 text-[length:var(--font-size-11)] text-muted-foreground">
+                      {t("settings.teams.teamSubagentsDesc")}
+                    </p>
+                    {teamSubagents.length === 0 ? (
+                      <p className="text-[length:var(--font-size-12)] text-muted-foreground">{t("settings.teams.noSubagents")}</p>
+                    ) : (
+                      teamSubagents.map((s) => (
+                        <div key={s.fqid} className="flex items-center gap-2 py-1">
+                          <span className={cn("truncate text-[length:var(--font-size-13)]", !s.enabled && "text-muted-foreground")}>{s.name}</span>
+                          {s.blockedBy && <BlockedHint blockedBy={s.blockedBy} teamName={s.origin.teamName} />}
+                          <div className="ml-auto flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={() =>
+                                openSettingsPanel({
+                                  kind: "agent-expert",
+                                  mode: team.writable ? "edit" : "customize-builtin",
+                                  expertId: s.id,
+                                  title: s.name,
+                                })
+                              }
+                            >
+                              {team.writable ? t("settings.agent.edit") : t("settings.agent.customize")}
+                            </Button>
+                            <Switch
+                              checked={s.enabled}
+                              disabled={!team.enabled}
+                              onCheckedChange={(v) => void setAssetEnabled(s.fqid, v)}
+                              aria-label={s.name}
+                            />
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Capabilities summary */}
+                  <div>
+                    <p className="mb-1.5 text-[length:var(--font-size-11)] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t("settings.teams.capabilities")}
+                    </p>
+                    <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                      {t("settings.teams.capabilitiesSummary", {
+                        skills: team.counts.skill,
+                        commands: team.counts.command,
+                        mcps: team.counts.mcp,
+                      })}
                     </p>
                   </div>
-                </div>
-              ) : (
-                teamGroups.map((group) => {
-                  const isCore = group.teamId === CORE_TEAM_ID;
-                  const isLocal = group.teamId === LOCAL_TEAM_ID;
-                  const groupPack = packById.get(group.teamId);
-                  const isOpen = expandedCard === group.teamId;
-                  const defaultMain = group.orchestrators.find(
-                    (o) => (o.fqid ?? "") === (defaultOrchestratorFqid ?? ""),
-                  );
-                  const isUserTeam = groupPack?.manifest.publisher === "user";
-                  const projectEnabled = groupPack ? groupPack.enabled : true;
-                  return (
-                    <div
-                      key={group.teamId}
-                      className={cn(
-                        CARD,
-                        "!divide-y-0 overflow-hidden",
-                        !projectEnabled && "opacity-60",
-                      )}
-                    >
-                      {/* Card header — click to expand the team; info button opens detail */}
-                      <div className="flex items-center gap-1 py-2.5 pl-2 pr-2">
-                        <button
-                          type="button"
-                          className="flex flex-1 min-w-0 items-center gap-2 py-1 text-left"
-                          onClick={() => setExpandedCard(isOpen ? null : group.teamId)}
-                        >
-                          <span className="shrink-0 text-muted-foreground">
-                            {isOpen ? (
-                              <ChevronDownIcon className="size-4" />
-                            ) : (
-                              <ChevronRightIcon className="size-4" />
-                            )}
-                          </span>
-                          <PackIcon size="sm" />
-                          <span className={cn(ROW_LABEL, "truncate")}>{group.label}</span>
-                          {groupPack?.manifest.tier === "pro" && (
-                            <Badge variant="secondary" className="h-4.5 px-1 text-[length:var(--font-size-10)] shrink-0">
-                              Pro
-                            </Badge>
-                          )}
-                          {!isCore && !isLocal && groupPack && (
-                            <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)] shrink-0">
-                              v{groupPack.manifest.version}
-                            </Badge>
-                          )}
-                          {isUserTeam && (
-                            <Badge variant="outline" className="h-4.5 px-1 text-[length:var(--font-size-10)] shrink-0">
-                              {t("settings.teamsAgents.myTeam")}
-                            </Badge>
-                          )}
-                          {defaultMain ? (
-                            <span className={cn(BADGE, "shrink-0 bg-primary/10 text-primary")}>
-                              {t("settings.teamsAgents.defaultMainAgent", {
-                                name: defaultMain.name,
-                              })}
-                            </span>
-                          ) : null}
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 shrink-0"
-                          title={t("settings.teamsAgents.viewDetails")}
-                          onClick={() =>
-                            openSettingsPanel({
-                              kind: "pack-detail",
-                              teamId: group.teamId,
-                              title: group.label,
-                            })
-                          }
-                        >
-                          <InfoIcon className="size-3.5" />
-                        </Button>
-                      </div>
 
-                      {isOpen && (
-                        <div className="border-t border-border/60">
-                          {group.orchestrators.length === 0 && group.experts.length === 0 ? (
-                            <p className="px-3 py-3 text-[length:var(--font-size-12)] text-muted-foreground">
-                              {t("settings.teamsAgents.teamEmptyAgentsHint")}
-                            </p>
-                          ) : null}
-                          {/* Main agents */}
-                          {group.orchestrators.length > 0 && (                            <div>
-                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">
-                                {t("settings.teamsAgents.kinds.orchestrator")}
-                              </p>
-                              <div className="divide-y divide-border/60">
-                                {group.orchestrators.map((orchestrator) => {
-                                  const isDefault =
-                                    (orchestrator.fqid ?? "") ===
-                                    (defaultOrchestratorFqid ?? "");
-                                  return (
-                                    <div key={orchestrator.id} className={cn(ROW, "px-3")}>
-                                      <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <span className={ROW_LABEL}>{orchestrator.name}</span>
-                                          {renderBadge(badges[orchestrator.fqid ?? orchestrator.id], t)}
-                                          {isDefault ? (
-                                            <span className={cn(BADGE, "bg-primary/10 text-primary")}>
-                                              {t("settings.teamsAgents.default")}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <p className={ROW_DESC}>{orchestrator.description}</p>
-                                        <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                                          {orchestratorBundleSummary(orchestrator, t)}
-                                        </p>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        {!isDefault ? (
-                                          <Button
-                                            variant="ghost"
-                                            size="xs"
-                                            disabled={saving || !orchestrator.enabled}
-                                            title={
-                                              !orchestrator.enabled
-                                                ? t("settings.teamsAgents.setDefaultDisabledHint")
-                                                : undefined
-                                            }
-                                            onClick={() => void setDefault(orchestrator)}
-                                          >
-                                            {t("settings.teamsAgents.setDefault")}
-                                          </Button>
-                                        ) : null}
-                                        <Button
-                                          variant="ghost"
-                                          size="xs"
-                                          disabled={saving}
-                                          onClick={() => openOrchestrator(orchestrator)}
-                                        >
-                                          {orchestrator.builtin
-                                            ? t("settings.agent.customize")
-                                            : t("settings.agent.edit")}
-                                        </Button>
-                                        {orchestrator.removable ? (
-                                          <InlineDeleteButton
-                                            itemId={`orch:${orchestrator.id}`}
-                                            pending={rowDeleteConfirm.isPending(`orch:${orchestrator.id}`)}
-                                            disabled={saving}
-                                            onRequest={() =>
-                                              rowDeleteConfirm.setPendingId(`orch:${orchestrator.id}`)
-                                            }
-                                            onConfirm={() => {
-                                              void (async () => {
-                                                if (!projectRoot) return;
-                                                setSaving(true);
-                                                try {
-                                                  await window.electronAPI.orchestratorsDeleteCustom(
-                                                    projectRoot,
-                                                    orchestrator.id,
-                                                  );
-                                                  await loadAll();
-                                                  toast.success(
-                                                    t("settings.agent.toast.orchestratorDeleted"),
-                                                  );
-                                                } catch (err: unknown) {
-                                                  toast.error(
-                                                    err instanceof Error
-                                                      ? err.message
-                                                      : t("settings.agent.toast.deleteFailed"),
-                                                  );
-                                                } finally {
-                                                  setSaving(false);
-                                                }
-                                              })();
-                                            }}
-                                          />
-                                        ) : null}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Experts */}
-                          {group.experts.length > 0 && (
-                            <div>
-                              <p className="px-3 pt-3 pb-1 text-[length:var(--font-hint)] uppercase tracking-wider text-muted-foreground/60">
-                                {t("settings.teamsAgents.kinds.expert")}
-                              </p>
-                              <div className="divide-y divide-border/60 pb-1">
-                                {group.experts.map((expert) => (
-                                  <div key={expert.id} className={cn(ROW, "px-3")}>
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className={ROW_LABEL}>{expert.name}</span>
-                                        {renderBadge(badges[expert.fqid ?? expert.id], t)}
-                                      </div>
-                                      <p className={ROW_DESC}>{expert.description}</p>
-                                      <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                                        {expertBundleSummary(expert, t)}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {expert.builtin ? (
-                                        <Switch
-                                          checked={expert.enabled}
-                                          onCheckedChange={(enabled) =>
-                                            void toggleExpertEnabled(expert, enabled)
-                                          }
-                                          aria-label={`Enable ${expert.name}`}
-                                        />
-                                      ) : null}
-                                      <Button
-                                        variant="ghost"
-                                        size="xs"
-                                        onClick={() => openExpert(expert)}
-                                      >
-                                        {expert.builtin
-                                          ? t("settings.agent.customize")
-                                          : t("settings.agent.edit")}
-                                      </Button>
-                                      {expert.removable ? (
-                                        <InlineDeleteButton
-                                          itemId={`exp:${expert.id}`}
-                                          pending={rowDeleteConfirm.isPending(`exp:${expert.id}`)}
-                                          disabled={saving}
-                                          onRequest={() =>
-                                            rowDeleteConfirm.setPendingId(`exp:${expert.id}`)
-                                          }
-                                          onConfirm={() => {
-                                            void (async () => {
-                                              if (!projectRoot) return;
-                                              setSaving(true);
-                                              try {
-                                                await window.electronAPI.subagentsDeleteCustom(
-                                                  projectRoot,
-                                                  expert.id,
-                                                );
-                                                await loadAll();
-                                                toast.success(t("settings.agent.toast.expertDeleted"));
-                                              } catch (err: unknown) {
-                                                toast.error(
-                                                  err instanceof Error
-                                                    ? err.message
-                                                    : t("settings.agent.toast.deleteFailed"),
-                                                );
-                                              } finally {
-                                                setSaving(false);
-                                              }
-                                            })();
-                                          }}
-                                        />
-                                      ) : null}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
+                  {/* Team settings: scope */}
+                  <div className="border-t border-border pt-3">
+                    <div className="flex items-center gap-2 text-[length:var(--font-size-13)]">
+                      <span className="text-muted-foreground">{t("settings.teams.scopeLabel")}</span>
+                      <ScopeChip scope={team.scope} />
+                      <span className="text-[length:var(--font-size-12)] text-muted-foreground">
+                        {team.scope === "app" ? t("settings.teams.scope.appDesc") : t("settings.teams.scope.projectDesc")}
+                      </span>
                     </div>
-                  );
-                })
+                  </div>
+                </div>
               )}
-              </div>
-            </>
-        )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
-}
-
-function groupLabel(
-  teamId: string,
-  badges: Record<string, OriginInfo | null>,
-  packById: Map<string, ProjectTeamView>,
-  t: TFunction,
-): string {
-  if (teamId === CORE_TEAM_ID) return t("settings.teamsAgents.coreTeam");
-  if (teamId === LOCAL_TEAM_ID) return t("settings.teamsAgents.mine");
-  const pack = packById.get(teamId);
-  if (pack) return pack.manifest.name;
-  // Fall back to any badge carrying this pack's name.
-  for (const badge of Object.values(badges)) {
-    if (badge?.teamId === teamId) return badge.teamName;
-  }
-  return teamId;
 }

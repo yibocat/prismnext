@@ -1439,6 +1439,28 @@
       }
     },
     "teams": {
+      "title": "Teams",
+      "pageDesc": "Manage teams and their lead agents, subagents, and rosters.",
+      "createTeam": "New team",
+      "browse": "Browse teams",
+      "activeTeam": "Active team",
+      "noLead": "No lead agent",
+      "noLeadCapability": "No lead agent (capability-only team)",
+      "setActive": "Set active",
+      "leadAgent": "Lead agent",
+      "rosterTitle": "Roster — who this lead can delegate to",
+      "teamSubagents": "This team's subagents",
+      "teamSubagentsDesc": "Can be referenced by any team's roster.",
+      "noSubagents": "No subagents in this team",
+      "capabilities": "Capabilities",
+      "capabilitiesSummary": "{{skills}} skills · {{commands}} commands · {{mcps}} MCP — available in all sessions once the team is enabled",
+      "scopeLabel": "Scope",
+      "teamNamePlaceholder": "Team name",
+      "teamDescPlaceholder": "Description (optional)",
+      "toast": {
+        "activeUpdated": "Active team updated",
+        "teamCreated": "Team created"
+      },
       "scope": {
         "app": "Global",
         "project": "This project",

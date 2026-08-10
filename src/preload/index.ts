@@ -1198,19 +1198,42 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	// Agent Packs（生命周期 + 视图，§9.5）
 	teamsList: (projectRoot: string) =>
 		ipcRenderer.invoke("teams:list", { projectRoot }),
-	teamsInstall: (projectRoot: string, teamId: string) =>
-		ipcRenderer.invoke("teams:install", { projectRoot, teamId }),
-	teamsSetEnabled: (projectRoot: string, teamId: string, enabled: boolean) =>
-		ipcRenderer.invoke("teams:setEnabled", { projectRoot, teamId, enabled }),
-	teamsUninstall: (projectRoot: string, teamId: string) =>
-		ipcRenderer.invoke("teams:uninstall", { projectRoot, teamId }),
-	teamsSetAssetEnabled: (projectRoot: string, fqid: string, enabled: boolean) =>
-		ipcRenderer.invoke("teams:setAssetEnabled", { projectRoot, fqid, enabled }),
+	teamsInstall: (teamId: string) =>
+		ipcRenderer.invoke("teams:install", { teamId }),
+	teamsSetEnabled: (
+		projectRoot: string,
+		teamId: string,
+		enabled: boolean | null,
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:setEnabled", { projectRoot, teamId, enabled, scope }),
+	teamsUninstall: (teamId: string) =>
+		ipcRenderer.invoke("teams:uninstall", { teamId }),
+	teamsSetAssetEnabled: (
+		projectRoot: string,
+		fqid: string,
+		enabled: boolean | null,
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:setAssetEnabled", { projectRoot, fqid, enabled, scope }),
 	teamsSaveAssetOverride: (
 		projectRoot: string,
 		fqid: string,
 		patch: import("@shared/teams/types").AssetOverride,
-	) => ipcRenderer.invoke("teams:saveAssetOverride", { projectRoot, fqid, patch }),
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:saveAssetOverride", { projectRoot, fqid, patch, scope }),
+	teamsGetActiveTeam: (projectRoot: string, sessionTeamId?: string | null) =>
+		ipcRenderer.invoke("teams:getActiveTeam", { projectRoot, sessionTeamId }),
+	teamsSetActiveTeam: (projectRoot: string, teamId: string, scope?: "project" | "app") =>
+		ipcRenderer.invoke("teams:setActiveTeam", { projectRoot, teamId, scope }),
+	teamsGetRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getRoster", { projectRoot, teamId }),
+	teamsCreate: (
+		name: string,
+		description: string | undefined,
+		scope: "app" | "project",
+		projectRoot: string,
+	) => ipcRenderer.invoke("teams:create", { name, description, scope, projectRoot }),
+	teamsDelete: (teamId: string, projectRoot?: string) =>
+		ipcRenderer.invoke("teams:delete", { teamId, projectRoot }),
 	teamsGetCoreState: (projectRoot: string) =>
 		ipcRenderer.invoke("teams:getCoreState", { projectRoot }),
 	teamsResetCoreDefaults: (projectRoot: string, kind: "subagent" | "orchestrator") =>

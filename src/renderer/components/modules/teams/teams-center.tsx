@@ -123,18 +123,15 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
     if (!projectRoot) return;
     setBusy(pack.manifest.id);
     try {
-      const { suggestedOrchestrator } = await window.electronAPI.teamsInstall(
-        projectRoot,
-        pack.manifest.id,
-      );
+      const { suggestedActiveTeam } = await window.electronAPI.teamsInstall(pack.manifest.id);
       toast.success(t("teamsCenter.toast.installed", { name: pack.manifest.name }));
-      if (suggestedOrchestrator) {
+      if (suggestedActiveTeam) {
         toast(t("teamsCenter.suggestion.text", { pack: pack.manifest.name }), {
           action: {
             label: t("teamsCenter.suggestion.accept"),
             onClick: () => {
               void window.electronAPI
-                .teamsSetDefaultOrchestrator(projectRoot, suggestedOrchestrator as Fqid)
+                .teamsSetActiveTeam(projectRoot, suggestedActiveTeam, "project")
                 .then(() => toast.success(t("teamsCenter.suggestion.done")));
             },
           },

@@ -1439,6 +1439,28 @@
       }
     },
     "teams": {
+      "title": "团队",
+      "pageDesc": "管理团队及其主 Agent、子 Agent 与名册。",
+      "createTeam": "新建团队",
+      "browse": "浏览团队",
+      "activeTeam": "活动团队",
+      "noLead": "无主 Agent",
+      "noLeadCapability": "无主 Agent（仅提供能力）",
+      "setActive": "设为活动",
+      "leadAgent": "主 Agent",
+      "rosterTitle": "名册 —— 本主 Agent 可以委派谁",
+      "teamSubagents": "本团队的子 Agent",
+      "teamSubagentsDesc": "可被任何团队的名册引用。",
+      "noSubagents": "本团队暂无子 Agent",
+      "capabilities": "能力",
+      "capabilitiesSummary": "技能 {{skills}} · 命令 {{commands}} · MCP {{mcps}} —— 团队启用后在所有会话可用",
+      "scopeLabel": "作用域",
+      "teamNamePlaceholder": "团队名称",
+      "teamDescPlaceholder": "描述（可选）",
+      "toast": {
+        "activeUpdated": "活动团队已更新",
+        "teamCreated": "团队已创建"
+      },
       "scope": {
         "app": "全局",
         "project": "本项目",

@@ -1919,28 +1919,49 @@ export interface ElectronAPI {
     projectRoot: string,
   ) => Promise<import("../../shared/teams/view").TeamViewV2[]>;
   teamsInstall: (
-    projectRoot: string,
     teamId: string,
   ) => Promise<{
     applied?: boolean;
-    suggestedOrchestrator?: import("../../shared/teams/types").Fqid;
+    suggestedActiveTeam?: string;
   }>;
   teamsSetEnabled: (
     projectRoot: string,
     teamId: string,
-    enabled: boolean,
+    enabled: boolean | null,
+    scope?: "app" | "project",
   ) => Promise<{
-    suggestedOrchestrator?: import("../../shared/teams/types").Fqid;
-    /** 停用该 pack 时，默认主 agent 若属于它 → 已转移回 core 默认 */
-    defaultMovedTo?: import("../../shared/teams/types").Fqid;
+    suggestedActiveTeam?: string;
+    defaultMovedTo?: string;
   }>;
-  teamsUninstall: (projectRoot: string, teamId: string) => Promise<void>;
-  teamsSetAssetEnabled: (projectRoot: string, fqid: string, enabled: boolean) => Promise<void>;
+  teamsUninstall: (teamId: string) => Promise<void>;
+  teamsSetAssetEnabled: (
+    projectRoot: string,
+    fqid: string,
+    enabled: boolean | null,
+    scope?: "app" | "project",
+  ) => Promise<void>;
   teamsSaveAssetOverride: (
     projectRoot: string,
     fqid: string,
     patch: import("../../shared/teams/types").AssetOverride,
+    scope?: "app" | "project",
   ) => Promise<void>;
+  teamsGetActiveTeam: (
+    projectRoot: string,
+    sessionTeamId?: string | null,
+  ) => Promise<import("../../shared/teams/view").TeamViewV2 | null>;
+  teamsSetActiveTeam: (projectRoot: string, teamId: string, scope?: "project" | "app") => Promise<void>;
+  teamsGetRoster: (
+    projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsCreate: (
+    name: string,
+    description: string | undefined,
+    scope: "app" | "project",
+    projectRoot: string,
+  ) => Promise<{ teamId: string; dir: string }>;
+  teamsDelete: (teamId: string, projectRoot?: string) => Promise<void>;
   teamsGetCoreState: (projectRoot: string) => Promise<{
     defaultOrchestratorId: string | null;
     defaultOrchestratorFqid: string | null;
