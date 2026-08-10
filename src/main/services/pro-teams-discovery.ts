@@ -22,9 +22,9 @@ import {
   invalidateCatalog,
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
-} from "./team-catalog";
+} from "../teams/catalog";
 import { invalidateLicenseCache } from "./teams-license";
-import { notifyTeamsChanged } from "./team-resolver";
+import { notifyTeamsChanged } from "../teams/resolver";
 import { _registeredRoots } from "./active-project-roots";
 import { createLogger } from "./logger";
 
@@ -55,9 +55,9 @@ export function findProPackageDirUp(startPath: string, maxLevels = 4): string | 
     if (existsSync(pkgPath)) {
       try {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as {
-          prismnext?: { packsRoot?: string };
+          prismnext?: { packsRoot?: string; teamsRoot?: string };
         };
-        if (pkg.prismnext?.packsRoot || existsSync(join(dir, "packs"))) return dir;
+        if (pkg.prismnext?.packsRoot || pkg.prismnext?.teamsRoot || existsSync(join(dir, "packs")) || existsSync(join(dir, "teams"))) return dir;
       } catch {
         // package.json 解析失败 → 继续向上
       }
@@ -93,15 +93,18 @@ export function resolveProPackageDir(env: string | undefined = process.env.PRISM
   return null;
 }
 
-/** 读 pro 包 package.json → teamsRoot 绝对路径（默认 "packs"）；目录不存在 → null */
+/** 读 pro 包 package.json → teamsRoot 绝对路径（默认 "packs"；兼容读旧键 packsRoot）；
+ *  新键 teamsRoot 优先；目录不存在 → null */
 export function resolveTeamsRootDir(packageDir: string): string | null {
   let teamsRoot = "packs";
   try {
     const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf-8")) as {
-      prismnext?: { packsRoot?: string };
+      prismnext?: { packsRoot?: string; teamsRoot?: string };
     };
-    if (typeof pkg.prismnext?.packsRoot === "string" && pkg.prismnext.packsRoot.trim()) {
-      teamsRoot = pkg.prismnext.packsRoot.trim();
+    // New key wins; fall back to legacy key.
+    const root = pkg.prismnext?.teamsRoot ?? pkg.prismnext?.packsRoot;
+    if (typeof root === "string" && root.trim()) {
+      teamsRoot = root.trim();
     }
   } catch (err) {
     log.warn("pro 包 package.json 解析失败", { packageDir, error: String(err) });
@@ -140,11 +143,11 @@ export function discoverAndRegisterProTeams(): { registered: string[]; skipped: 
       found.add(normalizeDir(teamsRoot));
       for (const entry of readdirSync(teamsRoot, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        if (existsSync(join(teamsRoot, entry.name, "plugin.json"))) {
+        if (existsSync(join(teamsRoot, entry.name, "team.json")) || existsSync(join(teamsRoot, entry.name, "plugin.json"))) {
           registered.push(entry.name);
         } else {
           skipped.push(entry.name);
-          log.warn("teamsRoot 下存在无 plugin.json 的目录，跳过", { dir: join(teamsRoot, entry.name) });
+          log.warn("teamsRoot 下存在无 team.json/plugin.json 的目录，跳过", { dir: join(teamsRoot, entry.name) });
         }
       }
     }

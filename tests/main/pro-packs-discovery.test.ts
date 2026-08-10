@@ -9,10 +9,11 @@ import {
   resolveProPackageDir,
 } from "../../src/main/services/pro-teams-discovery";
 import {
-  getTeam,
+  getTeamRecord,
   listExternalTeamRoots,
   unregisterExternalTeamRoot,
-} from "../../src/main/services/team-catalog";
+} from "../../src/main/teams/catalog";
+import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import { licenseStateVersion } from "../../src/main/services/teams-license";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
@@ -52,6 +53,7 @@ afterEach(() => {
   delete process.env.PRISM_PRO_PATH;
   discoverAndRegisterProTeams();
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
+  __resetTeamsResolverForTests();
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
 });
 
@@ -120,9 +122,9 @@ describe("pro-packs-discovery: 注册与注销", () => {
 
     expect(result.registered).toEqual(["test.pro.alpha"]);
     expect(result.skipped).toEqual(["broken"]);
-    const pack = getTeam("test.pro.alpha");
+    const pack = getTeamRecord("test.pro.alpha");
     expect(pack).not.toBeNull();
-    expect(pack!.kind).toBe("external");
+    expect(pack!.source).toBe("pro");
     expect(pack!.manifest.tier).toBe("pro");
   });
 
@@ -135,16 +137,16 @@ describe("pro-packs-discovery: 注册与注销", () => {
 
     process.env.PRISM_PRO_PATH = a.entryFile;
     discoverAndRegisterProTeams();
-    expect(getTeam("test.pro.a")).not.toBeNull();
+    expect(getTeamRecord("test.pro.a")).not.toBeNull();
 
     process.env.PRISM_PRO_PATH = b.entryFile;
     discoverAndRegisterProTeams();
-    expect(getTeam("test.pro.a")).toBeNull(); // 旧 root 注销
-    expect(getTeam("test.pro.b")).not.toBeNull();
+    expect(getTeamRecord("test.pro.a")).toBeNull(); // 旧 root 注销
+    expect(getTeamRecord("test.pro.b")).not.toBeNull();
 
     delete process.env.PRISM_PRO_PATH; // pro 消失
     discoverAndRegisterProTeams();
-    expect(getTeam("test.pro.b")).toBeNull();
+    expect(getTeamRecord("test.pro.b")).toBeNull();
   });
 
   it("重复调用幂等：无差量时注册集合不变", () => {
@@ -155,7 +157,7 @@ describe("pro-packs-discovery: 注册与注销", () => {
     discoverAndRegisterProTeams();
     const second = discoverAndRegisterProTeams();
     expect(second.registered).toEqual(["test.pro.alpha"]);
-    expect(getTeam("test.pro.alpha")).not.toBeNull();
+    expect(getTeamRecord("test.pro.alpha")).not.toBeNull();
   });
 });
 

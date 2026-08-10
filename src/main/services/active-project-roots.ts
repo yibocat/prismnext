@@ -136,7 +136,8 @@ export function assertUnderHome(abs: string, op: string): void {
   }
 }
 
-/** Test-only accessor. */
+/** Public accessor: returns the currently registered project roots.
+ *  Used by pro-teams-discovery to broadcast license-change invalidation. */
 export function _registeredRoots(): string[] {
   return Array.from(_roots).sort();
 }
