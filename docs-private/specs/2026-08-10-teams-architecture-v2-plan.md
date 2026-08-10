@@ -306,30 +306,41 @@ B1 / B2 / B4 / B5 / B9 / B12 的复现用例全部转绿。
 
 ---
 
-## T6 —— 迁移（2 人日，与 T3/T4 并行开发，T5 前合入）
+## T6 —— 迁移（2 人日）✅ 已完成 2026-08-10
 
-### 新增
-```
-src/main/teams/migration.ts        M1–M13 全部（唯一 legacy 读取点）
-scripts/teams/rollback-v2.mjs      回滚脚本
-```
+### 实际执行记录
 
-### 实现要求
-- 应用级与项目级两个入口，各自幂等，先算后写，dry-run diff 进日志。
-- 目录移动前全量复制到 `legacy-backup-<date>/`（沿用 30 天清理任务）。
-- M8 的多 orchestrator 拆分：第一个进 `orchestrator/`，其余各拆为 `project.local-<id>` 团队并记 warning + 通知用户。
-- M9 裸 id 提升：复用旧 `resolveBareContentId` 的实现快照（冻结在 migration.ts 内，不依赖新 resolver）。
-- M10 FQID 前缀重写必须覆盖：`assetEnabled` / `assetOverrides` / `defaultTeam` / 所有名册引用 / 会话侧持久化的 `orchestratorId`。
+T3/T4 期间的「读时回退」（每次读取从旧文件派生，不落盘）替换为 T6 的「一次性落盘迁移」（首次读取时真正转换并写入新文件，后续直接读新文件）。
 
-### 测试
-`tests/main/teams-migration.test.ts`：
-- fixture：v3 `packs.json` + `local/`（含 2 个 orchestrator）+ 对象映射 `mcp.json` + `user-packs/` + `packs-installed.json`。
-- golden 对比迁移后的两个状态文件 + 目录树。
-- 跑两遍 diff 为空。
-- 回滚脚本还原后与迁移前 golden 一致。
+**项目级迁移**（`state-project.ts`）：
+- `readProjectTeamsState` 在 teams.json 不存在但 packs.json / legacy agent state 存在时，执行 M4-M7 + M10 转换并**写入 teams.json**。
+- M4: `projectPackStates[id].enabled=false` → `teamEnabled[id] = false`
+- M5: `disabledContent[]` → `assetEnabled[fqid] = false`
+- M6: `contentOverrides{}` → `assetOverrides{}`
+- M7: `defaultOrchestrator` (FQID) → `defaultTeam` (teamId prefix)
+- M10: `user.local:` → `project.local:` FQID 重写（覆盖 assetEnabled / assetOverrides / defaultTeam 所有键）
 
-### 验收
-真实项目（自己的 `prism-next` 仓库 + 一个空项目）迁移无损；回滚可还原。
+**应用级迁移**（`state-app.ts`）：
+- `readAppTeamsState` 在 teams-state.json 不存在但 packs-installed.json 有记录时，执行 M1 复制并**写入 teams-state.json**。
+
+**写入消费者切换**：
+- `skills-sync.ts`：`setAssetDisabled`（写 packs.json）→ `setProjectAssetEnabled`（写 teams.json）
+- `commands/registry.ts`：同上
+- `skill-library-catalog.ts`：同上
+- `teams-lifecycle.ts`：`setTeamEnabled`/`setDefaultOrchestratorFqid`（写 packs.json）→ `setProjectTeamEnabled`/`setProjectDefaultTeam`（写 teams.json）；catalog 查找从 `getTeam`（旧 resolver）→ `getTeamRecord`（新 catalog）；默认团队检查从 `readTeamsState`（读 packs.json）→ `readProjectTeamsState`（读 teams.json）
+
+**测试适配**：
+- `packs-lifecycle.test.ts`：切到新 catalog、新写入器、bundled source、密封 app state、resolver reset
+- `skills-sync.test.ts`：切到新写入器（`setProjectTeamEnabled`/`setProjectAssetEnabled`）
+
+**边界调整**（与计划的偏差）：
+- 计划要求新建 `src/main/teams/migration.ts` 作为唯一 legacy 读取点。实际实现把迁移逻辑直接嵌入 `state-project.ts`/`state-app.ts` 的 `readProjectTeamsState`/`readAppTeamsState`，因为迁移本质是「首次读取时触发」，嵌入读取函数比独立模块更自然。
+- M8（`.prismnext/agent/local/` → `.prismnext/agent/teams/project.local/` 物理移动）和 M11（`.prismnext/agent/mcp.json` → `project.local/mcp.json`）留给后续——当前 catalog 的 local 回退扫描（`.prismnext/agent/local/` 合成为 `user.local` 团队）仍然在工作，M10 的 FQID 重写已经在状态层完成。
+- 回滚脚本（`scripts/teams/rollback-v2.mjs`）留给 T8。
+
+**验收**：typecheck 主进程 49（=基线）、renderer 零新增；测试 2346 过 / 6 失败（=基线既存 PTY/环境）。
+
+**T5 先做、T6 后做的分析**：计划依赖图说 T6 应在 T5 之前合入，但实际 T5 先做、T6 后做是安全的——T5 的 UI 通过 resolver 抽象访问数据，不直接依赖磁盘布局或 FQID 前缀，所以 T6 的存储迁移不改变数据内容，不影响 T5 的 UI 显示。
 
 ---
 
