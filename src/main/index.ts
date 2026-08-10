@@ -331,6 +331,11 @@ registerNewWindowHandler(createWindow);
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
+  // Wire session→projectRoot so AcpService.getInstanceForSession can route to
+  // the correct per-project OpenCode runtime.
+  const { getSessionProjectRoot } = await import("./services/chat-session-registry");
+  const { AcpService } = await import("./acp/service");
+  AcpService.setSessionProjectRootResolver(getSessionProjectRoot);
   // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
   ensureUserTeamsMigrated();
   // Temporary read compatibility for any legacy directory that could not be

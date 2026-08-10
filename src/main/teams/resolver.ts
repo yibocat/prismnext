@@ -397,7 +397,7 @@ export function notifyTeamsChanged(projectRoot?: string): void {
       .catch(() => {});
     void import("../acp/service")
       .then((m) => {
-        m.AcpService.getInstance().invalidateAgentConfigCache(root);
+        m.AcpService.getInstanceForProject(root).invalidateAgentConfigCache(root);
       })
       .catch(() => {});
   }

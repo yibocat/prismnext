@@ -10,7 +10,7 @@ import { StoreIcon, PackageIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { usePacksStore } from "@/stores/teams-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { InlineDeleteButton } from "./inline-delete-button";
 import { PackIcon } from "../teams/team-icon";
 import type { AssetKind } from "@shared/teams/types";
 
-type PackDetailSlot = Extract<SettingsPanelSlot, { kind: "pack-detail" }>;
+type TeamDetailSlot = Extract<SettingsPanelSlot, { kind: "team-detail" }>;
 
 interface PackContentEntry {
   kind: AssetKind;
@@ -42,11 +42,11 @@ const KIND_LABEL_KEYS: Record<AssetKind, string> = {
   mcp: "settings.teamsAgents.kinds.mcp",
 };
 
-export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
+export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const license = useProLicenseStore((s) => s.license);
-  const pack = usePacksStore((s) =>
+  const pack = useTeamsStore((s) =>
     s.catalog.find((p) => p.manifest.id === slot.teamId) ?? null,
   );
   const [contents, setContents] = useState<PackContentEntry[]>([]);
@@ -57,7 +57,7 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
   const load = useCallback(async () => {
     if (!projectRoot) return;
     try {
-      await usePacksStore.getState().load(projectRoot, { force: true });
+      await useTeamsStore.getState().load(projectRoot, { force: true });
       setContents(await window.electronAPI.teamsGetTeamContents(slot.teamId));
     } catch {
       setContents([]);
@@ -101,7 +101,7 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
     try {
       // Optimistic flip in the shared store (flips the panel switch AND the
       // card list in real time), then persist + reconcile with main.
-      const result = await usePacksStore.getState().setEnabled(
+      const result = await useTeamsStore.getState().setEnabled(
         projectRoot,
         pack.manifest.id,
         enabled,

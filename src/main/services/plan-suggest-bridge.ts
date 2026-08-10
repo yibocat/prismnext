@@ -49,7 +49,7 @@ function bridgeRoot(): string {
 }
 
 function resolveOrchestratorSessionId(sessionId: string): string {
-  const parent = AcpService.getInstance().getSessionParentId(sessionId);
+  const parent = AcpService.getInstanceForSession(sessionId).getSessionParentId(sessionId);
   return parent?.trim() || sessionId;
 }
 
@@ -76,7 +76,7 @@ function finishPending(
   }
 
   if (decision === "accepted") {
-    void AcpService.getInstance().applySessionAgent(sessionId, "plan").catch(() => {});
+    void AcpService.getInstanceForSession(sessionId).applySessionAgent("sessionId", "plan").catch(() => {});
     // Same-turn continuation never sees chat:send's Plan appendix — put BINDING in the tool result.
     writeResult(pending.resPath, pending.reqPath, buildPlanSuggestAcceptedResult(sessionId));
   } else {
@@ -106,7 +106,7 @@ export function resolvePlanSuggestConsent(
       dismissedSessions.add(sessionId);
     }
     if (decision === "accepted") {
-      void AcpService.getInstance().applySessionAgent(sessionId, "plan").catch(() => {});
+      void AcpService.getInstanceForSession(sessionId).applySessionAgent("sessionId", "plan").catch(() => {});
     }
     return { success: true };
   }
@@ -164,7 +164,7 @@ function acceptRequest(
   }
   const sessionId = resolveOrchestratorSessionId(rawSession);
   const tabId = resolveChatTabId(sessionId);
-  const sessionAgent = AcpService.getInstance().getSessionAgent(sessionId);
+  const sessionAgent = AcpService.getInstanceForSession(sessionId).getSessionAgent(sessionId);
   const dismissed = dismissedSessions.has(sessionId);
   const gate = resolvePlanSuggestGate({ tabId, sessionAgent, dismissed });
   const reason = clampPlanSuggestReason(req.reason);

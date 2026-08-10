@@ -9,6 +9,10 @@ vi.mock("../../src/main/acp/service", () => ({
       resolveCitationStagingSessionId: (id: string) => id,
       clearSessionParentCacheForTests: () => {},
     }),
+    getInstanceForSession: () => ({
+      resolveCitationStagingSessionId: (id: string) => id,
+      clearSessionParentCacheForTests: () => {},
+    }),
   },
 }));
 

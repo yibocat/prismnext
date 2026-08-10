@@ -381,6 +381,19 @@ export class AcpService {
     return instance;
   }
 
+  /** Resolve the AcpService that owns a sessionId (falls back to default singleton). */
+  static getInstanceForSession(sessionId: string | null | undefined): AcpService {
+    if (!sessionId?.trim()) return AcpService.getInstance();
+    const root = AcpService.sessionProjectRoot(sessionId);
+    return root ? AcpService.getInstanceForProject(root) : AcpService.getInstance();
+  }
+
+  /** Session→projectRoot resolver; injected from chat-session-registry to avoid a circular import. */
+  private static sessionProjectRoot: (sessionId: string) => string | undefined = () => undefined;
+  static setSessionProjectRootResolver(fn: (sessionId: string) => string | undefined): void {
+    AcpService.sessionProjectRoot = fn;
+  }
+
   /** Test-only: discard runtime registrations without touching child processes. */
   static __resetProjectRuntimesForTests(): void {
     AcpService.projectInstances.clear();

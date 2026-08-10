@@ -25,7 +25,7 @@ function oneLineSummary(text: string | null | undefined, max = 160): string {
 export function readLibraryTaskHitRecords(sessionId: string): LibraryTaskHitRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const parentId = AcpService.getInstance().resolveCitationStagingSessionId(id);
+  const parentId = AcpService.getInstanceForSession(id).resolveCitationStagingSessionId(id);
   try {
     const p = hitsPath(parentId);
     if (!existsSync(p)) return [];
@@ -77,8 +77,8 @@ export function recordLibraryTaskHitsFromToolSession(
   hits: LibraryTaskHitRecord[],
 ): void {
   if (!toolSessionId?.trim() || hits.length === 0) return;
-  if (!AcpService.getInstance().isSubAgentSession(toolSessionId)) return;
-  const parentId = AcpService.getInstance().resolveCitationStagingSessionId(toolSessionId);
+  if (!AcpService.getInstanceForSession(toolSessionId).isSubAgentSession(toolSessionId)) return;
+  const parentId = AcpService.getInstanceForSession(toolSessionId).resolveCitationStagingSessionId(toolSessionId);
   mergeLibraryTaskHits(parentId, hits);
 }
 

@@ -20,7 +20,7 @@ export function registerMcpHandlers(): void {
         return { ok: false as const };
       }
       const ensure = ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
-      const acp = AcpService.getInstance();
+      const acp = AcpService.getInstanceForProject(projectPath);
       acp.prewarmProject(projectPath);
       let reloadedSessions = 0;
       if (ensure.added || ensure.migrated || ensure.reenabled || ensure.removed) {
@@ -43,7 +43,7 @@ export function registerMcpHandlers(): void {
       if (!projectPath) {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
       }
-      const result = await AcpService.getInstance().applyProjectMcpConfig(projectPath);
+      const result = await AcpService.getInstanceForProject(projectPath).applyProjectMcpConfig(projectPath);
       return { ok: true as const, ...result };
     },
   );

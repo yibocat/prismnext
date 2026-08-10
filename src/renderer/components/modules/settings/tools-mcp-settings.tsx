@@ -21,7 +21,7 @@ import {
   useSettingsEditorSlotOfKind,
 } from "@/hooks/use-settings-editor";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
-import { usePacksStore } from "@/stores/teams-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -64,7 +64,7 @@ export function ToolsMcpSettings() {
   const saving = useMcpServersStore((s) => s.saving);
   const load = useMcpServersStore((s) => s.load);
   const persist = useMcpServersStore((s) => s.persist);
-  const teamMcps = usePacksStore((s) => s.teamMcps);
+  const teamMcps = useTeamsStore((s) => s.teamMcps);
 
   const openMcpServerSlot = useSettingsEditorSlotOfKind("mcp-server");
   const deleteConfirm = useInlineDeleteConfirm();
@@ -78,7 +78,7 @@ export function ToolsMcpSettings() {
   // every packs load — install / enable / disable at app or project level).
   useEffect(() => {
     if (!projectRoot) return;
-    void usePacksStore.getState().load(projectRoot);
+    void useTeamsStore.getState().load(projectRoot);
   }, [projectRoot]);
 
   const handleApplyMcp = async () => {
@@ -131,13 +131,13 @@ export function ToolsMcpSettings() {
   // experts/commands). The owning pack must still be enabled in this project.
   const handleTogglePackMcp = async (fqid: string, enabled: boolean) => {
     if (!projectRoot) return;
-    usePacksStore.getState().setEnabledLocalMcp(fqid, enabled);
+    useTeamsStore.getState().setEnabledLocalMcp(fqid, enabled);
     try {
       await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled);
-      await usePacksStore.getState().load(projectRoot, { force: true });
+      await useTeamsStore.getState().load(projectRoot, { force: true });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : String(err));
-      await usePacksStore.getState().load(projectRoot, { force: true });
+      await useTeamsStore.getState().load(projectRoot, { force: true });
     }
   };
 

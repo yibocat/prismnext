@@ -229,7 +229,7 @@ export async function flushDeferredTaskAllowlistFollowUp(
 
   try {
     const { AcpService } = await import("../acp/service");
-    const service = AcpService.getInstance();
+    const service = AcpService.getInstanceForSession(sessionId);
     await service.sendPrompt(sessionId, followUp, {
       model: deferred.model,
       provider: deferred.provider,
@@ -246,7 +246,7 @@ export async function flushDeferredTaskAllowlistFollowUp(
   if (stillMissing.length > 0) {
     try {
       const { AcpService } = await import("../acp/service");
-      AcpService.getInstance().setPendingTaskDenial(
+      AcpService.getInstanceForSession(sessionId).setPendingTaskDenial(
         sessionId,
         formatTaskError("task_allowlist_not_invoked", {
           allowlist: stillMissing,

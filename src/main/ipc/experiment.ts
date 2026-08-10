@@ -303,7 +303,7 @@ export function registerExperimentHandlers(): void {
     const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
     const permRules = buildPermissionRulesFromSettings(settings);
     const sessionAgent = chatSessionId
-      ? AcpService.getInstance().getSessionAgent(chatSessionId)
+      ? AcpService.getInstanceForSession(chatSessionId).getSessionAgent(chatSessionId)
       : undefined;
     const action = resolvePermissionAction(mode, "experiment-run", sessionAgent, {
       projectRoot: args.projectRoot,

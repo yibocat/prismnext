@@ -14,6 +14,12 @@ vi.mock("../../src/main/acp/service", () => ({
       isSubAgentSession: (id: string) => id === SUB,
       clearSessionParentCacheForTests: () => {},
     }),
+    getInstanceForSession: () => ({
+      resolveCitationStagingSessionId: (id: string) =>
+        id === SUB ? PARENT : id,
+      isSubAgentSession: (id: string) => id === SUB,
+      clearSessionParentCacheForTests: () => {},
+    }),
   },
 }));
 

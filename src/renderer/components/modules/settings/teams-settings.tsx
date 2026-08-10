@@ -1,6 +1,6 @@
 // Settings → Teams — built on the app's design system (SETTINGS_CARD/ROW
 // tokens + shadcn controls + InlineDeleteButton). Restores ALL pre-T5 features
-// (new Orchestrator/Expert, Reset builtin, Info→pack-detail, inline delete)
+// (new Orchestrator/Expert, Reset builtin, Info→team-detail, inline delete)
 // while adding the new model (active team, roster, scope, tri-state override).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -138,7 +138,7 @@ export function TeamsAgentsSettings() {
   useEffect(() => { void loadAll(); }, [loadAll, license]);
 
   useOnSettingsEditorKindsClosed(
-    ["agent-expert", "agent-orchestrator", "pack-detail"],
+    ["agent-expert", "agent-orchestrator", "team-detail"],
     () => { void loadAll({ silent: true }); },
   );
 
@@ -399,7 +399,7 @@ export function TeamsAgentsSettings() {
                             onReset={() => void window.electronAPI.teamsSetEnabled(projectRoot, group.teamId, null, "project").then(() => loadAll())} />
                         </button>
                         <Button variant="ghost" size="icon" className="size-7 shrink-0" title={t("settings.teamsAgents.viewDetails")}
-                          onClick={() => openSettingsPanel({ kind: "pack-detail", teamId: group.teamId, title: group.label })}>
+                          onClick={() => openSettingsPanel({ kind: "team-detail", teamId: group.teamId, title: group.label })}>
                           <InfoIcon className="size-3.5" />
                         </Button>
                         {!isCore && groupPack && (

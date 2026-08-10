@@ -444,7 +444,7 @@ export class EventMapper {
         // buffer it and keep retrying parent_id / Task-slot link. Without the
         // buffer, late link leaves the run panel stuck on “Working…”.
         const pendingTabs = Array.from(this.pendingTasksByTab.keys());
-        const hasParentId = !!AcpService.getInstance().getSessionParentId(sessionId);
+        const hasParentId = !!AcpService.getInstanceForSession(sessionId).getSessionParentId(sessionId);
         log.warn(`session/update dropped — no chat tab mapping`, {
           sessionId,
           method,
@@ -470,7 +470,7 @@ export class EventMapper {
     // emits during replay and is intentionally NOT suppressed here.
     if (
       method !== "session/permission"
-      && AcpService.getInstance().isSessionReplaySuppressed()
+      && AcpService.getInstanceForSession(sessionId).isSessionReplaySuppressed()
     ) {
       log.debug(`replay-suppressed: ${method} tabId=${tabId} sessionId=${sessionId ?? "(none)"}`);
       return;
@@ -561,7 +561,7 @@ export class EventMapper {
       ?? params?.parent_session_id
       ?? params?.session?.parentId
       ?? params?.session?.parentSessionId
-      ?? AcpService.getInstance().getSessionParentId(sessionId)
+      ?? AcpService.getInstanceForSession(sessionId).getSessionParentId(sessionId)
       ?? undefined;
     if (typeof parentId === "string" && parentId) {
       const parentTab = this.resolveTabForSession(parentId, params);
@@ -581,7 +581,7 @@ export class EventMapper {
               getSessionProjectRoot(parentId),
             );
             this.sessionToTab.set(sessionId, parentTab);
-            AcpService.getInstance().markSubAgentSession(sessionId);
+            AcpService.getInstanceForSession(sessionId).markSubAgentSession(sessionId);
           }
           return parentTab;
         }
@@ -796,7 +796,7 @@ export class EventMapper {
     const taskToolUseId = this.subSessionToTaskTool.get(subSessionId);
     if (!taskToolUseId) return;
     if (this.isUserStoppedTask(taskToolUseId)) return;
-    const parts = AcpService.getInstance().listSessionActivityParts(subSessionId);
+    const parts = AcpService.getInstanceForSession(subSessionId).listSessionActivityParts(subSessionId);
     const blocks = buildSubAgentActivityBlocks(parts);
     const fingerprint = JSON.stringify(blocks);
     if (this.subAgentDbSyncFingerprint.get(subSessionId) === fingerprint) return;
@@ -901,7 +901,7 @@ export class EventMapper {
         if (this.subSessionToTaskTool.has(sessionId)) continue;
         candidates.add(sessionId);
       }
-      for (const childId of AcpService.getInstance().listChildSessionIds(parentSessionId)) {
+      for (const childId of AcpService.getInstanceForSession(parentSessionId).listChildSessionIds(parentSessionId)) {
         candidates.add(childId);
       }
     }
@@ -912,13 +912,13 @@ export class EventMapper {
         this.orphanSubSessions.delete(sessionId);
         continue;
       }
-      const parentId = AcpService.getInstance().getSessionParentId(sessionId);
+      const parentId = AcpService.getInstanceForSession(sessionId).getSessionParentId(sessionId);
       if (!parentId) continue;
       if (parentSessionId && parentId !== parentSessionId) continue;
       const parentTab = this.resolveTabForSession(parentId);
       if (parentTab !== tabId) continue;
       // Mark early so nested Task deny does not wait on link.
-      AcpService.getInstance().markSubAgentSession(sessionId);
+      AcpService.getInstanceForSession(sessionId).markSubAgentSession(sessionId);
       log.info(`linking child sub-session to pending Task`, { sessionId, tabId });
       this.linkSubAgentSession(tabId, sessionId);
     }
@@ -1005,7 +1005,7 @@ export class EventMapper {
     const queue = this.pendingTasksByTab.get(parentTabId);
     if (!queue?.length) return null;
     const parentSessionId = this.tabToSession.get(parentTabId);
-    const service = AcpService.getInstance();
+    const service = AcpService.getInstanceForSession(subSessionId);
     const agentName = normalizeTaskSubagentId(
       typeof service.getSessionAgentName === "function"
         ? service.getSessionAgentName(subSessionId)
@@ -1071,7 +1071,7 @@ export class EventMapper {
       parentTabId,
       parentSessionId ? getSessionProjectRoot(parentSessionId) : undefined,
     );
-    AcpService.getInstance().markSubAgentSession(subSessionId);
+    AcpService.getInstanceForSession(subSessionId).markSubAgentSession(subSessionId);
     this.win.webContents.send("chat:stream", {
       tabId: parentTabId,
       type: "subAgent.linked",
@@ -1094,7 +1094,7 @@ export class EventMapper {
   private ensureSubAgentTaskLink(tabId: string, subSessionId: string): string | undefined {
     const existing = this.subSessionToTaskTool.get(subSessionId);
     if (existing) return existing;
-    const parentSessionId = AcpService.getInstance().getSessionParentId(subSessionId);
+    const parentSessionId = AcpService.getInstanceForSession(subSessionId).getSessionParentId(subSessionId);
     if (!parentSessionId) return undefined;
     const parentTab = this.resolveTabForSession(parentSessionId);
     if (parentTab !== tabId) return undefined;
@@ -1403,7 +1403,7 @@ export class EventMapper {
     });
     if (childSessionId && !this.subSessionToTaskTool.has(childSessionId)) {
       this.subSessionToTaskTool.set(childSessionId, taskToolUseId);
-      AcpService.getInstance().markSubAgentSession(childSessionId);
+      AcpService.getInstanceForSession(childSessionId).markSubAgentSession(childSessionId);
       this.sessionToTab.set(childSessionId, tabId);
       this.clearTaskLinkWatchdog(taskToolUseId);
       this.clearTaskAwaitTimeout(taskToolUseId);
@@ -1461,7 +1461,7 @@ export class EventMapper {
   private ensureBackgroundTasksFromDb(tabId: string): void {
     const parentSessionId = this.tabToSession.get(tabId);
     if (!parentSessionId) return;
-    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    const parts = AcpService.getInstanceForSession(parentSessionId).listSessionActivityParts(parentSessionId);
     for (const part of parts) {
       const d = part.data;
       const toolName = String(d.tool || d.name || "").toLowerCase();
@@ -1538,7 +1538,7 @@ export class EventMapper {
     if (!this.tabHasOpenTasksForJoin(tabId)) return;
     const parentSessionId = this.tabToSession.get(tabId);
     if (!parentSessionId) return;
-    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    const parts = AcpService.getInstanceForSession(parentSessionId).listSessionActivityParts(parentSessionId);
     for (const part of parts) {
       const text =
         typeof part.data.text === "string"
@@ -1650,7 +1650,7 @@ export class EventMapper {
   ): string | null {
     const parentSessionId = this.tabToSession.get(tabId);
     if (!parentSessionId || !childSessionId) return null;
-    const parts = AcpService.getInstance().listSessionActivityParts(parentSessionId);
+    const parts = AcpService.getInstanceForSession(parentSessionId).listSessionActivityParts(parentSessionId);
     for (const part of parts) {
       const d = part.data;
       const toolName = String(d.tool || d.name || "").toLowerCase();
@@ -2069,7 +2069,7 @@ export class EventMapper {
         const cwd =
           (typeof toolInput?.workdir === "string" ? toolInput.workdir : undefined)
           || (typeof toolInput?.cwd === "string" ? toolInput.cwd : undefined);
-        AcpService.getInstance().syncBashPermissionFromToolCall({
+        AcpService.getInstanceForSession(sessionId).syncBashPermissionFromToolCall({
           sessionId,
           tabId,
           toolCallId: toolId,
@@ -2079,7 +2079,7 @@ export class EventMapper {
       }
 
       if ((toolName === "delete" || toolName === "move") && toolId) {
-        AcpService.getInstance().syncCustomToolPermissionFromToolCall({
+        AcpService.getInstanceForSession(sessionId).syncCustomToolPermissionFromToolCall({
           sessionId,
           tabId,
           toolCallId: toolId,
@@ -2099,7 +2099,7 @@ export class EventMapper {
       // Thinking segment ends when the first tool starts.
       this.sealThinkingDuration(tabId, sessionId, msgId);
 
-      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+      if (AcpService.getInstanceForSession(sessionId).isSubAgentSession(sessionId)) {
         this.emitSubAgentActivity(tabId, sessionId, {
           type: "tool_use",
           id: toolId,
@@ -2317,7 +2317,7 @@ export class EventMapper {
           || tuStatusLocal === "canceled";
         const isHistoricalReplay =
           isTerminalStatus
-          || AcpService.getInstance().isSessionReplaySuppressed();
+          || AcpService.getInstanceForSession(sessionId).isSessionReplaySuppressed();
         if (
           !isHistoricalReplay
           && updateId
@@ -2334,7 +2334,7 @@ export class EventMapper {
           const cwd =
             (typeof backfillInput.workdir === "string" ? backfillInput.workdir : undefined)
             || (typeof backfillInput.cwd === "string" ? backfillInput.cwd : undefined);
-          AcpService.getInstance().syncBashPermissionFromToolCall({
+          AcpService.getInstanceForSession(sessionId).syncBashPermissionFromToolCall({
             sessionId,
             tabId,
             toolCallId: updateId,
@@ -2347,7 +2347,7 @@ export class EventMapper {
           && updateId
           && (backfillToolName === "delete" || backfillToolName === "move")
         ) {
-          AcpService.getInstance().syncCustomToolPermissionFromToolCall({
+          AcpService.getInstanceForSession(sessionId).syncCustomToolPermissionFromToolCall({
             sessionId,
             tabId,
             toolCallId: updateId,
@@ -2408,7 +2408,7 @@ export class EventMapper {
           userStoppedError =
             typeof resultContent === "string" ? resultContent : String(resultContent);
           if (parentSessionId) {
-            void AcpService.getInstance()
+            void AcpService.getInstanceForSession(parentSessionId)
               .patchSessionToolOutput(parentSessionId, updateId, resultContent)
               .catch(() => {});
           }
@@ -2417,7 +2417,7 @@ export class EventMapper {
           // Persist readable failure into OpenCode so later turns / hydration see it
           // (live model may already have received opaque cancel from OpenCode).
           if (parentSessionId) {
-            void AcpService.getInstance()
+            void AcpService.getInstanceForSession(parentSessionId)
               .patchSessionToolOutput(parentSessionId, updateId, resultContent)
               .catch(() => {});
           }
@@ -2436,7 +2436,7 @@ export class EventMapper {
         enrichedTaskForOpenCode = resultContent !== rawTaskResult;
       }
 
-      const _isSubAgent = AcpService.getInstance().isSubAgentSession(sessionId);
+      const _isSubAgent = AcpService.getInstanceForSession(sessionId).isSubAgentSession(sessionId);
       if (_isSubAgent) {
         this.emitSubAgentActivity(tabId, sessionId, {
           type: "tool_result",
@@ -2485,7 +2485,7 @@ export class EventMapper {
         enrichedTaskForOpenCode
         && parentSessionId
         && updateId
-        && !AcpService.getInstance().isSessionReplaySuppressed()
+        && !AcpService.getInstanceForSession(sessionId).isSessionReplaySuppressed()
       ) {
         void syncEnrichedTaskToolResultToOpenCode(
           parentSessionId,
@@ -2563,7 +2563,7 @@ export class EventMapper {
     }
 
     if (content && content.type === "text" && content.text) {
-      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+      if (AcpService.getInstanceForSession(sessionId).isSubAgentSession(sessionId)) {
         // Same delta accumulation as the main session — otherwise upsert replaces
         // the trailing text with each tiny chunk and the final reply looks non-streaming.
         const isThinking =
@@ -2702,7 +2702,7 @@ export class EventMapper {
       // ── SDK-flattened format: { agent_message_chunk: "text", agent_thought_chunk: "text" } ──
       // Some SDK versions deliver text/thinking as top-level string fields
       // without a `content` wrapper or `sessionUpdate` marker.
-      if (AcpService.getInstance().isSubAgentSession(sessionId)) {
+      if (AcpService.getInstanceForSession(sessionId).isSubAgentSession(sessionId)) {
         if (typeof update.agent_thought_chunk === "string" && update.agent_thought_chunk) {
           const key = msgId || `${sessionId}-thinking`;
           if (!this.thinkingStartedAt.has(key)) {

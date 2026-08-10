@@ -23,7 +23,7 @@ import { AgentToolsPanel } from "./agent-tools-panel";
 import { KnowledgeModulesPanel } from "./knowledge-modules-panel";
 import { BuiltinCommandsPanel } from "./builtin-commands-panel";
 import { ResearchBriefPanel } from "./research-brief-panel";
-import { PackDetailPanel } from "./team-detail-panel";
+import { TeamDetailPanel } from "./team-detail-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 import { PermissionRulesEditorPanel } from "./permission-rules-editor-panel";
@@ -73,8 +73,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <SkillMarkdownPanel slot={slot} />;
     case "skill-library":
       return <SkillLibraryPanel />;
-    case "pack-detail":
-      return <PackDetailPanel slot={slot} />;
+    case "team-detail":
+      return <TeamDetailPanel slot={slot} />;
     case "agent-tools":
       return <AgentToolsPanel />;
     case "knowledge-modules":

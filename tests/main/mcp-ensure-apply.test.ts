@@ -12,6 +12,10 @@ vi.mock("../../src/main/acp/service", () => ({
       prewarmProject,
       applyProjectMcpConfig,
     }),
+    getInstanceForProject: () => ({
+      prewarmProject,
+      applyProjectMcpConfig,
+    }),
   },
 }));
 

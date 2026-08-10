@@ -49,7 +49,7 @@ function emitWarmStatus(projectRoot: string): void {
     const { emitAgentStatusChanged } = require("./agent-status-notify") as {
       emitAgentStatusChanged: (s: unknown) => void;
     };
-    emitAgentStatusChanged(AcpService.getInstance().getStatusSnapshot(projectRoot));
+    emitAgentStatusChanged(AcpService.getInstanceForProject(projectRoot).getStatusSnapshot(projectRoot));
   } catch {
     /* windows may not be ready */
   }
