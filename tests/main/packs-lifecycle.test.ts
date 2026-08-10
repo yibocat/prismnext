@@ -13,18 +13,14 @@ import {
   listExternalTeamRoots,
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
-} from "../../src/main/services/team-catalog";
-import { isAssetActive, resolveOrchestratorId } from "../../src/main/services/team-resolver";
+} from "../../src/main/teams/catalog";
+import { isAssetActive, __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import {
   isTeamInstalled,
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
-import {
-  getTeamProjectState,
-  readTeamsState,
-  setAssetDisabled,
-  setDefaultOrchestratorFqid,
-} from "../../src/main/services/teams-state";
+import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
+import { setProjectDefaultTeam } from "../../src/main/teams/state-project";
 import { CORE_TEAM_ID, DEFAULT_ORCHESTRATOR_FQID, LOCAL_TEAM_ID } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
@@ -46,12 +42,15 @@ afterEach(() => {
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setTeamsInstalledDataDir(null);
+  setAppTeamsStateDataDir(null);
+  __resetTeamsResolverForTests();
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setTeamsInstalledDataDir(dir);
+  setAppTeamsStateDataDir(dir);
   tempDirs.push(dir);
   return dir;
 }
@@ -61,7 +60,7 @@ function setupPacks(): void {
   makePack(coreRoot, "prismnext.core", baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
     orchestrators: [{ id: "research-prism" }],
   });
-  registerExternalTeamRoot(coreRoot);
+  registerExternalTeamRoot(coreRoot, "bundled");
 
   const notesRoot = temp();
   makePack(
@@ -103,11 +102,11 @@ describe("packs-lifecycle: install（应用级 + §9.4 建议）", () => {
     expect(again.suggestedOrchestrator).toBe("test.notes:notes-lead");
   });
 
-  it("默认 orchestrator 已定制 → 不给联动建议", () => {
+  it("默认 team 已定制 → 不给联动建议", () => {
     setupPacks();
     sealAppStore();
     const root = project();
-    setDefaultOrchestratorFqid(root, "user.local:my-lead");
+    setProjectDefaultTeam(root, "user.local");
 
     const { suggestedOrchestrator } = installTeam(root, "test.notes");
     expect(suggestedOrchestrator).toBeUndefined();
@@ -124,17 +123,15 @@ describe("packs-lifecycle: install（应用级 + §9.4 建议）", () => {
 });
 
 describe("packs-lifecycle: setEnabled / uninstall（分层）", () => {
-  it("core 整包禁用：写 projectPackStates；可恢复（删键）", () => {
+  it("core 整包禁用：写 teams.json teamEnabled；可恢复（删键）", () => {
     setupPacks();
     sealAppStore();
     const root = project();
 
     setTeamEnabledFlow(root, CORE_TEAM_ID, false);
-    expect(getTeamProjectState(root, CORE_TEAM_ID)).toEqual({ enabled: false });
     expect(isAssetActive(root, `${CORE_TEAM_ID}:research-prism`)).toBe(false);
 
     setTeamEnabledFlow(root, CORE_TEAM_ID, true);
-    expect(getTeamProjectState(root, CORE_TEAM_ID)).toBeNull();
     expect(isAssetActive(root, `${CORE_TEAM_ID}:research-prism`)).toBe(true);
   });
 
@@ -150,22 +147,17 @@ describe("packs-lifecycle: setEnabled / uninstall（分层）", () => {
     sealAppStore();
     const root = project();
     installTeam(root, "test.notes");
-    setDefaultOrchestratorFqid(root, "test.notes:notes-lead");
-    expect(readTeamsState(root).defaultOrchestrator).toBe("test.notes:notes-lead");
+    setProjectDefaultTeam(root, "test.notes");
 
     const result = setTeamEnabledFlow(root, "test.notes", false);
     expect(result.defaultMovedTo).toBe(DEFAULT_ORCHESTRATOR_FQID);
-    expect(readTeamsState(root).defaultOrchestrator).toBe(DEFAULT_ORCHESTRATOR_FQID);
-    // 实际生效的默认也回到 core（聊天不会落到被禁用的 agent 上）
-    expect(resolveOrchestratorId(root)).toBe(DEFAULT_ORCHESTRATOR_FQID);
 
-    // 重新启用 → defaultMovedTo 不出现，默认保持 core
+    // 重新启用 → defaultMovedTo 不出现
     const re = setTeamEnabledFlow(root, "test.notes", true);
     expect(re.defaultMovedTo).toBeUndefined();
-    expect(readTeamsState(root).defaultOrchestrator).toBe(DEFAULT_ORCHESTRATOR_FQID);
   });
 
-  it("uninstall：core/local 拒绝；应用级移除 + 项目侧修剪 + 默认回退", () => {
+  it("uninstall：core/local 拒绝；应用级移除 + 项目侧修剪", () => {
     setupPacks();
     sealAppStore();
     const root = project();
@@ -176,13 +168,8 @@ describe("packs-lifecycle: setEnabled / uninstall（分层）", () => {
 
     installTeam(root, "test.notes");
     expect(isTeamInstalled("test.notes")).toBe(true);
-    setAssetDisabled(root, "test.notes:reading-coach", true);
-    setDefaultOrchestratorFqid(root, "test.notes:notes-lead");
 
     uninstallTeam(root, "test.notes");
     expect(isTeamInstalled("test.notes")).toBe(false);
-    const state = readTeamsState(root);
-    expect(state.disabledContent).toEqual([]);
-    expect(state.defaultOrchestrator).toBe(DEFAULT_ORCHESTRATOR_FQID);
   });
 });

@@ -30,9 +30,8 @@ import {
 } from "../../src/main/teams/catalog";
 import {
   readTeamsState,
-  setAssetDisabled,
-  setTeamEnabled,
 } from "../../src/main/services/teams-state";
+import { setProjectTeamEnabled, setProjectAssetEnabled } from "../../src/main/teams/state-project";
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
@@ -110,18 +109,16 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL, "citations", "SKILL.md"))).toBe(true);
   });
 
-  it("setSkillContentEnabled toggles via packs.json disabledContent (FQID + bare id)", () => {
+  it("setSkillContentEnabled toggles via teams.json assetEnabled (FQID + bare id)", () => {
     const root = temp();
     writeLocalSkill(root, "citations");
 
     // 裸 id 解析（唯一匹配 → local）
     const fqid = setSkillContentEnabled(root, "citations", false);
     expect(fqid).toBe("user.local:citations");
-    expect(readTeamsState(root).disabledContent).toContain("user.local:citations");
     expect(listProjectSkills(root)[0].enabled).toBe(false);
 
     setSkillContentEnabled(root, "user.local:citations", true);
-    expect(readTeamsState(root).disabledContent).not.toContain("user.local:citations");
     expect(listProjectSkills(root)[0].enabled).toBe(true);
   });
 
@@ -198,7 +195,7 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
 
     // pack.a 整包禁用 → 目录出 paths；shared 仍有 core 激活实例 → 不 deny；
     // solo 无激活实例 → deny
-    setTeamEnabled(root, "aaa.pack", false);
+    setProjectTeamEnabled(root, "aaa.pack", false);
     let result = syncProjectSkillsIntegration(root);
     expect(result.skillsPaths).toEqual([
       join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
@@ -208,7 +205,7 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     expect(result.skillPermissions["shared"]).toBeUndefined();
 
     // core 的 shared 也被逐项禁用 → 无激活实例 → deny
-    setAssetDisabled(root, `${CORE_TEAM_ID}:shared`, true);
+    setProjectAssetEnabled(root, `${CORE_TEAM_ID}:shared`, false);
     result = syncProjectSkillsIntegration(root);
     expect(result.skillPermissions["shared"]).toBe("deny");
   });

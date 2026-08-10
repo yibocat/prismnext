@@ -9,7 +9,7 @@ import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
 import { listAssets, resolveRef } from "../teams/resolver";
 import { precedenceRank } from "../teams/precedence";
-import { setAssetDisabled } from "./teams-state";
+import { setProjectAssetEnabled } from "../teams/state-project";
 
 /** legacy 项目技能目录（R6 迁移的输入；新代码不再写入这里） */
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
@@ -300,7 +300,7 @@ export function deleteProjectSkill(projectRoot: string, fqidOrBareId: string): v
     rmSync(skillDir, { recursive: true, force: true });
   }
   removeSkillInstallRecord(projectRoot, localId);
-  setAssetDisabled(projectRoot, `${LOCAL_TEAM_ID}:${localId}`, false);
+  setProjectAssetEnabled(projectRoot, `${LOCAL_TEAM_ID}:${localId}`, true);
 }
 
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
@@ -369,7 +369,7 @@ export function setSkillContentEnabled(
     ? fqidOrBareId
     : resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
-  setAssetDisabled(projectRoot, fqid, !enabled);
+  setProjectAssetEnabled(projectRoot, fqid, enabled ? true : false);
   return fqid;
 }
 

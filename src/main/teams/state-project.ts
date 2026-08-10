@@ -4,8 +4,11 @@
  * Persists `<projectRoot>/.prismnext/agent/teams.json`: project default team +
  * team/asset tri-state overrides + project overrides. Per-project.
  *
- * T1 is a pure read/write layer: nothing consumes it yet. The T2 TeamResolver
- * reads it; the T6 migration moves packs.json content into it.
+ * T6: the read-time fallback is now a one-shot on-disk migration. When
+ * teams.json does not exist but the legacy packs.json (or legacy agent state)
+ * does, the legacy state is converted to the new schema AND written to
+ * teams.json on disk. Subsequent reads find teams.json and skip the
+ * migration. This replaces the T3/T4 read-only derivation.
  *
  * Write rules: atomic write (tmp + rename) + write counter + change event
  * (each listener wrapped in try/catch). Project writes invalidate only their
@@ -16,6 +19,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { dirname, join } from "node:path";
 import {
   PROJECT_TEAMS_STATE_REL,
+  PROJECT_DEFAULT_TEAM_ID,
+  LOCAL_TEAM_ID,
   type ProjectTeamsState,
   type Fqid,
   type AssetOverride,
@@ -31,58 +36,89 @@ function statePath(projectRoot: string): string {
 }
 
 /**
- * Read-time fallback (decided for T3): when teams.json does not exist yet,
- * derive the project state from the legacy packs.json so existing projects keep
- * their enable/disable state after the T3 switch. Read-only — never writes.
- * The T6 migration moves packs.json → teams.json on disk and removes this.
+ * T6 one-shot migration: convert the legacy packs.json (stateVersion 3) to
+ * the new teams.json (version 1) and write it to disk. This runs once —
+ * after teams.json exists, it's never called again.
+ *
+ * M4: projectPackStates[id].enabled=false → teamEnabled[id] = false
+ * M5: disabledContent[] → assetEnabled[fqid] = false
+ * M6: contentOverrides{} → assetOverrides{} (allowedExperts stays as-is on
+ *     disk; the resolver reads it via the catalog's parseRoster)
+ * M7: defaultOrchestrator (FQID) → defaultTeam (its teamId prefix)
+ * M10: user.local: → project.local: FQID rewrite in all keys
  */
-function deriveFromLegacyPacks(projectRoot: string): ProjectTeamsState | null {
-  // Trigger when packs.json exists OR when legacy content (skills/ etc.) exists
-  // without packs.json — readTeamsState runs the legacy migration (R6 etc.) in
-  // both cases, and the migration is what moves legacy dirs into the Local Pack.
-  const legacyPath = join(projectRoot, ".prismnext", "agent", "packs.json");
-  if (!existsSync(legacyPath) && !hasLegacyAgentState(projectRoot)) return null;
-  try {
-    // Static import (a dynamic require() is undefined under vitest ESM). The new
-    // layer reads the legacy store; removed in T6.
-    const old = readTeamsState(projectRoot);
-    const teamEnabled: Record<string, boolean> = {};
-    for (const [teamId, st] of Object.entries(old.projectPackStates)) {
-      if (typeof st?.enabled === "boolean") teamEnabled[teamId] = st.enabled;
-    }
-    // The legacy Local Pack keeps its user.local id across the T3/T4 switch
-    // (the project.local rename is T6 / M10), so FQID prefixes pass through
-    // unchanged and the legacy packs.json state stays consistent.
-    const assetEnabled: Record<string, boolean> = {};
-    for (const fqid of old.disabledContent) assetEnabled[fqid] = false;
-    const assetOverrides: ProjectTeamsState["assetOverrides"] = { ...old.contentOverrides };
-    // defaultOrchestrator (an orchestrator FQID) → defaultTeam (its teamId).
-    const defaultTeam = old.defaultOrchestrator?.split(":")[0];
-    return {
-      version: 1,
-      defaultTeam: defaultTeam || undefined,
-      teamEnabled,
-      assetEnabled,
-      assetOverrides,
-    };
-  } catch (err) {
-    log.error("legacy packs.json fallback failed", { projectRoot, error: String(err) });
-    return null;
+function migrateFromLegacyPacks(projectRoot: string): ProjectTeamsState {
+  const old = readTeamsState(projectRoot);
+
+  // M10: rewrite user.local: → project.local: in all FQID keys.
+  const rewriteFqid = (fqid: string): string =>
+    fqid.startsWith(`${LOCAL_TEAM_ID}:`)
+      ? `${PROJECT_DEFAULT_TEAM_ID}:${fqid.slice(LOCAL_TEAM_ID.length + 1)}`
+      : fqid;
+
+  // M4: projectPackStates → teamEnabled (only records enabled=false).
+  const teamEnabled: Record<string, boolean> = {};
+  for (const [teamId, st] of Object.entries(old.projectPackStates)) {
+    if (typeof st?.enabled === "boolean") teamEnabled[teamId] = st.enabled;
   }
+
+  // M5: disabledContent → assetEnabled (all false).
+  const assetEnabled: Record<string, boolean> = {};
+  for (const fqid of old.disabledContent) {
+    assetEnabled[rewriteFqid(fqid)] = false;
+  }
+
+  // M6: contentOverrides → assetOverrides (rewrite FQID keys).
+  const assetOverrides: ProjectTeamsState["assetOverrides"] = {};
+  for (const [fqid, ov] of Object.entries(old.contentOverrides)) {
+    assetOverrides[rewriteFqid(fqid)] = ov;
+  }
+
+  // M7: defaultOrchestrator (FQID) → defaultTeam (teamId prefix).
+  // M10: rewrite user.local → project.local in defaultTeam.
+  let defaultTeam = old.defaultOrchestrator?.split(":")[0];
+  if (defaultTeam === LOCAL_TEAM_ID) defaultTeam = PROJECT_DEFAULT_TEAM_ID;
+
+  const newState: ProjectTeamsState = {
+    version: 1,
+    defaultTeam: defaultTeam || undefined,
+    teamEnabled,
+    assetEnabled,
+    assetOverrides,
+  };
+
+  // Write to disk (atomic).
+  writeProjectTeamsState(projectRoot, newState);
+  log.info("T6 migration: packs.json → teams.json written", { projectRoot });
+
+  return newState;
 }
 
-/** Read project state; teams.json → legacy packs.json fallback → empty. */
+/** Read project state; teams.json → one-shot migration from legacy → empty. */
 export function readProjectTeamsState(projectRoot: string): ProjectTeamsState {
   const path = statePath(projectRoot);
-  if (!existsSync(path)) {
-    return deriveFromLegacyPacks(projectRoot) ?? emptyProjectTeamsState();
+  if (existsSync(path)) {
+    try {
+      return normalizeProjectTeamsState(JSON.parse(readFileSync(path, "utf-8")));
+    } catch (err) {
+      log.error("teams.json corrupt, falling back to empty", { projectRoot, error: String(err) });
+      return emptyProjectTeamsState();
+    }
   }
-  try {
-    return normalizeProjectTeamsState(JSON.parse(readFileSync(path, "utf-8")));
-  } catch (err) {
-    log.error("teams.json corrupt, falling back to empty", { projectRoot, error: String(err) });
-    return emptyProjectTeamsState();
+
+  // T6 one-shot migration: teams.json doesn't exist yet. If the legacy
+  // packs.json or legacy agent state exists, convert and write teams.json.
+  const legacyPath = join(projectRoot, ".prismnext", "agent", "packs.json");
+  if (existsSync(legacyPath) || hasLegacyAgentState(projectRoot)) {
+    try {
+      return migrateFromLegacyPacks(projectRoot);
+    } catch (err) {
+      log.error("T6 migration failed, falling back to empty", { projectRoot, error: String(err) });
+      return emptyProjectTeamsState();
+    }
   }
+
+  return emptyProjectTeamsState();
 }
 
 /** Atomic write (tmp + rename) + write counter + change event for this project. */

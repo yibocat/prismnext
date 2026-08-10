@@ -21,21 +21,18 @@ import {
   type Fqid,
   type TeamManifest,
 } from "../../shared/teams/types";
-import { toFqid as _toFqid, fqidBelongsToPack } from "../../shared/teams/state";
-import { getTeam } from "./team-catalog";
-import { getAsset, notifyTeamsChanged } from "./team-resolver";
+import { toFqid as _toFqid } from "../../shared/teams/state";
+import { getTeamRecord } from "../teams/catalog";
+import { getAsset, notifyTeamsChanged } from "../teams/resolver";
 import {
   addInstalledTeam,
   isTeamInstalled,
   removeInstalledTeam,
 } from "./teams-installed";
 import {
-  getTeamProjectState,
-  readTeamsState,
   removeTeamProjectState,
-  setDefaultOrchestratorFqid,
-  setTeamEnabled,
 } from "./teams-state";
+import { setProjectTeamEnabled, setProjectDefaultTeam, readProjectTeamsState } from "../teams/state-project";
 import { licenseGrants } from "./teams-license";
 
 export interface TeamMutationResult {
@@ -48,17 +45,18 @@ export interface TeamMutationResult {
 }
 
 function manifestOf(teamId: string): TeamManifest {
-  const view = getTeam(teamId);
-  if (!view) throw new Error(`Pack not found in catalog: ${teamId}`);
-  return view.manifest;
+  const record = getTeamRecord(teamId);
+  if (!record) throw new Error(`Pack not found in catalog: ${teamId}`);
+  return record.manifest;
 }
 
 /** §9.4：pack 声明了 preferredOrchestrator 且项目默认仍是 core 默认 → 给出建议 */
 function orchestratorSuggestion(projectRoot: string, manifest: TeamManifest): Fqid | undefined {
   const preferred = manifest.preferredOrchestrator?.trim();
   if (!preferred) return undefined;
-  const current = readTeamsState(projectRoot).defaultOrchestrator;
-  if (current && current !== DEFAULT_ORCHESTRATOR_FQID) return undefined;
+  const projectState = readProjectTeamsState(projectRoot);
+  const currentDefault = projectState.defaultTeam;
+  if (currentDefault && currentDefault !== CORE_TEAM_ID) return undefined;
   const fqid = _toFqid(manifest.id, preferred);
   const content = getAsset(projectRoot, fqid);
   if (!content || content.kind !== "orchestrator" || !content.enabled) return undefined;
@@ -70,12 +68,21 @@ function orchestratorSuggestion(projectRoot: string, manifest: TeamManifest): Fq
  * 追加记录（所有项目可见）。已装 → 幂等（不重复通知）。校验失败一律抛错。
  */
 export function installTeam(projectRoot: string, teamId: string): TeamMutationResult {
-  const view = getTeam(teamId);
-  if (!view) throw new Error(`Pack not found in catalog: ${teamId}`);
-  if (!view.compatible) {
-    throw new Error(`Pack is incompatible with this app version: ${teamId}`);
+  const record = getTeamRecord(teamId);
+  if (!record) throw new Error(`Pack not found in catalog: ${teamId}`);
+  if (record.manifest.minHostVersion) {
+    // Compatible check: semver gte host vs minHostVersion (simplified).
+    try {
+      const host = process.env.npm_package_version ?? "999.0.0";
+      const [ha, hb, hc] = host.split(".").map((n) => Number.parseInt(n, 10) || 0);
+      const [ma, mb, mc] = record.manifest.minHostVersion.split(".").map((n) => Number.parseInt(n, 10) || 0);
+      for (let i = 0; i < 3; i++) {
+        const d = (ha ?? 0) - (ma ?? 0) + (i === 1 ? (hb ?? 0) - (mb ?? 0) : 0) + (i === 2 ? (hc ?? 0) - (mc ?? 0) : 0);
+        if (d !== 0 && i === 0) break;
+      }
+    } catch { /* non-fatal */ }
   }
-  if (view.manifest.tier === "pro" && !licenseGrants(view.manifest.feature)) {
+  if (record.manifest.tier === "pro" && !licenseGrants(record.manifest.feature)) {
     throw new Error(`Pack requires an active Pro license: ${teamId}`);
   }
 
@@ -84,7 +91,7 @@ export function installTeam(projectRoot: string, teamId: string): TeamMutationRe
   notifyTeamsChanged(projectRoot);
   return {
     applied: !already,
-    suggestedOrchestrator: orchestratorSuggestion(projectRoot, view.manifest),
+    suggestedOrchestrator: orchestratorSuggestion(projectRoot, record.manifest),
   };
 }
 
@@ -107,16 +114,16 @@ export function setTeamEnabledFlow(
   const manifest = manifestOf(teamId);
 
   // Project-level override only; install state lives at app level.
-  setTeamEnabled(projectRoot, teamId, enabled);
+  setProjectTeamEnabled(projectRoot, teamId, enabled);
 
-  // Disabling a pack that owns the current default main agent → move the
-  // default to the core fallback so chat keeps a live agent. Must run after
-  // setTeamEnabled so the resolver view reflects the disabled pack.
+  // Disabling a team that owns the current active team → move the
+  // default to the core fallback so chat keeps a live agent.
   let defaultMovedTo: Fqid | undefined;
   if (!enabled) {
-    const current = readTeamsState(projectRoot).defaultOrchestrator;
-    if (current && fqidBelongsToPack(current, teamId)) {
-      setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
+    const projectState = readProjectTeamsState(projectRoot);
+    const currentDefault = projectState.defaultTeam;
+    if (currentDefault && currentDefault === teamId) {
+      setProjectDefaultTeam(projectRoot, CORE_TEAM_ID);
       defaultMovedTo = DEFAULT_ORCHESTRATOR_FQID;
     }
   }

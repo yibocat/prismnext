@@ -16,7 +16,7 @@ import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/
 import { parseFqid } from "../../shared/teams/state";
 import type { AssetViewV2 } from "../../shared/teams/view";
 import { invalidateResolver, listAssets, resolveInvocation, resolveRef } from "../teams/resolver";
-import { setAssetDisabled } from "../services/teams-state";
+import { setProjectAssetEnabled } from "../teams/state-project";
 
 /**
  * CommandRegistry（§5.6.3）—— resolver 之上的命令门面，per-project 实例。
@@ -150,7 +150,7 @@ export class CommandRegistry {
     if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
     this.deleteFile(existing.name);
     // 清理可能残留的逐项禁用
-    setAssetDisabled(this.projectRoot, existing.id, false);
+    setProjectAssetEnabled(this.projectRoot, existing.id, true);
     invalidateResolver(this.projectRoot);
   }
 
@@ -163,7 +163,7 @@ export class CommandRegistry {
       ? id
       : resolveRef(this.projectRoot, id, undefined, "command");
     if (!fqid) throw new Error(`Command not found: ${id}`);
-    setAssetDisabled(this.projectRoot, fqid, !enabled);
+    setProjectAssetEnabled(this.projectRoot, fqid, enabled ? true : false);
   }
 
   // ── Export / import（作用域 = Local Pack commands）──
@@ -228,7 +228,7 @@ export class CommandRegistry {
 
       this.writeFile(def);
       if (!def.enabled) {
-        setAssetDisabled(this.projectRoot, def.id, true);
+        setProjectAssetEnabled(this.projectRoot, def.id, false);
       }
       existingNames.add(targetName);
       result.imported += 1;

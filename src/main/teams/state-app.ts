@@ -4,8 +4,10 @@
  * Persists `<userData>/teams-state.json`: install records + app-level default
  * team + team/asset tri-state overrides + global overrides. Shared by all projects.
  *
- * T1 is a pure read/write layer: nothing consumes it yet. The T2 TeamResolver
- * reads it; the T6 migration moves packs-installed.json content into it.
+ * T6: the read-time fallback is now a one-shot on-disk migration. When
+ * teams-state.json does not exist but packs-installed.json does, the
+ * install records are copied to teams-state.json and written to disk.
+ * Subsequent reads find teams-state.json and skip the migration.
  *
  * Write rules: atomic write (tmp + rename) + write counter + change event
  * (each listener wrapped in try/catch).
@@ -43,33 +45,47 @@ function filePath(): string {
 }
 
 /**
- * Read-time fallback (decided for T3): when teams-state.json does not exist yet,
- * derive the install records from the legacy packs-installed.json so installed
- * teams survive the T3 switch. Read-only — never writes. Removed in T6.
+ * T6 one-shot migration (M1): copy install records from the legacy
+ * packs-installed.json to the new teams-state.json and write to disk.
+ * This runs once — after teams-state.json exists, it's never called again.
  */
-function deriveInstalledFromLegacy(): AppTeamsState["installed"] | null {
-  try {
-    // Static import (a dynamic require() is undefined under vitest ESM).
-    const list = listInstalledTeams();
-    return list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt }));
-  } catch {
-    return null;
-  }
+function migrateFromLegacyInstalled(): AppTeamsState {
+  const list = listInstalledTeams();
+  const state: AppTeamsState = {
+    ...emptyAppTeamsState(),
+    installed: list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt })),
+  };
+  writeAppTeamsState(state);
+  log.info("T6 migration: packs-installed.json → teams-state.json written", {
+    count: state.installed.length,
+  });
+  return state;
 }
 
-/** Read app state; teams-state.json → legacy packs-installed.json fallback → empty. */
+/** Read app state; teams-state.json → one-shot migration from legacy → empty. */
 export function readAppTeamsState(): AppTeamsState {
   const path = filePath();
-  if (!existsSync(path)) {
-    const installed = deriveInstalledFromLegacy();
-    return { ...emptyAppTeamsState(), installed: installed ?? [] };
+  if (existsSync(path)) {
+    try {
+      return normalizeAppTeamsState(JSON.parse(readFileSync(path, "utf-8")));
+    } catch (err) {
+      log.error("teams-state.json corrupt, falling back to empty", { error: String(err) });
+      return emptyAppTeamsState();
+    }
   }
+
+  // T6 one-shot migration: teams-state.json doesn't exist. If the legacy
+  // packs-installed.json has records, copy them and write teams-state.json.
   try {
-    return normalizeAppTeamsState(JSON.parse(readFileSync(path, "utf-8")));
-  } catch (err) {
-    log.error("teams-state.json corrupt, falling back to empty", { error: String(err) });
-    return emptyAppTeamsState();
+    const legacyList = listInstalledTeams();
+    if (legacyList.length > 0) {
+      return migrateFromLegacyInstalled();
+    }
+  } catch {
+    // Legacy store not available — empty state.
   }
+
+  return emptyAppTeamsState();
 }
 
 /** Atomic write (tmp + rename) + write counter + change event. */

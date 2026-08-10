@@ -2,7 +2,7 @@ import type { LibraryCatalogItem } from "../../shared/skill-library-types";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import { toFqid } from "../../shared/teams/state";
 import { listCorePackSkills } from "./core-team-skills";
-import { setAssetDisabled } from "./teams-state";
+import { setProjectAssetEnabled } from "../teams/state-project";
 import {
   analyzeGitHubSkillSource,
   githubSourceToAnalyzeUrl,
@@ -87,7 +87,7 @@ export async function installLibraryCatalogItem(
 ): Promise<{ installedIds: string[] }> {
   if (item.sourceKind === "bundled") {
     // 引用模型：core pack 技能天然可用，「安装」= 确保启用（清禁用项，零拷贝）
-    setAssetDisabled(projectRoot, toFqid(CORE_TEAM_ID, item.skillId), false);
+    setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, item.skillId), true);
     return { installedIds: [item.skillId] };
   }
 
@@ -126,7 +126,7 @@ export async function installAllFromLibrarySource(
   if (source.kind === "bundled") {
     const installedIds: string[] = [];
     for (const skill of listCorePackSkills()) {
-      setAssetDisabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), false);
+      setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), true);
       installedIds.push(skill.id);
     }
     return { installedIds };
@@ -155,7 +155,7 @@ export async function uninstallAllFromLibrarySource(
     // 引用模型：「卸载全部」= 禁用 core pack 全部技能（零文件删除）
     const removedIds: string[] = [];
     for (const skill of listCorePackSkills()) {
-      setAssetDisabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), true);
+      setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), false);
       removedIds.push(skill.id);
     }
     return { removedIds };
