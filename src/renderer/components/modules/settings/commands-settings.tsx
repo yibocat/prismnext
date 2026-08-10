@@ -254,7 +254,7 @@ export default function CommandsSettings() {
                     <p className={SETTINGS_ROW_LABEL}>/{cmd.name}</p>
                     {originBadge(cmd, t)}
                     {!packOn && (
-                      <span className={cn(BADGE, "bg-destructive/10 text-destructive")}>
+                      <span className={cn(BADGE, "bg-destructive text-destructive-foreground")}>
                         {t("settings.commandsPage.disabledInProject")}
                       </span>
                     )}

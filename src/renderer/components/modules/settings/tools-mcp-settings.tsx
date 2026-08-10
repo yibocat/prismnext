@@ -328,7 +328,7 @@ export function ToolsMcpSettings() {
                           {t("settings.mcp.sourceTeam", { team: mcp.origin.teamName })}
                         </span>
                         {!mcp.enabled && (
-                          <span className={cn(BADGE, "bg-destructive/10 text-destructive")}>
+                          <span className={cn(BADGE, "bg-destructive text-destructive-foreground")}>
                             {t("settings.mcp.disabledInProject")}
                           </span>
                         )}

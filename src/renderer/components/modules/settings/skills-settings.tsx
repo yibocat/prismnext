@@ -343,7 +343,7 @@ export function SkillsSettings() {
                         <p className="text-[length:var(--font-size-11)] font-semibold uppercase tracking-wide text-muted-foreground/70">
                           {group.label}
                         </p>
-                        <span className={cn(BADGE, "bg-muted/40 text-muted-foreground/70")}>
+                        <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                           {group.scope === "app"
                             ? t("settings.skillsPage.scope.app")
                             : t("settings.skillsPage.scope.project")}
@@ -363,22 +363,22 @@ export function SkillsSettings() {
                                 })}
                               </span>
                               {!skill.enabled && (
-                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground/70")}>
+                                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                                   off
                                 </span>
                               )}
                               {skill.origin === "custom" && (
-                                <span className={cn(BADGE, "bg-secondary text-primary")}>
+                                <span className={cn(BADGE, "bg-secondary text-secondary-foreground")}>
                                   {t("settings.skillsPage.origin.custom")}
                                 </span>
                               )}
                               {skill.origin === "bundled" && (
-                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                                   {t("settings.skillsPage.origin.bundled")}
                                 </span>
                               )}
                               {skill.origin === "plugin" && (
-                                <span className={cn(BADGE, "bg-muted/60 text-muted-foreground")}>
+                                <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                                   {skill.originTeamName ?? "pack"}
                                 </span>
                               )}
