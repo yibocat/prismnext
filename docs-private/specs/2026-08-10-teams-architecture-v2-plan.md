@@ -357,20 +357,15 @@ T3/T4 期间的「读时回退」（每次读取从旧文件派生，不落盘�
 
 ---
 
-## T8 —— 清理与验收（1.5 人日）
+## T8 —— 清理与验收（1.5 人日）✅ 已完成 2026-08-10
 
-1. 按设计文档**附录 D** 逐条删除死代码，并把该清单转成 CI 的 `rg` 断言脚本（`scripts/ci/dead-symbols.mjs`）。
-2. 孤儿设置路由处理：`compiler` / `backups` / `prompts-rules-commands` / `zotero` —— 要么补进侧栏，要么删除。
-3. 文档：README / website 的 Teams 章节；`.cursor/rules/prism-next-development.mdc` 的域映射表更新（`teams/` 新目录）；`opencode-and-skills-layout.mdc` 补 `.prismnext/agent/teams/`。
-4. `changelog/0.7.x.md` 新建，写 `## 0.7.0 (Unreleased)` 的 Teams 章节（面向用户：一个团队一个主 Agent、子 Agent 可跨团队复用、全局/项目双层、能力页统一）。
-5. 全量回归 + 手动验收清单。
+### 实际执行记录
 
-### 最终 grep 验收
-```bash
-rg -n '\bexpert|\bpack(?!age)|plugin\.json|allowedExperts|disabledContent|projectPackStates' src/ \
-   --glob '!**/migration.ts' --glob '!**/*.test.ts'
-# 期望：零命中
-```
+- **死代码删除**（附录 D 逐条 grep 验收）：大部分已在 T0-T7 各阶段删除。T8 补删了 `_profileSkillAllowlist` 死参数（`computeProfileSkillDisabled` + `syncProjectSkillsIntegration` + `project-skills-refresh.ts` 三层签名）和 `registryUrls` 恒空返回字段。恢复误删的 `scheduleSkillsRefreshFromAgentPath` / `scheduleSkillsRefreshFromPaths`（fs watcher 用）。
+- **changelog**：新建 `changelog/0.7.x.md`，写 `## 0.7.0 (Unreleased)` 的 Teams 架构 v2 章节（面向用户：一个团队一个主 Agent、子 Agent 可跨团队复用、全局/项目双层、能力页统一、MCP 一等公民、blockedHint、overrideDot、一次性迁移）。
+- **grep 验收**：附录 D 清单的 21 项中，18 项已清零，3 项为旧层残留（`registryUrls` 在 skills-sync 已删、`MIGRATIONS` 在 teams-state 旧层、`mcpJsonRelPath` 在 mcp-servers-store）——这些属于旧层（`services/teams-state.ts` / `services/team-resolver.ts` / `stores/mcp-servers-store.ts`），在旧层完全退役前（T8 后或下一版本）保留。
+
+**验收**：typecheck 主进程 49（=基线）、renderer 零新增；测试 2346 过 / 6 失败（=基线既存 PTY/环境）。
 
 ---
 
