@@ -29,7 +29,8 @@ import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { isBuiltinMcpServer, serverIsConfigurable } from "@/lib/agent/mcp-presets";
 import type { McpServerEntry } from "@/lib/agent/mcp-config";
-import type { ResolvedMcp } from "@shared/teams/types";
+import type { AssetViewV2 } from "@shared/teams/view";
+import type { McpServerDef } from "@shared/teams/types";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-2";
@@ -47,9 +48,10 @@ function serverSummary(entry: McpServerEntry): string {
   return cmd.length > 72 ? `${cmd.slice(0, 72)}…` : cmd;
 }
 
-function mcpTransportSummary(mcp: ResolvedMcp): string {
-  if (mcp.transport.type === "http") return mcp.transport.url || "Remote (http)";
-  const { command, args } = mcp.transport;
+function mcpTransportSummary(mcp: AssetViewV2): string {
+  const def = mcp.definition as McpServerDef;
+  if (def.transport.type === "http") return def.transport.url || "Remote (http)";
+  const { command, args } = def.transport;
   const cmd = [command, ...(args ?? [])].join(" ");
   return cmd.length > 72 ? `${cmd.slice(0, 72)}…` : cmd;
 }

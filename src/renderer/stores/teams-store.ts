@@ -1,36 +1,72 @@
-// Shared packs catalog store (renderer).
+// Shared teams catalog store (renderer).
 //
-// Single source of truth for the installed pack list so the settings card
-// list (Teams & Agents) and the pack detail panel stay in sync in REAL TIME:
-// toggling the project-level enable switch in the detail panel flips the
-// shared store first (optimistic), then persists via IPC and reconciles with
-// the authoritative catalog from main. No more "close the panel to refresh".
+// Single source of truth for the team list so Settings → Teams, the team
+// detail panel, and the marketplace stay in sync in REAL TIME: toggling the
+// project-level enable switch flips the shared store first (optimistic), then
+// persists via IPC and reconciles with the authoritative catalog from main.
+//
+// T5: the catalog is TeamViewV2[] (new resolver). A derived `kind` / `locked`
+// compatibility field keeps the pre-T5 UI working until each page is reworked.
 import { create } from "zustand";
-import type { Fqid, ProjectTeamView, ResolvedMcp } from "@shared/teams/types";
+import type { Fqid } from "@shared/teams/types";
+import type { AssetViewV2, TeamViewV2 } from "@shared/teams/view";
+import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
 
-interface PacksStoreState {
-  catalog: ProjectTeamView[];
-  /** Pack-declared MCP servers (app-level resource, project-gated). */
-  teamMcps: ResolvedMcp[];
+/**
+ * TeamViewV2 + legacy display fields the pre-T5 UI still reads.
+ * `kind` / `locked` / `installedByDefault` are derived from the v2 fields.
+ */
+export interface TeamCardView extends TeamViewV2 {
+  /** Legacy PackKind equivalent, derived from scope + source. */
+  kind: "core" | "firstparty" | "external" | "local";
+  /** tier=pro without a license grant. */
+  locked: boolean;
+  /** core / local / user teams are implicitly installed. */
+  installedByDefault: boolean;
+}
+
+/** Derive the legacy display fields from a TeamViewV2. */
+export function toCardView(t: TeamViewV2): TeamCardView {
+  const kind: TeamCardView["kind"] =
+    t.manifest.id === CORE_TEAM_ID
+      ? "core"
+      : t.scope === "project" || t.manifest.id === LOCAL_TEAM_ID
+        ? "local"
+        : t.source === "bundled"
+          ? "firstparty"
+          : "external";
+  return {
+    ...t,
+    kind,
+    locked: t.manifest.tier === "pro" && !t.licenseOk,
+    installedByDefault:
+      t.source === "core" || t.source === "user" || t.scope === "project",
+  };
+}
+
+interface TeamsStoreState {
+  catalog: TeamCardView[];
+  /** Team-declared MCP servers (app-level resource, project-gated). */
+  teamMcps: AssetViewV2[];
   loadedRoot: string | null;
   loading: boolean;
   /** Load the catalog from main. Cached per project root unless `force`. */
   load: (projectRoot: string, options?: { force?: boolean }) => Promise<void>;
   /** Optimistic local flip — instant UI feedback; reconciled by next load. */
   setEnabledLocal: (teamId: string, enabled: boolean) => void;
-  /** Optimistic per-MCP flip (pack-declared server, disabledContent). */
+  /** Optimistic per-MCP flip (team-declared server, tri-state). */
   setEnabledLocalMcp: (fqid: string, enabled: boolean) => void;
   /** Persist project-level enable/disable to main, then re-load catalog. */
   setEnabled: (
     projectRoot: string,
     teamId: string,
     enabled: boolean,
-  ) => Promise<{ defaultMovedTo?: Fqid } | void>;
-  setPackMcps: (mcps: ResolvedMcp[]) => void;
+  ) => Promise<{ defaultMovedTo?: string } | void>;
+  setTeamMcps: (mcps: AssetViewV2[]) => void;
   clear: () => void;
 }
 
-export const usePacksStore = create<PacksStoreState>((set, get) => ({
+export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
   catalog: [],
   teamMcps: [],
   loadedRoot: null,
@@ -47,14 +83,15 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
     }
     set({ loading: true });
     try {
-      const catalog = await window.electronAPI.teamsList(projectRoot);
-      // Pack enable/disable changes the effective MCP set — keep the pack MCP
+      const raw = await window.electronAPI.teamsList(projectRoot);
+      const catalog = raw.map(toCardView);
+      // Team enable/disable changes the effective MCP set — keep the team MCP
       // view in sync so the MCP settings page greys out / restores live.
       let teamMcps = get().teamMcps;
       try {
         teamMcps = await window.electronAPI.teamsListProjectMcps(projectRoot);
       } catch {
-        // non-fatal; pack MCP view stays stale until next load
+        // non-fatal; team MCP view stays stale until next load
       }
       set({ catalog, teamMcps, loadedRoot: projectRoot });
     } finally {
@@ -67,15 +104,12 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
       catalog: s.catalog.map((p) =>
         p.manifest.id === teamId ? { ...p, enabled } : p,
       ),
-      // Flip the owning pack's MCP view too — the MCP settings page greys out
-      // in real time while the IPC round trip completes.
       teamMcps: s.teamMcps.map((m) =>
         m.teamId === teamId ? { ...m, enabled } : m,
       ),
     }));
   },
 
-  /** Per-item optimistic flip for a pack-declared MCP (disabledContent). */
   setEnabledLocalMcp: (fqid, enabled) => {
     set((s) => ({
       teamMcps: s.teamMcps.map((m) => (m.fqid === fqid ? { ...m, enabled } : m)),
@@ -83,17 +117,15 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
   },
 
   setEnabled: async (projectRoot, teamId, enabled) => {
-    // Optimistic: flip the UI immediately, then persist + reconcile.
     get().setEnabledLocal(teamId, enabled);
-    let result: { defaultMovedTo?: Fqid } | undefined;
+    let result: { defaultMovedTo?: string } | undefined;
     try {
       result = (await window.electronAPI.teamsSetEnabled(
         projectRoot,
         teamId,
         enabled,
-      )) as { defaultMovedTo?: Fqid } | undefined;
+      )) as { defaultMovedTo?: string } | undefined;
     } catch (err) {
-      // Reconcile on failure: reload to restore the authoritative state.
       await get().load(projectRoot, { force: true });
       throw err;
     }
@@ -101,7 +133,10 @@ export const usePacksStore = create<PacksStoreState>((set, get) => ({
     return result;
   },
 
-  setPackMcps: (teamMcps) => set({ teamMcps }),
+  setTeamMcps: (teamMcps) => set({ teamMcps }),
 
   clear: () => set({ catalog: [], teamMcps: [], loadedRoot: null, loading: false }),
 }));
+
+/** Back-compat alias while call sites migrate (T5). */
+export const usePacksStore = useTeamsStore;

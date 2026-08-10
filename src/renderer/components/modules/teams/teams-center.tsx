@@ -25,7 +25,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { AssetKind, Fqid, ProjectTeamView } from "@shared/teams/types";
+import type { AssetKind, Fqid } from "@shared/teams/types";
+import type { TeamCardView } from "../../../stores/teams-store";
+import { toCardView } from "../../../stores/teams-store";
 import { PackIcon } from "./team-icon";
 
 export interface TeamsCenterProps {
@@ -66,7 +68,7 @@ type PackDisplayState =
   | "proLocked"
   | "installable";
 
-function packDisplayState(pack: ProjectTeamView): PackDisplayState {
+function packDisplayState(pack: TeamCardView): PackDisplayState {
   if (pack.installed) {
     if (pack.enabled) return "installedActive";
     return pack.locked ? "installedProLocked" : "installedDisabled";
@@ -87,7 +89,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
   //（locked 标记与可安装性随授权变化即时更新）。
   const license = useProLicenseStore((s) => s.license);
 
-  const [packs, setPacks] = useState<ProjectTeamView[]>([]);
+  const [packs, setPacks] = useState<TeamCardView[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setPacks([]);
       return;
     }
-    setPacks(await window.electronAPI.teamsList(projectRoot));
+    setPacks((await window.electronAPI.teamsList(projectRoot)).map(toCardView));
   }, [projectRoot]);
 
   useEffect(() => {
@@ -117,7 +119,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
 
   const selected = packs.find((p) => p.manifest.id === selectedId) ?? null;
 
-  const install = async (pack: ProjectTeamView) => {
+  const install = async (pack: TeamCardView) => {
     if (!projectRoot) return;
     setBusy(pack.manifest.id);
     try {
@@ -179,7 +181,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       return (p.manifest.category?.trim() || "general") === f.slice(4);
     }).length;
 
-  const installButton = (pack: ProjectTeamView, fullWidth = false) => {
+  const installButton = (pack: TeamCardView, fullWidth = false) => {
     const state = packDisplayState(pack);
     const buttonClass = cn(
       "gap-1 shadow-none",

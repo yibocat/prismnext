@@ -1917,7 +1917,7 @@ export interface ElectronAPI {
   // Agent Packs（生命周期 + 视图，§9.5）
   teamsList: (
     projectRoot: string,
-  ) => Promise<import("../../shared/teams/types").ProjectTeamView[]>;
+  ) => Promise<import("../../shared/teams/view").TeamViewV2[]>;
   teamsInstall: (
     projectRoot: string,
     teamId: string,
@@ -1960,7 +1960,7 @@ export interface ElectronAPI {
   teamsListAssets: (
     projectRoot: string,
     kind: import("../../shared/teams/types").AssetKind,
-  ) => Promise<import("../../shared/teams/types").AssetView[]>;
+  ) => Promise<import("../../shared/teams/view").AssetViewV2[]>;
   teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
   teamsGetTeamContents: (teamId: string) => Promise<{
     kind: import("../../shared/teams/types").AssetKind;
@@ -1970,7 +1970,7 @@ export interface ElectronAPI {
   }[]>;
   teamsListProjectMcps: (
     projectRoot: string,
-  ) => Promise<import("../../shared/teams/types").ResolvedMcp[]>;
+  ) => Promise<import("../../shared/teams/view").AssetViewV2[]>;
   teamsListMcp: (
     projectRoot: string,
   ) => Promise<Array<{ name: string; enabled: boolean; origin: string; autoStart: boolean }>>;

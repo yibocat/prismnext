@@ -1,42 +1,43 @@
-// Pack lifecycle IPC (spec §9.5): listCatalog / install / setEnabled / uninstall /
-// setContentEnabled / saveOverride / resetCoreDefaults / getCoreState /
-// resolveOrigin / getContentView / setDefaultOrchestrator.
+// Teams IPC (design 2026-08-10 §10). Query handlers read the TeamResolver
+// (teams/resolver.ts); mutation handlers are thin shells over the single write
+// exit (teams/lifecycle.ts). Channel names are unchanged from the T0 rename so
+// existing renderer call sites keep working; only the return shapes are new
+// (TeamViewV2 / AssetViewV2 with scope / blockedBy / runtimeName).
 import { ipcMain } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { CORE_TEAM_ID } from "../../shared/teams/types";
-import type { AssetKind, AssetOverride, Fqid } from "../../shared/teams/types";
-import { getTeamContentsWithMcp } from "../services/team-catalog";
-import { listMcpServers } from "../teams/resolver";
+import type { AssetKind, Fqid, TeamScope } from "../../shared/teams/types";
 import {
+  getAsset,
+  getTeam,
   isAssetActive,
   listAssets,
-  listProjectMcps,
-  listProjectTeams,
-  notifyTeamsChanged,
-  resolveOrigin,
-  resolveOrchestratorId,
-} from "../services/team-resolver";
+  listMcpServers,
+  listTeams,
+  readInstructions,
+  resolveActiveTeam,
+  resolveRoster,
+} from "../teams/resolver";
+import { getTeamRecord } from "../teams/catalog";
 import {
+  createTeam,
+  deleteTeam,
+  demoteTeam,
   installTeam,
-  setTeamEnabledFlow,
-  uninstallTeam,
-} from "../services/teams-lifecycle";
-import {
-  getCoreAssetModificationState,
-  readTeamsState,
-  resetCoreAssetsToDefaults,
+  moveAsset,
+  promoteTeam,
   saveAssetOverride,
-  setAssetDisabled,
-  setDefaultOrchestratorFqid,
-} from "../services/teams-state";
+  setActiveTeam,
+  setAssetEnabled,
+  setTeamEnabled,
+  uninstallTeam,
+} from "../teams/lifecycle";
+import type { AssetOverride } from "../../shared/teams/types";
 
 function requireProjectRoot(projectRoot: string | null | undefined): string {
   if (!projectRoot) throw new Error("No project root");
   return projectRoot;
 }
-
-const CONTENT_KINDS: AssetKind[] = ["orchestrator", "subagent", "skill", "command"];
 
 /** A unified MCP entry for the slash catalog (project entries + team entries). */
 interface UnifiedMcpEntry {
@@ -91,122 +92,247 @@ function listUnifiedMcpServers(projectRoot: string): UnifiedMcpEntry[] {
 }
 
 export function registerPacksHandlers(): void {
-  // catalog ∪ 项目状态（ProjectTeamView[]：installed/enabled/locked/compatible）
+  // ── Queries (TeamResolver) ──
+
+  // All teams visible in this project, with resolved state (scope / blockedBy /
+  // enabled / counts). Drives Settings → Teams and the marketplace.
   ipcMain.handle("teams:list", async (_event, args?: { projectRoot?: string | null }) => {
     if (!args?.projectRoot) return [];
-    return listProjectTeams(args.projectRoot);
+    return listTeams(args.projectRoot);
   });
 
-  ipcMain.handle(
-    "teams:install",
-    async (_event, args: { projectRoot: string; teamId: string }) => {
-      return installTeam(requireProjectRoot(args.projectRoot), args.teamId);
-    },
-  );
+  ipcMain.handle("teams:get", async (_event, args?: { projectRoot?: string | null; teamId?: string }) => {
+    if (!args?.projectRoot || !args.teamId) return null;
+    return getTeam(args.projectRoot, args.teamId);
+  });
 
-  ipcMain.handle(
-    "teams:setEnabled",
-    async (_event, args: { projectRoot: string; teamId: string; enabled: boolean }) => {
-      return setTeamEnabledFlow(requireProjectRoot(args.projectRoot), args.teamId, args.enabled);
-    },
-  );
-
-  ipcMain.handle(
-    "teams:uninstall",
-    async (_event, args: { projectRoot: string; teamId: string }) => {
-      uninstallTeam(requireProjectRoot(args.projectRoot), args.teamId);
-    },
-  );
-
-  // 逐项启停（§6.2 轻量操作：disabledContent 增删，视图经写入订阅即时失效）
-  ipcMain.handle(
-    "teams:setAssetEnabled",
-    async (_event, args: { projectRoot: string; fqid: Fqid; enabled: boolean }) => {
-      setAssetDisabled(requireProjectRoot(args.projectRoot), args.fqid, !args.enabled);
-    },
-  );
-
-  // Badge single source (spec §9.3, fixes P10): FQID or bare id.
-  ipcMain.handle(
-    "teams:resolveOrigin",
-    async (_event, args?: { projectRoot?: string | null; fqidOrId?: string }) => {
-      if (!args?.projectRoot || !args.fqidOrId) return null;
-      return resolveOrigin(args.projectRoot, args.fqidOrId);
-    },
-  );
-
-  // Settings grouped data (spec §9.2: expanded pack row = its content items).
+  // Assets of a kind (orchestrator / subagent / skill / command / mcp).
   ipcMain.handle(
     "teams:listAssets",
     async (_event, args?: { projectRoot?: string | null; kind?: string }) => {
       if (!args?.projectRoot) return [];
-      const kind = args.kind as AssetKind | undefined;
-      if (!kind || !CONTENT_KINDS.includes(kind)) return [];
-      return listAssets(args.projectRoot, kind);
+      return listAssets(args.projectRoot, args.kind as AssetKind | undefined);
     },
   );
 
-  // Save an override for a content item (Phase 6: replaces legacy
-  // `experts:saveBuiltinOverride` / `orchestrators:saveBuiltinOverride`).
-  // An all-undefined patch removes the override (single-item reset).
+  // A team's roster (lead agent + members with via/unavailable annotations).
+  ipcMain.handle("teams:getRoster", async (_event, args?: { projectRoot?: string | null; teamId?: string }) => {
+    if (!args?.projectRoot || !args.teamId) return null;
+    return resolveRoster(args.projectRoot, args.teamId);
+  });
+
+  // The active team (session → project → app → core fallback).
+  ipcMain.handle(
+    "teams:getActiveTeam",
+    async (_event, args?: { projectRoot?: string | null; sessionTeamId?: string | null }) => {
+      if (!args?.projectRoot) return null;
+      return resolveActiveTeam(args.projectRoot, args.sessionTeamId);
+    },
+  );
+
+  ipcMain.handle(
+    "teams:readInstructions",
+    async (_event, args?: { projectRoot?: string | null; fqid?: string }) => {
+      if (!args?.projectRoot || !args.fqid) return "";
+      return readInstructions(args.projectRoot, args.fqid);
+    },
+  );
+
+  // Unified MCP list for the slash catalog (B1 fix): project mcp.json entries
+  // PLUS every enabled team's MCP servers (resolved by the TeamResolver).
+  ipcMain.handle("teams:listMcp", async (_event, args?: { projectRoot?: string | null }) => {
+    if (!args?.projectRoot) return [];
+    return listUnifiedMcpServers(args.projectRoot);
+  });
+
+  // ── Legacy-compat query channels (kept so existing UI works until T5
+  //  reworks each page; implemented over the new resolver) ──
+
+  // Content inventory of a team (marketplace detail + pack detail panel).
+  ipcMain.handle("teams:getTeamContents", async (_event, args?: { teamId?: string }) => {
+    if (!args?.teamId) return [];
+    const record = getTeamRecord(args.teamId);
+    if (!record) return [];
+    const out: Array<{ kind: AssetKind; id: string; name: string; description: string }> = record.assets.map(
+      (a) => ({ kind: a.kind, id: a.id, name: a.name, description: a.description }),
+    );
+    for (const m of record.mcps) {
+      out.push({ kind: "mcp", id: m.id, name: m.name, description: m.description ?? "" });
+    }
+    return out;
+  });
+
+  // Team-provided MCP servers (MCP settings page "From teams" section).
+  ipcMain.handle("teams:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
+    if (!args?.projectRoot) return [];
+    return listMcpServers(args.projectRoot);
+  });
+
+  // ── Mutations (lifecycle; the single write exit) ──
+
+  // Install is app-level (no projectRoot needed for the write itself).
+  ipcMain.handle("teams:install", async (_event, args: { teamId: string }) => {
+    return installTeam(args.teamId);
+  });
+
+  ipcMain.handle("teams:uninstall", async (_event, args: { teamId: string }) => {
+    uninstallTeam(args.teamId);
+  });
+
+  // Team enable/disable. scope="project" (the row switch) by default; "app" is
+  // the "disable in all projects" menu action. value=null follows the other layer.
+  ipcMain.handle(
+    "teams:setEnabled",
+    async (
+      _event,
+      args: { projectRoot?: string | null; teamId: string; enabled: boolean | null; scope?: TeamScope },
+    ) => {
+      const scope: TeamScope = args.scope ?? "project";
+      return setTeamEnabled(args.teamId, args.enabled, scope, args.projectRoot ?? undefined);
+    },
+  );
+
+  // Asset enable/disable (tri-state).
+  ipcMain.handle(
+    "teams:setAssetEnabled",
+    async (
+      _event,
+      args: { projectRoot?: string | null; fqid: Fqid; enabled: boolean | null; scope?: TeamScope },
+    ) => {
+      const scope: TeamScope = args.scope ?? "project";
+      setAssetEnabled(args.fqid, args.enabled, scope, args.projectRoot ?? undefined);
+    },
+  );
+
+  // Save an asset override at the given layer.
   ipcMain.handle(
     "teams:saveAssetOverride",
     async (
       _event,
-      args: { projectRoot: string; fqid: Fqid; patch: AssetOverride },
+      args: { projectRoot?: string | null; fqid: Fqid; patch: AssetOverride; scope?: TeamScope },
     ) => {
-      const root = requireProjectRoot(args.projectRoot);
       if (!args.fqid || typeof args.patch !== "object" || args.patch === null) {
         throw new Error("Invalid override payload");
       }
-      saveAssetOverride(root, args.fqid, args.patch);
-      notifyTeamsChanged(root);
+      const scope: TeamScope = args.scope ?? "project";
+      saveAssetOverride(args.fqid, args.patch, scope, args.projectRoot ?? undefined);
     },
   );
 
-  // Core content modification state + default orchestrator (drives the
-  // "Reset to defaults" availability and the Default badge). Replaces the
-  // legacy `experts:getManifest` / `orchestrators:getManifest` consumers.
+  // Set the active team (project or app layer).
   ipcMain.handle(
-    "teams:getCoreState",
-    async (_event, args?: { projectRoot?: string | null }) => {
-      if (!args?.projectRoot) return null;
-      const root = args.projectRoot;
-      const state = readTeamsState(root);
-      const coreExperts = listAssets(root, "subagent").filter((c) => c.teamId === CORE_TEAM_ID);
-      const coreOrchs = listAssets(root, "orchestrator").filter((c) => c.teamId === CORE_TEAM_ID);
-      const expertState = getCoreAssetModificationState(
-        root,
-        coreExperts.map((c) => c.fqid),
-      );
-      const orchState = getCoreAssetModificationState(
-        root,
-        coreOrchs.map((c) => c.fqid),
-      );
-      const defaultOrch = coreOrchs.find((c) => c.fqid === state.defaultOrchestrator);
-      // The EFFECTIVE default: resolver falls back to the core default when the
-      // stored default's pack is disabled in this project (its content is not
-      // active). The UI must show the agent that actually runs, not the raw
-      // stored value — otherwise a disabled team keeps its DEFAULT badge even
-      // though chat already uses the core default.
-      const effectiveDefaultFqid = resolveOrchestratorId(root);
+    "teams:setActiveTeam",
+    async (
+      _event,
+      args: { projectRoot?: string | null; teamId: string; scope?: "project" | "app" },
+    ) => {
+      setActiveTeam(args.teamId, args.scope ?? "project", args.projectRoot ?? undefined);
+    },
+  );
+
+  // Create / delete a team (writable teams only).
+  ipcMain.handle(
+    "teams:create",
+    async (
+      _event,
+      args: { name: string; description?: string; scope: TeamScope; projectRoot?: string | null },
+    ) => {
+      return createTeam({
+        name: args.name,
+        description: args.description,
+        scope: args.scope,
+        projectRoot: args.projectRoot ?? undefined,
+      });
+    },
+  );
+
+  ipcMain.handle(
+    "teams:delete",
+    async (_event, args: { teamId: string; projectRoot?: string | null }) => {
+      deleteTeam(args.teamId, args.projectRoot ?? undefined);
+    },
+  );
+
+  // Promote / demote a team across scopes; move an asset across teams.
+  ipcMain.handle(
+    "teams:promote",
+    async (_event, args: { teamId: string; projectRoot: string }) => {
+      return promoteTeam(args.teamId, requireProjectRoot(args.projectRoot));
+    },
+  );
+
+  ipcMain.handle(
+    "teams:demote",
+    async (_event, args: { teamId: string; projectRoot: string }) => {
+      return demoteTeam(args.teamId, requireProjectRoot(args.projectRoot));
+    },
+  );
+
+  ipcMain.handle(
+    "teams:moveAsset",
+    async (_event, args: { projectRoot: string; fqid: Fqid; targetTeamId: string }) => {
+      return moveAsset(args.fqid, args.targetTeamId, requireProjectRoot(args.projectRoot));
+    },
+  );
+
+  // ── Legacy-compat mutations/state (mapped onto the new model) ──
+
+  // Set the default lead agent by orchestrator FQID → activates its team.
+  ipcMain.handle(
+    "teams:setDefaultOrchestrator",
+    async (_event, args: { projectRoot: string; fqid: Fqid }) => {
+      const root = requireProjectRoot(args.projectRoot);
+      const asset = getAsset(root, args.fqid);
+      if (!asset || asset.kind !== "orchestrator" || !asset.enabled) {
+        throw new Error(`Orchestrator is not active: ${args.fqid}`);
+      }
+      setActiveTeam(asset.teamId, "project", root);
+    },
+  );
+
+  // Origin badge for a content item (FQID or bare id).
+  ipcMain.handle(
+    "teams:resolveOrigin",
+    async (_event, args?: { projectRoot?: string | null; fqidOrId?: string }) => {
+      if (!args?.projectRoot || !args.fqidOrId) return null;
+      const asset = getAsset(args.projectRoot, args.fqidOrId);
+      if (!asset) return null;
       return {
-        defaultOrchestratorId: defaultOrch?.id ?? null,
-        // Full-fidelity default (any pack, not just core): UI matches against
-        // `orchestrator.fqid` so a non-core default is preserved across reloads
-        // instead of silently falling back to the core default.
-        defaultOrchestratorFqid: effectiveDefaultFqid,
-        coreSubagentDisabledCount: expertState.disabledCount,
-        coreSubagentOverrideCount: expertState.overrideCount,
-        coreOrchestratorDisabledCount: orchState.disabledCount,
-        coreOrchestratorOverrideCount: orchState.overrideCount,
+        teamId: asset.origin.teamId,
+        teamName: asset.origin.teamName,
+        teamTier: asset.origin.tier,
       };
     },
   );
 
-  // Factory-reset core content of a kind (Phase 6: replaces legacy
-  // `experts:resetBuiltinsToDefaults`). The IPC layer resolves the kind-aware
-  // core FQID set from the resolver view so packs-state stays storage-only.
+  // Core content modification state + the effective active lead (drives the
+  // Reset button and the Default badge on the legacy Teams & Agents page).
+  ipcMain.handle("teams:getCoreState", async (_event, args?: { projectRoot?: string | null }) => {
+    if (!args?.projectRoot) return null;
+    const root = args.projectRoot;
+    const coreSubagents = listAssets(root, "subagent").filter((c) => c.teamId === "prismnext.core");
+    const coreOrchs = listAssets(root, "orchestrator").filter((c) => c.teamId === "prismnext.core");
+    const countModified = (items: typeof coreSubagents) => ({
+      disabledCount: items.filter((i) => i.enabledProject === false || i.enabledApp === false).length,
+      overrideCount: items.filter((i) => i.hasOverride).length,
+    });
+    const subagentState = countModified(coreSubagents);
+    const orchState = countModified(coreOrchs);
+    const activeTeam = resolveActiveTeam(root);
+    const activeOrchFqid = activeTeam.orchestratorId
+      ? `${activeTeam.manifest.id}:${activeTeam.orchestratorId}`
+      : null;
+    return {
+      defaultOrchestratorId: activeTeam.orchestratorId ?? null,
+      defaultOrchestratorFqid: activeOrchFqid,
+      coreSubagentDisabledCount: subagentState.disabledCount,
+      coreSubagentOverrideCount: subagentState.overrideCount,
+      coreOrchestratorDisabledCount: orchState.disabledCount,
+      coreOrchestratorOverrideCount: orchState.overrideCount,
+    };
+  });
+
+  // Factory-reset core content of a kind (clears per-item disables + overrides).
   ipcMain.handle(
     "teams:resetCoreDefaults",
     async (_event, args: { projectRoot: string; kind: "subagent" | "orchestrator" }) => {
@@ -214,51 +340,11 @@ export function registerPacksHandlers(): void {
       if (args.kind !== "subagent" && args.kind !== "orchestrator") {
         throw new Error("Invalid kind");
       }
-      const fqids = listAssets(root, args.kind)
-        .filter((c) => c.teamId === CORE_TEAM_ID)
-        .map((c) => c.fqid);
-      resetCoreAssetsToDefaults(root, fqids);
-      notifyTeamsChanged(root);
-    },
-  );
-
-  // Catalog-level content scan (no install required; detail view "what's in this pack").
-  // Includes MCP servers declared by the pack's mcp.json.
-  ipcMain.handle("teams:getTeamContents", async (_event, args?: { teamId?: string }) => {
-    if (!args?.teamId) return [];
-    try {
-      return getTeamContentsWithMcp(args.teamId);
-    } catch {
-      return [];
-    }
-  });
-
-  // Pack-declared MCP servers (app-level resource, project-gated) — the MCP
-  // settings page shows these under "From teams" with enabled/greyed state.
-  ipcMain.handle("teams:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
-    if (!args?.projectRoot) return [];
-    return listProjectMcps(args.projectRoot);
-  });
-
-  // Unified MCP list for the slash catalog (B1 fix): project mcp.json entries
-  // PLUS every enabled team's MCP servers (resolved by the TeamResolver). The
-  // composer `/` menu reads this so team-provided MCPs can actually be invoked
-  // (previously they were invisible to the lazy-load allowlist).
-  ipcMain.handle("teams:listMcp", async (_event, args?: { projectRoot?: string | null }) => {
-    if (!args?.projectRoot) return [];
-    return listUnifiedMcpServers(args.projectRoot);
-  });
-
-  // Spec §9.4 link UX confirm: target must be currently active to become default.
-  ipcMain.handle(
-    "teams:setDefaultOrchestrator",
-    async (_event, args: { projectRoot: string; fqid: Fqid }) => {
-      const root = requireProjectRoot(args.projectRoot);
-      if (!isAssetActive(root, args.fqid)) {
-        throw new Error(`Orchestrator is not active: ${args.fqid}`);
+      const coreAssets = listAssets(root, args.kind).filter((c) => c.teamId === "prismnext.core");
+      for (const asset of coreAssets) {
+        setAssetEnabled(asset.fqid, null, "project", root);
+        saveAssetOverride(asset.fqid, {}, "project", root);
       }
-      setDefaultOrchestratorFqid(root, args.fqid);
-      notifyTeamsChanged(root);
     },
   );
 }
