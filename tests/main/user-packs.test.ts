@@ -2,8 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
 import { setUserTeamsDataDir, createUserTeam, deleteUserTeam, listUserTeams, ensureUserTeamsRegistered } from "../../src/main/services/user-teams";
-import { listTeams } from "../../src/main/services/team-catalog";
-import { listProjectTeams, listAssets } from "../../src/main/services/team-resolver";
+import { listAssets, listTeams } from "../../src/main/teams/resolver";
 import { saveCustomOrchestrator, saveCustomSubagent, deleteCustomOrchestrator, listOrchestrators } from "../../src/main/services/subagents-sync";
 import { USER_TEAM_PUBLISHER } from "../../src/shared/teams/types";
 import { makeProjectRoot, makeTempDir } from "./packs-test-utils";
@@ -32,16 +31,18 @@ describe("user-packs (app-level teams)", () => {
     const listed = listUserTeams();
     expect(listed.map((t) => t.teamId)).toContain(team.teamId);
 
-    // Catalog sees it as a normal pack (user publisher → auto-installed).
-    const pack = listTeams().find((p) => p.manifest.id === team.teamId);
-    expect(pack).toBeDefined();
-    expect(pack!.manifest.publisher).toBe(USER_TEAM_PUBLISHER);
-    expect(pack!.installedByDefault).toBe(true);
-
-    // Project view: installed + enabled without any install step.
     const root = makeProjectRoot();
     tempDirs.push(root);
-    const view = listProjectTeams(root).find((p) => p.manifest.id === team.teamId);
+
+    // Catalog sees it as a normal v2 Team (user publisher → auto-installed).
+    const pack = listTeams(root).find((p) => p.manifest.id === team.teamId);
+    expect(pack).toBeDefined();
+    expect(pack!.manifest.publisher).toBe(USER_TEAM_PUBLISHER);
+    expect(pack!.source).toBe("user");
+    expect(pack!.installed).toBe(true);
+
+    // Project view: installed + enabled without any install step.
+    const view = listTeams(root).find((p) => p.manifest.id === team.teamId);
     expect(view?.installed).toBe(true);
     expect(view?.enabled).toBe(true);
   });
@@ -54,7 +55,9 @@ describe("user-packs (app-level teams)", () => {
 
     deleteUserTeam(team.teamId);
     expect(listUserTeams().map((t) => t.teamId)).not.toContain(team.teamId);
-    expect(listTeams().find((p) => p.manifest.id === team.teamId)).toBeUndefined();
+    const root = makeProjectRoot();
+    tempDirs.push(root);
+    expect(listTeams(root).find((p) => p.manifest.id === team.teamId)).toBeUndefined();
   });
 
   it("requires a name", () => {
@@ -70,7 +73,7 @@ describe("user-packs (app-level teams)", () => {
     tempDirs.push(root);
 
     // Sanity: the team must be in the catalog before saving into it.
-    expect(listTeams().find((p) => p.manifest.id === team.teamId)).toBeDefined();
+    expect(listTeams(root).find((p) => p.manifest.id === team.teamId)).toBeDefined();
 
     const saved = saveCustomOrchestrator(
       root,

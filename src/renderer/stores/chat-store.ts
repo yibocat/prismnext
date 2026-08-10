@@ -215,6 +215,8 @@ interface TabState {
   promptStale: boolean;
   /** Expert team orchestrator id (null → project default). */
   orchestratorId: string | null;
+  /** Tab-level active team override (null → project/app default via Teams resolver). */
+  sessionTeamId: string | null;
   /** OpenCode primary agent for this tab. */
   sessionAgent: SessionAgent;
   /** True while session history is being loaded from disk (avoids homepage flash). */
@@ -332,6 +334,7 @@ function makeDefaultTab(id: string): TabState {
     contextUsageSource: null,
     promptStale: false,
     orchestratorId: null,
+    sessionTeamId: null,
     sessionAgent: "build",
     isLoadingSession: false,
     sessionCwd: null,
@@ -598,6 +601,10 @@ interface ChatState {
   setSessionAgent: (agent: SessionAgent, tabId?: string) => void;
   /** Soft-block entry when leaving Plan with a dirty draft. */
   requestSetSessionAgent: (agent: SessionAgent, tabId?: string) => void;
+  /** Tab-level active team (Teams v2); null clears override. */
+  setSessionTeamId: (tabId: string, teamId: string | null) => void;
+  /** Clear all tab sessionTeamId overrides (Settings changed project default). */
+  clearSessionTeamOverrides: () => void;
   /**
    * After reopening a session with a pending draft: restore Plan agent + chip +
    * permissions, but suppress the composer confirm strip (Approve lives on draft toolbar).
@@ -647,6 +654,7 @@ interface ChatState {
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      sessionTeamId?: string | null;
       promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
       promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
@@ -1325,6 +1333,30 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     get().setSessionAgent(agent, resolvedTabId);
   },
 
+  setSessionTeamId: (tabId, teamId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, sessionTeamId: teamId, orchestratorId: null }
+          : t,
+      ),
+    }));
+  },
+
+  /**
+   * Settings (or any project-default change) won — clear tab overrides so
+   * Composer follows `teams.json.defaultTeam` instead of a stale sessionTeamId.
+   */
+  clearSessionTeamOverrides: () => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.sessionTeamId == null && t.orchestratorId == null
+          ? t
+          : { ...t, sessionTeamId: null, orchestratorId: null },
+      ),
+    }));
+  },
+
   restorePendingPlanModeIfNeeded: async (tabId?: string) => {
     const resolvedTabId = tabId ?? get().activeTabId;
     const tab = get().tabs.find((t) => t.id === resolvedTabId);
@@ -1817,6 +1849,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      sessionTeamId?: string | null;
       promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
       promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
@@ -1954,6 +1987,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           sessionAgent === "plan"
             ? undefined
             : composerExtras?.orchestratorId ?? activeTab?.orchestratorId ?? undefined,
+        sessionTeamId:
+          sessionAgent === "plan"
+            ? undefined
+            : composerExtras?.sessionTeamId ?? activeTab?.sessionTeamId ?? undefined,
         selectedExpertIds: composerExtras?.selectedExpertIds,
         mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
         skillIds: composerExtras?.skillIds,

@@ -12,8 +12,16 @@ import {
   type TeamScope,
 } from "../../shared/teams/types";
 
+let appTeamsDirOverride: string | null = null;
+
+/** Test-only app Teams root override. */
+export function setAppTeamsDirForTests(dir: string | null): void {
+  appTeamsDirOverride = dir;
+}
+
 /** App-level user-created teams root: `<userData>/teams/`. */
 export function appTeamsDir(): string {
+  if (appTeamsDirOverride) return appTeamsDirOverride;
   try {
     return join(app.getPath("userData"), "teams");
   } catch {

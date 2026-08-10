@@ -6,7 +6,7 @@
  * 安装/启停联动、local 遮蔽 core、逐项启停、CRUD 仅 local（P9）、
  * export/import 作用域。
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -18,14 +18,20 @@ import {
   listExternalTeamRoots,
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
-import { setTeamEnabled } from "../../src/main/services/teams-state";
+import { setTeamEnabled } from "../../src/main/teams/lifecycle";
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../src/shared/teams/types";
+import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
+import {
+  CORE_TEAM_ID,
+  isProjectLocalTeamId,
+  PROJECT_DEFAULT_TEAM_ID,
+  PROJECT_TEAMS_REL,
+} from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -42,6 +48,14 @@ function project(): string {
   return root;
 }
 
+beforeEach(() => {
+  const dir = makeTempDir("packs-app-");
+  tempDirs.push(dir);
+  setTeamsInstalledDataDir(dir);
+  setAppTeamsStateDataDir(dir);
+  setAppTeamsDirForTests(join(dir, "teams"));
+});
+
 afterEach(() => {
   __resetCommandRegistriesForTests();
   __resetTeamsResolverForTests();
@@ -49,6 +63,7 @@ afterEach(() => {
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setTeamsInstalledDataDir(null);
   setAppTeamsStateDataDir(null);
+  setAppTeamsDirForTests(null);
 });
 
 /** Seal the app-level installed store into a per-test temp dir. */
@@ -56,6 +71,7 @@ function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setTeamsInstalledDataDir(dir);
   setAppTeamsStateDataDir(dir);
+  setAppTeamsDirForTests(join(dir, "teams"));
   tempDirs.push(dir);
   return dir;
 }
@@ -80,6 +96,11 @@ function setupPacks(): void {
 }
 
 describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
+  it("项目默认团队身份只接受 project.local，旧 user.local 只可用于迁移", () => {
+    expect(isProjectLocalTeamId(PROJECT_DEFAULT_TEAM_ID)).toBe(true);
+    expect(isProjectLocalTeamId("user.local")).toBe(false);
+  });
+
   it("core 命令以 FQID 身份出现（source=builtin）；未安装 pack 的命令不出现", () => {
     setupPacks();
     const root = project();
@@ -112,7 +133,7 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     expect(cmd!.removable).toBe(false);
 
     // pack 禁用不摘除内容，而是整条判定链落到 enabled=false（§5.3：license → pack 启停 → 逐项禁用）
-    setTeamEnabled(root, "test.notes", false);
+    setTeamEnabled("test.notes", false, "project", root);
     expect(reg.list().find((c) => c.id === "test.notes:notes-cmd")!.enabled).toBe(false);
     // 禁用后不可被斜杠命中
     expect(reg.lookup("notes-cmd")).toBeUndefined();
@@ -129,12 +150,12 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     // local 创建同名命令 → 遮蔽 core
     reg.create({ name: "setup", description: "Mine", template: "My body" });
     const hit = reg.lookup("setup")!;
-    expect(hit.id).toBe(`${LOCAL_TEAM_ID}:setup`);
+    expect(hit.id).toBe(`${PROJECT_DEFAULT_TEAM_ID}:setup`);
     expect(hit.source).toBe("user");
     expect(hit.template).toBe("My body");
 
     // 禁用 local 遮蔽副本 → core 原件重新可见
-    reg.setEnabled(`${LOCAL_TEAM_ID}:setup`, false);
+    reg.setEnabled(`${PROJECT_DEFAULT_TEAM_ID}:setup`, false);
     expect(reg.lookup("setup")!.id).toBe(`${CORE_TEAM_ID}:setup`);
   });
 
@@ -175,10 +196,10 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
       template: "Do $ARGUMENTS",
       action: "compile",
     });
-    expect(def.id).toBe(`${LOCAL_TEAM_ID}:my-cmd`);
+    expect(def.id).toBe(`${PROJECT_DEFAULT_TEAM_ID}:my-cmd`);
     expect(def.removable).toBe(true);
 
-    const file = join(root, LOCAL_TEAM_REL, "commands", "my-cmd.md");
+    const file = join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "my-cmd.md");
     expect(existsSync(file)).toBe(true);
     const raw = readFileSync(file, "utf-8");
     expect(raw).not.toContain("pluginId");
@@ -187,7 +208,7 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     expect(raw).toContain("Do $ARGUMENTS");
 
     // 立即可被 resolver 视图看到
-    expect(reg.list().some((c) => c.id === `${LOCAL_TEAM_ID}:my-cmd`)).toBe(true);
+    expect(reg.list().some((c) => c.id === `${PROJECT_DEFAULT_TEAM_ID}:my-cmd`)).toBe(true);
   });
 
   it("update 改名：旧文件删除、新 FQID 生效", () => {
@@ -196,11 +217,11 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     const reg = getCommandRegistry(root);
 
     reg.create({ name: "before", description: "d", template: "t" });
-    const updated = reg.update(`${LOCAL_TEAM_ID}:before`, { name: "after", template: "t2" });
-    expect(updated.id).toBe(`${LOCAL_TEAM_ID}:after`);
+    const updated = reg.update(`${PROJECT_DEFAULT_TEAM_ID}:before`, { name: "after", template: "t2" });
+    expect(updated.id).toBe(`${PROJECT_DEFAULT_TEAM_ID}:after`);
     expect(updated.template).toBe("t2");
-    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "before.md"))).toBe(false);
-    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "after.md"))).toBe(true);
+    expect(existsSync(join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "before.md"))).toBe(false);
+    expect(existsSync(join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "after.md"))).toBe(true);
   });
 
   it("remove：local 命令删除成功；core/plugin 命令抛错（只能禁用）", () => {
@@ -209,8 +230,8 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     const reg = getCommandRegistry(root);
 
     reg.create({ name: "doomed", description: "d", template: "t" });
-    reg.remove(`${LOCAL_TEAM_ID}:doomed`);
-    expect(existsSync(join(root, LOCAL_TEAM_REL, "commands", "doomed.md"))).toBe(false);
+    reg.remove(`${PROJECT_DEFAULT_TEAM_ID}:doomed`);
+    expect(existsSync(join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "doomed.md"))).toBe(false);
     expect(reg.list().some((c) => c.name === "doomed")).toBe(false);
 
     expect(() => reg.remove(`${CORE_TEAM_ID}:setup`)).toThrow(/cannot delete/i);
@@ -244,11 +265,11 @@ describe("commands registry: export/import 作用域 = Local Pack", () => {
 
     const names = reg
       .list()
-      .filter((c) => c.teamId === LOCAL_TEAM_ID)
+      .filter((c) => c.teamId === PROJECT_DEFAULT_TEAM_ID)
       .map((c) => c.name)
       .sort();
     expect(names).toEqual(["fresh", "keep", "keep-2"]);
     // enabled:false 的导入项落为 disabledContent
-    expect(reg.list().find((c) => c.id === `${LOCAL_TEAM_ID}:fresh`)!.enabled).toBe(false);
+    expect(reg.list().find((c) => c.id === `${PROJECT_DEFAULT_TEAM_ID}:fresh`)!.enabled).toBe(false);
   });
 });

@@ -1636,6 +1636,7 @@ export interface ElectronAPI {
     intensivePaperIds?: string[];
     hasPaperSnippets?: boolean;
     orchestratorId?: string | null;
+    sessionTeamId?: string | null;
     sessionAgent?: "build" | "plan";
     selectedExpertIds?: string[];
     promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;

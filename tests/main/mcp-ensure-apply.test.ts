@@ -43,7 +43,7 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("creates empty mcp.json when missing (no Paper Search seed)", async () => {
+  it("creates an empty project.local MCP array when missing", async () => {
     const ensure = handlers.get("mcp:ensure");
     expect(ensure).toBeTruthy();
     const result = (await ensure!({}, { projectPath: root })) as {
@@ -56,6 +56,15 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
     expect(prewarmProject).toHaveBeenCalledWith(root);
     expect(applyProjectMcpConfig).not.toHaveBeenCalled();
     expect(result.reloadedSessions).toBe(0);
+    expect(
+      JSON.parse(
+        (await import("node:fs")).readFileSync(
+          join(root, ".prismnext", "agent", "teams", "project.local", "mcp.json"),
+          "utf-8",
+        ),
+      ),
+    ).toEqual([]);
+    expect((await import("node:fs")).existsSync(join(root, ".prismnext", "agent", "mcp.json"))).toBe(false);
   });
 
   it("reloads open sessions when legacy paper-search is stripped", async () => {
@@ -84,7 +93,7 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
       ensure?: { removed?: boolean };
     };
     expect(result.ok).toBe(true);
-    expect(result.ensure?.removed).toBe(true);
+    expect(result.ensure?.migrated).toBe(true);
     expect(applyProjectMcpConfig).toHaveBeenCalledWith(root);
     expect(result.reloadedSessions).toBe(2);
   });

@@ -3,7 +3,15 @@ import { basename, dirname, join } from "node:path";
 import { countPromptTokens } from "../lib/token-estimate";
 import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, type TeamSource } from "../../shared/teams/types";
+import {
+  CORE_TEAM_ID,
+  isProjectLocalTeamId,
+  LOCAL_TEAM_ID,
+  LOCAL_TEAM_REL,
+  PROJECT_DEFAULT_TEAM_ID,
+  PROJECT_TEAMS_REL,
+  type TeamSource,
+} from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
@@ -14,7 +22,9 @@ import { setProjectAssetEnabled } from "../teams/state-project";
 /** legacy 项目技能目录（R6 迁移的输入；新代码不再写入这里） */
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 /** Local Pack 技能目录 —— 项目级技能的唯一写入位置（Phase 3 起） */
-export const PRISM_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
+/** M8 target; LOCAL_TEAM_REL kept for watcher/legacy path matching. */
+export const PRISM_LOCAL_SKILLS_REL = `${PROJECT_TEAMS_REL}/${PROJECT_DEFAULT_TEAM_ID}/skills`;
+export const PRISM_LEGACY_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
 /**
  * OpenCode `skills.paths` entry (relative to session cwd).
@@ -276,12 +286,12 @@ export function removeSkillInstallRecord(projectRoot: string, skillId: string): 
 function resolveLocalSkillId(projectRoot: string, fqidOrBareId: string): string | null {
   const parsed = parseFqid(fqidOrBareId);
   if (parsed) {
-    return parsed.teamId === LOCAL_TEAM_ID ? parsed.contentId : null;
+    return isProjectLocalTeamId(parsed.teamId) ? parsed.contentId : null;
   }
   const fqid = resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
   const resolved = parseFqid(fqid);
-  return resolved?.teamId === LOCAL_TEAM_ID ? resolved.contentId : null;
+  return resolved && isProjectLocalTeamId(resolved.teamId) ? resolved.contentId : null;
 }
 
 /**
@@ -300,7 +310,7 @@ export function deleteProjectSkill(projectRoot: string, fqidOrBareId: string): v
     rmSync(skillDir, { recursive: true, force: true });
   }
   removeSkillInstallRecord(projectRoot, localId);
-  setProjectAssetEnabled(projectRoot, `${LOCAL_TEAM_ID}:${localId}`, true);
+  setProjectAssetEnabled(projectRoot, `${PROJECT_DEFAULT_TEAM_ID}:${localId}`, true);
 }
 
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
@@ -328,7 +338,7 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
     } catch {
       // 读不到按 0 处理（目录扫描已确认 SKILL.md 存在，极端竞态才到这里）
     }
-    const isLocal = skill.teamId === LOCAL_TEAM_ID;
+    const isLocal = isProjectLocalTeamId(skill.teamId);
     const installOrigin = isLocal ? installBySkillId.get(skill.id) : undefined;
     results.push({
       fqid: skill.fqid,
@@ -519,7 +529,8 @@ export function syncProjectSkillsIntegration(
   const teamDirs = new Map<string, string>(); // teamId → teamDir
   const teamMeta = new Map<string, { scope: "app" | "project"; source: TeamSource }>();
   for (const skill of listAssets(root, "skill")) {
-    if (!skill.enabled || skill.teamId === LOCAL_TEAM_ID) continue;
+    // Project-local skills are covered by the trailing `.prismnext/agent` path.
+    if (!skill.enabled || isProjectLocalTeamId(skill.teamId)) continue;
     if (!teamDirs.has(skill.teamId)) {
       teamDirs.set(skill.teamId, dirname(dirname(skill.dir)));
       teamMeta.set(skill.teamId, { scope: skill.origin.scope, source: skill.origin.source });

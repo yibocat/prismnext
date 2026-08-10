@@ -38,7 +38,7 @@ import {
 } from "../../src/main/services/teams-installed";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests, listAssets as listAssetsV2 } from "../../src/main/teams/resolver";
-import { CORE_TEAM_ID } from "../../src/shared/teams/types";
+import { CORE_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -84,7 +84,7 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
 
     const skills = listProjectSkills(root);
     expect(skills).toHaveLength(1);
-    expect(skills[0].fqid).toBe("user.local:citations");
+    expect(skills[0].fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
     expect(skills[0].name).toBe("citations");
     expect(skills[0].enabled).toBe(true);
     expect(skills[0].origin).toBe("custom");
@@ -104,7 +104,7 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
 
     const skills = listProjectSkills(root);
     expect(skills).toHaveLength(1);
-    expect(skills[0].fqid).toBe("user.local:citations");
+    expect(skills[0].fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
     expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(false);
     expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL, "citations", "SKILL.md"))).toBe(true);
   });
@@ -115,10 +115,10 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
 
     // 裸 id 解析（唯一匹配 → local）
     const fqid = setSkillContentEnabled(root, "citations", false);
-    expect(fqid).toBe("user.local:citations");
+    expect(fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
     expect(listProjectSkills(root)[0].enabled).toBe(false);
 
-    setSkillContentEnabled(root, "user.local:citations", true);
+    setSkillContentEnabled(root, `${PROJECT_DEFAULT_TEAM_ID}:citations`, true);
     expect(listProjectSkills(root)[0].enabled).toBe(true);
   });
 
@@ -127,7 +127,7 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     writeLocalSkill(root, "academic-citations");
     writeLocalSkill(root, "peer-review-response");
     writeLocalSkill(root, "literature-review");
-    setSkillContentEnabled(root, "user.local:literature-review", false);
+    setSkillContentEnabled(root, `${PROJECT_DEFAULT_TEAM_ID}:literature-review`, false);
 
     // Profile whitelists only academic-citations, but the other installed
     // skills must NOT be denied — only the disabled one is.

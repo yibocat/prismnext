@@ -11,11 +11,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TeamSource } from "../../src/shared/teams/types";
 import {
   __resetTeamsResolverForTests,
+  __setHostVersionForTests,
   getAsset,
   isAssetActive,
   listAssets,
   listTeams,
   resolveActiveTeam,
+  resolveChatOrchestrator,
   resolveInvocation,
   resolveRef,
   resolveRoster,
@@ -147,6 +149,7 @@ beforeEach(() => {
   appDataDir = mkdtempSync(join(tmpdir(), "teams-appdata-"));
   projectRoot = mkdtempSync(join(tmpdir(), "teams-project-"));
   setAppTeamsStateDataDir(appDataDir);
+  __setHostVersionForTests("0.7.0");
   writeAppTeamsState(emptyAppTeamsState());
   // Seal the bundled root to an empty dir so only fixture teams appear.
   process.env.PRISM_FIRST_PARTY_TEAMS_DIR = mkdtempSync(join(tmpdir(), "teams-bundled-empty-"));
@@ -156,6 +159,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const r of externalRoots.splice(0)) unregisterExternalTeamRoot(r);
   setAppTeamsStateDataDir(null);
+  __setHostVersionForTests(undefined);
   delete process.env.PRISM_FIRST_PARTY_TEAMS_DIR;
   __resetTeamsResolverForTests();
   rmSync(tmp, { recursive: true, force: true });
@@ -379,6 +383,26 @@ describe("resolveActiveTeam", () => {
   });
 });
 
+describe("resolveChatOrchestrator", () => {
+  it("reads project defaultTeam from teams.json (not packs.json)", () => {
+    const root = useExternalRoot("bundled");
+    writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
+    writeTeam(root, "acme.capable", { orchestrator: { id: "lead" } });
+
+    expect(resolveChatOrchestrator(projectRoot).teamId).toBe("prismnext.core");
+    setProjectDefaultTeam(projectRoot, "acme.capable");
+    const active = resolveChatOrchestrator(projectRoot);
+    expect(active.teamId).toBe("acme.capable");
+    expect(active.fqid.startsWith("acme.capable:")).toBe(true);
+    expect(active.runtimeName.length).toBeGreaterThan(0);
+
+    const session = resolveChatOrchestrator(projectRoot, {
+      sessionTeamId: "prismnext.core",
+    });
+    expect(session.teamId).toBe("prismnext.core");
+  });
+});
+
 // ── MCP as first-class asset (design §7.4) ────────────────
 
 describe("MCP as asset", () => {
@@ -391,6 +415,17 @@ describe("MCP as asset", () => {
 
     setAppAssetEnabled("acme.tools:mem", false);
     expect(isAssetActive(projectRoot, "acme.tools:mem")).toBe(false);
+  });
+
+  it("shadows MCPs by runtime name rather than asset id", () => {
+    const bundled = useExternalRoot("bundled");
+    const user = useExternalRoot("user");
+    writeTeam(bundled, "acme.bundled", { mcps: [{ id: "bundled-id", name: "shared-server" }] });
+    writeTeam(user, "user.override", { mcps: [{ id: "user-id", name: "shared-server" }] });
+
+    const mcps = listAssets(projectRoot, "mcp");
+    expect(mcps.find((m) => m.fqid === "user.override:user-id")?.blockedBy).toBeUndefined();
+    expect(mcps.find((m) => m.fqid === "acme.bundled:bundled-id")?.blockedBy).toBe("shadowed");
   });
 });
 

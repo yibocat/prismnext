@@ -35,29 +35,28 @@ describe("agents-sync: new plan == legacy plan (golden equivalence)", () => {
     rmSync(appDataDir, { recursive: true, force: true });
   });
 
-  it("empty project (real core pack) produces byte-identical agent files", () => {
+  it("namespaces OpenCode agent files per project while retaining the same logical agents", () => {
     const legacy = buildProjectSubagentsAgentPlan(projectRoot, { defaultSubagentModel: null });
     const next = buildAgentsPlan(projectRoot, { defaultSubagentModel: null });
 
-    // Same file set (core team uses bare ids on both paths).
-    expect([...next.agentFiles].sort()).toEqual([...legacy.agentFiles].sort());
-
-    // Byte-identical content per file.
-    const legacyByName = new Map(legacy.agentEntries.map((e) => [e.filename, e.content]));
-    for (const entry of next.agentEntries) {
-      const legacyContent = legacyByName.get(entry.filename);
-      expect(legacyContent, `${entry.filename} missing from legacy plan`).toBeDefined();
-      expect(entry.content, `${entry.filename} content drift`).toBe(legacyContent);
-    }
-
-    // Same active lead agent.
-    expect(next.activeOrchestratorId).toBe(legacy.orchestratorId);
+    expect(next.agentFiles).toHaveLength(legacy.agentFiles.length);
+    expect(next.agentFiles.every((file) => file.startsWith(`${next.namespace}--`))).toBe(true);
+    expect(next.agentFiles.map((file) => file.replace(`${next.namespace}--`, "")).sort())
+      .toEqual([...legacy.agentFiles].sort());
+    expect(next.activeOrchestratorId).toBe(`${next.namespace}--${legacy.orchestratorId}`);
   });
 
-  it("content hashes match the legacy plan", () => {
-    const legacy = buildProjectSubagentsAgentPlan(projectRoot, { defaultSubagentModel: null });
-    const next = buildAgentsPlan(projectRoot, { defaultSubagentModel: null });
-    expect(next.orchestratorContentHash).toBe(legacy.orchestratorContentHash);
-    expect(next.syncContentHash).toBe(legacy.syncContentHash);
+  it("uses a stable namespace per project and a distinct namespace for another project", () => {
+    const first = buildAgentsPlan(projectRoot, { defaultSubagentModel: null });
+    const again = buildAgentsPlan(projectRoot, { defaultSubagentModel: null });
+    const otherRoot = mkdtempSync(join(tmpdir(), "agents-sync-project-"));
+    try {
+      const other = buildAgentsPlan(otherRoot, { defaultSubagentModel: null });
+      expect(again.namespace).toBe(first.namespace);
+      expect(other.namespace).not.toBe(first.namespace);
+      expect(other.agentFiles).not.toEqual(first.agentFiles);
+    } finally {
+      rmSync(otherRoot, { recursive: true, force: true });
+    }
   });
 });

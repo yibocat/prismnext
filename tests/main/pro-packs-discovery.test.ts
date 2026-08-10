@@ -36,7 +36,9 @@ function makeProPackage(
   mkdirSync(join(packageDir, "src"), { recursive: true });
   const pkg: Record<string, unknown> = { name: "@prismnext/pro", private: true };
   if (opts.withPrismnextField !== false) {
-    pkg.prismnext = { packsRoot: packsRootName };
+    pkg.prismnext = opts.teamsRoot
+      ? { teamsRoot: packsRootName }
+      : { packsRoot: packsRootName };
   }
   writeFileSync(join(packageDir, "package.json"), JSON.stringify(pkg, null, 2));
   const entryFile = join(packageDir, "src", "index.ts");
@@ -111,6 +113,31 @@ describe("pro-packs-discovery: teamsRoot 解析", () => {
 });
 
 describe("pro-packs-discovery: 注册与注销", () => {
+  it("scans a v2 teamsRoot team.json tree with its command content", () => {
+    const root = temp();
+    const { entryFile, packsDir } = makeProPackage(root, { teamsRoot: "teams" });
+    const teamDir = join(packsDir, "test.pro.v2");
+    mkdirSync(join(teamDir, "commands"), { recursive: true });
+    writeFileSync(
+      join(teamDir, "team.json"),
+      JSON.stringify({
+        id: "test.pro.v2",
+        name: "V2 Pro",
+        description: "v2",
+        version: "0.1.0",
+        formatVersion: 2,
+        tier: "pro",
+        publisher: "prismnext.pro",
+      }),
+    );
+    writeFileSync(join(teamDir, "commands", "review.md"), "---\ndescription: Review\n---\nReview\n");
+
+    process.env.PRISM_PRO_PATH = entryFile;
+    expect(discoverAndRegisterProTeams().registered).toEqual(["test.pro.v2"]);
+    const team = getTeamRecord("test.pro.v2");
+    expect(team?.assets.some((asset) => asset.kind === "command" && asset.id === "review")).toBe(true);
+  });
+
   it("扫描 teamsRoot → 注册含 plugin.json 的 pack；无 plugin.json 的目录跳过", () => {
     const root = temp();
     const { entryFile, packsDir } = makeProPackage(root);

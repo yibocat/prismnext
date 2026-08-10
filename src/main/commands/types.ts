@@ -9,7 +9,7 @@
 export type CommandSource = "builtin" | "user" | "plugin";
 
 export interface CommandDef {
-  /** 全局唯一身份（FQID）："prismnext.core:setup" | "user.local:review-section" | "<teamId>:<name>" */
+  /** 全局唯一身份（FQID）："prismnext.core:setup" | "project.local:review-section" | "<teamId>:<name>" */
   id: string;
   /** Command name WITHOUT / prefix（pack 内 id） */
   name: string;

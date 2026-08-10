@@ -15,7 +15,7 @@ import {
   refreshProjectSkillsIntegrationIfNeeded,
 } from "./project-skills-refresh";
 import { syncProjectPromptFile } from "./prompt-sync";
-import { readPrismExpertsSyncState } from "./subagents-sync";
+import { getAgentsSyncState } from "../teams/agents-sync";
 import { normalizeProjectRoot } from "./skills-sync";
 import type { ProjectWarmPhase } from "../../shared/agent-status";
 
@@ -106,17 +106,16 @@ async function runProjectChatPrewarm(
   options?: ProjectChatPrewarmOptions,
 ): Promise<void> {
   const t0 = Date.now();
-  const acp = AcpService.getInstance();
+  const acp = AcpService.getInstanceForProject(projectRoot);
   const skipReload = options?.skipOpenCodeReload === true;
 
-  const {
-    resolveOrchestratorId,
-  } = await import("./subagents-sync");
-
-  const orchestratorId = resolveOrchestratorId(projectRoot, null);
+  // Touch active-team resolution so teams.json migration/defaults are warm
+  // before agents-sync; chat send uses the same resolver path.
+  const { resolveChatOrchestrator } = await import("../teams/resolver");
+  resolveChatOrchestrator(projectRoot);
   const promptCtx = await buildPromptContext(projectRoot);
 
-  const prevExpertsState = readPrismExpertsSyncState();
+  const prevExpertsState = getAgentsSyncState(projectRoot);
   const expertsResult = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, { promptCtx });
   const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
 

@@ -17,7 +17,10 @@ import { app } from "electron";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
-import { contentDirFingerprint, invalidateCatalog, registerExternalTeamRoot } from "./team-catalog";
+import {
+  invalidateCatalog as invalidateCatalogV2,
+  registerExternalTeamRoot as registerExternalTeamRootV2,
+} from "../teams/catalog";
 import { createLogger } from "./logger";
 
 const log = createLogger("user-teams");
@@ -52,14 +55,9 @@ let registeredRoot: string | null = null;
 export function ensureUserTeamsRegistered(): void {
   const dir = rootDir();
   if (registeredRoot === dir) return;
-  registerExternalTeamRoot(dir);
-  invalidateCatalog();
+  registerExternalTeamRootV2(dir, "user");
+  invalidateCatalogV2();
   registeredRoot = dir;
-}
-
-/** Content fingerprint of the whole user-packs tree (resolver cache key). */
-export function userTeamsContentFingerprint(): string {
-  return contentDirFingerprint(rootDir());
 }
 
 export interface UserTeam {
@@ -148,7 +146,7 @@ export function createUserTeam(name: string, description = ""): UserTeam {
     )}\n`,
     "utf-8",
   );
-  invalidateCatalog();
+  invalidateCatalogV2();
   log.info("user team created", { id });
   return { teamId: id, name: trimmedName, description: description.trim(), version: "0.1.0", dir };
 }
@@ -158,6 +156,6 @@ export function deleteUserTeam(teamId: string): void {
   const team = listUserTeams().find((t) => t.teamId === teamId);
   if (!team) throw new Error(`User team not found: ${teamId}`);
   rmSync(team.dir, { recursive: true, force: true });
-  invalidateCatalog();
+  invalidateCatalogV2();
   log.info("user team deleted", { teamId });
 }

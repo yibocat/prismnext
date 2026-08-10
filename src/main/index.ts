@@ -8,6 +8,7 @@ import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
 import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
 import { ensureUserTeamsRegistered } from "./services/user-teams";
+import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -330,8 +331,10 @@ registerNewWindowHandler(createWindow);
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
-  // User-created teams live in userData and are registered as an external pack
-  // root so the catalog/resolver treat them like installed packs.
+  // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
+  ensureUserTeamsMigrated();
+  // Temporary read compatibility for any legacy directory that could not be
+  // migrated safely (for example, an unreadable manifest).
   ensureUserTeamsRegistered();
   // Inject CSP on the default session (renderer only — browser webviews use a
   // separate persist:browser partition). Must run before createWindow().

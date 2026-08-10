@@ -21,7 +21,7 @@ import {
 } from "./settings-tokens";
 import { AssetGroupList } from "../teams/asset-group-list";
 import type { AssetViewV2 } from "@shared/teams/view";
-import { LOCAL_TEAM_ID } from "@shared/teams/types";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import type { CommandDef } from "@commands/types";
 
 export default function CommandsSettings() {
@@ -78,7 +78,7 @@ export default function CommandsSettings() {
     void loadAll();
   });
 
-  const customCount = commands.filter((c) => c.teamId === LOCAL_TEAM_ID).length;
+  const customCount = commands.filter((c) => c.teamId === PROJECT_DEFAULT_TEAM_ID).length;
 
   const handleSetEnabled = useCallback(async (fqid: string, enabled: boolean | null) => {
     if (!projectRoot) return;
@@ -140,7 +140,7 @@ export default function CommandsSettings() {
 
   const renderActions = (asset: AssetViewV2) => {
     const cmd = cmdByFqid.get(asset.fqid);
-    if (!cmd || cmd.teamId !== LOCAL_TEAM_ID) return null;
+    if (!cmd || cmd.teamId !== PROJECT_DEFAULT_TEAM_ID) return null;
     return (
       <div className="flex items-center gap-2 shrink-0">
         <Button variant="ghost" size="xs" className="shrink-0" onClick={() => openEdit(cmd.id, cmd.name)}>

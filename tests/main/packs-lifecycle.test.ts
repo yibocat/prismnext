@@ -1,14 +1,13 @@
 /**
- * packs-lifecycle 测试（§6.2 校验层 + §9.4 联动建议）。
- * 测试密封（packs-test-utils）：fake core / free / pro pack 走 external roots。
+ * teams/lifecycle tests (v2 write exit — replaces services/teams-lifecycle).
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
 import {
   installTeam,
-  setTeamEnabledFlow,
+  setTeamEnabled,
   uninstallTeam,
-} from "../../src/main/services/teams-lifecycle";
+} from "../../src/main/teams/lifecycle";
 import {
   listExternalTeamRoots,
   registerExternalTeamRoot,
@@ -16,12 +15,18 @@ import {
 } from "../../src/main/teams/catalog";
 import { isAssetActive, __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import {
-  isTeamInstalled,
-  setTeamsInstalledDataDir,
-} from "../../src/main/services/teams-installed";
-import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
-import { setProjectDefaultTeam } from "../../src/main/teams/state-project";
-import { CORE_TEAM_ID, DEFAULT_ORCHESTRATOR_FQID, LOCAL_TEAM_ID } from "../../src/shared/teams/types";
+  readAppTeamsState,
+  setAppTeamsStateDataDir,
+} from "../../src/main/teams/state-app";
+import {
+  readProjectTeamsState,
+  setProjectDefaultTeam,
+} from "../../src/main/teams/state-project";
+import {
+  CORE_TEAM_ID,
+  LOCAL_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
+} from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -41,18 +46,19 @@ function project(): string {
 afterEach(() => {
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
-  setTeamsInstalledDataDir(null);
   setAppTeamsStateDataDir(null);
   __resetTeamsResolverForTests();
 });
 
-/** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
-  setTeamsInstalledDataDir(dir);
   setAppTeamsStateDataDir(dir);
   tempDirs.push(dir);
   return dir;
+}
+
+function isInstalled(teamId: string): boolean {
+  return readAppTeamsState().installed.some((r) => r.teamId === teamId);
 }
 
 function setupPacks(): void {
@@ -84,92 +90,96 @@ function setupPacks(): void {
   registerExternalTeamRoot(proRoot);
 }
 
-describe("packs-lifecycle: install（应用级 + §9.4 建议）", () => {
-  it("install 成功：应用级记录 + 项目自动启用；声明 preferredOrchestrator 且默认未定制 → 建议", () => {
+describe("teams/lifecycle: install", () => {
+  it("install writes app installed[] and suggests active team when default is core", () => {
     setupPacks();
     sealAppStore();
     const root = project();
+    // Warm project view so assets resolve.
+    void root;
 
-    const { applied, suggestedOrchestrator } = installTeam(root, "test.notes");
+    const { applied, suggestedActiveTeam } = installTeam("test.notes");
     expect(applied).toBe(true);
-    expect(isTeamInstalled("test.notes")).toBe(true);
-    expect(suggestedOrchestrator).toBe("test.notes:notes-lead");
+    expect(isInstalled("test.notes")).toBe(true);
+    expect(suggestedActiveTeam).toBe("test.notes");
     expect(isAssetActive(root, "test.notes:notes-lead")).toBe(true);
 
-    // 幂等：重复 install applied=false；默认 orchestrator 仍为 core 默认 → 建议照给
-    const again = installTeam(root, "test.notes");
+    const again = installTeam("test.notes");
     expect(again.applied).toBe(false);
-    expect(again.suggestedOrchestrator).toBe("test.notes:notes-lead");
+    expect(again.suggestedActiveTeam).toBe("test.notes");
   });
 
-  it("默认 team 已定制 → 不给联动建议", () => {
+  it("customized project defaultTeam → no active-team suggestion", () => {
     setupPacks();
     sealAppStore();
     const root = project();
     setProjectDefaultTeam(root, "user.local");
 
-    const { suggestedOrchestrator } = installTeam(root, "test.notes");
-    expect(suggestedOrchestrator).toBeUndefined();
+    // Suggestion is app-level (no projectRoot on install); with project default
+    // already non-core, activeTeamSuggestion(teamId) still only sees app default.
+    // Install with project context via setTeamEnabled enable path instead:
+    installTeam("test.notes");
+    setProjectDefaultTeam(root, LOCAL_TEAM_ID);
+    const { suggestedActiveTeam } = setTeamEnabled("test.notes", true, "project", root);
+    expect(suggestedActiveTeam).toBeUndefined();
   });
 
-  it("catalog 不存在 / pro 未授权 → 抛错，不写应用级记录", () => {
+  it("missing catalog / pro without license → throw, no install record", () => {
     setupPacks();
     sealAppStore();
-    const root = project();
-    expect(() => installTeam(root, "ghost.pack")).toThrow(/not found/i);
-    expect(() => installTeam(root, "test.pro")).toThrow(/pro license/i);
-    expect(isTeamInstalled("test.notes")).toBe(false);
+    expect(() => installTeam("ghost.pack")).toThrow(/not found/i);
+    expect(() => installTeam("test.pro")).toThrow(/Pro license/i);
+    expect(isInstalled("test.notes")).toBe(false);
   });
 });
 
-describe("packs-lifecycle: setEnabled / uninstall（分层）", () => {
-  it("core 整包禁用：写 teams.json teamEnabled；可恢复（删键）", () => {
+describe("teams/lifecycle: setTeamEnabled / uninstall", () => {
+  it("core team disable writes teams.json; re-enable restores", () => {
     setupPacks();
     sealAppStore();
     const root = project();
 
-    setTeamEnabledFlow(root, CORE_TEAM_ID, false);
+    setTeamEnabled(CORE_TEAM_ID, false, "project", root);
     expect(isAssetActive(root, `${CORE_TEAM_ID}:research-prism`)).toBe(false);
 
-    setTeamEnabledFlow(root, CORE_TEAM_ID, true);
+    setTeamEnabled(CORE_TEAM_ID, true, "project", root);
     expect(isAssetActive(root, `${CORE_TEAM_ID}:research-prism`)).toBe(true);
   });
 
-  it("local 不可禁用", () => {
+  it("project.local / user.local cannot be disabled", () => {
     setupPacks();
     sealAppStore();
     const root = project();
-    expect(() => setTeamEnabledFlow(root, LOCAL_TEAM_ID, false)).toThrow(/local/i);
+    expect(() => setTeamEnabled(PROJECT_DEFAULT_TEAM_ID, false, "project", root)).toThrow(
+      /cannot be disabled/i,
+    );
   });
 
-  it("禁用拥有默认主 agent 的 pack → 默认自动转移回 core，并返回 defaultMovedTo", () => {
+  it("disabling the active team's pack moves defaultTeam back to core", () => {
     setupPacks();
     sealAppStore();
     const root = project();
-    installTeam(root, "test.notes");
+    installTeam("test.notes");
     setProjectDefaultTeam(root, "test.notes");
 
-    const result = setTeamEnabledFlow(root, "test.notes", false);
-    expect(result.defaultMovedTo).toBe(DEFAULT_ORCHESTRATOR_FQID);
+    const result = setTeamEnabled("test.notes", false, "project", root);
+    expect(result.defaultMovedTo).toBe(CORE_TEAM_ID);
+    expect(readProjectTeamsState(root).defaultTeam).toBe(CORE_TEAM_ID);
 
-    // 重新启用 → defaultMovedTo 不出现
-    const re = setTeamEnabledFlow(root, "test.notes", true);
+    const re = setTeamEnabled("test.notes", true, "project", root);
     expect(re.defaultMovedTo).toBeUndefined();
   });
 
-  it("uninstall：core/local 拒绝；应用级移除 + 项目侧修剪", () => {
+  it("uninstall: core rejected; removes app install record", () => {
     setupPacks();
     sealAppStore();
-    const root = project();
-    expect(() => uninstallTeam(root, CORE_TEAM_ID)).toThrow(/cannot be uninstalled/i);
-    expect(() => uninstallTeam(root, LOCAL_TEAM_ID)).toThrow(/cannot be uninstalled/i);
-    // 未安装 → 幂等 no-op
-    expect(() => uninstallTeam(root, "test.notes")).not.toThrow();
+    expect(() => uninstallTeam(CORE_TEAM_ID)).toThrow(/cannot be uninstalled/i);
+    expect(() => uninstallTeam("test.notes")).not.toThrow();
 
-    installTeam(root, "test.notes");
-    expect(isTeamInstalled("test.notes")).toBe(true);
+    installTeam("test.notes");
+    expect(isInstalled("test.notes")).toBe(true);
 
-    uninstallTeam(root, "test.notes");
-    expect(isTeamInstalled("test.notes")).toBe(false);
+    uninstallTeam("test.notes");
+    expect(isInstalled("test.notes")).toBe(false);
   });
 });

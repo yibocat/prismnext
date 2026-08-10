@@ -75,7 +75,7 @@ export function PackDetailPanel({ slot }: { slot: PackDetailSlot }) {
     try {
       const isUserTeam = pack.manifest.publisher === "user";
       if (isUserTeam) {
-        await window.electronAPI.teamsDeleteUserTeam(pack.manifest.id);
+        await window.electronAPI.teamsDelete(pack.manifest.id, projectRoot);
       } else {
         await window.electronAPI.teamsUninstall(pack.manifest.id);
       }

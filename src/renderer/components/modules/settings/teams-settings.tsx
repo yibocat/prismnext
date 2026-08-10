@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
+import { useChatStore } from "@/stores/chat-store";
 import { useTeamsStore, type TeamCardView } from "@/stores/teams-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
@@ -37,7 +38,7 @@ import { OverrideDot } from "../teams/override-dot";
 import { BlockedHint } from "../teams/blocked-hint";
 import { RosterEditor } from "../teams/roster-editor";
 import type { AssetViewV2, RosterView } from "@shared/teams/view";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
+import { CORE_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
@@ -45,12 +46,12 @@ const BUILTIN_EXPERTS_RESET_ID = "builtin-experts-reset";
 
 function packIdOf(fqid: string): string {
   const idx = fqid.indexOf(":");
-  return idx > 0 ? fqid.slice(0, idx) : LOCAL_TEAM_ID;
+  return idx > 0 ? fqid.slice(0, idx) : PROJECT_DEFAULT_TEAM_ID;
 }
 
 function groupLabel(teamId: string, pack: TeamCardView | undefined, t: TFunction): string {
   if (teamId === CORE_TEAM_ID) return t("settings.teamsAgents.coreTeam");
-  if (teamId === LOCAL_TEAM_ID) return t("settings.teamsAgents.mine");
+  if (teamId === PROJECT_DEFAULT_TEAM_ID) return pack?.manifest.name ?? t("settings.teams.scope.project");
   return pack?.manifest.name ?? teamId;
 }
 
@@ -79,6 +80,7 @@ export function TeamsAgentsSettings() {
   const [creatingTeam, setCreatingTeam] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [teamDesc, setTeamDesc] = useState("");
+  const [teamScope, setTeamScope] = useState<"app" | "project">("project");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [coreState, setCoreState] = useState<{
@@ -88,7 +90,13 @@ export function TeamsAgentsSettings() {
   const expertResetConfirm = useInlineDeleteConfirm();
 
   const packs = useMemo(
-    () => catalog.filter((p) => p.installed && p.kind !== "local"),
+    () => catalog.filter((p) =>
+      p.installed
+      && (
+        p.manifest.id !== PROJECT_DEFAULT_TEAM_ID
+        || Object.values(p.counts).some((count) => count > 0)
+      ),
+    ),
     [catalog],
   );
   const packById = useMemo(() => {
@@ -156,9 +164,9 @@ export function TeamsAgentsSettings() {
       list.push(e); exp.set(pid, list);
     }
     const pids = new Set<string>([...packs.map((p) => p.manifest.id)]);
-    pids.add(CORE_TEAM_ID); pids.add(LOCAL_TEAM_ID);
+    pids.add(CORE_TEAM_ID);
     for (const pid of [...orch.keys(), ...exp.keys()]) pids.add(pid);
-    const rank = (pid: string) => (pid === CORE_TEAM_ID ? 0 : pid === LOCAL_TEAM_ID ? 2 : 1);
+    const rank = (pid: string) => (pid === CORE_TEAM_ID ? 0 : pid === PROJECT_DEFAULT_TEAM_ID ? 2 : 1);
     return [...pids].map((teamId) => ({
       teamId,
       label: groupLabel(teamId, packById.get(teamId), t),
@@ -171,18 +179,22 @@ export function TeamsAgentsSettings() {
     rowDeleteConfirm.clearPending();
     const team = packById.get(packIdOf(o.fqid));
     const builtin = !team?.writable;
+    // Prefer FQID — bare o.id collides across teams ("orchestrator") and misses
+    // the legacy facade's agentFileBase id (`teamId--id`).
+    const ref = o.fqid || o.runtimeName || o.id;
     openSettingsPanel(builtin
-      ? { kind: "agent-orchestrator", mode: "customize-builtin", orchestratorId: o.id, title: o.name }
-      : { kind: "agent-orchestrator", mode: "edit", orchestratorId: o.id, title: o.name });
+      ? { kind: "agent-orchestrator", mode: "customize-builtin", orchestratorId: ref, title: o.name }
+      : { kind: "agent-orchestrator", mode: "edit", orchestratorId: ref, title: o.name });
   };
 
   const openExpert = (e: AssetViewV2) => {
     rowDeleteConfirm.clearPending();
     const team = packById.get(packIdOf(e.fqid));
     const builtin = !team?.writable;
+    const ref = e.fqid || e.runtimeName || e.id;
     openSettingsPanel(builtin
-      ? { kind: "agent-expert", mode: "customize-builtin", expertId: e.id, title: e.name }
-      : { kind: "agent-expert", mode: "edit", expertId: e.id, title: e.name });
+      ? { kind: "agent-expert", mode: "customize-builtin", expertId: ref, title: e.name }
+      : { kind: "agent-expert", mode: "edit", expertId: ref, title: e.name });
   };
 
   const setActive = async (teamId: string) => {
@@ -191,6 +203,7 @@ export function TeamsAgentsSettings() {
     try {
       await window.electronAPI.teamsSetActiveTeam(projectRoot, teamId, "project");
       setActiveTeamId(teamId);
+      await useTeamsStore.getState().load(projectRoot, { force: true });
       toast.success(t("settings.teams.toast.activeUpdated"));
     } catch (err) { toast.error(err instanceof Error ? err.message : String(err)); }
     finally { setSaving(false); }
@@ -231,7 +244,7 @@ export function TeamsAgentsSettings() {
     if (!projectRoot || !teamName.trim()) return;
     setSaving(true);
     try {
-      await window.electronAPI.teamsCreateUserTeam(teamName.trim(), teamDesc.trim());
+      await window.electronAPI.teamsCreate(teamName.trim(), teamDesc.trim(), teamScope, projectRoot);
       setTeamName(""); setTeamDesc(""); setCreatingTeam(false);
       toast.success(t("settings.teamsAgents.teamCreated"));
       await loadAll({ silent: true });
@@ -336,6 +349,14 @@ export function TeamsAgentsSettings() {
                 <div className="flex flex-col gap-2 py-2.5">
                   <Input value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder={t("settings.teamsAgents.teamNamePlaceholder")} className="h-8 text-[length:var(--font-size-12)]" autoFocus />
                   <Input value={teamDesc} onChange={(e) => setTeamDesc(e.target.value)} placeholder={t("settings.teamsAgents.teamDescPlaceholder")} className="h-8 text-[length:var(--font-size-12)]" />
+                  <div className="flex gap-1">
+                    <Button size="xs" variant={teamScope === "project" ? "secondary" : "ghost"} onClick={() => setTeamScope("project")}>
+                      {t("settings.teams.scope.project")}
+                    </Button>
+                    <Button size="xs" variant={teamScope === "app" ? "secondary" : "ghost"} onClick={() => setTeamScope("app")}>
+                      {t("settings.teams.scope.app")}
+                    </Button>
+                  </div>
                   <div className="flex justify-end gap-2">
                     <Button size="xs" variant="ghost" disabled={saving} onClick={() => { setCreatingTeam(false); setTeamName(""); setTeamDesc(""); }}>{t("settings.teamsAgents.cancel")}</Button>
                     <Button size="xs" disabled={saving || !teamName.trim()} onClick={() => void createTeam()}>{t("settings.teams.createTeam")}</Button>
@@ -381,7 +402,7 @@ export function TeamsAgentsSettings() {
                           onClick={() => openSettingsPanel({ kind: "pack-detail", teamId: group.teamId, title: group.label })}>
                           <InfoIcon className="size-3.5" />
                         </Button>
-                        {!isCore && group.teamId !== LOCAL_TEAM_ID && groupPack && (
+                        {!isCore && groupPack && (
                           <Switch checked={groupPack.enabled} disabled={saving} onCheckedChange={(v) => void setTeamEnabled(groupPack, v)} aria-label={group.label} />
                         )}
                       </div>

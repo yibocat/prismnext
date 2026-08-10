@@ -24,6 +24,7 @@ import { ComposerChromeStack } from "./composer-chrome-stack";
 import { ComposerSendQueuePanel } from "./composer-send-queue-panel";
 import { SubAgentRunPanelHost } from "./subagent-run-panel";
 import { PlanModeChip } from "./plan-mode-chip";
+import { ActiveTeamSelect } from "./active-team-select";
 import { useChatComposer } from "@/hooks/use-chat-composer";
 import { useChatStore } from "@/stores/chat-store";
 import type { ComposerAttachment } from "@/lib/chat/composer-attach-file";
@@ -315,6 +316,7 @@ export function ChatComposerCore({
             )}
           >
             {isCompact && addMenu}
+            {isCompact && <ActiveTeamSelect />}
             {isCompact && <PlanModeChip />}
             <div className={cn(isCompact && "flex-1 min-w-0 overflow-hidden self-center")}>
               {editor}

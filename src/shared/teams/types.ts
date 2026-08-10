@@ -323,6 +323,15 @@ export const PROJECT_TEAMS_REL = ".prismnext/agent/teams";
 /** 项目默认团队 id（user.local 的迁移目标，治 C1） */
 export const PROJECT_DEFAULT_TEAM_ID = "project.local";
 
+/**
+ * The sole runtime identity of the writable default project Team.
+ * `user.local` is a legacy migration input and must never be accepted by v2
+ * UI or resolver consumers as a current Team identity.
+ */
+export function isProjectLocalTeamId(teamId: string): boolean {
+  return teamId === PROJECT_DEFAULT_TEAM_ID;
+}
+
 /** 应用级状态 `<userData>/teams-state.json`（v2） */
 export interface AppTeamsState {
   version: typeof APP_TEAMS_STATE_VERSION;

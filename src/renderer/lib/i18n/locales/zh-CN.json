@@ -1953,7 +1953,12 @@
       "queueDelete": "从队列删除",
       "taskPlanTitle": "任务计划",
       "taskPlanInProgress": "进行中",
-      "taskPlanDismiss": "隐藏任务计划"
+      "taskPlanDismiss": "隐藏任务计划",
+      "activeTeam": "活动团队",
+      "activeTeamHint": "切换本对话使用的团队（主 Agent）",
+      "activeTeamHintWithLead": "当前主 Agent：{{lead}}。点击切换团队。",
+      "activeTeamSwitched": "已切换活动团队 → {{team}}（{{lead}}）。发一条消息即可验证。",
+      "activeTeamSwitchFailed": "切换活动团队失败"
     },
     "questionPanel": {
       "title": "需要你确认",

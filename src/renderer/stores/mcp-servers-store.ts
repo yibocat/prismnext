@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import {
   parseMcpConfig,
-  serializeMcpConfig,
+  parseTeamMcpConfig,
+  serializeTeamMcpConfig,
   type McpServerEntry,
 } from "@/lib/agent/mcp-config";
 
 function mcpPathFor(projectRoot: string): string {
-  return `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/mcp.json`;
+  return `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/teams/project.local/mcp.json`;
 }
 
 interface McpServersState {
@@ -34,7 +35,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     }
     const mcpPath = mcpPathFor(projectRoot);
     try {
-      // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
+      // M11 creates the v2 project.local array and removes retired MCPs.
       await window.electronAPI.mcpEnsure(projectRoot);
       const exists = await window.electronAPI.fsExists(mcpPath);
       if (!exists) {
@@ -42,7 +43,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
         return;
       }
       const result = await window.electronAPI.fsRead(mcpPath);
-      set({ servers: parseMcpConfig(result?.content ?? ""), loaded: true });
+      set({ servers: parseTeamMcpConfig(result?.content ?? ""), loaded: true });
     } catch {
       set({ servers: [], loaded: true });
     }
@@ -52,7 +53,17 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     const prev = get().servers;
     set({ servers: next, projectRoot, saving: true });
     try {
-      await window.electronAPI.fsWrite(mcpPathFor(projectRoot), serializeMcpConfig(next));
+      await window.electronAPI.fsWrite(mcpPathFor(projectRoot), serializeTeamMcpConfig(next));
+      await Promise.all(
+        next.map((entry) =>
+          window.electronAPI.teamsSetAssetEnabled(
+            projectRoot,
+            `project.local:${entry.name.trim()}`,
+            entry.enabled,
+            "project",
+          ),
+        ),
+      );
       await window.electronAPI.mcpApply(projectRoot);
     } catch {
       set({ servers: prev });
@@ -65,7 +76,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
   readRaw: async (projectRoot) => {
     const mcpPath = mcpPathFor(projectRoot);
     const exists = await window.electronAPI.fsExists(mcpPath);
-    if (!exists) return "{\n  \"mcpServers\": {}\n}\n";
+    if (!exists) return "[]\n";
     const result = await window.electronAPI.fsRead(mcpPath);
     return result?.content ?? "";
   },
@@ -74,11 +85,14 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     set({ saving: true });
     try {
       const mcpPath = mcpPathFor(projectRoot);
-      await window.electronAPI.fsWrite(mcpPath, content);
+      const trimmed = content.trim();
+      const parsed = trimmed.startsWith("[")
+        ? parseTeamMcpConfig(content)
+        : parseMcpConfig(content);
+      await window.electronAPI.fsWrite(mcpPath, serializeTeamMcpConfig(parsed));
       await window.electronAPI.mcpApply(projectRoot);
-      const result = await window.electronAPI.fsRead(mcpPath);
       set({
-        servers: parseMcpConfig(result?.content ?? ""),
+        servers: parsed,
         projectRoot,
       });
     } finally {
@@ -88,5 +102,5 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
 }));
 
 export function mcpJsonRelPath(): string {
-  return ".prismnext/agent/mcp.json";
+  return ".prismnext/agent/teams/project.local/mcp.json";
 }

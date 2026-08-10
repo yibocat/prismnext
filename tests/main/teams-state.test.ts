@@ -4,7 +4,7 @@
  * Covers: resolveTri truth table, normalize whitelist filtering (injection
  * rejection), atomic write, write counter, and listeners (including one that throws).
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -172,10 +172,43 @@ describe("state-app / state-project — IO, counter, listeners", () => {
   });
 
   it("project state: corrupt file self-heals to empty", () => {
-    const { writeFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
     const p = join(projectRoot, ".prismnext", "agent");
     mkdirSync(p, { recursive: true });
     writeFileSync(join(p, "teams.json"), "{ not json", "utf-8");
     expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
+    expect(readdirSync(p).some((name) => name.startsWith("teams.json.corrupted."))).toBe(true);
+    expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
+  });
+
+  it("project state: rewrites persisted user.local identities to project.local", () => {
+    const p = join(projectRoot, ".prismnext", "agent");
+    mkdirSync(p, { recursive: true });
+    writeFileSync(
+      join(p, "teams.json"),
+      JSON.stringify({
+        version: 1,
+        defaultTeam: "user.local",
+        teamEnabled: { "user.local": true },
+        assetEnabled: { "user.local:review": false },
+        assetOverrides: { "user.local:lead": { temperature: 0.2 } },
+      }),
+      "utf-8",
+    );
+
+    const state = readProjectTeamsState(projectRoot);
+
+    expect(state.defaultTeam).toBe("project.local");
+    expect(state.teamEnabled).toEqual({ "project.local": true });
+    expect(state.assetEnabled).toEqual({ "project.local:review": false });
+    expect(state.assetOverrides["project.local:lead"]?.temperature).toBe(0.2);
+  });
+
+  it("app state: corrupt file is backed up before an empty state is written", () => {
+    const statePath = join(dir, "teams-state.json");
+    writeFileSync(statePath, "{ not json", "utf-8");
+
+    expect(readAppTeamsState()).toEqual(emptyAppTeamsState());
+    expect(readdirSync(dir).some((name) => name.startsWith("teams-state.json.corrupted."))).toBe(true);
+    expect(readAppTeamsState()).toEqual(emptyAppTeamsState());
   });
 });

@@ -20,8 +20,11 @@ import {
   AppSelectValue,
 } from "@/components/ui/app-select";
 import { useDocumentStore } from "@/stores/document-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { TeamPicker } from "../teams/team-picker";
 import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent-subagents";
+import { isProjectLocalTeamId } from "@shared/teams/types";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   detectExpertPermissionPreset,
@@ -80,10 +83,9 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
   // Target team for new agents (null = this project's Local Pack).
-  const [userTeams, setUserTeams] = useState<
-    Array<{ teamId: string; name: string; description: string; version: string }>
-  >([]);
   const [targetTeamId, setTargetPackId] = useState<string | null>(null);
+  const teamCatalog = useTeamsStore((state) => state.catalog);
+  const loadTeams = useTeamsStore((state) => state.load);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -105,9 +107,8 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
           setContentFqid(null);
           setTargetPackId(null);
-          const teams = await window.electronAPI.teamsListUserTeams().catch(() => []);
+          await loadTeams(root);
           if (cancelled) return;
-          setUserTeams(teams);
           setLoading(false);
           return;
         }
@@ -123,7 +124,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         setContentFqid(detail.fqid ?? null);
         // Editing a custom agent writes back to its owning pack (local or team).
         const pid = detail.fqid?.split(":")[0];
-        setTargetPackId(pid && pid !== "user.local" ? pid : null);
+        setTargetPackId(pid && !isProjectLocalTeamId(pid) ? pid : null);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.expert.toast.loadFailed"));
@@ -138,7 +139,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     return () => {
       cancelled = true;
     };
-  }, [projectRoot, isNew, expertId, slot.mode, closePanel, t]);
+  }, [projectRoot, isNew, expertId, slot.mode, closePanel, t, loadTeams]);
 
   const saveExpert = useCallback(async () => {
     if (!projectRoot) return;
@@ -267,19 +268,12 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
             <label className="text-[length:var(--font-size-12)] font-medium">
               {t("settings.editor.expert.targetTeam")}
             </label>
-            <select
-              value={targetTeamId ?? ""}
-              onChange={(e) => setTargetPackId(e.target.value || null)}
-              disabled={saving}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
-            >
-              <option value="">{t("settings.editor.expert.localTarget")}</option>
-              {userTeams.map((team) => (
-                <option key={team.teamId} value={team.teamId}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+            <TeamPicker
+              teams={teamCatalog}
+              value={targetTeamId ?? "project.local"}
+              onChange={setTargetPackId}
+              className={saving ? "pointer-events-none opacity-60" : undefined}
+            />
             <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
               {t("settings.editor.expert.targetTeamDesc")}
             </p>

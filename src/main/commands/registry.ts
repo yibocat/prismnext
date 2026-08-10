@@ -12,11 +12,16 @@ import {
   type CommandPack,
 } from "./export-import";
 import { isValidCommandName } from "./template-utils";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL } from "../../shared/teams/types";
+import {
+  CORE_TEAM_ID,
+  isProjectLocalTeamId,
+  PROJECT_DEFAULT_TEAM_ID,
+} from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
 import type { AssetViewV2 } from "../../shared/teams/view";
 import { invalidateResolver, listAssets, resolveInvocation, resolveRef } from "../teams/resolver";
 import { setProjectAssetEnabled } from "../teams/state-project";
+import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
 
 /**
  * CommandRegistry（§5.6.3）—— resolver 之上的命令门面，per-project 实例。
@@ -31,9 +36,9 @@ import { setProjectAssetEnabled } from "../teams/state-project";
 export class CommandRegistry {
   constructor(private readonly projectRoot: string) {}
 
-  /** Local Pack commands 目录 */
+  /** Project default team commands 目录（M8: teams/project.local/commands） */
   private get commandsDir(): string {
-    return join(this.projectRoot, LOCAL_TEAM_REL, "commands");
+    return join(ensureProjectDefaultTeamDir(this.projectRoot), "commands");
   }
 
   list(): CommandDef[] {
@@ -74,7 +79,7 @@ export class CommandRegistry {
     return this.list();
   }
 
-  // ── Local Pack command CRUD（只允许 user.local）──
+  // ── Project-local command CRUD ────────────────────────────
 
   /**
    * Create a new local command as a .md file in the Local Pack.
@@ -88,7 +93,7 @@ export class CommandRegistry {
     }
 
     const def: CommandDef = {
-      id: `${LOCAL_TEAM_ID}:${payload.name}`,
+      id: `${PROJECT_DEFAULT_TEAM_ID}:${payload.name}`,
       name: payload.name,
       description: payload.description,
       source: "user",
@@ -98,8 +103,8 @@ export class CommandRegistry {
       model: payload.model,
       order: 1000,
       enabled: true,
-      teamId: LOCAL_TEAM_ID,
-      teamName: "My Content",
+      teamId: PROJECT_DEFAULT_TEAM_ID,
+      teamName: "This project",
       removable: true,
     };
 
@@ -124,7 +129,7 @@ export class CommandRegistry {
     const updated: CommandDef = {
       ...existing,
       name: payload.name ?? existing.name,
-      id: `${LOCAL_TEAM_ID}:${payload.name ?? existing.name}`,
+      id: `${PROJECT_DEFAULT_TEAM_ID}:${payload.name ?? existing.name}`,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
       action:
@@ -207,7 +212,7 @@ export class CommandRegistry {
       }
 
       const def: CommandDef = {
-        id: `${LOCAL_TEAM_ID}:${targetName}`,
+        id: `${PROJECT_DEFAULT_TEAM_ID}:${targetName}`,
         name: targetName,
         description: entry.description ?? "",
         source: "user",
@@ -217,8 +222,8 @@ export class CommandRegistry {
         model: entry.model || undefined,
         order: 1000,
         enabled: entry.enabled !== false,
-        teamId: LOCAL_TEAM_ID,
-        teamName: "My Content",
+        teamId: PROJECT_DEFAULT_TEAM_ID,
+        teamName: "This project",
         removable: true,
       };
 
@@ -242,7 +247,7 @@ export class CommandRegistry {
 
   /** Local Pack 的命令视图（export/import 作用域） */
   private localCommands(): CommandDef[] {
-    return this.list().filter((c) => c.teamId === LOCAL_TEAM_ID);
+    return this.list().filter((c) => isProjectLocalTeamId(c.teamId));
   }
 
   private filePath(name: string): string {
@@ -294,7 +299,7 @@ function toCommandDef(asset: AssetViewV2): CommandDef {
     id: asset.fqid,
     name: asset.id,
     description: asset.description,
-    source: teamId === CORE_TEAM_ID ? "builtin" : teamId === LOCAL_TEAM_ID ? "user" : "plugin",
+    source: teamId === CORE_TEAM_ID ? "builtin" : isProjectLocalTeamId(teamId) ? "user" : "plugin",
     template: cmd.template ?? "",
     action: cmd.action,
     agent: cmd.agent,

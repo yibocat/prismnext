@@ -117,7 +117,7 @@ describe("skills-registry", () => {
         "https://registry.test/index.json",
       );
 
-      const skillDir = join(root, ".prismnext/agent/local/skills/local-pack");
+      const skillDir = join(root, ".prismnext/agent/teams/project.local/skills/local-pack");
       expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
       expect(existsSync(join(skillDir, "README.md"))).toBe(true);
       expect(readFileSync(join(skillDir, "README.md"), "utf-8")).toContain("# Notes");

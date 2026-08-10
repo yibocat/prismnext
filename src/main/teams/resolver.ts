@@ -2,9 +2,8 @@
  * resolver.ts — the TeamResolver (design 2026-08-10 §6).
  *
  * The SINGLE component that answers "what teams exist, what assets exist,
- * whether they are usable, and what they look like". Pure read; nothing is
- * wired to it yet (T2). The legacy services/team-resolver.ts keeps serving
- * the existing consumers until T3/T4 switch over.
+ * whether they are usable, and what they look like". Skills / commands / MCP /
+ * agents-sync / chat (via resolveChatOrchestrator) consume this layer.
  *
  * Pipeline: discover → validate → state → gate → index → shadow → roster → emit.
  */
@@ -30,6 +29,7 @@ import type {
   TeamViewV2,
 } from "../../shared/teams/view";
 import { createLogger } from "../services/logger";
+import { _registeredRoots } from "../services/active-project-roots";
 import { licenseGrants, licenseStateVersion } from "../services/teams-license";
 import {
   appTeamsStateWriteCounter,
@@ -52,7 +52,7 @@ import {
 import { compareByPrecedence } from "./precedence";
 import { canReference } from "./scope";
 
-const log = createLogger("teams-resolver");
+const log = createLogger("teams-resolver", "agent");
 
 // ── Invalidation subscriptions ────────────────────────────
 // App-state writes affect EVERY project → invalidate all. Project-state writes
@@ -60,18 +60,6 @@ const log = createLogger("teams-resolver");
 
 onAppTeamsStateWritten(() => invalidateResolver());
 onProjectTeamsStateWritten((root) => invalidateResolver(root));
-
-// Read-time fallback invalidation (T3/T4): while teams.json / teams-state.json
-// don't exist yet, the resolver derives state from the legacy packs.json /
-// packs-installed.json. Those legacy writes must also invalidate the view, or
-// enable/disable toggles won't take effect. Removed in T6 once the migration
-// writes the new files and the fallback is gone.
-// Static import: a dynamic import().then() registers the listener too late for
-// synchronous write→read sequences in tests and IPC handlers.
-import { onTeamsStateWritten as onLegacyPacksStateWritten } from "../services/teams-state";
-import { onTeamsInstalledChanged as onLegacyPacksInstalledChanged } from "../services/teams-installed";
-onLegacyPacksStateWritten((root) => invalidateResolver(root));
-onLegacyPacksInstalledChanged(() => invalidateResolver());
 
 // ── View cache ────────────────────────────────────────────
 
@@ -83,6 +71,7 @@ interface ProjectView {
 }
 
 const projectViews = new Map<string, ProjectView>();
+let hostVersionOverrideForTests: string | null | undefined;
 
 function viewKey(projectRoot: string): string {
   return [
@@ -97,6 +86,7 @@ function viewKey(projectRoot: string): string {
 // ── State resolution (design §5.3) ────────────────────────
 
 function hostVersion(): string | null {
+  if (hostVersionOverrideForTests !== undefined) return hostVersionOverrideForTests;
   try {
     const { app } = require("electron") as typeof import("electron");
     if (app && typeof app.getVersion === "function") return app.getVersion();
@@ -201,7 +191,11 @@ function applyOverride(
       merged.modules = o.modules.length ? o.modules : undefined;
     }
     if (kind === "orchestrator" && Array.isArray(o.allowedExperts)) {
-      merged.roster = { mode: "list", members: o.allowedExperts };
+      // Keep bare ids / FQIDs as written; resolveRoster resolves via resolveRef.
+      merged.roster = {
+        mode: "list",
+        members: o.allowedExperts.filter((m): m is string => typeof m === "string"),
+      };
     }
   }
   return merged;
@@ -309,13 +303,16 @@ function applyShadowing(
     const active = assets.filter((a) => a.kind === kind && a.enabled);
     const byName = new Map<string, AssetViewV2[]>();
     for (const a of active) {
-      const list = byName.get(a.id) ?? [];
+      const runtimeKey = kind === "mcp"
+        ? ((a.definition as { name?: unknown } | undefined)?.name as string | undefined) ?? a.id
+        : a.id;
+      const list = byName.get(runtimeKey) ?? [];
       list.push(a);
-      byName.set(a.id, list);
+      byName.set(runtimeKey, list);
     }
-    for (const [id, group] of byName) {
+    for (const [runtimeKey, group] of byName) {
       if (group.length === 1) {
-        group[0].runtimeName = id;
+        group[0].runtimeName = runtimeKey;
         continue;
       }
       // Collision: every party gets the prefixed name (including the winner),
@@ -330,12 +327,16 @@ function applyShadowing(
       });
       // core keeps the bare id as the stable anchor; others prefix.
       for (const a of sorted) {
-        a.runtimeName = a.teamId === CORE_TEAM_ID ? a.id : `${a.teamId}--${a.id}`;
+        a.runtimeName = kind === "mcp"
+          ? runtimeKey
+          : a.teamId === CORE_TEAM_ID
+            ? a.id
+            : `${a.teamId}--${a.id}`;
       }
       // Mark all but the winner as shadowed (they lose the bare-name invocation).
       const winner = sorted[0];
       for (const a of sorted) {
-        if (a !== winner && a.teamId !== CORE_TEAM_ID) {
+        if (a !== winner && (kind === "mcp" || a.teamId !== CORE_TEAM_ID)) {
           // Only mark shadowed when it actually loses the invocation name.
           a.blockedBy = a.blockedBy ?? "shadowed";
         }
@@ -385,18 +386,21 @@ export function invalidateResolver(projectRoot?: string): void {
  */
 export function notifyTeamsChanged(projectRoot?: string): void {
   invalidateResolver(projectRoot);
-  if (!projectRoot) return;
-  void import("../services/project-subagents-refresh")
-    .then((m) => m.scheduleSubagentsRefresh(projectRoot))
-    .catch(() => {});
-  void import("../services/project-skills-refresh")
-    .then((m) => m.scheduleSkillsRefresh(projectRoot))
-    .catch(() => {});
-  void import("../acp/service")
-    .then((m) => {
-      m.AcpService.getInstance().invalidateAgentConfigCache(projectRoot);
-    })
-    .catch(() => {});
+  const roots = projectRoot ? [projectRoot] : _registeredRoots();
+  if (roots.length === 0) return;
+  for (const root of roots) {
+    void import("../services/project-subagents-refresh")
+      .then((m) => m.scheduleSubagentsRefresh(root))
+      .catch(() => {});
+    void import("../services/project-skills-refresh")
+      .then((m) => m.scheduleSkillsRefresh(root))
+      .catch(() => {});
+    void import("../acp/service")
+      .then((m) => {
+        m.AcpService.getInstance().invalidateAgentConfigCache(root);
+      })
+      .catch(() => {});
+  }
 }
 
 // ── Catalog layer (no project) ────────────────────────────
@@ -529,6 +533,88 @@ export function resolveActiveTeam(
   throw new Error("Core team not found in catalog");
 }
 
+/** Chat / prewarm / stack-preview: the lead agent OpenCode should run. */
+export interface ChatOrchestratorResolved {
+  teamId: string;
+  fqid: Fqid;
+  /** OpenCode agent file base (`agents/<runtimeName>.md`). */
+  runtimeName: string;
+  name: string;
+  definition: OrchestratorDefV2;
+}
+
+/**
+ * Resolve the chat lead agent from the v2 active-team chain.
+ * Tab override may be a teamId, orchestrator FQID, runtimeName, or bare asset id.
+ * When unset, uses resolveActiveTeam (session → project → app → core).
+ */
+export function resolveChatOrchestrator(
+  projectRoot: string,
+  opts?: {
+    sessionTeamId?: string | null;
+    /** @deprecated Prefer sessionTeamId; still accepted for tab.orchestratorId. */
+    orchestratorId?: string | null;
+  },
+): ChatOrchestratorResolved {
+  const view = getProjectView(projectRoot);
+  const pick = (asset: AssetViewV2): ChatOrchestratorResolved => ({
+    teamId: asset.teamId,
+    fqid: asset.fqid,
+    runtimeName: asset.runtimeName,
+    name: asset.name,
+    definition: asset.definition as OrchestratorDefV2,
+  });
+
+  let resolved: ChatOrchestratorResolved | null = null;
+
+  const override = opts?.orchestratorId?.trim();
+  if (override) {
+    // Team id → that team's lead (session-style override via old field).
+    const asTeam = view.teams.find((t) => t.manifest.id === override);
+    if (asTeam?.enabled && asTeam.hasOrchestrator && asTeam.orchestratorId) {
+      const asset = view.byFqid.get(toFqid(asTeam.manifest.id, asTeam.orchestratorId));
+      if (asset?.enabled && asset.kind === "orchestrator") resolved = pick(asset);
+    }
+    if (!resolved) {
+      const byFqid = view.byFqid.get(override);
+      if (byFqid?.enabled && byFqid.kind === "orchestrator") resolved = pick(byFqid);
+    }
+    if (!resolved) {
+      const byName = view.assets.find(
+        (a) =>
+          a.kind === "orchestrator"
+          && a.enabled
+          && (a.runtimeName === override || a.id === override),
+      );
+      if (byName) resolved = pick(byName);
+    }
+  }
+
+  if (!resolved) {
+    const team = resolveActiveTeam(projectRoot, opts?.sessionTeamId);
+    if (!team.orchestratorId) {
+      throw new Error(`Active team ${team.manifest.id} has no lead agent`);
+    }
+    const fqid = toFqid(team.manifest.id, team.orchestratorId);
+    const asset = view.byFqid.get(fqid);
+    if (!asset?.enabled || asset.kind !== "orchestrator") {
+      throw new Error(`Active lead agent not found or disabled: ${fqid}`);
+    }
+    resolved = pick(asset);
+  }
+
+  log.info("resolveChatOrchestrator", {
+    projectRoot,
+    sessionTeamId: opts?.sessionTeamId ?? null,
+    orchestratorIdArg: opts?.orchestratorId ?? null,
+    teamId: resolved.teamId,
+    fqid: resolved.fqid,
+    runtimeName: resolved.runtimeName,
+    name: resolved.name,
+  });
+  return resolved;
+}
+
 // ── Roster resolution (design §6.3; never silently drop) ──
 
 export function resolveRoster(projectRoot: string, teamId: string): RosterView | null {
@@ -574,7 +660,14 @@ export function resolveRoster(projectRoot: string, teamId: string): RosterView |
       }
       continue;
     }
-    const target = view.byFqid.get(ref);
+    // Exact FQID, else authorized bare-id resolve (override members / legacy
+    // same-team lift that pointed at a missing asset, e.g. user.local:foo → core:foo).
+    let target = view.byFqid.get(ref) ?? null;
+    if (!target) {
+      const bare = parseFqid(ref)?.contentId ?? ref;
+      const resolved = resolveRef(projectRoot, bare, teamId, "subagent");
+      if (resolved) target = view.byFqid.get(resolved) ?? null;
+    }
     if (!target) {
       // Dangling reference: keep it, marked, so the UI can explain.
       out.push({
@@ -623,4 +716,10 @@ export function __resetTeamsResolverForTests(): void {
   projectViews.clear();
   listeners.clear();
   invalidateCatalog();
+}
+
+/** Test-only stable host version injection for runtime compatibility gates. */
+export function __setHostVersionForTests(version: string | null | undefined): void {
+  hostVersionOverrideForTests = version;
+  projectViews.clear();
 }

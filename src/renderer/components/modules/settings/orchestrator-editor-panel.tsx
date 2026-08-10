@@ -14,12 +14,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDocumentStore } from "@/stores/document-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { TeamPicker } from "../teams/team-picker";
 import type {
   SubagentInfo,
   OrchestratorInfo,
   SaveCustomOrchestratorPayload,
 } from "@shared/agent-subagents";
+import { isProjectLocalTeamId } from "@shared/teams/types";
 import { buildSubagentRosterMarkdown } from "@shared/subagent-roster";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
@@ -72,10 +75,9 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
   // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
   // Target team for new agents (null = this project's Local Pack).
-  const [userTeams, setUserTeams] = useState<
-    Array<{ teamId: string; name: string; description: string; version: string }>
-  >([]);
   const [targetTeamId, setTargetPackId] = useState<string | null>(null);
+  const teamCatalog = useTeamsStore((state) => state.catalog);
+  const loadTeams = useTeamsStore((state) => state.load);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -110,9 +112,8 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           setAllowedExperts([]);
           setContentFqid(null);
           setTargetPackId(null);
-          const teams = await window.electronAPI.teamsListUserTeams().catch(() => []);
+          await loadTeams(root);
           if (cancelled) return;
-          setUserTeams(teams);
           setLoading(false);
           return;
         }
@@ -153,7 +154,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
         setContentFqid(detail.fqid ?? null);
         // Editing a custom agent writes back to its owning pack (local or team).
         const pid = detail.fqid?.split(":")[0];
-        setTargetPackId(pid && pid !== "user.local" ? pid : null);
+        setTargetPackId(pid && !isProjectLocalTeamId(pid) ? pid : null);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.orchestrator.toast.loadFailed"));
@@ -168,7 +169,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
     return () => {
       cancelled = true;
     };
-  }, [projectRoot, isNew, builtinCustomize, orchestratorId, slot.mode, closePanel]);
+  }, [projectRoot, isNew, builtinCustomize, orchestratorId, slot.mode, closePanel, loadTeams]);
 
   const saveOrchestrator = useCallback(async () => {
     if (!projectRoot) return;
@@ -313,19 +314,12 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
             <label className="text-[length:var(--font-size-12)] font-medium">
               {t("settings.editor.orchestrator.targetTeam")}
             </label>
-            <select
-              value={targetTeamId ?? ""}
-              onChange={(e) => setTargetPackId(e.target.value || null)}
-              disabled={saving}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-[length:var(--font-size-12)]"
-            >
-              <option value="">{t("settings.editor.orchestrator.localTarget")}</option>
-              {userTeams.map((team) => (
-                <option key={team.teamId} value={team.teamId}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
+            <TeamPicker
+              teams={teamCatalog}
+              value={targetTeamId ?? "project.local"}
+              onChange={setTargetPackId}
+              className={saving ? "pointer-events-none opacity-60" : undefined}
+            />
             <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
               {t("settings.editor.orchestrator.targetTeamDesc")}
             </p>

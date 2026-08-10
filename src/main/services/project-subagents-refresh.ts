@@ -16,6 +16,7 @@ import { normalizeProjectRoot } from "./skills-sync";
 
 const EXPERTS_REFRESH_DEBOUNCE_MS = 800;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const reloadPendingProjects = new Set<string>();
 
 export function notifyExpertsIntegrationChanged(projectPath: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -43,18 +44,19 @@ export async function refreshProjectSubagentsIntegration(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
-  const agentsDir = getOpencodeAgentsDir();
+  const root = normalizeProjectRoot(projectRoot);
+  const agentsDir = getOpencodeAgentsDir(root);
   // Clean up files recorded by the LEGACY on-disk sync state (pre-T3) on the
   // first switch; the new in-memory sync state handles staleness after that.
   const legacyPrev = readPrismExpertsSyncState();
-  if (legacyPrev?.agentFiles?.length && !getAgentsSyncState(projectRoot)) {
+  if (legacyPrev?.agentFiles?.length && !getAgentsSyncState(root)) {
     clearSyncedAgentFiles(agentsDir, legacyPrev.agentFiles);
   }
-  const result = syncAgentsToOpencode(projectRoot, {
+  const result = syncAgentsToOpencode(root, {
     agentsDir,
     promptCtx: options?.promptCtx,
   });
-  notifyExpertsIntegrationChanged(projectRoot);
+  notifyExpertsIntegrationChanged(root);
   return {
     agentFiles: result.agentFiles,
     orchestratorId: result.activeOrchestratorId,
@@ -93,17 +95,29 @@ export async function refreshProjectExpertsIntegrationWithReload(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
-  const prev = readPrismExpertsSyncState();
-  const result = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, options);
+  const root = normalizeProjectRoot(projectRoot);
+  const prev = getAgentsSyncState(root);
+  const result = await refreshProjectSubagentsIntegrationIfNeeded(root, options);
   const hashChanged =
     !result.skipped
     && (
       !prev?.orchestratorContentHash
       || prev.orchestratorContentHash !== result.orchestratorContentHash
     );
-  const acp = AcpService.getInstance();
-  if (hashChanged && acp.getConnection()) {
-    await acp.reloadAfterExpertsIntegration();
+  const acp = AcpService.getInstanceForProject(root);
+  const needsReload = hashChanged || reloadPendingProjects.has(root);
+  if (needsReload) {
+    if (!acp.getConnection()) {
+      reloadPendingProjects.add(root);
+      return result;
+    }
+    try {
+      await acp.reloadAfterExpertsIntegration();
+      reloadPendingProjects.delete(root);
+    } catch (err) {
+      reloadPendingProjects.add(root);
+      throw err;
+    }
   }
   return result;
 }
@@ -116,22 +130,25 @@ export function scheduleSubagentsRefresh(projectRoot: string): void {
     projectRoot,
     setTimeout(() => {
       pendingTimers.delete(projectRoot);
-      void refreshProjectExpertsIntegrationWithReload(projectRoot).catch((err) => {
-        // Recoverable: agent.md payloads are already on disk and the next
-        // packs change (or the next chat send prewarm) retries the reload.
-        console.warn("[experts-refresh] deferred (will retry):", err?.message ?? err);
-      });
-      // Pack install/enable/disable changes the effective MCP set — push the
-      // re-resolved set into already-open sessions (session/load), not only
-      // into sessions created after the change.
-      void import("../acp/service")
-        .then(({ AcpService }) => AcpService.getInstance().applyProjectMcpConfig(projectRoot))
-        .catch((err: unknown) => {
+      void (async () => {
+        try {
+          await refreshProjectExpertsIntegrationWithReload(projectRoot);
+        } catch (err: any) {
+          // The pending reload marker guarantees the next prewarm retries.
+          console.warn("[experts-refresh] deferred (will retry):", err?.message ?? err);
+        }
+        // session/load must not race the OpenCode restart above; otherwise an
+        // in-flight MCP push can observe ACP connection closed.
+        try {
+          const { AcpService } = await import("../acp/service");
+          await AcpService.getInstanceForProject(normalizeProjectRoot(projectRoot)).applyProjectMcpConfig(projectRoot);
+        } catch (err: unknown) {
           console.warn(
             "[experts-refresh] MCP push deferred:",
             err instanceof Error ? err.message : String(err),
           );
-        });
+        }
+      })();
     }, EXPERTS_REFRESH_DEBOUNCE_MS),
   );
 }
@@ -142,7 +159,11 @@ export function isExpertsIntegrationPath(absPath: string, projectRoot: string): 
   return (
     // local pack（用户自建 orchestrators/experts/skills/commands）
     normalized.includes(`${root}/.prismnext/agent/local/`)
-    // packs.json（启停 / override / 默认 orchestrator）
+    || normalized.includes(`${root}/.prismnext/agent/teams/project.local/`)
+    // project teams root + teams.json（v2 启停 / 默认活动团队）
+    || normalized.includes(`${root}/.prismnext/agent/teams/`)
+    || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
+    // packs.json（legacy 启停 / override / 默认 orchestrator）
     || normalized.endsWith(`${root}/.prismnext/agent/packs.json`)
     // legacy 路径（迁移前/回滚期仍可能变动）
     || normalized.includes(`${root}/.prismnext/agent/experts/`)

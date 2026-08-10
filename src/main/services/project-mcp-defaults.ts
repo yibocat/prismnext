@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createLogger } from "./logger";
+import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
 
 const log = createLogger("project-mcp-defaults");
 
@@ -65,25 +66,35 @@ function writeMcpServers(
 /**
  * Ensure mcp.json exists and strip legacy Paper Search MCP.
  * New projects get `{}`; existing projects lose `paper-search-mcp` on open.
+ * After M11, user MCP lives in `teams/project.local/mcp.json` — do not recreate
+ * the legacy agent-level file once that target exists.
  */
 export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResult {
   mkdirSync(agentDir, { recursive: true });
-  const mcpPath = join(agentDir, "mcp.json");
-  const fileMissing = !existsSync(mcpPath);
-  if (fileMissing) {
-    writeMcpServers(mcpPath, {});
-    return { added: false, migrated: false, reenabled: false, removed: false, path: mcpPath };
+  // M11 is the only permitted reader/converter of agent/mcp.json. Derive the
+  // project root from <project>/.prismnext/agent and migrate before creating
+  // a v2 default file.
+  const migrated = ensureProjectContentMigrated(dirname(dirname(agentDir)));
+  const projectLocalMcp = join(agentDir, "teams", "project.local", "mcp.json");
+  if (!existsSync(projectLocalMcp)) {
+    mkdirSync(dirname(projectLocalMcp), { recursive: true });
+    writeFileSync(projectLocalMcp, "[]\n", "utf-8");
   }
 
-  const { servers, rawOk } = readMcpServers(mcpPath);
-  if (!rawOk || !(PAPER_SEARCH_MCP_ID in servers)) {
-    return { added: false, migrated: false, reenabled: false, removed: false, path: mcpPath };
+  let servers: Array<{ id?: unknown }> = [];
+  try {
+    const parsed = JSON.parse(readFileSync(projectLocalMcp, "utf-8"));
+    if (Array.isArray(parsed)) servers = parsed;
+  } catch {
+    return { added: false, migrated, reenabled: false, removed: false, path: projectLocalMcp };
   }
-
-  const { [PAPER_SEARCH_MCP_ID]: _legacy, ...rest } = servers;
-  writeMcpServers(mcpPath, rest);
-  log.info(
-    `Removed legacy ${PAPER_SEARCH_MCP_ID} from mcp.json — use built-in literature-discover`,
-  );
-  return { added: false, migrated: false, reenabled: false, removed: true, path: mcpPath };
+  const filtered = servers.filter((server) => server?.id !== PAPER_SEARCH_MCP_ID);
+  const removed = filtered.length !== servers.length;
+  if (removed) {
+    writeFileSync(projectLocalMcp, `${JSON.stringify(filtered, null, 2)}\n`, "utf-8");
+    log.info(
+      `Removed legacy ${PAPER_SEARCH_MCP_ID} from project.local MCP — use built-in literature-discover`,
+    );
+  }
+  return { added: false, migrated, reenabled: false, removed, path: projectLocalMcp };
 }

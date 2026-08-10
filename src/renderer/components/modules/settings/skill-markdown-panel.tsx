@@ -129,7 +129,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         }
         if (projectRoot) {
           const list = await window.electronAPI.agentListSkills(projectRoot);
-          const info = list.find((s) => s.fqid === `user.local:${slot.skillId}`);
+          const info = list.find((s) => s.fqid === `project.local:${slot.skillId}`);
           if (!cancelled && info?.installOrigin) setResetSource("registry");
         }
       } catch {
@@ -147,7 +147,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     try {
       if (resetSource === "bundled") {
         // 引用模型：删除 local 分歧副本，core 原件自动浮现（遮蔽解除）
-        await window.electronAPI.agentDeleteSkill(projectRoot, `user.local:${slot.skillId}`);
+        await window.electronAPI.agentDeleteSkill(projectRoot, `project.local:${slot.skillId}`);
         await window.electronAPI.chatPrewarm(projectRoot);
         bumpSkillsRefresh();
         toast.success(t("settings.editor.skillMd.toast.restored"));

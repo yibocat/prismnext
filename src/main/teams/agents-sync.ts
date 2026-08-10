@@ -14,6 +14,7 @@
 import { app } from "electron";
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { projectRuntimeAgentsDir } from "../acp/runtime-paths";
 import type { PromptContext } from "../prompts/types";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 import {
@@ -42,6 +43,8 @@ export interface AgentFileEntry {
 export interface AgentsPlan {
   agentEntries: AgentFileEntry[];
   agentFiles: string[];
+  /** Stable namespace preventing two projects from overwriting Agent files. */
+  namespace: string;
   /** Active team's lead agent runtimeName. */
   activeOrchestratorId: string;
   orchestratorContentHash: string;
@@ -55,7 +58,20 @@ function computeSyncContentHash(entries: AgentFileEntry[]): string {
 }
 
 /** Resolve a lead agent's roster to render-ready refs (enabled members only). */
-function rosterRefsFor(projectRoot: string, teamId: string): RosterRefMd[] {
+function projectNamespace(projectRoot: string): string {
+  return `project-${agentContentHash(projectRoot.replace(/\\/g, "/"))}`;
+}
+
+/** OpenCode mode/file base for a resolver runtime name in one project. */
+export function projectAgentRuntimeName(projectRoot: string, runtimeName: string): string {
+  return `${projectNamespace(projectRoot)}--${runtimeName}`;
+}
+
+function rosterRefsFor(
+  projectRoot: string,
+  teamId: string,
+  runtimeNameFor: (runtimeName: string) => string,
+): RosterRefMd[] {
   const view = resolveRoster(projectRoot, teamId);
   if (!view) return [];
   return view.entries
@@ -63,7 +79,7 @@ function rosterRefsFor(projectRoot: string, teamId: string): RosterRefMd[] {
     .map((e) => {
       const asset = getAsset(projectRoot, e.fqid);
       return {
-        id: asset?.runtimeName ?? e.fqid,
+        id: runtimeNameFor(asset?.runtimeName ?? e.fqid),
         name: e.name,
         description: asset?.description ?? "",
       };
@@ -88,6 +104,8 @@ export function buildAgentsPlan(
   }
 
   const activeTeam = resolveActiveTeam(projectRoot);
+  const namespace = projectNamespace(projectRoot);
+  const runtimeNameFor = (runtimeName: string) => projectAgentRuntimeName(projectRoot, runtimeName);
   const activeOrchestratorFqid = `${activeTeam.manifest.id}:${activeTeam.orchestratorId}`;
   const activeOrchestrator = getAsset(projectRoot, activeOrchestratorFqid);
   if (!activeOrchestrator?.enabled) {
@@ -101,7 +119,7 @@ export function buildAgentsPlan(
     if (!sub.enabled) continue;
     const instructions = readInstructions(projectRoot, sub.fqid);
     agentEntries.push({
-      filename: `${sub.runtimeName}.md`,
+      filename: `${runtimeNameFor(sub.runtimeName)}.md`,
       content: renderSubagentMarkdown(sub.definition as SubagentDefV2, instructions, promptCtx, {
         defaultModel: defaultSubagentModel,
       }),
@@ -118,7 +136,7 @@ export function buildAgentsPlan(
   for (const [teamId, orchFqid] of leadTeams) {
     const orch = getAsset(projectRoot, orchFqid)!;
     const instructions = readInstructions(projectRoot, orchFqid);
-    const roster = rosterRefsFor(projectRoot, teamId);
+    const roster = rosterRefsFor(projectRoot, teamId, runtimeNameFor);
     const md = renderOrchestratorMarkdown(
       orch.definition as OrchestratorDefV2,
       instructions,
@@ -126,13 +144,14 @@ export function buildAgentsPlan(
       promptCtx,
     );
     if (orchFqid === activeOrchestratorFqid) orchestratorMd = md;
-    agentEntries.push({ filename: `${orch.runtimeName}.md`, content: md });
+    agentEntries.push({ filename: `${runtimeNameFor(orch.runtimeName)}.md`, content: md });
   }
 
   return {
     agentEntries,
     agentFiles: agentEntries.map((e) => e.filename),
-    activeOrchestratorId: activeOrchestrator.runtimeName,
+    namespace,
+    activeOrchestratorId: runtimeNameFor(activeOrchestrator.runtimeName),
     orchestratorContentHash: agentContentHash(orchestratorMd),
     syncContentHash: computeSyncContentHash(agentEntries),
   };
@@ -151,7 +170,8 @@ export interface AgentsSyncState {
 
 const syncStates = new Map<string, AgentsSyncState>();
 
-export function getOpencodeAgentsDir(): string {
+export function getOpencodeAgentsDir(projectRoot?: string): string {
+  if (projectRoot) return projectRuntimeAgentsDir(app.getPath("userData"), projectRoot);
   return join(app.getPath("userData"), "opencode-server", "config", "opencode", "agents");
 }
 

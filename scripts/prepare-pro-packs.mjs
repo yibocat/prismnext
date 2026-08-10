@@ -34,7 +34,12 @@ function findProPackageDirUp(startPath, maxLevels = 4) {
     if (existsSync(pkgPath)) {
       try {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        if (pkg.prismnext?.teamsRoot || existsSync(join(dir, "packs"))) return dir;
+        if (
+          pkg.prismnext?.teamsRoot
+          || pkg.prismnext?.packsRoot
+          || existsSync(join(dir, "teams"))
+          || existsSync(join(dir, "packs"))
+        ) return dir;
       } catch {
         // 继续向上
       }
@@ -63,12 +68,15 @@ if (!packageDir) {
   process.exit(1);
 }
 
-let teamsRoot = "packs";
+let teamsRoot;
 try {
   const pkg = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf-8"));
-  if (typeof pkg.prismnext?.teamsRoot === "string" && pkg.prismnext.teamsRoot.trim()) {
-    teamsRoot = pkg.prismnext.teamsRoot.trim();
-  }
+  const declared = pkg.prismnext?.teamsRoot ?? pkg.prismnext?.packsRoot;
+  teamsRoot = typeof declared === "string" && declared.trim()
+    ? declared.trim()
+    : existsSync(join(packageDir, "teams"))
+      ? "teams"
+      : "packs";
 } catch (err) {
   console.error(`[prepare-pro-packs] package.json 解析失败: ${packageDir}`, err);
   process.exit(1);

@@ -1953,7 +1953,12 @@
       "queueDelete": "從佇列刪除",
       "taskPlanTitle": "任務計劃",
       "taskPlanInProgress": "進行中",
-      "taskPlanDismiss": "隱藏任務計劃"
+      "taskPlanDismiss": "隱藏任務計劃",
+      "activeTeam": "活動團隊",
+      "activeTeamHint": "切換本對話使用的團隊（主 Agent）",
+      "activeTeamHintWithLead": "目前主 Agent：{{lead}}。點擊切換團隊。",
+      "activeTeamSwitched": "已切換活動團隊 → {{team}}（{{lead}}）。發一則訊息即可驗證。",
+      "activeTeamSwitchFailed": "切換活動團隊失敗"
     },
     "questionPanel": {
       "title": "需要你確認",

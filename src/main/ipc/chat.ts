@@ -127,8 +127,10 @@ const sessionDisplayBackups = new Map<
 
 const mappers = new Map<number, EventMapper>();
 
-function getService(): AcpService {
-  return AcpService.getInstance();
+function getService(projectPath?: string): AcpService {
+  return projectPath?.trim()
+    ? AcpService.getInstanceForProject(projectPath)
+    : AcpService.getInstance();
 }
 
 function getMapper(win: BrowserWindow): EventMapper {
@@ -156,7 +158,9 @@ function registerTabSession(
   if (projectPath?.trim()) {
     setSessionProjectRoot(sessionId, projectPath.trim());
   }
-  bridge.start();
+  bridge.start(projectPath?.trim()
+    ? AcpService.getInstanceForProject(projectPath)
+    : AcpService.getInstance());
 }
 
 /**
@@ -165,10 +169,11 @@ function registerTabSession(
  * the child when credentials change (API keys are only applied at spawn).
  */
 async function ensureConnected(
+  service: AcpService,
   extraEnv?: Record<string, string>,
   preferredCatalogProvider?: string,
 ): Promise<void> {
-  await getService().initialize(
+  await service.initialize(
     buildOpenCodeCredentialEnv(extraEnv, { preferredCatalogProvider }),
   );
 }
@@ -296,6 +301,8 @@ export function registerChatHandlers(): void {
         /** Composer includes ```paper …``` excerpt block(s) this turn. */
         hasPaperSnippets?: boolean;
         orchestratorId?: string | null;
+        /** Session/tab active team override (v2); wins over project/app default. */
+        sessionTeamId?: string | null;
         sessionAgent?: "build" | "plan";
         selectedExpertIds?: string[];
         /** Vision images — sent as ACP ContentBlock::Image alongside the text prompt. */
@@ -319,7 +326,7 @@ export function registerChatHandlers(): void {
       };
 
       try {
-      const service = getService();
+      const service = getService(args.projectPath);
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
       const isFirstSend = !args.sessionId;
       const clearPrepare = () => {
@@ -364,23 +371,31 @@ export function registerChatHandlers(): void {
       let promptCtx = await buildPromptContext(args.projectPath);
 
       if (args.projectPath) {
-        const {
-          resolveOrchestratorId,
-          getOrchestrator,
-          getSubagent,
-        } = await import("../services/subagents-sync");
+        const { resolveChatOrchestrator } = await import("../teams/resolver");
+        const { getSubagent } = await import("../services/subagents-sync");
 
-        orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
-        const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
-        if (orchestrator?.model) {
-          const slash = orchestrator.model.indexOf("/");
+        const activeOrch = resolveChatOrchestrator(args.projectPath, {
+          sessionTeamId: args.sessionTeamId,
+          orchestratorId: args.orchestratorId,
+        });
+        orchestratorId = activeOrch.runtimeName;
+        log.info("chat:send active lead", {
+          tabId,
+          teamId: activeOrch.teamId,
+          lead: activeOrch.runtimeName,
+          leadName: activeOrch.name,
+          sessionTeamId: args.sessionTeamId ?? null,
+          orchestratorIdArg: args.orchestratorId ?? null,
+        });
+        if (activeOrch.definition.model) {
+          const slash = activeOrch.definition.model.indexOf("/");
           if (slash > 0) {
-            provider = orchestrator.model.slice(0, slash);
-            modelId = orchestrator.model.slice(slash + 1);
+            provider = activeOrch.definition.model.slice(0, slash);
+            modelId = activeOrch.definition.model.slice(slash + 1);
           }
         }
-        if (orchestrator?.thoughtLevel && !args.thoughtLevel?.trim()) {
-          thoughtLevel = orchestrator.thoughtLevel;
+        if (activeOrch.definition.thoughtLevel && !args.thoughtLevel?.trim()) {
+          thoughtLevel = activeOrch.definition.thoughtLevel;
         }
 
         promptCtx = await buildPromptContext(args.projectPath);
@@ -389,7 +404,7 @@ export function registerChatHandlers(): void {
         emitChatPrepare(tabId, "syncing_project");
         // If credentials will restart OpenCode next, sync-only here so we don't
         // reload once for agents then again for API keys.
-        const credentialRestartPending = getService().wouldRestartForCredentials(
+        const credentialRestartPending = service.wouldRestartForCredentials(
           buildOpenCodeCredentialEnv(extraEnv, {
             preferredCatalogProvider: provider,
           }),
@@ -417,10 +432,15 @@ export function registerChatHandlers(): void {
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
           const { buildExpertTeamPreamble } = await import("../../shared/subagent-team-preamble");
+          const { projectAgentRuntimeName } = await import("../teams/agents-sync");
           const entries = expertIds
             .map((id) => getSubagent(args.projectPath!, id))
             .filter((e): e is NonNullable<typeof e> => !!e?.enabled)
-            .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+            .map((e) => ({
+              id: projectAgentRuntimeName(args.projectPath!, e.id),
+              name: e.name,
+              description: e.description,
+            }));
           const preamble = buildExpertTeamPreamble(entries);
           if (preamble) userPrompt = `${userPrompt}\n\n${preamble}`;
         }
@@ -431,7 +451,7 @@ export function registerChatHandlers(): void {
 
       // Connect / apply credentials last — at most one spawn before session/new.
       try {
-        await ensureConnected(extraEnv, provider);
+        await ensureConnected(service, extraEnv, provider);
       } catch (err: any) {
         log.error(`OpenCode initialize failed: ${err.message}`);
         clearPrepare();
@@ -503,7 +523,13 @@ export function registerChatHandlers(): void {
       {
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
-          setSessionTaskAllowlist(sessionId, expertIds);
+          const { projectAgentRuntimeName } = await import("../teams/agents-sync");
+          setSessionTaskAllowlist(
+            sessionId,
+            args.projectPath
+              ? expertIds.map((id) => projectAgentRuntimeName(args.projectPath!, id))
+              : expertIds,
+          );
         } else {
           clearSessionTaskAllowlist(sessionId);
         }
@@ -527,19 +553,6 @@ export function registerChatHandlers(): void {
       const effortForSend = validatedEffort;
 
       const sessionAgent = resolveSessionAgent(args.sessionAgent);
-      // Plan wins over orchestrator for ACP agent key
-      if (sessionAgent === "plan") {
-        await service.applySessionAgent(sessionId, "plan");
-      } else if (orchestratorId) {
-        await service.applySessionAgent(sessionId, "build");
-        try {
-          await service.setConfigOption(sessionId, "agent", orchestratorId);
-        } catch (err: any) {
-          log.debug(`setConfigOption agent orchestrator failed: ${err.message}`);
-        }
-      } else {
-        await service.applySessionAgent(sessionId, "build");
-      }
 
       const citationsAppendix = buildSessionCitationsTurnAppendix(sessionId);
       const citeAuditAppendix = buildSessionCiteAuditTurnAppendix(sessionId);
@@ -614,8 +627,35 @@ export function registerChatHandlers(): void {
       // task-link-timeout can abort this new prompt with opaque "Task cancelled".
       // Unlinked Tasks from a prior turn → structured superseded (not opaque cancel).
       getMapper(win).clearPendingTasksForTab(tabId);
-      if (!isFirstTurn && args.projectPath) {
+      // Hydrate BEFORE mode switch — prewarm may have restarted OpenCode and
+      // dropped in-memory sessions. OpenCode 1.18 switches agents via configId
+      // "mode" (not "agent"); modes are agent file bases (notes-lead, …).
+      if (args.projectPath) {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
+      }
+      if (sessionAgent === "plan") {
+        await service.applySessionAgent(sessionId, "plan");
+      } else if (orchestratorId) {
+        service.setSessionAgent(sessionId, "build");
+        try {
+          const modeId = args.projectPath
+            ? (await import("../teams/agents-sync")).projectAgentRuntimeName(args.projectPath, orchestratorId)
+            : orchestratorId;
+          await service.applySessionMode(sessionId, modeId);
+          log.info("chat:send OpenCode mode set", {
+            tabId,
+            sessionId,
+            mode: modeId,
+            teamLead: orchestratorId,
+          });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn(`chat:send setConfigOption mode=${orchestratorId} failed: ${message}`);
+          // Last resort: built-in build mode (not the team lead).
+          await service.applySessionAgent(sessionId, "build");
+        }
+      } else {
+        await service.applySessionAgent(sessionId, "build");
       }
       if (args.projectPath && sessionId) {
         const wantsMcp = (mcpServerAllowlist?.length ?? 0) > 0;
@@ -1421,7 +1461,7 @@ export function registerChatHandlers(): void {
     "chat:prewarm",
     async (_event, args: { projectPath?: string }) => {
       try {
-        await ensureConnected();
+        await ensureConnected(getService());
         if (args.projectPath) {
           const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
           await ensureProjectChatPrewarm(args.projectPath);
@@ -1471,7 +1511,7 @@ export function registerChatHandlers(): void {
     "chat:ensureAgent",
     async (_event, args?: { projectPath?: string }) => {
       try {
-        await ensureConnected();
+        await ensureConnected(getService());
         if (args?.projectPath) {
           const {
             ensureProjectChatPrewarm,
@@ -1641,7 +1681,7 @@ export function registerChatHandlers(): void {
     ) => {
       const service = getService();
       try {
-        await ensureConnected();
+        await ensureConnected(getService());
       } catch (err: any) {
         throw new Error(`Cannot truncate session: OpenCode is not available — ${err.message}`);
       }

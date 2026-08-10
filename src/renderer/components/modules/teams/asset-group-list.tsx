@@ -10,7 +10,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import type { AssetViewV2 } from "@shared/teams/view";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
+import { CORE_TEAM_ID } from "@shared/teams/types";
 import {
   SETTINGS_CARD as CARD,
   SETTINGS_ROW as ROW,
@@ -74,7 +74,7 @@ export function AssetGroupList({
       map.set(key, entry);
     }
     const rank = (g: Group) =>
-      g.teamId === CORE_TEAM_ID ? 0 : g.scope === "project" || g.teamId === LOCAL_TEAM_ID ? 2 : 1;
+      g.teamId === CORE_TEAM_ID ? 0 : g.scope === "project" ? 2 : 1;
     return [...map.values()].sort(
       (a, b) => rank(a) - rank(b) || a.teamName.localeCompare(b.teamName),
     );

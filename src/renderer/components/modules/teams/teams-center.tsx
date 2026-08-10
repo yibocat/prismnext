@@ -19,6 +19,7 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
+import { useChatStore } from "@/stores/chat-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,7 +132,10 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
             onClick: () => {
               void window.electronAPI
                 .teamsSetActiveTeam(projectRoot, suggestedActiveTeam, "project")
-                .then(() => toast.success(t("teamsCenter.suggestion.done")));
+                .then(() => {
+                  useChatStore.getState().clearSessionTeamOverrides();
+                  toast.success(t("teamsCenter.suggestion.done"));
+                });
             },
           },
         });

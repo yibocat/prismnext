@@ -1,4 +1,5 @@
 /** OpenCode-compatible MCP server entry (stored under mcpServers in mcp.json). */
+import type { McpServerDef } from "@shared/teams/types";
 
 export type McpServerType = "local" | "remote";
 
@@ -104,6 +105,72 @@ export function serializeMcpConfig(servers: McpServerEntry[]): string {
     mcpServers[key] = entryToRaw(entry);
   }
   return JSON.stringify({ mcpServers }, null, 2);
+}
+
+/** Parse the v2 Team mcp.json array used by project.local and Team assets. */
+export function parseTeamMcpConfig(content: string): McpServerEntry[] {
+  if (!content.trim()) return [];
+  const parsed = JSON.parse(content);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.flatMap((raw): McpServerEntry[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const server = raw as McpServerDef;
+    if (!server.id || !server.name || !server.transport) return [];
+    if (server.transport.type === "stdio") {
+      return [{
+        name: server.id,
+        type: "local",
+        enabled: true,
+        command: [server.transport.command, ...(server.transport.args ?? [])],
+        environment: { ...(server.transport.env ?? {}) },
+        url: "",
+        headers: {},
+      }];
+    }
+    return [{
+      name: server.id,
+      type: "remote",
+      enabled: true,
+      command: [],
+      environment: {},
+      url: server.transport.url,
+      headers: { ...(server.transport.headers ?? {}) },
+    }];
+  });
+}
+
+/** Serialize UI entries into the v2 McpServerDef[] Team schema. */
+export function serializeTeamMcpConfig(servers: McpServerEntry[]): string {
+  const out: McpServerDef[] = [];
+  for (const entry of servers) {
+    const id = entry.name.trim();
+    if (!id) continue;
+    if (entry.type === "local") {
+      const [command, ...args] = entry.command;
+      if (!command) continue;
+      out.push({
+        id,
+        name: id,
+        transport: {
+          type: "stdio",
+          command,
+          ...(args.length ? { args } : {}),
+          ...(Object.keys(entry.environment).length ? { env: entry.environment } : {}),
+        },
+      });
+    } else if (entry.url.trim()) {
+      out.push({
+        id,
+        name: id,
+        transport: {
+          type: "http",
+          url: entry.url.trim(),
+          ...(Object.keys(entry.headers).length ? { headers: entry.headers } : {}),
+        },
+      });
+    }
+  }
+  return `${JSON.stringify(out, null, 2)}\n`;
 }
 
 export function createEmptyMcpServer(name = ""): McpServerEntry {

@@ -35,6 +35,37 @@ function statePath(projectRoot: string): string {
   return join(projectRoot, PROJECT_TEAMS_STATE_REL);
 }
 
+/** M10 also applies to a v2 state file written before the physical M8 move. */
+function rewriteLegacyProjectLocalIdentity(state: ProjectTeamsState): ProjectTeamsState {
+  const rewriteFqid = (fqid: string): string =>
+    fqid.startsWith(`${LOCAL_TEAM_ID}:`)
+      ? `${PROJECT_DEFAULT_TEAM_ID}:${fqid.slice(LOCAL_TEAM_ID.length + 1)}`
+      : fqid;
+  const rewriteTeamId = (teamId: string): string =>
+    teamId === LOCAL_TEAM_ID ? PROJECT_DEFAULT_TEAM_ID : teamId;
+  const rewriteRecord = <T>(record: Record<string, T>): Record<string, T> =>
+    Object.fromEntries(Object.entries(record).map(([key, value]) => [rewriteFqid(key), value]));
+
+  const rewritten: ProjectTeamsState = {
+    ...state,
+    defaultTeam: state.defaultTeam ? rewriteTeamId(state.defaultTeam) : undefined,
+    teamEnabled: Object.fromEntries(
+      Object.entries(state.teamEnabled).map(([teamId, value]) => [rewriteTeamId(teamId), value]),
+    ),
+    assetEnabled: rewriteRecord(state.assetEnabled),
+    assetOverrides: rewriteRecord(state.assetOverrides),
+  };
+
+  return rewritten;
+}
+
+function hasLegacyProjectLocalIdentity(state: ProjectTeamsState): boolean {
+  return state.defaultTeam === LOCAL_TEAM_ID
+    || LOCAL_TEAM_ID in state.teamEnabled
+    || Object.keys(state.assetEnabled).some((fqid) => fqid.startsWith(`${LOCAL_TEAM_ID}:`))
+    || Object.keys(state.assetOverrides).some((fqid) => fqid.startsWith(`${LOCAL_TEAM_ID}:`));
+}
+
 /**
  * T6 one-shot migration: convert the legacy packs.json (stateVersion 3) to
  * the new teams.json (version 1) and write it to disk. This runs once —
@@ -99,10 +130,32 @@ export function readProjectTeamsState(projectRoot: string): ProjectTeamsState {
   const path = statePath(projectRoot);
   if (existsSync(path)) {
     try {
-      return normalizeProjectTeamsState(JSON.parse(readFileSync(path, "utf-8")));
+      const state = normalizeProjectTeamsState(JSON.parse(readFileSync(path, "utf-8")));
+      if (!hasLegacyProjectLocalIdentity(state)) return state;
+      const rewritten = rewriteLegacyProjectLocalIdentity(state);
+      writeProjectTeamsState(projectRoot, rewritten);
+      log.info("M10: existing teams.json user.local identities rewritten", { projectRoot });
+      return rewritten;
     } catch (err) {
-      log.error("teams.json corrupt, falling back to empty", { projectRoot, error: String(err) });
-      return emptyProjectTeamsState();
+      const empty = emptyProjectTeamsState();
+      const backup = `${path}.corrupted.${Date.now()}`;
+      try {
+        renameSync(path, backup);
+        writeProjectTeamsState(projectRoot, empty);
+        log.error("teams.json corrupt; backed up and reset", {
+          projectRoot,
+          error: String(err),
+          backup,
+        });
+      } catch (backupErr) {
+        // Never overwrite an unreadable state file unless its backup succeeded.
+        log.error("teams.json corrupt; backup failed", {
+          projectRoot,
+          error: String(err),
+          backupError: String(backupErr),
+        });
+      }
+      return empty;
     }
   }
 

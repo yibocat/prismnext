@@ -34,7 +34,7 @@ import {
   type ProjectTeamState,
 } from "../../shared/teams/types";
 import { emptyPacksState, fqidBelongsToPack, normalizePacksState } from "../../shared/teams/state";
-import { getTeam } from "./team-catalog";
+import { getTeamRecord } from "../teams/catalog";
 import { createLogger } from "./logger";
 import { upsertInstalledTeams } from "./teams-installed";
 
@@ -723,7 +723,7 @@ export function migrateLegacyAgentState(projectRoot: string, state: TeamsProject
 function listCorePackSkills(): Map<string, string> {
   const out = new Map<string, string>();
   try {
-    const core = getTeam(CORE_TEAM_ID);
+    const core = getTeamRecord(CORE_TEAM_ID);
     if (!core) return out;
     const skillsRoot = join(core.dir, "skills");
     if (!existsSync(skillsRoot)) return out;
@@ -843,204 +843,13 @@ export function readTeamsState(projectRoot: string): TeamsProjectState {
   return migrateTeamsStateIfNeeded(projectRoot).state;
 }
 
-/** 原子写：先写 tmp 再 rename，避免半截文件。 */
+/** 原子写：先写 tmp 再 rename，避免半截文件。仅用于一次性迁移。 */
 export function writeTeamsState(projectRoot: string, state: TeamsProjectState): void {
   const path = statePath(projectRoot);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, "utf-8");
   renameSync(tmp, path);
-  writeCounter += 1;
-  for (const listener of writeListeners) {
-    try {
-      listener(projectRoot);
-    } catch {
-      // 监听器异常不阻断状态写
-    }
-  }
-}
-
-/** packs.json 的 mtime（resolver 缓存键的一部分）；不存在返回 0 */
-export function teamsStateMtime(projectRoot: string): number {
-  try {
-    const path = statePath(projectRoot);
-    if (!existsSync(path)) return 0;
-    return statSync(path).mtimeMs;
-  } catch {
-    return 0;
-  }
-}
-
-// ── 写入通知（§5.5：pack-resolver 订阅以使视图失效）──────────
-
-type PacksStateWriteListener = (projectRoot: string) => void;
-const writeListeners = new Set<PacksStateWriteListener>();
-
-export function onTeamsStateWritten(listener: PacksStateWriteListener): {
-  dispose: () => void;
-} {
-  writeListeners.add(listener);
-  return { dispose: () => writeListeners.delete(listener) };
-}
-
-/**
- * 进程内单调写入计数（resolver 缓存键的一部分）：
- * 同一毫秒内连续写入时 mtime 可能不变，计数器保证进程内写立即失效缓存。
- * 跨进程写仍由 mtime 兜底（v1 单写者，见设计文档 O-2）。
- */
-let writeCounter = 0;
-
-export function teamsStateWriteCounter(): number {
-  return writeCounter;
-}
-
-// ── §6.2 状态操作（layering spec：项目级只存启停覆盖）────────
-
-/**
- * 项目启停：写 projectPackStates[teamId] = { enabled }。
- * enabled=true 且无现有记录 → 删键（缺省 = 自动启用，不落冗余记录）。
- * enabled=false → 写记录（显式停用）。
- */
-export function setTeamEnabled(
-  projectRoot: string,
-  teamId: string,
-  enabled: boolean,
-): ProjectTeamState | null {
-  const state = readTeamsState(projectRoot);
-  const states = { ...state.projectPackStates };
-  if (enabled) {
-    if (teamId in states) delete states[teamId];
-  } else {
-    states[teamId] = { enabled: false };
-  }
-  writeTeamsState(projectRoot, { ...state, projectPackStates: states });
-  return states[teamId] ?? null;
-}
-
-/**
- * 项目启停覆盖读取：无记录 → null（即「缺省自动启用」）。
- */
-export function getTeamProjectState(
-  projectRoot: string,
-  teamId: string,
-): ProjectTeamState | null {
-  return readTeamsState(projectRoot).projectPackStates[teamId] ?? null;
-}
-
-/**
- * uninstall 的项目侧清理：移除 projectPackStates 覆盖 + 惰性修剪该 pack 的
- * disabledContent / contentOverrides；defaultOrchestrator 指向该 pack 时回退
- * core 默认。零文件删除（引用模型）。应用级卸载由 packs-installed 负责。
- */
-export function removeTeamProjectState(projectRoot: string, teamId: string): TeamsProjectState {
-  const state = readTeamsState(projectRoot);
-  const states = { ...state.projectPackStates };
-  delete states[teamId];
-  const next: TeamsProjectState = {
-    ...state,
-    projectPackStates: states,
-    disabledContent: state.disabledContent.filter((f) => !fqidBelongsToPack(f, teamId)),
-    contentOverrides: Object.fromEntries(
-      Object.entries(state.contentOverrides).filter(([f]) => !fqidBelongsToPack(f, teamId)),
-    ),
-    defaultOrchestrator:
-      state.defaultOrchestrator && fqidBelongsToPack(state.defaultOrchestrator, teamId)
-        ? DEFAULT_ORCHESTRATOR_FQID
-        : state.defaultOrchestrator,
-  };
-  writeTeamsState(projectRoot, next);
-  return next;
-}
-
-/** 逐项禁用/启用（disabledContent 增删，幂等）。 */
-export function setAssetDisabled(
-  projectRoot: string,
-  fqid: Fqid,
-  disabled: boolean,
-): TeamsProjectState {
-  const state = readTeamsState(projectRoot);
-  const set = new Set(state.disabledContent);
-  if (disabled) set.add(fqid);
-  else set.delete(fqid);
-  const next = { ...state, disabledContent: [...set].sort() };
-  writeTeamsState(projectRoot, next);
-  return next;
-}
-
-/** 写 override（增量合并）；patch 为空对象 → 删除该键。 */
-export function saveAssetOverride(
-  projectRoot: string,
-  fqid: Fqid,
-  patch: AssetOverride,
-): TeamsProjectState {
-  const state = readTeamsState(projectRoot);
-  const overrides = { ...state.contentOverrides };
-  const merged: AssetOverride = { ...(overrides[fqid] ?? {}) };
-  for (const [key, value] of Object.entries(patch)) {
-    if (value === undefined) {
-      delete (merged as Record<string, unknown>)[key];
-    } else {
-      (merged as Record<string, unknown>)[key] = value;
-    }
-  }
-  if (Object.keys(merged).length > 0) overrides[fqid] = merged;
-  else delete overrides[fqid];
-  const next = { ...state, contentOverrides: overrides };
-  writeTeamsState(projectRoot, next);
-  return next;
-}
-
-/** 设置默认 orchestrator（FQID）。 */
-export function setDefaultOrchestratorFqid(projectRoot: string, fqid: Fqid): TeamsProjectState {
-  const state = readTeamsState(projectRoot);
-  const next = { ...state, defaultOrchestrator: fqid };
-  writeTeamsState(projectRoot, next);
-  return next;
-}
-
-// ── core 内容的状态查询与重置（Phase 6：取代旧 builtin manifest 契约）──
-//
-// FQID (`teamId:contentId`) does not encode content kind, so kind filtering
-// must consult the resolver view (listAssets). packs-state stays storage-only
-// and does NOT import the resolver to avoid a circular dependency; these two
-// helpers take the list of matching FQIDs as an argument.
-
-/** Count disabled/overridden entries from the given core FQID set. */
-export function getCoreAssetModificationState(
-  projectRoot: string,
-  coreFqids: readonly Fqid[],
-): { disabledCount: number; overrideCount: number } {
-  const state = readTeamsState(projectRoot);
-  const disabled = new Set(state.disabledContent);
-  const overridden = new Set(Object.keys(state.contentOverrides));
-  let disabledCount = 0;
-  let overrideCount = 0;
-  for (const fqid of coreFqids) {
-    if (disabled.has(fqid)) disabledCount += 1;
-    if (overridden.has(fqid)) overrideCount += 1;
-  }
-  return { disabledCount, overrideCount };
-}
-
-/**
- * Clear disabledContent entries and contentOverrides for the given core FQID
- * set (factory reset). Replaces the legacy `resetAllBuiltinExpertsToDefaults`.
- */
-export function resetCoreAssetsToDefaults(
-  projectRoot: string,
-  coreFqids: readonly Fqid[],
-): TeamsProjectState {
-  const state = readTeamsState(projectRoot);
-  const targets = new Set(coreFqids);
-  const next = {
-    ...state,
-    disabledContent: state.disabledContent.filter((fqid) => !targets.has(fqid)),
-    contentOverrides: Object.fromEntries(
-      Object.entries(state.contentOverrides).filter(([fqid]) => !targets.has(fqid)),
-    ),
-  };
-  writeTeamsState(projectRoot, next);
-  return next;
 }
 
 // ── legacy-backup 清理（spec §11 Phase 6）────────────────────────────

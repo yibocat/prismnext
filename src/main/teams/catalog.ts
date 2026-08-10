@@ -33,6 +33,7 @@ import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, PROJECT_DEFAULT_TEAM_ID } 
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
 import { createLogger } from "../services/logger";
 import { appTeamsDir, projectTeamsDir } from "./scope";
+import { ensureProjectContentMigrated } from "./migrate-project-content";
 
 const log = createLogger("teams-catalog");
 
@@ -498,10 +499,7 @@ function computeFingerprint(projectRoots: string[]): string {
       parts.push(teamDirFingerprint(join(root, entry.name)));
     }
   }
-  // The legacy Local Pack fallback dir (.prismnext/agent/local/) is part of the
-  // fingerprint too — its content feeds the project.default team, and it does
-  // NOT live under teams/, so without this two projects would share a stale
-  // catalog cache entry.
+  // Pre-M8 fallback dir still fingerprints until physically moved.
   for (const projectRoot of projectRoots) {
     parts.push(`local:${teamDirFingerprint(join(projectRoot, LOCAL_TEAM_REL))}`);
   }
@@ -509,17 +507,32 @@ function computeFingerprint(projectRoots: string[]): string {
 }
 
 function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
+  for (const projectRoot of projectRoots) {
+    try {
+      ensureProjectContentMigrated(projectRoot);
+    } catch (err) {
+      log.error("M8/M11 project content migration failed", {
+        projectRoot,
+        error: String(err),
+      });
+    }
+  }
+
   const teams: TeamRecord[] = [];
   const byId = new Map<string, TeamRecord>();
 
   const roots: Array<{ dir: string; scope: TeamScope; source: TeamSource; writable: boolean }> = [
     { dir: getBundledTeamsDir(), scope: "app", source: "bundled", writable: false },
-    ...listExternalTeamRoots().map((dir) => ({
-      dir,
-      scope: "app" as const,
-      source: getExternalTeamRootSource(dir),
-      writable: false,
-    })),
+    ...listExternalTeamRoots().map((dir) => {
+      const source = getExternalTeamRootSource(dir);
+      return {
+        dir,
+        scope: "app" as const,
+        source,
+        // user-packs / user-created roots are writable; pro/registry roots are not.
+        writable: source === "user",
+      };
+    }),
     { dir: appTeamsDir(), scope: "app", source: "user", writable: true },
     ...projectRoots.map((r) => ({
       dir: projectTeamsDir(r),
@@ -548,15 +561,13 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
     }
   }
 
-  // Read-time fallback (T0 froze the disk format; T6 migrates it): a project's
-  // legacy Local Pack at .prismnext/agent/local/ is surfaced as a project team.
-  // The teamId stays LOCAL_TEAM_ID ("user.local") so FQID prefixes don't split
-  // from the legacy packs.json state; the project.local rename is T6 (M10).
+  // Pre-M8 safety net: if migration could not move local/, surface it as
+  // project.local (M10 id). Prefer the real teams/project.local/ when present.
   for (const projectRoot of projectRoots) {
-    if (byId.has(LOCAL_TEAM_ID)) continue;
+    if (byId.has(PROJECT_DEFAULT_TEAM_ID) || byId.has(LOCAL_TEAM_ID)) continue;
     const legacyLocal = join(projectRoot, LOCAL_TEAM_REL);
     if (!existsSync(legacyLocal)) continue;
-    const team = scanTeam(legacyLocal, "project", "user", true, LOCAL_TEAM_ID);
+    const team = scanTeam(legacyLocal, "project", "user", true, PROJECT_DEFAULT_TEAM_ID);
     if (team) {
       teams.push(team);
       byId.set(team.manifest.id, team);

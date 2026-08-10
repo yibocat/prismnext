@@ -3,8 +3,6 @@
 // external pack root — the catalog / resolver treat them like installed packs.
 import { ipcMain } from "electron";
 import {
-  createUserTeam,
-  deleteUserTeam,
   ensureUserTeamsRegistered,
   listUserTeams,
 } from "../services/user-teams";
@@ -18,12 +16,12 @@ export function registerUserPacksHandlers(): void {
 
   ipcMain.handle(
     "teams:createUserTeam",
-    async (_event, args: { name: string; description?: string }) => {
-      return createUserTeam(args.name ?? "", args.description ?? "");
+    async () => {
+      throw new Error("Legacy user-packs creation is retired; use teams:create.");
     },
   );
 
-  ipcMain.handle("teams:deleteUserTeam", async (_event, args: { teamId: string }) => {
-    deleteUserTeam(args.teamId);
+  ipcMain.handle("teams:deleteUserTeam", async () => {
+    throw new Error("Legacy user-packs deletion is retired; use teams:delete.");
   });
 }

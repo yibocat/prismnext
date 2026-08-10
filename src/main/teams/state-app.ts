@@ -69,8 +69,23 @@ export function readAppTeamsState(): AppTeamsState {
     try {
       return normalizeAppTeamsState(JSON.parse(readFileSync(path, "utf-8")));
     } catch (err) {
-      log.error("teams-state.json corrupt, falling back to empty", { error: String(err) });
-      return emptyAppTeamsState();
+      const empty = emptyAppTeamsState();
+      const backup = `${path}.corrupted.${Date.now()}`;
+      try {
+        renameSync(path, backup);
+        writeAppTeamsState(empty);
+        log.error("teams-state.json corrupt; backed up and reset", {
+          error: String(err),
+          backup,
+        });
+      } catch (backupErr) {
+        // Never overwrite an unreadable state file unless its backup succeeded.
+        log.error("teams-state.json corrupt; backup failed", {
+          error: String(err),
+          backupError: String(backupErr),
+        });
+      }
+      return empty;
     }
   }
 

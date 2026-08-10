@@ -10,7 +10,7 @@
 import { create } from "zustand";
 import type { Fqid } from "@shared/teams/types";
 import type { AssetViewV2, TeamViewV2 } from "@shared/teams/view";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID } from "@shared/teams/types";
+import { CORE_TEAM_ID } from "@shared/teams/types";
 
 /**
  * TeamViewV2 + legacy display fields the pre-T5 UI still reads.
@@ -30,7 +30,7 @@ export function toCardView(t: TeamViewV2): TeamCardView {
   const kind: TeamCardView["kind"] =
     t.manifest.id === CORE_TEAM_ID
       ? "core"
-      : t.scope === "project" || t.manifest.id === LOCAL_TEAM_ID
+      : t.scope === "project"
         ? "local"
         : t.source === "bundled"
           ? "firstparty"

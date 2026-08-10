@@ -52,7 +52,7 @@ export async function refreshProjectSkillsIntegration(
 ): Promise<RefreshProjectSkillsResult> {
   const root = normalizeProjectRoot(projectPath);
   const result = syncProjectSkillsIntegration(projectPath);
-  const acp = AcpService.getInstance();
+  const acp = AcpService.getInstanceForProject(root);
   const { configPath, changed: configChanged } = acp.applyProjectSkillsIntegration(projectPath, {
     skillsPaths: result.skillsPaths,
     skillPermissions: result.skillPermissions,
@@ -72,7 +72,7 @@ export async function refreshProjectSkillsIntegrationIfNeeded(
   const key = computeSkillsIntegrationKey(projectPath);
   if (lastAppliedSkillsKey.get(root) === key) {
     const result = syncProjectSkillsIntegration(projectPath);
-    const acp = AcpService.getInstance();
+    const acp = AcpService.getInstanceForProject(root);
     acp.prewarmProject(projectPath);
     return {
       ...result,
@@ -89,7 +89,7 @@ export async function refreshProjectSkillsIntegrationWithReload(
   projectPath: string,
 ): Promise<RefreshProjectSkillsResult> {
   const result = await refreshProjectSkillsIntegrationIfNeeded(projectPath);
-  const acp = AcpService.getInstance();
+  const acp = AcpService.getInstanceForProject(normalizeProjectRoot(projectPath));
   if (!result.skipped && result.configChanged && acp.getConnection()) {
     await acp.reloadAfterSkillsIntegration();
   }
@@ -124,6 +124,7 @@ export function isSkillsIntegrationPath(absPath: string, projectRoot: string): b
   const root = projectRoot.replace(/\\/g, "/");
   return (
     normalized.includes(`${root}/.prismnext/agent/local/`)
+    || normalized.includes(`${root}/.prismnext/agent/teams/project.local/`)
     || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
     || normalized.includes(`${root}/.prismnext/agent/experts/`)
     || normalized.endsWith(`${root}/.prismnext/agent/experts-manifest.json`)

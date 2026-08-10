@@ -55,31 +55,9 @@ interface UnifiedMcpEntry {
  */
 function listUnifiedMcpServers(projectRoot: string): UnifiedMcpEntry[] {
   const out: UnifiedMcpEntry[] = [];
-  const seen = new Set<string>();
-
-  // Project mcp.json (object-map schema) first — highest precedence.
-  const mcpPath = join(projectRoot, ".prismnext", "agent", "mcp.json");
-  if (existsSync(mcpPath)) {
-    try {
-      const config = JSON.parse(readFileSync(mcpPath, "utf-8")) as {
-        mcpServers?: Record<string, { enabled?: boolean }>;
-      };
-      for (const [name, raw] of Object.entries(config.mcpServers ?? {})) {
-        if (seen.has(name)) continue;
-        seen.add(name);
-        out.push({ name, enabled: raw.enabled !== false, origin: "project", autoStart: false });
-      }
-    } catch {
-      // Corrupt project mcp.json → skip project entries, teams still merge.
-    }
-  }
-
-  // Team-provided MCP servers (TeamResolver, enabled only).
   for (const asset of listMcpServers(projectRoot)) {
-    if (!asset.enabled) continue;
+    if (!asset.enabled || asset.blockedBy) continue;
     const def = asset.definition as { name: string; autoStart?: boolean };
-    if (seen.has(def.name)) continue;
-    seen.add(def.name);
     out.push({
       name: def.name,
       enabled: true,

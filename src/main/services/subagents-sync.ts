@@ -1,24 +1,13 @@
 /**
- * experts-sync.ts —— orchestrators / experts 的 legacy facade（Phase 2 重写）。
+ * subagents-sync —— orchestrators / experts 的 legacy facade（IPC / 渲染契约）。
  *
- * 内容来源与启停判定已全部交给 Agent Pack 体系：
- *   - core 内容 = `resources/teams/prismnext.core/`（PackCatalog 扫描）
- *   - 用户自建内容 = Local Pack `.prismnext/agent/local/`
- *   - 启停 / override / 默认 orchestrator = packs.json（packs-state.ts）
- *   - 「有什么、是否可用」唯一答案 = pack-resolver.ts
+ * 判定与内容列表一律走 Teams v2：`teams/resolver`（teams.json / teams-state.json）。
+ * 本文件不再导入旧 `team-resolver`；聊天默认 lead 经 `resolveChatOrchestrator`。
  *
- * 本文件保留重构前的对外契约（IPC / chat / stack-preview / 渲染引擎），
- * 内部全部改为 resolver 驱动：
- *   - SubagentInfo/OrchestratorInfo 形状不变（id 仍为裸 id；新增 fqid 字段）
- *   - agent.md 渲染逻辑逐字节不变（golden 验收：tests/main/agent-plan-golden）
- *   - 文件名规则：core/local 用裸 id（opencode 侧稳定），其余 pack 用
- *     `<teamId>--<id>`（§4.5.2）
- *   - 裸 id 命名空间冲突时按 local > external > firstparty > core 遮蔽
- *     （对齐旧 merge 语义：custom 覆盖 bundled）
- *
- * 已删除：experts/orchestrators manifest 文件读写（→ packs.json 适配器）、
- * bundled-experts/bundled-orchestrators loader、merge/applyOverride 拼贴、
- * listDisabledBuiltinExperts / expertsManifestModified（无消费方）。
+ * 对外契约保持：
+ *   - SubagentInfo / OrchestratorInfo（id = runtimeName；含 fqid）
+ *   - agent.md 渲染（golden：tests/main/agent-plan-golden）
+ *   - CRUD 写 project.local / user teams 目录（M8 后 teams/project.local/）
  */
 
 import { app } from "electron";
@@ -53,29 +42,31 @@ import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 import {
   CORE_TEAM_ID,
-  DEFAULT_ORCHESTRATOR_FQID,
-  LOCAL_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
   type SubagentDef,
   type Fqid,
   type OrchestratorDef,
-  type AssetView,
+  type AssetKind,
 } from "../../shared/teams/types";
 import { parseFqid, toFqid } from "../../shared/teams/state";
 import {
   getAsset,
   listAssets,
   readInstructions,
-  resolveRosterRefs,
-  resolveBareContentId,
-  resolveOrchestratorId as resolverResolveOrchestratorId,
+  resolveChatOrchestrator,
+  resolveRef,
+  resolveInvocation,
+  resolveRoster,
   invalidateResolver,
-} from "./team-resolver";
-import {
-  readTeamsState,
-  setDefaultOrchestratorFqid,
-} from "./teams-state";
-import { getLocalTeamDir, invalidateCatalog } from "./team-catalog";
-import { listUserTeams } from "./user-teams";
+} from "../teams/resolver";
+import type { AssetViewV2 } from "../../shared/teams/view";
+import { getTeamRecord, invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
+import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
+import { setActiveTeam } from "../teams/lifecycle";
+import { readProjectTeamsState } from "../teams/state-project";
+import { createLogger } from "./logger";
+
+const log = createLogger("subagents-sync", "agent");
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 
@@ -83,40 +74,12 @@ export const PRISM_EXPERTS_SYNC_REL = "prism-experts-sync.json";
 
 // ── 裸 id / 文件名命名空间 ─────────────────────────────────
 
-/** pack 遮蔽优先级：数字小者胜（local 最强，core 兜底）。 */
-function packShadowRank(teamId: string): number {
-  if (teamId === LOCAL_TEAM_ID) return 0;
-  if (teamId === CORE_TEAM_ID) return 3;
-  return 1; // firstparty / external
+/** OpenCode agent 文件名基 = v2 runtimeName。 */
+function agentFileBase(content: AssetViewV2): string {
+  return content.runtimeName;
 }
 
-/**
- * opencode agent 文件名基（§4.5.2）：core/local 用裸 id（与旧布局逐字节一致），
- * 其余 pack 用 `<teamId>--<id>` 防冲突。
- */
-function agentFileBase(content: AssetView): string {
-  return content.teamId === CORE_TEAM_ID || content.teamId === LOCAL_TEAM_ID
-    ? content.id
-    : `${content.teamId}--${content.id}`;
-}
-
-/**
- * 按裸 id 分组取遮蔽胜者（旧 mergeExpertDefinitions 的 Map 覆盖语义：
- * custom 覆盖 bundled —— 现在推广为 local > external/firstparty > core）。
- */
-function shadowWinners(items: AssetView[]): AssetView[] {
-  const byBare = new Map<string, AssetView>();
-  for (const item of items) {
-    const key = agentFileBase(item);
-    const prev = byBare.get(key);
-    if (!prev || packShadowRank(item.teamId) < packShadowRank(prev.teamId)) {
-      byBare.set(key, item);
-    }
-  }
-  return [...byBare.values()];
-}
-
-// ── AssetView → legacy Info 视图 ─────────────────────
+// ── AssetViewV2 → legacy Info 视图 ─────────────────────
 
 function instructionsPreview(text: string, max = 120): string {
   const oneLine = text.replace(/\s+/g, " ").trim();
@@ -124,7 +87,7 @@ function instructionsPreview(text: string, max = 120): string {
   return `${oneLine.slice(0, max)}…`;
 }
 
-function toExpertInfo(projectRoot: string, content: AssetView): SubagentInfo {
+function toExpertInfo(projectRoot: string, content: AssetViewV2): SubagentInfo {
   const def = content.definition as SubagentDef;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveActiveModuleKeys({
@@ -134,10 +97,10 @@ function toExpertInfo(projectRoot: string, content: AssetView): SubagentInfo {
   return {
     id: agentFileBase(content),
     fqid: content.fqid,
-    name: def.name,
-    description: def.description,
+    name: def.name ?? content.name,
+    description: def.description ?? content.description,
     builtin: content.teamId === CORE_TEAM_ID,
-    removable: content.removable,
+    removable: content.editable,
     model: def.model,
     thoughtLevel: def.thoughtLevel,
     temperature: def.temperature,
@@ -154,7 +117,7 @@ function toExpertInfo(projectRoot: string, content: AssetView): SubagentInfo {
  * - 定义了 roster 的 → 按启用 expert 过滤后的【文件名基】列表
  * - 未定义的 → undefined（UI 显示「标准编排」，plan 视为全部启用 experts）
  */
-function toOrchestratorInfo(projectRoot: string, content: AssetView): OrchestratorInfo {
+function toOrchestratorInfo(projectRoot: string, content: AssetViewV2): OrchestratorInfo {
   const def = content.definition as OrchestratorDef;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveOrchestratorActiveModuleKeys();
@@ -165,11 +128,10 @@ function toOrchestratorInfo(projectRoot: string, content: AssetView): Orchestrat
   return {
     id: agentFileBase(content),
     fqid: content.fqid,
-    name: def.name,
-    description: def.description,
+    name: def.name ?? content.name,
+    description: def.description ?? content.description,
     builtin: content.teamId === CORE_TEAM_ID,
-    // 旧版视图语义：core orchestrator 不带 removable 键；仅 local（可删除）为 true
-    ...(content.removable ? { removable: true } : {}),
+    ...(content.editable ? { removable: true } : {}),
     model: def.model,
     thoughtLevel: def.thoughtLevel,
     temperature: def.temperature,
@@ -182,71 +144,124 @@ function toOrchestratorInfo(projectRoot: string, content: AssetView): Orchestrat
 }
 
 export function listSubagents(projectRoot: string): SubagentInfo[] {
-  const winners = shadowWinners(listAssets(projectRoot, "subagent"));
-  return winners.map((c) => toExpertInfo(projectRoot, c));
+  return listAssets(projectRoot, "subagent").map((c) => toExpertInfo(projectRoot, c));
 }
 
 export function listOrchestrators(projectRoot: string): OrchestratorInfo[] {
-  const winners = shadowWinners(listAssets(projectRoot, "orchestrator"));
-  return winners.map((c) => toOrchestratorInfo(projectRoot, c));
+  return listAssets(projectRoot, "orchestrator").map((c) => toOrchestratorInfo(projectRoot, c));
 }
 
-/** 裸 id 或 FQID → expert。 */
+/** Match legacy Info.id (runtimeName), fqid, bare content id. */
+function matchAgentInfoId(
+  id: string,
+  info: { id: string; fqid?: string },
+): boolean {
+  if (info.id === id || info.fqid === id) return true;
+  const parsed = info.fqid ? parseFqid(info.fqid) : null;
+  if (parsed?.contentId === id) return true;
+  if (info.id.endsWith(`--${id}`)) return true;
+  return false;
+}
+
+function findAsset(
+  projectRoot: string,
+  kind: "orchestrator" | "subagent",
+  ref: string,
+): AssetViewV2 | null {
+  const direct = getAsset(projectRoot, ref);
+  if (direct?.kind === kind) return direct;
+  const byRef = resolveRef(projectRoot, ref, undefined, kind);
+  if (byRef) {
+    const asset = getAsset(projectRoot, byRef);
+    if (asset?.kind === kind) return asset;
+  }
+  const byInvocation = resolveInvocation(projectRoot, kind, ref);
+  if (byInvocation) return byInvocation;
+  return (
+    listAssets(projectRoot, kind).find(
+      (a) =>
+        a.fqid === ref
+        || a.id === ref
+        || a.runtimeName === ref
+        || `${a.teamId}--${a.id}` === ref,
+    ) ?? null
+  );
+}
+
+function resolveBareToFqid(
+  projectRoot: string,
+  kind: AssetKind,
+  bareOrRuntime: string,
+): Fqid | null {
+  return (
+    resolveRef(projectRoot, bareOrRuntime, undefined, kind)
+    ?? resolveInvocation(projectRoot, kind, bareOrRuntime)?.fqid
+    ?? null
+  );
+}
+
+/** 裸 id / FQID / runtimeName → expert（v2 TeamResolver）。 */
 export function getSubagent(projectRoot: string, expertId: string): SubagentInfo | null {
   const id = expertId.trim();
   if (!id) return null;
-  return listSubagents(projectRoot).find((e) => e.id === id || e.fqid === id) ?? null;
+  const asset = findAsset(projectRoot, "subagent", id);
+  if (asset) return toExpertInfo(projectRoot, asset);
+  return listSubagents(projectRoot).find((e) => matchAgentInfoId(id, e)) ?? null;
 }
 
-/** 裸 id 或 FQID → orchestrator。 */
+/** 裸 id / FQID / runtimeName → orchestrator（v2 TeamResolver）。 */
 export function getOrchestrator(
   projectRoot: string,
   orchestratorId: string,
 ): OrchestratorInfo | null {
   const id = orchestratorId.trim();
   if (!id) return null;
-  return listOrchestrators(projectRoot).find((o) => o.id === id || o.fqid === id) ?? null;
+  const asset = findAsset(projectRoot, "orchestrator", id);
+  if (asset) return toOrchestratorInfo(projectRoot, asset);
+  return listOrchestrators(projectRoot).find((o) => matchAgentInfoId(id, o)) ?? null;
 }
 
 /**
- * 解析当前应使用的 orchestrator，返回【文件名基】（core/local = 裸 id）。
- * 链路与旧版一致：tab 指定（须启用）→ 项目默认（须启用）→ core 默认兜底。
+ * 解析当前应使用的 orchestrator，返回【文件名基】（runtimeName）。
+ * 真相：resolveChatOrchestrator（session/tab → project/app defaultTeam → core）。
  */
 export function resolveOrchestratorId(
   projectRoot: string,
   tabOrchestratorId?: string | null,
 ): string {
-  const fqid = resolverResolveOrchestratorId(projectRoot, tabOrchestratorId);
-  const content = getAsset(projectRoot, fqid);
-  return content ? agentFileBase(content) : DEFAULT_ORCHESTRATOR_ID;
+  try {
+    return resolveChatOrchestrator(projectRoot, {
+      orchestratorId: tabOrchestratorId,
+    }).runtimeName;
+  } catch {
+    return DEFAULT_ORCHESTRATOR_ID;
+  }
 }
 
 // ── roster 解析（渲染 / UI 共用）────────────────────
 
 /**
- * orchestrator 实际可用的 expert 引用（文件名基 + 名称 + 描述）：
- * resolver 解析 FQID → 遮蔽胜者 → 仅启用 → 按 spec 顺序去重。
- * spec 未定义时由调用方自行退化为「全部启用 experts」（本函数不处理）。
+ * orchestrator 实际可用的 expert 引用（runtimeName + 名称 + 描述）。
+ * 经 v2 resolveRoster；不可用条目跳过。
  */
 function resolveAllowedRefs(
   projectRoot: string,
   orchestratorFqid: Fqid,
 ): Array<{ id: string; name: string; description: string }> {
-  const winners = shadowWinners(listAssets(projectRoot, "subagent"));
-  const byFqid = new Map(winners.map((c) => [c.fqid, c]));
-  const byBare = new Map(winners.map((c) => [agentFileBase(c), c]));
+  const orch = getAsset(projectRoot, orchestratorFqid);
+  if (!orch) return [];
+  const roster = resolveRoster(projectRoot, orch.teamId);
+  if (!roster) return [];
   const refs: Array<{ id: string; name: string; description: string }> = [];
   const seen = new Set<string>();
-  for (const fqid of resolveRosterRefs(projectRoot, orchestratorFqid)) {
-    // resolver 返回的 FQID 可能被遮蔽（同名 local 内容胜出）→ 映射到胜者
-    const direct = byFqid.get(fqid);
-    const parsed = parseFqid(fqid);
-    const winner = direct ?? (parsed ? byBare.get(parsed.contentId) : undefined);
-    if (!winner || !winner.enabled) continue;
-    const base = agentFileBase(winner);
+  for (const entry of roster.entries) {
+    if (entry.unavailable !== undefined) continue;
+    const asset = getAsset(projectRoot, entry.fqid);
+    if (!asset?.enabled) continue;
+    const base = asset.runtimeName;
     if (seen.has(base)) continue;
     seen.add(base);
-    refs.push({ id: base, name: winner.name, description: winner.description });
+    refs.push({ id: base, name: asset.name, description: asset.description });
   }
   return refs;
 }
@@ -258,8 +273,9 @@ export function readSubagentInstructions(
   expert: SubagentDefinition,
 ): string {
   const fqid =
-    (expert as SubagentInfo).fqid ?? resolveBareContentId(projectRoot, "subagent", expert.id);
-  return fqid ? readInstructions(projectRoot, fqid) : "";
+    (expert as SubagentInfo).fqid ?? resolveBareToFqid(projectRoot, "subagent", expert.id);
+  if (!fqid) return "";
+  return readInstructions(projectRoot, fqid);
 }
 
 export function readOrchestratorInstructions(
@@ -268,8 +284,9 @@ export function readOrchestratorInstructions(
 ): string {
   const fqid =
     (orchestrator as OrchestratorInfo).fqid
-    ?? resolveBareContentId(projectRoot, "orchestrator", orchestrator.id);
-  return fqid ? readInstructions(projectRoot, fqid) : "";
+    ?? resolveBareToFqid(projectRoot, "orchestrator", orchestrator.id);
+  if (!fqid) return "";
+  return readInstructions(projectRoot, fqid);
 }
 
 // ── 渲染引擎（与重构前逐字节一致；勿动逻辑）──────────────────
@@ -690,31 +707,37 @@ function invalidateLocalViews(projectRoot: string): void {
 /** Derive a content item's owning pack id from its fqid (`teamId:contentId`). */
 function packIdOf(item: { fqid?: string }): string {
   const pid = item.fqid?.split(":")[0];
-  return pid && pid.length > 0 ? pid : LOCAL_TEAM_ID;
+  return pid && pid.length > 0 ? pid : PROJECT_DEFAULT_TEAM_ID;
 }
 
 /**
  * Resolve the directory a custom agent should be written into.
- * - no target / LOCAL_TEAM_ID → this project's Local Pack;
- * - a user-team teamId → that team's app-level directory.
+ * - no target / project.local → this project's default team;
+ * - any writable v2 Team → that Team's directory.
  */
 function resolveWritableTarget(
   projectRoot: string,
   targetTeamId?: string,
 ): { dir: string; teamId: string } {
   const tid = targetTeamId?.trim();
-  if (!tid || tid === LOCAL_TEAM_ID) {
-    return { dir: getLocalTeamDir(projectRoot), teamId: LOCAL_TEAM_ID };
+  if (!tid || tid === PROJECT_DEFAULT_TEAM_ID) {
+    return { dir: ensureProjectDefaultTeamDir(projectRoot), teamId: PROJECT_DEFAULT_TEAM_ID };
   }
-  const team = listUserTeams().find((t) => t.teamId === tid);
-  if (!team) throw new Error(`Target team not found: ${tid}`);
-  return { dir: team.dir, teamId: team.teamId };
+  const team = getTeamRecord(tid, [projectRoot]);
+  if (team) {
+    if (!team.writable) throw new Error(`Target team is read-only: ${tid}`);
+    return { dir: team.dir, teamId: team.manifest.id };
+  }
+  throw new Error(`Target team not found: ${tid}`);
 }
 
-/** Invalidate views after a write: local → this project; user team → catalog. */
+/** Invalidate views after a write: project.local → this project; user team → catalog. */
 function invalidateWritableTarget(projectRoot: string, teamId: string): void {
-  if (teamId === LOCAL_TEAM_ID) invalidateLocalViews(projectRoot);
-  else invalidateCatalog();
+  if (teamId === PROJECT_DEFAULT_TEAM_ID) {
+    invalidateLocalViews(projectRoot);
+  } else {
+    invalidateCatalogV2();
+  }
 }
 
 export function saveCustomSubagent(
@@ -728,10 +751,18 @@ export function saveCustomSubagent(
   // strip the pack prefix to get the bare id used as the directory name.
   const bareId = rawId.includes("--") ? rawId.slice(rawId.lastIndexOf("--") + 2) : rawId;
   const id = payload.id ? bareId : uniqueLocalExpertId(projectRoot, bareId);
-  const agentDir = join(dir, "experts", id);
+  // Prefer subagents/ (M8); if the team still only has experts/ (user-packs),
+  // write there so dual-layout scanners that prefer an existing experts/ root
+  // keep seeing new files.
+  const subagentsRoot = join(dir, "subagents");
+  const expertsRoot = join(dir, "experts");
+  const kindRoot =
+    existsSync(subagentsRoot) || !existsSync(expertsRoot) ? subagentsRoot : expertsRoot;
+  const agentDir = join(kindRoot, id);
   mkdirSync(agentDir, { recursive: true });
 
-  // 新格式 expert.json：无 builtin/removable/pluginId 身份字段（§4.3.2）
+  // New v2 directories use subagent.json; legacy experts/ keeps expert.json
+  // only while M2 compatibility remains active.
   const def: SubagentDef = {
     id,
     name: payload.name.trim(),
@@ -743,7 +774,8 @@ export function saveCustomSubagent(
     permission: payload.permission,
   };
 
-  writeFileSync(join(agentDir, "expert.json"), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
+  const definitionFile = kindRoot === subagentsRoot ? "subagent.json" : "expert.json";
+  writeFileSync(join(agentDir, definitionFile), `${JSON.stringify(def, null, 2)}\n`, "utf-8");
   writeFileSync(join(agentDir, "instructions.md"), payload.instructions.trim(), "utf-8");
   invalidateWritableTarget(projectRoot, teamId);
 
@@ -765,8 +797,10 @@ export function deleteCustomSubagent(projectRoot: string, expertId: string): voi
   const teamId = packIdOf(expert);
   const { dir } = resolveWritableTarget(projectRoot, teamId);
   const bareId = expert.id.includes("--") ? expert.id.slice(expert.id.lastIndexOf("--") + 2) : expert.id;
-  const agentDir = join(dir, "experts", bareId);
-  if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
+  for (const sub of ["subagents", "experts"] as const) {
+    const agentDir = join(dir, sub, bareId);
+    if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
+  }
   invalidateWritableTarget(projectRoot, teamId);
 }
 
@@ -830,9 +864,8 @@ export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: st
   const agentDir = join(dir, "orchestrators", bareId);
   if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
   invalidateWritableTarget(projectRoot, teamId);
-  const state = readTeamsState(projectRoot);
-  if (state.defaultOrchestrator === toFqid(teamId, bareId)) {
-    setDefaultOrchestratorFqid(projectRoot, DEFAULT_ORCHESTRATOR_FQID);
+  if (readProjectTeamsState(projectRoot).defaultTeam === teamId) {
+    setActiveTeam(CORE_TEAM_ID, "project", projectRoot);
   }
 }
 
@@ -848,7 +881,17 @@ export function getOrchestratorDetail(
   orchestratorId: string,
 ): (OrchestratorInfo & { instructions: string }) | null {
   const orchestrator = getOrchestrator(projectRoot, orchestratorId);
-  if (!orchestrator) return null;
+  if (!orchestrator) {
+    log.warn("orchestrators:getDetail miss", { projectRoot, orchestratorId });
+    return null;
+  }
+  log.info("orchestrators:getDetail hit", {
+    projectRoot,
+    requested: orchestratorId,
+    fqid: orchestrator.fqid,
+    runtimeName: orchestrator.id,
+    name: orchestrator.name,
+  });
   return {
     ...orchestrator,
     instructions: readOrchestratorInstructions(projectRoot, orchestrator),
@@ -860,7 +903,10 @@ export function getSubagentDetail(
   expertId: string,
 ): (SubagentInfo & { instructions: string }) | null {
   const expert = getSubagent(projectRoot, expertId);
-  if (!expert) return null;
+  if (!expert) {
+    log.warn("subagents:getDetail miss", { projectRoot, expertId });
+    return null;
+  }
   return {
     ...expert,
     instructions: readSubagentInstructions(projectRoot, expert),

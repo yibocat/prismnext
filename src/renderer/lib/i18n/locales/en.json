@@ -1953,7 +1953,12 @@
       "queueDelete": "Remove from queue",
       "taskPlanTitle": "Task plan",
       "taskPlanInProgress": "In progress",
-      "taskPlanDismiss": "Hide task plan"
+      "taskPlanDismiss": "Hide task plan",
+      "activeTeam": "Active team",
+      "activeTeamHint": "Switch the team (lead agent) for this chat",
+      "activeTeamHintWithLead": "Active lead: {{lead}}. Switch team for this chat.",
+      "activeTeamSwitched": "Active team → {{team}} ({{lead}}). Send a message to verify.",
+      "activeTeamSwitchFailed": "Could not switch active team"
     },
     "questionPanel": {
       "title": "Agent needs your input",

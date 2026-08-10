@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import type { McpServerDef } from "../../shared/teams/types";
+import { listMcpServers } from "../teams/resolver";
+import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
+import { projectRuntimeAgentsDir, projectRuntimeDir } from "./runtime-paths";
 import {
   isPrimaryOpenCodeStreamError,
   openCodeLogEndOffset,
@@ -27,7 +30,7 @@ import {
   getSessionTaskAllowlist,
   resolveChatTabId,
 } from "../services/chat-session-registry";
-import { mcpJsonToAcpServers, packMcpDefToAcp, type AcpMcpServer } from "./mcp-transform";
+import { packMcpDefToAcp, type AcpMcpServer } from "./mcp-transform";
 import { ensureDefaultMcpServers, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
 import {
   getPermissionRulesForMode,
@@ -182,15 +185,18 @@ export interface SessionMessageBackup {
 }
 
 /**
- * AcpService — singleton managing the OpenCode ACP subprocess.
+ * AcpService — one OpenCode ACP subprocess per project runtime.
  *
- * App-level: spawns `opencode acp` once at startup. All projects share this
- * single process. Session data lives under <userData>/opencode-server/.
+ * Project services own their OpenCode process and XDG runtime directory. The
+ * legacy default instance remains for app-wide compatibility operations only;
+ * project chat must use getInstanceForProject(projectRoot).
  *
  * Communicates via JSON-RPC 2.0 over stdio using @agentclientprotocol/sdk.
  */
 export class AcpService {
   private static instance: AcpService;
+  private static projectInstances = new Map<string, AcpService>();
+  private readonly runtimeProjectRoot: string | null;
   private conn: ClientSideConnection | null = null;
   private proc: ChildProcess | null = null;
   /** Current working directory for session operations (may be a worktree). */
@@ -267,6 +273,13 @@ export class AcpService {
    * child mid-handshake → "ACP connection closed".
    */
   private initInflight: Promise<void> | null = null;
+  /**
+   * Single-flight + coalesce for post-sync OpenCode restarts (skills / agents).
+   * Concurrent scheduleSkillsRefresh + scheduleSubagentsRefresh used to each
+   * call shutdown() mid-handshake → "ACP connection closed".
+   */
+  private reloadInflight: Promise<void> | null = null;
+  private reloadQueuedReason: string | null = null;
   /** Cached agent config per projectRoot — avoids re-reading on session create.
    *  A Map (not a single slot) so switching between two projects doesn't
    *  thrash the cache (B11). */
@@ -340,6 +353,11 @@ export class AcpService {
     return null;
   }
 
+  private constructor(projectRoot?: string) {
+    this.runtimeProjectRoot = projectRoot ? resolve(projectRoot) : null;
+    this.projectPath = this.runtimeProjectRoot ?? "";
+  }
+
   /** True while session/load is replaying stored tool updates — skip live bash gates. */
   isSessionReplaySuppressed(): boolean {
     return this.sessionReplaySuppress > 0;
@@ -350,6 +368,23 @@ export class AcpService {
       AcpService.instance = new AcpService();
     }
     return AcpService.instance;
+  }
+
+  /** Return the isolated OpenCode runtime for an absolute project root. */
+  static getInstanceForProject(projectRoot: string): AcpService {
+    const root = resolve(projectRoot);
+    let instance = AcpService.projectInstances.get(root);
+    if (!instance) {
+      instance = new AcpService(root);
+      AcpService.projectInstances.set(root, instance);
+    }
+    return instance;
+  }
+
+  /** Test-only: discard runtime registrations without touching child processes. */
+  static __resetProjectRuntimesForTests(): void {
+    AcpService.projectInstances.clear();
+    AcpService.instance = undefined as unknown as AcpService;
   }
 
   getConnection(): ClientSideConnection | null {
@@ -473,12 +508,23 @@ export class AcpService {
   }
 
   getProjectPath(): string {
-    return this.projectPath;
+    return this.runtimeProjectRoot ?? this.projectPath;
   }
 
-  /** Global data directory for the OpenCode server process. */
+  /** Isolated data directory for this OpenCode server process. */
   private getServerDataDir(): string {
+    if (this.runtimeProjectRoot) {
+      return projectRuntimeDir(app.getPath("userData"), this.runtimeProjectRoot);
+    }
     return join(app.getPath("userData"), "opencode-server");
+  }
+
+  /** Directory OpenCode scans for this runtime's Agent Markdown files. */
+  getOpencodeAgentsDir(): string {
+    if (this.runtimeProjectRoot) {
+      return projectRuntimeAgentsDir(app.getPath("userData"), this.runtimeProjectRoot);
+    }
+    return join(this.getServerDataDir(), "config", "opencode", "agents");
   }
 
   /** Path to the SQLite database where OpenCode stores session metadata. */
@@ -1542,6 +1588,15 @@ export class AcpService {
   } {
     const agentDir = join(projectRoot, ".prismnext", "agent");
 
+    // M8/M11: local/ + agent/mcp.json → teams/project.local/ before merge.
+    try {
+      ensureProjectContentMigrated(projectRoot);
+    } catch (err: unknown) {
+      log.warn(
+        `ensureProjectContentMigrated failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
     try {
       ensureDefaultMcpServers(agentDir);
@@ -1556,36 +1611,17 @@ export class AcpService {
       additionalDirectories.push(skillsDir);
     }
 
-    let mcpServers: AcpMcpServer[] = [];
-    const mcpPath = join(agentDir, "mcp.json");
-    if (existsSync(mcpPath)) {
-      try {
-        const raw = readFileSync(mcpPath, "utf-8");
-        const config = JSON.parse(raw);
-        mcpServers = mcpJsonToAcpServers(config.mcpServers);
-      } catch (err: any) {
-        log.warn(`Failed to load ${mcpPath}: ${err.message}`);
-      }
-    }
+    const mcpServers: AcpMcpServer[] = [];
 
-    // Team-declared MCP servers (app-level resource, project-gated): every
-    // ENABLED team's MCP definitions join the runtime set, resolved by the
-    // TeamResolver (single source). Project mcp.json wins on name collisions —
-    // an explicit project config overrides the team's declaration.
-    // (require, not import: readAgentConfig is sync and the resolver is a
-    // heavy module loaded lazily to keep ACP startup light.)
+    // TeamResolver is the sole normal MCP source. M11 is the only code allowed
+    // to read the legacy object-map file, so ACP cannot resurrect a second
+    // project configuration after migration.
     try {
-      const { listMcpServers } = require("../teams/resolver") as {
-        listMcpServers: (root: string) => Array<{
-          enabled: boolean;
-          definition: McpServerDef;
-        }>;
-      };
-      const teamMcps = listMcpServers(projectRoot).filter((m) => m.enabled);
+      const teamMcps = listMcpServers(projectRoot).filter((m) => m.enabled && !m.blockedBy);
       if (teamMcps.length > 0) {
         const existingNames = new Set(mcpServers.map((s) => s.name));
         for (const asset of teamMcps) {
-          const def = asset.definition;
+          const def = asset.definition as McpServerDef;
           if (existingNames.has(def.name)) continue;
           const acp = packMcpDefToAcp(def);
           if (acp) {
@@ -1596,7 +1632,7 @@ export class AcpService {
         log.info("Merged team MCP servers", {
           projectRoot,
           packCount: teamMcps.length,
-          names: teamMcps.map((m) => m.definition.name),
+          names: teamMcps.map((m) => (m.definition as McpServerDef).name),
         });
       }
     } catch (err: unknown) {
@@ -1609,12 +1645,10 @@ export class AcpService {
   /** Names of team MCP servers declared autoStart:true (eager session/new set). */
   private autoStartMcpNames(projectRoot: string): Set<string> {
     try {
-      const { listMcpServers } = require("../teams/resolver") as {
-        listMcpServers: (root: string) => Array<{ enabled: boolean; definition: McpServerDef }>;
-      };
       const names = new Set<string>();
       for (const asset of listMcpServers(projectRoot)) {
-        if (asset.enabled && asset.definition.autoStart === true) names.add(asset.definition.name);
+        const def = asset.definition as McpServerDef;
+        if (asset.enabled && !asset.blockedBy && def.autoStart === true) names.add(def.name);
       }
       return names;
     } catch {
@@ -1769,29 +1803,43 @@ export class AcpService {
 
   /** Restart OpenCode so skills.paths / permission.skill changes are picked up. */
   async reloadAfterSkillsIntegration(): Promise<void> {
-    if (!this.conn) return;
-    log.info("Restarting OpenCode to apply skills integration");
-    this.suppressExitLifecycle = true;
-    try {
-      await this.shutdown();
-      await this.initialize();
-    } finally {
-      this.suppressExitLifecycle = false;
-    }
+    await this.reloadOpenCodeForIntegration("skills");
   }
 
-  /** Restart OpenCode so synced expert/orchestrator agent definitions are picked up. */
+  /** Restart OpenCode so synced lead/subagent agent definitions are picked up. */
   async reloadAfterExpertsIntegration(): Promise<void> {
-    if (!this.conn) return;
-    log.info("Restarting OpenCode to apply experts integration");
+    await this.reloadOpenCodeForIntegration("experts");
+  }
+
+  /**
+   * Coalesced OpenCode restart for skills/agents sync. Joins initInflight before
+   * shutdown, and merges concurrent skills+experts reload requests into one
+   * (or one follow-up) restart instead of tearing down mid-handshake.
+   */
+  private async reloadOpenCodeForIntegration(reason: string): Promise<void> {
+    if (!this.conn && !this.initInflight) return;
+    this.reloadQueuedReason = reason;
+    if (this.reloadInflight) {
+      await this.reloadInflight;
+      return;
+    }
+    this.reloadInflight = (async () => {
+      while (this.reloadQueuedReason) {
+        const queued = this.reloadQueuedReason;
+        this.reloadQueuedReason = null;
+        if (!this.conn && !this.initInflight) return;
+        await this.reloadOpenCodeExclusive(queued);
+      }
+    })().finally(() => {
+      this.reloadInflight = null;
+    });
+    await this.reloadInflight;
+  }
+
+  private async reloadOpenCodeExclusive(reason: string): Promise<void> {
+    log.info(`Restarting OpenCode to apply ${reason} integration`);
     this.suppressExitLifecycle = true;
     try {
-      // Join any in-flight initialize BEFORE tearing down — shutting down a
-      // child that is mid-handshake (app startup prewarm, credential restart,
-      // or another concurrent reload) makes that handshake fail with
-      // "ACP connection closed". initialize() also joins initInflight, but its
-      // own shutdown happens inside initializeExclusive; here we must not
-      // shutdown() while someone else is still spawning.
       while (this.initInflight) {
         try {
           await this.initInflight;
@@ -2546,14 +2594,32 @@ export class AcpService {
     return this.sessionAgents.get(sessionId) ?? "build";
   }
 
+  /**
+   * Apply Plan/Build primary mode via OpenCode ACP.
+   * OpenCode 1.18 only accepts configId `mode` | `model` | `effort` —
+   * `agent` is rejected with "unknown config option: agent".
+   */
   async applySessionAgent(sessionId: string, agent: SessionAgent): Promise<void> {
     const resolved = resolveSessionAgent(agent);
     this.setSessionAgent(sessionId, resolved);
     try {
-      await this.setConfigOption(sessionId, "agent", resolved);
-    } catch (err: any) {
-      log.debug(`setConfigOption agent=${resolved} failed: ${err.message}`);
+      await this.setConfigOption(sessionId, "mode", resolved);
+      log.info("OpenCode mode set", { sessionId, mode: resolved });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`setConfigOption mode=${resolved} failed: ${message}`);
     }
+  }
+
+  /**
+   * Switch the session to a team lead (OpenCode agent file base = mode id).
+   * Must run after the session is hydrated in the current OpenCode process.
+   */
+  async applySessionMode(sessionId: string, modeId: string): Promise<void> {
+    const mode = modeId.trim();
+    if (!mode) throw new Error("modeId is required");
+    await this.setConfigOption(sessionId, "mode", mode);
+    log.info("OpenCode mode set", { sessionId, mode });
   }
 
   /**
@@ -2927,8 +2993,9 @@ export class AcpService {
       this.sessionLoadedMcpNames.set(sessionId, new Set());
       return;
     }
-    await this.reloadSessionMcps(sessionId, cwd, projectRoot, desired);
-    this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
+    if (await this.reloadSessionMcps(sessionId, cwd, projectRoot, desired)) {
+      this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
+    }
   }
 
   /**
@@ -2942,8 +3009,8 @@ export class AcpService {
     cwd: string,
     projectRoot: string,
     mcpServerAllowlist?: string[],
-  ): Promise<void> {
-    if (!this.conn) return;
+  ): Promise<boolean> {
+    if (!this.conn) return false;
     const { mcpServers } = this.loadProjectAgentConfig(
       projectRoot,
       mcpServerAllowlist !== undefined ? { mcpServerAllowlist } : undefined,
@@ -2958,19 +3025,23 @@ export class AcpService {
             : "(none)",
       loaded: mcpServers.map((s) => s.name),
     });
-    await this.withNotificationCollector(
-      () => {},
-      async () => {
-        this.sessionReplaySuppress++;
-        try {
-          await this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers });
-        } finally {
-          this.sessionReplaySuppress = Math.max(0, this.sessionReplaySuppress - 1);
-        }
-      },
-    ).catch((err: any) => {
+    try {
+      await this.withNotificationCollector(
+        () => {},
+        async () => {
+          this.sessionReplaySuppress++;
+          try {
+            await this.conn!.extMethod("session/load", { sessionId, cwd, mcpServers });
+          } finally {
+            this.sessionReplaySuppress = Math.max(0, this.sessionReplaySuppress - 1);
+          }
+        },
+      );
+      return true;
+    } catch (err: any) {
       log.warn(`session/load (MCP reload) failed for ${sessionId}: ${err.message}`);
-    });
+      return false;
+    }
   }
 
   /**
@@ -2992,11 +3063,11 @@ export class AcpService {
     let reloadedSessions = 0;
     for (const sessionId of sessions) {
       const desired = [...(this.sessionLoadedMcpNames.get(sessionId) ?? [])];
-      await this.reloadSessionMcps(sessionId, projectRoot, projectRoot, desired);
-      // Keep the dedupe map in sync so a later token-less turn doesn't think
-      // a reload is needed (or worse, skip one that is).
-      this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
-      reloadedSessions++;
+      if (await this.reloadSessionMcps(sessionId, projectRoot, projectRoot, desired)) {
+        // Advance the dedupe map only after session/load succeeds.
+        this.sessionLoadedMcpNames.set(sessionId, new Set(desired));
+        reloadedSessions++;
+      }
     }
     log.info("Applied project MCP config", { projectRoot, reloadedSessions });
     return { reloadedSessions };

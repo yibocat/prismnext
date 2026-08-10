@@ -45,7 +45,7 @@ export function TeamPicker({ teams, value, onChange, onCreateTeam, className }: 
         <button
           type="button"
           className={cn(
-            "flex w-full items-center justify-between rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-[length:var(--font-size-13)] hover:bg-accent/50",
+            "flex w-full items-center justify-between rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-[length:var(--font-size-13)] hover:bg-accent",
             className,
           )}
         >

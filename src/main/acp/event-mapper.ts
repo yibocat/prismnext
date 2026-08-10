@@ -66,7 +66,7 @@ export class EventMapper {
   private win: BrowserWindow;
   private sessionToTab = new Map<string, string>();
   private tabToSession = new Map<string, string>();
-  private unregisterNotification: (() => void) | null = null;
+  private unregisterNotifications = new Map<AcpService, () => void>();
   /** Parent tab → queued Task tool invocations awaiting a subagent session link. */
   private pendingTasksByTab = new Map<
     string,
@@ -214,22 +214,22 @@ export class EventMapper {
     this.sessionToTab.delete(sessionId);
   }
 
-  start(): void {
-    if (this.unregisterNotification) return;
+  start(service = AcpService.getInstance()): void {
+    if (this.unregisterNotifications.has(service)) return;
 
-    const service = AcpService.getInstance();
-    this.unregisterNotification = service.onNotification((method, params) => {
+    const unregister = service.onNotification((method, params) => {
       this.handleNotification(method, params);
     });
+    this.unregisterNotifications.set(service, unregister);
 
-    log.info("EventMapper started — listening for ACP notifications");
+    log.info("EventMapper started — listening for ACP notifications", {
+      projectRoot: service.getProjectPath() || null,
+    });
   }
 
   stop(): void {
-    if (this.unregisterNotification) {
-      this.unregisterNotification();
-      this.unregisterNotification = null;
-    }
+    for (const unregister of this.unregisterNotifications.values()) unregister();
+    this.unregisterNotifications.clear();
     // Release all session ↔ tab mappings to prevent leaks
     this.sessionToTab.clear();
     this.tabToSession.clear();
