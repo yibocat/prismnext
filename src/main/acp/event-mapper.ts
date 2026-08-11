@@ -6,6 +6,7 @@ import {
   unregisterChatSession,
   resolveChatTabId,
   getSessionProjectRoot,
+  setSessionProjectRoot,
   getSessionTaskAllowlist,
   markSessionTaskAllowlistSatisfied,
   flushDeferredTaskAllowlistFollowUp,
@@ -890,6 +891,9 @@ export class EventMapper {
     if (!this.pendingTasksByTab.get(tabId)?.length) return;
     const parentSessionId = this.tabToSession.get(tabId);
     const candidates = new Set<string>();
+    const parentRoot = parentSessionId
+      ? getSessionProjectRoot(parentSessionId)
+      : undefined;
 
     for (const sessionId of this.orphanSubSessions.keys()) {
       candidates.add(sessionId);
@@ -901,8 +905,12 @@ export class EventMapper {
         if (this.subSessionToTaskTool.has(sessionId)) continue;
         candidates.add(sessionId);
       }
-      for (const childId of AcpService.getInstanceForSession(parentSessionId).listChildSessionIds(parentSessionId)) {
+      const parentService = AcpService.getInstanceForSession(parentSessionId);
+      for (const childId of parentService.listChildSessionIds(parentSessionId)) {
         candidates.add(childId);
+        // Point child → project runtime before parent_id lookup (do not
+        // registerChatSession yet — that would steal tab→primary mapping).
+        if (parentRoot) setSessionProjectRoot(childId, parentRoot);
       }
     }
 
@@ -911,6 +919,9 @@ export class EventMapper {
       if (this.subSessionToTaskTool.has(sessionId)) {
         this.orphanSubSessions.delete(sessionId);
         continue;
+      }
+      if (parentRoot && !getSessionProjectRoot(sessionId)) {
+        setSessionProjectRoot(sessionId, parentRoot);
       }
       const parentId = AcpService.getInstanceForSession(sessionId).getSessionParentId(sessionId);
       if (!parentId) continue;
@@ -1036,8 +1047,28 @@ export class EventMapper {
           candidate.toolUseId,
           subSessionId,
         );
-        if (resolved === subSessionId) return takeAt(i);
+        if (resolved === subSessionId) {
+          const pending = takeAt(i);
+          // OpenCode often omits subagent_type on the live tool_call (tracked as
+          // placeholder "expert"). Once the child agent is known, backfill it.
+          if (pending && pending.expertId === "expert" && agentName) {
+            pending.expertId = agentName;
+            this.taskToolExpertById.set(pending.toolUseId, agentName);
+          }
+          return pending;
+        }
       }
+    }
+
+    // Single pending Task still using the empty-rawInput placeholder — bind it
+    // once the child agent name is known (parallel Tasks stay ambiguous).
+    if (agentName && queue.length === 1 && queue[0]?.expertId === "expert") {
+      const pending = takeAt(0);
+      if (pending) {
+        pending.expertId = agentName;
+        this.taskToolExpertById.set(pending.toolUseId, agentName);
+      }
+      return pending;
     }
 
     if (queue.length === 1) return takeAt(0);

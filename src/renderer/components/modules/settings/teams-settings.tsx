@@ -28,6 +28,10 @@ import { ProBadge } from "../teams/pro-badge";
 import { ScopeChip } from "../teams/scope-chip";
 import type { AssetViewV2 } from "@shared/teams/view";
 import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import {
+  matchesAgentAssetQuery,
+  type AgentAssetPaneProps,
+} from "./agent-assets-shared";
 
 const HANGAR_TEAM_IDS = new Set([MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID]);
 /** Team row click — label matches other Settings rows; hover only brightens text (no fill). */
@@ -58,7 +62,10 @@ interface TeamRow {
   leadName: string | null;
 }
 
-export function TeamsAgentsSettings() {
+export function TeamsAgentsSettings({
+  embedded = false,
+  searchQuery = "",
+}: AgentAssetPaneProps = {}) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const license = useProLicenseStore((s) => s.license);
@@ -115,7 +122,7 @@ export function TeamsAgentsSettings() {
     () => { void loadAll({ silent: true }); },
   );
 
-  const { installedRows, hangarRows } = useMemo(() => {
+  const { installedRows: installedRowsAll, hangarRows: hangarRowsAll } = useMemo(() => {
     // Settings list = installed teams only (uninstalled Core/bundled go to Browse).
     // Hangars always appear — even before any user content is created — in their own section.
     const pids = new Set<string>(packs.map((p) => p.manifest.id));
@@ -151,6 +158,29 @@ export function TeamsAgentsSettings() {
       .sort((a, b) => hangarRank(a.teamId) - hangarRank(b.teamId));
     return { installedRows: installed, hangarRows: hangars };
   }, [orchestrators, packs, packById, t]);
+
+  const filterRow = useCallback(
+    (row: TeamRow) =>
+      matchesAgentAssetQuery(
+        searchQuery,
+        row.label,
+        row.leadName,
+        row.teamId,
+        row.pack?.manifest.name,
+        row.pack?.manifest.description,
+      ),
+    [searchQuery],
+  );
+  const installedRows = useMemo(
+    () => installedRowsAll.filter(filterRow),
+    [installedRowsAll, filterRow],
+  );
+  const hangarRows = useMemo(
+    () => hangarRowsAll.filter(filterRow),
+    [hangarRowsAll, filterRow],
+  );
+  const hasAnyTeam = installedRowsAll.length > 0 || hangarRowsAll.length > 0;
+  const hasVisibleTeam = installedRows.length > 0 || hangarRows.length > 0;
 
   const goActivatePro = () => {
     useLayoutStore.getState().setLeftSidebarView("settings");
@@ -201,24 +231,24 @@ export function TeamsAgentsSettings() {
         key={row.teamId}
         className={cn(
           ROW,
-          "px-2 gap-2",
+          "min-w-0 items-start gap-2 px-2",
           (!projectEnabled || isLocked) && "opacity-60",
         )}
       >
         <button
           type="button"
-          className={TEAM_ROW_BTN}
+          className={cn(TEAM_ROW_BTN, "min-w-0")}
           onClick={() => toggleTeamDetail(row)}
         >
           <PackIcon size="sm" />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className={cn(TEAM_ROW_LABEL, isOpen && "text-foreground")}>{row.label}</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <span className={cn(TEAM_ROW_LABEL, "min-w-0 max-w-full truncate", isOpen && "text-foreground")}>{row.label}</span>
               {row.pack && <ScopeChip scope={row.pack.scope} quiet />}
               {isPro && <ProBadge />}
             </div>
             {row.leadName && (
-              <p className={TEAM_ROW_DESC}>{row.leadName}</p>
+              <p className={cn(TEAM_ROW_DESC, "truncate")}>{row.leadName}</p>
             )}
           </div>
         </button>
@@ -256,72 +286,86 @@ export function TeamsAgentsSettings() {
     );
   };
 
-  return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.teams.title")}</h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">{t("settings.teams.pageDesc")}</p>
+  const body = !projectRoot ? (
+    <div className={cn(CARD, "min-w-0 !divide-y-0")}>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <BotIcon className="size-8 text-muted-foreground/30" />
+        <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.noProject")}</p>
+      </div>
+    </div>
+  ) : (
+    <div className="min-w-0 space-y-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={saving}
+          onClick={() => openSettingsPanel({ kind: "team-create", scope: "project" })}
+        >
+          <PlusIcon className="size-3 mr-1" />{t("settings.teams.createTeam")}
+        </Button>
+        <Button variant="outline" size="xs" disabled={saving} onClick={() => openSettingsPanel({ kind: "agent-expert", mode: "new" })}>
+          <PlusIcon className="size-3 mr-1" />{t("settings.teams.newSubagent")}
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className={cn(CARD, "min-w-0 py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>{t("common.loading")}</div>
+      ) : !hasAnyTeam ? (
+        <div className={cn(CARD, "min-w-0 !divide-y-0")}>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <BotIcon className="size-8 text-muted-foreground/30" />
+            <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.emptyTeamCards")}</p>
           </div>
-          {projectRoot && (
-            <Button variant="outline" size="xs" className="shrink-0" onClick={() => useLayoutStore.getState().setLeftSidebarView("teams")}>
+        </div>
+      ) : !hasVisibleTeam ? (
+        <div className={cn(CARD, "min-w-0 py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+          {t("settings.agentAssets.noMatches")}
+        </div>
+      ) : (
+        <>
+          {installedRows.length > 0 && (
+            <div className={cn(CARD, "min-w-0 overflow-hidden")}>
+              {installedRows.map(renderTeamRow)}
+            </div>
+          )}
+          {hangarRows.length > 0 && (
+            <div className="min-w-0 space-y-2">
+              <p className={CATEGORY_HEADER}>{t("settings.teams.hangarsSection")}</p>
+              <div className={cn(CARD, "min-w-0 overflow-hidden")}>
+                {hangarRows.map(renderTeamRow)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0 space-y-6">{body}</div>;
+  }
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6 px-4 py-8 sm:px-8">
+        <div className="flex min-w-0 items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.teams.title")}</h2>
+            <p className="mt-0.5 text-[length:var(--font-dialog-label)] text-muted-foreground">{t("settings.teams.pageDesc")}</p>
+          </div>
+          {projectRoot ? (
+            <Button
+              variant="outline"
+              size="xs"
+              className="shrink-0"
+              onClick={() => useLayoutStore.getState().setLeftSidebarView("teams")}
+            >
               <StoreIcon className="size-3 mr-1" />{t("settings.teams.browse")}
             </Button>
-          )}
+          ) : null}
         </div>
-
-        {!projectRoot ? (
-          <div className={cn(CARD, "!divide-y-0")}>
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <BotIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.noProject")}</p>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                variant="outline"
-                size="xs"
-                disabled={saving}
-                onClick={() => openSettingsPanel({ kind: "team-create", scope: "project" })}
-              >
-                <PlusIcon className="size-3 mr-1" />{t("settings.teams.createTeam")}
-              </Button>
-              <Button variant="outline" size="xs" disabled={saving} onClick={() => openSettingsPanel({ kind: "agent-expert", mode: "new" })}>
-                <PlusIcon className="size-3 mr-1" />{t("settings.teams.newSubagent")}
-              </Button>
-            </div>
-
-            {loading ? (
-              <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>{t("common.loading")}</div>
-            ) : installedRows.length === 0 && hangarRows.length === 0 ? (
-              <div className={cn(CARD, "!divide-y-0")}>
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <BotIcon className="size-8 text-muted-foreground/30" />
-                  <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.teams.emptyTeamCards")}</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {installedRows.length > 0 && (
-                  <div className={CARD}>
-                    {installedRows.map(renderTeamRow)}
-                  </div>
-                )}
-                {hangarRows.length > 0 && (
-                  <div className="space-y-2">
-                    <p className={CATEGORY_HEADER}>{t("settings.teams.hangarsSection")}</p>
-                    <div className={CARD}>
-                      {hangarRows.map(renderTeamRow)}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </>
-        )}
+        {body}
       </div>
     </div>
   );

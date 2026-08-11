@@ -29,6 +29,7 @@ import {
   getSessionProjectRoot,
   getSessionTaskAllowlist,
   resolveChatTabId,
+  setSessionProjectRoot,
 } from "../services/chat-session-registry";
 import { packMcpDefToAcp, type AcpMcpServer } from "./mcp-transform";
 import { ensureDefaultMcpServers, mergeMcpAllowlist, mcpAllowlistSetsEqual } from "../services/project-mcp-defaults";
@@ -381,11 +382,30 @@ export class AcpService {
     return instance;
   }
 
-  /** Resolve the AcpService that owns a sessionId (falls back to default singleton). */
+  /**
+   * Resolve the AcpService that owns a sessionId (falls back to default singleton).
+   *
+   * Task subagent sessions are often not yet in the chat-session registry when
+   * the first ACP/SQLite link attempt runs. Falling back to the global
+   * `opencode-server` DB then misses project-runtime rows (`parent_id` null →
+   * `task-link-degraded` / `task-await-timeout` while children actually exist).
+   * Probe registered project runtimes once and cache the mapping.
+   */
   static getInstanceForSession(sessionId: string | null | undefined): AcpService {
     if (!sessionId?.trim()) return AcpService.getInstance();
-    const root = AcpService.sessionProjectRoot(sessionId);
-    return root ? AcpService.getInstanceForProject(root) : AcpService.getInstance();
+    const id = sessionId.trim();
+    const root = AcpService.sessionProjectRoot(id);
+    if (root) return AcpService.getInstanceForProject(root);
+    for (const [projectRoot, instance] of AcpService.projectInstances) {
+      if (!instance.hasSessionInDb(id)) continue;
+      try {
+        setSessionProjectRoot(id, projectRoot);
+      } catch {
+        /* ignore cache write failures */
+      }
+      return instance;
+    }
+    return AcpService.getInstance();
   }
 
   /** Session→projectRoot resolver; injected from chat-session-registry to avoid a circular import. */
@@ -543,6 +563,26 @@ export class AcpService {
   /** Path to the SQLite database where OpenCode stores session metadata. */
   private getDbPath(): string {
     return join(this.getServerDataDir(), "opencode", "opencode.db");
+  }
+
+  /** Whether this runtime's OpenCode DB has a row for `sessionId`. */
+  hasSessionInDb(sessionId: string): boolean {
+    const id = sessionId?.trim();
+    if (!id) return false;
+    try {
+      const { DatabaseSync } = require("node:sqlite") as typeof import("node:sqlite");
+      const db = new DatabaseSync(this.getDbPath(), { readOnly: true });
+      try {
+        const row = db
+          .prepare("SELECT 1 AS ok FROM session WHERE id = ? LIMIT 1")
+          .get(id) as { ok?: number } | undefined;
+        return row?.ok === 1;
+      } finally {
+        db.close();
+      }
+    } catch {
+      return false;
+    }
   }
 
   /**

@@ -27,6 +27,10 @@ import {
 import type { AssetViewV2 } from "@shared/teams/view";
 import type { McpServerDef } from "@shared/teams/types";
 import { parseTeamMcpConfig, serializeTeamMcpConfig } from "@/lib/agent/mcp-config";
+import {
+  matchesAgentAssetQuery,
+  type AgentAssetPaneProps,
+} from "./agent-assets-shared";
 
 const MCP_LIST_PREVIEW = 15;
 
@@ -38,7 +42,10 @@ function mcpTransportSummary(mcp: AssetViewV2): string {
   return cmd.length > 72 ? `${cmd.slice(0, 72)}…` : cmd;
 }
 
-export function ToolsMcpSettings() {
+export function ToolsMcpSettings({
+  embedded = false,
+  searchQuery = "",
+}: AgentAssetPaneProps = {}) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const saving = useMcpServersStore((s) => s.saving);
@@ -87,13 +94,23 @@ export function ToolsMcpSettings() {
     },
   );
 
-  const sortedAssets = useMemo(
-    () =>
-      [...assets].sort(
-        (a, b) => a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+  const sortedAssets = useMemo(() => {
+    const sorted = [...assets].sort(
+      (a, b) => a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+    );
+    return sorted.filter((a) =>
+      matchesAgentAssetQuery(
+        searchQuery,
+        a.name,
+        a.id,
+        a.fqid,
+        a.description,
+        a.teamId,
+        a.origin.teamName,
+        mcpTransportSummary(a),
       ),
-    [assets],
-  );
+    );
+  }, [assets, searchQuery]);
 
   const visibleAssets = useMemo(() => {
     if (listExpanded || sortedAssets.length <= MCP_LIST_PREVIEW) return sortedAssets;
@@ -101,6 +118,7 @@ export function ToolsMcpSettings() {
   }, [sortedAssets, listExpanded]);
 
   const hiddenCount = Math.max(0, sortedAssets.length - MCP_LIST_PREVIEW);
+  const unfilteredCount = assets.length;
 
   const handleDelete = async (asset: AssetViewV2) => {
     if (!projectRoot || !asset.editable) return;
@@ -152,39 +170,24 @@ export function ToolsMcpSettings() {
     </div>
   );
 
-  if (!projectRoot) {
-    return (
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-3xl mx-auto px-8 py-8">
-          <div className={cn(CARD, "!divide-y-0")}>
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <PlugIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                {t("settings.mcp.openProject")}
-              </p>
-            </div>
-          </div>
-        </div>
+  const listBody = !projectRoot ? (
+    <div className={cn(CARD, "min-w-0 !divide-y-0")}>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <PlugIcon className="size-8 text-muted-foreground/30" />
+        <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+          {t("settings.mcp.openProject")}
+        </p>
       </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
-              {t("settings.mcp.title")}
-            </h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              {t("settings.mcp.pageDesc")}
-            </p>
-          </div>
+    </div>
+  ) : (
+    <div className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.mcp.installed")}</p>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+          {renderAddButtons()}
           <Button
             variant="outline"
             size="xs"
-            className="shrink-0"
             onClick={() => openSettingsPanel({ kind: "mcp-json" })}
             title={t("settings.mcp.editJsonHint")}
           >
@@ -192,90 +195,107 @@ export function ToolsMcpSettings() {
             {t("settings.mcp.editJson")}
           </Button>
         </div>
+      </div>
 
-        <div>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.mcp.installed")}</p>
-            {renderAddButtons()}
+      <div className={cn(CARD, "min-w-0 overflow-hidden")}>
+        {!loaded ? (
+          <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("common.loading")}
           </div>
-
-          <div className={CARD}>
-            {!loaded ? (
-              <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("common.loading")}
-              </div>
-            ) : sortedAssets.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10 text-center">
-                <PlugIcon className="size-8 text-muted-foreground/30" />
-                <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                  {t("settings.mcp.empty")}
-                </p>
-                {renderAddButtons("justify-center")}
-              </div>
-            ) : (
-              <>
-                {visibleAssets.map((asset) => {
-                  const teamLabel = teamDisplayName(
-                    asset.teamId,
-                    asset.origin.teamName,
-                    t,
-                  );
-                  const summary = mcpTransportSummary(asset);
-                  return (
-                    <div key={asset.fqid} className={ROW}>
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 pr-3 text-left"
-                        disabled={saving}
-                        onClick={() => openMcp(asset)}
-                      >
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
-                          <span className={cn(ROW_LABEL, "font-mono shrink-0")}>
-                            {asset.name}
-                          </span>
-                          <span
-                            className="text-[length:var(--font-size-11)] text-muted-foreground truncate min-w-0"
-                            title={teamLabel}
-                          >
-                            {teamLabel}
-                          </span>
-                        </div>
-                        {summary ? (
-                          <p className={cn(ROW_DESC, "truncate font-mono")} title={summary}>
-                            {summary}
-                          </p>
-                        ) : null}
-                      </button>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {asset.editable && (
-                          <InlineDeleteButton
-                            itemId={asset.fqid}
-                            pending={deleteConfirm.isPending(asset.fqid)}
-                            disabled={saving}
-                            onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
-                            onConfirm={() => void handleDelete(asset)}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {!listExpanded && hiddenCount > 0 && (
+        ) : unfilteredCount === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <PlugIcon className="size-8 text-muted-foreground/30" />
+            <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+              {t("settings.mcp.empty")}
+            </p>
+            {renderAddButtons("justify-center")}
+          </div>
+        ) : sortedAssets.length === 0 ? (
+          <div className="py-3 text-[length:var(--font-size-12)] text-muted-foreground">
+            {t("settings.agentAssets.noMatches")}
+          </div>
+        ) : (
+          <>
+            {visibleAssets.map((asset) => {
+              const teamLabel = teamDisplayName(
+                asset.teamId,
+                asset.origin.teamName,
+                t,
+              );
+              const summary = mcpTransportSummary(asset);
+              return (
+                <div key={asset.fqid} className={cn(ROW, "min-w-0 items-start")}>
                   <button
                     type="button"
-                    className={cn(
-                      ROW,
-                      "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
-                    )}
-                    onClick={() => setListExpanded(true)}
+                    className="min-w-0 flex-1 pr-2 text-left"
+                    disabled={saving}
+                    onClick={() => openMcp(asset)}
                   >
-                    {t("settings.mcp.loadMore", { count: hiddenCount })}
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span className={cn(ROW_LABEL, "min-w-0 max-w-full truncate font-mono")}>
+                        {asset.name}
+                      </span>
+                      <span
+                        className="min-w-0 max-w-full truncate text-[length:var(--font-size-11)] text-muted-foreground"
+                        title={teamLabel}
+                      >
+                        {teamLabel}
+                      </span>
+                    </div>
+                    {summary ? (
+                      <p className={cn(ROW_DESC, "line-clamp-2 break-all font-mono")} title={summary}>
+                        {summary}
+                      </p>
+                    ) : null}
                   </button>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {asset.editable && (
+                      <InlineDeleteButton
+                        itemId={asset.fqid}
+                        pending={deleteConfirm.isPending(asset.fqid)}
+                        disabled={saving}
+                        onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
+                        onConfirm={() => void handleDelete(asset)}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {!listExpanded && hiddenCount > 0 && (
+              <button
+                type="button"
+                className={cn(
+                  ROW,
+                  "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
                 )}
-              </>
+                onClick={() => setListExpanded(true)}
+              >
+                {t("settings.mcp.loadMore", { count: hiddenCount })}
+              </button>
             )}
-          </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0 space-y-6">{listBody}</div>;
+  }
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6 px-4 py-8 sm:px-8">
+        <div className="min-w-0">
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
+            {t("settings.mcp.title")}
+          </h2>
+          <p className="mt-0.5 text-[length:var(--font-dialog-label)] text-muted-foreground">
+            {t("settings.mcp.pageDesc")}
+          </p>
         </div>
+        {listBody}
       </div>
     </div>
   );

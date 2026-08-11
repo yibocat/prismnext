@@ -29,12 +29,9 @@ import {
   CompilerSettings,
   ModelSettings,
   BackupsSettings,
-  TeamsAgentsSettings,
+  AgentAssetsSettings,
   PromptsRulesSettings,
   PermissionsSettings,
-  SlashCommandsSettings,
-  ToolsMcpSettings,
-  SkillsSettings,
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
@@ -225,15 +222,15 @@ export function LeftMainArea() {
       general: GeneralSettings,
       appearance: AppearanceSettings,
       models: ModelSettings,
-      "teams-agents": TeamsAgentsSettings,
+      "teams-agents": AgentAssetsSettings,
       terminal: TerminalSettings,
       browser: BrowserSettings,
       "prompts-rules": PromptsRulesSettings,
       "prompts-rules-commands": PromptsRulesSettings,
       permissions: PermissionsSettings,
-      commands: SlashCommandsSettings,
-      "tools-mcp": ToolsMcpSettings,
-      skills: SkillsSettings,
+      commands: AgentAssetsSettings,
+      "tools-mcp": AgentAssetsSettings,
+      skills: AgentAssetsSettings,
       compiler: CompilerSettings,
       texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,
@@ -243,7 +240,7 @@ export function LeftMainArea() {
     }[resolvedCategory];
     if (BuiltinSettings) {
       return (
-        <div className="flex h-full flex-col min-w-0" data-surface="content">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-surface="content">
           <BuiltinSettings />
         </div>
       );

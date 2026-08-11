@@ -170,7 +170,7 @@ export function PromptsRulesSettings() {
 
   const isCustom = agentSystemPrompt.trim().length > 0;
   const [stackSummary, setStackSummary] = useState<{
-    stableTokens: number;
+    totalTokens: number;
     sectionCount: number;
     orchestratorName?: string;
   } | null>(null);
@@ -191,9 +191,8 @@ export function PromptsRulesSettings() {
         projectRoot ?? undefined,
         agentSystemPrompt || undefined,
       );
-      const stable = stack.sections.find((s) => s.id === "prism-system");
       setStackSummary({
-        stableTokens: stable?.tokenCount ?? 0,
+        totalTokens: stack.totalTokenCount,
         sectionCount: stack.sections.length,
         orchestratorName: stack.orchestratorName,
       });
@@ -387,7 +386,7 @@ export function PromptsRulesSettings() {
                 <p className={ROW_DESC}>
                   {stackSummary
                     ? t("settings.prompts.rowDesc.stackSummary", {
-                        tokens: formatTokenCount(stackSummary.stableTokens),
+                        tokens: formatTokenCount(stackSummary.totalTokens),
                         layers: stackSummary.sectionCount,
                       })
                     : t("settings.prompts.rowDesc.openForStack")}

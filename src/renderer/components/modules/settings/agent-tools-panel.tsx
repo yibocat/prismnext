@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
-import { cn } from "@/lib/utils";
 import {
   SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
-
-const BADGE =
-  "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
+import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 
 const CATEGORY_ORDER = ["reference", "compile", "project", "utility"] as const;
 
@@ -63,33 +60,31 @@ export function AgentToolsPanel() {
     <div className={SETTINGS_DETAIL_SHELL}>
       <div className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-[length:var(--font-size-15)] font-semibold">{t("settings.editor.agentTools.title")}</h2>
+          <h2 className="text-[length:var(--font-size-15)] font-semibold">
+            {t("settings.editor.agentTools.title")}
+          </h2>
           <p className={SETTINGS_ROW_DESC}>{t("settings.editor.agentTools.intro")}</p>
         </div>
         <PromptInternalsNotice />
       </div>
 
       {grouped.map(({ category, tools: categoryTools }) => (
-        <section key={category} className="space-y-3">
+        <section key={category} className="min-w-0 space-y-3">
           <h3 className={SETTINGS_CATEGORY_HEADER}>
             {t(`settings.editor.agentTools.category.${category}`)}
           </h3>
-          <div className="space-y-3">
+          <div className="min-w-0 space-y-8">
             {categoryTools.map((tool) => (
-              <article
-                key={tool.name}
-                className="rounded-lg border border-border px-4 py-3 space-y-2"
-              >
-                <div className="flex flex-wrap items-center gap-2">
+              <article key={tool.name} className="min-w-0 space-y-2">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                   <p className="text-[length:var(--font-size-13)] font-medium">{tool.label}</p>
                   <code className="text-[length:var(--font-size-11)] text-muted-foreground">
                     {tool.name}
                   </code>
-                  <span className={cn(BADGE, "bg-muted text-muted-foreground")}>{t("common.readOnly")}</span>
                 </div>
-                <pre className="whitespace-pre-wrap rounded-md bg-muted/40 px-3 py-2 text-[length:var(--font-size-12)] leading-relaxed text-foreground/90 font-mono">
-                  {tool.schemaDescription}
-                </pre>
+                {tool.schemaDescription.trim() ? (
+                  <SettingsModulePromptPreview content={tool.schemaDescription} />
+                ) : null}
               </article>
             ))}
           </div>

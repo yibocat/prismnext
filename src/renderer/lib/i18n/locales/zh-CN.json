@@ -69,7 +69,17 @@
       "browser": "浏览器",
       "literature": "文献",
       "pro": "Pro",
-      "teams": "团队"
+      "teams": "团队与智能体"
+    },
+    "agentAssets": {
+      "title": "团队与智能体",
+      "pageDesc": "团队及其技能、斜杠命令与 MCP — 用标签页分别管理。",
+      "searchPlaceholder": "搜索当前标签…",
+      "tabTeams": "团队",
+      "tabSkills": "技能",
+      "tabCommands": "命令",
+      "tabMcp": "MCP",
+      "noMatches": "没有匹配的结果。"
     },
     "general": {
       "title": "通用",
@@ -371,8 +381,8 @@
       "rowDesc": {
         "customPrompt": "自定义提示会替换 `_prism-system.md` 中的内置默认内容。",
         "builtinPrompt": "内置 prismnext 人设会在聊天同步时写入 `_prism-system.md`。",
-        "stackSummary": "基线 _prism-system：约 {{tokens}} tokens · 预览中共 {{layers}} 层",
-        "openForStack": "打开项目以查看完整提示栈预览。",
+        "stackSummary": "共 {{layers}} 层注入 · 合计约 {{tokens}} tokens（_prism-system、AGENTS.md、项目规则、主 Agent）",
+        "openForStack": "打开项目以查看完整注入栈预览。",
         "openForInstructions": "打开项目以编辑项目说明。",
         "instructions": "项目专用说明 — 独立的 OpenCode 说明文件，不会合并进 `_prism-system.md`。",
         "agentsChars": "项目说明共 {{count}} 个字符。",
@@ -1583,7 +1593,7 @@
       "localLabel": "本地",
       "myTeam": "我的团队",
       "viewDetails": "详情",
-      "teamEmptyAgentsHint": "该团队暂无主 Agent 或子 Agent。其技能与命令请在「技能」「命令」页面管理。",
+      "teamEmptyAgentsHint": "该团队暂无主 Agent 或子 Agent。技能与命令请在 设置 → 团队 的「技能 / 命令」标签中管理。",
       "cancel": "取消",
       "deleteTeam": "删除团队",
       "enableInProject": "在此项目启用",
@@ -3285,6 +3295,7 @@
     },
     "card": {
       "install": "安装",
+      "uninstall": "卸载",
       "added": "已安装",
       "disabled": "已停用",
       "proLocked": "Pro",
@@ -3313,7 +3324,8 @@
       "minHostVersion": "需要应用版本"
     },
     "toast": {
-      "installed": "团队已安装。"
+      "installed": "团队已安装。",
+      "uninstalled": "团队已卸载。"
     },
     "suggestion": {
       "text": "将「{{pack}}」的主 Agent 设为默认？",

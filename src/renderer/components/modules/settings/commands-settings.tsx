@@ -24,10 +24,17 @@ import {
 } from "./settings-tokens";
 import type { AssetViewV2 } from "@shared/teams/view";
 import type { CommandDef } from "@commands/types";
+import {
+  matchesAgentAssetQuery,
+  type AgentAssetPaneProps,
+} from "./agent-assets-shared";
 
 const COMMANDS_LIST_PREVIEW = 15;
 
-export default function CommandsSettings() {
+export default function CommandsSettings({
+  embedded = false,
+  searchQuery = "",
+}: AgentAssetPaneProps = {}) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
@@ -48,13 +55,25 @@ export default function CommandsSettings() {
     return map;
   }, [commands]);
 
-  const sortedAssets = useMemo(
-    () =>
-      [...assets].sort(
-        (a, b) => a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
-      ),
-    [assets],
-  );
+  const sortedAssets = useMemo(() => {
+    const sorted = [...assets].sort(
+      (a, b) => a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+    );
+    return sorted.filter((a) => {
+      const cmd = cmdByFqid.get(a.fqid);
+      return matchesAgentAssetQuery(
+        searchQuery,
+        a.name,
+        `/${a.name}`,
+        a.id,
+        a.fqid,
+        a.description,
+        a.teamId,
+        a.origin.teamName,
+        cmd?.description,
+      );
+    });
+  }, [assets, searchQuery, cmdByFqid]);
 
   const visibleAssets = useMemo(() => {
     if (listExpanded || sortedAssets.length <= COMMANDS_LIST_PREVIEW) return sortedAssets;
@@ -62,6 +81,7 @@ export default function CommandsSettings() {
   }, [sortedAssets, listExpanded]);
 
   const hiddenCount = Math.max(0, sortedAssets.length - COMMANDS_LIST_PREVIEW);
+  const unfilteredCount = assets.length;
 
   const loadAll = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoaded(false);
@@ -124,124 +144,131 @@ export default function CommandsSettings() {
     }
   };
 
-  return (
-    <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
-              {t("settings.commandsPage.title")}
-            </h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-              {t("settings.commandsPage.pageDesc")}
+  const listBody = !projectRoot ? (
+    <div className={cn(CARD, "min-w-0 !divide-y-0")}>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <TerminalIcon className="size-8 text-muted-foreground/30" />
+        <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+          {t("settings.commandsPage.openProject")}
+        </p>
+      </div>
+    </div>
+  ) : (
+    <div className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.commandsPage.installed")}</p>
+        <Button variant="outline" size="xs" onClick={openCreate}>
+          <PlusIcon className="size-3 mr-1" />
+          {t("settings.commandsPage.addCustom")}
+        </Button>
+      </div>
+
+      {!loaded ? (
+        <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+          {t("common.loading")}
+        </div>
+      ) : unfilteredCount === 0 ? (
+        <div className={cn(CARD, "!divide-y-0")}>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <TerminalIcon className="size-8 text-muted-foreground/30" />
+            <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+              {t("settings.commandsPage.emptyCommands")}
             </p>
-            <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground">
-              {t("settings.commandsPage.appHint")}
-            </p>
+            <Button variant="outline" size="xs" onClick={openCreate}>
+              <PlusIcon className="size-3 mr-1" />
+              {t("settings.commandsPage.addCustom")}
+            </Button>
           </div>
         </div>
+      ) : sortedAssets.length === 0 ? (
+        <div className={cn(CARD, "min-w-0 py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+          {t("settings.agentAssets.noMatches")}
+        </div>
+      ) : (
+        <div className={cn(CARD, "min-w-0 overflow-hidden")}>
+          {visibleAssets.map((asset) => {
+            const cmd = cmdByFqid.get(asset.fqid);
+            const canDelete = Boolean(cmd?.removable ?? asset.editable);
+            const teamLabel = teamDisplayName(
+              asset.teamId,
+              asset.origin.teamName,
+              t,
+            );
+            const description = (cmd?.description || asset.description || "").trim();
 
-        {!projectRoot ? (
-          <div className={cn(CARD, "!divide-y-0")}>
-            <div className="flex flex-col items-center gap-3 py-10 text-center">
-              <TerminalIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                {t("settings.commandsPage.openProject")}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-              <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.commandsPage.installed")}</p>
-              <Button variant="outline" size="xs" onClick={openCreate}>
-                <PlusIcon className="size-3 mr-1" />
-                {t("settings.commandsPage.addCustom")}
-              </Button>
-            </div>
-
-            {!loaded ? (
-              <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
-                {t("common.loading")}
-              </div>
-            ) : sortedAssets.length === 0 ? (
-              <div className={cn(CARD, "!divide-y-0")}>
-                <div className="flex flex-col items-center gap-3 py-10 text-center">
-                  <TerminalIcon className="size-8 text-muted-foreground/30" />
-                  <p className="text-[length:var(--font-size-13)] text-muted-foreground">
-                    {t("settings.commandsPage.emptyCommands")}
-                  </p>
-                  <Button variant="outline" size="xs" onClick={openCreate}>
-                    <PlusIcon className="size-3 mr-1" />
-                    {t("settings.commandsPage.addCustom")}
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className={CARD}>
-                {visibleAssets.map((asset) => {
-                  const cmd = cmdByFqid.get(asset.fqid);
-                  const canDelete = Boolean(cmd?.removable ?? asset.editable);
-                  const teamLabel = teamDisplayName(
-                    asset.teamId,
-                    asset.origin.teamName,
-                    t,
-                  );
-                  const description = (cmd?.description || asset.description || "").trim();
-
-                  return (
-                    <div key={asset.fqid} className={ROW}>
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 pr-3 text-left"
-                        disabled={saving}
-                        onClick={() => openCommand(asset)}
-                      >
-                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
-                          <span className={cn(ROW_LABEL, "font-mono shrink-0")}>
-                            /{asset.name}
-                          </span>
-                          <span
-                            className="text-[length:var(--font-size-11)] text-muted-foreground truncate min-w-0"
-                            title={teamLabel}
-                          >
-                            {teamLabel}
-                          </span>
-                        </div>
-                        {description ? (
-                          <p className={cn(ROW_DESC, "truncate")} title={description}>
-                            {description}
-                          </p>
-                        ) : null}
-                      </button>
-                      {canDelete ? (
-                        <InlineDeleteButton
-                          itemId={asset.fqid}
-                          pending={deleteConfirm.isPending(asset.fqid)}
-                          disabled={saving}
-                          onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
-                          onConfirm={() => void confirmDelete(asset.fqid)}
-                        />
-                      ) : null}
-                    </div>
-                  );
-                })}
-                {!listExpanded && hiddenCount > 0 ? (
-                  <button
-                    type="button"
-                    className={cn(
-                      ROW,
-                      "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
-                    )}
-                    onClick={() => setListExpanded(true)}
-                  >
-                    {t("settings.commandsPage.loadMore", { count: hiddenCount })}
-                  </button>
+            return (
+              <div key={asset.fqid} className={cn(ROW, "min-w-0 items-start")}>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 pr-2 text-left"
+                  disabled={saving}
+                  onClick={() => openCommand(asset)}
+                >
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className={cn(ROW_LABEL, "min-w-0 max-w-full truncate font-mono")}>
+                      /{asset.name}
+                    </span>
+                    <span
+                      className="min-w-0 max-w-full truncate text-[length:var(--font-size-11)] text-muted-foreground"
+                      title={teamLabel}
+                    >
+                      {teamLabel}
+                    </span>
+                  </div>
+                  {description ? (
+                    <p className={cn(ROW_DESC, "line-clamp-2 break-words")} title={description}>
+                      {description}
+                    </p>
+                  ) : null}
+                </button>
+                {canDelete ? (
+                  <InlineDeleteButton
+                    itemId={asset.fqid}
+                    pending={deleteConfirm.isPending(asset.fqid)}
+                    disabled={saving}
+                    onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
+                    onConfirm={() => void confirmDelete(asset.fqid)}
+                  />
                 ) : null}
               </div>
-            )}
-          </div>
-        )}
+            );
+          })}
+          {!listExpanded && hiddenCount > 0 ? (
+            <button
+              type="button"
+              className={cn(
+                ROW,
+                "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setListExpanded(true)}
+            >
+              {t("settings.commandsPage.loadMore", { count: hiddenCount })}
+            </button>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0 space-y-6">{listBody}</div>;
+  }
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6 px-4 py-8 sm:px-8">
+        <div className="min-w-0">
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
+            {t("settings.commandsPage.title")}
+          </h2>
+          <p className="mt-0.5 text-[length:var(--font-dialog-label)] text-muted-foreground">
+            {t("settings.commandsPage.pageDesc")}
+          </p>
+          <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground">
+            {t("settings.commandsPage.appHint")}
+          </p>
+        </div>
+        {listBody}
       </div>
     </div>
   );

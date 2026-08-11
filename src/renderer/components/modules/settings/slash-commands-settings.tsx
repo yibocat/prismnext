@@ -1,6 +1,7 @@
 import CommandsSettings from "./commands-settings";
+import type { AgentAssetPaneProps } from "./agent-assets-shared";
 
-/** Settings → Commands category entry (self-contained page chrome lives in CommandsSettings). */
-export function SlashCommandsSettings() {
-  return <CommandsSettings />;
+/** Legacy entry; Commands live under Settings → Teams hub tabs. */
+export function SlashCommandsSettings(props: AgentAssetPaneProps = {}) {
+  return <CommandsSettings {...props} />;
 }

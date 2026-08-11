@@ -1,19 +1,20 @@
 // Teams Center（§9.1 浏览页）—— LeftSidebar Nav 的沉浸式页面。
-// 布局完全对齐 TemplateCenter：max-w-6xl 容器 + 页头 + 左侧栏（分类/
-// 信息）+ 右侧 @container（搜索 + 卡片网格 / 详情），卡片用 shadcn Card
-// + muted 图标带，按钮 shadow-none，全页无彩色元素。
+// 布局对齐 TemplateCenter：max-w-6xl + 页头 + 左侧分类/信息 + 右侧
+// @container。列表卡片为紧凑双列行（图标 | 名+一行简介 | 安装/卸载）。
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   ArrowLeftIcon,
   Bot,
-  CheckIcon,
+  DownloadIcon,
   PuzzleIcon,
   SearchIcon,
+  Settings2Icon,
   SlashIcon,
   SparklesIcon,
   PlugIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
@@ -23,13 +24,11 @@ import { useChatStore } from "@/stores/chat-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
   type AssetKind,
-  type Fqid,
 } from "@shared/teams/types";
 import type { TeamCardView } from "../../../stores/teams-store";
 import { toCardView } from "../../../stores/teams-store";
@@ -162,6 +161,24 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
     }
   };
 
+  const uninstall = async (pack: TeamCardView) => {
+    setBusy(pack.manifest.id);
+    try {
+      await window.electronAPI.teamsUninstall(pack.manifest.id);
+      toast.success(t("teamsCenter.toast.uninstalled", { name: pack.manifest.name }));
+      await reload();
+    } catch (err) {
+      toast.error(String(err instanceof Error ? err.message : err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openManageInSettings = () => {
+    useLayoutStore.getState().setLeftSidebarView("settings");
+    useLayoutStore.getState().setSettingsCategory("teams-agents");
+  };
+
   // Browse = installable packs only (never Common Team / project hangar / local teams).
   const browsable = useMemo(() => packs.filter(isStoreBrowsable), [packs]);
 
@@ -195,44 +212,44 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       return (p.manifest.category?.trim() || "general") === f.slice(4);
     }).length;
 
-  const installButton = (pack: TeamCardView, fullWidth = false) => {
+  const rowActionButton = (pack: TeamCardView) => {
     const state = packDisplayState(pack);
-    const buttonClass = cn(
-      "gap-1 shadow-none",
-      fullWidth && "h-7 w-full text-[length:var(--font-size-12)]",
-    );
     if (state === "installedProLocked") {
-      // Installed but license invalid → offer re-activation deep link.
       return (
         <Button
-          size="sm"
-          variant="secondary"
-          className={buttonClass}
+          size="xs"
+          variant="outline"
+          className="shrink-0"
           onClick={(e) => {
             e.stopPropagation();
             goActivate();
           }}
         >
-          {t("teamsCenter.card.installedProLocked")}
-          <span className="text-primary">{t("teamsCenter.card.goActivate")}</span>
+          {t("teamsCenter.card.goActivate")}
         </Button>
       );
     }
     if (pack.installed) {
       return (
-        <Button size="sm" variant="secondary" disabled className={buttonClass}>
-          <CheckIcon className="size-3.5" />
-          {state === "installedActive"
-            ? t("teamsCenter.card.installedActive")
-            : t("teamsCenter.card.installedDisabled")}
+        <Button
+          size="xs"
+          variant="outline"
+          className="shrink-0"
+          disabled={busy === pack.manifest.id}
+          onClick={(e) => {
+            e.stopPropagation();
+            void uninstall(pack);
+          }}
+        >
+          {t("teamsCenter.card.uninstall")}
         </Button>
       );
     }
     return (
       <Button
-        size="sm"
-        variant={fullWidth ? "default" : "outline"}
-        className={buttonClass}
+        size="xs"
+        variant="outline"
+        className="shrink-0"
         disabled={busy === pack.manifest.id || !pack.compatible || pack.locked}
         onClick={(e) => {
           e.stopPropagation();
@@ -263,9 +280,59 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
     </button>
   );
 
+  const renderDetailActions = () => {
+    if (!selected) return null;
+    return (
+      <>
+        {selected.installed && packDisplayState(selected) === "installedProLocked" ? (
+          <Button size="xs" variant="outline" className="shrink-0" onClick={goActivate}>
+            {t("teamsCenter.card.goActivate")}
+          </Button>
+        ) : selected.installed ? (
+          <Button
+            size="xs"
+            variant="outline"
+            className="shrink-0"
+            disabled={busy === selected.manifest.id}
+            onClick={() => void uninstall(selected)}
+          >
+            <Trash2Icon className="size-3" />
+            {t("teamsCenter.card.uninstall")}
+          </Button>
+        ) : selected.locked || !selected.compatible ? (
+          <Button size="xs" variant="outline" className="shrink-0" disabled>
+            {selected.locked
+              ? t("teamsCenter.card.proLocked")
+              : t("teamsCenter.card.incompatible")}
+          </Button>
+        ) : (
+          <Button
+            size="xs"
+            variant="outline"
+            className="shrink-0"
+            disabled={busy === selected.manifest.id}
+            onClick={() => void install(selected)}
+          >
+            <DownloadIcon className="size-3" />
+            {t("teamsCenter.card.install")}
+          </Button>
+        )}
+        <Button
+          size="xs"
+          variant="outline"
+          className="shrink-0"
+          onClick={openManageInSettings}
+        >
+          <Settings2Icon className="size-3" />
+          {t("teamsCenter.manage")}
+        </Button>
+      </>
+    );
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <div className="max-w-6xl mx-auto w-full px-8 pt-8 pb-8">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full min-w-0 max-w-6xl px-4 pt-6 pb-8 sm:px-8 sm:pt-8">
         {/* 页头（与 TemplateCenter 一致） */}
         <div className="mb-6 hidden lg:block space-y-1">
           <h2 className="text-[length:var(--font-session-item)] font-semibold">
@@ -283,64 +350,63 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
           ) : null}
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-start min-h-0 gap-6">
-          {/* 左侧栏：分类（浏览）/ 信息（详情），对齐 TemplateSidebar / DetailSidebar */}
-          <div className="shrink-0 w-full lg:w-[200px]">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors mb-4 lg:hidden"
-              onClick={selected ? () => setSelectedId(null) : onBack}
-            >
-              <ArrowLeftIcon className="size-3.5" />
-              {t("common.back")}
-            </button>
-
-            {selected ? (
-              <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
-                <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider hidden lg:block">
-                  {t("teamsCenter.meta.title")}
-                </p>
-                <div className="flex flex-col gap-y-3 text-[length:var(--font-size-12)] text-muted-foreground px-2">
-                  <div>
-                    <span>{t("teamsCenter.meta.status")}</span>
-                    <p className="text-foreground font-medium">
-                      {packDisplayState(selected) === "installedActive" &&
-                        t("teamsCenter.card.installedActive")}
-                      {packDisplayState(selected) === "installedDisabled" &&
-                        t("teamsCenter.card.installedDisabled")}
-                      {packDisplayState(selected) === "installedProLocked" &&
-                        t("teamsCenter.card.installedProLocked")}
-                      {packDisplayState(selected) === "proLocked" &&
-                        t("teamsCenter.card.proLocked")}
-                      {packDisplayState(selected) === "installable" &&
-                        t("teamsCenter.card.notInstalled")}
-                    </p>
-                  </div>
-                  <div>
-                    <span>{t("teamsCenter.meta.publisher")}</span>
-                    <p className="text-foreground">{selected.manifest.publisher}</p>
-                  </div>
-                  <div>
-                    <span>{t("teamsCenter.meta.version")}</span>
-                    <p className="text-foreground">v{selected.manifest.version}</p>
-                  </div>
-                  <div>
-                    <span>{t("teamsCenter.meta.tier")}</span>
-                    <p className="text-foreground">
-                      {selected.manifest.tier === "pro" ? "Pro" : "Free"}
-                    </p>
-                  </div>
-                  {selected.manifest.category ? (
-                    <div>
-                      <span>{t("teamsCenter.meta.category")}</span>
-                      <p className="text-foreground capitalize">{selected.manifest.category}</p>
-                    </div>
-                  ) : null}
+        <div className="flex min-h-0 min-w-0 flex-col gap-6 lg:flex-row lg:items-start">
+          {/* 浏览：分类侧栏；详情：宽屏才显示信息栏（窄屏徽章已含关键信息） */}
+          {selected ? (
+            <div className="hidden w-[200px] shrink-0 flex-col gap-1 px-2 lg:flex">
+              <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider">
+                {t("teamsCenter.meta.title")}
+              </p>
+              <div className="flex flex-col gap-y-3 px-2 text-[length:var(--font-size-12)] text-muted-foreground">
+                <div>
+                  <span>{t("teamsCenter.meta.status")}</span>
+                  <p className="font-medium text-foreground">
+                    {packDisplayState(selected) === "installedActive" &&
+                      t("teamsCenter.card.installedActive")}
+                    {packDisplayState(selected) === "installedDisabled" &&
+                      t("teamsCenter.card.installedDisabled")}
+                    {packDisplayState(selected) === "installedProLocked" &&
+                      t("teamsCenter.card.installedProLocked")}
+                    {packDisplayState(selected) === "proLocked" &&
+                      t("teamsCenter.card.proLocked")}
+                    {packDisplayState(selected) === "installable" &&
+                      t("teamsCenter.card.notInstalled")}
+                  </p>
                 </div>
+                <div>
+                  <span>{t("teamsCenter.meta.publisher")}</span>
+                  <p className="text-foreground">{selected.manifest.publisher}</p>
+                </div>
+                <div>
+                  <span>{t("teamsCenter.meta.version")}</span>
+                  <p className="text-foreground">v{selected.manifest.version}</p>
+                </div>
+                <div>
+                  <span>{t("teamsCenter.meta.tier")}</span>
+                  <p className="text-foreground">
+                    {selected.manifest.tier === "pro" ? "Pro" : "Free"}
+                  </p>
+                </div>
+                {selected.manifest.category ? (
+                  <div>
+                    <span>{t("teamsCenter.meta.category")}</span>
+                    <p className="capitalize text-foreground">{selected.manifest.category}</p>
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <div className="lg:w-[200px] shrink-0 flex flex-col gap-1 px-2">
-                <p className="px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider hidden lg:block">
+            </div>
+          ) : (
+            <div className="w-full shrink-0 lg:w-[200px]">
+              <button
+                type="button"
+                className="mb-4 flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+                onClick={onBack}
+              >
+                <ArrowLeftIcon className="size-3.5" />
+                {t("common.back")}
+              </button>
+              <div className="flex flex-col gap-1 px-2">
+                <p className="hidden px-2 pb-1 text-[length:var(--font-hint)] text-muted-foreground uppercase tracking-wider lg:block">
                   {t("teamsCenter.sidebar")}
                 </p>
                 <div className="flex flex-col gap-1">
@@ -354,59 +420,68 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                   )}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* 右侧主区 */}
-          <div className="flex-1 min-w-0 @container">
+          <div className="min-w-0 flex-1 @container">
             {selected ? (
               /* ── 详情页（对齐 template DetailView） ── */
-              <div className="flex-1 pb-8">
+              <div className="min-w-0 flex-1 pb-8">
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors mb-6"
+                  className="mb-6 flex items-center gap-1.5 text-[length:var(--font-size-12)] text-muted-foreground transition-colors hover:text-foreground"
                   onClick={() => setSelectedId(null)}
                 >
                   <ArrowLeftIcon className="size-3.5" />
                   {t("teamsCenter.backToList")}
                 </button>
 
-                <div className="space-y-6">
-                  <div className="flex items-start gap-3">
-                    <PackIcon size="lg" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-[length:var(--font-size-13)] font-medium">
-                          {selected.manifest.name}
-                        </h3>
-                        {selected.manifest.tier === "pro" && <ProBadge />}
-                        {!selected.compatible && (
-                          <Badge variant="destructive">
-                            {t("teamsCenter.card.incompatible")}
-                          </Badge>
-                        )}
-                        {selected.installed && (
-                          <Badge variant="outline">
-                            {packDisplayState(selected) === "installedActive"
-                              ? t("teamsCenter.card.installedActive")
-                              : packDisplayState(selected) === "installedDisabled"
-                                ? t("teamsCenter.card.installedDisabled")
-                                : t("teamsCenter.card.installedProLocked")}
-                          </Badge>
-                        )}
+                <div className="min-w-0 space-y-6">
+                  <div className="flex min-w-0 flex-col gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <PackIcon size="lg" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <h3 className="break-words text-[length:var(--font-size-13)] font-medium">
+                            {selected.manifest.name}
+                          </h3>
+                          {selected.manifest.tier === "pro" && <ProBadge />}
+                          {!selected.compatible && (
+                            <Badge variant="destructive">
+                              {t("teamsCenter.card.incompatible")}
+                            </Badge>
+                          )}
+                          {selected.installed && (
+                            <Badge variant="outline">
+                              {packDisplayState(selected) === "installedActive"
+                                ? t("teamsCenter.card.installedActive")
+                                : packDisplayState(selected) === "installedDisabled"
+                                  ? t("teamsCenter.card.installedDisabled")
+                                  : t("teamsCenter.card.installedProLocked")}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 break-words text-[length:var(--font-size-12)] leading-relaxed text-muted-foreground">
+                          {selected.manifest.longDescription ?? selected.manifest.description}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge variant="outline">{selected.manifest.publisher}</Badge>
+                          <Badge variant="secondary">v{selected.manifest.version}</Badge>
+                          {(selected.manifest.tags ?? []).map((tag) => (
+                            <Badge key={tag} variant="secondary">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                      <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-relaxed mt-1">
-                        {selected.manifest.longDescription ?? selected.manifest.description}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        <Badge variant="outline">{selected.manifest.publisher}</Badge>
-                        <Badge variant="secondary">v{selected.manifest.version}</Badge>
-                        {(selected.manifest.tags ?? []).map((tag) => (
-                          <Badge key={tag} variant="secondary">
-                            {tag}
-                          </Badge>
-                        ))}
+                      {/* 宽容器：操作靠右；窄容器改到下方整行，避免挤扁简介 */}
+                      <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1.5 @md:flex">
+                        {renderDetailActions()}
                       </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 @md:hidden">
+                      {renderDetailActions()}
                     </div>
                   </div>
 
@@ -416,20 +491,22 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                     if (group.length === 0) return null;
                     const Meta = KIND_META[kind];
                     return (
-                      <div key={kind}>
-                        <h3 className="text-[length:var(--font-size-13)] font-medium mb-2 flex items-center gap-1.5">
-                          <Meta.icon className="size-3.5 text-muted-foreground" />
+                      <div key={kind} className="min-w-0">
+                        <h3 className="mb-2 flex items-center gap-1.5 text-[length:var(--font-size-13)] font-medium">
+                          <Meta.icon className="size-3.5 shrink-0 text-muted-foreground" />
                           {t(Meta.labelKey)}
-                          <span className="text-muted-foreground font-normal tabular-nums">
+                          <span className="tabular-nums font-normal text-muted-foreground">
                             {group.length}
                           </span>
                         </h3>
-                        <div className="rounded-lg border border-border divide-y divide-border">
+                        <div className="divide-y divide-border rounded-lg border border-border">
                           {group.map((c) => (
-                            <div key={c.id} className="px-3 py-2">
-                              <div className="text-[length:var(--font-size-12)]">{c.name || c.id}</div>
+                            <div key={c.id} className="min-w-0 px-3 py-2">
+                              <div className="break-words text-[length:var(--font-size-12)]">
+                                {c.name || c.id}
+                              </div>
                               {c.description && (
-                                <div className="text-[length:var(--font-size-11)] text-muted-foreground mt-0.5">
+                                <div className="mt-0.5 break-words text-[length:var(--font-size-11)] text-muted-foreground">
                                   {c.description}
                                 </div>
                               )}
@@ -439,49 +516,6 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                       </div>
                     );
                   })}
-
-                  {/* 操作 */}
-                  <div className="flex items-center gap-2 pt-2">
-                    {selected.installed &&
-                    packDisplayState(selected) === "installedProLocked" ? (
-                      <Button
-                        size="sm"
-                        className="shadow-none"
-                        onClick={goActivate}
-                      >
-                        {t("teamsCenter.card.goActivate")}
-                      </Button>
-                    ) : (
-                      !selected.installed &&
-                      (selected.locked || !selected.compatible ? (
-                        <Button size="sm" className="shadow-none" disabled>
-                          {selected.locked
-                            ? t("teamsCenter.card.proLocked")
-                            : t("teamsCenter.card.incompatible")}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="shadow-none"
-                          disabled={busy === selected.manifest.id}
-                          onClick={() => void install(selected)}
-                        >
-                          {t("teamsCenter.card.install")}
-                        </Button>
-                      ))
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="shadow-none"
-                      onClick={() => {
-                        useLayoutStore.getState().setLeftSidebarView("settings");
-                        useLayoutStore.getState().setSettingsCategory("teams");
-                      }}
-                    >
-                      {t("teamsCenter.manage")}
-                    </Button>
-                  </div>
                 </div>
               </div>
             ) : (
@@ -530,42 +564,31 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                     <p className="text-[length:var(--font-size-13)]">{t("teamsCenter.empty")}</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 @sm:grid-cols-2 @md:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 @md:grid-cols-2 gap-2">
                     {filtered.map((pack) => (
-                      <Card
+                      <button
                         key={pack.manifest.id}
+                        type="button"
                         className={cn(
-                          "cursor-pointer transition-colors overflow-hidden",
-                          pack.installed ? "border-primary" : "hover:border-border",
+                          "flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left transition-colors",
+                          pack.installed ? "bg-muted" : "hover:bg-muted",
                         )}
                         onClick={() => setSelectedId(pack.manifest.id)}
                       >
-                        <div className="relative h-14 flex items-center justify-center bg-muted">
-                          <PackIcon size="md" />
-                          {pack.installed ? (
-                            <Badge className="absolute top-1.5 right-1.5 h-5 px-1.5 text-[length:var(--font-size-10)]">
-                              {packDisplayState(pack) === "installedActive"
-                                ? t("teamsCenter.card.installedActive")
-                                : packDisplayState(pack) === "installedDisabled"
-                                  ? t("teamsCenter.card.installedDisabled")
-                                  : t("teamsCenter.card.installedProLocked")}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <CardHeader className="p-2.5 gap-0">
-                          <CardTitle className="text-[length:var(--font-size-12)] flex items-center gap-1.5">
-                            {pack.manifest.name}
+                        <PackIcon size="md" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate text-[length:var(--font-size-12)] font-medium text-foreground">
+                              {pack.manifest.name}
+                            </span>
                             {pack.manifest.tier === "pro" && <ProBadge />}
-                          </CardTitle>
-                          <CardDescription className="text-[length:var(--font-badge)] line-clamp-2 leading-relaxed mt-0.5">
+                          </div>
+                          <p className="mt-0.5 truncate text-[length:var(--font-size-11)] text-muted-foreground">
                             {pack.manifest.description}
-                          </CardDescription>
-                          <p className="mt-1.5 text-[length:var(--font-size-10)] uppercase tracking-wide text-muted-foreground">
-                            {pack.manifest.publisher} · v{pack.manifest.version}
                           </p>
-                        </CardHeader>
-                        <div className="px-2.5 pb-2.5">{installButton(pack, true)}</div>
-                      </Card>
+                        </div>
+                        {rowActionButton(pack)}
+                      </button>
                     ))}
                   </div>
                 )}

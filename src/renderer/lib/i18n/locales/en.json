@@ -69,7 +69,17 @@
       "browser": "Browser",
       "literature": "Literature",
       "pro": "Pro",
-      "teams": "Teams"
+      "teams": "Teams & Agents"
+    },
+    "agentAssets": {
+      "title": "Teams & Agents",
+      "pageDesc": "Teams and their skills, slash commands, and MCP servers — switch tabs to manage each kind.",
+      "searchPlaceholder": "Search this tab…",
+      "tabTeams": "Teams",
+      "tabSkills": "Skills",
+      "tabCommands": "Commands",
+      "tabMcp": "MCP",
+      "noMatches": "No matches for this search."
     },
     "general": {
       "title": "General",
@@ -371,8 +381,8 @@
       "rowDesc": {
         "customPrompt": "Custom prompt replaces the built-in default in `_prism-system.md`.",
         "builtinPrompt": "Built-in prismnext persona written to `_prism-system.md` on chat sync.",
-        "stackSummary": "Baseline _prism-system: ~{{tokens}} tokens · {{layers}} layers in stack preview",
-        "openForStack": "Open a project to see full stack preview.",
+        "stackSummary": "{{layers}} injection layers · ~{{tokens}} tokens total (_prism-system, AGENTS.md, project rules, lead)",
+        "openForStack": "Open a project to see the full injection stack preview.",
         "openForInstructions": "Open a project to edit project instructions.",
         "instructions": "Project-specific instructions — separate OpenCode instruction file, not merged into `_prism-system.md`.",
         "agentsChars": "{{count}} characters in project instructions.",
@@ -1583,7 +1593,7 @@
       "localLabel": "Local",
       "myTeam": "My team",
       "viewDetails": "Details",
-      "teamEmptyAgentsHint": "This team has no lead agents or subagents yet. Its skills and commands are managed in the Skills and Commands pages.",
+      "teamEmptyAgentsHint": "This team has no lead agents or subagents yet. Manage its skills and commands under Settings → Teams (Skills / Commands tabs).",
       "cancel": "Cancel",
       "deleteTeam": "Delete team",
       "enableInProject": "Enable in this project",
@@ -3259,6 +3269,7 @@
     },
     "card": {
       "install": "Install",
+      "uninstall": "Uninstall",
       "added": "Installed",
       "disabled": "Disabled",
       "proLocked": "Pro",
@@ -3287,7 +3298,8 @@
       "minHostVersion": "Requires app"
     },
     "toast": {
-      "installed": "Team installed."
+      "installed": "Team installed.",
+      "uninstalled": "Team uninstalled."
     },
     "suggestion": {
       "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",

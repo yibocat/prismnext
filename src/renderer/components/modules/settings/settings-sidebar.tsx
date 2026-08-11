@@ -25,14 +25,12 @@ import {
   XIcon,
   Bot,
   BookOpenIcon,
-  PuzzleIcon,
-  PlugIcon,
-  SlashIcon,
   ShieldIcon,
   InfoIcon,
   SparklesIcon,
 } from "lucide-react";
 import { useProLicenseStore } from "@/stores/pro-license-store";
+import { isAgentAssetsCategory } from "./agent-assets-shared";
 
 const SECTION_LABEL =
   "text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50";
@@ -54,9 +52,6 @@ export const SETTINGS_GROUPS = [
       { id: "teams-agents", labelKey: "settings.nav.teams", icon: Bot },
       { id: "prompts-rules", labelKey: "settings.nav.promptsRules", icon: FileTextIcon },
       { id: "permissions", labelKey: "settings.nav.permissions", icon: ShieldIcon },
-      { id: "commands", labelKey: "settings.nav.commands", icon: SlashIcon },
-      { id: "tools-mcp", labelKey: "settings.nav.mcp", icon: PlugIcon },
-      { id: "skills", labelKey: "settings.nav.skills", icon: PuzzleIcon },
     ],
   },
   {
@@ -117,22 +112,34 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
                 <span className={SECTION_LABEL}>{t(group.labelKey)}</span>
               </div>
               <div className="flex flex-col gap-1">
-                {group.items.map((cat) => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
-                      activeCategory === cat.id
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    )}
-                    onClick={() => onSelectCategory(cat.id)}
-                  >
-                    <cat.icon className="size-3.5 shrink-0 text-muted-foreground" />
-                    <span className="flex-1 text-left">{t(cat.labelKey)}</span>
-                  </button>
-                ))}
+                {group.items.map((cat) => {
+                  const selected =
+                    cat.id === "teams-agents"
+                      ? isAgentAssetsCategory(activeCategory)
+                      : activeCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
+                        selected
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      )}
+                      onClick={() => {
+                        if (cat.id === "teams-agents" && isAgentAssetsCategory(activeCategory)) {
+                          onSelectCategory(activeCategory);
+                          return;
+                        }
+                        onSelectCategory(cat.id);
+                      }}
+                    >
+                      <cat.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="flex-1 text-left">{t(cat.labelKey)}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
