@@ -1,6 +1,4 @@
 import { ipcMain } from "electron";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   listProjectSkills,
   readSkillsManifest,
@@ -9,9 +7,7 @@ import {
   removeSkillLibrarySource,
   setSkillLibrarySourceConnected,
   listLibrarySources,
-  PRISM_CURATED_SOURCE_ID,
   activeRemoteRegistryUrls,
-  PRISM_LOCAL_SKILLS_REL,
   setSkillContentEnabled,
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
@@ -168,11 +164,20 @@ export function registerSkillsHandlers(): void {
     "agent:installSkill",
     async (
       _event,
-      args: { projectPath: string; skillId: string; content: string },
+      args: {
+        projectPath: string;
+        skillId: string;
+        content: string;
+        targetTeamId?: string;
+      },
     ) => {
-      const skillDir = join(args.projectPath, PRISM_LOCAL_SKILLS_REL, args.skillId);
-      mkdirSync(skillDir, { recursive: true });
-      writeFileSync(join(skillDir, "SKILL.md"), args.content, "utf-8");
+      const { installProjectSkill } = await import("../services/skills-sync");
+      installProjectSkill(
+        args.projectPath,
+        args.skillId,
+        args.content,
+        args.targetTeamId,
+      );
       return refreshProjectSkills(args.projectPath);
     },
   );

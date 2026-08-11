@@ -45,21 +45,27 @@ export function CollapsibleFormSection({
   title,
   summary,
   defaultOpen = false,
+  /** When false, no outer card chrome — only children (e.g. a content preview) should be framed. */
+  framed = true,
   children,
 }: {
   title: string;
   summary?: string;
   defaultOpen?: boolean;
+  framed?: boolean;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded-lg border border-border overflow-hidden">
+    <div className={cn(framed && "rounded-lg border border-border overflow-hidden")}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted/40 transition-colors"
+        className={cn(
+          "flex w-full items-center justify-between gap-3 text-left transition-colors",
+          framed ? "px-3 py-2.5 hover:bg-muted/40" : "py-1",
+        )}
       >
         <span className="min-w-0">
           <span className="block text-[length:var(--font-size-13)] font-medium">{title}</span>
@@ -76,7 +82,11 @@ export function CollapsibleFormSection({
           )}
         />
       </button>
-      {open ? <div className="border-t border-border/60 px-3 py-3">{children}</div> : null}
+      {open ? (
+        <div className={cn(framed ? "border-t border-border/60 px-3 py-3" : "pt-2")}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -312,11 +322,17 @@ export function ProfileEditorForm({
   onFormChange,
   builtinCustomize = false,
   saving = false,
+  /** When false, hide the model / reasoning controls (lead agents use Composer model). */
+  showModel = true,
+  /** Initial instructions pane — use "source" when creating so the user can type immediately. */
+  initialInstructionsView = "preview",
 }: {
   form: ProfileFormState;
   onFormChange: (next: ProfileFormState) => void;
   builtinCustomize?: boolean;
   saving?: boolean;
+  showModel?: boolean;
+  initialInstructionsView?: "source" | "preview";
 }) {
   const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
@@ -384,7 +400,7 @@ export function ProfileEditorForm({
   const patch = (partial: Partial<ProfileFormState>) => onFormChange({ ...form, ...partial });
   const lockIdentity = builtinCustomize;
   const lockInstructions = builtinCustomize;
-  const [instructionsView, setInstructionsView] = useState<"source" | "preview">("preview");
+  const [instructionsView, setInstructionsView] = useState<"source" | "preview">(initialInstructionsView);
   const [instructionTokenCount, setInstructionTokenCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -432,74 +448,78 @@ export function ProfileEditorForm({
         </SettingsFormField>
       </div>
 
-      <div>
-        <h3 className={SETTINGS_CATEGORY_HEADER}>{t("settings.agent.profileForm.model")}</h3>
-        <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
-          {t("settings.agent.profileForm.modelDesc")}
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <AppSelect
-            disabled={saving}
-            value={modelValue || "__default__"}
-            onValueChange={(v) => {
-              if (v === "__default__") {
-                patch({ modelProvider: "", modelId: "", thoughtLevel: "" });
-                return;
-              }
-              const [providerId, modelId] = v.split("::");
-              patch({
-                modelProvider: providerId,
-                modelId,
-                thoughtLevel: "",
-              });
-            }}
-          >
-            <AppSelectTrigger variant="dialog" className="w-full min-w-[min(320px,100%)]">
-              <AppSelectValue placeholder={t("settings.agent.profileForm.chatDefault")} />
-            </AppSelectTrigger>
-            <AppSelectContent>
-              <AppSelectItem value="__default__">
-                {t("settings.agent.profileForm.chatDefault")}
-              </AppSelectItem>
-              {Array.from(modelGroups.entries()).map(([providerId, entries]) => (
-                <AppSelectGroup key={providerId}>
-                  <AppSelectLabel>{entries[0]?.provider.name ?? providerId}</AppSelectLabel>
-                  {entries.map(({ model }) => (
-                    <AppSelectItem
-                      key={`${providerId}::${model.id}`}
-                      value={`${providerId}::${model.id}`}
-                    >
-                      {model.name}
-                    </AppSelectItem>
-                  ))}
-                </AppSelectGroup>
-              ))}
-            </AppSelectContent>
-          </AppSelect>
-
-          {form.modelProvider && thoughtLevels.length > 0 ? (
+      {showModel ? (
+        <div>
+          <h3 className="text-[length:var(--font-size-12)] font-medium mb-1">
+            {t("settings.agent.profileForm.model")}
+          </h3>
+          <p className={cn(SETTINGS_ROW_DESC, "mb-3")}>
+            {t("settings.agent.profileForm.modelDesc")}
+          </p>
+          <div className="flex flex-wrap gap-3">
             <AppSelect
               disabled={saving}
-              value={form.thoughtLevel || "__default__"}
-              onValueChange={(v) => patch({ thoughtLevel: v === "__default__" ? "" : v })}
+              value={modelValue || "__default__"}
+              onValueChange={(v) => {
+                if (v === "__default__") {
+                  patch({ modelProvider: "", modelId: "", thoughtLevel: "" });
+                  return;
+                }
+                const [providerId, modelId] = v.split("::");
+                patch({
+                  modelProvider: providerId,
+                  modelId,
+                  thoughtLevel: "",
+                });
+              }}
             >
-              <AppSelectTrigger variant="dialog" className="w-full min-w-[min(180px,100%)]">
-                <AppSelectValue placeholder={t("settings.agent.profileForm.reasoningDepth")} />
+              <AppSelectTrigger variant="dialog" className="w-full min-w-[min(320px,100%)]">
+                <AppSelectValue placeholder={t("settings.agent.profileForm.chatDefault")} />
               </AppSelectTrigger>
               <AppSelectContent>
                 <AppSelectItem value="__default__">
-                  {t("settings.agent.profileForm.defaultDepth")}
+                  {t("settings.agent.profileForm.chatDefault")}
                 </AppSelectItem>
-                {thoughtLevels.map((l) => (
-                  <AppSelectItem key={l.value} value={l.value}>
-                    {l.label}
-                  </AppSelectItem>
+                {Array.from(modelGroups.entries()).map(([providerId, entries]) => (
+                  <AppSelectGroup key={providerId}>
+                    <AppSelectLabel>{entries[0]?.provider.name ?? providerId}</AppSelectLabel>
+                    {entries.map(({ model }) => (
+                      <AppSelectItem
+                        key={`${providerId}::${model.id}`}
+                        value={`${providerId}::${model.id}`}
+                      >
+                        {model.name}
+                      </AppSelectItem>
+                    ))}
+                  </AppSelectGroup>
                 ))}
               </AppSelectContent>
             </AppSelect>
-          ) : null}
+
+            {form.modelProvider && thoughtLevels.length > 0 ? (
+              <AppSelect
+                disabled={saving}
+                value={form.thoughtLevel || "__default__"}
+                onValueChange={(v) => patch({ thoughtLevel: v === "__default__" ? "" : v })}
+              >
+                <AppSelectTrigger variant="dialog" className="w-full min-w-[min(180px,100%)]">
+                  <AppSelectValue placeholder={t("settings.agent.profileForm.reasoningDepth")} />
+                </AppSelectTrigger>
+                <AppSelectContent>
+                  <AppSelectItem value="__default__">
+                    {t("settings.agent.profileForm.defaultDepth")}
+                  </AppSelectItem>
+                  {thoughtLevels.map((l) => (
+                    <AppSelectItem key={l.value} value={l.value}>
+                      {l.label}
+                    </AppSelectItem>
+                  ))}
+                </AppSelectContent>
+              </AppSelect>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div>
         <div className={cn("mb-3", !lockInstructions && "flex items-start justify-between gap-3")}>
@@ -549,10 +569,7 @@ export function ProfileEditorForm({
         </div>
         {lockInstructions || instructionsView === "preview" ? (
           form.instructions.trim() ? (
-            <SettingsModulePromptPreview
-              content={form.instructions}
-              shellClassName="max-h-[28rem] overflow-y-auto"
-            />
+            <SettingsModulePromptPreview content={form.instructions} />
           ) : (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
               {t("settings.agent.profileForm.instructionsEmpty")}

@@ -1314,6 +1314,20 @@ export interface ElectronAPI {
     reloadedSessions: number;
     error?: string;
   }>;
+  mcpReadTeamJson: (
+    projectPath: string,
+    teamId?: string,
+  ) => Promise<{ teamId: string; content: string }>;
+  mcpWriteTeamJson: (
+    projectPath: string,
+    content: string,
+    teamId?: string,
+  ) => Promise<{
+    ok: boolean;
+    teamId?: string;
+    reloadedSessions: number;
+    error?: string;
+  }>;
   agentListSkills: (projectPath: string) => Promise<Array<{
     fqid: string;
     id: string;
@@ -1516,7 +1530,12 @@ export interface ElectronAPI {
       removable: boolean;
     }>;
   }>;
-  agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentInstallSkill: (
+    projectPath: string,
+    skillId: string,
+    content: string,
+    targetTeamId?: string,
+  ) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentInstallSkillFromRegistry: (
     projectPath: string,
     skillName: string,
@@ -1599,6 +1618,10 @@ export interface ElectronAPI {
     payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
     targetTeamId?: string,
   ) => Promise<{ expert: import("@shared/agent-subagents").SubagentInfo; experts: import("@shared/agent-subagents").SubagentInfo[] }>;
+  subagentsListRosterReferrers: (
+    projectPath: string,
+    expertId: string,
+  ) => Promise<Array<{ teamId: string; teamName: string; orchestratorFqid: string }>>;
   subagentsDeleteCustom: (
     projectPath: string,
     expertId: string,
@@ -1956,11 +1979,25 @@ export interface ElectronAPI {
     projectRoot: string,
     teamId: string,
   ) => Promise<import("../../shared/teams/view").RosterView | null>;
-  teamsCreate: (
-    name: string,
-    description: string | undefined,
-    scope: "app" | "project",
+  teamsGetSkillsRoster: (
     projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsGetCommandsRoster: (
+    projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsCreate: (
+    projectRoot: string,
+    input: {
+      name: string;
+      description?: string;
+      longDescription?: string;
+      tags?: string[];
+      scope: "app" | "project";
+      leadName?: string;
+      leadInstructions?: string;
+    },
   ) => Promise<{ teamId: string; dir: string }>;
   teamsDelete: (teamId: string, projectRoot?: string) => Promise<void>;
   teamsGetCoreState: (projectRoot: string) => Promise<{
@@ -1984,7 +2021,10 @@ export interface ElectronAPI {
     kind: import("../../shared/teams/types").AssetKind,
   ) => Promise<import("../../shared/teams/view").AssetViewV2[]>;
   teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
-  teamsGetTeamContents: (teamId: string) => Promise<{
+  teamsGetTeamContents: (
+    teamId: string,
+    projectRoot?: string | null,
+  ) => Promise<{
     kind: import("../../shared/teams/types").AssetKind;
     id: string;
     name: string;

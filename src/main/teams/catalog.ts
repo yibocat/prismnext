@@ -12,8 +12,8 @@
  *   project  <projectRoot>/.prismnext/agent/teams/ (project, user; writable)
  *
  * Dual layout (T0 froze the on-disk format; T6 migrates it): the new layout
- * (team.json + orchestrator/ + subagents/) wins, the legacy layout
- * (plugin.json + orchestrators/ + experts/) is the fallback.
+ * Canonical layout: team.json + orchestrators/<id>/ + subagents/ (+ skills/commands).
+ * Legacy fallback only: plugin.json + experts/ (still readable; do not author new packs this way).
  */
 
 import { app } from "electron";
@@ -29,7 +29,12 @@ import type {
   TeamSource,
 } from "../../shared/teams/types";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
-import { CORE_TEAM_ID, LOCAL_TEAM_ID, LOCAL_TEAM_REL, PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
+import {
+  CORE_TEAM_ID,
+  LOCAL_TEAM_ID,
+  LOCAL_TEAM_REL,
+  PROJECT_DEFAULT_TEAM_ID,
+} from "../../shared/teams/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
 import { createLogger } from "../services/logger";
 import { appTeamsDir, projectTeamsDir } from "./scope";
@@ -84,6 +89,28 @@ export function getBundledTeamsDir(): string {
     if (app.isPackaged) return join(process.resourcesPath, "resources", "teams");
     const appPath = app.getAppPath();
     return existsSync(appPath) ? join(appPath, "resources", "teams") : devFallback;
+  } catch {
+    return devFallback;
+  }
+}
+
+/**
+ * App-level slash commands dir (`resources/commands/`) — not a team.
+ * Packaged beside teams under `resources/`.
+ */
+export function getBundledAppCommandsDir(): string {
+  const override = process.env.PRISM_APP_COMMANDS_DIR?.trim();
+  if (override) return override;
+  const teamsDir = getBundledTeamsDir();
+  // …/resources/teams → …/resources/commands
+  const sibling = join(teamsDir, "..", "commands");
+  if (existsSync(sibling)) return sibling;
+  const devFallback = join(process.cwd(), "resources", "commands");
+  try {
+    if (!app) return devFallback;
+    if (app.isPackaged) return join(process.resourcesPath, "resources", "commands");
+    const appPath = app.getAppPath();
+    return existsSync(appPath) ? join(appPath, "resources", "commands") : devFallback;
   } catch {
     return devFallback;
   }
@@ -242,7 +269,17 @@ function readAgentDef(
     };
     const definition =
       kind === "orchestrator"
-        ? ({ ...base, roster: parseRoster(raw.roster ?? raw.allowedExperts, teamId) } as OrchestratorDefV2)
+        ? ({
+            ...base,
+            roster: parseRoster(raw.roster ?? raw.allowedExperts, teamId),
+            // Missing allowedSkills / allowedCommands → own-team only.
+            skillsRoster:
+              parseRoster(raw.skillsRoster ?? raw.allowedSkills, teamId)
+              ?? { mode: "list", members: ["@team"] },
+            commandsRoster:
+              parseRoster(raw.commandsRoster ?? raw.allowedCommands, teamId)
+              ?? { mode: "list", members: ["@team"] },
+          } as OrchestratorDefV2)
         : ({
             ...base,
             modules: Array.isArray(raw.modules) ? (raw.modules as string[]) : undefined,
@@ -305,8 +342,8 @@ function scanSkills(teamDir: string): ScannedAsset[] {
   return out;
 }
 
-function scanCommands(teamDir: string): ScannedAsset[] {
-  const root = join(teamDir, "commands");
+/** Scan `*.md` command files under a commands directory (team or app). */
+export function scanCommandMarkdownDir(root: string): ScannedAsset[] {
   if (!existsSync(root)) return [];
   const out: ScannedAsset[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -335,6 +372,15 @@ function scanCommands(teamDir: string): ScannedAsset[] {
     }
   }
   return out;
+}
+
+function scanCommands(teamDir: string): ScannedAsset[] {
+  return scanCommandMarkdownDir(join(teamDir, "commands"));
+}
+
+/** App-level commands (`resources/commands/`). FQIDs use {@link APP_COMMANDS_OWNER_ID}. */
+export function listAppCommandAssets(): ScannedAsset[] {
+  return scanCommandMarkdownDir(getBundledAppCommandsDir());
 }
 
 /** Read a team's mcp.json (McpServerDef[]; the single v2 MCP schema). */
@@ -484,6 +530,22 @@ function teamDirFingerprint(teamDir: string): string {
   return parts.sort().join("|");
 }
 
+function appCommandsDirFingerprint(): string {
+  const root = getBundledAppCommandsDir();
+  if (!existsSync(root)) return "app-commands:missing";
+  const parts: string[] = [];
+  for (const entry of readdirSync(root)) {
+    if (!entry.endsWith(".md")) continue;
+    try {
+      const st = statSync(join(root, entry));
+      parts.push(`${entry}:${st.mtimeMs}:${st.size}`);
+    } catch {
+      /* ignore */
+    }
+  }
+  return `app-commands:${parts.sort().join(",")}`;
+}
+
 function computeFingerprint(projectRoots: string[]): string {
   const roots = [
     getBundledTeamsDir(),
@@ -491,7 +553,7 @@ function computeFingerprint(projectRoots: string[]): string {
     appTeamsDir(),
     ...projectRoots.map((r) => projectTeamsDir(r)),
   ];
-  const parts: string[] = [];
+  const parts: string[] = [appCommandsDirFingerprint()];
   for (const root of roots) {
     if (!existsSync(root)) continue;
     for (const entry of readdirSync(root, { withFileTypes: true })) {

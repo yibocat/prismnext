@@ -2,6 +2,13 @@ import { join } from "node:path";
 import { ipcMain } from "electron";
 import { AcpService } from "../acp/service";
 import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
+import {
+  readWritableTeamMcpJson,
+  writeWritableTeamMcpJson,
+} from "../services/team-mcp-files";
+import { invalidateCatalog } from "../teams/catalog";
+import { invalidateResolver } from "../teams/resolver";
+import { PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
 
 export function registerMcpHandlers(): void {
   /**
@@ -45,6 +52,41 @@ export function registerMcpHandlers(): void {
       }
       const result = await AcpService.getInstanceForProject(projectPath).applyProjectMcpConfig(projectPath);
       return { ok: true as const, ...result };
+    },
+  );
+
+  /** Read a writable team's mcp.json (v2 array). Defaults to Project Team. */
+  ipcMain.handle(
+    "mcp:readTeamJson",
+    async (_e, args: { projectPath: string; teamId?: string }) => {
+      const projectPath = args.projectPath?.trim();
+      if (!projectPath) throw new Error("missing projectPath");
+      const teamId = args.teamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
+      return {
+        teamId,
+        content: readWritableTeamMcpJson(projectPath, teamId),
+      };
+    },
+  );
+
+  /** Write a writable team's mcp.json and apply to open sessions. */
+  ipcMain.handle(
+    "mcp:writeTeamJson",
+    async (_e, args: { projectPath: string; teamId?: string; content: string }) => {
+      const projectPath = args.projectPath?.trim();
+      if (!projectPath) {
+        return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
+      }
+      const teamId = args.teamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
+      writeWritableTeamMcpJson(projectPath, teamId, args.content ?? "[]\n");
+      // mcp.json is part of the catalog fingerprint, but projectViews stay stale
+      // until cleared — Settings → MCP list reads listAssets via that cache.
+      invalidateCatalog();
+      invalidateResolver(projectPath);
+      const applied = await AcpService.getInstanceForProject(projectPath).applyProjectMcpConfig(
+        projectPath,
+      );
+      return { ok: true as const, teamId, reloadedSessions: applied.reloadedSessions };
     },
   );
 }

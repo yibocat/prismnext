@@ -89,7 +89,7 @@ describe("user-packs (app-level teams)", () => {
     // agentFileBase form `<teamId>--<id>` for non-local packs).
     const bareOrchId = saved.id!.split("--").pop()!;
     expect(saved.fqid).toBe(`${team.teamId}:${bareOrchId}`);
-    expect(saved.removable).toBe(true);
+    expect(saved.removable).toBe(false);
     expect(saved.builtin).toBe(false);
 
     // Resolver exposes it as enabled content of that team.
@@ -116,9 +116,9 @@ describe("user-packs (app-level teams)", () => {
     );
     expect(edited.fqid).toBe(`${team.teamId}:${bareOrchId}`);
 
-    // Delete removes it from the team.
-    deleteCustomOrchestrator(root, saved.id);
-    expect(listOrchestrators(root).find((o) => o.fqid === `${team.teamId}:${bareOrchId}`)).toBeUndefined();
+    // Lead agents are never deleted alone — delete the team instead.
+    expect(() => deleteCustomOrchestrator(root, saved.id)).toThrow(/cannot be deleted/i);
+    expect(listOrchestrators(root).find((o) => o.fqid === `${team.teamId}:${bareOrchId}`)).toBeDefined();
   });
 
   it("saving an expert into a user team works too", () => {

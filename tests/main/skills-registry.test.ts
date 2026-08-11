@@ -129,8 +129,8 @@ describe("skills-registry", () => {
 });
 
 describe("skill-libraries", () => {
-  it("includes built-in remote cards", () => {
-    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "prism-curated")).toBe(true);
+  it("includes built-in remote cards (no Core-as-curated)", () => {
+    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "prism-curated")).toBe(false);
     expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "cloudflare-docs")).toBe(true);
     expect(REMOTE_SKILL_LIBRARY_PRESETS.length).toBeGreaterThan(0);
   });

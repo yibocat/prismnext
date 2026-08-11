@@ -1,17 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { useTeamsStore } from "@/stores/teams-store";
+import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 import {
   defaultNewSkillMarkdown,
   validateSkillMarkdown,
 } from "@/lib/agent/skills-markdown";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
+import { TeamPicker } from "../teams/team-picker";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
+import { Hint } from "@/components/ui/hint";
 
 type SkillMarkdownSlot = Extract<SettingsPanelSlot, { kind: "skill-markdown" }>;
 
@@ -19,6 +24,21 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const catalog = useTeamsStore((s) => s.catalog);
+  const loadTeams = useTeamsStore((s) => s.load);
+
+  const writableTeams = useMemo(
+    () => catalog.filter((tm) => tm.writable && tm.installed),
+    [catalog],
+  );
+
+  const [targetTeamId, setTargetTeamId] = useState(
+    slot.mode === "new"
+      ? (slot.targetTeamId ?? PROJECT_DEFAULT_TEAM_ID)
+      : slot.mode === "edit"
+        ? (slot.teamId ?? PROJECT_DEFAULT_TEAM_ID)
+        : PROJECT_DEFAULT_TEAM_ID,
+  );
 
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
@@ -32,12 +52,30 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     slot.mode === "new" ? "source" : "preview",
   );
 
-  const skillDirRel =
-    slot.mode === "edit" ? `.prismnext/agent/local/skills/${slot.skillId}` : null;
-  const skillPath =
-    projectRoot && skillDirRel
-      ? `${projectRoot.replace(/[/\\]+$/, "")}/${skillDirRel}/SKILL.md`
-      : null;
+  const skillPath = useMemo(() => {
+    if (slot.mode === "edit" && slot.absPath) return slot.absPath;
+    if (slot.mode === "edit" && projectRoot) {
+      return `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/teams/${targetTeamId}/skills/${slot.skillId}/SKILL.md`;
+    }
+    return null;
+  }, [slot, projectRoot, targetTeamId]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
+
+  const pickerTeams = useMemo(
+    () =>
+      writableTeams.map((tm) => ({
+        ...tm,
+        manifest: {
+          ...tm.manifest,
+          name: teamDisplayName(tm.manifest.id, tm.manifest.name, t),
+        },
+      })),
+    [writableTeams, t],
+  );
 
   const loadContent = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -54,7 +92,6 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         try {
           let text: string | null = null;
           if (slot.absPath) {
-            // 非 core pack 的技能：直接读绝对路径（只读预览）
             const result = await window.electronAPI.fsRead(slot.absPath);
             text = result?.content ?? null;
           } else {
@@ -90,7 +127,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         if (!silent) setLoading(false);
       }
     },
-    [slot.mode, slot.mode === "new" ? null : slot.skillId, skillPath, closePanel, t],
+    [slot, skillPath, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -107,10 +144,6 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     setViewMode(slot.mode === "new" ? "source" : "preview");
   }, [loadContent, slot.mode, slot.mode === "new" ? null : slot.skillId]);
 
-  // Resolve what "reset" means for this skill: drop the local diverged copy
-  // when the core pack ships the same id (core original resurfaces), reinstall
-  // from its registry/GitHub source otherwise. Custom skills have no default
-  // to recover, so they get no reset.
   useEffect(() => {
     if (slot.mode !== "edit") {
       setResetSource(null);
@@ -129,7 +162,9 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         }
         if (projectRoot) {
           const list = await window.electronAPI.agentListSkills(projectRoot);
-          const info = list.find((s) => s.fqid === `project.local:${slot.skillId}`);
+          const info = list.find(
+            (s) => s.fqid === `${targetTeamId}:${slot.skillId}` || s.id === slot.skillId,
+          );
           if (!cancelled && info?.installOrigin) setResetSource("registry");
         }
       } catch {
@@ -139,15 +174,14 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     return () => {
       cancelled = true;
     };
-  }, [slot.mode, slot.mode === "new" ? null : slot.skillId, projectRoot]);
+  }, [slot.mode, slot.mode === "new" ? null : slot.skillId, projectRoot, targetTeamId]);
 
   const handleResetToDefault = async () => {
     if (!projectRoot || slot.mode !== "edit" || !resetSource) return;
     setResetting(true);
     try {
       if (resetSource === "bundled") {
-        // 引用模型：删除 local 分歧副本，core 原件自动浮现（遮蔽解除）
-        await window.electronAPI.agentDeleteSkill(projectRoot, `project.local:${slot.skillId}`);
+        await window.electronAPI.agentDeleteSkill(projectRoot, `${targetTeamId}:${slot.skillId}`);
         await window.electronAPI.chatPrewarm(projectRoot);
         bumpSkillsRefresh();
         toast.success(t("settings.editor.skillMd.toast.restored"));
@@ -180,7 +214,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
 
     if (slot.mode === "new") {
       const list = await window.electronAPI.agentListSkills(projectRoot);
-      if (list.some((s) => s.id === validation.name)) {
+      if (list.some((s) => s.fqid === `${targetTeamId}:${validation.name}` || s.id === validation.name)) {
         toast.error(t("settings.editor.skillMd.toast.exists", { name: validation.name }));
         return;
       }
@@ -188,7 +222,12 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
 
     setSaving(true);
     try {
-      await window.electronAPI.agentInstallSkill(projectRoot, validation.name, content.trim());
+      await window.electronAPI.agentInstallSkill(
+        projectRoot,
+        validation.name,
+        content.trim(),
+        targetTeamId,
+      );
       setSavedContent(content);
       bumpSkillsRefresh();
       toast.success(
@@ -230,6 +269,20 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         readOnly={slot.mode === "preview-bundled"}
         onRefresh={slot.mode !== "new" ? () => void handleRefresh() : undefined}
         refreshing={refreshing}
+        leading={
+          slot.mode === "new" ? (
+            <Hint label={t("settings.editor.skillMd.targetTeam")}>
+              <TeamPicker
+                teams={pickerTeams}
+                value={targetTeamId}
+                onChange={setTargetTeamId}
+                onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
+                variant="toolbar"
+                className={saving ? "pointer-events-none opacity-60" : undefined}
+              />
+            </Hint>
+          ) : undefined
+        }
         actions={
           slot.mode === "preview-bundled"
             ? undefined

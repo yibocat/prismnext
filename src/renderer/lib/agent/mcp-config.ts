@@ -107,6 +107,31 @@ export function serializeMcpConfig(servers: McpServerEntry[]): string {
   return JSON.stringify({ mcpServers }, null, 2);
 }
 
+/** Convert a single Team `McpServerDef` into the UI entry shape. */
+export function mcpServerDefToEntry(server: McpServerDef): McpServerEntry | null {
+  if (!server.id || !server.name || !server.transport) return null;
+  if (server.transport.type === "stdio") {
+    return {
+      name: server.id,
+      type: "local",
+      enabled: true,
+      command: [server.transport.command, ...(server.transport.args ?? [])],
+      environment: { ...(server.transport.env ?? {}) },
+      url: "",
+      headers: {},
+    };
+  }
+  return {
+    name: server.id,
+    type: "remote",
+    enabled: true,
+    command: [],
+    environment: {},
+    url: server.transport.url,
+    headers: { ...(server.transport.headers ?? {}) },
+  };
+}
+
 /** Parse the v2 Team mcp.json array used by project.local and Team assets. */
 export function parseTeamMcpConfig(content: string): McpServerEntry[] {
   if (!content.trim()) return [];
@@ -114,28 +139,8 @@ export function parseTeamMcpConfig(content: string): McpServerEntry[] {
   if (!Array.isArray(parsed)) return [];
   return parsed.flatMap((raw): McpServerEntry[] => {
     if (!raw || typeof raw !== "object") return [];
-    const server = raw as McpServerDef;
-    if (!server.id || !server.name || !server.transport) return [];
-    if (server.transport.type === "stdio") {
-      return [{
-        name: server.id,
-        type: "local",
-        enabled: true,
-        command: [server.transport.command, ...(server.transport.args ?? [])],
-        environment: { ...(server.transport.env ?? {}) },
-        url: "",
-        headers: {},
-      }];
-    }
-    return [{
-      name: server.id,
-      type: "remote",
-      enabled: true,
-      command: [],
-      environment: {},
-      url: server.transport.url,
-      headers: { ...(server.transport.headers ?? {}) },
-    }];
+    const entry = mcpServerDefToEntry(raw as McpServerDef);
+    return entry ? [entry] : [];
   });
 }
 

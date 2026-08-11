@@ -10,6 +10,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import type { AssetViewV2 } from "@shared/teams/view";
+import { isProjectEnableOverridden } from "@shared/teams/state";
 import { CORE_TEAM_ID } from "@shared/teams/types";
 import {
   SETTINGS_CARD as CARD,
@@ -30,6 +31,11 @@ export interface AssetGroupListProps {
   assets: AssetViewV2[];
   /** Persist a project-level tri-state flip. value=null follows the app layer. */
   onSetEnabled: (fqid: string, enabled: boolean | null) => void;
+  /**
+   * When false, hide the enable Switch (Core / store team skills are roster-scoped;
+   * only hangar / user-owned skills toggle here). Default: always show.
+   */
+  canToggleEnabled?: (asset: AssetViewV2) => boolean;
   /** Optional per-row actions (edit / delete) for editable assets. */
   renderActions?: (asset: AssetViewV2) => React.ReactNode;
   /** Optional secondary line under the asset name. */
@@ -50,6 +56,7 @@ interface Group {
 export function AssetGroupList({
   assets,
   onSetEnabled,
+  canToggleEnabled,
   renderActions,
   renderMeta,
   emptyHint,
@@ -119,19 +126,22 @@ export function AssetGroupList({
             {isOpen && (
               <div className="divide-y divide-border">
                 {group.assets.map((asset) => {
+                  const canToggle = canToggleEnabled?.(asset) ?? true;
                   const overridden =
-                    asset.enabledProject !== undefined &&
-                    asset.enabledProject !== asset.enabledApp;
+                    asset.origin.scope !== "project"
+                    && isProjectEnableOverridden(asset.enabledProject, asset.enabledApp);
                   return (
                     <div key={asset.fqid} className={cn(ROW, !asset.enabled && "opacity-60")}>
                       <div className="min-w-0 flex-1 pr-4">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={cn(ROW_LABEL, "font-mono")}>{asset.name}</span>
-                          <OverrideDot
-                            overridden={overridden}
-                            appValue={asset.enabledApp}
-                            onReset={() => onSetEnabled(asset.fqid, null)}
-                          />
+                          {canToggle && (
+                            <OverrideDot
+                              overridden={overridden}
+                              appValue={asset.enabledApp}
+                              onReset={() => onSetEnabled(asset.fqid, null)}
+                            />
+                          )}
                         </div>
                         {asset.blockedBy ? (
                           <p className={ROW_DESC}>
@@ -148,7 +158,7 @@ export function AssetGroupList({
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {renderActions?.(asset)}
-                        {asset.blockedBy && asset.blockedBy !== "asset-disabled-project" && asset.blockedBy !== "asset-disabled-app" ? (
+                        {!canToggle ? null : asset.blockedBy && asset.blockedBy !== "asset-disabled-project" && asset.blockedBy !== "asset-disabled-app" ? (
                           <span className="w-9" />
                         ) : (
                           <Switch

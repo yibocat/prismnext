@@ -24,12 +24,22 @@ export interface TeamPickerProps {
   onChange: (teamId: string) => void;
   /** Create a new team at the given scope. */
   onCreateTeam?: (scope: "app" | "project") => void;
+  /** Form field (full width) vs editor toolbar chip. */
+  variant?: "field" | "toolbar";
   className?: string;
 }
 
-export function TeamPicker({ teams, value, onChange, onCreateTeam, className }: TeamPickerProps) {
+export function TeamPicker({
+  teams,
+  value,
+  onChange,
+  onCreateTeam,
+  variant = "field",
+  className,
+}: TeamPickerProps) {
   const { t } = useTranslation();
   const selected = teams.find((tm) => tm.manifest.id === value) ?? null;
+  const compact = variant === "toolbar";
 
   const { projectTeams, appTeams } = useMemo(() => {
     const writable = teams.filter((tm) => tm.writable);
@@ -44,23 +54,28 @@ export function TeamPicker({ teams, value, onChange, onCreateTeam, className }: 
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          title={t("settings.teams.picker.placeholder")}
           className={cn(
-            "flex w-full items-center justify-between rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-[length:var(--font-size-13)] hover:bg-accent",
+            compact
+              ? "flex h-6 max-w-[10.5rem] items-center gap-1 rounded px-2 text-left text-[length:var(--font-size-12)] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              : "flex w-full items-center justify-between rounded-md border border-border bg-background px-2.5 py-1.5 text-left text-[length:var(--font-size-13)] hover:bg-accent",
             className,
           )}
         >
-          <span className="flex items-center gap-2 truncate">
-            <span className="truncate">{selected?.manifest.name ?? t("settings.teams.picker.placeholder")}</span>
-            {selected && (
+          <span className={cn("truncate", compact ? "min-w-0" : "flex items-center gap-2")}>
+            <span className="truncate">
+              {selected?.manifest.name ?? t("settings.teams.picker.placeholder")}
+            </span>
+            {!compact && selected && (
               <span className="shrink-0 text-[length:var(--font-size-11)] text-muted-foreground">
                 {selected.scope === "app" ? t("settings.teams.scope.app") : t("settings.teams.scope.project")}
               </span>
             )}
           </span>
-          <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          <ChevronDownIcon className={cn("shrink-0 text-muted-foreground", compact ? "size-3.5" : "size-4")} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent align="start" className="w-64">
         <DropdownMenuLabel>{t("settings.teams.picker.projectGroup")}</DropdownMenuLabel>
         {projectTeams.map((tm) => (
           <DropdownMenuItem key={tm.manifest.id} onClick={() => onChange(tm.manifest.id)}>

@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, accessSync, constants, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import type { McpServerDef } from "../../shared/teams/types";
-import { listMcpServers } from "../teams/resolver";
+import { listMcpServers, resolveActiveTeam } from "../teams/resolver";
 import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
 import { projectRuntimeAgentsDir, projectRuntimeDir } from "./runtime-paths";
 import {
@@ -1630,7 +1630,15 @@ export class AcpService {
     // to read the legacy object-map file, so ACP cannot resurrect a second
     // project configuration after migration.
     try {
-      const teamMcps = listMcpServers(projectRoot).filter((m) => m.enabled && !m.blockedBy);
+      // MCP is team-owned: only the active team's servers join the session
+      // (no cross-team "+" allowlist like skills/subagents).
+      const activeTeamId = resolveActiveTeam(projectRoot)?.manifest.id ?? null;
+      const teamMcps = listMcpServers(projectRoot).filter(
+        (m) =>
+          m.enabled
+          && !m.blockedBy
+          && (activeTeamId ? m.teamId === activeTeamId : true),
+      );
       if (teamMcps.length > 0) {
         const existingNames = new Set(mcpServers.map((s) => s.name));
         for (const asset of teamMcps) {
@@ -1644,6 +1652,7 @@ export class AcpService {
         }
         log.info("Merged team MCP servers", {
           projectRoot,
+          activeTeamId,
           packCount: teamMcps.length,
           names: teamMcps.map((m) => (m.definition as McpServerDef).name),
         });
@@ -1658,8 +1667,10 @@ export class AcpService {
   /** Names of team MCP servers declared autoStart:true (eager session/new set). */
   private autoStartMcpNames(projectRoot: string): Set<string> {
     try {
+      const activeTeamId = resolveActiveTeam(projectRoot)?.manifest.id ?? null;
       const names = new Set<string>();
       for (const asset of listMcpServers(projectRoot)) {
+        if (activeTeamId && asset.teamId !== activeTeamId) continue;
         const def = asset.definition as McpServerDef;
         if (asset.enabled && !asset.blockedBy && def.autoStart === true) names.add(def.name);
       }

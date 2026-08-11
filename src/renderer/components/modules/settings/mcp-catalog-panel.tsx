@@ -4,6 +4,7 @@ import { Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
 import { mergeMcpEntries } from "@/lib/agent/mcp-config";
@@ -16,6 +17,10 @@ import {
   type McpPreset,
 } from "@/lib/agent/mcp-presets";
 import { McpPresetFieldInputs } from "./mcp-preset-field-inputs";
+import { TeamPicker } from "../teams/team-picker";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
+import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import { cn } from "@/lib/utils";
 import {
   SETTINGS_CATEGORY_HEADER,
@@ -30,25 +35,62 @@ const ROW_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mt-0.5
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const INPUT =
-  "w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40";
+  "w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary";
 
-export function McpCatalogPanel() {
+type CatalogSlot = Extract<SettingsPanelSlot, { kind: "mcp-catalog" }>;
+
+export function McpCatalogPanel({ slot }: { slot?: CatalogSlot }) {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const catalog = useTeamsStore((s) => s.catalog);
+  const loadTeams = useTeamsStore((s) => s.load);
   const servers = useMcpServersStore((s) => s.servers);
   const saving = useMcpServersStore((s) => s.saving);
+  const load = useMcpServersStore((s) => s.load);
   const persist = useMcpServersStore((s) => s.persist);
 
+  const lockedTeam = Boolean(slot?.targetTeamId);
+  const [targetTeamId, setTargetTeamId] = useState(
+    slot?.targetTeamId ?? PROJECT_DEFAULT_TEAM_ID,
+  );
   const [catalogSearch, setCatalogSearch] = useState("");
   const [installPresetId, setInstallPresetId] = useState<string | null>(null);
   const [installValues, setInstallValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    if (slot?.targetTeamId) setTargetTeamId(slot.targetTeamId);
+  }, [slot?.targetTeamId]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void load(projectRoot, targetTeamId);
+  }, [projectRoot, targetTeamId, load]);
+
+  useEffect(() => {
     setCatalogSearch("");
     setInstallPresetId(null);
     setInstallValues({});
-  }, []);
+  }, [targetTeamId]);
+
+  const pickerTeams = useMemo(
+    () =>
+      catalog
+        .filter((tm) => tm.writable && tm.installed)
+        .map((tm) => ({
+          ...tm,
+          manifest: {
+            ...tm.manifest,
+            name: teamDisplayName(tm.manifest.id, tm.manifest.name, t),
+          },
+        })),
+    [catalog, t],
+  );
 
   const installedNames = useMemo(() => new Set(servers.map((s) => s.name)), [servers]);
 
@@ -59,10 +101,10 @@ export function McpCatalogPanel() {
       const categoryEn = MCP_CATEGORY_LABELS[p.category].toLowerCase();
       const categoryTr = t(`settings.editor.mcp.category.${p.category}`).toLowerCase();
       return (
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        categoryEn.includes(q) ||
-        categoryTr.includes(q)
+        p.name.toLowerCase().includes(q)
+        || p.description.toLowerCase().includes(q)
+        || categoryEn.includes(q)
+        || categoryTr.includes(q)
       );
     });
   }, [catalogSearch, t]);
@@ -103,12 +145,9 @@ export function McpCatalogPanel() {
       toast.error(t("settings.mcp.toast.fillRequired"));
       return;
     }
-    await persist(projectRoot, mergeMcpEntries(servers, [entry]));
+    await persist(projectRoot, mergeMcpEntries(servers, [entry]), targetTeamId);
     cancelInstall();
     toast.success(t("settings.editor.mcp.toast.added", { name: preset.name }));
-    // Stay on the catalog so installing several MCP servers in a row is
-    // frictionless — the row flips to "installed" and the next one can be
-    // picked immediately (previously the panel closed after every install).
   };
 
   const oneClickInstall = async (preset: McpPreset) => {
@@ -119,9 +158,8 @@ export function McpCatalogPanel() {
     }
     const entry = presetToEntry(preset);
     if (!entry) return;
-    await persist(projectRoot, mergeMcpEntries(servers, [entry]));
+    await persist(projectRoot, mergeMcpEntries(servers, [entry]), targetTeamId);
     toast.success(t("settings.mcp.toast.installed", { name: preset.name }));
-    // Same as above — stay open for batch installs.
   };
 
   if (!projectRoot) {
@@ -144,11 +182,6 @@ export function McpCatalogPanel() {
               <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
                 {t(`settings.editor.mcp.category.${preset.category}`)}
               </span>
-              {preset.builtin ? (
-                <span className={cn(BADGE, "bg-muted text-primary normal-case tracking-normal")}>
-                  {t("settings.editor.mcp.badgeBuiltin")}
-                </span>
-              ) : null}
             </div>
             <p className={ROW_DESC}>
               {t(`settings.editor.mcp.presets.${preset.id}.description`, {
@@ -157,10 +190,8 @@ export function McpCatalogPanel() {
             </p>
           </div>
           {installed ? (
-            <span className={cn(BADGE, "bg-muted text-primary")}>
-              {preset.builtin
-                ? t("settings.editor.mcp.badgeDefault")
-                : t("settings.editor.mcp.badgeInstalled")}
+            <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+              {t("settings.editor.mcp.badgeInstalled")}
             </span>
           ) : (
             <Button
@@ -174,7 +205,7 @@ export function McpCatalogPanel() {
           )}
         </div>
         {installing && !installed && (
-          <div className="px-4 pb-3 border-t border-border/50">
+          <div className="px-4 pb-3 border-t border-border">
             <McpPresetFieldInputs
               preset={preset}
               values={installValues}
@@ -187,7 +218,7 @@ export function McpCatalogPanel() {
                 onClick={() => void confirmInstall(preset)}
               >
                 {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-                {t("settings.editor.mcp.addToProject")}
+                {t("settings.mcp.install")}
               </Button>
               <Button variant="ghost" size="xs" onClick={cancelInstall} disabled={saving}>
                 {t("common.cancel")}
@@ -212,7 +243,18 @@ export function McpCatalogPanel() {
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcp.intro")}</p>
+        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcp.introInstall")}</p>
+        {!lockedTeam && (
+          <div className="space-y-1.5">
+            <p className={SETTINGS_ROW_DESC}>{t("settings.mcp.targetTeam")}</p>
+            <TeamPicker
+              teams={pickerTeams}
+              value={targetTeamId}
+              onChange={setTargetTeamId}
+              onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
+            />
+          </div>
+        )}
         <div className="relative">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
           <input
@@ -241,7 +283,9 @@ export function McpCatalogPanel() {
           <Button
             variant="ghost"
             size="xs"
-            onClick={() => openSettingsPanel({ kind: "mcp-paste-json" })}
+            onClick={() =>
+              openSettingsPanel({ kind: "mcp-paste-json", targetTeamId })
+            }
           >
             {t("settings.editor.mcp.addFromJson")}
           </Button>

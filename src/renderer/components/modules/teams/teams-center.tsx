@@ -25,10 +25,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { AssetKind, Fqid } from "@shared/teams/types";
+import {
+  MY_CONTENT_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
+  type AssetKind,
+  type Fqid,
+} from "@shared/teams/types";
 import type { TeamCardView } from "../../../stores/teams-store";
 import { toCardView } from "../../../stores/teams-store";
 import { PackIcon } from "./team-icon";
+import { ProBadge } from "./pro-badge";
+
+/** Hangars + project-scoped teams are not marketplace items. */
+function isStoreBrowsable(pack: TeamCardView): boolean {
+  if (pack.kind === "local") return false;
+  if (pack.manifest.id === MY_CONTENT_TEAM_ID) return false;
+  if (pack.manifest.id === PROJECT_DEFAULT_TEAM_ID) return false;
+  return true;
+}
 
 export interface TeamsCenterProps {
   onBack: () => void;
@@ -114,8 +128,8 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setContents([]);
       return;
     }
-    void window.electronAPI.teamsGetTeamContents(selectedId).then(setContents);
-  }, [selectedId]);
+    void window.electronAPI.teamsGetTeamContents(selectedId, projectRoot).then(setContents);
+  }, [selectedId, projectRoot]);
 
   const selected = packs.find((p) => p.manifest.id === selectedId) ?? null;
 
@@ -148,8 +162,8 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
     }
   };
 
-  // 浏览对象 = 非 local 的 catalog pack
-  const browsable = useMemo(() => packs.filter((p) => p.kind !== "local"), [packs]);
+  // Browse = installable packs only (never Common Team / project hangar / local teams).
+  const browsable = useMemo(() => packs.filter(isStoreBrowsable), [packs]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -365,7 +379,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                         <h3 className="text-[length:var(--font-size-13)] font-medium">
                           {selected.manifest.name}
                         </h3>
-                        {selected.manifest.tier === "pro" && <Badge>Pro</Badge>}
+                        {selected.manifest.tier === "pro" && <ProBadge />}
                         {!selected.compatible && (
                           <Badge variant="destructive">
                             {t("teamsCenter.card.incompatible")}
@@ -541,11 +555,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                         <CardHeader className="p-2.5 gap-0">
                           <CardTitle className="text-[length:var(--font-size-12)] flex items-center gap-1.5">
                             {pack.manifest.name}
-                            {pack.manifest.tier === "pro" && (
-                              <Badge variant="secondary" className="h-4.5 px-1 text-[length:var(--font-size-10)]">
-                                Pro
-                              </Badge>
-                            )}
+                            {pack.manifest.tier === "pro" && <ProBadge />}
                           </CardTitle>
                           <CardDescription className="text-[length:var(--font-badge)] line-clamp-2 leading-relaxed mt-0.5">
                             {pack.manifest.description}

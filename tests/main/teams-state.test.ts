@@ -14,6 +14,7 @@ import {
   normalizeAppTeamsState,
   normalizeProjectTeamsState,
   resolveTri,
+  isProjectEnableOverridden,
 } from "../../src/shared/teams/state";
 import {
   appTeamsStateWriteCounter,
@@ -58,6 +59,25 @@ describe("resolveTri — the single layer-merge function", () => {
 
   it("project=false overrides app=true", () => {
     expect(resolveTri(false, true, true)).toBe(false);
+  });
+});
+
+describe("isProjectEnableOverridden", () => {
+  it("ignores unset project layer", () => {
+    expect(isProjectEnableOverridden(undefined, true)).toBe(false);
+    expect(isProjectEnableOverridden(undefined, undefined)).toBe(false);
+  });
+
+  it("project=true with unset app is not an override (same as default on)", () => {
+    expect(isProjectEnableOverridden(true, undefined)).toBe(false);
+  });
+
+  it("flags real divergence from effective app value", () => {
+    expect(isProjectEnableOverridden(false, undefined)).toBe(true);
+    expect(isProjectEnableOverridden(false, true)).toBe(true);
+    expect(isProjectEnableOverridden(true, false)).toBe(true);
+    expect(isProjectEnableOverridden(true, true)).toBe(false);
+    expect(isProjectEnableOverridden(false, false)).toBe(false);
   });
 });
 

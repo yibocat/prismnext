@@ -9,7 +9,7 @@
 export type CommandSource = "builtin" | "user" | "plugin";
 
 export interface CommandDef {
-  /** 全局唯一身份（FQID）："prismnext.core:setup" | "project.local:review-section" | "<teamId>:<name>" */
+  /** 全局唯一身份（FQID）："app:setup" | "project.local:review-section" | "<teamId>:<name>" */
   id: string;
   /** Command name WITHOUT / prefix（pack 内 id） */
   name: string;
@@ -47,6 +47,8 @@ export interface CreateCommandPayload {
   action?: string;
   agent?: string;
   model?: string;
+  /** Writable team to own the command (Common / Project / custom). Default project.local. */
+  targetTeamId?: string;
 }
 
 /** Payload for updating an existing user command */

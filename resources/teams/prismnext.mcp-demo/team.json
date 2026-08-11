@@ -5,6 +5,7 @@
   "longDescription": "Shows how a team can ship MCP servers. It declares two MCP servers in its own mcp.json: a local SQLite-backed memory server (stdio) and a remote HTTP placeholder (http). Installing this team at app level and enabling it in a project makes both servers available to chats in that project; disabling the team greys them out and stops injection.",
   "version": "0.1.0",
   "packFormatVersion": 1,
+  "formatVersion": 2,
   "tier": "free",
   "publisher": "prismnext",
   "domain": "demo",

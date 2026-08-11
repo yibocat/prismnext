@@ -416,7 +416,6 @@ function migrateLegacySkillsManifestDisabled(
                   .filter((u): u is string => typeof u === "string" && Boolean(u.trim()))
                   .map((url) => ({ id: `remote:${url.trim()}`, kind: "remote", url: url.trim(), connected: true }))
               : []),
-            { id: "prism-curated", kind: "bundled", connected: true },
           ],
       installs: Array.isArray(manifest!.installs) ? manifest!.installs : [],
     };

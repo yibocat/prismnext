@@ -103,18 +103,13 @@ export function buildAgentsPlan(
     }
   }
 
-  const activeTeam = resolveActiveTeam(projectRoot);
   const namespace = projectNamespace(projectRoot);
   const runtimeNameFor = (runtimeName: string) => projectAgentRuntimeName(projectRoot, runtimeName);
-  const activeOrchestratorFqid = `${activeTeam.manifest.id}:${activeTeam.orchestratorId}`;
-  const activeOrchestrator = getAsset(projectRoot, activeOrchestratorFqid);
-  if (!activeOrchestrator?.enabled) {
-    throw new Error(`Active lead agent not found or disabled: ${activeOrchestratorFqid}`);
-  }
 
   const agentEntries: AgentFileEntry[] = [];
 
-  // All enabled subagents.
+  // All enabled subagents — including capability-only teams (My Content).
+  // Must not depend on there being an active lead team.
   for (const sub of listAssets(projectRoot, "subagent")) {
     if (!sub.enabled) continue;
     const instructions = readInstructions(projectRoot, sub.fqid);
@@ -132,9 +127,21 @@ export function buildAgentsPlan(
     if (!orch.enabled) continue;
     leadTeams.set(orch.teamId, orch.fqid);
   }
+
+  const activeTeam = resolveActiveTeam(projectRoot);
+  let activeOrchestratorFqid: string | null =
+    activeTeam?.orchestratorId
+      ? `${activeTeam.manifest.id}:${activeTeam.orchestratorId}`
+      : null;
+  if (!activeOrchestratorFqid) {
+    activeOrchestratorFqid = [...leadTeams.values()][0] ?? null;
+  }
+
   let orchestratorMd = "";
+  let activeOrchestratorId = "";
   for (const [teamId, orchFqid] of leadTeams) {
-    const orch = getAsset(projectRoot, orchFqid)!;
+    const orch = getAsset(projectRoot, orchFqid);
+    if (!orch) continue;
     const instructions = readInstructions(projectRoot, orchFqid);
     const roster = rosterRefsFor(projectRoot, teamId, runtimeNameFor);
     const md = renderOrchestratorMarkdown(
@@ -143,15 +150,22 @@ export function buildAgentsPlan(
       roster,
       promptCtx,
     );
-    if (orchFqid === activeOrchestratorFqid) orchestratorMd = md;
+    if (orchFqid === activeOrchestratorFqid) {
+      orchestratorMd = md;
+      activeOrchestratorId = runtimeNameFor(orch.runtimeName);
+    }
     agentEntries.push({ filename: `${runtimeNameFor(orch.runtimeName)}.md`, content: md });
+  }
+
+  if (!activeOrchestratorId) {
+    log.warn("buildAgentsPlan: no usable lead team — syncing subagents only", { projectRoot });
   }
 
   return {
     agentEntries,
     agentFiles: agentEntries.map((e) => e.filename),
     namespace,
-    activeOrchestratorId: runtimeNameFor(activeOrchestrator.runtimeName),
+    activeOrchestratorId,
     orchestratorContentHash: agentContentHash(orchestratorMd),
     syncContentHash: computeSyncContentHash(agentEntries),
   };

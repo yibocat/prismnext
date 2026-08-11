@@ -845,6 +845,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			reloadedSessions: number;
 			error?: string;
 		}>,
+	mcpReadTeamJson: (projectPath: string, teamId?: string) =>
+		ipcRenderer.invoke("mcp:readTeamJson", { projectPath, teamId }) as Promise<{
+			teamId: string;
+			content: string;
+		}>,
+	mcpWriteTeamJson: (projectPath: string, content: string, teamId?: string) =>
+		ipcRenderer.invoke("mcp:writeTeamJson", { projectPath, teamId, content }) as Promise<{
+			ok: boolean;
+			teamId?: string;
+			reloadedSessions: number;
+			error?: string;
+		}>,
 	agentListSkills: (projectPath: string) => ipcRenderer.invoke("agent:listSkills", { projectPath }),
 	agentListRules: (projectPath: string) => ipcRenderer.invoke("agent:listRules", { projectPath }),
 	agentInstallRule: (projectPath: string, ruleId: string, content: string) =>
@@ -887,8 +899,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:disconnectSkillRegistry", { projectPath, registryUrl }),
 	agentSetSkillEnabled: (projectPath: string, skillId: string, enabled: boolean) =>
 		ipcRenderer.invoke("agent:setSkillEnabled", { projectPath, skillId, enabled }),
-	agentInstallSkill: (projectPath: string, skillId: string, content: string) =>
-		ipcRenderer.invoke("agent:installSkill", { projectPath, skillId, content }),
+	agentInstallSkill: (
+		projectPath: string,
+		skillId: string,
+		content: string,
+		targetTeamId?: string,
+	) =>
+		ipcRenderer.invoke("agent:installSkill", { projectPath, skillId, content, targetTeamId }),
 	agentInstallSkillFromRegistry: (
 		projectPath: string,
 		skillName: string,
@@ -937,6 +954,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
 		targetTeamId?: string,
 	) => ipcRenderer.invoke("subagents:saveCustom", { projectPath, payload, targetTeamId }),
+	subagentsListRosterReferrers: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:listRosterReferrers", { projectPath, expertId }),
 	subagentsDeleteCustom: (projectPath: string, expertId: string) =>
 		ipcRenderer.invoke("subagents:deleteCustom", { projectPath, expertId }),
 	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
@@ -1227,12 +1246,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("teams:setActiveTeam", { projectRoot, teamId, scope }),
 	teamsGetRoster: (projectRoot: string, teamId: string) =>
 		ipcRenderer.invoke("teams:getRoster", { projectRoot, teamId }),
+	teamsGetSkillsRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getSkillsRoster", { projectRoot, teamId }),
+	teamsGetCommandsRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getCommandsRoster", { projectRoot, teamId }),
 	teamsCreate: (
-		name: string,
-		description: string | undefined,
-		scope: "app" | "project",
 		projectRoot: string,
-	) => ipcRenderer.invoke("teams:create", { name, description, scope, projectRoot }),
+		input: {
+			name: string;
+			description?: string;
+			longDescription?: string;
+			tags?: string[];
+			scope: "app" | "project";
+			leadName?: string;
+			leadInstructions?: string;
+		},
+	) => ipcRenderer.invoke("teams:create", { projectRoot, ...input }),
 	teamsDelete: (teamId: string, projectRoot?: string) =>
 		ipcRenderer.invoke("teams:delete", { teamId, projectRoot }),
 	teamsGetCoreState: (projectRoot: string) =>
@@ -1245,8 +1274,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("teams:listAssets", { projectRoot, kind }),
 	teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) =>
 		ipcRenderer.invoke("teams:setDefaultOrchestrator", { projectRoot, fqid }),
-	teamsGetTeamContents: (teamId: string) =>
-		ipcRenderer.invoke("teams:getTeamContents", { teamId }),
+	teamsGetTeamContents: (teamId: string, projectRoot?: string | null) =>
+		ipcRenderer.invoke("teams:getTeamContents", { teamId, projectRoot }),
 	teamsListProjectMcps: (projectRoot: string) =>
 		ipcRenderer.invoke("teams:listProjectMcps", { projectRoot }),
 	teamsListMcp: (projectRoot: string) =>

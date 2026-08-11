@@ -3,7 +3,10 @@
  */
 
 import {
+  APP_COMMAND_IDS,
+  APP_COMMANDS_OWNER_ID,
   APP_TEAMS_STATE_VERSION,
+  CORE_TEAM_ID,
   PROJECT_TEAMS_STATE_VERSION,
   TEAMS_STATE_VERSION,
   type AppTeamsState,
@@ -39,6 +42,40 @@ export function parseFqid(fqid: string): { teamId: string; contentId: string } |
 /** fqid 是否属于某个 pack */
 export function fqidBelongsToPack(fqid: string, teamId: string): boolean {
   return fqid.startsWith(`${teamId}:`);
+}
+
+/** Former Core slash commands now owned by `app:` (plus removed undo/redo). */
+const CORE_TO_APP_COMMAND_IDS = new Set<string>([...APP_COMMAND_IDS, "undo", "redo"]);
+
+/** Rewrite legacy `prismnext.core:<cmd>` → `app:<cmd>` for platform commands. */
+export function rewriteCoreAppCommandFqid(fqid: string): string {
+  const parsed = parseFqid(fqid);
+  if (!parsed || parsed.teamId !== CORE_TEAM_ID) return fqid;
+  if (!CORE_TO_APP_COMMAND_IDS.has(parsed.contentId)) return fqid;
+  return toFqid(APP_COMMANDS_OWNER_ID, parsed.contentId);
+}
+
+function rewriteCoreAppCommandOverride(override: AssetOverride): AssetOverride {
+  if (!override.allowedCommands?.length) return override;
+  return {
+    ...override,
+    allowedCommands: override.allowedCommands.map(rewriteCoreAppCommandFqid),
+  };
+}
+
+function rewriteCoreAppCommandStateMaps<T extends {
+  assetEnabled: TriState;
+  assetOverrides: Record<Fqid, AssetOverride>;
+}>(state: T): T {
+  const assetEnabled: TriState = {};
+  for (const [fqid, value] of Object.entries(state.assetEnabled)) {
+    assetEnabled[rewriteCoreAppCommandFqid(fqid)] = value;
+  }
+  const assetOverrides: Record<Fqid, AssetOverride> = {};
+  for (const [fqid, value] of Object.entries(state.assetOverrides)) {
+    assetOverrides[rewriteCoreAppCommandFqid(fqid)] = rewriteCoreAppCommandOverride(value);
+  }
+  return { ...state, assetEnabled, assetOverrides };
 }
 
 /**
@@ -101,6 +138,20 @@ export function resolveTri(
   return project ?? app ?? fallback;
 }
 
+/**
+ * Whether the project enable flag meaningfully diverges from the app layer.
+ * Unset app follows `fallback` (enable defaults to on). So project=true with
+ * app unset is NOT an override — same effective value as following global.
+ */
+export function isProjectEnableOverridden(
+  enabledProject: boolean | undefined,
+  enabledApp: boolean | undefined,
+  fallback = true,
+): boolean {
+  if (enabledProject === undefined) return false;
+  return enabledProject !== (enabledApp ?? fallback);
+}
+
 // ── 字段白名单校验（治 v1 的 contentOverrides 直接 `as` 安全洞）──
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -130,6 +181,12 @@ function normalizeAssetOverride(raw: unknown): AssetOverride | null {
   }
   if (Array.isArray(raw.allowedExperts)) {
     out.allowedExperts = raw.allowedExperts.filter((m): m is string => typeof m === "string");
+  }
+  if (Array.isArray(raw.allowedSkills)) {
+    out.allowedSkills = raw.allowedSkills.filter((m): m is string => typeof m === "string");
+  }
+  if (Array.isArray(raw.allowedCommands)) {
+    out.allowedCommands = raw.allowedCommands.filter((m): m is string => typeof m === "string");
   }
   if (isPlainObject(raw.permission)) {
     out.permission = raw.permission;
@@ -161,10 +218,16 @@ function normalizeDefaultTeam(raw: unknown): string | undefined {
   return typeof raw === "string" && raw.trim() ? raw : undefined;
 }
 
+function normalizeUninstalled(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.filter((x): x is string => typeof x === "string" && Boolean(x.trim())))];
+}
+
 export function emptyAppTeamsState(): AppTeamsState {
   return {
     version: APP_TEAMS_STATE_VERSION,
     installed: [],
+    uninstalled: [],
     teamEnabled: {},
     assetEnabled: {},
     assetOverrides: {},
@@ -183,24 +246,25 @@ export function emptyProjectTeamsState(): ProjectTeamsState {
 /** 防御性解析 teams-state.json（应用级）。任何字段畸形都退化为安全默认。 */
 export function normalizeAppTeamsState(raw: unknown): AppTeamsState {
   if (!isPlainObject(raw)) return emptyAppTeamsState();
-  return {
+  return rewriteCoreAppCommandStateMaps({
     version: APP_TEAMS_STATE_VERSION,
     installed: normalizeInstalled(raw.installed),
+    uninstalled: normalizeUninstalled(raw.uninstalled),
     defaultTeam: normalizeDefaultTeam(raw.defaultTeam),
     teamEnabled: normalizeTriState(raw.teamEnabled),
     assetEnabled: normalizeTriState(raw.assetEnabled),
     assetOverrides: normalizeOverridesMap(raw.assetOverrides),
-  };
+  });
 }
 
 /** 防御性解析 teams.json（项目级）。 */
 export function normalizeProjectTeamsState(raw: unknown): ProjectTeamsState {
   if (!isPlainObject(raw)) return emptyProjectTeamsState();
-  return {
+  return rewriteCoreAppCommandStateMaps({
     version: PROJECT_TEAMS_STATE_VERSION,
     defaultTeam: normalizeDefaultTeam(raw.defaultTeam),
     teamEnabled: normalizeTriState(raw.teamEnabled),
     assetEnabled: normalizeTriState(raw.assetEnabled),
     assetOverrides: normalizeOverridesMap(raw.assetOverrides),
-  };
+  });
 }

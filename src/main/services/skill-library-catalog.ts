@@ -1,8 +1,4 @@
 import type { LibraryCatalogItem } from "../../shared/skill-library-types";
-import { CORE_TEAM_ID } from "../../shared/teams/types";
-import { toFqid } from "../../shared/teams/state";
-import { listCorePackSkills } from "./core-team-skills";
-import { setProjectAssetEnabled } from "../teams/state-project";
 import {
   analyzeGitHubSkillSource,
   githubSourceToAnalyzeUrl,
@@ -28,18 +24,9 @@ export async function fetchLibraryCatalogForSource(
   projectRoot: string,
   source: SkillLibrarySourceInfo,
 ): Promise<LibraryCatalogItem[]> {
+  // Legacy kind "bundled" (prismnext Curated = Core) is no longer a library source.
   if (source.kind === "bundled") {
-    const bundled = listCorePackSkills();
-    return bundled.map((skill) => ({
-      key: `bundled:${skill.id}`,
-      skillId: skill.id,
-      name: skill.name,
-      description: skill.description,
-      sourceId: source.id,
-      sourceLabel: source.name,
-      sourceKind: "bundled",
-      category: skill.category,
-    }));
+    return [];
   }
 
   if (source.kind === "github") {
@@ -86,9 +73,9 @@ export async function installLibraryCatalogItem(
   item: LibraryCatalogItem,
 ): Promise<{ installedIds: string[] }> {
   if (item.sourceKind === "bundled") {
-    // 引用模型：core pack 技能天然可用，「安装」= 确保启用（清禁用项，零拷贝）
-    setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, item.skillId), true);
-    return { installedIds: [item.skillId] };
+    throw new Error(
+      "Built-in Core skills are not installed from the library — they ship with the PrismNext Core team.",
+    );
   }
 
   if (item.sourceKind === "github") {
@@ -123,17 +110,8 @@ export async function installAllFromLibrarySource(
 ): Promise<{ installedIds: string[] }> {
   const source = findSource(projectRoot, sourceId);
 
-  if (source.kind === "bundled") {
-    const installedIds: string[] = [];
-    for (const skill of listCorePackSkills()) {
-      setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), true);
-      installedIds.push(skill.id);
-    }
-    return { installedIds };
-  }
-
   if (source.kind !== "github") {
-    throw new Error("Install all is only supported for built-in and GitHub sources.");
+    throw new Error("Install all is only supported for GitHub sources.");
   }
 
   const analysis = await analyzeGitHubSkillSource(githubSourceToAnalyzeUrl(source));
@@ -146,22 +124,12 @@ export async function installAllFromLibrarySource(
 }
 
 export async function uninstallAllFromLibrarySource(
-  projectRoot: string,
-  sourceId: string,
+  _projectRoot: string,
+  _sourceId: string,
 ): Promise<{ removedIds: string[] }> {
-  const source = findSource(projectRoot, sourceId);
-
-  if (source.kind === "bundled") {
-    // 引用模型：「卸载全部」= 禁用 core pack 全部技能（零文件删除）
-    const removedIds: string[] = [];
-    for (const skill of listCorePackSkills()) {
-      setProjectAssetEnabled(projectRoot, toFqid(CORE_TEAM_ID, skill.id), false);
-      removedIds.push(skill.id);
-    }
-    return { removedIds };
-  }
-
-  throw new Error("Uninstall all is only supported for built-in skills.");
+  throw new Error(
+    "Uninstall all is no longer supported — remove individual skills from Settings → Skills, or delete the Project / Common Team copy.",
+  );
 }
 
 export async function fetchLibraryCatalog(

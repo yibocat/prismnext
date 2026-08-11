@@ -193,7 +193,7 @@
       {
         "id": "notes-local",
         "builtin": false,
-        "removable": true,
+        "removable": false,
         "enabled": true,
         "roster": [
           "latex-polisher",

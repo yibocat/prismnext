@@ -83,6 +83,8 @@ interface RightPanelState {
     title?: string;
   }) => string;
   openSettingsEditorTab: (slot: SettingsPanelSlot) => string;
+  /** Create/update a settings editor tab without forcing it active. */
+  ensureSettingsEditorTab: (slot: SettingsPanelSlot) => string;
   /** Close AI terminal without confirmation or PTY destroy */
   closeAiTab: (id: string) => void;
   /** Remove duplicate AI tab without marking session dismissed */
@@ -597,7 +599,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     return id;
   },
 
-  openSettingsEditorTab: (slot) => {
+  ensureSettingsEditorTab: (slot) => {
     const key = settingsPanelSlotKey(slot);
     const title = settingsPanelSlotTitle(slot) ?? "Settings";
     const { tabs } = get();
@@ -606,11 +608,8 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     );
     if (existing) {
       set({
-        activeTabId: existing.id,
         tabs: tabs.map((t) =>
-          t.kind === "settings-editor" && t.settingsSlotKey === key
-            ? { ...t, settingsSlot: slot, title }
-            : t,
+          t.id === existing.id ? { ...t, settingsSlot: slot, title } : t,
         ),
       });
       return existing.id;
@@ -624,7 +623,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       settingsSlot: slot,
       settingsSlotKey: key,
     };
-    set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
+    set((s) => ({ tabs: [tab, ...s.tabs] }));
+    return id;
+  },
+
+  openSettingsEditorTab: (slot) => {
+    const id = get().ensureSettingsEditorTab(slot);
+    set({ activeTabId: id });
     return id;
   },
 

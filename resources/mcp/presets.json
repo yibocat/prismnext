@@ -1,0 +1,118 @@
+{
+  "presets": [
+    {
+      "id": "fetch",
+      "name": "Fetch",
+      "description": "Fetch web pages and convert to markdown",
+      "category": "search",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-fetch"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch"
+    },
+    {
+      "id": "brave-search",
+      "name": "Brave Search",
+      "description": "Web search via Brave Search API",
+      "category": "search",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
+      "fields": [
+        {
+          "key": "BRAVE_API_KEY",
+          "label": "Brave Search API key",
+          "secret": true,
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "github",
+      "name": "GitHub",
+      "description": "Issues, pull requests, and repository context",
+      "category": "dev",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/github",
+      "fields": [
+        {
+          "key": "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "label": "GitHub personal access token",
+          "secret": true,
+          "required": true,
+          "placeholder": "ghp_…"
+        }
+      ]
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "description": "Read and search a local git repository",
+      "category": "dev",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-git"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+      "fields": [
+        {
+          "key": "__path__",
+          "label": "Repository path",
+          "required": true,
+          "appendToCommand": true,
+          "placeholder": "/path/to/repo"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "description": "Persistent key-value memory across sessions",
+      "category": "productivity",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory"
+    },
+    {
+      "id": "sqlite",
+      "name": "SQLite",
+      "description": "Query a local SQLite database file",
+      "category": "data",
+      "type": "local",
+      "recommended": true,
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sqlite"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
+      "fields": [
+        {
+          "key": "__path__",
+          "label": "Database file path",
+          "required": true,
+          "appendToCommand": true,
+          "placeholder": "/path/to/database.sqlite"
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "description": "Query a PostgreSQL database",
+      "category": "data",
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres"],
+      "docsUrl": "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
+      "fields": [
+        {
+          "key": "connection_string",
+          "label": "Connection string",
+          "required": true,
+          "appendToCommand": true,
+          "placeholder": "postgresql://user:pass@localhost:5432/db",
+          "secret": true
+        }
+      ]
+    }
+  ]
+}

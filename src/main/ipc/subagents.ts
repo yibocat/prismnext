@@ -9,6 +9,7 @@ import {
   saveCustomSubagent,
   saveCustomOrchestrator,
 } from "../services/subagents-sync";
+import { listSubagentRosterReferrers } from "../teams/lifecycle";
 import { scheduleSubagentsRefresh } from "../services/project-subagents-refresh";
 import type {
   SubagentInfo,
@@ -42,6 +43,14 @@ export function registerExpertsHandlers(): void {
       const expert = saveCustomSubagent(args.projectPath, args.payload, args.targetTeamId);
       scheduleSubagentsRefresh(args.projectPath);
       return { expert, experts: listSubagents(args.projectPath) };
+    },
+  );
+
+  ipcMain.handle(
+    "subagents:listRosterReferrers",
+    async (_event, args: { projectPath: string; expertId: string }) => {
+      if (!args.projectPath || !args.expertId) return [];
+      return listSubagentRosterReferrers(args.projectPath, args.expertId);
     },
   );
 

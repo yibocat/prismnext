@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   MarkdownToolbarControls,
@@ -24,6 +25,7 @@ export function SettingsMarkdownToolbar({
   onRefresh,
   refreshing = false,
   actions,
+  leading,
 }: {
   viewMode: "source" | "preview";
   onViewModeChange?: (mode: "source" | "preview") => void;
@@ -31,6 +33,8 @@ export function SettingsMarkdownToolbar({
   onRefresh?: () => void;
   refreshing?: boolean;
   actions?: SettingsMarkdownToolbarActions;
+  /** Compact controls after Save/Cancel (e.g. team picker). */
+  leading?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -55,6 +59,8 @@ export function SettingsMarkdownToolbar({
           </button>
         </>
       ) : null}
+
+      {leading}
 
       <div className="flex-1 min-w-0" />
 

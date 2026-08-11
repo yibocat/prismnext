@@ -9,7 +9,6 @@ import {
   writeSkillsManifest,
   addSkillLibrarySource,
   removeSkillLibrarySource,
-  setSkillLibrarySourceConnected,
   listLibrarySources,
   setSkillContentEnabled,
   PRISM_CURATED_SOURCE_ID,
@@ -129,10 +128,38 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     writeLocalSkill(root, "literature-review");
     setSkillContentEnabled(root, `${PROJECT_DEFAULT_TEAM_ID}:literature-review`, false);
 
-    // Profile whitelists only academic-citations, but the other installed
-    // skills must NOT be denied — only the disabled one is.
-    const disabled = computeProfileSkillDisabled(root, ["academic-citations"]);
+    // Active team is project.local (hangar); own-team skills stay allowed.
+    // Only the disabled asset is denied.
+    const disabled = computeProfileSkillDisabled(root, {
+      teamId: PROJECT_DEFAULT_TEAM_ID,
+    });
     expect(disabled).toEqual(["literature-review"]);
+  });
+
+  it("computeProfileSkillDisabled scopes auto-allow to active team roster", () => {
+    const teamsRoot = temp("packs-root-");
+    makePack(teamsRoot, "acme.foreign", baseManifest("acme.foreign"), {
+      skills: [{ id: "foreign-skill" }],
+      orchestrators: [{ id: "lead" }],
+    });
+    registerExternalTeamRoot(teamsRoot, "bundled");
+    sealAppStore();
+    addInstalledTeam("acme.foreign");
+
+    const root = temp();
+    writeLocalSkill(root, "local-skill");
+
+    const scoped = computeProfileSkillDisabled(root, {
+      teamId: PROJECT_DEFAULT_TEAM_ID,
+    });
+    expect(scoped).toContain("foreign-skill");
+    expect(scoped).not.toContain("local-skill");
+
+    const withSlash = computeProfileSkillDisabled(root, {
+      teamId: PROJECT_DEFAULT_TEAM_ID,
+      extraAllowIds: ["foreign-skill"],
+    });
+    expect(withSlash).not.toContain("foreign-skill");
   });
 });
 
@@ -178,13 +205,14 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     ]);
   });
 
-  it("pack 级禁用 → 目录整体移出 paths；同名遮蔽豁免 deny", () => {
+  it("pack 级禁用 → 目录整体移出 paths；团队 roster 再收紧 permission.skill", () => {
     const teamsRoot = temp("packs-root-");
     makePack(teamsRoot, "aaa.pack", baseManifest("aaa.pack"), {
       skills: [{ id: "shared" }, { id: "solo" }],
     });
     makePack(teamsRoot, CORE_TEAM_ID, baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
       skills: [{ id: "shared" }],
+      orchestrators: [{ id: "build" }],
     });
     // bundled source so the reserved core id is accepted (reserved-id guard).
     registerExternalTeamRoot(teamsRoot, "bundled");
@@ -193,20 +221,24 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     sealAppStore();
     addInstalledTeam("aaa.pack");
 
-    // pack.a 整包禁用 → 目录出 paths；shared 仍有 core 激活实例 → 不 deny；
-    // solo 无激活实例 → deny
+    // pack.a 整包禁用 → 目录出 paths；solo 无激活实例 → deny
     setProjectTeamEnabled(root, "aaa.pack", false);
-    let result = syncProjectSkillsIntegration(root);
+    let result = syncProjectSkillsIntegration(root, { teamId: CORE_TEAM_ID });
     expect(result.skillsPaths).toEqual([
       join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
       PRISM_OPENCODE_SKILLS_SCAN_REL,
     ]);
     expect(result.skillPermissions["solo"]).toBe("deny");
+    // Active team = core → own-team shared stays allowed (shadow carve-out).
     expect(result.skillPermissions["shared"]).toBeUndefined();
+
+    // Under project.local, core's shared is out of roster → deny (slash can re-allow).
+    result = syncProjectSkillsIntegration(root, { teamId: PROJECT_DEFAULT_TEAM_ID });
+    expect(result.skillPermissions["shared"]).toBe("deny");
 
     // core 的 shared 也被逐项禁用 → 无激活实例 → deny
     setProjectAssetEnabled(root, `${CORE_TEAM_ID}:shared`, false);
-    result = syncProjectSkillsIntegration(root);
+    result = syncProjectSkillsIntegration(root, { teamId: CORE_TEAM_ID });
     expect(result.skillPermissions["shared"]).toBe("deny");
   });
 
@@ -337,10 +369,32 @@ describe("skills-sync: 技能库来源（manifest 元数据，不变）", () => 
     );
   }
 
-  it("always includes prism-curated bundled source", () => {
+  it("does not seed prism-curated as an install library (Core ≠ curated)", () => {
     const root = temp();
     const sources = listLibrarySources(root);
-    expect(sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID && s.kind === "bundled")).toBe(true);
+    expect(sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID)).toBe(false);
+  });
+
+  it("strips legacy prism-curated bundled source from manifests", () => {
+    const root = temp();
+    mkdirSync(join(root, ".prismnext/agent"), { recursive: true });
+    writeFileSync(
+      join(root, ".prismnext/agent/skills-manifest.json"),
+      JSON.stringify({
+        sources: [
+          { id: PRISM_CURATED_SOURCE_ID, kind: "bundled", connected: true },
+          {
+            id: "remote:https://example.com/index.json",
+            kind: "remote",
+            url: "https://example.com/index.json",
+            connected: true,
+          },
+        ],
+      }),
+    );
+    const sources = listLibrarySources(root);
+    expect(sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID)).toBe(false);
+    expect(sources.some((s) => s.url === "https://example.com/index.json")).toBe(true);
   });
 
   it("does not write library registry URLs to skills patch", async () => {
@@ -370,20 +424,6 @@ describe("skills-sync: 技能库来源（manifest 元数据，不变）", () => 
     const source = listLibrarySources(root).find((s) => s.url === registryUrl)!;
     removeSkillLibrarySource(root, source.id);
     expect(listLibrarySources(root).some((s) => s.url === registryUrl)).toBe(false);
-  });
-
-  it("cannot remove built-in prism-curated source", () => {
-    const root = temp();
-    expect(() => removeSkillLibrarySource(root, PRISM_CURATED_SOURCE_ID)).toThrow(/cannot be removed/i);
-    expect(listLibrarySources(root).some((s) => s.id === PRISM_CURATED_SOURCE_ID)).toBe(true);
-  });
-
-  it("allows disconnecting and reconnecting bundled prism-curated source", () => {
-    const root = temp();
-    let sources = setSkillLibrarySourceConnected(root, PRISM_CURATED_SOURCE_ID, false);
-    expect(sources.find((s) => s.id === PRISM_CURATED_SOURCE_ID)?.connected).toBe(false);
-    sources = setSkillLibrarySourceConnected(root, PRISM_CURATED_SOURCE_ID, true);
-    expect(sources.find((s) => s.id === PRISM_CURATED_SOURCE_ID)?.connected).toBe(true);
   });
 
   it("migrates legacy registryUrls to sources", () => {

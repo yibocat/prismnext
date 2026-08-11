@@ -10,7 +10,10 @@
 import { BrowserWindow, app } from "electron";
 import { join } from "node:path";
 import { AcpService } from "../acp/service";
-import { syncProjectSkillsIntegration } from "./skills-sync";
+import {
+  syncProjectSkillsIntegration,
+  type SkillPermissionScope,
+} from "./skills-sync";
 import { normalizeProjectRoot } from "./skills-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { createLogger } from "./logger";
@@ -20,10 +23,15 @@ const log = createLogger("project-skills-refresh");
 /** Last applied skills integration key per project — avoids redundant opencode.json writes. */
 const lastAppliedSkillsKey = new Map<string, string>();
 
-function computeSkillsIntegrationKey(projectRoot: string): string {
-  const result = syncProjectSkillsIntegration(projectRoot);
+function computeSkillsIntegrationKey(
+  projectRoot: string,
+  scope?: SkillPermissionScope,
+): string {
+  const result = syncProjectSkillsIntegration(projectRoot, scope);
   return JSON.stringify({
     root: normalizeProjectRoot(projectRoot),
+    teamId: scope?.teamId ?? null,
+    extra: [...(scope?.extraAllowIds ?? [])].sort(),
     paths: result.skillsPaths,
     perms: result.skillPermissions,
   });
@@ -49,15 +57,16 @@ export interface RefreshProjectSkillsResult {
 /** Sync project skills on disk + app-level OpenCode config + agent config cache. */
 export async function refreshProjectSkillsIntegration(
   projectPath: string,
+  scope?: SkillPermissionScope,
 ): Promise<RefreshProjectSkillsResult> {
   const root = normalizeProjectRoot(projectPath);
-  const result = syncProjectSkillsIntegration(projectPath);
+  const result = syncProjectSkillsIntegration(projectPath, scope);
   const acp = AcpService.getInstanceForProject(root);
   const { configPath, changed: configChanged } = acp.applyProjectSkillsIntegration(projectPath, {
     skillsPaths: result.skillsPaths,
     skillPermissions: result.skillPermissions,
   });
-  const key = computeSkillsIntegrationKey(projectPath);
+  const key = computeSkillsIntegrationKey(projectPath, scope);
   lastAppliedSkillsKey.set(root, key);
   acp.prewarmProject(projectPath);
   notifySkillsIntegrationChanged(projectPath);
@@ -67,11 +76,12 @@ export async function refreshProjectSkillsIntegration(
 /** Skip opencode.json rewrite when skills patch is unchanged. */
 export async function refreshProjectSkillsIntegrationIfNeeded(
   projectPath: string,
+  scope?: SkillPermissionScope,
 ): Promise<RefreshProjectSkillsResult> {
   const root = normalizeProjectRoot(projectPath);
-  const key = computeSkillsIntegrationKey(projectPath);
+  const key = computeSkillsIntegrationKey(projectPath, scope);
   if (lastAppliedSkillsKey.get(root) === key) {
-    const result = syncProjectSkillsIntegration(projectPath);
+    const result = syncProjectSkillsIntegration(projectPath, scope);
     const acp = AcpService.getInstanceForProject(root);
     acp.prewarmProject(projectPath);
     return {
@@ -81,7 +91,7 @@ export async function refreshProjectSkillsIntegrationIfNeeded(
       skipped: true,
     };
   }
-  return refreshProjectSkillsIntegration(projectPath);
+  return refreshProjectSkillsIntegration(projectPath, scope);
 }
 
 /** Skills file changed on disk — sync then restart OpenCode so config is loaded. */

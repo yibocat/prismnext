@@ -24,6 +24,7 @@ import { KnowledgeModulesPanel } from "./knowledge-modules-panel";
 import { BuiltinCommandsPanel } from "./builtin-commands-panel";
 import { ResearchBriefPanel } from "./research-brief-panel";
 import { TeamDetailPanel } from "./team-detail-panel";
+import { TeamCreatePanel } from "./team-create-panel";
 import { ShortcutsSettings } from "./shortcuts-settings";
 import { LogViewer } from "./log-viewer";
 import { PermissionRulesEditorPanel } from "./permission-rules-editor-panel";
@@ -62,11 +63,11 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
     case "custom-command":
       return <CustomCommandEditorPanel slot={slot} />;
     case "mcp-json":
-      return <McpJsonEditorPanel />;
+      return <McpJsonEditorPanel slot={slot} />;
     case "mcp-catalog":
-      return <McpCatalogPanel />;
+      return <McpCatalogPanel slot={slot} />;
     case "mcp-paste-json":
-      return <McpPasteJsonPanel />;
+      return <McpPasteJsonPanel slot={slot} />;
     case "mcp-server":
       return <McpServerEditorPanel slot={slot} />;
     case "skill-markdown":
@@ -75,6 +76,8 @@ export function renderSettingsPanelSlot(slot: SettingsPanelSlot): ReactNode {
       return <SkillLibraryPanel />;
     case "team-detail":
       return <TeamDetailPanel slot={slot} />;
+    case "team-create":
+      return <TeamCreatePanel slot={slot} />;
     case "agent-tools":
       return <AgentToolsPanel />;
     case "knowledge-modules":

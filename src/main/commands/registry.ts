@@ -13,87 +13,78 @@ import {
 } from "./export-import";
 import { isValidCommandName } from "./template-utils";
 import {
+  APP_COMMANDS_OWNER_ID,
   CORE_TEAM_ID,
-  isProjectLocalTeamId,
   PROJECT_DEFAULT_TEAM_ID,
 } from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
 import type { AssetViewV2 } from "../../shared/teams/view";
-import { invalidateResolver, listAssets, resolveInvocation, resolveRef } from "../teams/resolver";
+import {
+  invalidateResolver,
+  listAssets,
+  listEffectiveSlashCommands,
+  resolveActiveTeam,
+  resolveInvocation,
+  resolveRef,
+} from "../teams/resolver";
 import { setProjectAssetEnabled } from "../teams/state-project";
-import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
+import { resolveWritableTeamDir } from "../services/team-mcp-files";
 
 /**
- * CommandRegistry（§5.6.3）—— resolver 之上的命令门面，per-project 实例。
- *
- * 内容唯一来源 = PackResolver.listCommands（core + local + 启用 packs）。
- * 本类不持有内容缓存（resolver 视图自校验新鲜度）：
- * - 启停 = teams.json assetEnabled (tri-state)（废弃 .md ↔ .md.disabled 改名与
- *   applyBuiltinStates/dumpBuiltinStates 全局态）；
- * - CRUD 只允许 Local Pack（remove 对非 local 直接报错——结构上杜绝 P9）；
- * - 斜杠重名遮蔽优先级：local > core > 其他 pack（id 字典序）。
+ * CommandRegistry — resolver facade for slash commands, per-project.
+ * CRUD targets any writable team (Common / Project / user-created).
  */
 export class CommandRegistry {
   constructor(private readonly projectRoot: string) {}
 
-  /** Project default team commands 目录（M8: teams/project.local/commands） */
-  private get commandsDir(): string {
-    return join(ensureProjectDefaultTeamDir(this.projectRoot), "commands");
+  private commandsDirFor(teamId: string): string {
+    return join(resolveWritableTeamDir(this.projectRoot, teamId), "commands");
   }
 
   list(): CommandDef[] {
     return listAssets(this.projectRoot, "command").map((cmd) => toCommandDef(cmd));
   }
 
-  /**
-   * Look up a single command by name for slash execution.
-   * Goes through the resolver's single precedence table (§7.5) — no local
-   * shadowing logic here. Returns undefined if not found or disabled.
-   */
   lookup(name: string): CommandDef | undefined {
     const asset = resolveInvocation(this.projectRoot, "command", name);
     return asset ? toCommandDef(asset) : undefined;
   }
 
-  /**
-   * Search commands by name or description substring.
-   */
   search(query: string): CommandDef[] {
     const q = query.toLowerCase();
-    return this.list()
+    const activeTeamId = resolveActiveTeam(this.projectRoot)?.manifest.id ?? null;
+    return listEffectiveSlashCommands(this.projectRoot, activeTeamId)
+      .map((asset) => toCommandDef(asset))
       .filter((c) => c.enabled)
       .filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.description.toLowerCase().includes(q),
       )
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => {
+        const aApp = a.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        const bApp = b.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        if (aApp !== bApp) return aApp - bApp;
+        return a.order - b.order;
+      });
   }
 
-  /**
-   * Reload: drop the resolver view for this project and rebuild.
-   * （resolver 的 viewKey 已覆盖文件指纹，多数情况下只是预热。）
-   */
   reload(): CommandDef[] {
     invalidateResolver(this.projectRoot);
     return this.list();
   }
 
-  // ── Project-local command CRUD ────────────────────────────
-
-  /**
-   * Create a new local command as a .md file in the Local Pack.
-   */
   create(payload: CreateCommandPayload): CommandDef {
-    this.ensureDir();
-    // Reject creating a command whose name already exists in the Local Pack
-    // (silent overwrite is a data-loss footgun).
-    if (this.localCommands().some((c) => c.name === payload.name)) {
+    const teamId = payload.targetTeamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
+    const dir = this.commandsDirFor(teamId);
+    mkdirSync(dir, { recursive: true });
+
+    if (this.teamCommands(teamId).some((c) => c.name === payload.name)) {
       throw new Error(`Command already exists: ${payload.name}`);
     }
 
     const def: CommandDef = {
-      id: `${PROJECT_DEFAULT_TEAM_ID}:${payload.name}`,
+      id: `${teamId}:${payload.name}`,
       name: payload.name,
       description: payload.description,
       source: "user",
@@ -103,33 +94,30 @@ export class CommandRegistry {
       model: payload.model,
       order: 1000,
       enabled: true,
-      teamId: PROJECT_DEFAULT_TEAM_ID,
-      teamName: "This project",
+      teamId,
+      teamName: teamId,
       removable: true,
     };
 
-    this.writeFile(def);
+    this.writeFile(def, teamId);
     invalidateResolver(this.projectRoot);
     return def;
   }
 
-  /**
-   * Update an existing local command.
-   */
   update(id: string, payload: UpdateCommandPayload): CommandDef {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
     if (!existing.removable) throw new Error(`Cannot modify pack command (disable it instead): ${id}`);
 
-    // If name changed, delete old file
+    const teamId = existing.teamId;
     if (payload.name && payload.name !== existing.name) {
-      this.deleteFile(existing.name);
+      this.deleteFile(existing.name, teamId);
     }
 
     const updated: CommandDef = {
       ...existing,
       name: payload.name ?? existing.name,
-      id: `${PROJECT_DEFAULT_TEAM_ID}:${payload.name ?? existing.name}`,
+      id: `${teamId}:${payload.name ?? existing.name}`,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
       action:
@@ -140,29 +128,20 @@ export class CommandRegistry {
       model: payload.model !== undefined ? payload.model : existing.model,
     };
 
-    this.writeFile(updated);
+    this.writeFile(updated, teamId);
     invalidateResolver(this.projectRoot);
     return updated;
   }
 
-  /**
-   * Delete a local command (removes the .md file).
-   * 非 local 内容直接报错 —— pack 内容只能禁用（P9 结构性修复）。
-   */
   remove(id: string): void {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
     if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
-    this.deleteFile(existing.name);
-    // 清理可能残留的逐项禁用
+    this.deleteFile(existing.name, existing.teamId);
     setProjectAssetEnabled(this.projectRoot, existing.id, true);
     invalidateResolver(this.projectRoot);
   }
 
-  /**
-   * Enable or disable any command by id —— 唯一状态操作 = teams.json
-   * assetEnabled (tri-state)（FQID 原样；裸 id 按 resolver 规则解析兜底）。
-   */
   setEnabled(id: string, enabled: boolean): void {
     const fqid = parseFqid(id)
       ? id
@@ -171,15 +150,13 @@ export class CommandRegistry {
     setProjectAssetEnabled(this.projectRoot, fqid, enabled ? true : false);
   }
 
-  // ── Export / import（作用域 = Local Pack commands）──
-
   exportPack(): CommandPack {
-    return buildCommandPack(this.localCommands());
+    return buildCommandPack(this.exportableCommands());
   }
 
   previewImport(packRaw: unknown): CommandImportPreview {
     const pack = parseCommandPack(packRaw);
-    const existingNames = new Set(this.localCommands().map((c) => c.name));
+    const existingNames = new Set(this.exportableCommands().map((c) => c.name));
     return previewCommandImport(existingNames, pack);
   }
 
@@ -191,7 +168,8 @@ export class CommandRegistry {
       renamed: [],
     };
 
-    const existingNames = new Set(this.localCommands().map((c) => c.name));
+    const existingNames = new Set(this.exportableCommands().map((c) => c.name));
+    const teamId = PROJECT_DEFAULT_TEAM_ID;
 
     for (const entry of pack.commands) {
       const baseName = entry.name?.trim().toLowerCase();
@@ -212,7 +190,7 @@ export class CommandRegistry {
       }
 
       const def: CommandDef = {
-        id: `${PROJECT_DEFAULT_TEAM_ID}:${targetName}`,
+        id: `${teamId}:${targetName}`,
         name: targetName,
         description: entry.description ?? "",
         source: "user",
@@ -222,16 +200,16 @@ export class CommandRegistry {
         model: entry.model || undefined,
         order: 1000,
         enabled: entry.enabled !== false,
-        teamId: PROJECT_DEFAULT_TEAM_ID,
+        teamId,
         teamName: "This project",
         removable: true,
       };
 
       if (strategy === "replace" && existingNames.has(baseName) && targetName === baseName) {
-        this.deleteFile(baseName);
+        this.deleteFile(baseName, teamId);
       }
 
-      this.writeFile(def);
+      this.writeFile(def, teamId);
       if (!def.enabled) {
         setProjectAssetEnabled(this.projectRoot, def.id, false);
       }
@@ -243,22 +221,23 @@ export class CommandRegistry {
     return result;
   }
 
-  // ── Private helpers ──
-
-  /** Local Pack 的命令视图（export/import 作用域） */
-  private localCommands(): CommandDef[] {
-    return this.list().filter((c) => isProjectLocalTeamId(c.teamId));
+  /** User-editable commands across writable teams (export / import conflict set). */
+  private exportableCommands(): CommandDef[] {
+    return this.list().filter((c) => c.removable);
   }
 
-  private filePath(name: string): string {
-    return join(this.commandsDir, `${name}.md`);
+  private teamCommands(teamId: string): CommandDef[] {
+    return this.list().filter((c) => c.teamId === teamId);
   }
 
-  private writeFile(def: CommandDef): void {
-    this.ensureDir();
+  private filePath(name: string, teamId: string): string {
+    return join(this.commandsDirFor(teamId), `${name}.md`);
+  }
 
-    // Frontmatter values are single-line; collapse newlines so a multi-line
-    // description can't corrupt the file (the flat parser splits on ":").
+  private writeFile(def: CommandDef, teamId: string): void {
+    const dir = this.commandsDirFor(teamId);
+    mkdirSync(dir, { recursive: true });
+
     const fmValue = (v: string) => v.replace(/\s+/g, " ").trim();
     const frontmatter = [
       "---",
@@ -266,26 +245,20 @@ export class CommandRegistry {
       ...(def.action ? [`action: ${fmValue(def.action)}`] : []),
       ...(def.agent ? [`agent: ${fmValue(def.agent)}`] : []),
       ...(def.model ? [`model: ${fmValue(def.model)}`] : []),
-      // order is persisted so user-defined ordering survives a reload (B12).
       `order: ${def.order ?? 1000}`,
       "---",
     ].join("\n");
 
     const content = `${frontmatter}\n\n${def.template || ""}\n`;
-    writeFileSync(this.filePath(def.name), content, "utf-8");
+    writeFileSync(this.filePath(def.name, teamId), content, "utf-8");
   }
 
-  private deleteFile(name: string): void {
-    const path = this.filePath(name);
+  private deleteFile(name: string, teamId: string): void {
+    const path = this.filePath(name, teamId);
     if (existsSync(path)) rmSync(path, { force: true });
-  }
-
-  private ensureDir(): void {
-    if (!existsSync(this.commandsDir)) mkdirSync(this.commandsDir, { recursive: true });
   }
 }
 
-/** Map a resolved command asset to the legacy CommandDef shape. */
 function toCommandDef(asset: AssetViewV2): CommandDef {
   const teamId = asset.teamId;
   const cmd = (asset.definition ?? {}) as {
@@ -299,7 +272,12 @@ function toCommandDef(asset: AssetViewV2): CommandDef {
     id: asset.fqid,
     name: asset.id,
     description: asset.description,
-    source: teamId === CORE_TEAM_ID ? "builtin" : isProjectLocalTeamId(teamId) ? "user" : "plugin",
+    source:
+      teamId === APP_COMMANDS_OWNER_ID || teamId === CORE_TEAM_ID
+        ? "builtin"
+        : asset.editable
+          ? "user"
+          : "plugin",
     template: cmd.template ?? "",
     action: cmd.action,
     agent: cmd.agent,
@@ -312,8 +290,6 @@ function toCommandDef(asset: AssetViewV2): CommandDef {
   };
 }
 
-// ── per-project 实例池（§5.6.3：删除全局可写态）─────────────────
-
 const registryPool = new Map<string, CommandRegistry>();
 
 export function getCommandRegistry(projectRoot: string): CommandRegistry {
@@ -325,7 +301,6 @@ export function getCommandRegistry(projectRoot: string): CommandRegistry {
   return registry;
 }
 
-/** 测试专用：清空实例池 */
 export function __resetCommandRegistriesForTests(): void {
   registryPool.clear();
 }

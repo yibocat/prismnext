@@ -42,12 +42,15 @@ import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 import {
   CORE_TEAM_ID,
+  MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
+  isProjectLocalLeadFqid,
   type SubagentDef,
   type Fqid,
   type OrchestratorDef,
   type AssetKind,
 } from "../../shared/teams/types";
+import { ensureMyContentTeam, isMyContentLeadFqid, isMyContentTeamId } from "../teams/my-content";
 import { parseFqid, toFqid } from "../../shared/teams/state";
 import {
   getAsset,
@@ -62,8 +65,7 @@ import {
 import type { AssetViewV2 } from "../../shared/teams/view";
 import { getTeamRecord, invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
 import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
-import { setActiveTeam } from "../teams/lifecycle";
-import { readProjectTeamsState } from "../teams/state-project";
+import { purgeSubagentFromForeignRosters } from "../teams/lifecycle";
 import { createLogger } from "./logger";
 
 const log = createLogger("subagents-sync", "agent");
@@ -113,16 +115,19 @@ function toExpertInfo(projectRoot: string, content: AssetViewV2): SubagentInfo {
 }
 
 /**
- * OrchestratorInfo.roster 语义对齐旧版：
- * - 定义了 roster 的 → 按启用 expert 过滤后的【文件名基】列表
- * - 未定义的 → undefined（UI 显示「标准编排」，plan 视为全部启用 experts）
+ * OrchestratorInfo.roster / rosterMode:
+ * - mode "all" (or missing) → rosterMode "all", roster undefined — do NOT expand
+ *   into every enabled expert id (that made the editor look like "select all Core")
+ * - mode "list" → rosterMode "list", roster = enabled runtime ids (may be [])
  */
 function toOrchestratorInfo(projectRoot: string, content: AssetViewV2): OrchestratorInfo {
   const def = content.definition as OrchestratorDef;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveOrchestratorActiveModuleKeys();
+  const spec = def.roster ?? { mode: "all" as const };
+  const rosterMode: "all" | "list" = spec.mode === "list" ? "list" : "all";
   const allowed =
-    def.roster !== undefined
+    rosterMode === "list"
       ? resolveAllowedRefs(projectRoot, content.fqid).map((ref) => ref.id)
       : undefined;
   return {
@@ -131,11 +136,14 @@ function toOrchestratorInfo(projectRoot: string, content: AssetViewV2): Orchestr
     name: def.name ?? content.name,
     description: def.description ?? content.description,
     builtin: content.teamId === CORE_TEAM_ID,
-    ...(content.editable ? { removable: true } : {}),
+    // Leads are never deletable — remove the team (or edit the lead) instead.
+    // Otherwise a custom team can lose its only lead and break chat routing.
+    removable: false,
     model: def.model,
     thoughtLevel: def.thoughtLevel,
     temperature: def.temperature,
     roster: allowed,
+    rosterMode,
     permission: def.permission,
     enabled: content.enabled,
     instructionsPreview: instructionsPreview(instructions),
@@ -699,6 +707,8 @@ function uniqueLocalOrchestratorId(projectRoot: string, base: string): string {
 
 /** local pack 目录写入后必须显式失效 resolver（fingerprint 有 mtime 精度边界）。 */
 function invalidateLocalViews(projectRoot: string): void {
+  // Catalog must drop too — getTeamContents / scan read TeamRecord.assets from it.
+  invalidateCatalogV2();
   invalidateResolver(projectRoot);
 }
 
@@ -707,20 +717,25 @@ function invalidateLocalViews(projectRoot: string): void {
 /** Derive a content item's owning pack id from its fqid (`teamId:contentId`). */
 function packIdOf(item: { fqid?: string }): string {
   const pid = item.fqid?.split(":")[0];
-  return pid && pid.length > 0 ? pid : PROJECT_DEFAULT_TEAM_ID;
+  return pid && pid.length > 0 ? pid : MY_CONTENT_TEAM_ID;
 }
 
 /**
  * Resolve the directory a custom agent should be written into.
- * - no target / project.local → this project's default team;
- * - any writable v2 Team → that Team's directory.
+ * - no target / My Content → app-level My Content hangar;
+ * - project.local → this project's hangar (explicit only);
+ * - any other writable v2 Team → that Team's directory.
  */
 function resolveWritableTarget(
   projectRoot: string,
   targetTeamId?: string,
 ): { dir: string; teamId: string } {
   const tid = targetTeamId?.trim();
-  if (!tid || tid === PROJECT_DEFAULT_TEAM_ID) {
+  if (!tid || tid === MY_CONTENT_TEAM_ID) {
+    const { dir } = ensureMyContentTeam();
+    return { dir, teamId: MY_CONTENT_TEAM_ID };
+  }
+  if (tid === PROJECT_DEFAULT_TEAM_ID) {
     return { dir: ensureProjectDefaultTeamDir(projectRoot), teamId: PROJECT_DEFAULT_TEAM_ID };
   }
   const team = getTeamRecord(tid, [projectRoot]);
@@ -794,6 +809,9 @@ export function deleteCustomSubagent(projectRoot: string, expertId: string): voi
       `Cannot delete a team-provided expert (disable the team or its expert instead): ${expertId}`,
     );
   }
+  // Drop explicit cross-team roster refs before removing the asset (UI confirms first).
+  purgeSubagentFromForeignRosters(projectRoot, expert.fqid ?? expertId);
+
   const teamId = packIdOf(expert);
   const { dir } = resolveWritableTarget(projectRoot, teamId);
   const bareId = expert.id.includes("--") ? expert.id.slice(expert.id.lastIndexOf("--") + 2) : expert.id;
@@ -810,6 +828,11 @@ export function saveCustomOrchestrator(
   targetTeamId?: string,
 ): OrchestratorInfo {
   const { dir, teamId } = resolveWritableTarget(projectRoot, targetTeamId);
+  if (isMyContentTeamId(teamId)) {
+    throw new Error(
+      "Cannot create or edit lead agents in Common Team. Create a custom team (one lead per team) instead.",
+    );
+  }
   const rawId = payload.id?.trim() || slugifyId(payload.name);
   // Editing passes an agentFileBase id (`<teamId>--<id>` for non-local packs);
   // strip the pack prefix to get the bare id used as the directory name.
@@ -819,13 +842,15 @@ export function saveCustomOrchestrator(
   mkdirSync(agentDir, { recursive: true });
 
   const knownExpertIds = listSubagents(projectRoot).map((e) => e.id);
-  // 新格式 orchestrator.json：无身份字段；roster 存裸 id（§4.3.1 可解析）。
-  // undefined = 不限制（默认全部可用专家，含将来新增）；仅用户显式勾选才落列表。
+  // 磁盘 key 仍是 allowedExperts。语义：
+  // - undefined / omitted = mode "all"（不限制，含将来新增）
+  // - [] = mode "list" 空名册（明确不允许任何子 Agent）
+  // - [...] = mode "list" 显式勾选
+  const mode = payload.rosterMode ?? (payload.roster !== undefined ? "list" : "all");
   const roster =
-    payload.roster !== undefined
-      ? pruneRosterRefIds(payload.roster, knownExpertIds)
-      : undefined;
-  // 磁盘 JSON 的 key 仍是 allowedExperts（T0 保留旧磁盘格式；T6 统一迁移为 roster）。
+    mode === "all"
+      ? undefined
+      : pruneRosterRefIds(payload.roster ?? [], knownExpertIds);
   const diskDef: Record<string, unknown> = {
     id,
     name: payload.name.trim(),
@@ -849,24 +874,16 @@ export function saveCustomOrchestrator(
 export function deleteCustomOrchestrator(projectRoot: string, orchestratorId: string): void {
   const orchestrator = getOrchestrator(projectRoot, orchestratorId);
   if (!orchestrator) throw new Error(`Orchestrator not found: ${orchestratorId}`);
-  if (!orchestrator.removable) {
-    // Pack-provided orchestrators (incl. first-party packs) are read-only —
-    // disable the pack instead of deleting its content.
-    throw new Error(
-      `Cannot delete a team-provided orchestrator (disable the team or its orchestrator instead): ${orchestratorId}`,
-    );
+  if (orchestrator.fqid && isMyContentLeadFqid(orchestrator.fqid)) {
+    throw new Error("Common Team's chat lead cannot be deleted.");
   }
-  const teamId = packIdOf(orchestrator);
-  const { dir } = resolveWritableTarget(projectRoot, teamId);
-  const bareId = orchestrator.id.includes("--")
-    ? orchestrator.id.slice(orchestrator.id.lastIndexOf("--") + 2)
-    : orchestrator.id;
-  const agentDir = join(dir, "orchestrators", bareId);
-  if (existsSync(agentDir)) rmSync(agentDir, { recursive: true, force: true });
-  invalidateWritableTarget(projectRoot, teamId);
-  if (readProjectTeamsState(projectRoot).defaultTeam === teamId) {
-    setActiveTeam(CORE_TEAM_ID, "project", projectRoot);
+  if (orchestrator.fqid && isProjectLocalLeadFqid(orchestrator.fqid)) {
+    throw new Error("This project's hangar lead cannot be deleted.");
   }
+  // Custom / hangar / pack leads: never delete the lead alone (≤1 lead per team).
+  throw new Error(
+    `Lead agents cannot be deleted (delete the team or edit this lead instead): ${orchestratorId}`,
+  );
 }
 
 // Core content state operations (Phase 6): these moved to the packs IPC

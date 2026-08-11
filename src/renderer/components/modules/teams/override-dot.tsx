@@ -1,5 +1,6 @@
 // OverrideDot — the "·overridden" indicator (design §8.2): shown when the
-// project value differs from the app value. Hover explains; click offers
+// project enable flag meaningfully diverges from the effective app/default
+// value (see isProjectEnableOverridden). Hover explains; click offers
 // "follow the global setting". VSCode-settings parity (existing user mental model).
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";

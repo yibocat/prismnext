@@ -28,7 +28,17 @@ export interface OrchestratorDefinition {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
+  /**
+   * Explicit allowlist of subagent runtime ids. Meaning depends on `rosterMode`:
+   * - `list`: these (and only these) may be delegated to — may be empty
+   * - `all`: ignored; every enabled subagent is available
+   */
   roster?: string[];
+  /**
+   * `all` = unrestricted (default / omitted allowlist).
+   * `list` = explicit allowlist in `roster` (empty = none — not "all").
+   */
+  rosterMode?: "all" | "list";
   permission?: Record<string, unknown>;
 }
 
@@ -76,7 +86,13 @@ export interface SaveCustomOrchestratorPayload {
   name: string;
   description: string;
   instructions: string;
+  /**
+   * Explicit allowlist. Omit / undefined with rosterMode "all" = unrestricted.
+   * Empty array with rosterMode "list" = no subagents (not "all").
+   */
   roster?: string[];
+  /** Defaults to "all" when roster is undefined, else "list". */
+  rosterMode?: "all" | "list";
   model?: string;
   thoughtLevel?: string;
   temperature?: number;

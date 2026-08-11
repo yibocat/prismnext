@@ -1,9 +1,10 @@
 {
   "id": "prismnext.core",
   "name": "PrismNext Core",
-  "description": "Built-in research agent suite — orchestrator, experts, skills and core commands.",
+  "description": "Built-in research agent suite — orchestrator, experts, and skills.",
   "version": "1.0.0",
   "packFormatVersion": 1,
+  "formatVersion": 2,
   "tier": "free",
   "publisher": "prismnext",
   "category": "core",

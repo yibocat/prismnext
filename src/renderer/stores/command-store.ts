@@ -9,12 +9,17 @@ import type {
   CommandImportPreview,
   CommandImportResult,
 } from "@commands/export-import";
+import { APP_COMMANDS_OWNER_ID } from "@shared/teams/types";
+import { useTeamsStore } from "./teams-store";
 
 interface CommandState {
   commands: CommandDef[];
   loaded: boolean;
+  /** FQIDs allowed in `/` menu: app commands ∪ active team roster. null = not ready. */
+  slashAllowFqids: Set<string> | null;
 
   loadCommands: () => Promise<void>;
+  refreshSlashAllow: () => Promise<void>;
   searchCommands: (query: string) => CommandDef[];
   expandCommand: (name: string, rawInput: string) => Promise<string>;
   createCommand: (payload: CreateCommandPayload) => Promise<CommandDef>;
@@ -42,6 +47,7 @@ async function getProjectRoot(): Promise<string> {
 export const useCommandStore = create<CommandState>()((set, get) => ({
   commands: [],
   loaded: false,
+  slashAllowFqids: null,
 
   loadCommands: async () => {
     try {
@@ -49,22 +55,55 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
       const projectRoot = useDocumentStore.getState().projectRoot;
       const commands = await window.electronAPI.commandsList(projectRoot);
       set({ commands, loaded: true });
+      await get().refreshSlashAllow();
     } catch (err) {
       console.error("[command-store] Failed to load commands:", err);
       set({ loaded: true });
     }
   },
 
+  refreshSlashAllow: async () => {
+    try {
+      const { useDocumentStore } = await import("./document-store");
+      const projectRoot = useDocumentStore.getState().projectRoot;
+      if (!projectRoot) {
+        set({ slashAllowFqids: null });
+        return;
+      }
+      const activeTeamId = useTeamsStore.getState().activeTeamId;
+      const roster = activeTeamId
+        ? await window.electronAPI.teamsGetCommandsRoster(projectRoot, activeTeamId)
+        : null;
+      const allow = new Set<string>();
+      for (const c of get().commands) {
+        if (c.enabled && c.teamId === APP_COMMANDS_OWNER_ID) allow.add(c.id);
+      }
+      for (const entry of roster?.entries ?? []) {
+        if (!entry.unavailable) allow.add(entry.fqid);
+      }
+      set({ slashAllowFqids: allow });
+    } catch {
+      set({ slashAllowFqids: null });
+    }
+  },
+
   searchCommands: (query: string) => {
     const q = query.toLowerCase();
+    const allow = get().slashAllowFqids;
     return get()
       .commands.filter((c) => c.enabled)
+      .filter((c) => (allow ? allow.has(c.id) : true))
       .filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.description.toLowerCase().includes(q),
       )
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => {
+        const aApp = a.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        const bApp = b.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        if (aApp !== bApp) return aApp - bApp;
+        return a.order - b.order;
+      });
   },
 
   expandCommand: async (name: string, rawInput: string) => {
@@ -101,6 +140,7 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
       const projectRoot = await getProjectRoot();
       const updated = await window.electronAPI.commandsToggle(projectRoot, id, enabled);
       set({ commands: updated });
+      await get().refreshSlashAllow();
     } catch {
       set({ commands: prev });
     }
@@ -111,6 +151,7 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
     const projectRoot = useDocumentStore.getState().projectRoot;
     const commands = await window.electronAPI.commandsReload(projectRoot);
     set({ commands });
+    await get().refreshSlashAllow();
   },
 
   previewImport: (projectRoot, pack) =>

@@ -6,9 +6,8 @@
 //
 // ─── ADDING A NEW BUILTIN ACTION ─────────────────────────────────────
 //
-//   1. Define the command entry in:
-//      src/main/commands/builtin-commands.ts
-//      (see the doc comment at the top of that file for the exact format)
+//   1. Define the command as a markdown file under resources/commands/
+//      (app-level) or a writable team's commands/ directory.
 //
 //   2. Add a register() call below following the existing pattern:
 //
@@ -22,7 +21,7 @@
 //   3. That's it. The ChatComposer and command engine need no changes.
 //
 //   The `action` key string must match EXACTLY between:
-//     - CommandDef.action   (in builtin-commands.ts)
+//     - frontmatter `action:` on the command markdown
 //     - actionRegistry.register() call  (in this file)
 //
 //   If they don't match, execute() throws an Error and the user sees
@@ -105,39 +104,8 @@ actionRegistry.register("compact-context", async () => {
   return "Context compacted. Old messages have been summarized to free token space.";
 });
 
-// ── restore-previous-turn (/undo) — world rollback to previous turn ──
-actionRegistry.register("restore-previous-turn", async () => {
-  const { useChatStore } = await import("@/stores/chat-store");
-  const { useCheckpointStore } = await import("@/stores/checkpoint-store");
-
-  const tabId = useChatStore.getState().activeTabId;
-  const restored = await useCheckpointStore.getState().rollbackPreviousTurn(tabId);
-
-  if (restored == null) {
-    throw new Error("Nothing to roll back — complete at least one turn first.");
-  }
-
-  return `Rolled back ${restored} file(s). Chat, workspace files, and proposed changes were rolled back.`;
-});
-
-// ── undo-last-restore (/redo) — regret / undo last rollback ──
-actionRegistry.register("undo-last-restore", async () => {
-  const { useChatStore } = await import("@/stores/chat-store");
-  const { useCheckpointStore } = await import("@/stores/checkpoint-store");
-
-  const tabId = useChatStore.getState().activeTabId;
-  const result = await useCheckpointStore.getState().undoLastRollback(tabId);
-
-  if (!result.ok) {
-    throw new Error("Nothing to undo — roll back to an earlier turn first.");
-  }
-
-  if (!result.sessionRestored) {
-    return "Rollback undone in the UI. Session history may be incomplete (truncation backup was missing).";
-  }
-
-  return "Rollback undone. Chat and workspace files are back to their pre-rollback state.";
-});
+// Rollback / regret live in the chat RestoreUndoBar (checkpoint store), not
+// as Core slash commands (removed: /undo, /redo).
 
 // ── enter-plan-mode ──
 // Prefer slash Modes → Plan (immediate mode switch, no command chip / no send).

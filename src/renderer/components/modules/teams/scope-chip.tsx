@@ -1,13 +1,37 @@
-// ScopeChip — the ALWAYS-VISIBLE scope badge (design §8.0 UX2: scope is always
-// shown, never a navigation axis). Opaque tokens only (theme iron rule).
+// ScopeChip — scope hint (design §8.0 UX2: scope is shown, never a nav axis).
+// Opaque tokens only (theme iron rule).
 import { GlobeIcon, FolderIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import type { TeamScope } from "@shared/teams/types";
 
-export function ScopeChip({ scope, className }: { scope: TeamScope; className?: string }) {
+export function ScopeChip({
+  scope,
+  className,
+  /** Settings list: muted text only — no pill fill / icon. */
+  quiet = false,
+}: {
+  scope: TeamScope;
+  className?: string;
+  quiet?: boolean;
+}) {
   const { t } = useTranslation();
   const isApp = scope === "app";
+  const label = isApp ? t("settings.teams.scope.app") : t("settings.teams.scope.project");
+  const title = isApp ? t("settings.teams.scope.appDesc") : t("settings.teams.scope.projectDesc");
+  if (quiet) {
+    return (
+      <span
+        className={cn(
+          "text-[length:var(--font-size-11)] text-muted-foreground shrink-0",
+          className,
+        )}
+        title={title}
+      >
+        {label}
+      </span>
+    );
+  }
   return (
     <span
       className={cn(
@@ -15,10 +39,10 @@ export function ScopeChip({ scope, className }: { scope: TeamScope; className?: 
         isApp ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground",
         className,
       )}
-      title={isApp ? t("settings.teams.scope.appDesc") : t("settings.teams.scope.projectDesc")}
+      title={title}
     >
       {isApp ? <GlobeIcon className="size-3" /> : <FolderIcon className="size-3" />}
-      {isApp ? t("settings.teams.scope.app") : t("settings.teams.scope.project")}
+      {label}
     </span>
   );
 }

@@ -9,6 +9,7 @@ import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protoco
 import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
 import { ensureUserTeamsRegistered } from "./services/user-teams";
 import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
+import { ensureMyContentTeam } from "./teams/my-content";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -338,6 +339,8 @@ app.whenReady().then(async () => {
   AcpService.setSessionProjectRootResolver(getSessionProjectRoot);
   // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
   ensureUserTeamsMigrated();
+  // Always-on My Content + chat lead (safety net so Core can be offloaded).
+  ensureMyContentTeam();
   // Temporary read compatibility for any legacy directory that could not be
   // migrated safely (for example, an unreadable manifest).
   ensureUserTeamsRegistered();

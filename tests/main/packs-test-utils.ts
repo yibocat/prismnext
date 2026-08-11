@@ -52,6 +52,9 @@ export interface CommandFixture {
 
 export interface PackContentsFixture {
   orchestrators?: AgentFixture[];
+  /** Canonical (formatVersion 2). */
+  subagents?: AgentFixture[];
+  /** @deprecated Prefer subagents. */
   experts?: AgentFixture[];
   skills?: SkillFixture[];
   commands?: CommandFixture[];
@@ -67,11 +70,13 @@ export function makePack(
 ): string {
   const dir = join(root, packDirName);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "plugin.json"), JSON.stringify(manifest, null, 2), "utf-8");
+  const body = { formatVersion: 2, ...manifest };
+  writeFileSync(join(dir, "team.json"), JSON.stringify(body, null, 2), "utf-8");
 
+  const subagents = contents.subagents ?? contents.experts ?? [];
   for (const [subdir, jsonName, agents] of [
     ["orchestrators", "orchestrator.json", contents.orchestrators ?? []],
-    ["experts", "expert.json", contents.experts ?? []],
+    ["subagents", "subagent.json", subagents],
   ] as const) {
     for (const agent of agents) {
       const agentDir = join(dir, subdir, agent.id);

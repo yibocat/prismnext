@@ -1,4 +1,10 @@
+/**
+ * Curated MCP install presets — data lives in `resources/mcp/presets.json`.
+ * Edit that file to add/remove/change presets; this module only validates and
+ * converts them for the Settings UI.
+ */
 import type { McpServerEntry } from "./mcp-config";
+import presetsFile from "../../../../resources/mcp/presets.json";
 
 export type McpPresetCategory = "dev" | "search" | "data" | "productivity";
 
@@ -22,11 +28,11 @@ export interface McpPreset {
   url?: string;
   docsUrl?: string;
   fields?: McpPresetField[];
-  /** Shown first in Settings → MCP catalog (research / writing workflow). */
+  /** Shown first in Settings → MCP install panel. */
   recommended?: boolean;
   /**
-   * prismnext-shipped default preset (seeded into mcp.json on new projects only).
-   * Settings shows a Built-in badge; users may disable or remove it like any MCP.
+   * Seeded into a writable team's mcp.json on new projects only.
+   * Settings may show a Built-in badge; users may still disable/remove it.
    */
   builtin?: boolean;
 }
@@ -38,127 +44,71 @@ export const MCP_CATEGORY_LABELS: Record<McpPresetCategory, string> = {
   productivity: "Productivity",
 };
 
-/** Curated catalog — prefer official @modelcontextprotocol servers with clear research value. */
-export const MCP_PRESETS: McpPreset[] = [
-  {
-    id: "fetch",
-    name: "Fetch",
-    description: "Fetch web pages and convert to markdown",
-    category: "search",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-fetch"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
-  },
-  {
-    id: "brave-search",
-    name: "Brave Search",
-    description: "Web search via Brave Search API",
-    category: "search",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-brave-search"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search",
-    fields: [
-      {
-        key: "BRAVE_API_KEY",
-        label: "Brave Search API key",
-        secret: true,
-        required: true,
-      },
-    ],
-  },
-  {
-    id: "github",
-    name: "GitHub",
-    description: "Issues, pull requests, and repository context",
-    category: "dev",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-github"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/github",
-    fields: [
-      {
-        key: "GITHUB_PERSONAL_ACCESS_TOKEN",
-        label: "GitHub personal access token",
-        secret: true,
-        required: true,
-        placeholder: "ghp_…",
-      },
-    ],
-  },
-  {
-    id: "git",
-    name: "Git",
-    description: "Read and search a local git repository",
-    category: "dev",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-git"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
-    fields: [
-      {
-        key: "__path__",
-        label: "Repository path",
-        required: true,
-        appendToCommand: true,
-        placeholder: "/path/to/repo",
-      },
-    ],
-  },
-  {
-    id: "memory",
-    name: "Memory",
-    description: "Persistent key-value memory across sessions",
-    category: "productivity",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-memory"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
-  },
-  {
-    id: "sqlite",
-    name: "SQLite",
-    description: "Query a local SQLite database file",
-    category: "data",
-    type: "local",
-    recommended: true,
-    command: ["npx", "-y", "@modelcontextprotocol/server-sqlite"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/sqlite",
-    fields: [
-      {
-        key: "__path__",
-        label: "Database file path",
-        required: true,
-        appendToCommand: true,
-        placeholder: "/path/to/database.sqlite",
-      },
-    ],
-  },
-  {
-    id: "postgres",
-    name: "PostgreSQL",
-    description: "Query a PostgreSQL database",
-    category: "data",
-    type: "local",
-    command: ["npx", "-y", "@modelcontextprotocol/server-postgres"],
-    docsUrl: "https://github.com/modelcontextprotocol/servers/tree/main/src/postgres",
-    fields: [
-      {
-        // NOTE: NOT "__path__" — that key is special-cased to prefill the
-        // project root for path-taking servers (Git / SQLite). A connection
-        // string is a URL, never a local path; giving it its own key keeps it
-        // empty for the user to fill in.
-        key: "connection_string",
-        label: "Connection string",
-        required: true,
-        appendToCommand: true,
-        placeholder: "postgresql://user:pass@localhost:5432/db",
-        secret: true,
-      },
-    ],
-  },
-];
+const CATEGORIES = new Set<McpPresetCategory>([
+  "dev",
+  "search",
+  "data",
+  "productivity",
+]);
+
+function normalizePreset(raw: unknown): McpPreset | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = typeof o.id === "string" ? o.id.trim() : "";
+  const name = typeof o.name === "string" ? o.name.trim() : "";
+  const description = typeof o.description === "string" ? o.description : "";
+  const category = o.category as McpPresetCategory;
+  const type = o.type === "remote" ? "remote" : o.type === "local" ? "local" : null;
+  if (!id || !name || !type || !CATEGORIES.has(category)) return null;
+
+  const command = Array.isArray(o.command)
+    ? o.command.filter((p): p is string => typeof p === "string" && p.length > 0)
+    : undefined;
+  const fields = Array.isArray(o.fields)
+    ? o.fields.flatMap((f): McpPresetField[] => {
+        if (!f || typeof f !== "object") return [];
+        const field = f as Record<string, unknown>;
+        const key = typeof field.key === "string" ? field.key.trim() : "";
+        const label = typeof field.label === "string" ? field.label : key;
+        if (!key) return [];
+        return [{
+          key,
+          label,
+          secret: field.secret === true,
+          required: field.required === true,
+          appendToCommand: field.appendToCommand === true,
+          placeholder: typeof field.placeholder === "string" ? field.placeholder : undefined,
+        }];
+      })
+    : undefined;
+
+  return {
+    id,
+    name,
+    description,
+    category,
+    type,
+    command,
+    url: typeof o.url === "string" ? o.url : undefined,
+    docsUrl: typeof o.docsUrl === "string" ? o.docsUrl : undefined,
+    fields,
+    recommended: o.recommended === true,
+    builtin: o.builtin === true,
+  };
+}
+
+function loadPresets(): McpPreset[] {
+  const list = Array.isArray((presetsFile as { presets?: unknown }).presets)
+    ? (presetsFile as { presets: unknown[] }).presets
+    : [];
+  return list.flatMap((raw) => {
+    const preset = normalizePreset(raw);
+    return preset ? [preset] : [];
+  });
+}
+
+/** Curated catalog from `resources/mcp/presets.json`. */
+export const MCP_PRESETS: McpPreset[] = loadPresets();
 
 export function getMcpPreset(id: string): McpPreset | undefined {
   return MCP_PRESETS.find((p) => p.id === id);

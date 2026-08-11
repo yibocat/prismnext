@@ -14,16 +14,15 @@ export function OriginChip({
   className?: string;
 }) {
   const { t } = useTranslation();
+  // Core ships from resources/teams/ like other official suites — same chip.
   const label =
-    source === "core"
-      ? t("settings.teams.origin.builtin")
-      : source === "bundled"
-        ? t("settings.teams.origin.official")
-        : source === "pro"
-          ? t("settings.teams.origin.pro")
-          : source === "registry"
-            ? t("settings.teams.origin.registry")
-            : t("settings.teams.origin.mine");
+    source === "core" || source === "bundled"
+      ? t("settings.teams.origin.official")
+      : source === "pro"
+        ? t("settings.teams.origin.pro")
+        : source === "registry"
+          ? t("settings.teams.origin.registry")
+          : t("settings.teams.origin.mine");
   return (
     <span
       className={cn(

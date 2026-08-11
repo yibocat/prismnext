@@ -112,6 +112,7 @@
       "newCommand": "New command",
       "command": "Command",
       "mcpCatalog": "MCP catalog",
+      "installMcp": "Install MCP",
       "addFromJson": "Add from JSON",
       "createSkill": "Create skill",
       "installSkills": "Install skills",
@@ -120,7 +121,8 @@
       "editor": "Editor",
       "settingsEditor": "Settings editor",
       "mcpJson": "mcp.json",
-      "packDetail": "Team details"
+      "packDetail": "Team details",
+      "newTeam": "New team"
     },
     "appearance": {
       "title": "Appearance",
@@ -306,14 +308,19 @@
       "title": "MCP",
       "subtitle": "Model Context Protocol servers available to the agent.",
       "browseCatalog": "Browse catalog",
+      "install": "Install",
+      "create": "New",
+      "loadMore": "Load more ({{count}})",
+      "targetTeam": "Save to team",
       "installed": "Installed",
       "configure": "Configure",
       "applyToChats": "Apply to chats",
-      "pageDesc": "Extend the agent with external tools via Model Context Protocol servers.",
+      "pageDesc": "Each MCP belongs to one team and is only available while that team is active. This list shows every team’s servers — click a row to configure that server.",
       "openProject": "Open a project to manage MCP servers.",
       "empty": "No MCP servers yet.",
       "addFromJson": "Add from JSON",
-      "editJson": "Edit mcp.json",
+      "editJson": "Edit team JSON",
+      "editJsonHint": "Edit one writable team’s mcp.json (pick the team in the panel). Pack/demo team files are not edited here.",
       "toast": {
         "applyFailed": "Failed to apply MCP configuration.",
         "removed": "Removed \"{{name}}\".",
@@ -640,9 +647,13 @@
       "checkUpdates": "Check updates",
       "install": "Install skills",
       "create": "Create skill",
-      "pageDesc": "Reusable instruction packs the agent can load during a chat.",
+      "pageDesc": "Reusable instruction packs for chat. Create or install into Project / Common Team; Core and store skills are browse-only. Remove self-owned skills here when you no longer need them.",
+      "openFolder": "Open folder",
       "openProject": "Open a project to manage skills.",
       "empty": "No skills installed yet.",
+      "emptyHint": "Install from a GitHub or registry source, or create your own SKILL.md.",
+      "loadMore": "Load more ({{count}})",
+      "updateAvailable": "Update available",
       "showAll": "Show all ({{count}} skills)",
       "showLess": "Show less",
       "origin": {
@@ -786,12 +797,18 @@
     "commandsPage": {
       "title": "Commands",
       "subtitle": "Slash commands available in chat.",
+      "pageDesc": "Slash commands for chat. App commands (compile, compact, …) are product-wide — not owned by any team. Team commands belong to Project / Common / custom teams; pack specialty commands can be added via team detail.",
+      "appLabel": "App",
+      "appHint": "Rows labeled App are always available in every chat. They are not PrismNext Core team assets.",
+      "installed": "Installed",
+      "loadMore": "Load more ({{count}})",
       "builtin": "Built-in",
       "custom": "Custom commands",
       "toast": {
         "exported": "Commands exported.",
         "noValid": "No valid commands found in file.",
-        "importReadFailed": "Could not read import file."
+        "importReadFailed": "Could not read import file.",
+        "removed": "Removed \"/{{name}}\"."
       },
       "import": {
         "title": "Import commands",
@@ -810,7 +827,7 @@
         "renamed": "{{count}} renamed",
         "failed": "Import failed."
       },
-      "addCustom": "+ Add custom command",
+      "addCustom": "New command",
       "export": "Export",
       "importBtn": "Import",
       "mine": "My commands",
@@ -981,8 +998,8 @@
         "thisProvider": "this provider"
       },
       "expert": {
-        "create": "Create expert",
-        "deleteTitle": "Delete expert",
+        "create": "Create subagent",
+        "deleteTitle": "Delete subagent?",
         "toast": {
           "created": "Expert created.",
           "saved": "Expert saved.",
@@ -996,13 +1013,15 @@
           "resetFailed": "Failed to reset expert.",
           "deleteFailed": "Failed to delete expert."
         },
-        "introBuiltin": "Built-in expert — customize model, capabilities, and tool permissions for this project. Name and instructions stay fixed.",
-        "introNew": "Create an OpenCode subagent expert synced to your expert team. Used via @ mention or orchestrator Task delegation.",
-        "introEdit": "Edit this expert's instructions and capabilities.",
+        "introBuiltin": "Built-in / installed subagent — name and instructions are read-only. Model and tool permissions can be overridden for this project (saves automatically).",
+        "introNew": "Fill in name and instructions, then Create. Defaults to Common Team (app-level); or pick a custom team. After create, further edits save automatically.",
+        "introEdit": "Edit this custom subagent. Changes save automatically.",
         "toolPermissions": "Tool permissions",
         "toolPermissionsDesc": "OpenCode subagent tool access preset",
         "resetDefaults": "Reset defaults",
-        "deleteDesc": "Delete this expert from the project? This cannot be undone.",
+        "deleteDesc": "Delete this subagent? This cannot be undone.",
+        "deleteDescInUse": "This subagent is still on other teams’ Task rosters:",
+        "deleteDescInUseFooter": "Confirming deletes it and removes it from those teams’ rosters.",
         "permissionPreset": {
           "readonly": "Read-only",
           "standard": "Standard",
@@ -1014,7 +1033,7 @@
         "openProject": "Open a project to edit experts.",
         "targetTeam": "Target team",
         "localTarget": "This project (local)",
-        "targetTeamDesc": "New experts live in the project Local Pack by default; choose a team to create app-level experts shared across projects."
+        "targetTeamDesc": "Defaults to Common Team (shared across projects). Or choose a custom team — you cannot add into built-in / store / Pro teams."
       },
       "orchestrator": {
         "roster": "Allowed experts",
@@ -1032,12 +1051,16 @@
           "resetFailed": "Failed to reset orchestrator.",
           "deleteFailed": "Failed to delete orchestrator."
         },
-        "introBuiltin": "Built-in orchestrator — customize model, capabilities, and which experts can be invoked via Task.",
-        "introNew": "Create a primary-session orchestrator that delegates work to experts via OpenCode Task.",
-        "introEdit": "Edit this orchestrator's instructions and expert allowlist.",
-        "allowedExpertsDesc": "Experts the orchestrator may invoke via Task.",
+        "introBuiltin": "Built-in / installed lead — identity and instructions are read-only. Pick the model in the chat composer. Who this lead may Task is managed on the team detail page.",
+        "introSafetyNet": "Common Team Chat is the always-on safety-net lead — read-only and cannot be deleted. Create a custom team when you need another lead.",
+        "introNew": "Lead agents are created with a custom team (one lead per team).",
+        "introEdit": "Edit this custom lead. Changes save automatically. Delete removes it from the team.",
+        "createViaTeam": "Create a team to add a lead agent (one lead per team).",
+        "allowedExpertsDesc": "Subagents this lead may invoke via Task. Unchecked = not allowed. Empty list = none (Core experts are not included unless you check them).",
+        "allowedExpertsAllDesc": "This lead currently allows every enabled subagent (unrestricted). Checking any box switches to an explicit allowlist.",
         "subagentRoster": "Synced subagent roster",
-        "subagentRosterDesc": "Appended to the orchestrator agent at sync — built-ins plus checked experts above. The model reads this list, not a hardcoded table in Instructions.",
+        "subagentRosterDesc": "Appended to the orchestrator agent at sync — only the allowlist above. The model reads this list, not a hardcoded table in Instructions.",
+        "rosterManagedInTeamDetail": "Who this lead may Task is managed on the team detail page: toggle this team's own subagents, and use + to pull in subagents from other teams. Preview below is what sync will append.",
         "noneSelected": "None selected",
         "allowedCount": "{{selected}} of {{total}} allowed",
         "noExperts": "No enabled experts available.",
@@ -1058,9 +1081,15 @@
           "notFound": "Command not found.",
           "deleted": "Command deleted.",
           "deleteFailed": "Failed to delete command.",
-          "saveFailed": "Failed to save command."
+          "saveFailed": "Failed to save command.",
+          "needWritableTeam": "Pick Project Team, Common Team, or a custom team."
         },
         "intro": "Custom slash commands for the chat composer. Templates support $ARGUMENTS, numbered args, and @file mentions.",
+        "introReadOnly": "Pack / built-in command — view only. Create a copy in a writable team to customize.",
+        "targetTeam": "Save to team",
+        "targetTeamDesc": "Project Team (this project), Common Team (all projects), or a custom team you created. Pack teams (Core / Pro / store) cannot own new commands.",
+        "ownerTeam": "Owner team",
+        "ownerTeamDesc": "Commands stay on the team they were created in.",
         "name": "Command name",
         "nameDesc": "Lowercase letters, numbers, and hyphens. No leading slash.",
         "namePlaceholder": "review-section",
@@ -1069,7 +1098,7 @@
         "template": "Prompt template",
         "templateDesc": "Supports $ARGUMENTS, $1…$9, and @path/to/file.",
         "templatePlaceholder": "Review this section for clarity: $ARGUMENTS",
-        "deleteDesc": "Remove this custom command from the project? This cannot be undone.",
+        "deleteDesc": "Remove this custom command? This cannot be undone.",
         "validationName": "Enter a valid command name (lowercase letters, numbers, hyphens).",
         "validationTemplate": "Prompt template is required.",
         "openProject": "Open a project to create custom commands.",
@@ -1159,8 +1188,9 @@
         "toast": {
           "added": "{{name}} added — start a new chat to use it."
         },
-        "openProject": "Open a project to browse the MCP catalog.",
+        "openProject": "Open a project to install MCP servers.",
         "intro": "Curated MCP servers for research workflows. Requires npx. External literature discovery uses built-in literature-discover; staging and library citations use prismnext literature-* tools.",
+        "introInstall": "Pick a team, then install a preset. It belongs to that team and is available only while the team is active.",
         "searchPlaceholder": "Search MCP servers…",
         "badgeBuiltin": "Built-in",
         "badgeRecommended": "Recommended",
@@ -1341,6 +1371,7 @@
         "loading": "Loading…",
         "introPreset": "Credentials and options for the {{name}} MCP server.",
         "introCustom": "Custom MCP server — edit the JSON configuration below.",
+        "introReadOnly": "This MCP server is shipped by its team and cannot be edited here. Switch to a writable team to add your own servers.",
         "serverJson": "Server JSON",
         "openFullJson": "Open full mcp.json"
       },
@@ -1354,7 +1385,7 @@
         },
         "openProject": "Open a project to edit MCP configuration.",
         "loading": "Loading…",
-        "intro": "Edit this project's .prismnext/agent/mcp.json — the servers YOU add here. MCP servers shipped by teams live in the team's own mcp.json and are managed from the MCP list, not this file. Invalid JSON cannot be saved."
+        "intro": "Editing {{team}}’s mcp.json ({{path}}). Only that team’s servers live in this file — not every row in the Settings list. Pack/demo teams are read-only from their own files. Invalid JSON cannot be saved."
       },
       "brief": {
         "toast": {
@@ -1375,7 +1406,8 @@
           "saveFailed": "Failed to save skill."
         },
         "openProject": "Open a project to edit skills.",
-        "loading": "Loading…"
+        "loading": "Loading…",
+        "targetTeam": "Save to team"
       },
       "mcpPaste": {
         "openProject": "Open a project to add MCP servers.",
@@ -1428,6 +1460,30 @@
           "literature": "Stores literature and reference PDFs for academic research and citation.",
           "notebook": "Contains notes in various formats such as Markdown files or Jupyter notebooks."
         }
+      },
+      "teamCreate": {
+        "intro": "Create a custom team for this workspace. Custom teams stay on your machine — they are not published to the Teams store.",
+        "name": "Team name",
+        "nameDesc": "Shown in Settings → Teams and the active-team picker.",
+        "namePlaceholder": "e.g. Writing desk",
+        "scope": "Scope",
+        "scopeDesc": "Project teams stay in this project. App teams are available across projects.",
+        "description": "Short description",
+        "descriptionPlaceholder": "What this team is for (optional)",
+        "longDescription": "Long description",
+        "longDescriptionDesc": "Shown on the team detail page.",
+        "longDescriptionPlaceholder": "Optional details…",
+        "tags": "Tags",
+        "tagsDesc": "Comma-separated labels for your own organization (not a store listing).",
+        "tagsPlaceholder": "writing, review",
+        "leadSection": "Lead agent",
+        "leadName": "Lead name",
+        "leadNameDesc": "Defaults to the team name if left blank.",
+        "leadNamePlaceholder": "Lead agent name",
+        "leadInstructions": "Lead instructions",
+        "leadInstructionsDesc": "System instructions for this team's lead. Leave blank for a short default.",
+        "leadInstructionsPlaceholder": "You are the lead agent for this team…",
+        "create": "Create team"
       }
     },
     "panels": {
@@ -1440,26 +1496,51 @@
     },
     "teams": {
       "title": "Teams",
-      "pageDesc": "Manage teams and their lead agents, subagents, and rosters.",
+      "pageDesc": "Click a team to open its detail. Manage lead agents, subagents, and roster there.",
       "createTeam": "New team",
       "browse": "Browse teams",
       "activeTeam": "Active team",
       "noLead": "No lead agent",
       "noLeadCapability": "No lead agent (capability-only team)",
       "setActive": "Set active",
+      "activateLicense": "Activate Pro",
       "leadAgent": "Lead agent",
       "rosterTitle": "Roster — who this lead can delegate to",
       "teamSubagents": "This team's subagents",
       "teamSubagentsDesc": "Can be referenced by any team's roster.",
       "noSubagents": "No subagents in this team",
+      "noSkills": "No skills in this team",
+      "noCommands": "No commands in this team",
+      "noMcps": "No MCP servers in this team",
+      "skillsRoster": {
+        "add": "Add",
+        "addExternal": "Add skill from another team",
+        "install": "Install",
+        "createNew": "New",
+        "emptyExternal": "No other skills available to add"
+      },
+      "commandsRoster": {
+        "add": "Add",
+        "addExternal": "Add command from another team",
+        "createNew": "New",
+        "emptyExternal": "No other commands available to add"
+      },
+      "mcpActions": {
+        "install": "Install",
+        "fromJson": "JSON",
+        "createNew": "New"
+      },
       "capabilities": "Capabilities",
-      "capabilitiesSummary": "{{skills}} skills · {{commands}} commands · {{mcps}} MCP — available in all sessions once the team is enabled",
+      "capabilitiesSummary": "{{skills}} skills · {{commands}} commands · {{mcps}} MCP — owned by this team; MCP is available only while this team is active (skills/subagents may also be added via +)",
       "scopeLabel": "Scope",
       "teamNamePlaceholder": "Team name",
       "teamDescPlaceholder": "Description (optional)",
       "toast": {
         "activeUpdated": "Active team updated",
-        "teamCreated": "Team created"
+        "teamCreated": "Team created",
+        "defaultMovedToBuiltin": "This team's default lead was disabled — the active team moved to the safety-net lead (Common Team or Core).",
+        "lastLead": "This is the last team with a lead agent. Enable or create another lead team before uninstalling or disabling it.",
+        "myContentLocked": "Common Team and the project team are always on and cannot be disabled, uninstalled, or deleted."
       },
       "scope": {
         "app": "Global",
@@ -1487,9 +1568,15 @@
         "count": "{{count}} items"
       },
       "card": {
-        "active": "Active"
+        "active": "Active",
+        "activated": "Activated"
       },
       "coreTeam": "PrismNext Core",
+      "myContentTeam": "Common Team",
+      "myContentLabel": "Always on",
+      "myContentDesc": "Your common hangar for unassigned content, plus the always-on Chat lead — the safety net when other teams (including PrismNext Core) are off.",
+      "myContentAlwaysOn": "Always available",
+      "myContentAlwaysOnDesc": "Common Team cannot be disabled or uninstalled. Its Chat lead is the last-resort conversation agent.",
       "noProject": "Open a project to manage teams and subagents.",
       "emptyTeamCards": "No teams yet.",
       "coreLabel": "Built-in",
@@ -1497,22 +1584,20 @@
       "myTeam": "My team",
       "viewDetails": "Details",
       "teamEmptyAgentsHint": "This team has no lead agents or subagents yet. Its skills and commands are managed in the Skills and Commands pages.",
-      "teamNamePlaceholder": "Team name",
-      "teamDescPlaceholder": "Description (optional)",
       "cancel": "Cancel",
-      "confirmReset": "Confirm reset",
-      "reset": "Reset",
       "deleteTeam": "Delete team",
       "enableInProject": "Enable in this project",
       "enableInProjectDesc": "When enabled, this team's lead agents, subagents, skills and commands are available in this project. Disabled teams are greyed out.",
       "newLead": "New lead agent",
       "newSubagent": "New subagent",
       "teamDetailEmpty": "This team has no content yet.",
+      "notInstalledHint": "This team is not installed. Install it again to use its lead agent, subagents, skills and commands.",
       "confirm": {
         "disableCore": "Disabling the core pack disables all built-in agents. Continue?"
       },
       "actions": {
-        "uninstall": "Uninstall"
+        "uninstall": "Uninstall",
+        "uninstallCore": "Uninstall built-in team"
       },
       "kinds": {
         "lead": "Lead agents",
@@ -1521,16 +1606,16 @@
         "command": "Commands",
         "mcp": "MCP"
       },
-      "toast": {
-        "activeUpdated": "Active team updated",
-        "teamCreated": "Team created",
-        "defaultMovedToBuiltin": "This team's default lead agent was disabled — the default lead agent has moved back to the built-in agent."
-      },
       "roster": {
         "allAvailable": "All available subagents",
         "specificList": "Specific list",
         "crossScope": "Cross-scope",
-        "empty": "No subagents available"
+        "empty": "No subagents available",
+        "addExternal": "Add subagent from another team",
+        "hidePicker": "Hide",
+        "emptyExternal": "No other subagents available to add",
+        "remove": "Remove",
+        "noLead": "This team has no lead agent — roster can't be edited"
       },
       "picker": {
         "placeholder": "Select a team",
@@ -1549,7 +1634,11 @@
         "assetDisabledProject": "Disabled in this project",
         "shadowed": "Shadowed by a same-named item in \"{{team}}\"",
         "outOfScope": "Can't be referenced across scopes"
-      }
+      },
+      "projectLocalDesc": "This project's hangar — content scoped to the open project, plus the always-on Project lead.",
+      "projectLocalAlwaysOnDesc": "The project team cannot be disabled or deleted. Its Project lead is always available for this project's local content.",
+      "projectLocalTeam": "Project Team",
+      "hangarsSection": "Always-on hangars"
     }
   },
   "welcome": {

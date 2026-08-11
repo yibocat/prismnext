@@ -446,7 +446,10 @@ export function registerChatHandlers(): void {
         }
 
         const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath);
+        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
+          teamId: activeOrch.teamId,
+          extraAllowIds: args.skillIds,
+        });
       }
 
       // Connect / apply credentials last — at most one spawn before session/new.
@@ -1532,27 +1535,42 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Session Management ───
+  // Session SQLite lives per project under opencode-runtimes/<hash>/ — always
+  // resolve AcpService via projectPath / sessionId, never the global singleton.
 
   ipcMain.handle("session:list", async (_event, args: { projectPath?: string }) => {
-    const service = getService();
-    if (!service.getConnection()) {
-      try {
-        await service.initialize();
-      } catch (err: any) {
-        log.warn(`session:list — OpenCode not available: ${err.message}`);
-        return [];
+    const service = getService(args.projectPath);
+    // Listing only needs the project SQLite file; skip ACP spawn when possible.
+    try {
+      if (args.projectPath) {
+        return await service.listProjectSessions(args.projectPath);
       }
+      return await service.listSessions(args.projectPath);
+    } catch (err: any) {
+      // First open of a project may not have a runtime DB yet.
+      if (!service.getConnection()) {
+        try {
+          await service.initialize();
+          if (args.projectPath) {
+            return await service.listProjectSessions(args.projectPath);
+          }
+          return await service.listSessions(args.projectPath);
+        } catch (initErr: any) {
+          log.warn(`session:list — OpenCode not available: ${initErr.message}`);
+          return [];
+        }
+      }
+      log.warn(`session:list failed: ${err.message}`);
+      return [];
     }
-    if (args.projectPath) {
-      return await service.listProjectSessions(args.projectPath);
-    }
-    return await service.listSessions(args.projectPath);
   });
 
   ipcMain.handle(
     "session:load",
     async (_event, args: { sessionId: string; projectPath?: string; cwd?: string }) => {
-      const service = getService();
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
       if (!service.getConnection()) {
         try {
           await service.initialize();
@@ -1582,7 +1600,9 @@ export function registerChatHandlers(): void {
         limit: number;
       },
     ) => {
-      const service = getService();
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
       if (!service.getConnection()) {
         try {
           await service.initialize();
@@ -1603,15 +1623,12 @@ export function registerChatHandlers(): void {
 
 
   ipcMain.handle("session:getDirectory", async (_event, args: { sessionId: string }) => {
-    const service = getService();
-    if (!service.getConnection()) {
-      try {
-        await service.initialize();
-      } catch {
-        return null;
-      }
+    const service = AcpService.getInstanceForSession(args.sessionId);
+    try {
+      return await service.getSessionDirectory(args.sessionId);
+    } catch {
+      return null;
     }
-    return await service.getSessionDirectory(args.sessionId);
   });
 
   ipcMain.handle(
@@ -1628,32 +1645,26 @@ export function registerChatHandlers(): void {
           "session:rename requires { tabId: string; title: string; sessionId: string }",
         );
       }
-      const service = getService();
-      if (!service.getConnection()) {
-        try {
-          await service.initialize();
-        } catch (err: any) {
-          throw new Error(
-            `Cannot rename session: OpenCode is not available — ${err.message}`,
-          );
-        }
+      const service = AcpService.getInstanceForSession(args.sessionId);
+      try {
+        await service.renameSession(args.sessionId, args.title);
+      } catch (err: any) {
+        throw new Error(
+          `Cannot rename session: ${err.message}`,
+        );
       }
-      await service.renameSession(args.sessionId, args.title);
     },
   );
 
   ipcMain.handle(
     "session:reassignDirectory",
     async (_event, args: { fromDirectory: string; toDirectory: string }) => {
-      const service = getService();
-      if (!service.getConnection()) {
-        try {
-          await service.initialize();
-        } catch {
-          return 0;
-        }
+      const service = getService(args.toDirectory);
+      try {
+        return await service.reassignSessionsDirectory(args.fromDirectory, args.toDirectory);
+      } catch {
+        return 0;
       }
-      return await service.reassignSessionsDirectory(args.fromDirectory, args.toDirectory);
     },
   );
 
@@ -1664,7 +1675,10 @@ export function registerChatHandlers(): void {
       if (args.projectPath) {
         deleteSessionDisplays(args.projectPath, args.sessionId);
       }
-      return await getService().deleteSession(args.sessionId);
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
+      return await service.deleteSession(args.sessionId);
     },
   );
 
@@ -1679,9 +1693,9 @@ export function registerChatHandlers(): void {
         turnIndex: number;
       },
     ) => {
-      const service = getService();
+      const service = getService(args.projectPath);
       try {
-        await ensureConnected(getService());
+        await ensureConnected(service);
       } catch (err: any) {
         throw new Error(`Cannot truncate session: OpenCode is not available — ${err.message}`);
       }
@@ -1722,7 +1736,7 @@ export function registerChatHandlers(): void {
 
       const displayBackup = sessionDisplayBackups.get(args.sessionId);
 
-      const service = getService();
+      const service = getService(args.projectPath);
       await service.restoreSessionFromBackup(backup);
       sessionTruncationBackups.delete(args.sessionId);
       sessionDisplayBackups.delete(args.sessionId);

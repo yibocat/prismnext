@@ -28,8 +28,18 @@ export interface OrchestratorDefV2 {
   model?: string;
   thoughtLevel?: string;
   temperature?: number;
-  /** Lead agent roster. Default = { mode: "all" }. */
+  /** Lead agent subagent roster. Default = { mode: "all" }. */
   roster?: RosterSpec;
+  /**
+   * Lead-scoped skills allowlist. Default = own-team only (`@team`).
+   * Foreign skills appear only when explicitly listed (Settings `+`).
+   */
+  skillsRoster?: RosterSpec;
+  /**
+   * Lead-scoped commands allowlist (mirrors skillsRoster).
+   * Default = own-team only (`@team`). Foreign commands via Settings `+`.
+   */
+  commandsRoster?: RosterSpec;
   permission?: Record<string, unknown>;
 }
 

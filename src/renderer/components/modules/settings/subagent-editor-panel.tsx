@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -21,10 +21,10 @@ import {
 } from "@/components/ui/app-select";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTeamsStore } from "@/stores/teams-store";
-import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { TeamPicker } from "../teams/team-picker";
 import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent-subagents";
-import { isProjectLocalTeamId } from "@shared/teams/types";
+import { MY_CONTENT_TEAM_ID } from "@shared/teams/types";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   detectExpertPermissionPreset,
@@ -49,9 +49,11 @@ import {
 
 type AgentExpertSlot = Extract<SettingsPanelSlot, { kind: "agent-expert" }>;
 
-function formFromExpert(
-  detail: SubagentInfo & { instructions: string },
-): ProfileFormState & { permissionPreset: ExpertPermissionPreset } {
+const AUTOSAVE_MS = 400;
+
+type ExpertFormState = ProfileFormState & { permissionPreset: ExpertPermissionPreset };
+
+function formFromExpert(detail: SubagentInfo & { instructions: string }): ExpertFormState {
   const { providerId, modelId } = parseProfileModel(detail.model);
   return {
     id: detail.id,
@@ -65,33 +67,73 @@ function formFromExpert(
   };
 }
 
+function persistSnapshot(input: {
+  builtinCustomize: boolean;
+  form: ExpertFormState;
+  targetTeamId: string | null;
+}): string {
+  if (input.builtinCustomize) {
+    return JSON.stringify({
+      modelProvider: input.form.modelProvider,
+      modelId: input.form.modelId,
+      thoughtLevel: input.form.thoughtLevel,
+      permissionPreset: input.form.permissionPreset,
+    });
+  }
+  return JSON.stringify({
+    id: input.form.id,
+    name: input.form.name,
+    description: input.form.description,
+    instructions: input.form.instructions,
+    modelProvider: input.form.modelProvider,
+    modelId: input.form.modelId,
+    thoughtLevel: input.form.thoughtLevel,
+    permissionPreset: input.form.permissionPreset,
+    targetTeamId: input.targetTeamId,
+  });
+}
+
 export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const builtinCustomize = slot.mode === "customize-builtin";
+  const builtinCustomize = slot.mode === "installed";
   const isNew = slot.mode === "new";
   const expertId = slot.mode === "new" ? undefined : slot.expertId;
 
   const [loading, setLoading] = useState(!isNew);
+  const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [form, setForm] = useState<ProfileFormState & { permissionPreset: ExpertPermissionPreset }>({
+  const [deleteReferrers, setDeleteReferrers] = useState<Array<{ teamId: string; teamName: string }>>([]);
+  const [deleteReferrersLoading, setDeleteReferrersLoading] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [form, setForm] = useState<ExpertFormState>({
     ...emptyProfileForm(),
     permissionPreset: "standard",
   });
-  // Fully-qualified id of the content being edited (needed by packs:* overrides).
   const [contentFqid, setContentFqid] = useState<string | null>(null);
-  // Target team for new agents (null = this project's Local Pack).
-  const [targetTeamId, setTargetPackId] = useState<string | null>(null);
+  const [targetTeamId, setTargetPackId] = useState<string | null>(MY_CONTENT_TEAM_ID);
+  const [created, setCreated] = useState(!isNew);
   const teamCatalog = useTeamsStore((state) => state.catalog);
   const loadTeams = useTeamsStore((state) => state.load);
+  const lastSavedRef = useRef<string>("");
+  const persistInFlightRef = useRef(false);
+  const pendingSnapRef = useRef<string | null>(null);
+  const formRef = useRef(form);
+  const contentFqidRef = useRef(contentFqid);
+  const targetTeamIdRef = useRef(targetTeamId);
+  formRef.current = form;
+  contentFqidRef.current = contentFqid;
+  targetTeamIdRef.current = targetTeamId;
 
   useEffect(() => {
     if (!projectRoot) {
       setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
       setContentFqid(null);
+      setCanDelete(false);
       setLoading(false);
+      setReady(false);
       return;
     }
 
@@ -101,12 +143,15 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
       const root = projectRoot;
       if (!root) return;
       setLoading(true);
+      setReady(false);
       setDeleteDialogOpen(false);
       try {
         if (isNew) {
           setForm({ ...emptyProfileForm(), permissionPreset: "standard" });
           setContentFqid(null);
-          setTargetPackId(null);
+          setTargetPackId(MY_CONTENT_TEAM_ID);
+          setCanDelete(false);
+          setCreated(false);
           await loadTeams(root);
           if (cancelled) return;
           setLoading(false);
@@ -122,9 +167,10 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         }
         setForm(formFromExpert(detail));
         setContentFqid(detail.fqid ?? null);
-        // Editing a custom agent writes back to its owning pack (local or team).
+        setCanDelete(Boolean(detail.removable) && !builtinCustomize);
+        setCreated(true);
         const pid = detail.fqid?.split(":")[0];
-        setTargetPackId(pid && !isProjectLocalTeamId(pid) ? pid : null);
+        setTargetPackId(pid || MY_CONTENT_TEAM_ID);
       } catch {
         if (!cancelled) {
           toast.error(t("settings.editor.expert.toast.loadFailed"));
@@ -139,81 +185,161 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     return () => {
       cancelled = true;
     };
-  }, [projectRoot, isNew, expertId, slot.mode, closePanel, t, loadTeams]);
+  }, [projectRoot, isNew, expertId, slot.mode, closePanel, t, loadTeams, builtinCustomize]);
 
-  const saveExpert = useCallback(async () => {
+  useEffect(() => {
+    if (loading) {
+      setReady(false);
+      return;
+    }
+    lastSavedRef.current = persistSnapshot({
+      builtinCustomize,
+      form,
+      targetTeamId,
+    });
+    setReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional hydrate gate
+  }, [loading]);
+
+  const persistExpert = useCallback(
+    async (snap: string): Promise<boolean> => {
+      if (!projectRoot) return false;
+      if (persistInFlightRef.current) {
+        pendingSnapRef.current = snap;
+        return false;
+      }
+
+      const currentForm = formRef.current;
+      const currentFqid = contentFqidRef.current;
+      const currentTarget = targetTeamIdRef.current;
+
+      if (builtinCustomize && !currentFqid) return false;
+      if (!builtinCustomize && (!currentForm.name.trim() || !currentForm.instructions.trim())) {
+        return false;
+      }
+
+      persistInFlightRef.current = true;
+      setSaving(true);
+      try {
+        const model = formatProfileModel(currentForm.modelProvider, currentForm.modelId);
+        const permission = permissionFromExpertPreset(currentForm.permissionPreset);
+
+        if (builtinCustomize && currentFqid) {
+          await window.electronAPI.teamsSaveAssetOverride(projectRoot, currentFqid, {
+            model: model || undefined,
+            thoughtLevel: currentForm.thoughtLevel.trim() || undefined,
+            permission,
+          });
+          lastSavedRef.current = persistSnapshot({
+            builtinCustomize,
+            form: currentForm,
+            targetTeamId: currentTarget,
+          });
+          return true;
+        }
+
+        const payload: SaveCustomSubagentPayload = {
+          id: currentForm.id,
+          name: currentForm.name.trim(),
+          description: currentForm.description.trim(),
+          instructions: currentForm.instructions,
+          model: model || undefined,
+          thoughtLevel: currentForm.thoughtLevel.trim() || undefined,
+          permission,
+        };
+        const result = await window.electronAPI.subagentsSaveCustom(
+          projectRoot,
+          payload,
+          currentTarget ?? MY_CONTENT_TEAM_ID,
+        );
+        const saved = result.expert;
+        if (saved?.id && saved.id !== currentForm.id) {
+          setForm((prev) => ({ ...prev, id: saved.id }));
+        }
+        if (saved?.fqid) setContentFqid(saved.fqid);
+        if (saved?.removable) setCanDelete(true);
+        setCreated(true);
+        lastSavedRef.current = persistSnapshot({
+          builtinCustomize,
+          form: { ...currentForm, id: saved?.id || currentForm.id },
+          targetTeamId: currentTarget,
+        });
+        return true;
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.saveFailed"));
+        return false;
+      } finally {
+        persistInFlightRef.current = false;
+        setSaving(false);
+        const pending = pendingSnapRef.current;
+        pendingSnapRef.current = null;
+        if (pending && pending !== lastSavedRef.current) {
+          void persistExpert(pending);
+        }
+      }
+    },
+    [projectRoot, builtinCustomize, t],
+  );
+
+  useEffect(() => {
+    if (!ready || loading || !projectRoot) return;
+    // Draft create: wait for explicit Create — do not autosave an unfinished new agent.
+    if (isNew && !created) return;
+
+    const snap = persistSnapshot({ builtinCustomize, form, targetTeamId });
+    if (snap === lastSavedRef.current) return;
+    if (builtinCustomize && !contentFqid) return;
+    if (!builtinCustomize && (!form.name.trim() || !form.instructions.trim())) return;
+
+    const timer = window.setTimeout(() => {
+      void persistExpert(snap);
+    }, AUTOSAVE_MS);
+    return () => window.clearTimeout(timer);
+  }, [
+    ready,
+    loading,
+    projectRoot,
+    isNew,
+    created,
+    builtinCustomize,
+    contentFqid,
+    form,
+    targetTeamId,
+    persistExpert,
+  ]);
+
+  const createExpert = async () => {
     if (!projectRoot) return;
-    if (!builtinCustomize && !form.name.trim()) {
+    if (!form.name.trim()) {
       toast.error(t("settings.editor.expert.toast.nameRequired"));
       return;
     }
-    if (!builtinCustomize && !form.instructions.trim()) {
+    if (!form.instructions.trim()) {
       toast.error(t("settings.editor.expert.toast.instructionsRequired"));
       return;
     }
+    const snap = persistSnapshot({ builtinCustomize: false, form, targetTeamId });
+    const ok = await persistExpert(snap);
+    if (ok) toast.success(t("settings.editor.expert.toast.created"));
+  };
 
-    setSaving(true);
+  const openDeleteDialog = async () => {
+    if (!projectRoot || !form.id || !canDelete) return;
+    setDeleteDialogOpen(true);
+    setDeleteReferrers([]);
+    setDeleteReferrersLoading(true);
     try {
-      const permission = permissionFromExpertPreset(form.permissionPreset);
-
-      if (builtinCustomize && contentFqid) {
-        await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
-          model: formatProfileModel(form.modelProvider, form.modelId),
-          thoughtLevel: form.thoughtLevel.trim() || undefined,
-          permission,
-        });
-      } else {
-        const payload: SaveCustomSubagentPayload = {
-          id: form.id,
-          name: form.name.trim(),
-          description: form.description.trim(),
-          instructions: form.instructions,
-          model: formatProfileModel(form.modelProvider, form.modelId),
-          thoughtLevel: form.thoughtLevel.trim() || undefined,
-          permission,
-        };
-        await window.electronAPI.subagentsSaveCustom(
-          projectRoot,
-          payload,
-          targetTeamId ?? undefined,
-        );
-      }
-
-      toast.success(isNew ? t("settings.editor.expert.toast.created") : t("settings.editor.expert.toast.saved"));
-      closePanel();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.saveFailed"));
+      const refs = await window.electronAPI.subagentsListRosterReferrers(projectRoot, form.id);
+      setDeleteReferrers(refs.map((r) => ({ teamId: r.teamId, teamName: r.teamName })));
+    } catch {
+      setDeleteReferrers([]);
     } finally {
-      setSaving(false);
-    }
-  }, [projectRoot, builtinCustomize, form, isNew, closePanel, t]);
-
-  const resetBuiltinCustomization = async () => {
-    if (!projectRoot || !form.id || !builtinCustomize || !contentFqid) return;
-    setSaving(true);
-    try {
-      await window.electronAPI.teamsSaveAssetOverride(projectRoot, contentFqid, {
-        model: undefined,
-        thoughtLevel: undefined,
-        temperature: undefined,
-        modules: undefined,
-        permission: undefined,
-      });
-      const full = await window.electronAPI.subagentsGetDetail(projectRoot, form.id);
-      if (full) {
-        setForm(formFromExpert(full));
-        setContentFqid(full.fqid ?? null);
-      }
-      toast.success(t("settings.editor.expert.toast.restoredDefaults"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : t("settings.editor.expert.toast.resetFailed"));
-    } finally {
-      setSaving(false);
+      setDeleteReferrersLoading(false);
     }
   };
 
   const deleteExpert = async () => {
-    if (!projectRoot || !form.id) return;
+    if (!projectRoot || !form.id || !canDelete) return;
     setDeleteDialogOpen(false);
     setSaving(true);
     try {
@@ -261,24 +387,27 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           onFormChange={(next) => setForm({ ...next, permissionPreset: form.permissionPreset })}
           builtinCustomize={builtinCustomize}
           saving={saving}
+          showModel
+          initialInstructionsView={isNew && !created ? "source" : "preview"}
         />
 
-        {isNew && (
+        {isNew && !created ? (
           <div className={cn(SETTINGS_DETAIL_SECTION, "!space-y-1.5")}>
             <label className="text-[length:var(--font-size-12)] font-medium">
               {t("settings.editor.expert.targetTeam")}
             </label>
             <TeamPicker
               teams={teamCatalog}
-              value={targetTeamId ?? "project.local"}
+              value={targetTeamId ?? MY_CONTENT_TEAM_ID}
               onChange={setTargetPackId}
+              onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
               className={saving ? "pointer-events-none opacity-60" : undefined}
             />
             <p className={cn(SETTINGS_ROW_DESC, "!mt-0.5")}>
               {t("settings.editor.expert.targetTeamDesc")}
             </p>
           </div>
-        )}
+        ) : null}
 
         <div className={SETTINGS_DETAIL_SECTION}>
           <SettingsFormField
@@ -314,47 +443,56 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           </SettingsFormField>
         </div>
 
-        <div className={SETTINGS_DETAIL_ACTIONS}>
-          <Button size="xs" onClick={() => void saveExpert()} disabled={saving}>
-            {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isNew ? t("settings.editor.expert.create") : t("common.save")}
-          </Button>
-          <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            {t("common.cancel")}
-          </Button>
-          {builtinCustomize ? (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => void resetBuiltinCustomization()}
-              disabled={saving}
-            >
-              {t("settings.editor.expert.resetDefaults")}
-            </Button>
-          ) : null}
-          {!builtinCustomize && !isNew ? (
-            <>
-              <span className="flex-1 min-w-[1rem]" />
+        {(isNew && !created) || (canDelete && form.id) ? (
+          <div className={SETTINGS_DETAIL_ACTIONS}>
+            {isNew && !created ? (
               <Button
-                variant="ghost"
                 size="xs"
-                className="shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => void createExpert()}
+                disabled={saving || !form.name.trim() || !form.instructions.trim()}
+              >
+                {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
+                {t("settings.editor.expert.create")}
+              </Button>
+            ) : null}
+            {canDelete && form.id ? (
+              <Button
+                variant="destructive"
+                size="xs"
+                onClick={() => void openDeleteDialog()}
                 disabled={saving}
-                onClick={() => setDeleteDialogOpen(true)}
               >
                 {t("common.delete")}
               </Button>
-            </>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="!max-w-md">
           <DialogHeader>
             <DialogTitle>{t("settings.editor.expert.deleteTitle")}</DialogTitle>
-            <DialogDescription>{t("settings.editor.expert.deleteDesc")}</DialogDescription>
+            <DialogDescription>
+              {deleteReferrersLoading
+                ? t("common.loading")
+                : deleteReferrers.length > 0
+                  ? t("settings.editor.expert.deleteDescInUse")
+                  : t("settings.editor.expert.deleteDesc")}
+            </DialogDescription>
           </DialogHeader>
+          {!deleteReferrersLoading && deleteReferrers.length > 0 ? (
+            <div className="space-y-2 px-1">
+              <ul className="list-disc pl-5 space-y-0.5 text-[length:var(--font-size-13)]">
+                {deleteReferrers.map((r) => (
+                  <li key={r.teamId}>{r.teamName}</li>
+                ))}
+              </ul>
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                {t("settings.editor.expert.deleteDescInUseFooter")}
+              </p>
+            </div>
+          ) : null}
           <DialogFooter>
             <Button variant="outline" size="sm" className="shadow-none" onClick={() => setDeleteDialogOpen(false)}>
               {t("common.cancel")}
@@ -363,7 +501,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
               variant="destructive"
               size="sm"
               className="shadow-none"
-              disabled={saving}
+              disabled={saving || deleteReferrersLoading}
               onClick={() => void deleteExpert()}
             >
               {t("common.delete")}

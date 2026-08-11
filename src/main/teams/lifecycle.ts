@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { join } from "node:path";
 import {
   CORE_TEAM_ID,
+  MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
   USER_TEAM_PUBLISHER,
   type AssetKind,
@@ -30,7 +31,15 @@ import { createLogger } from "../services/logger";
 import { _registeredRoots } from "../services/active-project-roots";
 import { licenseGrants } from "../services/teams-license";
 import { getTeamRecord, invalidateCatalog, scanAllTeams } from "./catalog";
-import { getAsset, getTeam, isAssetActive, listTeams, notifyTeamsChanged } from "./resolver";
+import {
+  getAsset,
+  getTeam,
+  isAssetActive,
+  listTeams,
+  notifyTeamsChanged,
+  resolveRoster,
+} from "./resolver";
+import { isMyContentLeadFqid, isMyContentTeamId } from "./my-content";
 import {
   readAppTeamsState,
   saveAppAssetOverride,
@@ -82,12 +91,98 @@ function activeTeamSuggestion(teamId: string, projectRoot?: string): string | un
   return teamId;
 }
 
+/**
+ * True when `teamId` is currently a usable lead team in `projectRoot` and no
+ * other installed+enabled lead remains. My Content's chat lead counts — Core
+ * may be removed whenever My Content (or any other lead team) is available.
+ */
+function isLastUsableLeadTeam(projectRoot: string, teamId: string): boolean {
+  const teams = listTeams(projectRoot);
+  const self = teams.find((t) => t.manifest.id === teamId);
+  if (!self?.installed || !self.enabled || !self.hasOrchestrator) return false;
+  return !teams.some(
+    (t) =>
+      t.manifest.id !== teamId
+      && t.installed
+      && t.enabled
+      && t.hasOrchestrator,
+  );
+}
+
+/**
+ * When reassigning a cleared project/app default: prefer Core (still the
+ * default research suite when installed), then My Content (always-on safety net).
+ */
+function fallbackLeadTeamId(excluding?: string): string | undefined {
+  const appUninstalled = readAppTeamsState().uninstalled ?? [];
+  const candidates = [CORE_TEAM_ID, MY_CONTENT_TEAM_ID];
+  for (const id of candidates) {
+    if (id === excluding) continue;
+    if (id === CORE_TEAM_ID && appUninstalled.includes(CORE_TEAM_ID)) continue;
+    const record = getTeamRecord(id);
+    if (record?.hasOrchestrator) return id;
+  }
+  return undefined;
+}
+
+function assertMyContentImmutable(teamId: string, action: string): void {
+  if (!isMyContentTeamId(teamId)) return;
+  throw new Error(
+    `Common Team is the always-on safety-net team and cannot be ${action}.`,
+  );
+}
+
+function assertCanRemoveLeadTeam(
+  teamId: string,
+  action: "uninstall" | "disable",
+  projectRoot?: string,
+): void {
+  assertMyContentImmutable(teamId, action === "uninstall" ? "uninstalled" : "disabled");
+  const roots = projectRoot ? [projectRoot] : [..._registeredRoots()];
+  // No open project → still refuse removing the last app-level lead (My Content
+  // normally covers this; keep the guard for broken/missing installs).
+  if (roots.length === 0) {
+    const record = getTeamRecord(teamId);
+    if (!record?.hasOrchestrator) return;
+    const myContent = getTeamRecord(MY_CONTENT_TEAM_ID);
+    if (teamId !== MY_CONTENT_TEAM_ID && myContent?.hasOrchestrator) return;
+    const state = readAppTeamsState();
+    const otherInstalledLead =
+      (myContent?.hasOrchestrator && teamId !== MY_CONTENT_TEAM_ID)
+      || state.installed.some((r) => {
+        if (r.teamId === teamId) return false;
+        const other = getTeamRecord(r.teamId);
+        return Boolean(other?.hasOrchestrator);
+      });
+    if (!otherInstalledLead && (teamId === CORE_TEAM_ID || record.source === "core")) {
+      throw new Error(
+        action === "uninstall"
+          ? "Cannot uninstall the last team with a lead agent. Install or create another lead team first."
+          : "Cannot disable the last team with a lead agent. Enable or create another lead team first.",
+      );
+    }
+    return;
+  }
+  for (const root of roots) {
+    if (!isLastUsableLeadTeam(root, teamId)) continue;
+    throw new Error(
+      action === "uninstall"
+        ? "Cannot uninstall the last team with a lead agent. Install or create another lead team first."
+        : "Cannot disable the last team with a lead agent. Enable or create another lead team first.",
+    );
+  }
+}
+
 function pruneProjectTeamReferences(projectRoot: string, teamId: string): void {
   const state = readProjectTeamsState(projectRoot);
   const belongsToTeam = (key: string) => parseFqid(key)?.teamId === teamId;
+  const fallback = state.defaultTeam === teamId ? fallbackLeadTeamId(teamId) : undefined;
   writeProjectTeamsState(projectRoot, {
     ...state,
-    defaultTeam: state.defaultTeam === teamId ? CORE_TEAM_ID : state.defaultTeam,
+    defaultTeam:
+      state.defaultTeam === teamId
+        ? fallback
+        : state.defaultTeam,
     teamEnabled: Object.fromEntries(Object.entries(state.teamEnabled).filter(([key]) => key !== teamId)),
     assetEnabled: Object.fromEntries(Object.entries(state.assetEnabled).filter(([key]) => !belongsToTeam(key))),
     assetOverrides: Object.fromEntries(
@@ -113,22 +208,41 @@ export function installTeam(teamId: string): TeamMutationResult {
     throw new Error(`Team requires an active Pro license: ${teamId}`);
   }
   const state = readAppTeamsState();
+  const uninstalled = state.uninstalled ?? [];
+  // Core is installed-by-default; "install" clears the opt-out list.
+  if (record.source === "core") {
+    const wasOut = uninstalled.includes(teamId);
+    if (wasOut) {
+      writeAppTeamsState({
+        ...state,
+        uninstalled: uninstalled.filter((id) => id !== teamId),
+      });
+    }
+    notifyTeamsChanged();
+    return { applied: wasOut, suggestedActiveTeam: activeTeamSuggestion(teamId) };
+  }
   const already = state.installed.some((r) => r.teamId === teamId);
   if (!already) {
     writeAppTeamsState({
       ...state,
       installed: [...state.installed, { teamId, installedAt: new Date().toISOString() }],
+      uninstalled: uninstalled.filter((id) => id !== teamId),
     });
   }
   notifyTeamsChanged();
   return { applied: !already, suggestedActiveTeam: activeTeamSuggestion(teamId) };
 }
 
-/** Uninstall a team at app level. core / project teams are rejected. Zero file deletion. */
+/**
+ * Uninstall a team at app level. Zero file deletion — catalog files stay so
+ * the team can be re-installed from Browse. Project / user-created teams are
+ * rejected (use delete). Core is allowed (opt-out via `uninstalled[]`).
+ */
 export function uninstallTeam(teamId: string): void {
-  if (teamId === CORE_TEAM_ID || teamId === PROJECT_DEFAULT_TEAM_ID) {
+  if (teamId === PROJECT_DEFAULT_TEAM_ID) {
     throw new Error(`Team cannot be uninstalled: ${teamId}`);
   }
+  assertMyContentImmutable(teamId, "uninstalled");
   const record = teamRecordOrThrow(teamId);
   if (record.scope === "project") {
     throw new Error("Project teams are deleted, not uninstalled.");
@@ -136,13 +250,34 @@ export function uninstallTeam(teamId: string): void {
   if (record.manifest.publisher === USER_TEAM_PUBLISHER) {
     throw new Error("User-created teams are deleted, not uninstalled.");
   }
+  // Refuse when this would leave every open project without a lead agent.
+  // My Content's chat lead counts as a usable replacement for Core.
+  assertCanRemoveLeadTeam(teamId, "uninstall");
+
   const state = readAppTeamsState();
-  if (!state.installed.some((r) => r.teamId === teamId)) return;
-  writeAppTeamsState({
-    ...state,
-    installed: state.installed.filter((r) => r.teamId !== teamId),
-    defaultTeam: state.defaultTeam === teamId ? CORE_TEAM_ID : state.defaultTeam,
-  });
+  const uninstalled = state.uninstalled ?? [];
+
+  if (record.source === "core") {
+    if (uninstalled.includes(teamId)) return;
+    writeAppTeamsState({
+      ...state,
+      uninstalled: [...uninstalled, teamId],
+      defaultTeam:
+        state.defaultTeam === teamId
+          ? fallbackLeadTeamId(teamId)
+          : state.defaultTeam,
+    });
+  } else {
+    if (!state.installed.some((r) => r.teamId === teamId)) return;
+    writeAppTeamsState({
+      ...state,
+      installed: state.installed.filter((r) => r.teamId !== teamId),
+      defaultTeam:
+        state.defaultTeam === teamId
+          ? fallbackLeadTeamId(teamId)
+          : state.defaultTeam,
+    });
+  }
   for (const projectRoot of _registeredRoots()) {
     pruneProjectTeamReferences(projectRoot, teamId);
   }
@@ -159,22 +294,36 @@ export function setTeamEnabled(
   projectRoot?: string,
 ): TeamMutationResult {
   if (teamId === PROJECT_DEFAULT_TEAM_ID && value === false) {
-    throw new Error("The project default team cannot be disabled.");
+    throw new Error(
+      "The project team is the always-on project hangar and cannot be disabled.",
+    );
+  }
+  if (value === false) {
+    assertMyContentImmutable(teamId, "disabled");
   }
   teamRecordOrThrow(teamId, projectRoot);
   let defaultMovedTo: string | undefined;
+
+  if (value === false) {
+    assertCanRemoveLeadTeam(
+      teamId,
+      "disable",
+      scope === "project" ? projectRoot : undefined,
+    );
+  }
 
   if (scope === "app") {
     setAppTeamEnabled(teamId, value);
   } else {
     if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
     setProjectTeamEnabled(projectRoot, teamId, value);
-    // Disabling the team that owns the active lead → move the default back to core.
+    // Disabling the active team's pack → move default to My Content / Core.
     if (value === false) {
       const current = readProjectTeamsState(projectRoot).defaultTeam;
       if (current === teamId) {
-        setProjectDefaultTeam(projectRoot, CORE_TEAM_ID);
-        defaultMovedTo = CORE_TEAM_ID;
+        const next = fallbackLeadTeamId(teamId);
+        setProjectDefaultTeam(projectRoot, next ?? null);
+        defaultMovedTo = next;
       }
     }
   }
@@ -193,6 +342,9 @@ export function setAssetEnabled(
   scope: TeamScope,
   projectRoot?: string,
 ): void {
+  if (value === false && isMyContentLeadFqid(fqid)) {
+    throw new Error("Common Team's chat lead cannot be disabled.");
+  }
   if (scope === "app") {
     setAppAssetEnabled(fqid, value);
   } else {
@@ -275,36 +427,93 @@ function uniqueTeamId(prefix: string, base: string, existingDirs: string[]): str
   return `${prefix}.${base}-${Date.now().toString(36)}`;
 }
 
-function writeTeamManifest(dir: string, id: string, name: string, description: string): void {
+export interface CreateTeamInput {
+  name: string;
+  description?: string;
+  longDescription?: string;
+  tags?: string[];
+  scope: TeamScope;
+  projectRoot?: string;
+  /** Defaults to the team name. */
+  leadName?: string;
+  /** Defaults to a short generic lead brief. */
+  leadInstructions?: string;
+}
+
+function writeTeamManifest(
+  dir: string,
+  id: string,
+  fields: {
+    name: string;
+    description: string;
+    longDescription?: string;
+    tags?: string[];
+  },
+): void {
   mkdirSync(dir, { recursive: true });
+  const manifest: Record<string, unknown> = {
+    id,
+    name: fields.name,
+    description: fields.description,
+    version: "0.1.0",
+    packFormatVersion: 1,
+    formatVersion: 2,
+    tier: "free",
+    publisher: USER_TEAM_PUBLISHER,
+  };
+  if (fields.longDescription) manifest.longDescription = fields.longDescription;
+  if (fields.tags && fields.tags.length > 0) manifest.tags = fields.tags;
+  writeFileSync(join(dir, "team.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+}
+
+/** Every custom team ships with exactly one lead (≤1 lead per team). */
+function seedDefaultLead(
+  dir: string,
+  opts: { teamName: string; leadName: string; leadInstructions: string },
+): void {
+  const orchDir = join(dir, "orchestrators", "lead");
+  mkdirSync(orchDir, { recursive: true });
   writeFileSync(
-    join(dir, "team.json"),
+    join(orchDir, "orchestrator.json"),
     `${JSON.stringify(
       {
-        id,
-        name,
-        description,
-        version: "0.1.0",
-        tier: "free",
-        publisher: USER_TEAM_PUBLISHER,
+        id: "lead",
+        name: opts.leadName,
+        description: `Lead agent for ${opts.teamName}`,
+        // `$pack` → `@team`: own-team subagents / skills expand into this lead's allowlists.
+        allowedExperts: ["$pack"],
+        allowedSkills: ["$pack"],
+        allowedCommands: ["$pack"],
       },
       null,
       2,
     )}\n`,
     "utf-8",
   );
+  writeFileSync(join(orchDir, "instructions.md"), opts.leadInstructions, "utf-8");
+}
+
+function defaultLeadInstructions(teamName: string): string {
+  return `You are the lead agent for **${teamName}**.\n\nOwn the main conversation, use tools when needed, and keep answers concise and practical.\n`;
 }
 
 /** Create a team at the given scope. Returns the new teamId. */
-export function createTeam(input: {
-  name: string;
-  description?: string;
-  scope: TeamScope;
-  projectRoot?: string;
-}): { teamId: string; dir: string } {
+export function createTeam(input: CreateTeamInput): { teamId: string; dir: string } {
   const name = input.name.trim();
   if (!name) throw new Error("Team name is required");
   const description = (input.description ?? "").trim();
+  const longDescription = (input.longDescription ?? "").trim() || undefined;
+  const tags = (input.tags ?? [])
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  const leadName = (input.leadName ?? "").trim() || name;
+  const leadInstructions =
+    (input.leadInstructions ?? "").trim() || defaultLeadInstructions(name);
+
+  const write = (dir: string, id: string) => {
+    writeTeamManifest(dir, id, { name, description, longDescription, tags });
+    seedDefaultLead(dir, { teamName: name, leadName, leadInstructions });
+  };
 
   if (input.scope === "app") {
     const root = appTeamsDir();
@@ -314,7 +523,7 @@ export function createTeam(input: {
       : [];
     const id = uniqueTeamId("user", slugify(name), existing);
     const dir = join(root, id);
-    writeTeamManifest(dir, id, name, description);
+    write(dir, id);
     invalidateCatalog();
     notifyTeamsChanged();
     log.info("app team created", { teamId: id });
@@ -329,7 +538,7 @@ export function createTeam(input: {
     : [];
   const id = uniqueTeamId("project", slugify(name), existing);
   const dir = join(root, id);
-  writeTeamManifest(dir, id, name, description);
+  write(dir, id);
   invalidateCatalog();
   notifyTeamsChanged(input.projectRoot);
   log.info("project team created", { teamId: id, projectRoot: input.projectRoot });
@@ -341,6 +550,7 @@ export function deleteTeam(teamId: string, projectRoot?: string): void {
   if (teamId === CORE_TEAM_ID || teamId === PROJECT_DEFAULT_TEAM_ID) {
     throw new Error(`Team cannot be deleted: ${teamId}`);
   }
+  assertMyContentImmutable(teamId, "deleted");
   const record = teamRecordOrThrow(teamId, projectRoot);
   if (!record.writable) {
     throw new Error(`Only user/project teams can be deleted (disable others instead): ${teamId}`);
@@ -382,6 +592,12 @@ function patchTeamReferences(oldTeamId: string, newTeamId: string, projectRoot?:
     ...override,
     ...(override.allowedExperts
       ? { allowedExperts: override.allowedExperts.map(rewriteFqid) }
+      : {}),
+    ...(override.allowedSkills
+      ? { allowedSkills: override.allowedSkills.map(rewriteFqid) }
+      : {}),
+    ...(override.allowedCommands
+      ? { allowedCommands: override.allowedCommands.map(rewriteFqid) }
       : {}),
   });
   writeAppTeamsState({
@@ -503,6 +719,24 @@ function rewriteRosterReferences(rewrites: Map<string, string>, projectRoot?: st
               return rewritten;
             });
             raw.allowedExperts = next;
+          }
+          if (Array.isArray(raw.allowedSkills)) {
+            const next = raw.allowedSkills.map((value) => {
+              if (typeof value !== "string") return value;
+              const rewritten = rewriteRef(value);
+              changed ||= rewritten !== value;
+              return rewritten;
+            });
+            raw.allowedSkills = next;
+          }
+          if (Array.isArray(raw.allowedCommands)) {
+            const next = raw.allowedCommands.map((value) => {
+              if (typeof value !== "string") return value;
+              const rewritten = rewriteRef(value);
+              changed ||= rewritten !== value;
+              return rewritten;
+            });
+            raw.allowedCommands = next;
           }
           if (
             raw.roster
@@ -731,6 +965,84 @@ function copyDir(from: string, to: string): void {
     if (entry.isDirectory()) copyDir(s, d);
     else writeFileSync(d, readFileSync(s));
   }
+}
+
+// ── Cross-team roster referrers (subagent delete confirm) ─
+
+export interface SubagentRosterReferrer {
+  teamId: string;
+  teamName: string;
+  orchestratorFqid: Fqid;
+}
+
+/**
+ * Other teams that explicitly list this subagent on their lead roster
+ * (`+` / allowlist). Birth-team `@team` and mode `"all"` are not "added".
+ *
+ * Follow-up: skills / commands / MCPs need the same
+ * referrer → confirm → purge-on-delete flow once their create/ownership UI
+ * is ready — extend this pattern instead of inventing a parallel helper.
+ */
+export function listSubagentRosterReferrers(
+  projectRoot: string,
+  subagentRef: string,
+): SubagentRosterReferrer[] {
+  const asset = getAsset(projectRoot, subagentRef);
+  if (!asset || asset.kind !== "subagent") return [];
+  const out: SubagentRosterReferrer[] = [];
+  for (const team of listTeams(projectRoot)) {
+    if (team.manifest.id === asset.teamId) continue;
+    const roster = resolveRoster(projectRoot, team.manifest.id);
+    if (!roster || roster.spec.mode !== "list") continue;
+    const hit = roster.entries.some((e) => e.via === "explicit" && e.fqid === asset.fqid);
+    if (!hit) continue;
+    out.push({
+      teamId: team.manifest.id,
+      teamName: team.manifest.name,
+      orchestratorFqid: roster.orchestratorFqid,
+    });
+  }
+  return out.sort((a, b) => a.teamName.localeCompare(b.teamName));
+}
+
+function rosterMemberPointsAt(member: string, targetFqid: Fqid, projectRoot: string): boolean {
+  if (member === "@team" || member === "$pack") return false;
+  if (member === targetFqid) return true;
+  const direct = getAsset(projectRoot, member);
+  if (direct?.fqid === targetFqid) return true;
+  const parsed = parseFqid(member);
+  if (parsed && toFqid(parsed.teamId, parsed.contentId) === targetFqid) return true;
+  return false;
+}
+
+/** Strip explicit foreign-roster refs to this subagent (project-layer override). */
+export function purgeSubagentFromForeignRosters(
+  projectRoot: string,
+  subagentRef: string,
+): number {
+  const asset = getAsset(projectRoot, subagentRef);
+  if (!asset || asset.kind !== "subagent") return 0;
+  const referrers = listSubagentRosterReferrers(projectRoot, asset.fqid);
+  let purged = 0;
+  for (const ref of referrers) {
+    const roster = resolveRoster(projectRoot, ref.teamId);
+    if (!roster || roster.spec.mode !== "list") continue;
+    const next = roster.spec.members.filter(
+      (m) => !rosterMemberPointsAt(m, asset.fqid, projectRoot),
+    );
+    if (next.length === roster.spec.members.length) continue;
+    saveAssetOverride(
+      roster.orchestratorFqid,
+      { allowedExperts: next },
+      "project",
+      projectRoot,
+    );
+    purged += 1;
+  }
+  if (purged > 0) {
+    log.info("purged subagent from foreign rosters", { fqid: asset.fqid, purged });
+  }
+  return purged;
 }
 
 // ── Read-side re-exports for IPC ──────────────────────────

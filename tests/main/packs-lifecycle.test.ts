@@ -3,7 +3,9 @@
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
+import { join } from "node:path";
 import {
+  deleteTeam,
   installTeam,
   setTeamEnabled,
   uninstallTeam,
@@ -13,7 +15,9 @@ import {
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
-import { isAssetActive, __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
+import { ensureMyContentTeam } from "../../src/main/teams/my-content";
+import { getTeam, isAssetActive, __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
+import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
 import {
   readAppTeamsState,
   setAppTeamsStateDataDir,
@@ -25,6 +29,7 @@ import {
 import {
   CORE_TEAM_ID,
   LOCAL_TEAM_ID,
+  MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
 } from "../../src/shared/teams/types";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
@@ -47,12 +52,15 @@ afterEach(() => {
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setAppTeamsStateDataDir(null);
+  setAppTeamsDirForTests(null);
   __resetTeamsResolverForTests();
 });
 
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setAppTeamsStateDataDir(dir);
+  setAppTeamsDirForTests(join(dir, "teams"));
+  ensureMyContentTeam();
   tempDirs.push(dir);
   return dir;
 }
@@ -138,6 +146,8 @@ describe("teams/lifecycle: setTeamEnabled / uninstall", () => {
     setupPacks();
     sealAppStore();
     const root = project();
+    // Need another lead so Core is not the last usable lead.
+    installTeam("test.notes");
 
     setTeamEnabled(CORE_TEAM_ID, false, "project", root);
     expect(isAssetActive(root, `${CORE_TEAM_ID}:research-prism`)).toBe(false);
@@ -170,16 +180,43 @@ describe("teams/lifecycle: setTeamEnabled / uninstall", () => {
     expect(re.defaultMovedTo).toBeUndefined();
   });
 
-  it("uninstall: core rejected; removes app install record", () => {
+  it("uninstall: Core may be opted out because My Content provides the safety-net lead", () => {
     setupPacks();
     sealAppStore();
-    expect(() => uninstallTeam(CORE_TEAM_ID)).toThrow(/cannot be uninstalled/i);
-    expect(() => uninstallTeam("test.notes")).not.toThrow();
+    const root = project();
+
+    expect(getTeam(root, MY_CONTENT_TEAM_ID)?.hasOrchestrator).toBe(true);
+    expect(getTeam(root, CORE_TEAM_ID)?.installed).toBe(true);
+    expect(() => uninstallTeam(CORE_TEAM_ID)).not.toThrow();
+    expect(getTeam(root, CORE_TEAM_ID)?.installed).toBe(false);
+
+    const re = installTeam(CORE_TEAM_ID);
+    expect(re.applied).toBe(true);
+    expect(getTeam(root, CORE_TEAM_ID)?.installed).toBe(true);
 
     installTeam("test.notes");
     expect(isInstalled("test.notes")).toBe(true);
-
     uninstallTeam("test.notes");
     expect(isInstalled("test.notes")).toBe(false);
+  });
+
+  it("disable: Core may be disabled while My Content remains", () => {
+    setupPacks();
+    sealAppStore();
+    const root = project();
+    expect(() => setTeamEnabled(CORE_TEAM_ID, false, "project", root)).not.toThrow();
+    expect(getTeam(root, CORE_TEAM_ID)?.enabled).toBe(false);
+    expect(getTeam(root, MY_CONTENT_TEAM_ID)?.enabled).toBe(true);
+  });
+
+  it("My Content cannot be disabled, uninstalled, or deleted", () => {
+    setupPacks();
+    sealAppStore();
+    const root = project();
+    expect(() => setTeamEnabled(MY_CONTENT_TEAM_ID, false, "project", root)).toThrow(
+      /always-on safety-net/i,
+    );
+    expect(() => uninstallTeam(MY_CONTENT_TEAM_ID)).toThrow(/always-on safety-net|deleted, not uninstalled/i);
+    expect(() => deleteTeam(MY_CONTENT_TEAM_ID, root)).toThrow(/always-on safety-net/i);
   });
 });

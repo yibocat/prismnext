@@ -115,18 +115,23 @@ license: MIT
 
 ## Install location
 
-Write skills under this **relative** project path (same on macOS, Windows,
-Linux):
+Write new skills under this **relative** project path (same on macOS,
+Windows, Linux) — the Project Team hangar:
 
 ```
-.prismnext/agent/skills/<skill-id>/SKILL.md
+.prismnext/agent/teams/project.local/skills/<skill-id>/SKILL.md
 ```
 
-- prismnext stores skill files only under `.prismnext/agent/skills/` and
-  syncs OpenCode automatically (app-level config, not in the project).
+- PrismNext owns project custom skills on the **Project Team** hangar
+  (`.prismnext/agent/teams/project.local/skills/`). OpenCode sync uses
+  app-level config under userData — never project-root `.opencode/`.
 - Skills created here are **user-created**: they appear in Settings →
-  Skills marked as custom, and can be deleted there. Bundled skills ship
-  with the app — they can be enabled/disabled but not deleted.
+  Skills (owned by Project Team) and can be deleted there. Bundled skills
+  ship with the app under the Core team — enable via the team Skills
+  allowlist; they are not deleted from disk by the user.
+- Prefer Settings → Skills / team detail **New** when the user wants a
+  Common Team skill; do **not** invent paths under Application Support /
+  userData.
 - A **new chat tab** is required before the skill can be invoked via the
   `skill` tool (skill lists are session-scoped).
 
@@ -166,6 +171,8 @@ Linux):
 
 | Path | Why |
 |------|-----|
-| `.agents/` or `.agents/skills/` | OpenCode default — not prismnext storage |
+| `.agents/` or `.agents/skills/` | OpenCode default — not PrismNext storage |
 | `<project>/.opencode/` | Runtime/npm artifacts; pollutes Git |
-| Any path outside `.prismnext/agent/skills/` for SKILL.md | Breaks Settings + sync |
+| `.prismnext/agent/skills/<id>/` (legacy flat tree) | Old layout; Settings CRUD expects hangar teams |
+| `.prismnext/agent/local/skills/` | Pre-M8 path; migrated to `teams/project.local/` |
+| Any other path for new `SKILL.md` (except the Install location above) | Breaks Settings + team ownership |

@@ -22,7 +22,7 @@ export type AssetKind = "orchestrator" | "subagent" | "skill" | "command" | "mcp
 /** 全限定内容 id：`${teamId}:${contentId}`，如 `prismnext.core:peer-reviewer` */
 export type Fqid = string;
 
-// ── plugin.json（包清单，§4.2）────────────────────────────
+// ── team.json（包清单，§4.2；legacy plugin.json 仍可读）────
 
 export interface TeamAssetDecl {
   id: string;
@@ -36,6 +36,9 @@ export interface TeamAssetDecl {
  */
 export interface TeamContentsDecl {
   orchestrators?: TeamAssetDecl[];
+  /** Canonical name (formatVersion 2). */
+  subagents?: TeamAssetDecl[];
+  /** @deprecated Prefer subagents — kept for older manifests. */
   experts?: TeamAssetDecl[];
   skills?: TeamAssetDecl[];
   commands?: TeamAssetDecl[];
@@ -54,6 +57,11 @@ export interface TeamManifest {
   version: string;
   /** 布局格式版本，当前恒为 1 */
   packFormatVersion: 1;
+  /**
+   * Disk layout version. `2` = team.json + orchestrators|orchestrator + subagents.
+   * Omitted / older = may still use plugin.json + experts/ (scanner fallback).
+   */
+  formatVersion?: number;
   tier: TeamTier;
   /** 发布者标识，如 `prismnext` / `prismnext.pro` / 第三方 */
   publisher: string;
@@ -202,10 +210,32 @@ export interface OriginInfo {
 
 export const TEAMS_STATE_VERSION = 3;
 export const CORE_TEAM_ID = "prismnext.core";
+/**
+ * Synthetic owner for app-level slash commands (`resources/commands/`).
+ * Not a TeamView — never appears in Settings → Teams.
+ */
+export const APP_COMMANDS_OWNER_ID = "app";
+/** Builtin app command ids (also used when rewriting legacy `prismnext.core:` FQIDs). */
+export const APP_COMMAND_IDS = [
+  "bib-check",
+  "brief",
+  "compact",
+  "compile",
+  "setup",
+] as const;
 export const LOCAL_TEAM_ID = "user.local";
+/**
+ * Always-on app team: hangar for unassigned user content + the undeletable
+ * chat lead agent (system safety net when Core is disabled/uninstalled).
+ */
+export const MY_CONTENT_TEAM_ID = "user.my-content";
+/** Singular lead id inside My Content (`orchestrator/orchestrator.json`). */
+export const MY_CONTENT_LEAD_ID = "chat";
 /** Marker publisher for user-created teams (auto-installed app-level packs). */
 export const USER_TEAM_PUBLISHER = "user";
 export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_TEAM_ID}:research-prism`;
+/** Chat / active-team final fallback when no other lead is usable. */
+export const FALLBACK_ORCHESTRATOR_FQID: Fqid = `${MY_CONTENT_TEAM_ID}:${MY_CONTENT_LEAD_ID}`;
 /** Local Pack 目录（相对项目根）；pack-catalog / packs-state 共用此常量拼绝对路径 */
 export const LOCAL_TEAM_REL = ".prismnext/agent/local";
 
@@ -224,6 +254,17 @@ export interface AssetOverride {
   modules?: string[];
   /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层；T6 迁移为 roster） */
   allowedExperts?: string[];
+  /**
+   * Lead-scoped skills allowlist (mirrors allowedExperts).
+   * `$pack` / `@team` = own-team skills; FQIDs = foreign skills added via `+`.
+   * Omit on disk → runtime defaults to own-team only (not global union).
+   */
+  allowedSkills?: string[];
+  /**
+   * Lead-scoped commands allowlist (mirrors allowedSkills).
+   * `$pack` / `@team` = own-team commands; FQIDs = foreign commands added via `+`.
+   */
+  allowedCommands?: string[];
   permission?: Record<string, unknown>;
 }
 
@@ -322,6 +363,10 @@ export const PROJECT_TEAMS_STATE_REL = ".prismnext/agent/teams.json";
 export const PROJECT_TEAMS_REL = ".prismnext/agent/teams";
 /** 项目默认团队 id（user.local 的迁移目标，治 C1） */
 export const PROJECT_DEFAULT_TEAM_ID = "project.local";
+/** Seeded hangar lead inside project.local (`orchestrators/project/`). */
+export const PROJECT_LOCAL_LEAD_ID = "project";
+/** FQID of the project hangar lead (undeletable, like My Content Chat). */
+export const PROJECT_LOCAL_LEAD_FQID: Fqid = `${PROJECT_DEFAULT_TEAM_ID}:${PROJECT_LOCAL_LEAD_ID}`;
 
 /**
  * The sole runtime identity of the writable default project Team.
@@ -332,11 +377,21 @@ export function isProjectLocalTeamId(teamId: string): boolean {
   return teamId === PROJECT_DEFAULT_TEAM_ID;
 }
 
+export function isProjectLocalLeadFqid(fqid: string): boolean {
+  return fqid === PROJECT_LOCAL_LEAD_FQID;
+}
+
 /** 应用级状态 `<userData>/teams-state.json`（v2） */
 export interface AppTeamsState {
   version: typeof APP_TEAMS_STATE_VERSION;
   /** 应用级安装记录（core / user / project 团队不入列） */
   installed: InstalledTeamRecord[];
+  /**
+   * Opt-out for teams that are installed by default (today: `prismnext.core`).
+   * Bundled/pro/registry use `installed` instead; core stays out of `installed`
+   * and is considered installed unless listed here.
+   */
+  uninstalled?: string[];
   /** 应用级默认（活动）团队 */
   defaultTeam?: string;
   /** 团队级三态覆盖（缺键 = 跟随默认 true） */

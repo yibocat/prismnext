@@ -21,11 +21,13 @@ import {
   resolveInvocation,
   resolveRef,
   resolveRoster,
+  resolveSkillsRoster,
 } from "../../src/main/teams/resolver";
 import {
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
+import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
 import { emptyAppTeamsState } from "../../src/shared/teams/state";
 import {
   readAppTeamsState,
@@ -39,6 +41,10 @@ import {
   setProjectDefaultTeam,
   setProjectTeamEnabled,
 } from "../../src/main/teams/state-project";
+import {
+  listSubagentRosterReferrers,
+  purgeSubagentFromForeignRosters,
+} from "../../src/main/teams/lifecycle";
 
 // ── Fixture helpers ───────────────────────────────────────
 
@@ -53,7 +59,7 @@ function writeTeam(
   opts: {
     tier?: "free" | "pro";
     minHostVersion?: string;
-    orchestrator?: { id: string; roster?: unknown };
+    orchestrator?: { id: string; roster?: unknown; allowedSkills?: unknown };
     subagents?: string[];
     skills?: string[];
     commands?: string[];
@@ -84,6 +90,9 @@ function writeTeam(
         name: opts.orchestrator.id,
         description: "lead",
         ...(opts.orchestrator.roster !== undefined ? { roster: opts.orchestrator.roster } : {}),
+        ...(opts.orchestrator.allowedSkills !== undefined
+          ? { allowedSkills: opts.orchestrator.allowedSkills }
+          : {}),
       }),
     );
     writeFileSync(join(odir, "instructions.md"), "lead instructions");
@@ -159,6 +168,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const r of externalRoots.splice(0)) unregisterExternalTeamRoot(r);
   setAppTeamsStateDataDir(null);
+  setAppTeamsDirForTests(null);
   __setHostVersionForTests(undefined);
   delete process.env.PRISM_FIRST_PARTY_TEAMS_DIR;
   __resetTeamsResolverForTests();
@@ -311,6 +321,47 @@ describe("resolveRoster", () => {
   });
 });
 
+describe("resolveSkillsRoster", () => {
+  it("defaults to own-team skills only (@team)", () => {
+    const root = useExternalRoot();
+    writeTeam(root, "acme.a", {
+      orchestrator: { id: "lead" },
+      skills: ["own-skill"],
+    });
+    writeTeam(root, "acme.b", { skills: ["other-skill"] });
+    const view = resolveSkillsRoster(projectRoot, "acme.a")!;
+    expect(view.spec).toEqual({ mode: "list", members: ["@team"] });
+    expect(view.entries.map((e) => e.fqid)).toEqual(["acme.a:own-skill"]);
+    expect(view.entries[0].via).toBe("team");
+  });
+
+  it("explicit foreign FQID expands alongside @team", () => {
+    const root = useExternalRoot();
+    writeTeam(root, "acme.a", {
+      orchestrator: {
+        id: "lead",
+        allowedSkills: { mode: "list", members: ["@team", "acme.b:shared"] },
+      },
+      skills: ["own-skill"],
+    });
+    writeTeam(root, "acme.b", { skills: ["shared"] });
+    const view = resolveSkillsRoster(projectRoot, "acme.a")!;
+    expect(view.entries.map((e) => e.fqid).sort()).toEqual([
+      "acme.a:own-skill",
+      "acme.b:shared",
+    ]);
+    expect(view.entries.find((e) => e.fqid === "acme.b:shared")?.via).toBe("explicit");
+  });
+
+  it("leadless team still exposes own-team skills", () => {
+    const root = useExternalRoot();
+    writeTeam(root, "acme.cap", { skills: ["tool-skill"] });
+    const view = resolveSkillsRoster(projectRoot, "acme.cap")!;
+    expect(view.entries.map((e) => e.fqid)).toEqual(["acme.cap:tool-skill"]);
+    expect(view.orchestratorFqid).toBe("acme.cap:");
+  });
+});
+
 // ── Precedence: one table drives four consumption points ──
 
 describe("precedence (design §7.5)", () => {
@@ -368,18 +419,55 @@ describe("resolveActiveTeam", () => {
     writeTeam(root, "acme.capability-only", { skills: ["sk"] }); // no orchestrator
 
     // Default → core.
-    expect(resolveActiveTeam(projectRoot).manifest.id).toBe("prismnext.core");
+    expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("prismnext.core");
 
     // Project default → capable team.
     setProjectDefaultTeam(projectRoot, "acme.capable");
-    expect(resolveActiveTeam(projectRoot).manifest.id).toBe("acme.capable");
+    expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("acme.capable");
 
     // Session override to a capability-only team → falls back to project default.
-    expect(resolveActiveTeam(projectRoot, "acme.capability-only").manifest.id).toBe("acme.capable");
+    expect(resolveActiveTeam(projectRoot, "acme.capability-only")?.manifest.id).toBe("acme.capable");
 
     // Disabled project default → falls back to core.
     setProjectTeamEnabled(projectRoot, "acme.capable", false);
-    expect(resolveActiveTeam(projectRoot).manifest.id).toBe("prismnext.core");
+    expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("prismnext.core");
+  });
+
+  it("returns null when core is uninstalled and no other lead team is usable", () => {
+    const root = useExternalRoot("bundled");
+    writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
+    writeAppTeamsState({
+      ...emptyAppTeamsState(),
+      uninstalled: ["prismnext.core"],
+    });
+    expect(resolveActiveTeam(projectRoot)).toBeNull();
+    void root;
+  });
+
+  it("falls back to My Content when core is uninstalled", () => {
+    const root = useExternalRoot("bundled");
+    writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
+    const appTeams = join(appDataDir, "teams");
+    setAppTeamsDirForTests(appTeams);
+    writeTeam(appTeams, "user.my-content", { orchestrator: { id: "chat" } });
+    writeFileSync(
+      join(appTeams, "user.my-content", "team.json"),
+      JSON.stringify({
+        id: "user.my-content",
+        name: "My Content",
+        description: "safety net",
+        version: "1.0.0",
+        tier: "free",
+        publisher: "user",
+      }),
+    );
+    __resetTeamsResolverForTests();
+    writeAppTeamsState({
+      ...emptyAppTeamsState(),
+      uninstalled: ["prismnext.core"],
+    });
+    expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("user.my-content");
+    void root;
   });
 });
 
@@ -471,5 +559,34 @@ describe("invariants", () => {
     expect(t).toBeDefined();
     expect(t?.hasOrchestrator).toBe(true);
     expect(isAssetActive(projectRoot, "acme.legacy:helper")).toBe(true);
+  });
+});
+
+describe("subagent foreign roster purge", () => {
+  it("lists other teams with explicit refs and purges them on delete path", () => {
+    const root = useExternalRoot();
+    writeTeam(root, "acme.birth", {
+      orchestrator: { id: "lead", roster: { mode: "list", members: ["@team"] } },
+      subagents: ["helper"],
+    });
+    writeTeam(root, "acme.other", {
+      orchestrator: {
+        id: "lead",
+        roster: { mode: "list", members: ["@team", "acme.birth:helper"] },
+      },
+      subagents: ["own"],
+    });
+    writeTeam(root, "acme.idle", {
+      orchestrator: { id: "lead", roster: { mode: "list", members: ["@team"] } },
+      subagents: ["x"],
+    });
+
+    const refs = listSubagentRosterReferrers(projectRoot, "acme.birth:helper");
+    expect(refs.map((r) => r.teamId)).toEqual(["acme.other"]);
+
+    expect(purgeSubagentFromForeignRosters(projectRoot, "acme.birth:helper")).toBe(1);
+    const after = resolveRoster(projectRoot, "acme.other")!;
+    expect(after.entries.some((e) => e.fqid === "acme.birth:helper")).toBe(false);
+    expect(listSubagentRosterReferrers(projectRoot, "acme.birth:helper")).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useTeamsStore } from "@/stores/teams-store";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { COMPOSER_TOOLBAR_TRIGGER } from "./worktree-selector";
 
 /**
@@ -25,6 +26,7 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const catalog = useTeamsStore((s) => s.catalog);
+  const projectActiveId = useTeamsStore((s) => s.activeTeamId);
   const loadTeams = useTeamsStore((s) => s.load);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const sessionTeamId = useChatStore((s) => {
@@ -33,7 +35,6 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
   });
   const setSessionTeamId = useChatStore((s) => s.setSessionTeamId);
 
-  const [projectActiveId, setProjectActiveId] = useState<string | null>(null);
   const [activeLeadName, setActiveLeadName] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
@@ -63,22 +64,11 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
     }
   }, []);
 
-  // Project default (no session override) + lead for the effective team.
+  // Keep catalog warm; lead label tracks session override → project default.
   useEffect(() => {
     if (!projectRoot) return;
     void loadTeams(projectRoot);
-    void (async () => {
-      try {
-        const projectDefault = await window.electronAPI.teamsGetActiveTeam(projectRoot);
-        const projectId = projectDefault?.manifest.id ?? null;
-        setProjectActiveId(projectId);
-        await refreshLeadName(projectRoot, sessionTeamId ?? projectId);
-      } catch {
-        setProjectActiveId(null);
-        setActiveLeadName(null);
-      }
-    })();
-  }, [projectRoot, loadTeams, refreshLeadName, sessionTeamId, catalog]);
+  }, [projectRoot, loadTeams]);
 
   const candidates = useMemo(
     () => catalog.filter((team) => team.enabled && team.hasOrchestrator && !team.locked),
@@ -86,6 +76,14 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
   );
 
   const effectiveId = sessionTeamId ?? projectActiveId ?? candidates[0]?.manifest.id ?? null;
+
+  useEffect(() => {
+    if (!projectRoot) {
+      setActiveLeadName(null);
+      return;
+    }
+    void refreshLeadName(projectRoot, effectiveId);
+  }, [projectRoot, effectiveId, refreshLeadName]);
   const active = candidates.find((team) => team.manifest.id === effectiveId) ?? null;
 
   const onSelect = useCallback(
@@ -119,7 +117,6 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
       switching,
       candidates,
       setSessionTeamId,
-      loadTeams,
       refreshLeadName,
       t,
     ],
@@ -127,7 +124,9 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
 
   if (!projectRoot || candidates.length === 0) return null;
 
-  const label = active?.manifest.name ?? t("chat.composer.activeTeam");
+  const label = active
+    ? teamDisplayName(active.manifest.id, active.manifest.name, t)
+    : t("chat.composer.activeTeam");
   const hint = activeLeadName
     ? t("chat.composer.activeTeamHintWithLead", { lead: activeLeadName })
     : t("chat.composer.activeTeamHint");
@@ -170,7 +169,7 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
               }
               description={team.manifest.description || undefined}
             >
-              {team.manifest.name}
+              {teamDisplayName(team.manifest.id, team.manifest.name, t)}
             </AppMenuItem>
           );
         })}

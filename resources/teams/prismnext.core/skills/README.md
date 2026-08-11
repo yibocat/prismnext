@@ -17,24 +17,26 @@ node scripts/export-bundled-skills.mjs
 
 ### In the app
 
-1. **Install into a project** — Settings → Skills → Skill Library copies a
-   bundled skill into the project's `.prismnext/agent/skills/<skill-id>/`.
-2. **Invoke in chat** — describe the task and the agent loads the matching
+1. **Bundled Core skills** — live under this directory in the app; they are
+   referenced in place (not copied into the project). Add them to a team's
+   Skills allowlist via team detail **+** when needed.
+2. **Install from library** — Settings → Skills → Skill Library installs
+   GitHub/registry skills into a writable hangar (default Project Team):
+   `.prismnext/agent/teams/project.local/skills/<skill-id>/`.
+3. **Invoke in chat** — describe the task and the agent loads the matching
    skill, or pick it explicitly with `/` in the composer.
-3. **New chat tab** — after creating or editing a skill, open a new chat tab
+4. **New chat tab** — after creating or editing a skill, open a new chat tab
    for it to appear (skill lists are session-scoped).
-4. **Enable / disable / delete** — Settings → Skills toggles each skill and
-   shows an origin badge per row: **built-in** (shipped with the app),
-   **registry** (installed from a source), **custom** (written by you or
-   skill-creator). Any installed skill can be deleted; built-ins can be
-   reinstalled from the Library at any time.
+5. **Manage** — Settings → Skills lists skills; self-owned hangar copies can
+   be deleted. Core skills are toggled via the owning team's Skills roster.
 
 ### Project paths
 
 | Content | Path |
 | --- | --- |
-| Skill files | `.prismnext/agent/skills/<skill-id>/` |
-| Enabled-state manifest | `.prismnext/agent/skills-manifest.json` |
+| Project custom / library skills | `.prismnext/agent/teams/project.local/skills/<skill-id>/` |
+| Legacy flat skills (read/migrate only) | `.prismnext/agent/skills/<skill-id>/` |
+| Enabled-state / library sources manifest | `.prismnext/agent/skills-manifest.json` |
 | Working documents (analysis, decision records, specs) | `specs/` (a plain folder, not app-managed) |
 | Shared Python environment | `.prismnext/.venv` |
 | Experiment run records | `.prismnext/experiments/<island-id>/runs.jsonl` |
@@ -332,8 +334,9 @@ orchestrate app tools; honor the stand-alone contract; scripted skills
 declare dependencies and expected runtimes (seconds, CPU).
 
 User-level custom skills live in a project at
-`.prismnext/agent/skills/<skill-id>/` — never in project-root `.opencode/`
-or `.agents/`.
+`.prismnext/agent/teams/project.local/skills/<skill-id>/` — never in
+project-root `.opencode/`, `.agents/`, or the legacy flat
+`.prismnext/agent/skills/` tree.
 
 ---
 

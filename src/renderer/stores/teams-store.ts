@@ -48,6 +48,8 @@ interface TeamsStoreState {
   catalog: TeamCardView[];
   /** Team-declared MCP servers (app-level resource, project-gated). */
   teamMcps: AssetViewV2[];
+  /** Project active team id (lead). Shared so list + detail stay in sync. */
+  activeTeamId: string | null;
   loadedRoot: string | null;
   loading: boolean;
   /** Load the catalog from main. Cached per project root unless `force`. */
@@ -62,6 +64,8 @@ interface TeamsStoreState {
     teamId: string,
     enabled: boolean,
   ) => Promise<{ defaultMovedTo?: string } | void>;
+  /** Persist active team, update store immediately, then reconcile. */
+  setActiveTeam: (projectRoot: string, teamId: string) => Promise<void>;
   setTeamMcps: (mcps: AssetViewV2[]) => void;
   clear: () => void;
 }
@@ -69,6 +73,7 @@ interface TeamsStoreState {
 export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
   catalog: [],
   teamMcps: [],
+  activeTeamId: null,
   loadedRoot: null,
   loading: false,
 
@@ -83,7 +88,10 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
     }
     set({ loading: true });
     try {
-      const raw = await window.electronAPI.teamsList(projectRoot);
+      const [raw, active] = await Promise.all([
+        window.electronAPI.teamsList(projectRoot),
+        window.electronAPI.teamsGetActiveTeam(projectRoot).catch(() => null),
+      ]);
       const catalog = raw.map(toCardView);
       // Team enable/disable changes the effective MCP set — keep the team MCP
       // view in sync so the MCP settings page greys out / restores live.
@@ -93,7 +101,12 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
       } catch {
         // non-fatal; team MCP view stays stale until next load
       }
-      set({ catalog, teamMcps, loadedRoot: projectRoot });
+      set({
+        catalog,
+        teamMcps,
+        activeTeamId: active?.manifest.id ?? null,
+        loadedRoot: projectRoot,
+      });
     } finally {
       set({ loading: false });
     }
@@ -133,9 +146,27 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
     return result;
   },
 
+  setActiveTeam: async (projectRoot, teamId) => {
+    set({ activeTeamId: teamId });
+    try {
+      await window.electronAPI.teamsSetActiveTeam(projectRoot, teamId, "project");
+    } catch (err) {
+      await get().load(projectRoot, { force: true });
+      throw err;
+    }
+    await get().load(projectRoot, { force: true });
+    try {
+      const { useCommandStore } = await import("./command-store");
+      await useCommandStore.getState().refreshSlashAllow();
+    } catch {
+      // non-fatal — slash menu refreshes on next commands load
+    }
+  },
+
   setTeamMcps: (teamMcps) => set({ teamMcps }),
 
-  clear: () => set({ catalog: [], teamMcps: [], loadedRoot: null, loading: false }),
+  clear: () =>
+    set({ catalog: [], teamMcps: [], activeTeamId: null, loadedRoot: null, loading: false }),
 }));
 
 /** Back-compat alias while call sites migrate (T5). */

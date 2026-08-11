@@ -1,24 +1,66 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { closeSettingsPanel } from "@/stores/settings-panel-store";
-import { useMcpServersStore } from "@/stores/mcp-servers-store";
+import { useTeamsStore } from "@/stores/teams-store";
+import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
+import { useMcpServersStore, mcpJsonRelPath } from "@/stores/mcp-servers-store";
+import { TeamPicker } from "../teams/team-picker";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
+import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import { SettingsJsonEditor } from "./settings-json-editor";
 import { SettingsJsonToolbar } from "./settings-json-toolbar";
 import { SETTINGS_DETAIL_SHELL, SETTINGS_ROW_DESC } from "./settings-tokens";
 
-export function McpJsonEditorPanel() {
+type JsonSlot = Extract<SettingsPanelSlot, { kind: "mcp-json" }>;
+
+export function McpJsonEditorPanel({ slot }: { slot?: JsonSlot }) {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const catalog = useTeamsStore((s) => s.catalog);
+  const loadTeams = useTeamsStore((s) => s.load);
   const readRaw = useMcpServersStore((s) => s.readRaw);
   const writeRaw = useMcpServersStore((s) => s.writeRaw);
   const saving = useMcpServersStore((s) => s.saving);
 
+  // Only lock when team detail (or caller) asks — Settings header leaves picker free.
+  const lockedTeam = Boolean(slot?.lockTarget && slot.targetTeamId);
+  const [targetTeamId, setTargetTeamId] = useState(
+    slot?.targetTeamId ?? PROJECT_DEFAULT_TEAM_ID,
+  );
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
+
+  useEffect(() => {
+    if (slot?.targetTeamId) setTargetTeamId(slot.targetTeamId);
+  }, [slot?.targetTeamId]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
+
+  const pickerTeams = useMemo(
+    () =>
+      catalog
+        .filter((tm) => tm.writable && tm.installed)
+        .map((tm) => ({
+          ...tm,
+          manifest: {
+            ...tm.manifest,
+            name: teamDisplayName(tm.manifest.id, tm.manifest.name, t),
+          },
+        })),
+    [catalog, t],
+  );
+
+  const targetTeamLabel = useMemo(() => {
+    const tm = catalog.find((c) => c.manifest.id === targetTeamId);
+    return teamDisplayName(targetTeamId, tm?.manifest.name ?? targetTeamId, t);
+  }, [catalog, targetTeamId, t]);
 
   const load = useCallback(async () => {
     if (!projectRoot) {
@@ -29,7 +71,7 @@ export function McpJsonEditorPanel() {
     }
     setLoading(true);
     try {
-      const raw = await readRaw(projectRoot);
+      const raw = await readRaw(projectRoot, targetTeamId);
       setContent(raw);
       setSavedContent(raw);
     } catch {
@@ -38,7 +80,7 @@ export function McpJsonEditorPanel() {
     } finally {
       setLoading(false);
     }
-  }, [projectRoot, readRaw, closePanel]);
+  }, [projectRoot, targetTeamId, readRaw, closePanel, t]);
 
   useEffect(() => {
     void load();
@@ -56,7 +98,7 @@ export function McpJsonEditorPanel() {
       return;
     }
     try {
-      await writeRaw(projectRoot, content);
+      await writeRaw(projectRoot, content, targetTeamId);
       setSavedContent(content);
       toast.success(t("settings.editor.mcpJson.toast.saved"));
       closePanel();
@@ -91,7 +133,23 @@ export function McpJsonEditorPanel() {
         saving={saving}
       />
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcpJson.intro")}</p>
+        <p className={SETTINGS_ROW_DESC}>
+          {t("settings.editor.mcpJson.intro", {
+            team: targetTeamLabel,
+            path: mcpJsonRelPath(targetTeamId),
+          })}
+        </p>
+        {!lockedTeam && (
+          <div className="space-y-1.5">
+            <p className={SETTINGS_ROW_DESC}>{t("settings.mcp.targetTeam")}</p>
+            <TeamPicker
+              teams={pickerTeams}
+              value={targetTeamId}
+              onChange={setTargetTeamId}
+              onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
+            />
+          </div>
+        )}
         <SettingsJsonEditor variant="field" value={content} onChange={setContent} />
       </div>
     </div>

@@ -19,6 +19,7 @@ import {
   resolveRoster,
 } from "../teams/resolver";
 import { getTeamRecord } from "../teams/catalog";
+import { _registeredRoots } from "../services/active-project-roots";
 import {
   createTeam,
   deleteTeam,
@@ -99,6 +100,26 @@ export function registerPacksHandlers(): void {
     return resolveRoster(args.projectRoot, args.teamId);
   });
 
+  // Skills allowlist for a team (own-team + foreign skills added via `+`).
+  ipcMain.handle(
+    "teams:getSkillsRoster",
+    async (_event, args?: { projectRoot?: string | null; teamId?: string }) => {
+      if (!args?.projectRoot || !args.teamId) return null;
+      const { resolveSkillsRoster } = await import("../teams/resolver");
+      return resolveSkillsRoster(args.projectRoot, args.teamId);
+    },
+  );
+
+  // Commands allowlist for a team (own-team + foreign commands added via `+`).
+  ipcMain.handle(
+    "teams:getCommandsRoster",
+    async (_event, args?: { projectRoot?: string | null; teamId?: string }) => {
+      if (!args?.projectRoot || !args.teamId) return null;
+      const { resolveCommandsRoster } = await import("../teams/resolver");
+      return resolveCommandsRoster(args.projectRoot, args.teamId);
+    },
+  );
+
   // The active team (session → project → app → core fallback).
   ipcMain.handle(
     "teams:getActiveTeam",
@@ -127,18 +148,29 @@ export function registerPacksHandlers(): void {
   //  reworks each page; implemented over the new resolver) ──
 
   // Content inventory of a team (marketplace detail + pack detail panel).
-  ipcMain.handle("teams:getTeamContents", async (_event, args?: { teamId?: string }) => {
-    if (!args?.teamId) return [];
-    const record = getTeamRecord(args.teamId);
-    if (!record) return [];
-    const out: Array<{ kind: AssetKind; id: string; name: string; description: string }> = record.assets.map(
-      (a) => ({ kind: a.kind, id: a.id, name: a.name, description: a.description }),
-    );
-    for (const m of record.mcps) {
-      out.push({ kind: "mcp", id: m.id, name: m.name, description: m.description ?? "" });
-    }
-    return out;
-  });
+  // projectRoot is required for project-scoped teams (e.g. project.local).
+  ipcMain.handle(
+    "teams:getTeamContents",
+    async (_event, args?: { teamId?: string; projectRoot?: string | null }) => {
+      if (!args?.teamId) return [];
+      const roots = args.projectRoot?.trim()
+        ? [args.projectRoot.trim()]
+        : [..._registeredRoots()];
+      const record = getTeamRecord(args.teamId, roots);
+      if (!record) return [];
+      const out: Array<{ kind: AssetKind; id: string; name: string; description: string }> =
+        record.assets.map((a) => ({
+          kind: a.kind,
+          id: a.id,
+          name: a.name,
+          description: a.description,
+        }));
+      for (const m of record.mcps) {
+        out.push({ kind: "mcp", id: m.id, name: m.name, description: m.description ?? "" });
+      }
+      return out;
+    },
+  );
 
   // Team-provided MCP servers (MCP settings page "From teams" section).
   ipcMain.handle("teams:listProjectMcps", async (_event, args?: { projectRoot?: string | null }) => {
@@ -208,18 +240,32 @@ export function registerPacksHandlers(): void {
     },
   );
 
-  // Create / delete a team (writable teams only).
+  // Create / delete a team (writable teams only). Custom teams are local hangars —
+  // not store/distribution packs.
   ipcMain.handle(
     "teams:create",
     async (
       _event,
-      args: { name: string; description?: string; scope: TeamScope; projectRoot?: string | null },
+      args: {
+        projectRoot?: string | null;
+        name: string;
+        description?: string;
+        longDescription?: string;
+        tags?: string[];
+        scope: TeamScope;
+        leadName?: string;
+        leadInstructions?: string;
+      },
     ) => {
       return createTeam({
         name: args.name,
         description: args.description,
+        longDescription: args.longDescription,
+        tags: args.tags,
         scope: args.scope,
         projectRoot: args.projectRoot ?? undefined,
+        leadName: args.leadName,
+        leadInstructions: args.leadInstructions,
       });
     },
   );
@@ -297,11 +343,11 @@ export function registerPacksHandlers(): void {
     const subagentState = countModified(coreSubagents);
     const orchState = countModified(coreOrchs);
     const activeTeam = resolveActiveTeam(root);
-    const activeOrchFqid = activeTeam.orchestratorId
+    const activeOrchFqid = activeTeam?.orchestratorId
       ? `${activeTeam.manifest.id}:${activeTeam.orchestratorId}`
       : null;
     return {
-      defaultOrchestratorId: activeTeam.orchestratorId ?? null,
+      defaultOrchestratorId: activeTeam?.orchestratorId ?? null,
       defaultOrchestratorFqid: activeOrchFqid,
       coreSubagentDisabledCount: subagentState.disabledCount,
       coreSubagentOverrideCount: subagentState.overrideCount,

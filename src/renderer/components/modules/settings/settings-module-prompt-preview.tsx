@@ -47,7 +47,12 @@ export function SettingsModulePromptPreview({
 }) {
   const body = useMemo(() => prepareDocumentMarkdown(content, "default"), [content]);
   return (
-    <div className={cn("rounded-md bg-muted/35 px-3 py-2.5", shellClassName)}>
+    <div
+      className={cn(
+        "min-h-[12rem] rounded-lg border border-border px-3 py-2.5",
+        shellClassName,
+      )}
+    >
       <div className={cn(SETTINGS_MODULE_PREVIEW_TYPOGRAPHY, className)}>
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={SETTINGS_MODULE_MARKDOWN_COMPONENTS}>
           {body}

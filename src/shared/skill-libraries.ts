@@ -10,12 +10,11 @@ export interface SkillLibraryCard {
   homepage?: string;
 }
 
-export const PRISM_CURATED_LIBRARY: SkillLibraryCard = {
-  id: "prism-curated",
-  name: "prismnext Curated",
-  description: "Skills bundled with the app — install copies into your project",
-  kind: "bundled",
-};
+/**
+ * @deprecated Core team skills are no longer a “curated install library”.
+ * Kept only so old skills-manifest.json entries can be stripped on read.
+ */
+export const PRISM_CURATED_SOURCE_ID = "prism-curated";
 
 /** GitHub repo presets for Install from URL. */
 export const GITHUB_SKILL_PRESETS = [
@@ -29,7 +28,6 @@ export const GITHUB_SKILL_PRESETS = [
 
 /** Preset remote registries (publisher discovery indexes). */
 export const SKILL_LIBRARY_PRESETS: SkillLibraryCard[] = [
-  PRISM_CURATED_LIBRARY,
   {
     id: "cloudflare-docs",
     name: "Cloudflare Docs",

@@ -138,11 +138,11 @@ describe("pro-packs-discovery: 注册与注销", () => {
     expect(team?.assets.some((asset) => asset.kind === "command" && asset.id === "review")).toBe(true);
   });
 
-  it("扫描 teamsRoot → 注册含 plugin.json 的 pack；无 plugin.json 的目录跳过", () => {
+  it("扫描 teamsRoot → 注册含 team.json 的 pack；无清单的目录跳过", () => {
     const root = temp();
     const { entryFile, packsDir } = makeProPackage(root);
     makePack(packsDir, "test.pro.alpha", baseManifest("test.pro.alpha", { tier: "pro", publisher: "prismnext.pro" }));
-    mkdirSync(join(packsDir, "broken")); // 无 plugin.json
+    mkdirSync(join(packsDir, "broken")); // 无 team.json / plugin.json
 
     process.env.PRISM_PRO_PATH = entryFile;
     const result = discoverAndRegisterProTeams();

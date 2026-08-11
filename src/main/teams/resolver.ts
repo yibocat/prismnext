@@ -18,7 +18,7 @@ import type {
   RosterRef,
   TeamManifest,
 } from "../../shared/teams/types";
-import { CORE_TEAM_ID } from "../../shared/teams/types";
+import { APP_COMMANDS_OWNER_ID, CORE_TEAM_ID, MY_CONTENT_TEAM_ID } from "../../shared/teams/types";
 import { parseFqid, resolveTri, toFqid } from "../../shared/teams/state";
 import type {
   AssetViewV2,
@@ -45,6 +45,7 @@ import {
 import {
   currentCatalogFingerprint,
   invalidateCatalog,
+  listAppCommandAssets,
   scanAllTeams,
   type ScannedAsset,
   type TeamRecord,
@@ -117,11 +118,15 @@ function resolveTeamState(
   const id = record.manifest.id;
   const licenseOk = record.manifest.tier === "pro" ? licenseGrants(record.manifest.feature) : true;
   const compatible = satisfiesMinHost(record.manifest.minHostVersion);
+  // core = installed by default unless opted out via teams-state.uninstalled;
+  // user / project teams are always "installed"; others need an install record.
+  const uninstalled = appState.uninstalled ?? [];
   const installed =
-    record.source === "core" ||
     record.source === "user" ||
     record.scope === "project" ||
-    appState.installed.some((r) => r.teamId === id);
+    (record.source === "core"
+      ? !uninstalled.includes(id)
+      : appState.installed.some((r) => r.teamId === id));
 
   const enabledApp = appState.teamEnabled[id];
   const enabledProject = projectState.teamEnabled[id];
@@ -195,6 +200,18 @@ function applyOverride(
       merged.roster = {
         mode: "list",
         members: o.allowedExperts.filter((m): m is string => typeof m === "string"),
+      };
+    }
+    if (kind === "orchestrator" && Array.isArray(o.allowedSkills)) {
+      merged.skillsRoster = {
+        mode: "list",
+        members: o.allowedSkills.filter((m): m is string => typeof m === "string"),
+      };
+    }
+    if (kind === "orchestrator" && Array.isArray(o.allowedCommands)) {
+      merged.commandsRoster = {
+        mode: "list",
+        members: o.allowedCommands.filter((m): m is string => typeof m === "string"),
       };
     }
   }
@@ -280,9 +297,49 @@ function buildProjectView(projectRoot: string): ProjectView {
     }
   }
 
+  // App-level commands (`resources/commands/`) — not a team; always present.
+  for (const a of listAppCommandAssets()) {
+    const fqid = toFqid(APP_COMMANDS_OWNER_ID, a.id);
+    const enabledApp = appState.assetEnabled[fqid];
+    const enabledProject = projectState.assetEnabled[fqid];
+    const blockedBy: BlockReason | undefined =
+      enabledProject === false
+        ? "asset-disabled-project"
+        : enabledProject === undefined && enabledApp === false
+          ? "asset-disabled-app"
+          : undefined;
+    assets.push({
+      fqid,
+      kind: "command",
+      teamId: APP_COMMANDS_OWNER_ID,
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      definition: a.command,
+      dir: a.path,
+      origin: {
+        teamId: APP_COMMANDS_OWNER_ID,
+        teamName: "App",
+        scope: "app",
+        source: "bundled",
+        tier: "free",
+      },
+      enabled: !blockedBy,
+      blockedBy,
+      enabledApp,
+      enabledProject,
+      editable: false,
+      hasOverride:
+        appState.assetOverrides[fqid] !== undefined
+        || projectState.assetOverrides[fqid] !== undefined,
+      runtimeName: a.id,
+    });
+  }
+
   // ── Shadow pass: runtimeName + blockedBy:"shadowed" (design §7.1) ──
-  // core team assets keep their bare id always; others keep the bare id when
-  // globally unique, else ALL colliding parties get the <teamId>--<id> prefix.
+  // App / core commands keep their bare id as the stable slash name; others
+  // keep the bare id when globally unique, else ALL colliding parties get the
+  // <teamId>--<id> prefix.
   applyShadowing(assets, teamById);
 
   const byFqid = new Map(assets.map((a) => [a.fqid, a]));
@@ -318,25 +375,35 @@ function applyShadowing(
       // Collision: every party gets the prefixed name (including the winner),
       // so the runtime name is unambiguous. The winner is the most specific.
       const sorted = [...group].sort((a, b) => {
-        const ta = teamById.get(a.teamId)!;
-        const tb = teamById.get(b.teamId)!;
+        const ta = teamById.get(a.teamId);
+        const tb = teamById.get(b.teamId);
         return compareByPrecedence(
-          { scope: ta.scope, source: ta.source, teamId: ta.manifest.id },
-          { scope: tb.scope, source: tb.source, teamId: tb.manifest.id },
+          {
+            scope: ta?.scope ?? "app",
+            source: ta?.source ?? (a.teamId === APP_COMMANDS_OWNER_ID ? "bundled" : "user"),
+            teamId: a.teamId,
+          },
+          {
+            scope: tb?.scope ?? "app",
+            source: tb?.source ?? (b.teamId === APP_COMMANDS_OWNER_ID ? "bundled" : "user"),
+            teamId: b.teamId,
+          },
         );
       });
-      // core keeps the bare id as the stable anchor; others prefix.
+      // App + core keep the bare id as the stable slash anchor; others prefix.
+      const keepsBare = (teamId: string) =>
+        teamId === CORE_TEAM_ID || teamId === APP_COMMANDS_OWNER_ID;
       for (const a of sorted) {
         a.runtimeName = kind === "mcp"
           ? runtimeKey
-          : a.teamId === CORE_TEAM_ID
+          : keepsBare(a.teamId)
             ? a.id
             : `${a.teamId}--${a.id}`;
       }
       // Mark all but the winner as shadowed (they lose the bare-name invocation).
       const winner = sorted[0];
       for (const a of sorted) {
-        if (a !== winner && (kind === "mcp" || a.teamId !== CORE_TEAM_ID)) {
+        if (a !== winner && (kind === "mcp" || !keepsBare(a.teamId))) {
           // Only mark shadowed when it actually loses the invocation name.
           a.blockedBy = a.blockedBy ?? "shadowed";
         }
@@ -460,15 +527,23 @@ export function resolveRef(
   const matches = view.assets.filter((a) => a.id === ref && (!kind || a.kind === kind));
   if (matches.length === 0) return null;
   if (matches.length === 1) return matches[0].fqid;
-  const sorted = [...matches].sort((a, b) => {
-    const ta = view.teams.find((t) => t.manifest.id === a.teamId)!;
-    const tb = view.teams.find((t) => t.manifest.id === b.teamId)!;
-    return compareByPrecedence(
-      { scope: ta.scope, source: ta.source, teamId: ta.manifest.id },
-      { scope: tb.scope, source: tb.source, teamId: tb.manifest.id },
-    );
-  });
+  const sorted = [...matches].sort((a, b) =>
+    compareByPrecedence(precedenceKey(view, a), precedenceKey(view, b)),
+  );
   return sorted[0].fqid;
+}
+
+/** Precedence key for an asset; app commands are not TeamViews. */
+function precedenceKey(
+  view: ProjectView,
+  asset: AssetViewV2,
+): { scope: TeamViewV2["scope"]; source: TeamViewV2["source"]; teamId: string } {
+  const team = view.teams.find((t) => t.manifest.id === asset.teamId);
+  return {
+    scope: team?.scope ?? "app",
+    source: team?.source ?? (asset.teamId === APP_COMMANDS_OWNER_ID ? "bundled" : "user"),
+    teamId: asset.teamId,
+  };
 }
 
 /**
@@ -486,14 +561,9 @@ export function resolveInvocation(
     (a) => a.kind === kind && a.enabled && (a.runtimeName === runtimeName || a.id === runtimeName),
   );
   if (candidates.length === 0) return null;
-  const sorted = [...candidates].sort((a, b) => {
-    const ta = view.teams.find((t) => t.manifest.id === a.teamId)!;
-    const tb = view.teams.find((t) => t.manifest.id === b.teamId)!;
-    return compareByPrecedence(
-      { scope: ta.scope, source: ta.source, teamId: ta.manifest.id },
-      { scope: tb.scope, source: tb.source, teamId: tb.manifest.id },
-    );
-  });
+  const sorted = [...candidates].sort((a, b) =>
+    compareByPrecedence(precedenceKey(view, a), precedenceKey(view, b)),
+  );
   return sorted[0];
 }
 
@@ -501,13 +571,13 @@ export function resolveInvocation(
 
 /**
  * Resolve the active team: session override ?? project default ?? app default
- * ?? core. Only a team that is enabled AND has a lead agent qualifies; otherwise
- * fall through. Core is the final fallback so chat never enters a no-agent state.
+ * ?? core (when installed) ?? My Content ?? any usable lead team.
+ * My Content is the always-on safety net so Core can be disabled/uninstalled.
  */
 export function resolveActiveTeam(
   projectRoot: string,
   sessionTeamId?: string | null,
-): TeamViewV2 {
+): TeamViewV2 | null {
   const view = getProjectView(projectRoot);
   const usable = (t: TeamViewV2 | undefined): t is TeamViewV2 =>
     !!t && t.enabled && t.hasOrchestrator;
@@ -527,10 +597,10 @@ export function resolveActiveTeam(
     if (usable(t)) return t;
   }
   const core = view.teams.find((x) => x.manifest.id === CORE_TEAM_ID);
-  if (core) return core;
-  // Defensive: core must always exist. If the catalog is empty, synthesize a
-  // minimal core view so callers never crash.
-  throw new Error("Core team not found in catalog");
+  if (usable(core)) return core;
+  const myContent = view.teams.find((x) => x.manifest.id === MY_CONTENT_TEAM_ID);
+  if (usable(myContent)) return myContent;
+  return view.teams.find(usable) ?? null;
 }
 
 /** Chat / prewarm / stack-preview: the lead agent OpenCode should run. */
@@ -546,7 +616,7 @@ export interface ChatOrchestratorResolved {
 /**
  * Resolve the chat lead agent from the v2 active-team chain.
  * Tab override may be a teamId, orchestrator FQID, runtimeName, or bare asset id.
- * When unset, uses resolveActiveTeam (session → project → app → core).
+ * When unset, uses resolveActiveTeam (session → project → app → core → My Content).
  */
 export function resolveChatOrchestrator(
   projectRoot: string,
@@ -592,8 +662,8 @@ export function resolveChatOrchestrator(
 
   if (!resolved) {
     const team = resolveActiveTeam(projectRoot, opts?.sessionTeamId);
-    if (!team.orchestratorId) {
-      throw new Error(`Active team ${team.manifest.id} has no lead agent`);
+    if (!team?.orchestratorId) {
+      throw new Error("No installed team with an enabled lead agent");
     }
     const fqid = toFqid(team.manifest.id, team.orchestratorId);
     const asset = view.byFqid.get(fqid);
@@ -693,6 +763,210 @@ export function resolveRoster(projectRoot: string, teamId: string): RosterView |
   }
 
   return { teamId, orchestratorFqid, spec, entries: out };
+}
+
+/**
+ * Skills allowlist for a team (mirrors resolveRoster for subagents).
+ * Default when unset: own-team skills only (`@team`) — not the global union.
+ * Teams without a lead still expose own-team skills (no foreign `+` slot).
+ */
+export function resolveSkillsRoster(projectRoot: string, teamId: string): RosterView | null {
+  const view = getProjectView(projectRoot);
+  const team = view.teams.find((t) => t.manifest.id === teamId);
+  if (!team) return null;
+
+  const allSkills = view.assets.filter((a) => a.kind === "skill");
+  const toEntry = (s: AssetViewV2, via: RosterEntryView["via"]): RosterEntryView => ({
+    fqid: s.fqid,
+    name: s.name,
+    origin: s.origin,
+    via,
+    unavailable: s.enabled ? undefined : s.blockedBy,
+  });
+
+  const ownOnly = (): RosterView => ({
+    teamId,
+    orchestratorFqid: team.orchestratorId ? toFqid(teamId, team.orchestratorId) : `${teamId}:`,
+    spec: { mode: "list", members: ["@team"] },
+    entries: allSkills.filter((s) => s.teamId === teamId).map((s) => toEntry(s, "team")),
+  });
+
+  if (!team.hasOrchestrator || !team.orchestratorId) return ownOnly();
+
+  const orchestratorFqid = toFqid(teamId, team.orchestratorId);
+  const orchAsset = view.byFqid.get(orchestratorFqid);
+  if (!orchAsset) return ownOnly();
+
+  const spec =
+    (orchAsset.definition as OrchestratorDefV2).skillsRoster
+    ?? { mode: "list" as const, members: ["@team"] };
+
+  if (spec.mode === "all") {
+    // Product: skills are never "all teams". Treat as own-team only.
+    return ownOnly();
+  }
+
+  const out: RosterEntryView[] = [];
+  const seen = new Set<Fqid>();
+  const pushUnique = (e: RosterEntryView) => {
+    if (seen.has(e.fqid)) return;
+    seen.add(e.fqid);
+    out.push(e);
+  };
+
+  for (const ref of spec.members as RosterRef[]) {
+    if (ref === "@team") {
+      for (const s of allSkills.filter((x) => x.teamId === teamId)) {
+        pushUnique(toEntry(s, "team"));
+      }
+      continue;
+    }
+    let target = view.byFqid.get(ref) ?? null;
+    if (!target) {
+      const bare = parseFqid(ref)?.contentId ?? ref;
+      const resolved = resolveRef(projectRoot, bare, teamId, "skill");
+      if (resolved) target = view.byFqid.get(resolved) ?? null;
+    }
+    if (!target || target.kind !== "skill") {
+      out.push({
+        fqid: ref,
+        name: ref,
+        origin: {
+          teamId: parseFqid(ref)?.teamId ?? "",
+          teamName: parseFqid(ref)?.teamId ?? "",
+          scope: "app",
+          source: "bundled",
+          tier: "free",
+        },
+        via: "explicit",
+        unavailable: "not-installed",
+      });
+      continue;
+    }
+    if (!canReference(team, target.origin)) {
+      out.push({ ...toEntry(target, "explicit"), unavailable: "out-of-scope" });
+      continue;
+    }
+    pushUnique(toEntry(target, "explicit"));
+  }
+
+  return { teamId, orchestratorFqid, spec, entries: out };
+}
+
+/**
+ * Commands allowlist for a team (mirrors resolveSkillsRoster).
+ * Default when unset: own-team commands only (`@team`).
+ */
+export function resolveCommandsRoster(projectRoot: string, teamId: string): RosterView | null {
+  const view = getProjectView(projectRoot);
+  const team = view.teams.find((t) => t.manifest.id === teamId);
+  if (!team) return null;
+
+  // Team roster never includes app-level commands (they are not team assets).
+  const allCommands = view.assets.filter(
+    (a) => a.kind === "command" && a.teamId !== APP_COMMANDS_OWNER_ID,
+  );
+  const toEntry = (c: AssetViewV2, via: RosterEntryView["via"]): RosterEntryView => ({
+    fqid: c.fqid,
+    name: c.name,
+    origin: c.origin,
+    via,
+    unavailable: c.enabled ? undefined : c.blockedBy,
+  });
+
+  const ownOnly = (): RosterView => ({
+    teamId,
+    orchestratorFqid: team.orchestratorId ? toFqid(teamId, team.orchestratorId) : `${teamId}:`,
+    spec: { mode: "list", members: ["@team"] },
+    entries: allCommands.filter((c) => c.teamId === teamId).map((c) => toEntry(c, "team")),
+  });
+
+  if (!team.hasOrchestrator || !team.orchestratorId) return ownOnly();
+
+  const orchestratorFqid = toFqid(teamId, team.orchestratorId);
+  const orchAsset = view.byFqid.get(orchestratorFqid);
+  if (!orchAsset) return ownOnly();
+
+  const spec =
+    (orchAsset.definition as OrchestratorDefV2).commandsRoster
+    ?? { mode: "list" as const, members: ["@team"] };
+
+  if (spec.mode === "all") {
+    return ownOnly();
+  }
+
+  const out: RosterEntryView[] = [];
+  const seen = new Set<Fqid>();
+  const pushUnique = (e: RosterEntryView) => {
+    if (seen.has(e.fqid)) return;
+    seen.add(e.fqid);
+    out.push(e);
+  };
+
+  for (const ref of spec.members as RosterRef[]) {
+    if (ref === "@team") {
+      for (const c of allCommands.filter((x) => x.teamId === teamId)) {
+        pushUnique(toEntry(c, "team"));
+      }
+      continue;
+    }
+    let target = view.byFqid.get(ref) ?? null;
+    if (!target) {
+      const bare = parseFqid(ref)?.contentId ?? ref;
+      const resolved = resolveRef(projectRoot, bare, teamId, "command");
+      if (resolved) target = view.byFqid.get(resolved) ?? null;
+    }
+    if (!target || target.kind !== "command") {
+      out.push({
+        fqid: ref,
+        name: ref,
+        origin: {
+          teamId: parseFqid(ref)?.teamId ?? "",
+          teamName: parseFqid(ref)?.teamId ?? "",
+          scope: "app",
+          source: "bundled",
+          tier: "free",
+        },
+        via: "explicit",
+        unavailable: "not-installed",
+      });
+      continue;
+    }
+    if (!canReference(team, target.origin)) {
+      out.push({ ...toEntry(target, "explicit"), unavailable: "out-of-scope" });
+      continue;
+    }
+    pushUnique(toEntry(target, "explicit"));
+  }
+
+  return { teamId, orchestratorFqid, spec, entries: out };
+}
+
+/**
+ * Slash menu / expand default set: all enabled app commands ∪ active team
+ * commands roster (own + foreign via +). App commands are never team-owned.
+ */
+export function listEffectiveSlashCommands(
+  projectRoot: string,
+  teamId?: string | null,
+): AssetViewV2[] {
+  const view = getProjectView(projectRoot);
+  const appCmds = view.assets.filter(
+    (a) => a.kind === "command" && a.teamId === APP_COMMANDS_OWNER_ID && a.enabled,
+  );
+  const activeId = teamId?.trim() || resolveActiveTeam(projectRoot)?.manifest.id || null;
+  if (!activeId) return appCmds;
+
+  const roster = resolveCommandsRoster(projectRoot, activeId);
+  const byFqid = new Map<Fqid, AssetViewV2>();
+  for (const c of appCmds) byFqid.set(c.fqid, c);
+  for (const entry of roster?.entries ?? []) {
+    if (entry.unavailable) continue;
+    if (entry.fqid.startsWith(`${APP_COMMANDS_OWNER_ID}:`)) continue;
+    const asset = view.byFqid.get(entry.fqid);
+    if (asset?.kind === "command" && asset.enabled) byFqid.set(asset.fqid, asset);
+  }
+  return [...byFqid.values()];
 }
 
 // ── Content read ──────────────────────────────────────────

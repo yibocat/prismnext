@@ -1,8 +1,6 @@
-// Skills settings — uses AssetGroupList (design §8.4) as the list component,
-// with teamsListAssets as the primary data source. The legacy agentListSkills
-// is kept as a secondary source for token counts / update checks / install
-// origins, indexed by fqid and passed through renderMeta / renderActions.
-// Standard settings shell: max-w-3xl + SETTINGS_CARD + shadcn controls.
+// Skills settings — flat SETTINGS_CARD list (name · tokens · team · description).
+// Core / store skills are browse-only; self-created / self-installed can be deleted.
+// No per-skill enable Switch — availability is team Skills allowlist / presence.
 import { formatTokenCount } from "@shared/token-estimate";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,7 +10,6 @@ import {
   FileTextIcon,
   FolderOpenIcon,
   LibraryIcon,
-  SquareArrowOutUpRightIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -20,16 +17,22 @@ import { useDocumentStore } from "@/stores/document-store";
 import { revealProjectHiddenPath } from "@/lib/files/open-project-path";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useSkillsRefreshStore } from "@/lib/settings/skills-refresh";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import {
   SETTINGS_CARD as CARD,
   SETTINGS_CATEGORY_HEADER as CATEGORY_HEADER,
+  SETTINGS_ROW as ROW,
+  SETTINGS_ROW_DESC as ROW_DESC,
+  SETTINGS_ROW_LABEL as ROW_LABEL,
 } from "./settings-tokens";
-import { AssetGroupList } from "../teams/asset-group-list";
 import type { AssetViewV2 } from "@shared/teams/view";
+
+const SKILLS_LIST_PREVIEW = 15;
 
 interface InstalledSkill {
   fqid: string;
@@ -61,23 +64,38 @@ export function SkillsSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const skillsRefreshTick = useSkillsRefreshStore((s) => s.tick);
 
-  // Primary data: AssetViewV2[] from the new resolver (drives AssetGroupList).
   const [assets, setAssets] = useState<AssetViewV2[]>([]);
-  // Secondary data: InstalledSkill[] from agentListSkills (for token counts,
-  // update checks, install origins — indexed by fqid).
   const [skills, setSkills] = useState<InstalledSkill[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [updatesBySkillId, setUpdatesBySkillId] = useState<Record<string, SkillUpdateRow>>({});
+  const [listExpanded, setListExpanded] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
 
-  // Index secondary data by fqid for O(1) lookup in renderMeta/renderActions.
   const skillByFqid = useMemo(() => {
     const map = new Map<string, InstalledSkill>();
     for (const s of skills) map.set(s.fqid, s);
     return map;
   }, [skills]);
+
+  const sortedAssets = useMemo(
+    () =>
+      [...assets].sort(
+        (a, b) =>
+          a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+      ),
+    [assets],
+  );
+
+  const visibleAssets = useMemo(() => {
+    if (listExpanded || sortedAssets.length <= SKILLS_LIST_PREVIEW) {
+      return sortedAssets;
+    }
+    return sortedAssets.slice(0, SKILLS_LIST_PREVIEW);
+  }, [sortedAssets, listExpanded]);
+
+  const hiddenCount = Math.max(0, sortedAssets.length - SKILLS_LIST_PREVIEW);
 
   const loadAll = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) setLoaded(false);
@@ -105,19 +123,13 @@ export function SkillsSettings() {
     void loadAll({ silent: skillsRefreshTick > 0 });
   }, [loadAll, skillsRefreshTick]);
 
-  const handleSetEnabled = useCallback(async (fqid: string, enabled: boolean | null) => {
-    if (!projectRoot) return;
-    deleteConfirm.clearPending();
-    // Optimistic: flip the asset locally.
-    setAssets((cur) => cur.map((a) => (a.fqid === fqid ? { ...a, enabled: enabled ?? true } : a)));
-    try {
-      await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled, "project");
-      await loadAll({ silent: true });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("settings.skillsPage.toast.updateFailed"));
-      await loadAll({ silent: true });
-    }
-  }, [projectRoot, deleteConfirm, loadAll, t]);
+  useEffect(() => {
+    setListExpanded(false);
+  }, [projectRoot]);
+
+  useOnSettingsEditorKindsClosed(["skill-markdown", "skill-library"], () => {
+    void loadAll({ silent: true });
+  });
 
   const reinstallSkill = async (skill: InstalledSkill) => {
     if (!projectRoot || !skill.installOrigin) return;
@@ -127,7 +139,11 @@ export function SkillsSettings() {
       await window.electronAPI.agentReinstallSkill(projectRoot, skill.id);
       await window.electronAPI.chatPrewarm(projectRoot);
       await loadAll();
-      setUpdatesBySkillId((prev) => { const next = { ...prev }; delete next[skill.id]; return next; });
+      setUpdatesBySkillId((prev) => {
+        const next = { ...prev };
+        delete next[skill.id];
+        return next;
+      });
       toast.success(t("settings.skillsPage.toast.reinstalled", { name: skill.name }));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Reinstall failed.");
@@ -171,7 +187,7 @@ export function SkillsSettings() {
   };
 
   const openSkillsFolder = () => {
-    revealProjectHiddenPath(".prismnext/agent/local/skills");
+    revealProjectHiddenPath(".prismnext/agent/teams/project.local/skills");
   };
 
   const openCreateSkill = () => {
@@ -182,62 +198,36 @@ export function SkillsSettings() {
     openSettingsPanel({ kind: "skill-library" });
   };
 
-  const openSkillMarkdown = (skill: InstalledSkill) => {
+  const openSkillMarkdown = (asset: AssetViewV2, skill?: InstalledSkill) => {
     deleteConfirm.clearPending();
-    if (skill.removable) {
-      openSettingsPanel({ kind: "skill-markdown", mode: "edit", skillId: skill.id, title: skill.name });
+    const skillId = skill?.id ?? asset.id;
+    const title = skill?.name ?? asset.name;
+    const removable = skill?.removable ?? asset.editable;
+    if (removable) {
+      openSettingsPanel({
+        kind: "skill-markdown",
+        mode: "edit",
+        skillId,
+        title,
+        teamId: asset.teamId,
+      });
       return;
     }
+    const absPath =
+      skill?.origin === "bundled"
+        ? undefined
+        : skill?.skillDirRel
+          ? `${skill.skillDirRel.replace(/[/\\]+$/, "")}/SKILL.md`
+          : asset.dir
+            ? `${asset.dir.replace(/[/\\]+$/, "")}/SKILL.md`
+            : undefined;
     openSettingsPanel({
-      kind: "skill-markdown", mode: "preview-bundled", skillId: skill.id, title: skill.name,
-      absPath: skill.origin === "bundled" ? undefined : `${skill.skillDirRel}/SKILL.md`,
+      kind: "skill-markdown",
+      mode: "preview-bundled",
+      skillId,
+      title,
+      absPath,
     });
-  };
-
-  // renderMeta: token count + update badge (from secondary data).
-  const renderMeta = (asset: AssetViewV2) => {
-    const skill = skillByFqid.get(asset.fqid);
-    const update = skill ? updatesBySkillId[skill.id] : undefined;
-    const hasUpdate = update?.updateAvailable === true;
-    return (
-      <span className="flex items-center gap-2">
-        {skill && (
-          <span className="tabular-nums">
-            {t("settings.editor.promptStack.tokens", { count: formatTokenCount(skill.tokenCount) })}
-          </span>
-        )}
-        {hasUpdate && (
-          <span className="text-warning">{t("settings.skillsPage.updateAvailable")}</span>
-        )}
-      </span>
-    );
-  };
-
-  // renderActions: reinstall / open / delete (from secondary data).
-  const renderActions = (asset: AssetViewV2) => {
-    const skill = skillByFqid.get(asset.fqid);
-    if (!skill) return null;
-    const update = updatesBySkillId[skill.id];
-    const hasUpdate = update?.updateAvailable === true;
-    return (
-      <div className="flex items-center gap-2 shrink-0">
-        {skill.installOrigin && (
-          <Button variant="ghost" size="xs" className="h-7 px-2 shrink-0 text-[length:var(--font-size-11)]"
-            disabled={saving} onClick={() => void reinstallSkill(skill)}>
-            {hasUpdate ? "Update" : "Reinstall"}
-          </Button>
-        )}
-        <Button variant="ghost" size="icon" className="size-7 shrink-0" disabled={saving}
-          title="Open skill" onClick={() => openSkillMarkdown(skill)}>
-          <SquareArrowOutUpRightIcon className="size-3.5" />
-        </Button>
-        {skill.removable && (
-          <InlineDeleteButton itemId={asset.fqid} pending={deleteConfirm.isPending(asset.fqid)} disabled={saving}
-            onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
-            onConfirm={() => void deleteSkill(asset.fqid)} />
-        )}
-      </div>
-    );
   };
 
   return (
@@ -245,12 +235,17 @@ export function SkillsSettings() {
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">{t("settings.skillsPage.title")}</h2>
-            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">{t("settings.skillsPage.pageDesc")}</p>
+            <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
+              {t("settings.skillsPage.title")}
+            </h2>
+            <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
+              {t("settings.skillsPage.pageDesc")}
+            </p>
           </div>
           {projectRoot && (
             <Button variant="outline" size="xs" className="shrink-0" onClick={openSkillsFolder}>
-              <FolderOpenIcon className="size-3 mr-1" />Open folder
+              <FolderOpenIcon className="size-3 mr-1" />
+              {t("settings.skillsPage.openFolder")}
             </Button>
           )}
         </div>
@@ -259,71 +254,154 @@ export function SkillsSettings() {
           <div className={cn(CARD, "!divide-y-0")}>
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <PuzzleIcon className="size-8 text-muted-foreground/30" />
-              <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.skillsPage.openProject")}</p>
+              <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                {t("settings.skillsPage.openProject")}
+              </p>
             </div>
           </div>
         ) : (
-          <>
-            <p className="text-[length:var(--font-size-12)] text-muted-foreground -mt-2">
-              Stored in{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/local/skills/&lt;name&gt;/SKILL.md
-              </code>
-              . Pack skills are referenced in place. New chat tabs pick up changes.
-            </p>
-
-            <div>
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.skillsPage.installed")}</p>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <Button variant="outline" size="xs"
-                    disabled={checkingUpdates || saving || skills.every((s) => !s.installOrigin)}
-                    onClick={() => void checkForUpdates()}>
-                    <RefreshCwIcon className={cn("size-3 mr-1", checkingUpdates && "animate-spin")} />
-                    {t("settings.skillsPage.checkUpdates")}
-                  </Button>
-                  <Button variant="outline" size="xs" onClick={openSkillLibrary}>
-                    <LibraryIcon className="size-3 mr-1" />{t("settings.skillsPage.install")}
-                  </Button>
-                  <Button variant="outline" size="xs" onClick={openCreateSkill}>
-                    <PlusIcon className="size-3 mr-1" />{t("settings.skillsPage.create")}
-                  </Button>
-                </div>
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+              <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.skillsPage.installed")}</p>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={checkingUpdates || saving || skills.every((s) => !s.installOrigin)}
+                  onClick={() => void checkForUpdates()}
+                >
+                  <RefreshCwIcon className={cn("size-3 mr-1", checkingUpdates && "animate-spin")} />
+                  {t("settings.skillsPage.checkUpdates")}
+                </Button>
+                <Button variant="outline" size="xs" onClick={openSkillLibrary}>
+                  <LibraryIcon className="size-3 mr-1" />
+                  {t("settings.skillsPage.install")}
+                </Button>
+                <Button variant="outline" size="xs" onClick={openCreateSkill}>
+                  <PlusIcon className="size-3 mr-1" />
+                  {t("settings.skillsPage.create")}
+                </Button>
               </div>
+            </div>
 
-              {!loaded ? (
-                <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
-                  {t("common.loading")}
-                </div>
-              ) : assets.length === 0 ? (
-                <div className={cn(CARD, "!divide-y-0")}>
-                  <div className="flex flex-col items-center gap-3 py-10 text-center">
-                    <PuzzleIcon className="size-8 text-muted-foreground/30" />
-                    <p className="text-[length:var(--font-size-13)] text-muted-foreground">{t("settings.skillsPage.empty")}</p>
-                    <p className="text-[length:var(--font-size-12)] text-muted-foreground/80">
-                      Install from GitHub or publisher registries, or create your own SKILL.md.
-                    </p>
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <Button variant="outline" size="xs" onClick={openSkillLibrary}>
-                        <LibraryIcon className="size-3 mr-1" />{t("settings.skillsPage.install")}
-                      </Button>
-                      <Button variant="outline" size="xs" onClick={openCreateSkill}>
-                        <FileTextIcon className="size-3 mr-1" />{t("settings.skillsPage.create")}
-                      </Button>
-                    </div>
+            {!loaded ? (
+              <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+                {t("common.loading")}
+              </div>
+            ) : sortedAssets.length === 0 ? (
+              <div className={cn(CARD, "!divide-y-0")}>
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <PuzzleIcon className="size-8 text-muted-foreground/30" />
+                  <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                    {t("settings.skillsPage.empty")}
+                  </p>
+                  <p className="text-[length:var(--font-size-12)] text-muted-foreground/80">
+                    {t("settings.skillsPage.emptyHint")}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <Button variant="outline" size="xs" onClick={openSkillLibrary}>
+                      <LibraryIcon className="size-3 mr-1" />
+                      {t("settings.skillsPage.install")}
+                    </Button>
+                    <Button variant="outline" size="xs" onClick={openCreateSkill}>
+                      <FileTextIcon className="size-3 mr-1" />
+                      {t("settings.skillsPage.create")}
+                    </Button>
                   </div>
                 </div>
-              ) : (
-                <AssetGroupList
-                  assets={assets}
-                  onSetEnabled={handleSetEnabled}
-                  renderMeta={renderMeta}
-                  renderActions={renderActions}
-                  emptyHint={t("settings.skillsPage.empty")}
-                />
-              )}
-            </div>
-          </>
+              </div>
+            ) : (
+              <div className={CARD}>
+                {visibleAssets.map((asset) => {
+                  const skill = skillByFqid.get(asset.fqid);
+                  const canDelete = Boolean(skill?.removable);
+                  const update = skill ? updatesBySkillId[skill.id] : undefined;
+                  const hasUpdate = update?.updateAvailable === true;
+                  const teamLabel = teamDisplayName(
+                    asset.teamId,
+                    asset.origin.teamName,
+                    t,
+                  );
+                  const description = (skill?.description || asset.description || "").trim();
+
+                  return (
+                    <div key={asset.fqid} className={ROW}>
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 pr-3 text-left"
+                        disabled={saving}
+                        onClick={() => openSkillMarkdown(asset, skill)}
+                      >
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+                          <span className={cn(ROW_LABEL, "font-mono shrink-0")}>{asset.name}</span>
+                          {skill && (
+                            <span className="text-[length:var(--font-size-11)] text-muted-foreground tabular-nums shrink-0">
+                              {t("settings.editor.promptStack.tokens", {
+                                count: formatTokenCount(skill.tokenCount),
+                              })}
+                            </span>
+                          )}
+                          <span
+                            className="text-[length:var(--font-size-11)] text-muted-foreground truncate min-w-0"
+                            title={teamLabel}
+                          >
+                            {teamLabel}
+                          </span>
+                          {hasUpdate && (
+                            <span className="text-[length:var(--font-size-11)] text-warning shrink-0">
+                              {t("settings.skillsPage.updateAvailable")}
+                            </span>
+                          )}
+                        </div>
+                        {description ? (
+                          <p className={cn(ROW_DESC, "truncate")} title={description}>
+                            {description}
+                          </p>
+                        ) : null}
+                      </button>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {skill?.installOrigin && (
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="h-7 px-2 shrink-0 text-[length:var(--font-size-11)]"
+                            disabled={saving}
+                            onClick={() => void reinstallSkill(skill)}
+                          >
+                            {hasUpdate
+                              ? t("settings.skillsPage.update")
+                              : t("settings.skillsPage.reinstall")}
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <InlineDeleteButton
+                            itemId={asset.fqid}
+                            pending={deleteConfirm.isPending(asset.fqid)}
+                            disabled={saving}
+                            onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
+                            onConfirm={() => void deleteSkill(asset.fqid)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                {!listExpanded && hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    className={cn(
+                      ROW,
+                      "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => setListExpanded(true)}
+                  >
+                    {t("settings.skillsPage.loadMore", { count: hiddenCount })}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

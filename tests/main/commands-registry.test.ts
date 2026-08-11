@@ -1,13 +1,11 @@
 /**
- * CommandRegistry（§5.6.3）测试 —— resolver 之上的命令门面。
+ * CommandRegistry — resolver facade for slash commands.
  *
- * 测试密封（packs-test-utils）：真实 core pack 不可见，fake core / free
- * pack 走 registerExternalTeamRoot。覆盖：FQID 身份、source 分层、pack
- * 安装/启停联动、local 遮蔽 core、逐项启停、CRUD 仅 local（P9）、
- * export/import 作用域。
+ * App-level commands live in `resources/commands/` (FQID `app:<name>`).
+ * Team commands stay under team dirs. Tests seal PRISM_APP_COMMANDS_DIR.
  */
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   getCommandRegistry,
@@ -24,14 +22,20 @@ import {
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
-import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
+import {
+  __resetTeamsResolverForTests,
+  listEffectiveSlashCommands,
+  resolveCommandsRoster,
+} from "../../src/main/teams/resolver";
 import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
 import {
+  APP_COMMANDS_OWNER_ID,
   CORE_TEAM_ID,
   isProjectLocalTeamId,
   PROJECT_DEFAULT_TEAM_ID,
   PROJECT_TEAMS_REL,
 } from "../../src/shared/teams/types";
+import { rewriteCoreAppCommandFqid } from "../../src/shared/teams/state";
 import { baseManifest, makePack, makeProjectRoot, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -48,12 +52,26 @@ function project(): string {
   return root;
 }
 
+function sealAppCommands(): void {
+  const dir = temp();
+  process.env.PRISM_APP_COMMANDS_DIR = dir;
+  writeFileSync(
+    join(dir, "setup.md"),
+    "---\ndescription: Setup\norder: 0\n---\nSetup body\n",
+  );
+  writeFileSync(
+    join(dir, "shared.md"),
+    "---\ndescription: Shared\norder: 1\n---\nShared body\n",
+  );
+}
+
 beforeEach(() => {
   const dir = makeTempDir("packs-app-");
   tempDirs.push(dir);
   setTeamsInstalledDataDir(dir);
   setAppTeamsStateDataDir(dir);
   setAppTeamsDirForTests(join(dir, "teams"));
+  sealAppCommands();
 });
 
 afterEach(() => {
@@ -64,9 +82,9 @@ afterEach(() => {
   setTeamsInstalledDataDir(null);
   setAppTeamsStateDataDir(null);
   setAppTeamsDirForTests(null);
+  delete process.env.PRISM_APP_COMMANDS_DIR;
 });
 
-/** Seal the app-level installed store into a per-test temp dir. */
 function sealAppStore(): string {
   const dir = makeTempDir("packs-app-");
   setTeamsInstalledDataDir(dir);
@@ -76,16 +94,12 @@ function sealAppStore(): string {
   return dir;
 }
 
-/** fake core（setup/shared 两条命令）+ free pack（notes-cmd） */
+/** Core team without slash commands + free pack (notes-cmd). */
 function setupPacks(): void {
   const coreRoot = temp();
   makePack(coreRoot, "prismnext.core", baseManifest(CORE_TEAM_ID, { publisher: "prismnext" }), {
-    commands: [
-      { name: "setup", md: "---\ndescription: Setup\norder: 0\n---\nSetup body\n" },
-      { name: "shared", md: "---\ndescription: Shared\norder: 1\n---\nShared body\n" },
-    ],
+    commands: [],
   });
-  // bundled source so the reserved core id is accepted (reserved-id guard).
   registerExternalTeamRoot(coreRoot, "bundled");
 
   const notesRoot = temp();
@@ -95,28 +109,38 @@ function setupPacks(): void {
   registerExternalTeamRoot(notesRoot);
 }
 
-describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
+describe("commands registry: app layer + identity", () => {
   it("项目默认团队身份只接受 project.local，旧 user.local 只可用于迁移", () => {
     expect(isProjectLocalTeamId(PROJECT_DEFAULT_TEAM_ID)).toBe(true);
     expect(isProjectLocalTeamId("user.local")).toBe(false);
   });
 
-  it("core 命令以 FQID 身份出现（source=builtin）；未安装 pack 的命令不出现", () => {
+  it("app 命令以 FQID app:<name> 出现（source=builtin）；与 Core team 无关", () => {
     setupPacks();
     const root = project();
     sealAppStore();
     const reg = getCommandRegistry(root);
 
     const list = reg.list();
-    const setup = list.find((c) => c.id === `${CORE_TEAM_ID}:setup`);
+    const setup = list.find((c) => c.id === `${APP_COMMANDS_OWNER_ID}:setup`);
     expect(setup).toBeDefined();
     expect(setup!.source).toBe("builtin");
-    expect(setup!.teamId).toBe(CORE_TEAM_ID);
+    expect(setup!.teamId).toBe(APP_COMMANDS_OWNER_ID);
     expect(setup!.removable).toBe(false);
     expect(setup!.enabled).toBe(true);
     expect(setup!.template).toBe("Setup body");
 
+    expect(list.some((c) => c.id === `${CORE_TEAM_ID}:setup`)).toBe(false);
     expect(list.some((c) => c.name === "notes-cmd")).toBe(false);
+  });
+
+  it("legacy prismnext.core:<cmd> FQID 重写为 app:<cmd>", () => {
+    expect(rewriteCoreAppCommandFqid(`${CORE_TEAM_ID}:compact`)).toBe(
+      `${APP_COMMANDS_OWNER_ID}:compact`,
+    );
+    expect(rewriteCoreAppCommandFqid(`${CORE_TEAM_ID}:research-prism`)).toBe(
+      `${CORE_TEAM_ID}:research-prism`,
+    );
   });
 
   it("installPackRecord 后 plugin 命令出现（source=plugin）；禁用 pack 后消失", () => {
@@ -132,31 +156,26 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     expect(cmd!.teamName).toBe("Notes");
     expect(cmd!.removable).toBe(false);
 
-    // pack 禁用不摘除内容，而是整条判定链落到 enabled=false（§5.3：license → pack 启停 → 逐项禁用）
     setTeamEnabled("test.notes", false, "project", root);
     expect(reg.list().find((c) => c.id === "test.notes:notes-cmd")!.enabled).toBe(false);
-    // 禁用后不可被斜杠命中
     expect(reg.lookup("notes-cmd")).toBeUndefined();
   });
 
-  it("lookup 遮蔽：local 同名命令优先于 core；禁用 local 后 core 浮现", () => {
+  it("lookup 遮蔽：local 同名命令优先于 app；禁用 local 后 app 浮现", () => {
     setupPacks();
     const root = project();
     const reg = getCommandRegistry(root);
 
-    // 无 local 副本时命中 core
-    expect(reg.lookup("setup")!.id).toBe(`${CORE_TEAM_ID}:setup`);
+    expect(reg.lookup("setup")!.id).toBe(`${APP_COMMANDS_OWNER_ID}:setup`);
 
-    // local 创建同名命令 → 遮蔽 core
     reg.create({ name: "setup", description: "Mine", template: "My body" });
     const hit = reg.lookup("setup")!;
     expect(hit.id).toBe(`${PROJECT_DEFAULT_TEAM_ID}:setup`);
     expect(hit.source).toBe("user");
     expect(hit.template).toBe("My body");
 
-    // 禁用 local 遮蔽副本 → core 原件重新可见
     reg.setEnabled(`${PROJECT_DEFAULT_TEAM_ID}:setup`, false);
-    expect(reg.lookup("setup")!.id).toBe(`${CORE_TEAM_ID}:setup`);
+    expect(reg.lookup("setup")!.id).toBe(`${APP_COMMANDS_OWNER_ID}:setup`);
   });
 
   it("lookup 跳过禁用命令：唯一实例禁用 → undefined", () => {
@@ -164,11 +183,10 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
     const root = project();
     const reg = getCommandRegistry(root);
 
-    reg.setEnabled(`${CORE_TEAM_ID}:shared`, false);
+    reg.setEnabled(`${APP_COMMANDS_OWNER_ID}:shared`, false);
     expect(reg.lookup("shared")).toBeUndefined();
-    // 重新启用（FQID 原样）
-    reg.setEnabled(`${CORE_TEAM_ID}:shared`, true);
-    expect(reg.lookup("shared")!.id).toBe(`${CORE_TEAM_ID}:shared`);
+    reg.setEnabled(`${APP_COMMANDS_OWNER_ID}:shared`, true);
+    expect(reg.lookup("shared")!.id).toBe(`${APP_COMMANDS_OWNER_ID}:shared`);
   });
 
   it("setEnabled 支持裸 id（按 resolver bare-id 规则解析）", () => {
@@ -178,14 +196,31 @@ describe("commands registry: resolver 视图与身份（§5.6.3）", () => {
 
     reg.setEnabled("shared", false);
     expect(
-      reg.list().find((c) => c.id === `${CORE_TEAM_ID}:shared`)!.enabled,
+      reg.list().find((c) => c.id === `${APP_COMMANDS_OWNER_ID}:shared`)!.enabled,
     ).toBe(false);
     expect(() => reg.setEnabled("no-such-cmd", false)).toThrow(/not found/i);
   });
+
+  it("effective slash set = app ∪ active team roster；roster 不含 app", () => {
+    setupPacks();
+    const root = project();
+    sealAppStore();
+    addInstalledTeam("test.notes");
+    setTeamEnabled("test.notes", true, "project", root);
+
+    const effective = listEffectiveSlashCommands(root, PROJECT_DEFAULT_TEAM_ID);
+    expect(effective.some((c) => c.fqid === `${APP_COMMANDS_OWNER_ID}:setup`)).toBe(true);
+    expect(effective.some((c) => c.fqid === "test.notes:notes-cmd")).toBe(false);
+
+    const roster = resolveCommandsRoster(root, PROJECT_DEFAULT_TEAM_ID);
+    expect(roster?.entries.every((e) => !e.fqid.startsWith(`${APP_COMMANDS_OWNER_ID}:`))).toBe(
+      true,
+    );
+  });
 });
 
-describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
-  it("create 写入 local/commands/<name>.md，无 pluginId/enabled 行", () => {
+describe("commands registry: CRUD 可写团队", () => {
+  it("create 写入 project.local/commands/<name>.md，无 pluginId/enabled 行", () => {
     setupPacks();
     const root = project();
     const reg = getCommandRegistry(root);
@@ -207,7 +242,6 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     expect(raw).toContain("action: compile");
     expect(raw).toContain("Do $ARGUMENTS");
 
-    // 立即可被 resolver 视图看到
     expect(reg.list().some((c) => c.id === `${PROJECT_DEFAULT_TEAM_ID}:my-cmd`)).toBe(true);
   });
 
@@ -224,7 +258,7 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     expect(existsSync(join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "after.md"))).toBe(true);
   });
 
-  it("remove：local 命令删除成功；core/plugin 命令抛错（只能禁用）", () => {
+  it("remove：local 命令删除成功；app/plugin 命令抛错（只能禁用）", () => {
     setupPacks();
     const root = project();
     const reg = getCommandRegistry(root);
@@ -234,12 +268,12 @@ describe("commands registry: CRUD 仅 Local Pack（P9）", () => {
     expect(existsSync(join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID, "commands", "doomed.md"))).toBe(false);
     expect(reg.list().some((c) => c.name === "doomed")).toBe(false);
 
-    expect(() => reg.remove(`${CORE_TEAM_ID}:setup`)).toThrow(/cannot delete/i);
+    expect(() => reg.remove(`${APP_COMMANDS_OWNER_ID}:setup`)).toThrow(/cannot delete/i);
   });
 });
 
-describe("commands registry: export/import 作用域 = Local Pack", () => {
-  it("exportPack 只含 local 命令；importPack rename 冲突策略生效", () => {
+describe("commands registry: export/import 作用域 = 可写命令", () => {
+  it("exportPack 只含 removable 命令；importPack rename 冲突策略生效", () => {
     setupPacks();
     const root = project();
     const reg = getCommandRegistry(root);
@@ -248,7 +282,6 @@ describe("commands registry: export/import 作用域 = Local Pack", () => {
     const pack = reg.exportPack();
     expect(pack.commands.map((c) => c.name)).toEqual(["keep"]);
 
-    // 导入含同名 + 新命令的 pack，rename 策略
     const result = reg.importPack(
       {
         version: 1,
@@ -269,7 +302,6 @@ describe("commands registry: export/import 作用域 = Local Pack", () => {
       .map((c) => c.name)
       .sort();
     expect(names).toEqual(["fresh", "keep", "keep-2"]);
-    // enabled:false 的导入项落为 disabledContent
     expect(reg.list().find((c) => c.id === `${PROJECT_DEFAULT_TEAM_ID}:fresh`)!.enabled).toBe(false);
   });
 });
