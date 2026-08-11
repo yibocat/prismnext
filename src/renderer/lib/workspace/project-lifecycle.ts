@@ -16,9 +16,14 @@ import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 /**
  * Tear down in-memory state that must not leak across projects.
  * Called at the start of openProject and from closeProject.
+ * @param keepProjectPath When reopening the same project, keep its OpenCode runtime.
  */
-export async function resetApplicationStateForProjectSwitch(): Promise<void> {
-  await window.electronAPI.chatDispose();
+export async function resetApplicationStateForProjectSwitch(
+  keepProjectPath?: string | null,
+): Promise<void> {
+  await window.electronAPI.chatDispose(
+    keepProjectPath?.trim() ? { keepProjectPath: keepProjectPath.trim() } : undefined,
+  );
   void window.electronAPI.terminalDestroyAllAiPty();
 
   useRightPanelStore.getState().closeAllTabs();

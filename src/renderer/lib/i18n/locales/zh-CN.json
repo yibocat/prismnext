@@ -2220,7 +2220,8 @@
       "planningNext": "正在规划下一步…",
       "describing_images": "正在用视觉辅助模型识图…",
       "thinking": "思考中…",
-      "syncing_project": "正在准备项目…",
+      "syncing_project": "正在同步项目配置…",
+      "starting_agent": "正在启动 Agent…",
       "creating_session": "正在创建会话…",
       "connecting_mcp": "正在连接工具…",
       "starting_model": "正在启动模型…",
@@ -3296,6 +3297,8 @@
     "card": {
       "install": "安装",
       "uninstall": "卸载",
+      "manage": "管理",
+      "moreActions": "更多操作",
       "added": "已安装",
       "disabled": "已停用",
       "proLocked": "Pro",

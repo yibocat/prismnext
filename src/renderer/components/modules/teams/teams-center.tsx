@@ -1,13 +1,14 @@
 // Teams Center（§9.1 浏览页）—— LeftSidebar Nav 的沉浸式页面。
 // 布局对齐 TemplateCenter：max-w-6xl + 页头 + 左侧分类/信息 + 右侧
-// @container。列表卡片为紧凑双列行（图标 | 名+一行简介 | 安装/卸载）。
-import { useCallback, useEffect, useMemo, useState } from "react";
+// @container。列表卡片为紧凑双列行（图标 | 名+一行简介 | 安装 / ⋯）。
+import { useCallback, useEffect, useMemo, useState, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   ArrowLeftIcon,
   Bot,
   DownloadIcon,
+  MoreHorizontalIcon,
   PuzzleIcon,
   SearchIcon,
   Settings2Icon,
@@ -20,10 +21,16 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { useChatStore } from "@/stores/chat-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
   MY_CONTENT_TEAM_ID,
@@ -132,6 +139,11 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
 
   const selected = packs.find((p) => p.manifest.id === selectedId) ?? null;
 
+  const syncComposerCatalog = async () => {
+    if (!projectRoot) return;
+    await useTeamsStore.getState().load(projectRoot, { force: true });
+  };
+
   const install = async (pack: TeamCardView) => {
     if (!projectRoot) return;
     setBusy(pack.manifest.id);
@@ -143,10 +155,10 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
           action: {
             label: t("teamsCenter.suggestion.accept"),
             onClick: () => {
-              void window.electronAPI
-                .teamsSetActiveTeam(projectRoot, suggestedActiveTeam, "project")
+              void useTeamsStore
+                .getState()
+                .setActiveTeam(projectRoot, suggestedActiveTeam)
                 .then(() => {
-                  useChatStore.getState().clearSessionTeamOverrides();
                   toast.success(t("teamsCenter.suggestion.done"));
                 });
             },
@@ -154,6 +166,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
         });
       }
       await reload();
+      await syncComposerCatalog();
     } catch (err) {
       toast.error(String(err instanceof Error ? err.message : err));
     } finally {
@@ -167,6 +180,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       await window.electronAPI.teamsUninstall(pack.manifest.id);
       toast.success(t("teamsCenter.toast.uninstalled", { name: pack.manifest.name }));
       await reload();
+      await syncComposerCatalog();
     } catch (err) {
       toast.error(String(err instanceof Error ? err.message : err));
     } finally {
@@ -230,19 +244,49 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       );
     }
     if (pack.installed) {
+      const stopCard = (e: SyntheticEvent) => e.stopPropagation();
       return (
-        <Button
-          size="xs"
-          variant="outline"
+        <div
           className="shrink-0"
-          disabled={busy === pack.manifest.id}
-          onClick={(e) => {
-            e.stopPropagation();
-            void uninstall(pack);
-          }}
+          onClick={stopCard}
+          onPointerDown={stopCard}
+          onKeyDown={stopCard}
         >
-          {t("teamsCenter.card.uninstall")}
-        </Button>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="size-7 shrink-0 px-0 text-muted-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground"
+                disabled={busy === pack.manifest.id}
+                aria-label={t("teamsCenter.card.moreActions")}
+              >
+                <MoreHorizontalIcon className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              // Override shared Content default (preventDefault) so focus returns to ⋯.
+              onCloseAutoFocus={() => {}}
+            >
+              <DropdownMenuItem
+                onClick={() => {
+                  openManageInSettings();
+                }}
+              >
+                {t("teamsCenter.card.manage")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={busy === pack.manifest.id}
+                onClick={() => {
+                  void uninstall(pack);
+                }}
+              >
+                {t("teamsCenter.card.uninstall")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       );
     }
     return (
@@ -566,14 +610,18 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                 ) : (
                   <div className="grid grid-cols-1 @md:grid-cols-2 gap-2">
                     {filtered.map((pack) => (
-                      <button
+                      <div
                         key={pack.manifest.id}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-left transition-colors",
-                          pack.installed ? "bg-muted" : "hover:bg-muted",
-                        )}
+                        role="button"
+                        tabIndex={0}
+                        className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent dark:hover:bg-card"
                         onClick={() => setSelectedId(pack.manifest.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedId(pack.manifest.id);
+                          }
+                        }}
                       >
                         <PackIcon size="md" />
                         <div className="min-w-0 flex-1">
@@ -588,7 +636,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                           </p>
                         </div>
                         {rowActionButton(pack)}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}

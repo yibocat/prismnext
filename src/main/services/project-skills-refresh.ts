@@ -12,11 +12,16 @@ import { join } from "node:path";
 import { AcpService } from "../acp/service";
 import {
   syncProjectSkillsIntegration,
+  normalizeProjectRoot,
+  isSkillsIntegrationPath,
+  projectRootFromAgentPath,
   type SkillPermissionScope,
 } from "./skills-sync";
-import { normalizeProjectRoot } from "./skills-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { createLogger } from "./logger";
+
+/** Re-export path helpers — single source of truth lives in skills-sync. */
+export { isSkillsIntegrationPath, projectRootFromAgentPath };
 
 const log = createLogger("project-skills-refresh");
 
@@ -101,7 +106,17 @@ export async function refreshProjectSkillsIntegrationWithReload(
   const result = await refreshProjectSkillsIntegrationIfNeeded(projectPath);
   const acp = AcpService.getInstanceForProject(normalizeProjectRoot(projectPath));
   if (!result.skipped && result.configChanged && acp.getConnection()) {
-    await acp.reloadAfterSkillsIntegration();
+    // Fresh children already read config from disk; a reload right after spawn
+    // (or during/after a turn via the FS watcher) is pure latency.
+    if (acp.wasSpawnedRecently()) {
+      log.info("skills refresh — skip reload (just spawned)", {
+        projectPath,
+        spawnAgeMs: Date.now() - acp.getLastSpawnAtMs(),
+      });
+    } else {
+      invalidateProjectChatPrewarm(projectPath);
+      await acp.reloadAfterSkillsIntegration();
+    }
   }
   return result;
 }
@@ -112,9 +127,12 @@ export function invalidateProjectSkillsIntegrationCache(projectPath: string): vo
 
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+/**
+ * Debounced skills sync after a real skills-affecting disk change.
+ * Does NOT invalidate the apply-cache up front — that forced every watcher
+ * tick (including prompt `_prism-system.md` writes) to rewrite + restart.
+ */
 export function scheduleSkillsRefresh(projectPath: string): void {
-  invalidateProjectChatPrewarm(projectPath);
-  invalidateProjectSkillsIntegrationCache(projectPath);
   const existing = pendingTimers.get(projectPath);
   if (existing) clearTimeout(existing);
   pendingTimers.set(
@@ -128,32 +146,13 @@ export function scheduleSkillsRefresh(projectPath: string): void {
   );
 }
 
-/** Check if a file path change should trigger a skills refresh (agent dir paths). */
-export function isSkillsIntegrationPath(absPath: string, projectRoot: string): boolean {
-  const normalized = absPath.replace(/\\/g, "/");
-  const root = projectRoot.replace(/\\/g, "/");
-  return (
-    normalized.includes(`${root}/.prismnext/agent/local/`)
-    || normalized.includes(`${root}/.prismnext/agent/teams/project.local/`)
-    || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
-    || normalized.includes(`${root}/.prismnext/agent/experts/`)
-    || normalized.endsWith(`${root}/.prismnext/agent/experts-manifest.json`)
-    || normalized.endsWith(`${root}/.prismnext/agent/orchestrators-manifest.json`)
-  );
-}
-
-/** Derive the project root from an agent-dir file path. */
-export function projectRootFromAgentPath(absPath: string): string | null {
-  const normalized = absPath.replace(/\\/g, "/");
-  const idx = normalized.indexOf("/.prismnext/agent/");
-  if (idx < 0) return null;
-  return normalized.slice(0, idx);
-}
-
-/** Schedule a skills refresh from a file-system watcher path. */
+/** Schedule a skills refresh from a file-system watcher / IPC path. */
 export function scheduleSkillsRefreshFromAgentPath(absPath: string): void {
   const root = projectRootFromAgentPath(absPath);
-  if (root) scheduleSkillsRefresh(root);
+  if (!root) return;
+  // skills-sync helper excludes prompt/expert writes (`_prism-system.md`, etc.).
+  if (!isSkillsIntegrationPath(absPath, root)) return;
+  scheduleSkillsRefresh(root);
 }
 
 /** Schedule a skills refresh from a set of changed paths (fs watcher). */

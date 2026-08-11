@@ -31,6 +31,11 @@ export function invalidateProjectChatPrewarm(projectRoot: string): void {
   warmErrors.delete(root);
 }
 
+/** True when file-level prewarm finished successfully for this project. */
+export function isProjectChatPrewarmReady(projectRoot: string): boolean {
+  return readyProjects.has(normalizeProjectRoot(projectRoot));
+}
+
 /** Project config warm phase for status UI (none | warming | ready | error). */
 export function getProjectWarmPhase(projectRoot: string): ProjectWarmPhase {
   const root = normalizeProjectRoot(projectRoot);

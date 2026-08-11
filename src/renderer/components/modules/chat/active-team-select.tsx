@@ -28,6 +28,7 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
   const catalog = useTeamsStore((s) => s.catalog);
   const projectActiveId = useTeamsStore((s) => s.activeTeamId);
   const loadTeams = useTeamsStore((s) => s.load);
+  const setActiveTeam = useTeamsStore((s) => s.setActiveTeam);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const sessionTeamId = useChatStore((s) => {
     const tab = s.tabs.find((x) => x.id === s.activeTabId);
@@ -92,8 +93,9 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
       const team = candidates.find((c) => c.manifest.id === teamId);
       setSwitching(true);
       try {
-        // Composer is the tab-level override in the three-layer active-Team
-        // chain. Persisted project defaults are changed only from Settings.
+        // Persist project default (Settings + new sessions) and pin this tab.
+        // setActiveTeam clears other tab overrides so the picker stays aligned.
+        await setActiveTeam(projectRoot, teamId);
         setSessionTeamId(activeTabId, teamId);
         const confirmed = await refreshLeadName(projectRoot, teamId);
         toast.success(
@@ -116,6 +118,7 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
       activeTabId,
       switching,
       candidates,
+      setActiveTeam,
       setSessionTeamId,
       refreshLeadName,
       t,

@@ -180,14 +180,36 @@ async function ensureConnected(
 
 export function registerChatHandlers(): void {
   // ─── Dispose ───
-  // Clears event mappers but keeps the ACP process alive (app-level).
-  ipcMain.handle("chat:dispose", async () => {
-    for (const mapper of mappers.values()) {
-      mapper.stop();
-    }
-    mappers.clear();
-    return { success: true };
-  });
+  // Clears event mappers and tears down project OpenCode runtimes (single-project
+  // switch). Keeps the global opencode-server singleton for credentials/catalog.
+  // Optional keepProjectPath: same-project reopen keeps that runtime.
+  ipcMain.handle(
+    "chat:dispose",
+    async (_event, args?: { keepProjectPath?: string }) => {
+      for (const mapper of mappers.values()) {
+        mapper.stop();
+      }
+      mappers.clear();
+      try {
+        const keep = args?.keepProjectPath?.trim() || null;
+        const disposedRoots = await AcpService.disposeAllProjectRuntimesExcept(keep);
+        if (disposedRoots.length > 0) {
+          const { invalidateProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+          for (const root of disposedRoots) {
+            invalidateProjectChatPrewarm(root);
+          }
+          log.info("chat:dispose cleared project OpenCode runtimes", {
+            count: disposedRoots.length,
+            kept: keep,
+          });
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`chat:dispose project runtime cleanup failed: ${message}`);
+      }
+      return { success: true };
+    },
+  );
 
   // ─── Register tab ↔ session mapping (sidebar load, tab restore) ───
   ipcMain.handle(
@@ -400,7 +422,10 @@ export function registerChatHandlers(): void {
 
         promptCtx = await buildPromptContext(args.projectPath);
 
-        const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+        const {
+          ensureProjectChatPrewarm,
+          isProjectChatPrewarmReady,
+        } = await import("../services/project-chat-prewarm");
         emitChatPrepare(tabId, "syncing_project");
         // If credentials will restart OpenCode next, sync-only here so we don't
         // reload once for agents then again for API keys.
@@ -413,20 +438,25 @@ export function registerChatHandlers(): void {
           skipOpenCodeReload: credentialRestartPending,
         });
 
-        const { refreshProjectSubagentsIntegrationIfNeeded } = await import("../services/project-subagents-refresh");
-        try {
-          await refreshProjectSubagentsIntegrationIfNeeded(args.projectPath, { promptCtx });
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          log.error(`Experts integration refresh failed: ${message}`);
-          clearPrepare();
-          win.webContents.send("chat:complete", {
-            tabId,
-            sessionId: args.sessionId || "",
-            success: false,
-            error: `Expert configuration could not be synced: ${message}`,
-          });
-          return;
+        // Prewarm already synced experts/skills when ready — skip duplicate IfNeeded
+        // work on the first-send hot path (still safe: invalidate clears ready).
+        const prewarmReady = isProjectChatPrewarmReady(args.projectPath);
+        if (!prewarmReady) {
+          const { refreshProjectSubagentsIntegrationIfNeeded } = await import("../services/project-subagents-refresh");
+          try {
+            await refreshProjectSubagentsIntegrationIfNeeded(args.projectPath, { promptCtx });
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.error(`Experts integration refresh failed: ${message}`);
+            clearPrepare();
+            win.webContents.send("chat:complete", {
+              tabId,
+              sessionId: args.sessionId || "",
+              success: false,
+              error: `Expert configuration could not be synced: ${message}`,
+            });
+            return;
+          }
         }
 
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
@@ -445,15 +475,28 @@ export function registerChatHandlers(): void {
           if (preamble) userPrompt = `${userPrompt}\n\n${preamble}`;
         }
 
-        const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
-          teamId: activeOrch.teamId,
-          extraAllowIds: args.skillIds,
-        });
+        if (!prewarmReady) {
+          const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+          await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
+            teamId: activeOrch.teamId,
+            extraAllowIds: args.skillIds,
+          });
+        } else if (args.skillIds?.length) {
+          // Allowlist-extra skills may still need a light pass even when warm.
+          const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+          await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
+            teamId: activeOrch.teamId,
+            extraAllowIds: args.skillIds,
+          });
+        }
       }
 
-      // Connect / apply credentials last — at most one spawn before session/new.
+      // Connect / apply credentials — usually a no-op when chat:prewarm already
+      // spawned the project runtime; otherwise surface "starting agent".
       try {
+        if (!service.isConnected()) {
+          emitChatPrepare(tabId, "starting_agent");
+        }
         await ensureConnected(service, extraEnv, provider);
       } catch (err: any) {
         log.error(`OpenCode initialize failed: ${err.message}`);
@@ -495,6 +538,9 @@ export function registerChatHandlers(): void {
           : modelId || undefined;
         try {
           // ACP standard: session/new connects MCP — only when the user sends.
+          // Pre-spawn (P0) already warmed the process; session/new is the
+          // remaining cold cost (~2–3s) and happens here, on the hot path,
+          // because the model/team is only known at send time.
           emitChatPrepare(tabId, "creating_session");
           const session = await service.createSession(
             cwd,
@@ -594,16 +640,12 @@ export function registerChatHandlers(): void {
           syncProjectPromptFile(args.projectPath, promptCtx);
         }
         const { instructionsChanged } = service.applyProjectPromptIntegration(args.projectPath);
-        // Skip reload when we just spawned (credential ensure / prewarm) —
-        // the new process already reads instructions from disk.
-        if (instructionsChanged && !service.wasSpawnedRecently()) {
-          try {
-            await service.reloadAfterSkillsIntegration();
-          } catch (err: any) {
-            log.warn(`OpenCode reload after prompt integration failed: ${err.message}`);
-          }
-        } else if (instructionsChanged) {
-          log.info("Skip OpenCode reload after prompt integration (just spawned)", {
+        // Never reload OpenCode from the send path. instructions are read at
+        // process start; the current session already has the system prompt
+        // injected via prompt content. Reloading here (or after the turn via
+        // a deferred wait) only stalls the UI and tears down the session.
+        if (instructionsChanged) {
+          log.info("Prompt instructions updated (file written, no reload)", {
             spawnAgeMs: Date.now() - service.getLastSpawnAtMs(),
           });
         }
@@ -1458,20 +1500,30 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Pre-warm ───
-  // Industry model: warm ACP + project config (skills/experts/prompts).
-  // Do NOT mint empty sessions — session/new happens on first chat:send.
+  // Sync project config (skills/experts/prompts), then pre-spawn the *project*
+  // OpenCode runtime so first chat:send skips cold process start.
+  // session/new still happens on first send (model/team unknown until then).
   ipcMain.handle(
     "chat:prewarm",
     async (_event, args: { projectPath?: string }) => {
       try {
+        // Global singleton: credentials / effort catalog (lightweight app-level).
         await ensureConnected(getService());
         if (args.projectPath) {
           const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
           await ensureProjectChatPrewarm(args.projectPath);
+          const projectService = AcpService.getInstanceForProject(args.projectPath);
+          // Hide project OpenCode cold-start while the user is still in the editor.
+          if (!projectService.isConnected()) {
+            log.info("chat:prewarm spawning project OpenCode runtime", {
+              projectPath: args.projectPath,
+            });
+            await ensureConnected(projectService);
+          }
           const { getCommandRegistry } = await import("../commands/registry");
           getCommandRegistry(args.projectPath).reload();
           const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
-          emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
+          emitAgentStatusChanged(projectService.getStatusSnapshot(args.projectPath));
         }
         return { ok: true as const };
       } catch (err: unknown) {
@@ -1480,7 +1532,9 @@ export function registerChatHandlers(): void {
         if (args.projectPath) {
           try {
             const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
-            emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
+            emitAgentStatusChanged(
+              AcpService.getInstanceForProject(args.projectPath).getStatusSnapshot(args.projectPath),
+            );
           } catch { /* ignore */ }
         }
         return { ok: false as const, error: message };
@@ -1525,6 +1579,11 @@ export function registerChatHandlers(): void {
             invalidateProjectChatPrewarm(args.projectPath);
           }
           await ensureProjectChatPrewarm(args.projectPath);
+          const projectService = AcpService.getInstanceForProject(args.projectPath);
+          if (!projectService.isConnected()) {
+            await ensureConnected(projectService);
+          }
+          return projectService.getStatusSnapshot(args.projectPath);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);

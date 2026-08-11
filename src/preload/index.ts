@@ -818,7 +818,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("bibliography:resolve", opts),
 
 	// OpenCode agent operations
-	chatDispose: () => ipcRenderer.invoke("chat:dispose"),
+	chatDispose: (opts?: { keepProjectPath?: string }) =>
+		ipcRenderer.invoke("chat:dispose", opts),
 	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
 	chatEnsureAgent: (projectPath?: string) =>
 		ipcRenderer.invoke("chat:ensureAgent", { projectPath }),

@@ -1288,7 +1288,7 @@ export interface ElectronAPI {
   }>;
 
   // OpenCode chat operations
-  chatDispose: () => Promise<{ success: boolean }>;
+  chatDispose: (opts?: { keepProjectPath?: string }) => Promise<{ success: boolean }>;
   chatPrewarm: (projectPath: string) => Promise<{
     ok: boolean;
     error?: string;

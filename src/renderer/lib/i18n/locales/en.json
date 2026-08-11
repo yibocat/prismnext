@@ -2194,7 +2194,8 @@
       "planningNext": "Planning next step…",
       "describing_images": "Describing images with vision helper…",
       "thinking": "Thinking…",
-      "syncing_project": "Preparing project…",
+      "syncing_project": "Syncing project config…",
+      "starting_agent": "Starting Agent…",
       "creating_session": "Creating chat session…",
       "connecting_mcp": "Connecting tools…",
       "starting_model": "Starting model…",
@@ -3270,6 +3271,8 @@
     "card": {
       "install": "Install",
       "uninstall": "Uninstall",
+      "manage": "Manage",
+      "moreActions": "More actions",
       "added": "Installed",
       "disabled": "Disabled",
       "proLocked": "Pro",

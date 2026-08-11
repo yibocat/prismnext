@@ -988,6 +988,8 @@ export function useOpenCodeEvents() {
 
     // ─── Chat Complete Handler ───
     const unsubComplete = window.electronAPI.onChatComplete(({ tabId, success, error, errorCode, emptyTurn, tokenUsage, contextUsed, contextWindowSize, contextSource, promptStale, planDraftMissing }) => {
+      const tCompleteStart = performance.now();
+      console.log(`[chat:complete] received tab=${tabId} success=${success}`);
       const chatStore = useChatStore.getState();
       const generationAtComplete =
         chatStore.tabs.find((t) => t.id === tabId)?.streamGeneration ?? 0;
@@ -1059,6 +1061,14 @@ export function useOpenCodeEvents() {
             return;
           }
           useChatStore.getState()._setStreaming(tabId, false);
+          // Measure when the UI actually re-renders after streaming clears.
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              console.log(
+                `[chat:complete] UI ready: ${Math.round(performance.now() - tCompleteStart)}ms`,
+              );
+            });
+          });
         }, 50);
       }
 

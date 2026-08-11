@@ -264,7 +264,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ isOpeningProject: true });
     try {
       const t1 = performance.now();
-      await resetApplicationStateForProjectSwitch();
+      // Same-project reopen (e.g. last-project on launch) keeps the OpenCode runtime.
+      await resetApplicationStateForProjectSwitch(rootPath);
       if (generation !== openProjectGeneration) return;
       console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
 

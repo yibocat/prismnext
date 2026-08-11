@@ -84,7 +84,7 @@ export function ToolCard({
   className,
 }: ToolCardProps) {
   const collapsible = hasContent;
-  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggleRef = useRef<HTMLDivElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
 
   useLayoutEffect(() => {
@@ -103,19 +103,28 @@ export function ToolCard({
 
   return (
     <div className={cn("min-w-0 max-w-full", className)}>
-      <button
+      <div
         ref={toggleRef}
-        type="button"
+        role="button"
+        tabIndex={collapsible ? 0 : -1}
+        aria-disabled={!collapsible}
         className={cn(
           TOOL_INLINE_ROW_CLASS,
           // Match assistant body size (--font-chat-message); hierarchy comes from color, not size.
-          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-chat-message)] py-1",
+          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-chat-message)] py-1 outline-none focus-visible:ring-1 focus-visible:ring-ring/40 rounded",
           collapsible ? "cursor-pointer" : "cursor-default",
         )}
         onMouseDown={(e) => {
           if (collapsible) e.preventDefault();
         }}
         onClick={handleToggle}
+        onKeyDown={(e) => {
+          if (!collapsible) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         {/* Status + tool icons must never flex-shrink — long label/meta text
          *  would otherwise squash the SVG (the "wobbling icon size" bug). */}
@@ -137,7 +146,7 @@ export function ToolCard({
             )}
           />
         )}
-      </button>
+      </div>
       {expanded && collapsible && (
         <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, bodyClassName)}>
           {typeof children === "function" ? (children as () => ReactNode)() : children}

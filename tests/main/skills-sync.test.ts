@@ -255,6 +255,13 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     expect(
       isSkillsIntegrationPath(join(root, ".prismnext/agent/local/experts/x/expert.json"), root),
     ).toBe(false);
+    // Prompt sync must not look like a skills change (was restarting OpenCode after each turn).
+    expect(
+      isSkillsIntegrationPath(join(root, ".prismnext/agent/_prism-system.md"), root),
+    ).toBe(false);
+    expect(
+      isSkillsIntegrationPath(join(root, ".prismnext/agent/AGENTS.md"), root),
+    ).toBe(false);
   });
 
   it("resolves project root from agent path on Windows-style separators", () => {

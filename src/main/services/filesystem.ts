@@ -441,6 +441,11 @@ export async function startWatching(rootPath: string): Promise<void> {
         }).catch((err) => {
           console.error("[fs-watch] skills refresh scheduling failed:", err);
         });
+        import("./project-subagents-refresh").then(({ scheduleExpertsRefreshFromPaths }) => {
+          scheduleExpertsRefreshFromPaths(rootPath, paths);
+        }).catch((err) => {
+          console.error("[fs-watch] experts refresh scheduling failed:", err);
+        });
       }
       const wins = BrowserWindow.getAllWindows();
       for (const win of wins) {

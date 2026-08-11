@@ -154,6 +154,9 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
       await get().load(projectRoot, { force: true });
       throw err;
     }
+    // Project default won — drop tab overrides so Composer matches Settings.
+    const { useChatStore } = await import("./chat-store");
+    useChatStore.getState().clearSessionTeamOverrides();
     await get().load(projectRoot, { force: true });
     try {
       const { useCommandStore } = await import("./command-store");

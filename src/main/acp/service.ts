@@ -420,6 +420,59 @@ export class AcpService {
     AcpService.instance = undefined as unknown as AcpService;
   }
 
+  /** Absolute roots that currently have a project OpenCode runtime registered. */
+  static listProjectRuntimeRoots(): string[] {
+    return [...AcpService.projectInstances.keys()];
+  }
+
+  /**
+   * Shut down one project OpenCode child and drop it from the registry.
+   * Single-project app: call on project switch so the previous ~170MB process
+   * does not linger. Does not touch the global singleton.
+   */
+  static async disposeProjectRuntime(projectRoot: string): Promise<void> {
+    const root = resolve(projectRoot);
+    const instance = AcpService.projectInstances.get(root);
+    if (!instance) return;
+    AcpService.projectInstances.delete(root);
+    try {
+      await instance.shutdown();
+      log.info("Disposed project OpenCode runtime", { projectRoot: root });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn(`disposeProjectRuntime failed: ${message}`, { projectRoot: root });
+    }
+  }
+
+  /** Dispose every project runtime (global singleton kept). Returns disposed roots. */
+  static async disposeAllProjectRuntimes(): Promise<string[]> {
+    return AcpService.disposeAllProjectRuntimesExcept();
+  }
+
+  /**
+   * Dispose project runtimes except `keepProjectRoot` (same-project reopen).
+   * Global singleton is never touched.
+   */
+  static async disposeAllProjectRuntimesExcept(
+    keepProjectRoot?: string | null,
+  ): Promise<string[]> {
+    const keep = keepProjectRoot?.trim() ? resolve(keepProjectRoot.trim()) : null;
+    const disposed: string[] = [];
+    for (const root of AcpService.listProjectRuntimeRoots()) {
+      if (keep && root === keep) continue;
+      await AcpService.disposeProjectRuntime(root);
+      disposed.push(root);
+    }
+    return disposed;
+  }
+
+  /** True when this instance has a live ACP connection (process may still be starting). */
+  isConnected(): boolean {
+    return !!this.conn && !!this.proc
+      && this.proc.exitCode === null
+      && this.proc.signalCode === null;
+  }
+
   getConnection(): ClientSideConnection | null {
     return this.conn;
   }
@@ -1784,10 +1837,26 @@ export class AcpService {
         delete nextSkills.urls;
 
         const existingPermission = (config.permission as Record<string, unknown> | undefined) ?? {};
+        const nextSkillPermission = sanitizeSkillPermissionMap(
+          existingPermission.skill,
+          patch.skillPermissions,
+        );
         const nextPermission = {
           ...existingPermission,
-          skill: sanitizeSkillPermissionMap(existingPermission.skill, patch.skillPermissions),
+          skill: nextSkillPermission,
         };
+
+        // Only treat skills runtime fields as "changed". Full-file stringify diffs
+        // (key order / unrelated tool writes) must not force an OpenCode restart.
+        const prevPaths = Array.isArray(existingSkills.paths) ? existingSkills.paths : [];
+        const pathsChanged =
+          JSON.stringify(prevPaths) !== JSON.stringify(patch.skillsPaths);
+        const skillPermChanged =
+          JSON.stringify(existingPermission.skill ?? null)
+          !== JSON.stringify(nextSkillPermission);
+        if (!pathsChanged && !skillPermChanged) {
+          continue;
+        }
 
         const nextConfig: Record<string, unknown> = {
           ...config,
@@ -1795,19 +1864,15 @@ export class AcpService {
           permission: nextPermission,
         };
 
-        const prevSerialized = JSON.stringify(config, null, 2);
-        const nextSerialized = JSON.stringify(nextConfig, null, 2);
-        if (prevSerialized === nextSerialized) {
-          continue;
-        }
         anyChanged = true;
-
         mkdirSync(dirname(p), { recursive: true });
-        writeFileSync(p, nextSerialized, "utf-8");
+        writeFileSync(p, JSON.stringify(nextConfig, null, 2), "utf-8");
         log.info("Applied project skills integration", {
           projectRoot,
           configPath: p,
           skillsPaths: patch.skillsPaths,
+          pathsChanged,
+          skillPermChanged,
         });
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
