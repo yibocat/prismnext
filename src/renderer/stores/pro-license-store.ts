@@ -29,6 +29,11 @@ const emptyContributions = (): ProContributionsSnapshot => ({
   declaredFeatures: [],
 });
 
+/** Coalesce concurrent activate+hydrate into one load. */
+let reloadProModuleInFlight: Promise<void> | null = null;
+/** Coalesce React StrictMode double-mount of App hydrate effect. */
+let hydrateInFlight: Promise<void> | null = null;
+
 export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   license: null,
   loadStatus: "idle",
@@ -38,18 +43,27 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   hydrated: false,
 
   hydrate: async () => {
-    try {
-      const license = (await window.electronAPI.proGetLicense()) ?? null;
-      set({ license, hydrated: true });
-      await get().reloadProModule();
-    } catch {
-      set({
-        license: null,
-        hydrated: true,
-        loadStatus: "skipped",
-        contributions: emptyContributions(),
-      });
-    }
+    // StrictMode remount: first effect already finished → do not register twice.
+    if (get().hydrated) return;
+    if (hydrateInFlight) return hydrateInFlight;
+
+    hydrateInFlight = (async () => {
+      try {
+        const license = (await window.electronAPI.proGetLicense()) ?? null;
+        set({ license, hydrated: true });
+        await get().reloadProModule();
+      } catch {
+        set({
+          license: null,
+          hydrated: true,
+          loadStatus: "skipped",
+          contributions: emptyContributions(),
+        });
+      } finally {
+        hydrateInFlight = null;
+      }
+    })();
+    return hydrateInFlight;
   },
 
   activate: async (rawKey) => {
@@ -74,20 +88,29 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   },
 
   reloadProModule: async () => {
-    set({ loadStatus: "loading" });
-    const { result } = await tryLoadPro({
-      getLicense: () => get().license,
-      onFeaturesDeclared: (ids) => set({ declaredFeatures: ids }),
-      onContributionsChanged: () => {
-        set({ contributions: proContributions.snapshot() });
-      },
-    });
-    set({
-      loadStatus: result.status,
-      loadResult: result,
-      contributions: proContributions.snapshot(),
-      declaredFeatures: proContributions.getDeclaredFeatures(),
-    });
+    if (reloadProModuleInFlight) return reloadProModuleInFlight;
+
+    reloadProModuleInFlight = (async () => {
+      set({ loadStatus: "loading" });
+      try {
+        const { result } = await tryLoadPro({
+          getLicense: () => get().license,
+          onFeaturesDeclared: (ids) => set({ declaredFeatures: ids }),
+          onContributionsChanged: () => {
+            set({ contributions: proContributions.snapshot() });
+          },
+        });
+        set({
+          loadStatus: result.status,
+          loadResult: result,
+          contributions: proContributions.snapshot(),
+          declaredFeatures: proContributions.getDeclaredFeatures(),
+        });
+      } finally {
+        reloadProModuleInFlight = null;
+      }
+    })();
+    return reloadProModuleInFlight;
   },
 
   hasFeature: (id) => licenseGrantsFeature(get().license, id),
