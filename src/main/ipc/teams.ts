@@ -7,6 +7,7 @@ import { ipcMain } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AssetKind, Fqid, TeamScope } from "../../shared/teams/types";
+import type { IconSpec } from "../../shared/icon-spec";
 import {
   getAsset,
   getTeam,
@@ -32,6 +33,8 @@ import {
   setAssetEnabled,
   setTeamEnabled,
   uninstallTeam,
+  updateTeamIcon,
+  setTeamIconImage,
 } from "../teams/lifecycle";
 import type { AssetOverride } from "../../shared/teams/types";
 
@@ -255,6 +258,8 @@ export function registerPacksHandlers(): void {
         scope: TeamScope;
         leadName?: string;
         leadInstructions?: string;
+        icon?: IconSpec | null;
+        iconImagePngBase64?: string;
       },
     ) => {
       return createTeam({
@@ -266,7 +271,33 @@ export function registerPacksHandlers(): void {
         projectRoot: args.projectRoot ?? undefined,
         leadName: args.leadName,
         leadInstructions: args.leadInstructions,
+        icon: args.icon,
+        iconImagePngBase64: args.iconImagePngBase64,
       });
+    },
+  );
+
+  ipcMain.handle(
+    "teams:updateIcon",
+    async (
+      _event,
+      args: { teamId: string; projectRoot?: string | null; icon: IconSpec | null },
+    ) => {
+      updateTeamIcon(args.teamId, args.projectRoot ?? undefined, args.icon);
+    },
+  );
+
+  ipcMain.handle(
+    "teams:setIconImage",
+    async (
+      _event,
+      args: { teamId: string; projectRoot?: string | null; pngBase64: string },
+    ) => {
+      setTeamIconImage(
+        args.teamId,
+        args.projectRoot ?? undefined,
+        Buffer.from(args.pngBase64, "base64"),
+      );
     },
   );
 

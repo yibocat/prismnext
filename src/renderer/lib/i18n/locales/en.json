@@ -42,6 +42,28 @@
     "addToChat": "Add to Chat",
     "more": "More"
   },
+  "icon": {
+    "picker": {
+      "choose": "Choose icon",
+      "clear": "Clear",
+      "default": "Use default",
+      "tab": {
+        "emoji": "Emoji",
+        "lucide": "Icon",
+        "image": "Image"
+      },
+      "emoji": {
+        "paste": "Paste emoji"
+      },
+      "image": {
+        "badType": "Not a valid image file.",
+        "failed": "Could not read that image.",
+        "current": "Current icon",
+        "replace": "Replace",
+        "drop": "Click to choose an image"
+      }
+    }
+  },
   "menu": {
     "file": "File",
     "closeTab": "Close Tab",
@@ -1476,6 +1498,8 @@
         "name": "Team name",
         "nameDesc": "Shown in Settings → Teams and the active-team picker.",
         "namePlaceholder": "e.g. Writing desk",
+        "icon": "Icon",
+        "iconDesc": "Emoji, icon, or image shown next to the team name.",
         "scope": "Scope",
         "scopeDesc": "Project teams stay in this project. App teams are available across projects.",
         "description": "Short description",
@@ -1548,6 +1572,7 @@
       "toast": {
         "activeUpdated": "Active team updated",
         "teamCreated": "Team created",
+        "iconUpdated": "Team icon updated",
         "defaultMovedToBuiltin": "This team's default lead was disabled — the active team moved to the safety-net lead (Common Team or Core).",
         "lastLead": "This is the last team with a lead agent. Enable or create another lead team before uninstalling or disabling it.",
         "myContentLocked": "Common Team and the project team are always on and cannot be disabled, uninstalled, or deleted."

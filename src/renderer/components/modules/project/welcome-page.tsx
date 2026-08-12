@@ -8,6 +8,7 @@ import { useCompileStore } from "@/stores/compile-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import { NewProjectDialog } from "./new-project-dialog";
 import { loadProjectIcon, ProjectIconBadge } from "./project-icon";
+import type { IconSpec } from "@shared/icon-spec";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -370,7 +371,7 @@ interface RecentRow {
   exists: boolean;
   isGit: boolean | null;
   branch: string | null;
-  projectIcon: string | null;
+  projectIcon: IconSpec | null;
 }
 
 async function loadRecentRow(path: string, name: string): Promise<RecentRow> {
@@ -479,7 +480,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
                   openProject(p.path);
                 }}
               >
-                <ProjectIconBadge icon={p.projectIcon} name={p.name} />
+                <ProjectIconBadge icon={p.projectIcon} name={p.name} projectPath={p.path} />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-[length:var(--font-size-13)] font-medium text-foreground">
@@ -508,7 +509,7 @@ function RecentProjects({ projectOpen }: { projectOpen: (path: string) => Promis
               </button>
             ) : (
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <ProjectIconBadge icon={p.projectIcon} name={p.name} muted />
+                <ProjectIconBadge icon={p.projectIcon} name={p.name} projectPath={p.path} muted />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[length:var(--font-size-13)] font-medium">
                     {p.name}

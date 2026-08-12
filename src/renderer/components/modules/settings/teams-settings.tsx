@@ -240,7 +240,7 @@ export function TeamsAgentsSettings({
           className={cn(TEAM_ROW_BTN, "min-w-0")}
           onClick={() => toggleTeamDetail(row)}
         >
-          <PackIcon size="sm" />
+          <PackIcon size="sm" icon={row.pack?.manifest.icon} iconDir={row.pack?.dir} />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className={cn(TEAM_ROW_LABEL, "min-w-0 max-w-full truncate", isOpen && "text-foreground")}>{row.label}</span>

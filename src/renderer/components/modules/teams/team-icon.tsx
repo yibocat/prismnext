@@ -1,23 +1,29 @@
-// 统一的 pack 图标（浏览页 / 设置页共用）——中性主题色，不用彩色渐变：
-// 与应用图标语言一致（lucide + muted 底色块），manifest.icon 未来接入时
-// 在此一处替换即可。
-import { Package } from "lucide-react";
-import { cn } from "@/lib/utils";
+// 统一的 pack 图标（浏览页 / 设置页 / 详情页共用）。
+// 有 manifest.icon 时渲染 emoji / lucide / image；否则回退到通用 Package。
+// Image icons live as `<teamDir>/icon.png` — resolved via fsReadImage.
+import { IconRenderer } from "../shared/icon-renderer";
+import { useIconImageSrc } from "../shared/use-icon-image-src";
+import { normalizeIconSpec, type IconSpec } from "@shared/icon-spec";
 
-export function PackIcon({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+export function PackIcon({
+  size = "md",
+  icon,
+  iconDir,
+}: {
+  size?: "sm" | "md" | "lg";
+  /** Team manifest icon; accepts a legacy string (treated as emoji). */
+  icon?: IconSpec | string | null;
+  /** Absolute team directory (needed to resolve image icons). */
+  iconDir?: string | null;
+}) {
+  const spec = normalizeIconSpec(icon);
+  const imageSrc = useIconImageSrc(spec, iconDir);
   return (
-    <div
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-md border border-border bg-muted",
-        size === "lg" ? "size-10" : size === "sm" ? "size-7" : "size-8",
-      )}
-    >
-      <Package
-        className={cn(
-          "text-muted-foreground",
-          size === "lg" ? "size-4.5" : size === "sm" ? "size-3.5" : "size-4",
-        )}
-      />
-    </div>
+    <IconRenderer
+      spec={spec}
+      size={size}
+      fallback="package"
+      imageSrc={imageSrc}
+    />
   );
 }

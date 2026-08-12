@@ -147,20 +147,25 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
   },
 
   setActiveTeam: async (projectRoot, teamId) => {
+    const previous = get().activeTeamId;
     set({ activeTeamId: teamId });
     try {
       await window.electronAPI.teamsSetActiveTeam(projectRoot, teamId, "project");
     } catch (err) {
+      set({ activeTeamId: previous });
       await get().load(projectRoot, { force: true });
       throw err;
     }
     // Project default won — drop tab overrides so Composer matches Settings.
+    // Catalog itself did not change; skip a full teams:list reload (was making
+    // back-to-back switches feel stuck after the first one "looked" done).
     const { useChatStore } = await import("./chat-store");
     useChatStore.getState().clearSessionTeamOverrides();
-    await get().load(projectRoot, { force: true });
     try {
       const { useCommandStore } = await import("./command-store");
-      await useCommandStore.getState().refreshSlashAllow();
+      // Slash allowlist depends on the active team's command roster — refresh
+      // in the background so the picker isn't blocked on it.
+      void useCommandStore.getState().refreshSlashAllow();
     } catch {
       // non-fatal — slash menu refreshes on next commands load
     }

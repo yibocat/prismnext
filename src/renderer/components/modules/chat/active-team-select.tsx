@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckIcon, ChevronDownIcon, UsersIcon } from "lucide-react";
+import { UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   AppMenu,
   AppMenuContent,
-  AppMenuItem,
+  AppMenuCheckItem,
   AppMenuLabel,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
@@ -15,7 +15,11 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
+import { normalizeIconSpec } from "@shared/icon-spec";
+import { IconRenderer } from "../shared/icon-renderer";
+import { useIconImageSrc } from "../shared/use-icon-image-src";
 import { COMPOSER_TOOLBAR_TRIGGER } from "./worktree-selector";
+import type { TeamCardView } from "@/stores/teams-store";
 
 interface ActiveTeamSelectProps {
   className?: string;
@@ -25,6 +29,27 @@ interface ActiveTeamSelectProps {
   compact?: boolean;
 }
 
+function TeamIconView({
+  team,
+  variant,
+}: {
+  team: TeamCardView | null;
+  variant: "bare" | "badge";
+}) {
+  const spec = normalizeIconSpec(team?.manifest.icon);
+  const imageSrc = useIconImageSrc(spec, team?.dir);
+  return (
+    <IconRenderer
+      spec={spec}
+      variant={variant}
+      size="sm"
+      fallback={variant === "bare" ? "package" : "package"}
+      fallbackIcon={variant === "bare" ? UsersIcon : undefined}
+      imageSrc={imageSrc}
+    />
+  );
+}
+
 /**
  * Composer active-team picker (design §8.7).
  * Lists enabled teams that have a lead agent; selection updates project default
@@ -32,8 +57,6 @@ interface ActiveTeamSelectProps {
  */
 export function ActiveTeamSelect({
   className,
-  presentation = "default",
-  compact = false,
 }: ActiveTeamSelectProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -102,33 +125,40 @@ export function ActiveTeamSelect({
   const onSelect = useCallback(
     async (teamId: string) => {
       if (!projectRoot || !activeTabId || switching) return;
+      if (teamId === effectiveId) {
+        setOpen(false);
+        return;
+      }
       const team = candidates.find((c) => c.manifest.id === teamId);
       setSwitching(true);
+      setOpen(false);
       try {
         // Persist project default (Settings + new sessions) and pin this tab.
         // setActiveTeam clears other tab overrides so the picker stays aligned.
         await setActiveTeam(projectRoot, teamId);
         setSessionTeamId(activeTabId, teamId);
-        const confirmed = await refreshLeadName(projectRoot, teamId);
-        toast.success(
-          t("chat.composer.activeTeamSwitched", {
-            team: confirmed?.teamName ?? team?.manifest.name ?? teamId,
-            lead: confirmed?.leadName || t("settings.teams.noLead"),
-          }),
-        );
+        // Lead name for toast/hint: don't block the picker — useEffect refreshes too.
+        void refreshLeadName(projectRoot, teamId).then((confirmed) => {
+          toast.success(
+            t("chat.composer.activeTeamSwitched", {
+              team: confirmed?.teamName ?? team?.manifest.name ?? teamId,
+              lead: confirmed?.leadName || t("settings.teams.noLead"),
+            }),
+          );
+        });
       } catch (err) {
         toast.error(
           err instanceof Error ? err.message : t("chat.composer.activeTeamSwitchFailed"),
         );
       } finally {
         setSwitching(false);
-        setOpen(false);
       }
     },
     [
       projectRoot,
       activeTabId,
       switching,
+      effectiveId,
       candidates,
       setActiveTeam,
       setSessionTeamId,
@@ -146,9 +176,8 @@ export function ActiveTeamSelect({
     ? t("chat.composer.activeTeamHintWithLead", { lead: activeLeadName })
     : t("chat.composer.activeTeamHint");
 
-  const useIconTrigger = presentation === "icon" || (presentation === "default" && compact);
-  const useCapsuleTrigger = presentation === "capsule";
-
+  // Composer trigger is icon-only — the team name lives in the dropdown panel
+  // and the hover tooltip, not on the bar itself.
   return (
     <AppMenu open={open} onOpenChange={setOpen}>
       <Hint label={hint} side="top">
@@ -160,23 +189,13 @@ export function ActiveTeamSelect({
             disabled={switching}
             className={cn(
               COMPOSER_TOOLBAR_TRIGGER,
-              useIconTrigger && "size-6 justify-center px-0 max-w-none",
-              // Grow with the label; truncate only when the bar/panel is truly tight.
-              useCapsuleTrigger && "max-w-[min(11rem,calc(100cqw-7.5rem))]",
-              !useIconTrigger && !useCapsuleTrigger && "max-w-[min(11rem,calc(100cqw-4rem))]",
+              "size-6 justify-center px-0 max-w-none",
               className,
             )}
-            aria-label={t("chat.composer.activeTeam")}
+            aria-label={label || t("chat.composer.activeTeam")}
+            title={label || t("chat.composer.activeTeam")}
           >
-            {useIconTrigger ? (
-              <UsersIcon className="size-3 shrink-0" />
-            ) : (
-              <>
-                <UsersIcon className="size-3 shrink-0 opacity-80" />
-                <span className="min-w-0 truncate">{label}</span>
-                <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
-              </>
-            )}
+            <TeamIconView team={active} variant="bare" />
           </button>
         </AppMenuTrigger>
       </Hint>
@@ -185,18 +204,15 @@ export function ActiveTeamSelect({
         {candidates.map((team) => {
           const selected = team.manifest.id === effectiveId;
           return (
-            <AppMenuItem
+            <AppMenuCheckItem
               key={team.manifest.id}
+              selected={selected}
               onSelect={() => void onSelect(team.manifest.id)}
-              leading={
-                <CheckIcon
-                  className={cn("size-3.5 shrink-0", selected ? "opacity-100" : "opacity-0")}
-                />
-              }
+              leading={<TeamIconView team={team} variant="badge" />}
               description={team.manifest.description || undefined}
             >
               {teamDisplayName(team.manifest.id, team.manifest.name, t)}
-            </AppMenuItem>
+            </AppMenuCheckItem>
           );
         })}
       </AppMenuContent>

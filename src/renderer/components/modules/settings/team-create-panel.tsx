@@ -11,6 +11,8 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { IconPicker } from "../shared/icon-picker";
+import type { IconSpec } from "@shared/icon-spec";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SECTION,
@@ -35,6 +37,8 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState<IconSpec | null>(null);
+  const [pendingIconPngBase64, setPendingIconPngBase64] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [longDescription, setLongDescription] = useState("");
   const [tagsRaw, setTagsRaw] = useState("");
@@ -64,6 +68,8 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
         scope,
         leadName: leadName.trim() || undefined,
         leadInstructions: leadInstructions.trim() || undefined,
+        icon: icon?.kind === "image" ? undefined : icon,
+        iconImagePngBase64: pendingIconPngBase64 ?? undefined,
       });
       await useTeamsStore.getState().load(projectRoot, { force: true });
       toast.success(t("settings.teams.toast.teamCreated"));
@@ -95,6 +101,21 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
         <p className={SETTINGS_ROW_DESC}>{t("settings.editor.teamCreate.intro")}</p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
+          <SettingsFormField
+            label={t("settings.editor.teamCreate.icon")}
+            description={t("settings.editor.teamCreate.iconDesc")}
+          >
+            <IconPicker
+              value={icon}
+              onChange={setIcon}
+              onPendingImagePngBase64={setPendingIconPngBase64}
+              name={name.trim() || t("settings.editor.teamCreate.namePlaceholder")}
+              fallback="letter"
+              size="md"
+              triggerLabel={t("icon.picker.choose")}
+            />
+          </SettingsFormField>
+
           <SettingsFormField
             label={t("settings.editor.teamCreate.name")}
             htmlFor="team-create-name"

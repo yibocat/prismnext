@@ -10,6 +10,8 @@
  * - 启停/可见性的唯一判定在 main 侧 PackResolver（§5），本文件只承载数据形状。
  */
 
+import type { IconSpec } from "../icon-spec";
+
 // ── 基础枚举 ──────────────────────────────────────────────
 
 export type TeamTier = "free" | "pro";
@@ -71,8 +73,8 @@ export interface TeamManifest {
   category?: string;
   tags?: string[];
   developer?: string;
-  /** 预留：pack 内图标相对路径 */
-  icon?: string;
+  /** Team visual identity (emoji / lucide / image). See `IconSpec`. */
+  icon?: IconSpec;
   /** 需要的最低 app 版本；不满足则 catalog 标记不兼容、禁止安装 */
   minHostVersion?: string;
   /** 本包内某 orchestrator 的 content id；启用 pack 时用于「设为默认」联动 */

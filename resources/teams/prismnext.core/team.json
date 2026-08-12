@@ -8,5 +8,6 @@
   "tier": "free",
   "publisher": "prismnext",
   "category": "core",
+  "icon": { "kind": "lucide", "value": "Layers" },
   "preferredOrchestrator": "research-prism"
 }

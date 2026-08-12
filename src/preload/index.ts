@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { WorkspaceFolder } from "../renderer/types/workspace";
 import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
+import type { IconSpec } from "../shared/icon-spec";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -147,14 +148,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	projectCreate: (
 		rootPath: string,
 		workspaceDirs?: WorkspaceFolder[],
-		options?: { initGit?: boolean; projectIcon?: string },
+		options?: {
+			initGit?: boolean;
+			projectIcon?: IconSpec | string | null;
+			projectIconImagePngBase64?: string;
+		},
 	) =>
 		ipcRenderer.invoke("project:create", {
 			rootPath,
 			workspaceDirs,
 			initGit: options?.initGit,
 			projectIcon: options?.projectIcon,
+			projectIconImagePngBase64: options?.projectIconImagePngBase64,
 		}),
+	projectSetIcon: (rootPath: string, icon: IconSpec | null) =>
+		ipcRenderer.invoke("project:setIcon", { rootPath, icon }),
+	projectSetIconImage: (rootPath: string, pngBase64: string) =>
+		ipcRenderer.invoke("project:setIconImage", { rootPath, pngBase64 }),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
 	projectScaffoldAgentsMd: (rootPath: string) =>
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
@@ -1261,8 +1271,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			scope: "app" | "project";
 			leadName?: string;
 			leadInstructions?: string;
+			icon?: IconSpec | null;
+			iconImagePngBase64?: string;
 		},
 	) => ipcRenderer.invoke("teams:create", { projectRoot, ...input }),
+	teamsUpdateIcon: (
+		teamId: string,
+		icon: IconSpec | null,
+		projectRoot?: string | null,
+	) => ipcRenderer.invoke("teams:updateIcon", { teamId, icon, projectRoot }),
+	teamsSetIconImage: (
+		teamId: string,
+		pngBase64: string,
+		projectRoot?: string | null,
+	) => ipcRenderer.invoke("teams:setIconImage", { teamId, pngBase64, projectRoot }),
 	teamsDelete: (teamId: string, projectRoot?: string) =>
 		ipcRenderer.invoke("teams:delete", { teamId, projectRoot }),
 	teamsGetCoreState: (projectRoot: string) =>

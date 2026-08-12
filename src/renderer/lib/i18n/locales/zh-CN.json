@@ -42,6 +42,28 @@
     "addToChat": "添加到聊天",
     "more": "更多"
   },
+  "icon": {
+    "picker": {
+      "choose": "选择图标",
+      "clear": "清除",
+      "default": "使用默认",
+      "tab": {
+        "emoji": "表情",
+        "lucide": "图标",
+        "image": "图片"
+      },
+      "emoji": {
+        "paste": "粘贴 emoji"
+      },
+      "image": {
+        "badType": "不是有效的图片文件。",
+        "failed": "无法读取该图片。",
+        "current": "当前图标",
+        "replace": "替换",
+        "drop": "点击选择图片"
+      }
+    }
+  },
   "menu": {
     "file": "文件",
     "closeTab": "关闭标签页",
@@ -1476,6 +1498,8 @@
         "name": "团队名称",
         "nameDesc": "显示在设置 → 团队与活动团队选择器中。",
         "namePlaceholder": "例如：写作台",
+        "icon": "图标",
+        "iconDesc": "显示在团队名旁边的表情、图标或图片。",
         "scope": "作用域",
         "scopeDesc": "本项目团队仅在此项目可用；应用级团队可跨项目使用。",
         "description": "简短描述",
@@ -1548,6 +1572,7 @@
       "toast": {
         "activeUpdated": "活动团队已更新",
         "teamCreated": "团队已创建",
+        "iconUpdated": "团队图标已更新",
         "defaultMovedToBuiltin": "该团队的默认主 Agent 已停用，活动团队已切到安全兜底（通用团队或 Core）。",
         "lastLead": "这是最后一个带主 Agent 的团队。请先启用或新建另一个带主 Agent 的团队，再卸载/停用。",
         "myContentLocked": "「通用团队」与「本项目团队」始终可用，不能关闭、卸载或删除。"

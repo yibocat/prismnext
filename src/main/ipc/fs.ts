@@ -4,7 +4,14 @@ import { startWatching, stopWatching } from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
-import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
+import {
+  writeWorkspaceDirs,
+  createConfiguredFolders,
+  validateWorkspaceDirs,
+  writeProjectIcon,
+  writeProjectIconImage,
+} from "../services/workspace-config";
+import { ICON_IMAGE_FILENAME, normalizeIconSpec, type IconSpec } from "../../shared/icon-spec";
 import type { Dirent } from "node:fs";
 import {
   assertSafeRelativePath,
@@ -386,7 +393,9 @@ export function registerFsHandlers(): void {
         rootPath: string;
         workspaceDirs?: WorkspaceFolder[];
         initGit?: boolean;
-        projectIcon?: string;
+        projectIcon?: IconSpec | string | null;
+        /** Optional PNG bytes (base64) written to `.prismnext/icon.png`. */
+        projectIconImagePngBase64?: string;
       },
     ) => {
     const { join } = require("node:path");
@@ -423,13 +432,21 @@ export function registerFsHandlers(): void {
     // writeWorkspaceDirs does a read-modify-write, so we pre-populate the initial settings
     // to avoid a second read-write cycle.
     const settingsPath = join(prismDir, "settings.json");
-    const projectIcon =
-      typeof args.projectIcon === "string" ? args.projectIcon.trim().slice(0, 16) : "";
+    const iconSpec = normalizeIconSpec(args.projectIcon);
     const initialSettings: Record<string, unknown> = {
       version: 1,
       compiler: "tectonic",
     };
-    if (projectIcon) initialSettings.projectIcon = projectIcon;
+    // Image icons are written as a sibling file (not Base64 in JSON).
+    if (args.projectIconImagePngBase64) {
+      const png = Buffer.from(args.projectIconImagePngBase64, "base64");
+      if (png.length > 0 && png.length <= 256 * 1024) {
+        writeFileSync(join(prismDir, ICON_IMAGE_FILENAME), png);
+        initialSettings.projectIcon = { kind: "image", value: ICON_IMAGE_FILENAME };
+      }
+    } else if (iconSpec && iconSpec.kind !== "image") {
+      initialSettings.projectIcon = iconSpec;
+    }
     writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
     writeWorkspaceDirs(prismDir, workspaceDirs);
 
@@ -472,6 +489,25 @@ export function registerFsHandlers(): void {
       }
     }
   });
+
+  // ─── Update a project's visual identity in `.prismnext/settings.json` ───
+  ipcMain.handle(
+    "project:setIcon",
+    async (_event, args: { rootPath: string; icon: IconSpec | null }) => {
+      const { join } = require("node:path");
+      const prismDir = join(args.rootPath, ".prismnext");
+      writeProjectIcon(prismDir, args.icon);
+    },
+  );
+
+  ipcMain.handle(
+    "project:setIconImage",
+    async (_event, args: { rootPath: string; pngBase64: string }) => {
+      const { join } = require("node:path");
+      const prismDir = join(args.rootPath, ".prismnext");
+      writeProjectIconImage(prismDir, Buffer.from(args.pngBase64, "base64"));
+    },
+  );
 
   // ─── Ensure .prismnext/ exists (idempotent) ───
   // Called on every project open (not just create) so that the data hub

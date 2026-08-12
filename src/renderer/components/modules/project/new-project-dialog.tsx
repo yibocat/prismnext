@@ -12,16 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  appMenuFontClass,
-  appMenuInputClass,
-  appMenuLabelClass,
-} from "@/components/ui/app-menu";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -46,7 +36,6 @@ import {
   FolderOpenIcon,
   Loader2Icon,
   PlusIcon,
-  SearchIcon,
   Trash2Icon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -58,10 +47,9 @@ import {
 } from "@/components/modules/settings/settings-tokens";
 import {
   DEFAULT_PROJECT_ICON,
-  PROJECT_ICON_CATEGORIES,
-  normalizeProjectIcon,
-  ProjectIconBadge,
 } from "./project-icon";
+import { IconPicker } from "../shared/icon-picker";
+import type { IconSpec } from "@shared/icon-spec";
 
 interface NewProjectDialogProps {
   children: React.ReactNode;
@@ -148,9 +136,11 @@ export function NewProjectDialog({
   );
   const [initGit, setInitGit] = useState(true);
   const [showFolders, setShowFolders] = useState(false);
-  const [projectIcon, setProjectIcon] = useState<string>(DEFAULT_PROJECT_ICON);
-  const [iconOpen, setIconOpen] = useState(false);
-  const [customEmoji, setCustomEmoji] = useState("");
+  const [projectIcon, setProjectIcon] = useState<IconSpec | null>({
+    kind: "emoji",
+    value: DEFAULT_PROJECT_ICON,
+  });
+  const [pendingIconPngBase64, setPendingIconPngBase64] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -175,9 +165,8 @@ export function NewProjectDialog({
       setWorkspaceFolders(PRESET_FOLDERS.paper.map((f) => ({ ...f })));
       setInitGit(settingsInitGit);
       setShowFolders(false);
-      setProjectIcon(DEFAULT_PROJECT_ICON);
-      setIconOpen(false);
-      setCustomEmoji("");
+      setProjectIcon({ kind: "emoji", value: DEFAULT_PROJECT_ICON });
+      setPendingIconPngBase64(null);
       const timer = setTimeout(() => inputRef.current?.focus(), 100);
       return () => clearTimeout(timer);
     }
@@ -210,10 +199,11 @@ export function NewProjectDialog({
     setCreating(true);
     try {
       const workspaceDirs = toCreateDirs(workspaceFolders);
-      const icon = normalizeProjectIcon(projectIcon) ?? DEFAULT_PROJECT_ICON;
+      const icon = projectIcon ?? { kind: "emoji", value: DEFAULT_PROJECT_ICON };
       await window.electronAPI.projectCreate(fullPath, workspaceDirs, {
         initGit,
-        projectIcon: icon,
+        projectIcon: icon.kind === "image" ? undefined : icon,
+        projectIconImagePngBase64: pendingIconPngBase64 ?? undefined,
       });
       addRecentProject(fullPath);
       setOpen(false);
@@ -244,87 +234,16 @@ export function NewProjectDialog({
           <div className={SETTINGS_FORM_FIELD}>
             <label className={SETTINGS_ROW_LABEL}>{t("project.new.projectName")}</label>
             <div className="flex items-center gap-2">
-              <Popover modal={false} open={iconOpen} onOpenChange={setIconOpen}>
-                <Hint label={t("project.new.chooseIcon")}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      disabled={creating}
-                      className={cn(
-                        "shrink-0 rounded-md outline-none transition-colors",
-                        "hover:ring-1 hover:ring-border focus-visible:ring-1 focus-visible:ring-ring",
-                        "disabled:pointer-events-none disabled:opacity-50",
-                      )}
-                    >
-                      <ProjectIconBadge icon={projectIcon} name={projectName || "P"} />
-                    </button>
-                  </PopoverTrigger>
-                </Hint>
-                <PopoverContent
-                  side="bottom"
-                  align="start"
-                  className={cn(
-                    "z-[100] w-[17.5rem] overflow-hidden p-0.5",
-                    appMenuFontClass,
-                  )}
-                  onOpenAutoFocus={(e) => e.preventDefault()}
-                  onWheel={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center gap-1.5 px-2 pb-1.5 pt-1">
-                    <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                    <input
-                      className={cn(appMenuInputClass, "h-7 min-w-0")}
-                      placeholder={t("project.new.pasteEmoji")}
-                      value={customEmoji}
-                      maxLength={8}
-                      onChange={(e) => {
-                        const next = e.target.value;
-                        setCustomEmoji(next);
-                        const normalized = normalizeProjectIcon(next);
-                        if (normalized) {
-                          setProjectIcon(normalized);
-                          setIconOpen(false);
-                          setCustomEmoji("");
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="mx-1 mb-1 h-px bg-border/60" />
-                  <div
-                    className="h-[220px] overflow-y-auto overscroll-contain"
-                    onWheel={(e) => e.stopPropagation()}
-                  >
-                    {PROJECT_ICON_CATEGORIES.map((cat) => (
-                      <div key={cat.label} className="pb-0.5">
-                        <div className={cn(appMenuLabelClass, "sticky top-0 z-10 bg-popover")}>
-                          {cat.label}
-                        </div>
-                        <div className="grid grid-cols-8 gap-0.5 px-1 pb-1">
-                          {cat.icons.map((emoji) => (
-                            <button
-                              key={`${cat.label}-${emoji}`}
-                              type="button"
-                              className={cn(
-                                "flex h-8 items-center justify-center rounded-sm text-[length:var(--font-size-14)] transition-colors",
-                                "hover:bg-accent hover:text-accent-foreground",
-                                projectIcon === emoji && "bg-accent text-accent-foreground",
-                              )}
-                              title={emoji}
-                              onClick={() => {
-                                setProjectIcon(emoji);
-                                setCustomEmoji("");
-                                setIconOpen(false);
-                              }}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <IconPicker
+                value={projectIcon}
+                onChange={setProjectIcon}
+                onPendingImagePngBase64={setPendingIconPngBase64}
+                name={projectName || "P"}
+                fallback="letter"
+                size="sm"
+                disabled={creating}
+                triggerLabel={t("project.new.chooseIcon")}
+              />
               <Input
                 ref={inputRef}
                 className={cn(SETTINGS_FORM_INPUT, "min-w-0 flex-1")}

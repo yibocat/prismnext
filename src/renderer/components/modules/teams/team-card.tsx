@@ -35,7 +35,7 @@ export function TeamCard({ team, isActive, trailing, onClick, expanded, classNam
         className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted"
         aria-expanded={expanded}
       >
-        <PackIcon size="sm" />
+        <PackIcon size="sm" icon={team.manifest.icon} iconDir={team.dir} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{team.manifest.name}</span>

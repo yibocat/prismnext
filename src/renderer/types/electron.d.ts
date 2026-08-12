@@ -585,8 +585,17 @@ export interface ElectronAPI {
   projectCreate: (
     rootPath: string,
     workspaceDirs?: import("./workspace").WorkspaceFolder[],
-    options?: { initGit?: boolean; projectIcon?: string },
+    options?: {
+      initGit?: boolean;
+      projectIcon?: import("../../shared/icon-spec").IconSpec | string | null;
+      projectIconImagePngBase64?: string;
+    },
   ) => Promise<void>;
+  projectSetIcon: (
+    rootPath: string,
+    icon: import("../../shared/icon-spec").IconSpec | null,
+  ) => Promise<void>;
+  projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
   /** Check feed / manifest and return full updater status. */
   updateCheck: () => Promise<UpdaterStatus>;
   /** Last known status without re-hitting the network. */
@@ -1997,8 +2006,20 @@ export interface ElectronAPI {
       scope: "app" | "project";
       leadName?: string;
       leadInstructions?: string;
+      icon?: import("../../shared/icon-spec").IconSpec | null;
+      iconImagePngBase64?: string;
     },
   ) => Promise<{ teamId: string; dir: string }>;
+  teamsUpdateIcon: (
+    teamId: string,
+    icon: import("../../shared/icon-spec").IconSpec | null,
+    projectRoot?: string | null,
+  ) => Promise<void>;
+  teamsSetIconImage: (
+    teamId: string,
+    pngBase64: string,
+    projectRoot?: string | null,
+  ) => Promise<void>;
   teamsDelete: (teamId: string, projectRoot?: string) => Promise<void>;
   teamsGetCoreState: (projectRoot: string) => Promise<{
     defaultOrchestratorId: string | null;

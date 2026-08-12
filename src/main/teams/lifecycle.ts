@@ -27,6 +27,12 @@ import {
   type TeamScope,
 } from "../../shared/teams/types";
 import { parseFqid, toFqid } from "../../shared/teams/state";
+import {
+  ICON_IMAGE_FILENAME,
+  iconSpecToJSON,
+  normalizeIconSpec,
+  type IconSpec,
+} from "../../shared/icon-spec";
 import { createLogger } from "../services/logger";
 import { _registeredRoots } from "../services/active-project-roots";
 import { licenseGrants } from "../services/teams-license";
@@ -393,7 +399,10 @@ export function setActiveTeam(
       lead: view.orchestratorId,
       teamName: view.manifest.name,
     });
-    notifyTeamsChanged(projectRoot);
+    // defaultTeam write already invalidates the resolver via onProjectTeamsStateWritten.
+    // Do NOT call notifyTeamsChanged here — that schedules skills/subagents sync +
+    // OpenCode reload, which is for content/enablement changes, not active-team flips.
+    // (Calling it made the UI look done while a heavy reload still ran — next switch stuttered.)
   } else {
     // App-level default: validate against any open project view when possible.
     const record = teamRecordOrThrow(teamId, projectRoot);
@@ -402,7 +411,7 @@ export function setActiveTeam(
     }
     setAppDefaultTeam(teamId);
     log.info("setActiveTeam", { teamId, scope, lead: record.orchestratorId });
-    notifyTeamsChanged();
+    // Same as project scope: state write invalidates; skip content-refresh fan-out.
   }
 }
 
@@ -438,6 +447,10 @@ export interface CreateTeamInput {
   leadName?: string;
   /** Defaults to a short generic lead brief. */
   leadInstructions?: string;
+  /** Optional team visual identity (emoji / lucide). Image icons use `iconImagePngBase64`. */
+  icon?: IconSpec | null;
+  /** Optional PNG bytes (base64) written to `<teamDir>/icon.png`. */
+  iconImagePngBase64?: string;
 }
 
 function writeTeamManifest(
@@ -448,6 +461,7 @@ function writeTeamManifest(
     description: string;
     longDescription?: string;
     tags?: string[];
+    icon?: IconSpec | null;
   },
 ): void {
   mkdirSync(dir, { recursive: true });
@@ -463,6 +477,12 @@ function writeTeamManifest(
   };
   if (fields.longDescription) manifest.longDescription = fields.longDescription;
   if (fields.tags && fields.tags.length > 0) manifest.tags = fields.tags;
+  // Image icons are written via setTeamIconImage / createTeam iconImagePngBase64.
+  const normalized = normalizeIconSpec(fields.icon);
+  if (normalized && normalized.kind !== "image") {
+    const iconJson = iconSpecToJSON(normalized);
+    if (iconJson) manifest.icon = iconJson;
+  }
   writeFileSync(join(dir, "team.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
 }
 
@@ -511,8 +531,15 @@ export function createTeam(input: CreateTeamInput): { teamId: string; dir: strin
     (input.leadInstructions ?? "").trim() || defaultLeadInstructions(name);
 
   const write = (dir: string, id: string) => {
-    writeTeamManifest(dir, id, { name, description, longDescription, tags });
+    writeTeamManifest(dir, id, { name, description, longDescription, tags, icon: input.icon });
     seedDefaultLead(dir, { teamName: name, leadName, leadInstructions });
+    if (input.iconImagePngBase64) {
+      const png = Buffer.from(input.iconImagePngBase64, "base64");
+      if (png.length > 0 && png.length <= 256 * 1024) {
+        writeFileSync(join(dir, ICON_IMAGE_FILENAME), png);
+        writeTeamManifestIcon(dir, { kind: "image", value: ICON_IMAGE_FILENAME });
+      }
+    }
   };
 
   if (input.scope === "app") {
@@ -543,6 +570,87 @@ export function createTeam(input: CreateTeamInput): { teamId: string; dir: strin
   notifyTeamsChanged(input.projectRoot);
   log.info("project team created", { teamId: id, projectRoot: input.projectRoot });
   return { teamId: id, dir };
+}
+
+function removeTeamIconImageFile(teamDir: string): void {
+  const path = join(teamDir, ICON_IMAGE_FILENAME);
+  if (existsSync(path)) {
+    try {
+      rmSync(path, { force: true });
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
+function writeTeamManifestIcon(teamDir: string, icon: IconSpec | null): void {
+  const manifestPath = join(teamDir, "team.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Record<string, unknown>;
+  const iconJson = iconSpecToJSON(normalizeIconSpec(icon));
+  if (iconJson) manifest.icon = iconJson;
+  else delete manifest.icon;
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
+}
+
+/**
+ * Rewrite a writable team's `icon` field in team.json. Read-only / built-in teams
+ * are rejected — only user (app) and project teams can be re-imagined.
+ * Non-image icons also remove a leftover `icon.png` on disk.
+ */
+export function updateTeamIcon(
+  teamId: string,
+  projectRoot: string | undefined,
+  icon: IconSpec | null,
+): void {
+  if (teamId === CORE_TEAM_ID || teamId === PROJECT_DEFAULT_TEAM_ID) {
+    throw new Error(`Team icon cannot be changed: ${teamId}`);
+  }
+  assertMyContentImmutable(teamId, "updated");
+  const record = teamRecordOrThrow(teamId, projectRoot);
+  if (!record.writable) {
+    throw new Error(`Only user/project teams can be edited: ${teamId}`);
+  }
+  const normalized = normalizeIconSpec(icon);
+  if (normalized?.kind === "image") {
+    throw new Error("Use setTeamIconImage to write image icons");
+  }
+  // Switching to emoji/lucide/null drops any leftover icon.png.
+  removeTeamIconImageFile(record.dir);
+  writeTeamManifestIcon(record.dir, normalized);
+  invalidateCatalog();
+  notifyTeamsChanged(projectRoot);
+  log.info("team icon updated", { teamId });
+}
+
+/**
+ * Write PNG bytes to `<teamDir>/icon.png` and set manifest.icon to
+ * `{ kind: "image", value: "icon.png" }`. Writable teams only.
+ */
+export function setTeamIconImage(
+  teamId: string,
+  projectRoot: string | undefined,
+  pngBytes: Buffer,
+): void {
+  if (teamId === CORE_TEAM_ID || teamId === PROJECT_DEFAULT_TEAM_ID) {
+    throw new Error(`Team icon cannot be changed: ${teamId}`);
+  }
+  assertMyContentImmutable(teamId, "updated");
+  const record = teamRecordOrThrow(teamId, projectRoot);
+  if (!record.writable) {
+    throw new Error(`Only user/project teams can be edited: ${teamId}`);
+  }
+  if (!pngBytes || pngBytes.length === 0) {
+    throw new Error("Empty icon image");
+  }
+  // Soft cap (~256 KB) — icons are already resized client-side to 128px.
+  if (pngBytes.length > 256 * 1024) {
+    throw new Error("Icon image is too large");
+  }
+  writeFileSync(join(record.dir, ICON_IMAGE_FILENAME), pngBytes);
+  writeTeamManifestIcon(record.dir, { kind: "image", value: ICON_IMAGE_FILENAME });
+  invalidateCatalog();
+  notifyTeamsChanged(projectRoot);
+  log.info("team icon image written", { teamId, bytes: pngBytes.length });
 }
 
 /** Delete a writable team (app user team or project team). Read-only teams are rejected. */

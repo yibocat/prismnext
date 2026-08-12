@@ -23,6 +23,8 @@ import {
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { PackIcon } from "../teams/team-icon";
+import { IconPicker } from "../shared/icon-picker";
+import { normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/icon-spec";
 import { OriginChip } from "../teams/origin-chip";
 import { ProBadge } from "../teams/pro-badge";
 import { ScopeChip } from "../teams/scope-chip";
@@ -601,6 +603,32 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     }
   };
 
+  /** Rewrite a writable team's icon (emoji/lucide) or clear it. */
+  const onIconChange = async (next: IconSpec | null) => {
+    if (!projectRoot || !pack) return;
+    if (next?.kind === "image") return; // handled by persistImage
+    if (iconSpecEquals(normalizeIconSpec(pack.manifest.icon), next)) return;
+    setBusy(true);
+    try {
+      await window.electronAPI.teamsUpdateIcon(slot.teamId, next, projectRoot);
+      await load();
+      toast.success(t("settings.teams.toast.iconUpdated"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Write PNG bytes to `<teamDir>/icon.png` and update manifest. */
+  const persistTeamImage = async (pngBase64: string): Promise<IconSpec> => {
+    if (!projectRoot) throw new Error("No project");
+    await window.electronAPI.teamsSetIconImage(slot.teamId, pngBase64, projectRoot);
+    await load();
+    toast.success(t("settings.teams.toast.iconUpdated"));
+    return { kind: "image", value: "icon.png" };
+  };
+
   const teamActionError = (err: unknown): string => {
     const msg = String(err instanceof Error ? err.message : err);
     if (/always-on safety-net|always-on project hangar|My Content|Common Team|Common/i.test(msg)) {
@@ -684,7 +712,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
       <div className="flex-1 overflow-auto">
         <div className={SETTINGS_DETAIL_SHELL}>
           <div className="flex items-start gap-3">
-            <PackIcon size="lg" />
+            <PackIcon size="lg" icon={pack.manifest.icon} iconDir={pack.dir} />
             <div className="flex-1 min-w-0">
               <h3 className="text-[length:var(--font-size-13)] font-medium">
                 {teamDisplayName(pack.manifest.id, pack.manifest.name, t)}
@@ -1358,7 +1386,21 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <div className="flex items-start gap-3">
-          <PackIcon size="lg" />
+          {isUserTeam ? (
+            <IconPicker
+              value={normalizeIconSpec(pack.manifest.icon)}
+              onChange={(next) => void onIconChange(next)}
+              persistImage={persistTeamImage}
+              imageBaseDir={pack.dir}
+              disabled={busy}
+              name={pack.manifest.name}
+              fallback="package"
+              size="lg"
+              triggerLabel={t("icon.picker.choose")}
+            />
+          ) : (
+            <PackIcon size="lg" icon={pack.manifest.icon} iconDir={pack.dir} />
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <h3 className="text-[length:var(--font-size-13)] font-medium">

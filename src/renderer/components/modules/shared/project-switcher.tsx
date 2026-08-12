@@ -17,6 +17,7 @@ import {
   loadProjectIcon,
   ProjectIconBadge,
 } from "@/components/modules/project/project-icon";
+import type { IconSpec } from "@shared/icon-spec";
 import { FolderOpenIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -36,8 +37,8 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const projectOpen = useProjectOpen();
 
-  const [currentIcon, setCurrentIcon] = useState<string | null>(null);
-  const [recentIcons, setRecentIcons] = useState<Record<string, string | null>>({});
+  const [currentIcon, setCurrentIcon] = useState<IconSpec | null>(null);
+  const [recentIcons, setRecentIcons] = useState<Record<string, IconSpec | null>>({});
 
   const projectName = projectRoot
     ? projectRoot.split(/[/\\]/).pop() || projectRoot
@@ -104,6 +105,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
               <ProjectIconBadge
                 icon={currentIcon}
                 name={projectName}
+                projectPath={projectRoot}
                 className="size-5 text-[length:var(--font-size-12)]"
               />
             ) : (
@@ -128,6 +130,7 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
                   <ProjectIconBadge
                     icon={recentIcons[p.path]}
                     name={p.name}
+                    projectPath={p.path}
                     className="size-5 text-[length:var(--font-size-12)]"
                   />
                 }

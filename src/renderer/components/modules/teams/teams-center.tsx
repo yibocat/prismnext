@@ -484,7 +484,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                 <div className="min-w-0 space-y-6">
                   <div className="flex min-w-0 flex-col gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                      <PackIcon size="lg" />
+                      <PackIcon size="lg" icon={selected?.manifest.icon} iconDir={selected?.dir} />
                       <div className="min-w-0 flex-1">
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <h3 className="break-words text-[length:var(--font-size-13)] font-medium">
@@ -623,7 +623,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
                           }
                         }}
                       >
-                        <PackIcon size="md" />
+                        <PackIcon size="md" icon={pack.manifest.icon} iconDir={pack.dir} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="truncate text-[length:var(--font-size-12)] font-medium text-foreground">
