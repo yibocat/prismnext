@@ -17,12 +17,24 @@ import { useTeamsStore } from "@/stores/teams-store";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { COMPOSER_TOOLBAR_TRIGGER } from "./worktree-selector";
 
+interface ActiveTeamSelectProps {
+  className?: string;
+  /** `icon` = always icon-only; `capsule` = AiBar compact row; `default` = panel toolbar. */
+  presentation?: "default" | "icon" | "capsule";
+  /** Panel toolbar: collapse to icon when the bar is narrow (mirrors Model select). */
+  compact?: boolean;
+}
+
 /**
  * Composer active-team picker (design §8.7).
  * Lists enabled teams that have a lead agent; selection updates project default
  * + tab sessionTeamId so chat send and Settings stay aligned.
  */
-export function ActiveTeamSelect({ className }: { className?: string }) {
+export function ActiveTeamSelect({
+  className,
+  presentation = "default",
+  compact = false,
+}: ActiveTeamSelectProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const catalog = useTeamsStore((s) => s.catalog);
@@ -134,6 +146,9 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
     ? t("chat.composer.activeTeamHintWithLead", { lead: activeLeadName })
     : t("chat.composer.activeTeamHint");
 
+  const useIconTrigger = presentation === "icon" || (presentation === "default" && compact);
+  const useCapsuleTrigger = presentation === "capsule";
+
   return (
     <AppMenu open={open} onOpenChange={setOpen}>
       <Hint label={hint} side="top">
@@ -143,21 +158,29 @@ export function ActiveTeamSelect({ className }: { className?: string }) {
             data-active-team={effectiveId ?? undefined}
             data-active-lead={activeLeadName ?? undefined}
             disabled={switching}
-            className={cn(COMPOSER_TOOLBAR_TRIGGER, "max-w-[11rem]", className)}
+            className={cn(
+              COMPOSER_TOOLBAR_TRIGGER,
+              useIconTrigger && "size-6 justify-center px-0 max-w-none",
+              // Grow with the label; truncate only when the bar/panel is truly tight.
+              useCapsuleTrigger && "max-w-[min(11rem,calc(100cqw-7.5rem))]",
+              !useIconTrigger && !useCapsuleTrigger && "max-w-[min(11rem,calc(100cqw-4rem))]",
+              className,
+            )}
             aria-label={t("chat.composer.activeTeam")}
           >
-            <UsersIcon className="size-3 shrink-0 opacity-80" />
-            <span className="min-w-0 truncate">
-              <span className="truncate">{label}</span>
-              {activeLeadName ? (
-                <span className="ml-1 text-muted-foreground/70">· {activeLeadName}</span>
-              ) : null}
-            </span>
-            <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+            {useIconTrigger ? (
+              <UsersIcon className="size-3 shrink-0" />
+            ) : (
+              <>
+                <UsersIcon className="size-3 shrink-0 opacity-80" />
+                <span className="min-w-0 truncate">{label}</span>
+                <ChevronDownIcon className="size-3 shrink-0 opacity-60" />
+              </>
+            )}
           </button>
         </AppMenuTrigger>
       </Hint>
-      <AppMenuContent align="start" className="min-w-[14rem] max-w-[18rem]">
+      <AppMenuContent align="start" side="top" className="min-w-[14rem] max-w-[18rem]">
         <AppMenuLabel>{t("chat.composer.activeTeam")}</AppMenuLabel>
         {candidates.map((team) => {
           const selected = team.manifest.id === effectiveId;

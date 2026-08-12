@@ -1,9 +1,0 @@
-{
-  "id": "reading-notes-coach",
-  "name": "Reading Notes Coach",
-  "description": "Shapes reading cards and evidence-tied notes for a scoped paper or section.",
-  "modules": ["literature-library", "chat-citation-staging", "project-brief"],
-  "permission": {
-    "task": { "*": "deny" }
-  }
-}

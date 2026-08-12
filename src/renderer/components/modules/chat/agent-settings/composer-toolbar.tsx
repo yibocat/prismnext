@@ -36,8 +36,8 @@ export function ComposerToolbar({
     >
       <div className={cn("flex min-w-0 flex-1 items-center gap-0.5")}>
         {addMenu}
-        <ActiveTeamSelect />
         <PlanModeChip />
+        <ActiveTeamSelect presentation="default" compact={compact} />
         {!modelBesideSend ? <ModelThoughtSelect compact={compact} /> : null}
         {intensiveCount > 0 ? (
           <>
