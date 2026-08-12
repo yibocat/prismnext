@@ -157,24 +157,15 @@ function normalizeWatchPath(filePath: string): string {
   return filePath.replace(/\\/g, "/").toLowerCase();
 }
 
-function isPrismAgentSkillsWatchPath(normalized: string): boolean {
-  // local pack（用户内容）整体可见/可监听；legacy skills 路径保留兜底
-  return (
-    normalized.includes("/.prismnext/agent/skills") ||
-    normalized.includes("/.prismnext/agent/local")
-  );
-}
-
-/** chokidar ignored callback — allow `.prismnext/agent/skills` despite dot-dir rule. */
-function isWatchIgnored(filePath: string): boolean {
+/** Root-project watcher: `.prismnext` is always a separate, hidden domain. */
+export function isWatchIgnored(filePath: string): boolean {
   const n = normalizeWatchPath(filePath);
-  if (isPrismAgentSkillsWatchPath(n)) return false;
-  if (n.includes("/.prismnext/agent/skills-manifest.json")) return false;
+  if (n.endsWith("/.prismnext") || n.includes("/.prismnext/")) return true;
+  if (n.includes("/node_modules/")) return true;
   // Project-root living research brief (hidden from tree, still watch for open editors).
   if (n.endsWith("/.brief.md") || /(^|\/)\.brief\.md$/.test(n)) return false;
 
   if (/(^|\/)\.[^\/]/.test(n)) return true;
-  if (n.includes("/node_modules/")) return true;
   if (n.includes("/__pycache__/")) return true;
   if (n.includes("/.prismnext/compile/")) return true;
 
@@ -184,6 +175,25 @@ function isWatchIgnored(filePath: string): boolean {
   return false;
 }
 
+/**
+ * Dedicated Agent-content watcher: its root is `.prismnext/agent`, and it
+ * only traverses user-editable content homes. Every hidden or dependency
+ * segment remains excluded even under an allowed Team.
+ */
+export function isAgentContentWatchIgnored(filePath: string): boolean {
+  const n = normalizeWatchPath(filePath);
+  const agentRoot = "/.prismnext/agent";
+  const index = n.lastIndexOf(agentRoot);
+  if (index < 0) return true;
+  const relative = n.slice(index + agentRoot.length).replace(/^\/+/, "");
+  if (!relative) return false;
+  const segments = relative.split("/").filter(Boolean);
+  if (segments.includes("node_modules") || segments.some((segment) => segment.startsWith("."))) {
+    return true;
+  }
+  return !["skills", "local", "teams"].includes(segments[0]);
+}
+
 function pathsEqualOrNested(child: string, parent: string): boolean {
   const c = normalizeWatchPath(child).replace(/\/$/, "");
   const p = normalizeWatchPath(parent).replace(/\/$/, "");
@@ -191,11 +201,19 @@ function pathsEqualOrNested(child: string, parent: string): boolean {
 }
 
 let activeWatcher: FSWatcher | null = null;
+let activeAgentWatcher: FSWatcher | null = null;
+let activeWatcherReady: Promise<void> | null = null;
+let settleWatcherReadiness: Array<() => void> = [];
 let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 /** Accumulates changed paths during a debounce window so the renderer can
  *  do incremental updates instead of a full project reload. */
 let changedPaths: Set<string> = new Set();
 const WATCHER_DEBOUNCE_MS = 500;
+
+export interface ProjectWatcherOptions {
+  /** Test-only fallback for environments with exhausted native watch handles. */
+  usePolling?: boolean;
+}
 
 export function shouldSkipProjectDirectory(name: string): boolean {
   return HIDDEN_DIRECTORY_NAMES.has(name) || HIDDEN_DIRECTORY_NAMES.has(name.toLowerCase());
@@ -401,21 +419,49 @@ export async function createDirectory(absolutePath: string): Promise<void> {
 /**
  * Start watching a project directory for file changes.
  * Debounces changes by 500ms, then sends `fs:fileChanged` to all renderer windows.
- * Returns immediately if a watcher is already active for the same root.
+ * Returns a lifecycle object whose `ready` promise resolves only after chokidar
+ * has discovered the allowed tree. Existing callers may ignore it and retain
+ * the same `stopWatching()` cleanup contract.
  */
-export async function startWatching(rootPath: string): Promise<void> {
+export async function startWatching(
+  rootPath: string,
+  options: ProjectWatcherOptions = {},
+): Promise<{ ready: Promise<void> }> {
   // If already watching the exact same path or a parent, skip
   if (activeWatcher) {
     const watched = activeWatcher.getWatched();
     const watchedRoots = Object.keys(watched);
     // rootPath is already covered if it IS a watched root or is a CHILD of one
     if (watchedRoots.some((r) => pathsEqualOrNested(rootPath, r))) {
-      return;
+      return { ready: activeWatcherReady ?? Promise.resolve() };
     }
     // Different path or broader scope — stop old watcher first
     await stopWatching();
   }
 
+  const readinessFor = (watcher: FSWatcher): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const settle = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      settleWatcherReadiness.push(settle);
+      watcher.once("ready", settle);
+      watcher.on("error", (err) => {
+        console.error("[fs-watch] chokidar error:", err);
+        if (settled) return;
+        settled = true;
+        reject(err);
+      });
+    });
+
+  const agentRoot = join(rootPath, ".prismnext", "agent");
+  // The dedicated watcher cannot discover a root created after chokidar starts.
+  // This is the app-owned Agent metadata location derived from `rootPath`, not
+  // an arbitrary external path, so create only this empty lifecycle directory.
+  await mkdir(agentRoot, { recursive: true });
   activeWatcher = watch(rootPath, {
     ignored: isWatchIgnored,
     ignoreInitial: true,
@@ -424,7 +470,20 @@ export async function startWatching(rootPath: string): Promise<void> {
       stabilityThreshold: 200,
       pollInterval: 50,
     },
+    ...(options.usePolling ? { usePolling: true } : {}),
   });
+  const rootWatcherReady = readinessFor(activeWatcher);
+  activeAgentWatcher = watch(agentRoot, {
+    ignored: isAgentContentWatchIgnored,
+    ignoreInitial: true,
+    depth: 50,
+    awaitWriteFinish: {
+      stabilityThreshold: 200,
+      pollInterval: 50,
+    },
+    ...(options.usePolling ? { usePolling: true } : {}),
+  });
+  const agentWatcherReady = readinessFor(activeAgentWatcher);
 
   // Reset changed paths on each new watcher start
   changedPaths = new Set();
@@ -459,15 +518,23 @@ export async function startWatching(rootPath: string): Promise<void> {
     }, WATCHER_DEBOUNCE_MS);
   };
 
-  activeWatcher.on("add", trackAndNotify);
-  activeWatcher.on("change", trackAndNotify);
-  activeWatcher.on("unlink", trackAndNotify);
-  activeWatcher.on("addDir", trackAndNotify);
-  activeWatcher.on("unlinkDir", trackAndNotify);
+  const attachEvents = (watcher: FSWatcher) => {
+    watcher.on("add", trackAndNotify);
+    watcher.on("change", trackAndNotify);
+    watcher.on("unlink", trackAndNotify);
+    watcher.on("addDir", trackAndNotify);
+    watcher.on("unlinkDir", trackAndNotify);
+  };
+  attachEvents(activeWatcher);
+  attachEvents(activeAgentWatcher);
 
-  activeWatcher.on("error", (err) => {
-    console.error("[fs-watch] chokidar error:", err);
-  });
+  activeWatcherReady = Promise.all([rootWatcherReady, agentWatcherReady]).then(
+    () => undefined,
+  );
+  // Existing IPC callers do not await `ready`; avoid unhandled rejections while
+  // preserving the rejection for lifecycle-aware callers.
+  void activeWatcherReady.catch(() => {});
+  return { ready: activeWatcherReady };
 }
 
 /**
@@ -479,8 +546,12 @@ export async function stopWatching(): Promise<void> {
     clearTimeout(watcherDebounceTimer);
     watcherDebounceTimer = null;
   }
-  if (activeWatcher) {
-    await activeWatcher.close();
-    activeWatcher = null;
-  }
+  for (const settle of settleWatcherReadiness.splice(0)) settle();
+  await Promise.all([
+    activeWatcher?.close(),
+    activeAgentWatcher?.close(),
+  ]);
+  activeWatcher = null;
+  activeAgentWatcher = null;
+  activeWatcherReady = null;
 }

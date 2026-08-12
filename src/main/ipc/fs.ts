@@ -1,6 +1,5 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
-import { startWatching, stopWatching } from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
@@ -20,24 +19,27 @@ import {
 } from "../lib/template-path";
 import { findProjectRelByBasename } from "../lib/find-project-file";
 import {
-  registerProjectRoot,
-  clearRoots,
   isPathUnderHome,
   assertContained,
   assertUnderHome,
 } from "../services/active-project-roots";
+import {
+  projectLifecycleAuthority,
+  type ProjectLifecycleAuthority,
+} from "../services/project-lifecycle-authority";
 
 const templateLog = createLogger("template-ipc", "ipc");
 const fsLog = createLogger("fs-ipc", "fs");
 
-export function registerFsHandlers(): void {
+export function registerFsHandlers(
+  watcher: Pick<typeof fs, "startWatching" | "stopWatching"> = fs,
+  authority: ProjectLifecycleAuthority = projectLifecycleAuthority,
+): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
-    registerProjectRoot(args.rootPath); // best-effort: register active project root for path containment
     return fs.scanProjectFolder(args.rootPath);
   });
 
   ipcMain.handle("fs:scanMetadata", async (_event, args: { rootPath: string }) => {
-    registerProjectRoot(args.rootPath);
     return fs.scanMetadata(args.rootPath);
   });
 
@@ -182,15 +184,16 @@ export function registerFsHandlers(): void {
 
   // ─── File watcher ───
 
-  ipcMain.handle("fs:watch-start", async (_event, args: { rootPath: string }) => {
-    // Project switch: reset path-containment roots to the newly opened project.
-    clearRoots();
-    registerProjectRoot(args.rootPath);
-    await startWatching(args.rootPath);
+  ipcMain.handle("fs:watch-start", async () => {
+    const rootPath = authority.currentRoot;
+    if (!rootPath) {
+      throw new Error("Cannot watch an unopened project");
+    }
+    await watcher.startWatching(rootPath);
   });
 
   ipcMain.handle("fs:watch-stop", async () => {
-    await stopWatching();
+    await watcher.stopWatching();
   });
 
   // ─── Dialog ───

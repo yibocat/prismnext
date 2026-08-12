@@ -106,6 +106,11 @@ export function isPathContained(abs: string): boolean {
   return false;
 }
 
+/** True when `abs` is exactly a registered, active project root. */
+export function isRegisteredProjectRoot(abs: string): boolean {
+  return Boolean(abs && typeof abs === "string" && isAbsolute(abs) && _roots.has(resolve(abs)));
+}
+
 /**
  * True if `absPath` is under the user's home directory and not a system path.
  * Looser than {@link isPathContained} — used for reads and user-dialog

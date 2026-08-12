@@ -257,7 +257,7 @@ function RightAreaWorkspace({
 
   useEffect(() => {
     if (checkoutRoot) {
-      window.electronAPI.fsWatchStart(checkoutRoot).catch((err) => {
+      window.electronAPI.fsWatchStart().catch((err) => {
         console.error("[watcher] Failed to start file watcher:", err);
       });
     }

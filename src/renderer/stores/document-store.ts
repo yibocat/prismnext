@@ -261,22 +261,25 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   openProject: async (rootPath: string) => {
     const generation = ++openProjectGeneration;
     const t0 = performance.now();
+    let canonicalRoot = rootPath;
     set({ isOpeningProject: true });
     try {
+      ({ rootPath: canonicalRoot } = await window.electronAPI.projectOpen(rootPath));
+      if (generation !== openProjectGeneration) return;
       const t1 = performance.now();
       // Same-project reopen (e.g. last-project on launch) keeps the OpenCode runtime.
-      await resetApplicationStateForProjectSwitch(rootPath);
+      await resetApplicationStateForProjectSwitch(canonicalRoot);
       if (generation !== openProjectGeneration) return;
       console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
 
       const t2 = performance.now();
       // Ensure .prismnext/ data hub exists before any agent operations.
-      window.electronAPI.projectEnsure(rootPath).catch(() => {});
+      window.electronAPI.projectEnsure(canonicalRoot).catch(() => {});
 
       // Warm Agent process + project config in parallel with fs scan. Do NOT
       // commit projectRoot until warm finishes — keeps the startup splash up
       // instead of flashing the shell with a thin top loading bar.
-      const warmPromise = window.electronAPI.chatPrewarm(rootPath).then((result) => {
+      const warmPromise = window.electronAPI.chatPrewarm(canonicalRoot).then((result) => {
         if (generation !== openProjectGeneration) return result;
         import("./command-store").then(({ useCommandStore }) => {
           useCommandStore.getState().reloadCommands();
@@ -284,7 +287,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         return result;
       });
 
-      const result = await window.electronAPI.fsScanMetadata(rootPath);
+      const result = await window.electronAPI.fsScanMetadata(canonicalRoot);
       if (generation !== openProjectGeneration) return;
       console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
       const files: ProjectFile[] = result.files.map((f) => ({
@@ -307,19 +310,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         });
       }
 
-      window.electronAPI.gitWarmup?.(rootPath).catch(() => {});
+      window.electronAPI.gitWarmup?.(canonicalRoot).catch(() => {});
 
       // Workspace / prefs can load from path without committing projectRoot yet.
       const workspaceStore = useWorkspaceConfigStore.getState();
-      await workspaceStore.loadConfig(rootPath);
+      await workspaceStore.loadConfig(canonicalRoot);
       if (generation !== openProjectGeneration) return;
 
       import("./literature-store").then(({ useLiteratureStore }) => {
         if (generation !== openProjectGeneration) return;
-        void useLiteratureStore.getState().refresh(rootPath);
+        void useLiteratureStore.getState().refresh(canonicalRoot);
       });
 
-      const lastActiveFileId = getProjectLastActiveFileId(rootPath);
+      const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
       const expandedFolders = (() => {
         if (!lastActiveFileId) return [] as string[];
         const parts = lastActiveFileId.split("/");
@@ -330,12 +333,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         return ancestors.filter((f) => result.folders.includes(f));
       })();
 
-      useProjectStore.getState().addRecentProject(rootPath);
-      window.electronAPI.settingsSet({ lastProjectPath: rootPath } as any);
+      useProjectStore.getState().addRecentProject(canonicalRoot);
+      window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
 
       import("./git-store").then(({ useGitStore }) => {
         useGitStore.getState().clearAll();
-        useGitStore.getState().selectUnit(rootPath);
+        useGitStore.getState().selectUnit(canonicalRoot);
       });
 
       // Block until Agent + project config (skills/experts/prompts) are warm.
@@ -358,8 +361,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       // Commit UI only when ready — splash stays up until this point.
       set({
-        projectRoot: rootPath,
-        checkoutRoot: rootPath,
+        projectRoot: canonicalRoot,
+        checkoutRoot: canonicalRoot,
         showWelcome: false,
         files,
         folders: result.folders,
@@ -369,7 +372,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         initialized: true,
       });
 
-      loadSessionUiPrefsIntoLayout(rootPath);
+      loadSessionUiPrefsIntoLayout(canonicalRoot);
       useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
       toast.error(`Failed to open project: ${error}`);
@@ -377,8 +380,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } finally {
       if (generation === openProjectGeneration) {
         const ms = Math.round(performance.now() - t0);
-        console.log(`[openProject] total: ${ms}ms  (${rootPath})`);
-        log.info("openProject complete", { durationMs: ms, path: rootPath });
+        console.log(`[openProject] total: ${ms}ms  (${canonicalRoot})`);
+        log.info("openProject complete", { durationMs: ms, path: canonicalRoot });
         set({ isOpeningProject: false });
       }
     }
@@ -389,6 +392,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     clearAutoSaveTimer();
     // Clear last project path so next launch shows welcome page
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);
+    await window.electronAPI.projectClose();
     await resetApplicationStateForProjectSwitch();
     set({
       projectRoot: null,

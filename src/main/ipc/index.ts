@@ -28,8 +28,10 @@ import { registerInteractionHandlers } from "./interaction";
 import { registerProLicenseHandlers } from "./pro-license";
 import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
+import { registerProjectLifecycleHandlers } from "./project-lifecycle";
 
 export function registerIpcHandlers(): void {
+  registerProjectLifecycleHandlers();
   registerFsHandlers();
   registerCompileHandlers();
   registerChatHandlers();
