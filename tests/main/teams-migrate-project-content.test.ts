@@ -14,8 +14,14 @@ import {
   ensureProjectContentMigrated,
   projectDefaultTeamDir,
 } from "../../src/main/teams/migrate-project-content";
-import { listAssets, __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
+import {
+  listAssets,
+  resolveChatOrchestrator,
+  resolveRoster,
+  __resetTeamsResolverForTests,
+} from "../../src/main/teams/resolver";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
+import { setProjectDefaultTeam } from "../../src/main/teams/state-project";
 import { makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -94,6 +100,49 @@ describe("M8 local/ → teams/project.local/", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("preserves an existing project.local custom lead, active default, and roster", () => {
+    const root = project();
+    const dest = projectDefaultTeamDir(root);
+    const leadDir = join(dest, "orchestrators", "custom-lead");
+    const reviewerDir = join(dest, "subagents", "reviewer");
+    mkdirSync(leadDir, { recursive: true });
+    mkdirSync(reviewerDir, { recursive: true });
+    writeFileSync(
+      join(dest, "team.json"),
+      JSON.stringify({
+        id: "project.local",
+        name: "Project Team",
+        description: "local",
+        version: "0.1.0",
+        tier: "free",
+        publisher: "user",
+      }),
+    );
+    writeFileSync(
+      join(leadDir, "orchestrator.json"),
+      JSON.stringify({
+        id: "custom-lead",
+        name: "Custom lead",
+        description: "active local lead",
+        roster: { mode: "list", members: ["project.local:reviewer"] },
+      }),
+    );
+    writeFileSync(join(leadDir, "instructions.md"), "custom lead\n");
+    writeFileSync(
+      join(reviewerDir, "subagent.json"),
+      JSON.stringify({ id: "reviewer", name: "Reviewer", description: "reviews" }),
+    );
+    writeFileSync(join(reviewerDir, "instructions.md"), "review\n");
+    setProjectDefaultTeam(root, "project.local");
+
+    ensureProjectContentMigrated(root);
+
+    expect(resolveChatOrchestrator(root).fqid).toBe("project.local:custom-lead");
+    const roster = resolveRoster(root, "project.local")!;
+    expect(roster.orchestratorFqid).toBe("project.local:custom-lead");
+    expect(roster.entries.map((entry) => entry.fqid)).toEqual(["project.local:reviewer"]);
   });
 
   it("merges a leftover local directory into an existing project.local team", () => {

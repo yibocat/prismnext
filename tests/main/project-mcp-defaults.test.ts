@@ -29,6 +29,7 @@ describe("ensureDefaultMcpServers", () => {
     const agentDir = join(root, ".prismnext", "agent");
     const result = ensureDefaultMcpServers(agentDir);
     expect(result.added).toBe(false);
+    expect(result.migrated).toBe(false);
     expect(result.removed).toBe(false);
     const mcpPath = join(agentDir, "teams", "project.local", "mcp.json");
     expect(existsSync(mcpPath)).toBe(true);

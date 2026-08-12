@@ -406,6 +406,9 @@ export function setActiveTeam(
   } else {
     // App-level default: validate against any open project view when possible.
     const record = teamRecordOrThrow(teamId, projectRoot);
+    if (record.scope === "project") {
+      throw new Error("Project-scoped teams cannot be app defaults.");
+    }
     if (!record.hasOrchestrator) {
       throw new Error(`Team has no lead agent: ${teamId}`);
     }

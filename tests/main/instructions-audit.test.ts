@@ -13,12 +13,12 @@ import type { PromptContext } from "../../src/main/prompts/types";
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
 const CORE_PACK_DIR = join(process.cwd(), "resources", "teams", "prismnext.core");
 
-function getCoreAgentsDir(kind: "experts" | "orchestrators"): string {
+function getCoreAgentsDir(kind: "subagents" | "orchestrators"): string {
   return join(CORE_PACK_DIR, kind);
 }
 
 function readCoreAgentInstructions(
-  kind: "experts" | "orchestrators",
+  kind: "subagents" | "orchestrators",
   id: string,
 ): string | null {
   const path = join(CORE_PACK_DIR, kind, id, "instructions.md");
@@ -40,7 +40,7 @@ const MODULE_BINDING_MARKERS = [
   "### Orchestrator judgment",
 ];
 
-function listBuiltinInstructionPaths(baseDir: string, kind: "experts" | "orchestrators"): string[] {
+function listBuiltinInstructionPaths(baseDir: string, kind: "subagents" | "orchestrators"): string[] {
   const entries = readdirSync(baseDir, { withFileTypes: true });
   return entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
@@ -65,9 +65,9 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(body).toContain("capability modules");
   });
 
-  it("expert instructions omit module binding text", () => {
+  it("all five built-in subagent instructions omit module binding text", () => {
     for (const id of ["literature-synthesizer", "research-design-coach", "methodology-auditor", "structure-diagnostician", "peer-reviewer"]) {
-      const body = readCoreAgentInstructions("experts", id);
+      const body = readCoreAgentInstructions("subagents", id);
       expect(body, id).toBeTruthy();
       for (const marker of MODULE_BINDING_MARKERS) {
         expect(body!, `${id} should not contain ${marker}`).not.toContain(marker);
@@ -105,7 +105,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {
-    const expertPaths = listBuiltinInstructionPaths(getCoreAgentsDir("experts"), "experts");
+    const expertPaths = listBuiltinInstructionPaths(getCoreAgentsDir("subagents"), "subagents");
     const orchestratorPaths = listBuiltinInstructionPaths(getCoreAgentsDir("orchestrators"), "orchestrators");
     const staleModulePhrases = [
       "## Academic Writing",

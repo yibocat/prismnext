@@ -218,6 +218,8 @@ export function ensureProjectLocalLead(dest: string): boolean {
   }
   if (existsSync(plural)) {
     const entries = readdirSync(plural, { withFileTypes: true }).filter((e) => e.isDirectory());
+    // A project.local custom lead may be the user's active default. Without an
+    // explicit FQID/default rewrite map, do not seed and split it silently.
     if (entries.length > 0) return false;
   }
   const orchDir = join(plural, PROJECT_LOCAL_LEAD_ID);
@@ -266,7 +268,13 @@ function normalizeProjectLocalLayout(projectRoot: string, dest: string): void {
 
   const entries = readdirSync(plural, { withFileTypes: true })
     .filter((e) => e.isDirectory())
-    .sort((a, b) => a.name.localeCompare(b.name));
+    // The built-in Project lead permanently owns project.local. Other leads
+    // are user teams and must be split out, regardless of lexical order.
+    .sort((a, b) => {
+      if (a.name === PROJECT_LOCAL_LEAD_ID) return -1;
+      if (b.name === PROJECT_LOCAL_LEAD_ID) return 1;
+      return a.name.localeCompare(b.name);
+    });
   if (entries.length <= 1) return;
 
   for (const entry of entries.slice(1)) {
@@ -507,7 +515,13 @@ export function ensureProjectContentMigrated(projectRoot: string): boolean {
     changed = true;
   } else {
     if (writeProjectLocalManifest(dest)) changed = true;
-    if (ensureProjectLocalLead(dest)) changed = true;
+    if (ensureProjectLocalLead(dest)) {
+      // A legacy/custom lead may already occupy project.local. Once the
+      // built-in Project lead is seeded, move those extra leads into their
+      // own sibling teams so project.local stays the unconditional hangar.
+      normalizeProjectLocalLayout(projectRoot, dest);
+      changed = true;
+    }
   }
 
   return changed;

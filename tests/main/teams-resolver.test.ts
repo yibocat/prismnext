@@ -44,6 +44,7 @@ import {
 import {
   listSubagentRosterReferrers,
   purgeSubagentFromForeignRosters,
+  setActiveTeam,
 } from "../../src/main/teams/lifecycle";
 
 // ── Fixture helpers ───────────────────────────────────────
@@ -244,7 +245,7 @@ describe("tri-state matrix (team + asset)", () => {
 // ── Scope visibility ──────────────────────────────────────
 
 describe("scope", () => {
-  it("project teams are only visible in their own project", () => {
+  it("each project has its own project.local hangar without leaking source assets", () => {
     const projectTeams = join(projectRoot, ".prismnext", "agent", "teams");
     writeTeam(projectTeams, "project.local", { subagents: ["mine"] });
 
@@ -255,9 +256,29 @@ describe("scope", () => {
     const otherProject = mkdtempSync(join(tmpdir(), "teams-other-"));
     try {
       const elsewhere = listTeams(otherProject).find((t) => t.manifest.id === "project.local");
-      expect(elsewhere).toBeUndefined();
+      expect(elsewhere).toBeDefined();
+      expect(listAssets(otherProject, "subagent").some((asset) => asset.fqid === "project.local:mine")).toBe(false);
     } finally {
       rmSync(otherProject, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an app default from project A and preserves project B's active team", () => {
+    const projectATeams = join(projectRoot, ".prismnext", "agent", "teams");
+    writeTeam(projectATeams, "project.local", { orchestrator: { id: "lead-a" } });
+    const projectB = mkdtempSync(join(tmpdir(), "teams-project-b-"));
+    try {
+      const projectBTeams = join(projectB, ".prismnext", "agent", "teams");
+      writeTeam(projectBTeams, "project.local", { orchestrator: { id: "lead-b" } });
+      setProjectDefaultTeam(projectB, "project.local");
+
+      expect(() => setActiveTeam("project.local", "app", projectRoot)).toThrow(
+        "Project-scoped teams cannot be app defaults",
+      );
+      expect(resolveActiveTeam(projectB)?.manifest.id).toBe("project.local");
+      expect(readAppTeamsState().defaultTeam).toBeUndefined();
+    } finally {
+      rmSync(projectB, { recursive: true, force: true });
     }
   });
 });
@@ -433,14 +454,14 @@ describe("resolveActiveTeam", () => {
     expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("prismnext.core");
   });
 
-  it("returns null when core is uninstalled and no other lead team is usable", () => {
+  it("falls back to the project hangar when core is uninstalled and My Content is absent", () => {
     const root = useExternalRoot("bundled");
     writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
     writeAppTeamsState({
       ...emptyAppTeamsState(),
       uninstalled: ["prismnext.core"],
     });
-    expect(resolveActiveTeam(projectRoot)).toBeNull();
+    expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("project.local");
     void root;
   });
 

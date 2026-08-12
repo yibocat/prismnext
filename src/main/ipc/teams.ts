@@ -6,7 +6,12 @@
 import { ipcMain } from "electron";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { AssetKind, Fqid, TeamScope } from "../../shared/teams/types";
+import {
+  PROJECT_DEFAULT_TEAM_ID,
+  type AssetKind,
+  type Fqid,
+  type TeamScope,
+} from "../../shared/teams/types";
 import type { IconSpec } from "../../shared/icon-spec";
 import {
   getAsset,
@@ -239,7 +244,11 @@ export function registerPacksHandlers(): void {
       _event,
       args: { projectRoot?: string | null; teamId: string; scope?: "project" | "app" },
     ) => {
-      setActiveTeam(args.teamId, args.scope ?? "project", args.projectRoot ?? undefined);
+      const scope = args.scope ?? "project";
+      if (scope === "app" && args.teamId === PROJECT_DEFAULT_TEAM_ID) {
+        throw new Error("Project-scoped teams cannot be app defaults.");
+      }
+      setActiveTeam(args.teamId, scope, args.projectRoot ?? undefined);
     },
   );
 

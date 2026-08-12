@@ -84,6 +84,14 @@ function assertPlanMatchesGolden(root: string, fixture: string): void {
   const golden = loadGolden(fixture);
   const plan = buildProjectSubagentsAgentPlan(root, { defaultSubagentModel: null });
 
+  // Every project gets the Project Team hangar lead, including an empty project.
+  // Keep this explicit so a future count/list relaxation cannot drop it silently.
+  expect(golden.agentFiles).toContain("project.md");
+  expect(golden.views.orchestrators).toContainEqual(expect.objectContaining({ id: "project" }));
+  expect(plan.agentFiles).toContain("project.md");
+  expect(listOrchestrators(root)).toContainEqual(
+    expect.objectContaining({ fqid: "project.local:project", id: "project" }),
+  );
   expect(plan.orchestratorId).toBe(golden.orchestratorId);
   expect([...plan.agentFiles].sort()).toEqual([...golden.agentFiles].sort());
   expect(plan.orchestratorContentHash).toBe(golden.orchestratorContentHash);

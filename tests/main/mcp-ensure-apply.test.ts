@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import type { EnsureDefaultMcpResult } from "../../src/main/services/project-mcp-defaults";
 
 const applyProjectMcpConfig = vi.fn(async () => ({ reloadedSessions: 2 }));
 const prewarmProject = vi.fn();
@@ -53,10 +54,11 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
     const result = (await ensure!({}, { projectPath: root })) as {
       ok: boolean;
       reloadedSessions?: number;
-      ensure?: { added?: boolean };
+      ensure?: Pick<EnsureDefaultMcpResult, "added" | "migrated">;
     };
     expect(result.ok).toBe(true);
     expect(result.ensure?.added).toBe(false);
+    expect(result.ensure?.migrated).toBe(false);
     expect(prewarmProject).toHaveBeenCalledWith(root);
     expect(applyProjectMcpConfig).not.toHaveBeenCalled();
     expect(result.reloadedSessions).toBe(0);
@@ -94,7 +96,7 @@ describe("mcp:ensure apply-on-change (Bug #25)", () => {
     const result = (await ensure!({}, { projectPath: root })) as {
       ok: boolean;
       reloadedSessions?: number;
-      ensure?: { removed?: boolean };
+      ensure?: Pick<EnsureDefaultMcpResult, "migrated" | "removed">;
     };
     expect(result.ok).toBe(true);
     expect(result.ensure?.migrated).toBe(true);

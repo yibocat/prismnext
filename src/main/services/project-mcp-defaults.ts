@@ -25,8 +25,10 @@ export function mcpAllowlistSetsEqual(a: readonly string[], b: readonly string[]
 
 export interface EnsureDefaultMcpResult {
   added: boolean;
-  /** @deprecated Paper Search migration removed — always false. */
+  /** True only when the legacy agent/mcp.json was migrated. */
   migrated: boolean;
+  /** True when Teams layout/seed work ran without changing MCP configuration. */
+  teamsMigrated: boolean;
   /** @deprecated Always false. */
   reenabled: boolean;
   /** True when legacy paper-search-mcp was removed from mcp.json. */
@@ -74,7 +76,12 @@ export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResul
   // M11 is the only permitted reader/converter of agent/mcp.json. Derive the
   // project root from <project>/.prismnext/agent and migrate before creating
   // a v2 default file.
-  const migrated = ensureProjectContentMigrated(dirname(dirname(agentDir)));
+  const legacyMcpPath = join(agentDir, "mcp.json");
+  const hadLegacyMcp = existsSync(legacyMcpPath);
+  const teamsMigrated = ensureProjectContentMigrated(dirname(dirname(agentDir)));
+  // Seeding Project Team is a Teams change, not an MCP change. Only a legacy
+  // mcp.json that was actually consumed should reload open ACP sessions.
+  const migrated = hadLegacyMcp && !existsSync(legacyMcpPath);
   const projectLocalMcp = join(agentDir, "teams", "project.local", "mcp.json");
   if (!existsSync(projectLocalMcp)) {
     mkdirSync(dirname(projectLocalMcp), { recursive: true });
@@ -86,7 +93,14 @@ export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResul
     const parsed = JSON.parse(readFileSync(projectLocalMcp, "utf-8"));
     if (Array.isArray(parsed)) servers = parsed;
   } catch {
-    return { added: false, migrated, reenabled: false, removed: false, path: projectLocalMcp };
+    return {
+      added: false,
+      migrated,
+      teamsMigrated,
+      reenabled: false,
+      removed: false,
+      path: projectLocalMcp,
+    };
   }
   const filtered = servers.filter((server) => server?.id !== PAPER_SEARCH_MCP_ID);
   const removed = filtered.length !== servers.length;
@@ -96,5 +110,12 @@ export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResul
       `Removed legacy ${PAPER_SEARCH_MCP_ID} from project.local MCP — use built-in literature-discover`,
     );
   }
-  return { added: false, migrated, reenabled: false, removed, path: projectLocalMcp };
+  return {
+    added: false,
+    migrated,
+    teamsMigrated,
+    reenabled: false,
+    removed,
+    path: projectLocalMcp,
+  };
 }
