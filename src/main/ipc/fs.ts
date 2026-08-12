@@ -190,6 +190,9 @@ export function registerFsHandlers(
       throw new Error("Cannot watch an unopened project");
     }
     await watcher.startWatching(rootPath);
+    if (authority.currentRoot !== rootPath) {
+      throw new Error("Cannot watch an unopened project");
+    }
   });
 
   ipcMain.handle("fs:watch-stop", async () => {

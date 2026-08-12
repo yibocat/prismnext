@@ -48,11 +48,21 @@ describe("project lifecycle watcher authority IPC", () => {
     watcher.stopWatching.mockResolvedValue(undefined);
   });
 
-  it("opens a project before allowing its canonical root to start watching", async () => {
+  it("validates a project without authorizing watchers until activate", async () => {
     const authority = createAuthority({ [home]: home, [alias]: project, [project]: project });
     registerHandlers(authority);
 
     await expect(handlers.get("project:open")!({}, { rootPath: alias })).resolves.toEqual({
+      rootPath: project,
+    });
+    expect(authority.currentRoot).toBeNull();
+    await expect(
+      handlers.get("fs:watch-start")!({}, { rootPath: `${home}/renderer-supplied-path` }),
+    ).rejects.toThrow(/unopened project/);
+    expect(watcher.startWatching).not.toHaveBeenCalled();
+    expect(watcher.stopWatching).not.toHaveBeenCalled();
+
+    await expect(handlers.get("project:activate")!({}, { rootPath: alias })).resolves.toEqual({
       rootPath: project,
     });
     await expect(
@@ -94,6 +104,7 @@ describe("project lifecycle watcher authority IPC", () => {
     const authority = createAuthority({ [home]: home, [project]: project });
     registerHandlers(authority);
     await handlers.get("project:open")!({}, { rootPath: project });
+    await handlers.get("project:activate")!({}, { rootPath: project });
 
     await expect(handlers.get("project:close")!({})).resolves.toBeUndefined();
     expect(watcher.stopWatching).toHaveBeenCalledTimes(1);
@@ -112,7 +123,12 @@ describe("project lifecycle watcher authority IPC", () => {
     registerHandlers(authority);
 
     await handlers.get("project:open")!({}, { rootPath: project });
+    await handlers.get("project:activate")!({}, { rootPath: project });
     await handlers.get("project:open")!({}, { rootPath: nextProject });
+    expect(authority.currentRoot).toBe(project);
+    expect(watcher.stopWatching).not.toHaveBeenCalled();
+
+    await handlers.get("project:activate")!({}, { rootPath: nextProject });
     await handlers.get("fs:watch-start")!({}, { rootPath: project });
 
     expect(watcher.stopWatching).toHaveBeenCalledTimes(1);
@@ -124,7 +140,9 @@ describe("project lifecycle watcher authority IPC", () => {
     registerHandlers(authority);
 
     await handlers.get("project:open")!({}, { rootPath: alias });
+    await handlers.get("project:activate")!({}, { rootPath: alias });
     await handlers.get("project:open")!({}, { rootPath: project });
+    await handlers.get("project:activate")!({}, { rootPath: project });
 
     expect(watcher.stopWatching).not.toHaveBeenCalled();
     expect(authority.currentRoot).toBe(project);

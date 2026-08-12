@@ -205,6 +205,10 @@ let activeAgentWatcher: FSWatcher | null = null;
 let activeWatcherReady: Promise<void> | null = null;
 let settleWatcherReadiness: Array<() => void> = [];
 let watcherDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+/** Bumped by `stopWatching` so in-flight `startWatching` cannot assign after close. */
+let watcherEpoch = 0;
+/** Serializes startWatching so concurrent calls cannot leak a watcher. */
+let startWatchingChain: Promise<unknown> = Promise.resolve();
 /** Accumulates changed paths during a debounce window so the renderer can
  *  do incremental updates instead of a full project reload. */
 let changedPaths: Set<string> = new Set();
@@ -214,6 +218,9 @@ export interface ProjectWatcherOptions {
   /** Test-only fallback for environments with exhausted native watch handles. */
   usePolling?: boolean;
 }
+
+/** Watcher startup I/O. Kept as an object so tests can intercept `mkdir`. */
+export const projectWatcherFs = { mkdir };
 
 export function shouldSkipProjectDirectory(name: string): boolean {
   return HIDDEN_DIRECTORY_NAMES.has(name) || HIDDEN_DIRECTORY_NAMES.has(name.toLowerCase());
@@ -427,6 +434,18 @@ export async function startWatching(
   rootPath: string,
   options: ProjectWatcherOptions = {},
 ): Promise<{ ready: Promise<void> }> {
+  const pending = startWatchingChain.then(() => startWatchingExclusive(rootPath, options));
+  startWatchingChain = pending.then(
+    () => undefined,
+    () => undefined,
+  );
+  return pending;
+}
+
+async function startWatchingExclusive(
+  rootPath: string,
+  options: ProjectWatcherOptions,
+): Promise<{ ready: Promise<void> }> {
   // If already watching the exact same path or a parent, skip
   if (activeWatcher) {
     const watched = activeWatcher.getWatched();
@@ -437,6 +456,41 @@ export async function startWatching(
     }
     // Different path or broader scope — stop old watcher first
     await stopWatching();
+  }
+
+  const epoch = watcherEpoch;
+  const agentRoot = join(rootPath, ".prismnext", "agent");
+  // The dedicated watcher cannot discover a root created after chokidar starts.
+  // This is the app-owned Agent metadata location derived from `rootPath`, not
+  // an arbitrary external path, so create only this empty lifecycle directory.
+  await projectWatcherFs.mkdir(agentRoot, { recursive: true });
+  if (epoch !== watcherEpoch) {
+    return { ready: Promise.resolve() };
+  }
+
+  const rootWatcher = watch(rootPath, {
+    ignored: isWatchIgnored,
+    ignoreInitial: true,
+    depth: 50,
+    awaitWriteFinish: {
+      stabilityThreshold: 200,
+      pollInterval: 50,
+    },
+    ...(options.usePolling ? { usePolling: true } : {}),
+  });
+  const agentWatcher = watch(agentRoot, {
+    ignored: isAgentContentWatchIgnored,
+    ignoreInitial: true,
+    depth: 50,
+    awaitWriteFinish: {
+      stabilityThreshold: 200,
+      pollInterval: 50,
+    },
+    ...(options.usePolling ? { usePolling: true } : {}),
+  });
+  if (epoch !== watcherEpoch) {
+    await Promise.all([rootWatcher.close(), agentWatcher.close()]);
+    return { ready: Promise.resolve() };
   }
 
   const readinessFor = (watcher: FSWatcher): Promise<void> =>
@@ -457,32 +511,9 @@ export async function startWatching(
       });
     });
 
-  const agentRoot = join(rootPath, ".prismnext", "agent");
-  // The dedicated watcher cannot discover a root created after chokidar starts.
-  // This is the app-owned Agent metadata location derived from `rootPath`, not
-  // an arbitrary external path, so create only this empty lifecycle directory.
-  await mkdir(agentRoot, { recursive: true });
-  activeWatcher = watch(rootPath, {
-    ignored: isWatchIgnored,
-    ignoreInitial: true,
-    depth: 50,
-    awaitWriteFinish: {
-      stabilityThreshold: 200,
-      pollInterval: 50,
-    },
-    ...(options.usePolling ? { usePolling: true } : {}),
-  });
+  activeWatcher = rootWatcher;
+  activeAgentWatcher = agentWatcher;
   const rootWatcherReady = readinessFor(activeWatcher);
-  activeAgentWatcher = watch(agentRoot, {
-    ignored: isAgentContentWatchIgnored,
-    ignoreInitial: true,
-    depth: 50,
-    awaitWriteFinish: {
-      stabilityThreshold: 200,
-      pollInterval: 50,
-    },
-    ...(options.usePolling ? { usePolling: true } : {}),
-  });
   const agentWatcherReady = readinessFor(activeAgentWatcher);
 
   // Reset changed paths on each new watcher start
@@ -542,6 +573,7 @@ export async function startWatching(
  * Safe to call when no watcher is active (no-op).
  */
 export async function stopWatching(): Promise<void> {
+  watcherEpoch += 1;
   if (watcherDebounceTimer) {
     clearTimeout(watcherDebounceTimer);
     watcherDebounceTimer = null;

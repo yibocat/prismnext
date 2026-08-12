@@ -8,6 +8,8 @@ const log = createLogger("document-store", "startup");
 
 /** Monotonic id so stale async openProject work is discarded after a newer open. */
 let openProjectGeneration = 0;
+/** True when the latest generation bump came from close, not another open. */
+let projectOpenSupersededByClose = false;
 /** Monotonic id so a slower openFile cannot clobber a newer selection. */
 let fileOpenGeneration = 0;
 import { useProjectStore } from "./project-store";
@@ -260,6 +262,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   openProject: async (rootPath: string) => {
     const generation = ++openProjectGeneration;
+    projectOpenSupersededByClose = false;
+    const previousRoot = get().projectRoot;
     const t0 = performance.now();
     let canonicalRoot = rootPath;
     set({ isOpeningProject: true });
@@ -333,9 +337,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         return ancestors.filter((f) => result.folders.includes(f));
       })();
 
-      useProjectStore.getState().addRecentProject(canonicalRoot);
-      window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
-
       import("./git-store").then(({ useGitStore }) => {
         useGitStore.getState().clearAll();
         useGitStore.getState().selectUnit(canonicalRoot);
@@ -359,6 +360,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         );
       }
 
+      if (generation !== openProjectGeneration) return;
+      await window.electronAPI.projectActivate(canonicalRoot);
+      if (generation !== openProjectGeneration) {
+        if (projectOpenSupersededByClose) {
+          try {
+            await window.electronAPI.projectClose();
+          } catch (revertError) {
+            console.error("[openProject] failed to revoke superseded project authority", revertError);
+          }
+        }
+        return;
+      }
+
+      useProjectStore.getState().addRecentProject(canonicalRoot);
+      window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
+
       // Commit UI only when ready — splash stays up until this point.
       set({
         projectRoot: canonicalRoot,
@@ -375,6 +392,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       loadSessionUiPrefsIntoLayout(canonicalRoot);
       useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
+      if (generation === openProjectGeneration) {
+        try {
+          if (previousRoot) await window.electronAPI.projectActivate(previousRoot);
+          else await window.electronAPI.projectClose();
+        } catch (revertError) {
+          console.error("[openProject] failed to restore previous project authority", revertError);
+        }
+      }
       toast.error(`Failed to open project: ${error}`);
       throw error;
     } finally {
@@ -389,6 +414,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   closeProject: async () => {
     openProjectGeneration++;
+    projectOpenSupersededByClose = true;
     clearAutoSaveTimer();
     // Clear last project path so next launch shows welcome page
     window.electronAPI.settingsSet({ lastProjectPath: null } as any);

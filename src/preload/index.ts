@@ -165,6 +165,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	projectSetIconImage: (rootPath: string, pngBase64: string) =>
 		ipcRenderer.invoke("project:setIconImage", { rootPath, pngBase64 }),
 	projectOpen: (rootPath: string) => ipcRenderer.invoke("project:open", { rootPath }),
+	projectActivate: (rootPath: string) => ipcRenderer.invoke("project:activate", { rootPath }),
 	projectClose: () => ipcRenderer.invoke("project:close"),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
 	projectScaffoldAgentsMd: (rootPath: string) =>

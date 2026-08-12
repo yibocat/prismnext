@@ -598,8 +598,10 @@ export interface ElectronAPI {
     icon: import("../../shared/icon-spec").IconSpec | null,
   ) => Promise<void>;
   projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
-  /** Validate and authorize the current project; returns its canonical root. */
+  /** Validate a project path and return its canonical root without authorizing watchers. */
   projectOpen: (rootPath: string) => Promise<{ rootPath: string }>;
+  /** Authorize the current project after the UI commits it; returns its canonical root. */
+  projectActivate: (rootPath: string) => Promise<{ rootPath: string }>;
   /** Stop lifecycle-owned services and revoke project authorization. */
   projectClose: () => Promise<void>;
   /** Check feed / manifest and return full updater status. */

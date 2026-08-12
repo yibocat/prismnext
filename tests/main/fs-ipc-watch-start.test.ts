@@ -30,17 +30,20 @@ function createAuthority(): ProjectLifecycleAuthority {
 
 describe("fs:watch-start IPC", () => {
   let authority: ProjectLifecycleAuthority;
+  const stopWatching = vi.fn();
 
   beforeEach(() => {
     handlers.clear();
     state.startWatching.mockReset();
-    state.startWatching.mockImplementation(async (root: string) => {
+    stopWatching.mockReset();
+    state.startWatching.mockImplementation(async () => {
       return { ready: Promise.resolve() };
     });
+    stopWatching.mockResolvedValue(undefined);
     authority = createAuthority();
     registerFsHandlers({
       startWatching: state.startWatching,
-      stopWatching: vi.fn(),
+      stopWatching,
     }, authority);
   });
 
@@ -61,5 +64,17 @@ describe("fs:watch-start IPC", () => {
 
     await expect(handler({}, { rootPath: `${home}/renderer-path` })).resolves.toBeUndefined();
     expect(state.startWatching).toHaveBeenCalledWith(root);
+  });
+
+  it("does not stop a newer watcher if the authorized root changes during startup", async () => {
+    const handler = handlers.get("fs:watch-start")!;
+    await authority.open(root);
+    state.startWatching.mockImplementation(async () => {
+      authority.close();
+      return { ready: Promise.resolve() };
+    });
+
+    await expect(handler({}, { rootPath: root })).rejects.toThrow(/unopened project/);
+    expect(stopWatching).not.toHaveBeenCalled();
   });
 });
