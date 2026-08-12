@@ -5,8 +5,23 @@ const FILE_EXT_RE =
 
 const UNSAFE_PATH_CHARS = /[|&;$`<>]/;
 
+function normalizeSlashes(path: string): string {
+  return path.trim().replace(/\\/g, "/");
+}
+
+/** Project-relative paths only: no absolute, drive-letter, UNC, or `..` segments. */
+export function isSafeProjectFileRefPath(path: string): boolean {
+  const v = normalizeSlashes(path);
+  if (!v) return false;
+  if (v.startsWith("/") || v.startsWith("//") || /^[A-Za-z]:/.test(v)) return false;
+  const segments = v.split("/").filter((segment) => segment && segment !== ".");
+  if (segments.length === 0) return false;
+  if (segments.some((segment) => segment === "..")) return false;
+  return true;
+}
+
 function normalizeProjectRelPath(path: string): string {
-  return path.trim().replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+  return normalizeSlashes(path).replace(/\/+$/, "");
 }
 
 export function looksLikeProjectFileRef(
@@ -18,7 +33,8 @@ export function looksLikeProjectFileRef(
   if (v.includes("\n")) return false;
   if (/^https?:\/\//i.test(v) || /^www\./i.test(v)) return false;
   if (UNSAFE_PATH_CHARS.test(v)) return false;
-  if (/\s/.test(v) && !v.includes("/")) return false;
+  if (/\s/.test(v) && !v.includes("/") && !v.includes("\\")) return false;
+  if (!isSafeProjectFileRefPath(v)) return false;
 
   const normalized = normalizeProjectRelPath(v);
   if (knownProjectPaths?.size) {
@@ -27,13 +43,13 @@ export function looksLikeProjectFileRef(
     if (v.endsWith("/") && knownProjectPaths.has(normalized)) return true;
   }
 
-  if (v.endsWith("/")) {
+  if (v.endsWith("/") || v.endsWith("\\")) {
     return false;
   }
 
   if (FILE_EXT_RE.test(v)) return true;
 
-  if (v.includes("/")) {
+  if (normalized.includes("/")) {
     return false;
   }
 
@@ -48,9 +64,12 @@ export function decodeProjectFileHref(href: string): string | null {
   if (!href.startsWith("project-file:")) return null;
   const raw = href.slice("project-file:".length);
   if (!raw) return null;
+  let decoded: string;
   try {
-    return decodeURIComponent(raw);
+    decoded = decodeURIComponent(raw);
   } catch {
-    return raw;
+    decoded = raw;
   }
+  if (!isSafeProjectFileRefPath(decoded)) return null;
+  return normalizeProjectRelPath(decoded);
 }

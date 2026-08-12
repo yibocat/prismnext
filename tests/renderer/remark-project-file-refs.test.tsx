@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import { render, screen } from "@testing-library/react";
 import React from "react";
 import { remarkLibraryCiteRefs } from "../../src/renderer/lib/markdown/remark-library-cite-refs";
+import { StaticMarkdown } from "../../src/renderer/components/modules/chat/static-markdown";
 
 const KNOWN = new Set([
   "notes/sine-regression-experiment.md",
@@ -42,9 +43,23 @@ describe("project-file-ref", () => {
     expect(looksLikeProjectFileRef("smith2024")).toBe(false);
   });
 
+  it("rejects absolute, drive-letter, and parent-directory paths", () => {
+    expect(looksLikeProjectFileRef("/tmp/a.md")).toBe(false);
+    expect(looksLikeProjectFileRef("C:\\Users\\secret.md")).toBe(false);
+    expect(looksLikeProjectFileRef("C:/Users/secret.md")).toBe(false);
+    expect(looksLikeProjectFileRef("../secret.md")).toBe(false);
+    expect(looksLikeProjectFileRef("notes/../../etc/passwd.md")).toBe(false);
+  });
+
   it("round-trips project-file href", () => {
     const href = encodeProjectFileHref("notes/foo bar.md");
     expect(decodeProjectFileHref(href)).toBe("notes/foo bar.md");
+  });
+
+  it("does not decode unsafe project-file hrefs", () => {
+    expect(decodeProjectFileHref(encodeProjectFileHref("/tmp/a.md"))).toBeNull();
+    expect(decodeProjectFileHref("project-file:%2Ftmp%2Fa.md")).toBeNull();
+    expect(decodeProjectFileHref("project-file:..%2Fsecret.md")).toBeNull();
   });
 });
 
@@ -115,11 +130,17 @@ describe("remarkProjectFileRefs", () => {
 });
 
 describe("StaticMarkdown file chips", () => {
-  it("renders project file inline chip from backticks", async () => {
-    const { StaticMarkdown } = await import(
-      "../../src/renderer/components/modules/chat/static-markdown"
-    );
+  it("renders project file inline chip from backticks", () => {
     render(<StaticMarkdown content="Open `notes/report.md` in the editor." />);
     expect(screen.getByRole("button", { name: "report.md" })).toBeTruthy();
+  });
+
+  it("does not turn absolute or parent-directory backticks into file chips", () => {
+    const { container } = render(
+      <StaticMarkdown content="Ignore `/tmp/a.md` and `../secret.md`." />,
+    );
+    expect(container.querySelector('a[href^="project-file:"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "a.md" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "secret.md" })).toBeNull();
   });
 });

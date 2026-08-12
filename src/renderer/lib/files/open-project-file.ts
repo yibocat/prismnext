@@ -80,12 +80,6 @@ export async function openProjectFileFromChat(
 
   const relativePath = resolveChatFilePath(raw, projectRoot);
   if (!relativePath) {
-    ensureRightAreaVisible("files");
-    const normalized = raw.replace(/\\/g, "/");
-    if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized)) {
-      await docStore.openExternalFile(normalized, { pin: opts?.pin ?? false });
-      return true;
-    }
     return false;
   }
 
