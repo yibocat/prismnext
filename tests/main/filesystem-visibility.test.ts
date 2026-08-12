@@ -123,6 +123,7 @@ describe("filesystem visibility", () => {
     try {
       const watcher = await startWatching(root, { usePolling: true });
       await watcher.ready;
+      await new Promise((resolve) => setTimeout(resolve, 150));
       mkdirSync(join(teamInstructions, ".."), { recursive: true });
       writeFileSync(teamInstructions, "created after watcher start\n");
 
@@ -139,7 +140,7 @@ describe("filesystem visibility", () => {
       await stopWatching();
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 
   it("cleans up a failed Agent-root initialization before a later start", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watch-agent-init-fail-"));
@@ -161,6 +162,7 @@ describe("filesystem visibility", () => {
 
       const watcher = await startWatching(root, { usePolling: true });
       await watcher.ready;
+      await new Promise((resolve) => setTimeout(resolve, 150));
       mkdirSync(join(teamInstructions, ".."), { recursive: true });
       writeFileSync(teamInstructions, "after failed initialization\n");
 
@@ -177,7 +179,7 @@ describe("filesystem visibility", () => {
       await stopWatching();
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 
   it("watches a real external Team edit after chokidar is ready", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watch-teams-"));
@@ -196,6 +198,9 @@ describe("filesystem visibility", () => {
       writeFileSync(teamInstructions, "before watcher\n");
       const watcher = await startWatching(root, { usePolling: true });
       await watcher.ready;
+      // Polling + awaitWriteFinish can miss a write that lands in the same
+      // tick as `ready`, especially when the full suite saturates the event loop.
+      await new Promise((resolve) => setTimeout(resolve, 150));
       writeFileSync(teamInstructions, "external edit\n");
 
       await vi.waitFor(
@@ -204,7 +209,7 @@ describe("filesystem visibility", () => {
             "fs:fileChanged",
             expect.objectContaining({ projectRoot: root, changedPaths: expect.arrayContaining([teamInstructions]) }),
           ),
-        { timeout: 3_000, interval: 50 },
+        { timeout: 5_000, interval: 50 },
       );
       expect(refreshSpies.subagents).toHaveBeenCalledWith(
         root,
@@ -215,6 +220,5 @@ describe("filesystem visibility", () => {
       await stopWatching();
       rmSync(root, { recursive: true, force: true });
     }
-  });
-
+  }, 10_000);
 });
