@@ -28,6 +28,8 @@ function getTerminalSelectionAnchorFromDom(
   const nodes = container.querySelectorAll(".xterm-selection div");
 
   let minTop = Infinity;
+  let maxBottom = -Infinity;
+  let minLeft = Infinity;
   let maxRight = -Infinity;
   let found = false;
 
@@ -36,6 +38,8 @@ function getTerminalSelectionAnchorFromDom(
     if (rect.width < 1 && rect.height < 1) continue;
     found = true;
     minTop = Math.min(minTop, rect.top);
+    maxBottom = Math.max(maxBottom, rect.bottom);
+    minLeft = Math.min(minLeft, rect.left);
     maxRight = Math.max(maxRight, rect.right);
   }
 
@@ -43,6 +47,8 @@ function getTerminalSelectionAnchorFromDom(
 
   return {
     top: minTop - containerBounds.top,
+    bottom: maxBottom - containerBounds.top,
+    leftX: minLeft - containerBounds.left,
     rightX: maxRight - containerBounds.left,
   };
 }
@@ -77,11 +83,17 @@ function getTerminalSelectionAnchorFromCells(
   const screenBounds = screen?.getBoundingClientRect() ?? containerBounds;
 
   const top = screenBounds.top - containerBounds.top + displayRow * cellH;
+  const bottom = top + (bottomRow - topRow + 1) * cellH;
+  const startCol = Math.min(range.start.x, range.end.x);
+  const contentLeft = screenBounds.left - containerBounds.left + startCol * cellW;
   const contentRight = screenBounds.left - containerBounds.left + selectionEndCol * cellW;
+  const screenLeft = screenBounds.left - containerBounds.left;
   const screenRight = screenBounds.right - containerBounds.left;
 
   return {
     top: Math.max(0, top),
+    bottom: Math.max(0, bottom),
+    leftX: Math.max(screenLeft, contentLeft),
     rightX: Math.min(contentRight, screenRight),
   };
 }

@@ -13,6 +13,7 @@ import {
   rmSync,
   statSync,
   writeFileSync,
+  type Dirent,
 } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, join, relative, resolve as pathResolve } from "node:path";
@@ -64,9 +65,21 @@ export const NO_EXPERIMENT_FOLDER_HINT =
  * `no_experiment_folder` error. Shared by the file-bridge and the UI IPC
  * (Sprint 0.7 D5) so the error shape stays identical.
  */
-export function resolveExperimentCtx(
-  projectRoot: string,
-): ExperimentStorageContext | { ok: false; error: "no_experiment_folder"; hint: string } {
+export type ExperimentCtxError = {
+  ok: false;
+  error: "no_experiment_folder";
+  hint: string;
+};
+
+export type ExperimentCtxResult = ExperimentStorageContext | ExperimentCtxError;
+
+export function isExperimentCtxError(
+  result: ExperimentCtxResult,
+): result is ExperimentCtxError {
+  return "ok" in result && result.ok === false;
+}
+
+export function resolveExperimentCtx(projectRoot: string): ExperimentCtxResult {
   const prismDir = join(projectRoot, ".prismnext");
   const resolved = resolveExperimentDir(projectRoot, prismDir);
   if ("error" in resolved) {
@@ -1276,9 +1289,9 @@ export function inferArtifactsByMtimeInIsland(
 
   const walk = (dir: string, depth: number): void => {
     if (depth > ARTIFACT_MTIME_MAX_DEPTH || visited > ARTIFACT_MTIME_MAX_ENTRIES) return;
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: Dirent[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" });
     } catch {
       return;
     }

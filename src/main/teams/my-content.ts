@@ -82,7 +82,7 @@ function ensureManifest(dir: string): boolean {
   if (existsSync(legacyPlugin)) {
     try {
       const raw = JSON.parse(readFileSync(legacyPlugin, "utf-8")) as Record<string, unknown>;
-      const upgraded = {
+      const upgraded: Record<string, unknown> = {
         ...TEAM_MANIFEST,
         ...raw,
         id: MY_CONTENT_TEAM_ID,
@@ -130,7 +130,7 @@ function repairChatRoster(jsonPath: string): boolean {
     const needsSkills = !Array.isArray(raw.allowedSkills);
     const needsCommands = !Array.isArray(raw.allowedCommands);
     if (!needsExperts && !needsSkills && !needsCommands) return false;
-    const next = {
+    const next: Record<string, unknown> = {
       ...raw,
       ...(needsExperts ? LEAD_JSON : {}),
       id: MY_CONTENT_LEAD_ID,

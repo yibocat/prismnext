@@ -63,6 +63,8 @@ export interface ProvenanceRunRecorded extends ProvenanceEventBase {
   };
   /** Explicit artifact paths from the run payload (project-relative). */
   artifacts: string[];
+  /** Frozen image copies from append time (prefer when showing this run's figures). */
+  artifactSnapshots?: string[];
   stdoutTailBytes: number;
   stderrTailBytes: number;
 }

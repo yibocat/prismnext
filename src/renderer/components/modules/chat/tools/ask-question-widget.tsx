@@ -61,7 +61,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
-  surface?: "inline" | "composer";
+  surface?: "inline" | "composer" | "drawer";
   hostedInComposer?: boolean;
 }) {
   const { t } = useTranslation();
@@ -74,11 +74,13 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   const customInputRef = useRef<HTMLInputElement>(null);
 
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const isError = toolResult?.is_error;
+  const isError = Boolean(toolResult?.is_error);
   const hasResult = toolResult?.content != null;
   const isAlreadyAnswered = hasResult && !isError;
   const isPrismQuestion = (toolUse.name || "").toLowerCase() === "question";
-  const needsUserAnswer = !isAlreadyAnswered && (isPrismQuestion || (!isStreaming && toolResult)) && !isError;
+  const needsUserAnswer = Boolean(
+    !isAlreadyAnswered && (isPrismQuestion || (!isStreaming && toolResult)) && !isError,
+  );
 
   const { question, options, multiSelect: isMulti } = useQuestionPromptView(
     toolUse,

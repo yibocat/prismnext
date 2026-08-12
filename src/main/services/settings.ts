@@ -84,6 +84,12 @@ export interface AppSettings {
   autoDownloadUpdates?: boolean;
   /** Optional helper model ref (`provider/model`) used for image fallback. */
   aiVisionFallbackModel?: string | null;
+  /** Provider API keys keyed by provider id. */
+  aiApiKeys?: Record<string, string>;
+  /** Provider base URLs keyed by provider id. */
+  aiBaseUrls?: Record<string, string>;
+  /** User-added custom API providers. */
+  aiCustomProviders?: Array<{ id: string; name?: string; baseUrl?: string }>;
   /**
    * Optional default model for Task / subagents (`provider/model`).
    * Applied to OpenCode built-in subagents (explore/general/…) and Prism experts

@@ -108,6 +108,20 @@ export interface ContentBlock {
   _backfillName?: string | null;
 }
 
+const CONTENT_BLOCK_TYPES = new Set<ContentBlock["type"]>([
+  "text",
+  "tool_use",
+  "tool_result",
+  "thinking",
+  "command",
+  "profile",
+]);
+
+function isContentBlock(value: unknown): value is ContentBlock {
+  if (!value || typeof value !== "object") return false;
+  const type = (value as { type?: unknown }).type;
+  return typeof type === "string" && CONTENT_BLOCK_TYPES.has(type as ContentBlock["type"]);
+}
 
 export interface TurnMessageMeta {
   /** Wall-clock when the assistant turn finished (ms). */
@@ -2077,7 +2091,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           prompt: meta.prompt || live?.prompt || "",
           subSessionId: result.subSessionId ?? live?.subSessionId,
           status: result.status,
-          blocks: (result.blocks ?? []) as ContentBlock[],
+          blocks: (result.blocks ?? []).filter(isContentBlock),
           error: result.error,
         });
       } catch (err: unknown) {
@@ -2794,7 +2808,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // ─── Internal ───
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
-    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
+    const stampedBox: {
+      value: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null;
+    } = { value: null };
     set((s) => {
       const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
       if (tabIdx === -1) return {};
@@ -2831,7 +2847,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         });
         turnMeta = merged.turnMeta;
         pendingTurnMeta = null;
-        stamped = {
+        stampedBox.value = {
           sessionId: tab.sessionId,
           turnIndex: merged.turnIndex,
           meta: merged.meta,
@@ -2861,8 +2877,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
-    if (stamped) {
-      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    if (stampedBox.value) {
+      persistTurnMetaToDisk(
+        stampedBox.value.sessionId,
+        stampedBox.value.turnIndex,
+        stampedBox.value.meta,
+      );
     }
   },
 
@@ -3065,7 +3085,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   _setStreaming: (tabId: string, isStreaming: boolean) => {
-    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
+    const stampedBox: {
+      value: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null;
+    } = { value: null };
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
@@ -3096,7 +3118,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             );
             turnMeta = merged.turnMeta;
             pendingTurnMeta = null;
-            stamped = {
+            stampedBox.value = {
               sessionId: t.sessionId,
               turnIndex: merged.turnIndex,
               meta: merged.meta,
@@ -3130,8 +3152,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
       return { tabs, ...projected };
     });
-    if (stamped) {
-      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    if (stampedBox.value) {
+      persistTurnMetaToDisk(
+        stampedBox.value.sessionId,
+        stampedBox.value.turnIndex,
+        stampedBox.value.meta,
+      );
     }
     if (!isStreaming) {
       const tab = get().tabs.find((t) => t.id === tabId);

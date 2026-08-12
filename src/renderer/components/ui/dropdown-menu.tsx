@@ -230,7 +230,6 @@ function DropdownMenuSubTrigger({
 function DropdownMenuSubContent({
   className,
   collisionPadding = 8,
-  onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent> & {
   collisionPadding?: number;
@@ -244,7 +243,6 @@ function DropdownMenuSubContent({
         className,
       )}
       {...props}
-      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

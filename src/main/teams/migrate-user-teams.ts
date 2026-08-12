@@ -87,7 +87,7 @@ function fileTreeSignature(root: string): string {
 function upgradeManifest(teamDir: string, manifest: Record<string, unknown>): void {
   const pluginPath = join(teamDir, "plugin.json");
   const teamPath = join(teamDir, "team.json");
-  const upgraded = { ...manifest, formatVersion: 2 };
+  const upgraded: Record<string, unknown> = { ...manifest, formatVersion: 2 };
   delete upgraded.contents;
   writeFileSync(teamPath, `${JSON.stringify(upgraded, null, 2)}\n`, "utf-8");
   if (pluginPath !== teamPath && existsSync(pluginPath)) rmSync(pluginPath, { force: true });

@@ -2,7 +2,7 @@
  * Read-only scan of an experiment lab island for figures / tables / metrics.
  * Does **not** write the registry (Phase 4 / P2.4).
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, extname, join, relative } from "node:path";
 import { toProjectRelativeArtifact } from "../../shared/artifact-path";
 import {
@@ -77,9 +77,9 @@ function walkFiles(
   out: string[],
 ): void {
   if (out.length >= maxFiles || depth > maxDepth || !existsSync(rootAbs)) return;
-  let entries: ReturnType<typeof readdirSync>;
+  let entries: Dirent[];
   try {
-    entries = readdirSync(rootAbs, { withFileTypes: true });
+    entries = readdirSync(rootAbs, { withFileTypes: true, encoding: "utf8" });
   } catch {
     return;
   }

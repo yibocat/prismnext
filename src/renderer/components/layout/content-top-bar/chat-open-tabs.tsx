@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useChatStore } from "@/stores/chat-store";
+import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { resolveSessionTitle } from "@/lib/chat/session-title";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { Hint } from "@/components/ui/hint";
@@ -17,7 +17,7 @@ function selectOpenTabsRenderKey(state: {
     isStreaming: boolean;
     sessionId: string | null;
     sessionCwd?: string | null;
-    messages: unknown[];
+    messages: ChatStreamMessage[];
   }>;
   activeTabId: string;
 }): string {

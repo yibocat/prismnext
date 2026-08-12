@@ -109,7 +109,6 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       setAllowedExperts([]);
       setRosterMode("list");
       setContentFqid(null);
-      setCanDelete(false);
       setSafetyNet(false);
       setLoading(false);
       setReady(false);

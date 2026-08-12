@@ -1,3 +1,5 @@
+import type { AppSettings } from "../stores/settings-store";
+
 export interface TexliveStatus {
   available: boolean;
   engines: string[];
@@ -515,7 +517,7 @@ export interface ElectronAPI {
   }) => Promise<{ deleted: boolean }>;
 
   // File watcher operations
-  fsWatchStart: (rootPath: string) => Promise<void>;
+  fsWatchStart: () => Promise<void>;
   fsWatchStop: () => Promise<void>;
 
   // Dialog operations
@@ -596,6 +598,10 @@ export interface ElectronAPI {
     icon: import("../../shared/icon-spec").IconSpec | null,
   ) => Promise<void>;
   projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
+  /** Validate and authorize the current project; returns its canonical root. */
+  projectOpen: (rootPath: string) => Promise<{ rootPath: string }>;
+  /** Stop lifecycle-owned services and revoke project authorization. */
+  projectClose: () => Promise<void>;
   /** Check feed / manifest and return full updater status. */
   updateCheck: () => Promise<UpdaterStatus>;
   /** Last known status without re-hitting the network. */
@@ -1701,7 +1707,7 @@ export interface ElectronAPI {
     subSessionId?: string;
   }) => Promise<{
     subSessionId: string | null;
-    blocks: Array<Record<string, unknown>>;
+    blocks: unknown[];
     status: "done" | "error" | "running";
     error?: string;
   }>;
@@ -1852,24 +1858,7 @@ export interface ElectronAPI {
   onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
   onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
   // Settings operations
-  settingsGet: () => Promise<{
-    aiModel: string;
-    theme: string;
-    sidebarCollapsed: boolean;
-    rightPanelCollapsed: boolean;
-    lastProjectPath?: string | null;
-    lastActiveFileId?: string | null;
-    zoteroApiKey?: string;
-    zoteroUserId?: string;
-    zoteroLastBBTDetected?: boolean;
-    pdfDarkMode?: "off" | "on" | "follow";
-    autoCreateMainTex?: boolean;
-    defaultDocClass?: "article" | "report" | "book";
-    agentSystemPrompt?: string;
-    editorSyntaxTheme?: string;
-    defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
-    defaultInitGit?: boolean;
-  }>;
+  settingsGet: () => Promise<AppSettings>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
   settingsGetKnowledgeModules: (projectRoot?: string) => Promise<Array<{
     key: string;

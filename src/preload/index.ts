@@ -67,8 +67,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("template:deleteBackup", args),
 
 	// File watcher
-	fsWatchStart: (rootPath: string) =>
-		ipcRenderer.invoke("fs:watch-start", { rootPath }),
+	fsWatchStart: () => ipcRenderer.invoke("fs:watch-start"),
 	fsWatchStop: () => ipcRenderer.invoke("fs:watch-stop"),
 
 	// Dialog operations
@@ -165,6 +164,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("project:setIcon", { rootPath, icon }),
 	projectSetIconImage: (rootPath: string, pngBase64: string) =>
 		ipcRenderer.invoke("project:setIconImage", { rootPath, pngBase64 }),
+	projectOpen: (rootPath: string) => ipcRenderer.invoke("project:open", { rootPath }),
+	projectClose: () => ipcRenderer.invoke("project:close"),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
 	projectScaffoldAgentsMd: (rootPath: string) =>
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
@@ -185,7 +186,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	researchPlanWrite: (args: {
 		projectRoot: string;
-		doc: import("../../shared/research-plan").ResearchPlanDoc;
+		doc: import("../shared/research-plan").ResearchPlanDoc;
 	}) => ipcRenderer.invoke("researchPlan:write", args),
 	researchPlanReadDraft: (args: { projectRoot: string; sessionId?: string }) =>
 		ipcRenderer.invoke("researchPlan:readDraft", args),
@@ -271,7 +272,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("interaction:list", { projectRoot }),
 	interactionWrite: (args: {
 		projectRoot: string;
-		spec: import("../../shared/interaction-spec").InteractionSpec;
+		spec: import("../shared/interaction-spec").InteractionSpec;
 	}) => ipcRenderer.invoke("interaction:write", args),
 	onInteractionChanged: (
 		callback: (data: {

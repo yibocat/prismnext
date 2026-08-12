@@ -112,13 +112,11 @@ export function normalizeVisionBaseUrl(providerId: string, baseUrl: string): str
 function getProviderCredentials(providerId: string): { apiKey: string; baseUrl: string } {
   const settings = getSettings();
   const apiKey = settings.aiApiKeys?.[providerId]?.trim() ?? "";
-  const customProviders = settings.aiCustomProviders as
-    | Array<{ id: string; baseUrl?: string }>
-    | undefined;
+  const customProviders = settings.aiCustomProviders;
   const customBase =
     customProviders?.find((p) => p.id === providerId)?.baseUrl?.trim() ?? "";
   const rawBase =
-    (settings.aiBaseUrls as Record<string, string> | undefined)?.[providerId]?.trim() ||
+    settings.aiBaseUrls?.[providerId]?.trim() ||
     customBase ||
     getDefaultBaseUrl(providerId) ||
     "";

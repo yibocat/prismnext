@@ -72,7 +72,7 @@ export function ExperimentsRunDialog({
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const settings = useSettingsStore((s) => s.settings);
   const permRules = useMemo(
-    () => buildPermissionRulesFromSettings(settings as Record<string, unknown>),
+    () => buildPermissionRulesFromSettings(settings),
     [settings],
   );
   const resolvedMode = resolvePermissionMode(permissionMode);

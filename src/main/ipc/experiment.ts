@@ -23,6 +23,7 @@ import {
   updateExperiment,
   updateRunNotes,
   workspaceIslandPathForId,
+  isExperimentCtxError,
 } from "../services/experiment-log-service";
 import {
   kickoffExperimentRun,
@@ -99,7 +100,7 @@ interface ExperimentSnapshotArgs {
 export function registerExperimentHandlers(): void {
   ipcMain.handle("experiment:list", async (_event, args: ExperimentListArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const list = listExperiments(ctxResult, {
       includeArchived: args.includeArchived === true,
     });
@@ -116,7 +117,7 @@ export function registerExperimentHandlers(): void {
     "experiment:archive",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = archiveExperiment(ctxResult, (args.id || "").trim());
       if (!result.ok) return { ok: false as const, error: result.error };
       broadcastExperimentChanged({
@@ -145,7 +146,7 @@ export function registerExperimentHandlers(): void {
       },
     ) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = createExperiment(ctxResult, {
         title: args.title,
         tags: args.tags,
@@ -165,7 +166,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:update", async (_event, args: ExperimentUpdateArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = updateExperiment(ctxResult, args.id, {
       title: args.title,
       tags: args.tags,
@@ -188,7 +189,7 @@ export function registerExperimentHandlers(): void {
       args: { projectRoot: string; id: string; runId: string; notes: string },
     ) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = updateRunNotes(
         ctxResult,
         (args.id || "").trim(),
@@ -209,7 +210,7 @@ export function registerExperimentHandlers(): void {
     "experiment:restore",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = restoreExperiment(ctxResult, (args.id || "").trim());
       if (!result.ok) return { ok: false as const, error: result.error };
       broadcastExperimentChanged({
@@ -225,7 +226,7 @@ export function registerExperimentHandlers(): void {
     "experiment:delete",
     async (_event, args: { projectRoot: string; id: string; removeLab?: boolean }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const id = (args.id || "").trim();
       const result = deleteExperiment(ctxResult, id, { removeLab: args.removeLab === true });
       if (!result.ok) return { ok: false as const, error: result.error };
@@ -240,7 +241,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:read", async (_event, args: ExperimentReadArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const limit = typeof args.runsLimit === "number" && args.runsLimit > 0 ? args.runsLimit : 20;
     // Human UI needs stdout/stderr tails; agent bridge uses lean reads separately.
     const result = readExperiment(ctxResult, args.id, limit, { includeOutput: true });
@@ -260,7 +261,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:detectEnv", async (_event, args: ExperimentDetectEnvArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = detectEnvForIsland(ctxResult, args.id);
     if (!result.ok) return { ok: false as const, error: result.error };
     return { ok: true as const, env: result.env, workspacePath: result.workspacePath };
@@ -268,7 +269,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:getPaths", async (_event, args: ExperimentGetPathsArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const workspaceAbs = workspaceIslandPathForId(ctxResult, args.id);
     if (!workspaceAbs) return { ok: false as const, error: "experiment_not_found" };
     if (!existsSync(workspaceAbs)) {
@@ -284,7 +285,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:run", async (event, args: ExperimentRunArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();
     const command = (args.command || "").trim();
     if (!id) return { ok: false as const, error: "experiment_not_found" };
@@ -360,7 +361,7 @@ export function registerExperimentHandlers(): void {
   // Station 3 — read-only workspace scan for Results panel (same core as agent tool).
   ipcMain.handle("experiment:snapshot", async (_event, args: ExperimentSnapshotArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();
     if (!id) return { ok: false as const, error: "experiment_not_found" };
     const result = snapshotExperiment(ctxResult, id, {

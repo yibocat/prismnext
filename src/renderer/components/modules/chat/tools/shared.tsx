@@ -10,7 +10,7 @@ import {
 
 // ─── Status Icon ───
 
-export function StatusIcon({ isLoading, isError }: { isLoading: boolean; isError: boolean }) {
+export function StatusIcon({ isLoading, isError = false }: { isLoading: boolean; isError?: boolean }) {
   if (isLoading) return <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />;
   if (isError) return <AlertCircleIcon className="size-3.5 text-destructive" />;
   return <CheckIcon className="size-3.5 text-success" />;

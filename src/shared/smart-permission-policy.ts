@@ -519,10 +519,7 @@ export function resolveSmartPermissionAction(
   }
 
   let action = resolveSmartDefaultAction(ctx, rules);
-  const planAskLocked =
-    ctx.sessionAgent === "plan"
-    && getPlanPermissionOverride(toolName, ctx) === "ask";
-  if (action === "prompt" && !planAskLocked && userAllowHit(ctx, rules)) {
+  if (action === "prompt" && userAllowHit(ctx, rules)) {
     action = "allow";
   }
   return action;

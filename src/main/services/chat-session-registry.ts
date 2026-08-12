@@ -128,7 +128,7 @@ export function isSessionIntensiveBibkey(sessionId: string | undefined, bibkey: 
 }
 
 /** Add one bibkey to the intensive-reading allowlist; returns the new list. */
-export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): readonly string[] {
   const key = bibkey.trim();
   if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
   const next = [...new Set([...getSessionIntensiveBibkeys(sessionId), key])];
@@ -137,7 +137,7 @@ export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): st
 }
 
 /** Remove one bibkey from the intensive-reading allowlist; returns the new list. */
-export function removeSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+export function removeSessionIntensiveBibkey(sessionId: string, bibkey: string): readonly string[] {
   const key = bibkey.trim();
   if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
   const next = getSessionIntensiveBibkeys(sessionId).filter((k) => k !== key);

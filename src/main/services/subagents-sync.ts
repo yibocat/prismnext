@@ -47,7 +47,6 @@ import {
   isProjectLocalLeadFqid,
   type SubagentDef,
   type Fqid,
-  type OrchestratorDef,
   type AssetKind,
 } from "../../shared/teams/types";
 import { ensureMyContentTeam, isMyContentLeadFqid, isMyContentTeamId } from "../teams/my-content";
@@ -62,9 +61,12 @@ import {
   resolveRoster,
   invalidateResolver,
 } from "../teams/resolver";
-import type { AssetViewV2 } from "../../shared/teams/view";
+import type { AssetViewV2, OrchestratorDefV2 } from "../../shared/teams/view";
 import { getTeamRecord, invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
-import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
+import {
+  ensureProjectContentMigrated,
+  ensureProjectDefaultTeamDir,
+} from "../teams/migrate-project-content";
 import { purgeSubagentFromForeignRosters } from "../teams/lifecycle";
 import { createLogger } from "./logger";
 
@@ -121,7 +123,7 @@ function toExpertInfo(projectRoot: string, content: AssetViewV2): SubagentInfo {
  * - mode "list" → rosterMode "list", roster = enabled runtime ids (may be [])
  */
 function toOrchestratorInfo(projectRoot: string, content: AssetViewV2): OrchestratorInfo {
-  const def = content.definition as OrchestratorDef;
+  const def = content.definition as OrchestratorDefV2;
   const instructions = readInstructions(projectRoot, content.fqid);
   const effectiveModules = resolveOrchestratorActiveModuleKeys();
   const spec = def.roster ?? { mode: "all" as const };
@@ -478,6 +480,12 @@ export function buildProjectSubagentsAgentPlan(
   projectRoot: string,
   options?: { promptCtx?: PromptContext; defaultSubagentModel?: string | null },
 ): ProjectExpertsAgentPlan {
+  // The Project Team lead is an automatic agent-plan entry, even before the
+  // project has user-created content. Invalidate a prior view after the seed
+  // so resolution includes its freshly written manifest and lead.
+  if (ensureProjectContentMigrated(projectRoot)) {
+    invalidateResolver(projectRoot);
+  }
   const promptCtx: PromptContext = { projectRoot, ...options?.promptCtx };
   let defaultSubagentModel = options?.defaultSubagentModel ?? null;
   if (options?.defaultSubagentModel === undefined) {

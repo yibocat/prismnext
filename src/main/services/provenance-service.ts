@@ -12,7 +12,7 @@
  *
  * Design: docs-private/superpowers/specs/2026-07-11-provenance-lite-design.md
  */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, type Dirent } from "node:fs";
 import { execSync } from "node:child_process";
 import { join, relative } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -165,9 +165,9 @@ function inferArtifactsByMtime(
   let visited = 0;
   const walk = (dir: string, depth: number): void => {
     if (depth > MTIME_SCAN_MAX_DEPTH || visited > MTIME_SCAN_MAX_ENTRIES) return;
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: Dirent[];
     try {
-      entries = readdirSync(dir, { withFileTypes: true });
+      entries = readdirSync(dir, { withFileTypes: true, encoding: "utf8" });
     } catch {
       return;
     }
