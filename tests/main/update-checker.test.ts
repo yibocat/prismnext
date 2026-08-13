@@ -108,6 +108,13 @@ describe("compareVersions", () => {
     expect(compareVersions("v1.2.0", "1.2")).toBe(0);
     expect(compareVersions("1.2.1", "1.2")).toBe(1);
   });
+
+  it("orders prerelease versions before their stable release", () => {
+    expect(compareVersions("0.7.0-beta.2", "0.7.0-beta.1")).toBe(1);
+    expect(compareVersions("0.7.0-beta.1", "0.7.0-beta.2")).toBe(-1);
+    expect(compareVersions("0.7.0", "0.7.0-beta.9")).toBe(1);
+    expect(compareVersions("0.7.0-beta.1", "0.7.0")).toBe(-1);
+  });
 });
 
 describe("toLegacyResult", () => {

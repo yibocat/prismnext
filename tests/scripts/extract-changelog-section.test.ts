@@ -50,6 +50,22 @@ describe("extractVersionSection", () => {
     expect(body).not.toContain("something");
   });
 
+  it("extracts a prerelease section without matching its stable version", () => {
+    const prerelease = `## 0.7.0-beta.1 — 2026-08-13
+
+### Beta
+- preview
+
+## 0.7.0 (Unreleased)
+
+### Stable
+- later
+`;
+    const body = extractVersionSection(prerelease, "0.7.0-beta.1");
+    expect(body).toContain("preview");
+    expect(body).not.toContain("later");
+  });
+
   it("returns null when missing", () => {
     expect(extractVersionSection(sample, "0.5.99")).toBeNull();
   });
@@ -86,5 +102,9 @@ describe("resolveChangelogSection", () => {
 describe("normalizeVersion", () => {
   it("strips v prefix", () => {
     expect(normalizeVersion("v2.1.0")).toBe("2.1.0");
+  });
+
+  it("preserves prerelease suffixes", () => {
+    expect(normalizeVersion("v0.7.0-beta.1")).toBe("0.7.0-beta.1");
   });
 });

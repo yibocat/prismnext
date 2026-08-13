@@ -401,7 +401,14 @@
     const isPlaceholder = !base || String(base).includes("REPLACE_WITH_R2_PUBLIC_BASE_URL");
     if (isPlaceholder) return ["./version.json"];
     const normalized = String(base).replace(/\/$/, "");
-    return [`${normalized}/version.json`, "./version.json"];
+    // The private release builder writes the one official PrismNext package
+    // here. Stable wins; beta is only the automatic fallback before the first
+    // stable release exists. The page still exposes one set of OS downloads.
+    return [
+      `${normalized}/pro/stable/version.json`,
+      `${normalized}/pro/beta/version.json`,
+      "./version.json",
+    ];
   }
 
   async function loadVersionJson() {

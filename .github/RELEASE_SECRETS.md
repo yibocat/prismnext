@@ -1,4 +1,16 @@
-# Release secrets checklist
+# Unified release checklist
+
+## Release ownership
+
+PrismNext ships **one official desktop package**. It contains the private Pro
+module at build time; free features work without a key and a license unlocks
+the Pro features already in that package.
+
+The public Host repository never checks out Pro source or holds its release
+credentials. The private `prismnext-pro` repository watches public `v*` tags,
+builds the unified package, uploads it, and creates the public GitHub Release.
+The website uses `pro/stable/version.json` (falling back to `pro/beta` before
+the first stable cut), so it never offers a separate Free/Pro choice.
 
 ## Cloudflare (required for P2+)
 
@@ -7,22 +19,28 @@
 3. Create R2 API token with Object Read & Write on that bucket.
 4. Note the S3 API endpoint: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`
 
-### GitHub Actions secrets
+### Private `prismnext-pro` GitHub Environment secrets
+
+Put these in the private repository's `pro-release` Environment, not in the
+public Host repository. They should target this same public bucket so the
+website and packaged updater use one feed.
 
 | Name | Purpose |
 |------|---------|
-| `R2_ACCOUNT_ID` | Cloudflare account id |
-| `R2_ACCESS_KEY_ID` | R2 token access key |
-| `R2_SECRET_ACCESS_KEY` | R2 token secret |
-| `R2_BUCKET` | Bucket name |
-| `R2_PUBLIC_BASE_URL` | HTTPS root electron-updater + website links, no trailing slash — e.g. `https://pub-c529ea6125f74485bddd4d8e4cfd2d44.r2.dev` |
+| `PUBLIC_R2_ACCOUNT_ID` | Cloudflare account id |
+| `PUBLIC_R2_ACCESS_KEY_ID` | R2 token access key |
+| `PUBLIC_R2_SECRET_ACCESS_KEY` | R2 token secret |
+| `PUBLIC_R2_BUCKET` | Bucket name |
+| `PUBLIC_R2_PUBLIC_BASE_URL` | HTTPS root for the download site and updater, no trailing slash |
+| `HOST_RELEASE_TOKEN` | Fine-grained token scoped only to public `yibocat/prismnext`, Contents: Read and write; lets private CI attach installers to the public Release |
 
 ### Updater feed URL at build time
 
 Packaged apps resolve the default electron-updater generic feed from a **build-time** constant (`__PRISM_UPDATER_BASE_URL__`), not from user settings.
 
-- **Release workflow:** sets `PRISM_UPDATER_BASE_URL: ${{ secrets.R2_PUBLIC_BASE_URL }}` on build/package steps (same value as `R2_PUBLIC_BASE_URL`).
-- **Local dist:** export the same URL before `pnpm build` / `pnpm dist`, e.g. `PRISM_UPDATER_BASE_URL=https://pub-xxx.r2.dev pnpm dist:mac`.
+- **Private release workflow:** beta builds bake `${PUBLIC_R2_PUBLIC_BASE_URL}/pro/beta`; stable builds bake `${PUBLIC_R2_PUBLIC_BASE_URL}/pro/stable`.
+- **Existing OSS installs:** the private stable job also mirrors installers and updater manifests to the R2 root, allowing the unchanged `com.prism-next.app` to upgrade in place to the unified package.
+- **Local dist:** export the intended feed before `pnpm build` / `pnpm dist`, e.g. `PRISM_UPDATER_BASE_URL=https://pub-xxx.r2.dev/pro/beta pnpm dist:mac`.
 - **Runtime override:** optional settings key `updateSource` can still override the baked default for advanced QA (not shown in About UI).
 
 When both the baked default and `updateSource` are empty (typical unsigned local dev without env), About shows **no-source**.
@@ -64,9 +82,9 @@ Later you can replace `*` with your exact `https://….pages.dev` origin.
 
 ### GitHub Releases
 
-The Release workflow also creates a **GitHub Release** (right-hand Releases list)
-with the same installers attached. Collaborators on the private repo can see it;
-it does not replace R2 as the updater feed.
+The private release workflow creates the **public `yibocat/prismnext` GitHub
+Release** with the same installers attached. The private repository only keeps
+an internal build record. R2 remains the updater feed and website source.
 
 **Release notes** come from the changelog (not a hardcoded blurb):
 

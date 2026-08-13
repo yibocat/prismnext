@@ -37,11 +37,11 @@ export function seriesFileNameForVersion(version) {
 
 /**
  * @param {string} version
- * @returns {string} normalized "x.y.z" (no leading v)
+ * @returns {string} normalized semver, including an optional prerelease suffix
  */
 export function normalizeVersion(version) {
   const clean = String(version).replace(/^v/i, "").trim();
-  const m = clean.match(/^(\d+\.\d+\.\d+)/);
+  const m = clean.match(/^(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/);
   if (!m) {
     throw new Error(`Invalid semver version: ${version}`);
   }
@@ -56,7 +56,7 @@ export function normalizeVersion(version) {
  */
 export function extractVersionSection(markdown, version) {
   const v = normalizeVersion(version);
-  const escaped = v.replace(/\./g, "\\.");
+  const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // ## 0.5.14 — date | ## 0.5.14 (Unreleased) | ## 0.5.14
   const headerRe = new RegExp(`^## ${escaped}(?:\\s|[—(]|$)`, "m");
   const match = headerRe.exec(markdown);
