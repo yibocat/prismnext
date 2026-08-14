@@ -6,9 +6,11 @@ PrismNext ships **one official desktop package**. It contains the private Pro
 module at build time; free features work without a key and a license unlocks
 the Pro features already in that package.
 
-The public Host repository never checks out Pro source or holds its release
-credentials. The private `prismnext-pro` repository watches public `v*` tags,
-builds the unified package, uploads it, and creates the public GitHub Release.
+The public Host repository never checks out Pro source or holds R2 publishing
+credentials. A protected Host tag creates a short-lived GitHub App token that
+only dispatches the exact tag metadata to private `prismnext-pro`; private CI
+then builds the unified package, uploads it, and creates the public GitHub
+Release.
 The website uses `pro/stable/version.json` (falling back to `pro/beta` before
 the first stable cut), so it never offers a separate Free/Pro choice.
 
@@ -33,6 +35,27 @@ website and packaged updater use one feed.
 | `PUBLIC_R2_BUCKET` | Bucket name |
 | `PUBLIC_R2_PUBLIC_BASE_URL` | HTTPS root for the download site and updater, no trailing slash |
 | `HOST_RELEASE_TOKEN` | Fine-grained token scoped only to public `yibocat/prismnext`, Contents: Read and write; lets private CI attach installers to the public Release |
+
+### Public `prismnext` dispatch Environment secrets
+
+Create a GitHub Environment named `pro-release-dispatch`, restricted to
+protected release tags. It contains the GitHub App identity used only to start
+the private build; it has no R2 access and does not expose Pro source.
+
+1. Create a GitHub App such as `PrismNext Release Dispatcher`.
+2. Install it **only** on private `yibocat/prismnext-pro`.
+3. Grant its repository permission `Contents: Read and write`, which GitHub
+   requires to create a `repository_dispatch` event.
+4. Do not configure a webhook URL: the Host GitHub Action initiates dispatch.
+5. Add the following Environment secrets in public `yibocat/prismnext`:
+
+| Name | Purpose |
+|------|---------|
+| `PRISMNEXT_RELEASE_APP_ID` | GitHub App ID |
+| `PRISMNEXT_RELEASE_APP_PRIVATE_KEY` | GitHub App private key PEM |
+
+`request-pro-release.yml` mints a token that expires after one hour and can
+address only the private Pro repository installation.
 
 ### Updater feed URL at build time
 
