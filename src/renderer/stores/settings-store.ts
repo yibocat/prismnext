@@ -199,6 +199,14 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command (default false). */
   aiTerminalCloseTabKillsProcess?: boolean;
+  /** Auto-open Job Monitor when an agent/experiment job starts. */
+  jobMonitorAutoOpen?: boolean;
+  /** Closing a Job Monitor also cancels that execution. */
+  jobMonitorCloseCancels?: boolean;
+  /** Ms to keep a finished job visible before idle cleanup. */
+  jobMonitorKeepFinishedMs?: number;
+  /** Ms of inactivity before an unpinned finished monitor is closed. */
+  jobMonitorIdleCloseMs?: number;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
   /**

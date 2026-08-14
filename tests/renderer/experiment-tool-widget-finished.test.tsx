@@ -58,12 +58,16 @@ describe("ExperimentToolWidget finished run", () => {
 
     expect(screen.getByText("Succeeded")).toBeTruthy();
     expect(screen.getByText(/1s/)).toBeTruthy();
+    expect(screen.getByText("exp-live")).toBeTruthy();
+    expect(screen.queryByText(/python -u -c/)).toBeNull();
     expect(screen.queryByText("run-20260726-033427-cdb0")).toBeNull();
     expect(screen.queryByText(/2026-07-26T03:34:27/)).toBeNull();
 
-    // Expand body to read output + optional Details.
-    fireEvent.click(screen.getByText("Succeeded"));
-    expect(screen.getByText(/epoch 9 loss=0.100/)).toBeTruthy();
+    fireEvent.click(screen.getByText("exp-live"));
+    const terminal = screen.getByTestId("experiment-run-terminal");
+    expect(terminal.textContent).toContain('python -u -c "import time; print(1)"');
+    expect(terminal.textContent).toContain("epoch 9 loss=0.100");
+    expect(screen.getByText("Details")).toBeTruthy();
 
     fireEvent.click(screen.getByText("Details"));
     expect(screen.getByText("run-20260726-033427-cdb0")).toBeTruthy();

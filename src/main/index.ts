@@ -22,6 +22,8 @@ import { installApplicationMenu } from "./menu";
 import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
+import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
+import { startExecutionEventBroadcast } from "./ipc/execution";
 import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
@@ -182,8 +184,17 @@ function pickWindowForShell(): BrowserWindow | null {
   return getPrimaryWindow();
 }
 
+function finalizeExecutionsForQuit(): void {
+  try {
+    void getExecutionRegistry().finalizeForQuit();
+  } catch {
+    // Registry may not be initialized during early quit.
+  }
+}
+
 function disposeGlobalsWhenNoWindows(): void {
   if (BrowserWindow.getAllWindows().length > 0) return;
+  finalizeExecutionsForQuit();
   disposeChat();
   destroyAllAiPty();
   destroyAllTerminalSessions();
@@ -357,6 +368,8 @@ app.whenReady().then(async () => {
   });
 
   startTerminalBridge();
+  initExecutionRegistry(join(app.getPath("userData"), "execution-history"));
+  startExecutionEventBroadcast();
   startLiteratureBridge();
   startLatexBridge();
   startResearchBriefBridge();
@@ -515,6 +528,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   setIsQuitting(true);
   disposeAllTectonicDaemonSessions();
+  finalizeExecutionsForQuit();
   destroyAllAiPty();
   destroyAllTerminalSessions();
 });

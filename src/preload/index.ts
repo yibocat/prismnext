@@ -2,6 +2,18 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { WorkspaceFolder } from "../renderer/types/workspace";
 import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
 import type { IconSpec } from "../shared/icon-spec";
+import type {
+	ExecutionApplyProjectSwitchArgs,
+	ExecutionApplyProjectSwitchResult,
+	ExecutionCancelResult,
+	ExecutionFindByToolCallIdResult,
+	ExecutionGetResult,
+	ExecutionListRunningResult,
+	ExecutionReplayArgs,
+	ExecutionReplayResult,
+	ExecutionRerunResult,
+	TerminalExecutionEvent,
+} from "../shared/execution";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -1364,19 +1376,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("terminal:loadConfig", { projectRoot }),
 	terminalSaveConfig: (projectRoot: string, config: unknown) =>
 		ipcRenderer.invoke("terminal:saveConfig", { projectRoot, config }),
-	terminalRunAiBash: (args: {
-		sessionId: string;
-		chatTabId: string;
-		toolCallId: string;
-		command: string;
-		cwd?: string;
-	}) => ipcRenderer.invoke("terminal:runAiBash", args),
 	terminalRegisterBashJob: (args: {
 		sessionId: string;
 		toolCallId: string;
 		command: string;
 	}) => ipcRenderer.invoke("terminal:registerBashJob", args),
 	terminalDestroyAllAiPty: () => ipcRenderer.invoke("terminal:destroyAllAiPty"),
+
+	executionGet: (executionId: string): Promise<ExecutionGetResult> =>
+		ipcRenderer.invoke("execution:get", { executionId }),
+	executionFindByToolCallId: (toolCallId: string): Promise<ExecutionFindByToolCallIdResult> =>
+		ipcRenderer.invoke("execution:findByToolCallId", { toolCallId }),
+	executionReplay: (args: ExecutionReplayArgs): Promise<ExecutionReplayResult> =>
+		ipcRenderer.invoke("execution:replay", args),
+	executionCancel: (executionId: string): Promise<ExecutionCancelResult> =>
+		ipcRenderer.invoke("execution:cancel", { executionId }),
+	executionRerun: (executionId: string): Promise<ExecutionRerunResult> =>
+		ipcRenderer.invoke("execution:rerun", { executionId }),
+	executionListRunning: (): Promise<ExecutionListRunningResult> =>
+		ipcRenderer.invoke("execution:listRunning"),
+	executionApplyProjectSwitch: (
+		args: ExecutionApplyProjectSwitchArgs,
+	): Promise<ExecutionApplyProjectSwitchResult> =>
+		ipcRenderer.invoke("execution:applyProjectSwitch", args),
+	onExecutionEvent: (listener: (event: TerminalExecutionEvent) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, payload: TerminalExecutionEvent) =>
+			listener(payload);
+		ipcRenderer.on("execution:event", handler);
+		return () => ipcRenderer.removeListener("execution:event", handler);
+	},
 
 	// Terminal events (Main → Renderer)
 	onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => {
@@ -1389,55 +1417,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("terminal:exit", handler);
 		return () => ipcRenderer.removeListener("terminal:exit", handler);
 	},
-	onTerminalAiStream: (
-		callback: (data: {
-			sessionId: string;
-			chatTabId: string;
-			requestId: string;
-			toolCallId?: string;
-			chunk: string;
-			phase: "output";
-		}) => void,
-	) => {
-		const handler = (
-			_event: Electron.IpcRendererEvent,
-			data: {
-				sessionId: string;
-				chatTabId: string;
-				requestId: string;
-				toolCallId?: string;
-				chunk: string;
-				phase: "output";
-			},
-		) => callback(data);
-		ipcRenderer.on("terminal:aiStream", handler);
-		return () => ipcRenderer.removeListener("terminal:aiStream", handler);
-	},
-	onTerminalAiExit: (
-		callback: (data: {
-			sessionId: string;
-			chatTabId: string;
-			requestId: string;
-			toolCallId?: string;
-			exitCode: number;
-			cwd: string;
-		}) => void,
-	) => {
-		const handler = (
-			_event: Electron.IpcRendererEvent,
-			data: {
-				sessionId: string;
-				chatTabId: string;
-				requestId: string;
-				toolCallId?: string;
-				exitCode: number;
-				cwd: string;
-			},
-		) => callback(data);
-		ipcRenderer.on("terminal:aiExit", handler);
-		return () => ipcRenderer.removeListener("terminal:aiExit", handler);
-	},
-
 	// Git operations
 	gitWarmup: (projectRoot: string) =>
 		ipcRenderer.invoke("git:warmup", { projectRoot }),

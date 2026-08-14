@@ -2,7 +2,7 @@
 
 export type AiTerminalPhase = "idle" | "running" | "completed" | "dismissed";
 
-/** AiTerminalView data source — live PTY stream vs mirror log replay. */
+/** Job Monitor presentation — live follow vs finished replay. */
 export type AiTerminalViewMode = "live" | "replay";
 
 export interface AiTerminalSessionState {
@@ -56,7 +56,7 @@ export function formatAiTerminalStatus(state: AiTerminalSessionState | undefined
   return null;
 }
 
-/** PTY + running → live stream; everything else replays sessionMirrorLog. */
+/** PTY + running → live stream; everything else replays the persisted transcript. */
 export function resolveAiTerminalViewMode(
   agentTerminalMode: "mirror" | "pty" | undefined,
   sessionPhase: AiTerminalPhase | undefined,

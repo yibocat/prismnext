@@ -2,36 +2,22 @@ import { create } from "zustand";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
-  buildMirrorFromBash,
-  formatMirrorCommandLine,
-  formatMirrorDenied,
-  formatMirrorExitFooter,
-  formatMirrorHeader,
-  formatMirrorOutput,
-} from "@/lib/terminal/ai-mirror";
-import {
   aiSessionTabTitle,
   consolidateAiTabsForChat,
   findOpenAiTabForChat,
   linkAiTabToChat,
   syncAiTabTitle,
 } from "@/lib/terminal/ai-session";
-import { shouldAutoOpenAiTerminal } from "@/lib/terminal/ai-prefs";
-import { appendRingBuffer } from "@/lib/terminal/ring-buffer";
-import {
-  migrateMirrorLogOnSessionBound,
-  resolveAiMirrorKey,
-} from "@/lib/terminal/mirror-key";
+import { readTerminalExecutionSettings, shouldAutoOpenAiTerminal } from "@/lib/terminal/ai-prefs";
+import { resolveAiMirrorKey } from "@/lib/terminal/mirror-key";
 import {
   aiTabTitleWithPhase,
   shouldGcAiTerminalTab,
-  AI_TERMINAL_POST_EXIT_GRACE_MS_DEFAULT,
-  AI_TERMINAL_IDLE_CLOSE_MS_DEFAULT,
   type AiTerminalSessionState,
   type AiTerminalPhase,
 } from "@/lib/terminal/ai-terminal-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { useExecutionStore } from "@/stores/execution-store";
 
 export interface BashMirrorState {
   chatTabId: string;
@@ -56,17 +42,13 @@ interface TerminalAiState {
   toolCallToChatTab: Record<string, string>;
   /** User closed AI tab — suppress auto-open until reopen (keyed by session mirror key). */
   userDismissedAiTab: Record<string, boolean>;
-  /** AI tab id → live xterm buffer. */
+  /** AI tab id → leftover local buffer (not the execution transcript). */
   mirrorText: Record<string, string>;
-  /** Full session mirror per OpenCode session (survives tab close). */
-  sessionMirrorLog: Record<string, string>;
   bashByTab: Record<string, BashMirrorState>;
   bashByToolCall: Record<string, BashMirrorState>;
   /** Per-session AI terminal lifecycle (keyed by mirror log key). */
   sessionStates: Record<string, AiTerminalSessionState>;
 
-  appendChatMirror: (chatTabId: string, chunk: string) => void;
-  syncOpenTabMirror: (chatTabId: string) => void;
   ensureAiTab: (chatTabId: string, toolCallId: string, command: string, cwd?: string) => string;
   onBashStart: (chatTabId: string, toolCallId: string, command: string, cwd?: string) => string;
   onBashOutput: (toolCallId: string, output: string, exitCode?: number, isError?: boolean) => void;
@@ -76,13 +58,6 @@ interface TerminalAiState {
     output: string,
     exitCode?: number,
     isError?: boolean,
-  ) => void;
-  onAiStreamChunk: (chatTabId: string, chunk: string) => void;
-  onAiStreamExit: (
-    chatTabId: string,
-    exitCode: number,
-    cwd?: string,
-    toolCallId?: string,
   ) => void;
   onBashDenied: (chatTabId: string, toolCallId: string, command: string) => void;
   onAiTabClosedByUser: (aiTabId: string) => void;
@@ -219,40 +194,11 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   toolCallToChatTab: {},
   userDismissedAiTab: {},
   mirrorText: {},
-  sessionMirrorLog: {},
   bashByTab: {},
   bashByToolCall: {},
   sessionStates: {},
 
-  appendChatMirror: (chatTabId, chunk) => {
-    const key = resolveAiMirrorKey(chatTabId);
-    set((s) => {
-      const base = s.sessionMirrorLog[key] ?? formatMirrorHeader();
-      const nextSession = appendRingBuffer(base, chunk);
-      const openId = findOpenAiTabForChat(chatTabId);
-      const nextMirror = { ...s.mirrorText };
-      if (openId) {
-        nextMirror[openId] = nextSession;
-      }
-      return {
-        sessionMirrorLog: { ...s.sessionMirrorLog, [key]: nextSession },
-        mirrorText: nextMirror,
-      };
-    });
-  },
-
-  syncOpenTabMirror: (chatTabId) => {
-    const key = resolveAiMirrorKey(chatTabId);
-    const mirror = get().sessionMirrorLog[key];
-    if (!mirror) return;
-    const openId = findOpenAiTabForChat(chatTabId);
-    if (!openId) return;
-    set((s) => ({
-      mirrorText: { ...s.mirrorText, [openId]: mirror },
-    }));
-  },
-
-  ensureAiTab: (chatTabId, toolCallId, command, cwd) => {
+  ensureAiTab: (chatTabId, toolCallId, command, _cwd) => {
     const consolidated = consolidateAiTabsForChat(chatTabId);
     const fromPanel = consolidated ?? findOpenAiTabForChat(chatTabId);
     const mapped = get().chatTabToAiTab[chatTabId];
@@ -261,7 +207,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
     if (existing) {
       linkAiTabToChat(existing, chatTabId, toolCallId);
       syncAiTabTitle(existing, command);
-      get().syncOpenTabMirror(chatTabId);
       set((s) => ({
         chatTabToAiTab: { ...s.chatTabToAiTab, [chatTabId]: existing },
         toolCallToAiTab: { ...s.toolCallToAiTab, [toolCallId]: existing },
@@ -270,18 +215,15 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       return existing;
     }
 
-    const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
-      chatTabId,
-      toolCallId,
-      title: aiSessionTabTitle(command),
-    });
-    const restored = get().sessionMirrorLog[resolveAiMirrorKey(chatTabId)] ?? formatMirrorHeader();
+    const executionId = useExecutionStore.getState().findByToolCallId(toolCallId);
+    const aiTabId = executionId
+      ? useRightPanelStore.getState().openJobMonitor(executionId)
+      : "";
+    if (!aiTabId) return "";
     set((s) => ({
       chatTabToAiTab: { ...s.chatTabToAiTab, [chatTabId]: aiTabId },
       toolCallToAiTab: { ...s.toolCallToAiTab, [toolCallId]: aiTabId },
       userDismissedAiTab: { ...s.userDismissedAiTab, [resolveAiMirrorKey(chatTabId)]: false },
-      mirrorText: { ...s.mirrorText, [aiTabId]: restored },
-      sessionMirrorLog: { ...s.sessionMirrorLog, [resolveAiMirrorKey(chatTabId)]: restored },
     }));
     upsertSessionState(set, resolveAiMirrorKey(chatTabId), chatTabId, {
       aiTabId,
@@ -301,7 +243,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
     }
 
     registerToolCall(set, toolCallId, chatTabId);
-    const line = formatMirrorCommandLine(command, cwd);
     const bash: BashMirrorState = {
       chatTabId,
       command,
@@ -319,26 +260,15 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       }));
       linkAiTabToChat(openId, chatTabId, toolCallId);
       syncAiTabTitle(openId, command);
-      get().appendChatMirror(chatTabId, line);
       registerBashState(set, openId, toolCallId, bash);
       markSessionRunning(set, chatTabId, toolCallId, command, openId);
       if (autoOpen) get().focusAiTab(openId);
       return openId;
     }
 
-    if (!autoOpen) {
-      get().appendChatMirror(chatTabId, line);
-      registerBashState(set, undefined, toolCallId, bash);
-      markSessionRunning(set, chatTabId, toolCallId, command);
-      return "";
-    }
-
-    const aiTabId = get().ensureAiTab(chatTabId, toolCallId, command, cwd);
-    get().appendChatMirror(chatTabId, line);
-    registerBashState(set, aiTabId, toolCallId, bash);
-    markSessionRunning(set, chatTabId, toolCallId, command, aiTabId);
-    get().focusAiTab(aiTabId);
-    return aiTabId;
+    registerBashState(set, undefined, toolCallId, bash);
+    markSessionRunning(set, chatTabId, toolCallId, command);
+    return "";
   },
 
   onBashOutput: (toolCallId, output, exitCode, isError) => {
@@ -356,17 +286,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       status: "completed",
     };
 
-    const chunks: string[] = [];
-    if (output && output !== prev?.output) chunks.push(formatMirrorOutput(output));
-    if (exitCode !== undefined) chunks.push(formatMirrorExitFooter(exitCode, isError));
-    const chunkText = chunks.join("");
-    if (!chunkText) {
-      registerBashState(set, findOpenAiTabForChat(chatTabId), toolCallId, merged);
-      markSessionCompleted(set, get, chatTabId);
-      return;
-    }
-
-    get().appendChatMirror(chatTabId, chunkText);
     const openId = findOpenAiTabForChat(chatTabId);
     if (openId) {
       set((s) => ({
@@ -398,52 +317,15 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
     markSessionCompleted(set, get, chatTabId);
   },
 
-  onAiStreamChunk: (chatTabId, chunk) => {
-    if (!chunk) return;
-    get().appendChatMirror(chatTabId, chunk);
-  },
-
-  onAiStreamExit: (chatTabId, exitCode, cwd, toolCallId) => {
-    const footer = formatMirrorExitFooter(exitCode, exitCode !== 0);
-    get().appendChatMirror(chatTabId, footer);
-
-    if (toolCallId) {
-      const prev = get().bashByToolCall[toolCallId];
-      if (prev) {
-        registerBashState(set, findOpenAiTabForChat(chatTabId), toolCallId, {
-          ...prev,
-          cwd: cwd ?? prev.cwd,
-          exitCode,
-          isError: exitCode !== 0,
-          status: "completed",
-        });
-      }
-    }
-    markSessionCompleted(set, get, chatTabId);
-  },
-
   onBashDenied: (chatTabId, toolCallId, command) => {
-    const autoOpen = shouldAutoOpenAiTerminal();
     registerToolCall(set, toolCallId, chatTabId);
-    const deniedText = formatMirrorDenied(command);
-    const bash: BashMirrorState = {
+    registerBashState(set, undefined, toolCallId, {
       chatTabId,
       command,
       output: "",
       status: "denied",
       isError: true,
-    };
-
-    if (!autoOpen) {
-      get().appendChatMirror(chatTabId, deniedText);
-      registerBashState(set, undefined, toolCallId, bash);
-      return;
-    }
-
-    const aiTabId = get().ensureAiTab(chatTabId, toolCallId, command);
-    get().appendChatMirror(chatTabId, deniedText);
-    registerBashState(set, aiTabId, toolCallId, bash);
-    get().focusAiTab(aiTabId);
+    });
   },
 
   onAiTabClosedByUser: (aiTabId) => {
@@ -452,13 +334,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       const chatTabId =
         tab?.linkedChatTabId
         ?? Object.entries(s.chatTabToAiTab).find(([, id]) => id === aiTabId)?.[0];
-      const mirror = s.mirrorText[aiTabId]
-        ?? (chatTabId ? s.sessionMirrorLog[resolveAiMirrorKey(chatTabId)] : undefined);
-      const nextSessionLog = { ...s.sessionMirrorLog };
-      if (chatTabId && mirror) {
-        nextSessionLog[resolveAiMirrorKey(chatTabId)] = mirror;
-      }
-
       const nextChat = { ...s.chatTabToAiTab };
       if (chatTabId) delete nextChat[chatTabId];
 
@@ -497,7 +372,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
         toolCallToAiTab: nextTool,
         mirrorText: nextMirror,
         bashByTab: nextBashTab,
-        sessionMirrorLog: nextSessionLog,
         userDismissedAiTab: nextDismissed,
         sessionStates: nextSessionStates,
       };
@@ -518,70 +392,13 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   },
 
   openBashInTerminal: (opts) => {
-    const { chatTabId, toolCallId, command, cwd } = opts;
-    const openId = consolidateAiTabsForChat(chatTabId) ?? findOpenAiTabForChat(chatTabId);
-
-    if (openId) {
-      linkAiTabToChat(openId, chatTabId, toolCallId);
-      syncAiTabTitle(openId, command);
-      get().syncOpenTabMirror(chatTabId);
-      set((s) => ({
-        chatTabToAiTab: { ...s.chatTabToAiTab, [chatTabId]: openId },
-        toolCallToAiTab: { ...s.toolCallToAiTab, [toolCallId]: openId },
-        userDismissedAiTab: { ...s.userDismissedAiTab, [resolveAiMirrorKey(chatTabId)]: false },
-      }));
-      get().focusAiTab(openId);
-      return openId;
+    const { chatTabId, toolCallId } = opts;
+    const executionId = useExecutionStore.getState().findByToolCallId(toolCallId);
+    if (executionId) {
+      useExecutionStore.getState().clearMonitorDismissed(chatTabId);
+      return useRightPanelStore.getState().openJobMonitor(executionId);
     }
-
-    const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
-      chatTabId,
-      toolCallId,
-      title: aiSessionTabTitle(command),
-    });
-
-    let mirror = get().sessionMirrorLog[resolveAiMirrorKey(chatTabId)];
-    if (!mirror) {
-      const bash = get().bashByToolCall[toolCallId];
-      if (bash) {
-        mirror = buildMirrorFromBash(bash);
-      } else if (opts.isDenied) {
-        mirror = buildMirrorFromBash({ command, status: "denied" });
-      } else {
-        mirror = buildMirrorFromBash({
-          command,
-          cwd,
-          output: opts.output,
-          exitCode: opts.exitCode,
-          isError: opts.isError,
-          status: "completed",
-        });
-      }
-    }
-
-    const bashState: BashMirrorState = get().bashByToolCall[toolCallId] ?? {
-      chatTabId,
-      command,
-      cwd,
-      output: opts.output ?? "",
-      exitCode: opts.exitCode,
-      isError: opts.isError,
-      status: opts.isDenied ? "denied" : "completed",
-    };
-
-    set((s) => ({
-      chatTabToAiTab: { ...s.chatTabToAiTab, [chatTabId]: aiTabId },
-      toolCallToAiTab: { ...s.toolCallToAiTab, [toolCallId]: aiTabId },
-      toolCallToChatTab: { ...s.toolCallToChatTab, [toolCallId]: chatTabId },
-      userDismissedAiTab: { ...s.userDismissedAiTab, [resolveAiMirrorKey(chatTabId)]: false },
-      mirrorText: { ...s.mirrorText, [aiTabId]: mirror },
-      sessionMirrorLog: { ...s.sessionMirrorLog, [resolveAiMirrorKey(chatTabId)]: mirror },
-      bashByTab: { ...s.bashByTab, [aiTabId]: bashState },
-      bashByToolCall: { ...s.bashByToolCall, [toolCallId]: bashState },
-    }));
-
-    get().focusAiTab(aiTabId);
-    return aiTabId;
+    return "";
   },
 
   focusLiveAiTerminal: (chatTabId, toolCallId) => {
@@ -600,7 +417,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
           userDismissedAiTab: { ...s.userDismissedAiTab, [resolveAiMirrorKey(chatTabId)]: false },
         }));
       }
-      get().syncOpenTabMirror(chatTabId);
       get().focusAiTab(openId);
       return openId;
     }
@@ -668,7 +484,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
 
   migrateSessionMirrorLog: (chatTabId, sessionId) => {
     set((s) => {
-      const nextLog = migrateMirrorLogOnSessionBound(s.sessionMirrorLog, chatTabId, sessionId);
       const nextDismissed = { ...s.userDismissedAiTab };
       if (chatTabId !== sessionId && nextDismissed[chatTabId]) {
         nextDismissed[sessionId] = true;
@@ -684,7 +499,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
         delete nextSessionStates[chatTabId];
       }
       return {
-        sessionMirrorLog: nextLog,
         userDismissedAiTab: nextDismissed,
         sessionStates: nextSessionStates,
       };
@@ -718,30 +532,16 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   focusOrOpenAiTerminal: (chatTabId) => {
     const openId = get().getAiTabForChat(chatTabId);
     if (openId) {
-      get().syncOpenTabMirror(chatTabId);
       get().focusAiTab(openId);
       return;
     }
-    const key = resolveAiMirrorKey(chatTabId);
-    const mirror = get().sessionMirrorLog[key];
-    if (!mirror) return;
-
-    const aiTabId = useRightPanelStore.getState().newAiTerminalTab({
-      chatTabId,
-      title: aiSessionTabTitle(),
-    });
-    set((s) => ({
-      chatTabToAiTab: { ...s.chatTabToAiTab, [chatTabId]: aiTabId },
-      userDismissedAiTab: { ...s.userDismissedAiTab, [key]: false },
-      mirrorText: { ...s.mirrorText, [aiTabId]: mirror },
-    }));
-    const prevPhase = get().sessionStates[key]?.phase ?? "completed";
-    upsertSessionState(set, key, chatTabId, {
-      aiTabId,
-      lastViewedAt: Date.now(),
-      phase: prevPhase,
-    });
-    get().focusAiTab(aiTabId);
+    const toolCallId = Object.entries(get().toolCallToChatTab).find(([, id]) => id === chatTabId)?.[0];
+    const executionId = toolCallId
+      ? useExecutionStore.getState().findByToolCallId(toolCallId)
+      : undefined;
+    if (!executionId) return;
+    useExecutionStore.getState().clearMonitorDismissed(chatTabId);
+    useRightPanelStore.getState().openJobMonitor(executionId);
   },
 
   toggleAiTerminalPinned: (chatTabId) => {
@@ -753,15 +553,9 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   },
 
   sweepIdleAiTerminalTabs: () => {
-    const settings = useSettingsStore.getState().settings;
-    const postExitGraceMs =
-      typeof settings.aiTerminalPostExitGraceMs === "number"
-        ? settings.aiTerminalPostExitGraceMs
-        : AI_TERMINAL_POST_EXIT_GRACE_MS_DEFAULT;
-    const idleCloseMs =
-      typeof settings.aiTerminalIdleCloseMs === "number"
-        ? settings.aiTerminalIdleCloseMs
-        : AI_TERMINAL_IDLE_CLOSE_MS_DEFAULT;
+    const settings = readTerminalExecutionSettings();
+    const postExitGraceMs = settings.jobMonitorKeepFinishedMs;
+    const idleCloseMs = settings.jobMonitorIdleCloseMs;
 
     const activeSessionId = useChatStore.getState().sessionId;
     const now = Date.now();
@@ -784,7 +578,6 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
       toolCallToChatTab: {},
       userDismissedAiTab: {},
       mirrorText: {},
-      sessionMirrorLog: {},
       bashByTab: {},
       bashByToolCall: {},
       sessionStates: {},

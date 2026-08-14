@@ -355,6 +355,7 @@ describe("experiment-store", () => {
       electronAPI.experimentRun.mockResolvedValueOnce({
         ok: true,
         runId: "run-20260708-100000-abcd",
+        executionId: "11111111-1111-4111-8111-111111111111",
         status: "started",
       });
 
@@ -367,6 +368,7 @@ describe("experiment-store", () => {
       expect(state.runInFlight).toEqual({
         id: "exp-a",
         runId: "run-20260708-100000-abcd",
+        executionId: "11111111-1111-4111-8111-111111111111",
         command: ".venv/bin/python train.py",
         liveOutput: "",
       });
@@ -733,6 +735,21 @@ describe("experiment-store", () => {
       });
     });
 
+    it("stores executionId from the started announcement", () => {
+      useExperimentStore.getState().handleRunStarted({
+        id: "exp-a",
+        runId: "run-agent-2",
+        command: "python train.py",
+        executionId: "22222222-2222-4222-8222-222222222222",
+      });
+
+      expect(useExperimentStore.getState().runInFlight).toMatchObject({
+        id: "exp-a",
+        runId: "run-agent-2",
+        executionId: "22222222-2222-4222-8222-222222222222",
+      });
+    });
+
     it("merges early buffered chunks into liveOutput", () => {
       useExperimentStore.setState({
         runOutputBuffer: { "run-agent-1": "epoch 0\n" },
@@ -816,13 +833,13 @@ describe("experiment-store", () => {
   });
 
   describe("cancelRun", () => {
-    it("calls experimentCancelRun and clears runInFlight", async () => {
+    it("calls experimentCancelRun and marks cancel-requested without clearing runInFlight", async () => {
       useExperimentStore.setState({
         runInFlight: {
           id: "exp-a",
           runId: "run-1",
           command: "sleep 999",
-          liveOutput: "",
+          liveOutput: "epoch 1\n",
         },
       });
       electronAPI.experimentCancelRun.mockResolvedValueOnce({ ok: true });
@@ -834,10 +851,16 @@ describe("experiment-store", () => {
         id: "exp-a",
         runId: "run-1",
       });
-      expect(useExperimentStore.getState().runInFlight).toBeNull();
+      expect(useExperimentStore.getState().runInFlight).toEqual({
+        id: "exp-a",
+        runId: "run-1",
+        command: "sleep 999",
+        liveOutput: "epoch 1\n",
+        cancelRequested: true,
+      });
     });
 
-    it("still clears runInFlight if the IPC throws", async () => {
+    it("still keeps runInFlight as cancel-requested if the IPC throws", async () => {
       useExperimentStore.setState({
         runInFlight: {
           id: "exp-a",
@@ -850,7 +873,11 @@ describe("experiment-store", () => {
 
       await useExperimentStore.getState().cancelRun(PROJECT, "exp-a", "run-1");
 
-      expect(useExperimentStore.getState().runInFlight).toBeNull();
+      expect(useExperimentStore.getState().runInFlight).toMatchObject({
+        id: "exp-a",
+        runId: "run-1",
+        cancelRequested: true,
+      });
     });
   });
 

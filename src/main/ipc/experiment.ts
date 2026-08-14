@@ -8,7 +8,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { cancelAiCommandForSession } from "../services/ai-pty";
 import { getSettings } from "../services/settings";
 import {
   archiveExperiment,
@@ -26,8 +25,8 @@ import {
   isExperimentCtxError,
 } from "../services/experiment-log-service";
 import {
+  cancelExperimentExecution,
   kickoffExperimentRun,
-  markExperimentRunCancelled,
 } from "../services/experiment-run-executor";
 import { snapshotExperiment } from "../services/experiment-results-snapshot";
 import { broadcastExperimentChanged } from "../services/experiment-ui-events";
@@ -334,7 +333,7 @@ export function registerExperimentHandlers(): void {
     // Stream events (started / output / complete) are broadcast from the
     // executor so Agent bridge runs share the same Chat live path (Station 2).
     // Pass originSender so this window still gets events origin-first (Bug #4).
-    kickoffExperimentRun({
+    const started = await kickoffExperimentRun({
       ctx: ctxResult,
       id,
       command,
@@ -345,16 +344,19 @@ export function registerExperimentHandlers(): void {
       chatSessionId,
       originSender: sender,
     });
-    return { ok: true as const, runId, status: "started" as const };
+    return {
+      ok: true as const,
+      runId: started?.runId ?? runId,
+      executionId: started?.executionId,
+      status: "started" as const,
+    };
   });
 
-  ipcMain.handle("experiment:cancelRun", (_event, args: ExperimentCancelRunArgs) => {
+  ipcMain.handle("experiment:cancelRun", async (_event, args: ExperimentCancelRunArgs) => {
     const id = (args.id || "").trim();
     const runId = (args.runId || "").trim();
     if (!id || !runId) return { ok: true as const };
-    // Stamp before kill so the eventual appendRun can mark cancelled (Bug #21).
-    markExperimentRunCancelled(id, runId);
-    cancelAiCommandForSession(`experiment:${id}:${runId}`);
+    await cancelExperimentExecution(id, runId);
     return { ok: true as const };
   });
 

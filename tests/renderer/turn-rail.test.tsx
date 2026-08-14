@@ -37,6 +37,24 @@ describe("TurnRail", () => {
     expect(onJump).toHaveBeenCalledWith(1);
   });
 
+  it("stacks above sticky user bubbles so the preview is not covered", () => {
+    const { container } = render(
+      <TurnRail previews={previews} windowStart={0} scrollContainerRef={nullRef} onJump={() => {}} />,
+    );
+    const rail = container.querySelector("[data-chat-turn-rail]");
+    expect(rail?.className).toContain("z-40");
+    expect(rail?.className).not.toContain("z-20");
+  });
+
+  it("hugs the chat panel edge so it does not sit over the message column", () => {
+    const { container } = render(
+      <TurnRail previews={previews} windowStart={0} scrollContainerRef={nullRef} onJump={() => {}} />,
+    );
+    const rail = container.querySelector("[data-chat-turn-rail]");
+    expect(rail?.className).toContain("right-1");
+    expect(rail?.className).not.toContain("right-6");
+  });
+
   it("dims bars before the virtual window start", () => {
     const { container } = render(
       <TurnRail previews={previews} windowStart={1} scrollContainerRef={nullRef} onJump={() => {}} />,

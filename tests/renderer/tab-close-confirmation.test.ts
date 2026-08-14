@@ -126,7 +126,7 @@ describe("tab-close-confirmation", () => {
     } as ReturnType<typeof useTerminalAiStore.getState>);
 
     const confirmation = getTabCloseConfirmation(aiTerminalTab);
-    expect(confirmation?.title).toBe("Close AI Terminal");
+    expect(confirmation?.title).toBe("Close Job Monitor");
     expect(confirmation?.destructive).toBe(false);
   });
 

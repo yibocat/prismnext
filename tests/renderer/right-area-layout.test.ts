@@ -12,7 +12,7 @@ import {
   toggleRightAreaMaximize,
   reconcileRightAreaOnMainAreaResize,
 } from "@/lib/workspace/right-area-layout";
-import { RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
+import { PANEL_RESIZE_HIT, RESIZE_FILL_PX } from "@/lib/workspace/layout-constants";
 import { MAIN_AREA_MIN, RIGHT_AREA_MIN } from "@/styles/constants";
 
 function mockPanel(state: { px: number; collapsed: boolean }): PanelImperativeHandle {
@@ -249,5 +249,10 @@ describe("right-area-layout", () => {
     vi.stubGlobal("innerWidth", 1200);
     const left = mockPanel({ px: 280, collapsed: false });
     expect(measureMainAreaWidthPx(left)).toBe(920);
+  });
+
+  it("keeps the sash hit narrower than a typical scrollbar so the thumb stays clickable", () => {
+    expect(PANEL_RESIZE_HIT.fine).toBeLessThanOrEqual(6);
+    expect(PANEL_RESIZE_HIT.coarse).toBeLessThanOrEqual(8);
   });
 });

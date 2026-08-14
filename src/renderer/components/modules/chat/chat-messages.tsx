@@ -988,7 +988,7 @@ export const ChatMessages = memo(function ChatMessages() {
       <div
         ref={scrollRef}
         data-chat-scroll
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 z-0 overflow-y-auto overflow-x-hidden"
       >
         <div ref={contentRef} data-chat-width className="w-full min-w-0">
           {windowStart > 0 && (

@@ -1490,6 +1490,9 @@ export function appendRun(
   if (input.cancelled) run.cancelled = true;
   if (input.kind) run.kind = input.kind;
   if (input.logPath) run.logPath = input.logPath;
+  if (input.executionId) run.executionId = input.executionId;
+  if (input.transcriptPath) run.transcriptPath = input.transcriptPath;
+  if (input.stderrPath) run.stderrPath = input.stderrPath;
   // Provenance before runs.jsonl (Bug #5): never stamp an orphan provenanceEventId
   // on the run when the mirror fails. Prefer a provenance row without a run link
   // over a run pointing at a missing event.

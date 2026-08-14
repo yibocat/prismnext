@@ -313,7 +313,9 @@ export function ExperimentsRunDialog({
                   aria-live="polite"
                 >
                   <Loader2Icon className="size-3 shrink-0 animate-spin" aria-hidden />
-                  <span className="font-medium">{t("experiments.running")}</span>
+                  <span className="font-medium">
+                    {t(runInFlight?.cancelRequested ? "experiments.cancelling" : "experiments.running")}
+                  </span>
                 </span>
                 <Button
                   type="button"

@@ -1,4 +1,4 @@
-import type { ModeDefinition, RightTab } from "@/lib/workspace/mode-registry";
+import { isJobMonitorTab, type ModeDefinition, type RightTab } from "@/lib/workspace/mode-registry";
 import { Terminal as TerminalIcon } from "lucide-react";
 import { TerminalSidebar } from "./terminal-sidebar";
 import { TerminalToolbar } from "./terminal-toolbar";
@@ -9,8 +9,9 @@ function TerminalToolbarWrapper({ tab }: { tab: RightTab }) {
     <TerminalToolbar
       tabId={tab.id}
       tabTitle={tab.title}
-      isAi={tab.terminalSource === "ai"}
+      isAi={isJobMonitorTab(tab)}
       linkedChatTabId={tab.linkedChatTabId}
+      linkedExecutionId={tab.linkedExecutionId}
     />
   );
 }

@@ -1143,6 +1143,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().removeAiTabsForChat(id);
       });
+      void import("./execution-store").then(({ useExecutionStore }) => {
+        void useExecutionStore.getState().cancelForChat(id);
+      });
   },
 
   renameSession: async (tabId, title) => {

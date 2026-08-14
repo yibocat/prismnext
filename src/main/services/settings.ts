@@ -60,6 +60,10 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command. */
   aiTerminalCloseTabKillsProcess?: boolean;
+  jobMonitorAutoOpen?: boolean;
+  jobMonitorCloseCancels?: boolean;
+  jobMonitorKeepFinishedMs?: number;
+  jobMonitorIdleCloseMs?: number;
 
   /** When true (default), agent PDF body reads require intensive-reading list membership. */
   literatureStrictIntensivePdf?: boolean;

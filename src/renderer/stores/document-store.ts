@@ -24,7 +24,11 @@ import {
 } from "@/lib/files/project-path";
 import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { loadSessionUiPrefsIntoLayout } from "@/lib/chat/session-ui-prefs";
-import { resetApplicationStateForProjectSwitch } from "@/lib/workspace/project-lifecycle";
+import {
+  confirmProjectSwitchIfNeeded,
+  listRunningExperimentIds,
+  resetApplicationStateForProjectSwitch,
+} from "@/lib/workspace/project-lifecycle";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -261,9 +265,23 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const previousRoot = get().projectRoot;
+    const switching = Boolean(previousRoot && previousRoot !== rootPath);
+    let stopExperimentIds: string[] | undefined;
+    if (switching) {
+      const decision = await confirmProjectSwitchIfNeeded(previousRoot);
+      if (decision === "abort") return;
+      stopExperimentIds = decision === "stop" && previousRoot
+        ? listRunningExperimentIds(previousRoot)
+        : [];
+      await window.electronAPI.executionApplyProjectSwitch?.({
+        projectId: previousRoot!,
+        stopExperimentIds,
+      });
+    }
+
     const generation = ++openProjectGeneration;
     projectOpenSupersededByClose = false;
-    const previousRoot = get().projectRoot;
     const t0 = performance.now();
     let canonicalRoot = rootPath;
     set({ isOpeningProject: true });
@@ -413,6 +431,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   },
 
   closeProject: async () => {
+    const previousRoot = get().projectRoot;
+    const decision = await confirmProjectSwitchIfNeeded(previousRoot);
+    if (decision === "abort") return;
+    if (previousRoot) {
+      await window.electronAPI.executionApplyProjectSwitch?.({
+        projectId: previousRoot,
+        stopExperimentIds: decision === "stop" ? listRunningExperimentIds(previousRoot) : [],
+      });
+    }
     openProjectGeneration++;
     projectOpenSupersededByClose = true;
     clearAutoSaveTimer();

@@ -41,8 +41,8 @@ function tabIcon(
     return <DotIcon className="size-3.5 shrink-0 text-info" strokeWidth={4} />;
   }
   if (tab.kind === "terminal") {
-    if (tab.terminalSource === "ai") {
-      return <SparklesIcon className="size-3.5 shrink-0 text-primary/80" />;
+    if (tab.terminalSource === "job-monitor" || tab.terminalSource === "ai") {
+      return <SparklesIcon className="size-3.5 shrink-0 text-primary" />;
     }
     const muted = terminalStatus === "exited" || terminalStatus === "error" || terminalStatus === "killed";
     return (

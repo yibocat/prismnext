@@ -1,6 +1,7 @@
 import { memo, useEffect, useState, type ReactNode } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { ExternalLinkIcon, FlaskConicalIcon } from "lucide-react";
+import { ShikiInlineHighlight } from "../shiki-code-block";
 import { ToolCard, Field } from "./shared";
 import { ChatArtifactGallery } from "@/lib/markdown/chat-artifact-block";
 import { pathsForRunChatDisplay } from "@/lib/chat/experiment-run-figures";
@@ -10,6 +11,7 @@ import {
 } from "@/modes/experiments-mode/open-experiment";
 import { Hint } from "@/components/ui/hint";
 import { useExperimentStore } from "@/stores/experiment-store";
+import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<string, string> = {
@@ -105,11 +107,15 @@ function isCancelledRunPayload(data: Record<string, unknown>): boolean {
   return false;
 }
 
-/** One-line command for chat — long `-c` scripts stay readable. */
-function shortCommand(cmd: string, max = 88): string {
-  const one = cmd.replace(/\s+/g, " ").trim();
-  if (one.length <= max) return one;
-  return `${one.slice(0, max - 1)}…`;
+function experimentRunRowLabel(input: Record<string, unknown>): string {
+  const command = typeof input.command === "string" ? input.command.trim() : "";
+  const notes = typeof input.notes === "string" ? input.notes.trim() : "";
+  if (notes && notes !== command) {
+    const one = notes.replace(/\s+/g, " ");
+    return one.length > 64 ? `${one.slice(0, 63)}…` : one;
+  }
+  const id = typeof input.id === "string" ? input.id.trim() : "";
+  return id || LABELS["experiment-run"];
 }
 
 function runStatusLabel(opts: {
@@ -128,16 +134,34 @@ function runStatusLabel(opts: {
   return { text: "Finished", className: "text-muted-foreground" };
 }
 
-function OutputTail({ text, emptyHint }: { text: string; emptyHint?: string }) {
-  if (!text.trim()) {
-    return emptyHint ? (
-      <p className="text-[length:var(--font-chat-meta)] text-muted-foreground">{emptyHint}</p>
-    ) : null;
-  }
+function ExperimentRunTerminal({
+  command,
+  output,
+  emptyHint,
+}: {
+  command: string;
+  output: string;
+  emptyHint?: string;
+}) {
   return (
-    <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-2.5 py-2 font-mono text-[length:var(--font-size-11)] leading-relaxed text-foreground/85">
-      {text}
-    </pre>
+    <div
+      data-testid="experiment-run-terminal"
+      className="max-h-72 overflow-y-auto"
+    >
+      {command ? (
+        <div className="flex items-start gap-1.5 font-mono">
+          <span className="shrink-0 text-muted-foreground">$ </span>
+          <ShikiInlineHighlight code={command} lang="bash" className="min-w-0 flex-1" />
+        </div>
+      ) : null}
+      {output.trim() ? (
+        <pre className="whitespace-pre-wrap break-all font-mono text-muted-foreground">
+          {output}
+        </pre>
+      ) : emptyHint ? (
+        <p className="text-muted-foreground">{emptyHint}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -181,35 +205,52 @@ function ExperimentRunFinishedBody({
   const stdoutPreview = lastStdoutLines(run?.stdoutTail ?? data.stdoutTail, 24);
   const status = runStatusLabel({ cancelled, exitRaw });
   const runId = typeof run?.runId === "string" ? run.runId : "";
+  const executionId = typeof run?.executionId === "string" ? run.executionId : "";
   const logPath = typeof run?.logPath === "string" ? run.logPath : "";
 
   const metaBits = [duration, kind || null].filter(Boolean);
 
+  const hasDetails = Boolean(runId || executionId || cwd || logPath || exitRaw != null);
+
   return (
     <div className="space-y-2 text-[length:var(--font-chat-meta)]">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className={status.className}>{status.text}</span>
-        {metaBits.length > 0 ? (
-          <span className="text-muted-foreground">{metaBits.join(" · ")}</span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <span className={status.className}>{status.text}</span>
+            {metaBits.length > 0 ? (
+              <span className="text-muted-foreground">{metaBits.join(" · ")}</span>
+            ) : null}
+          </div>
+          {cancelled ? (
+            <p className="mt-1 text-muted-foreground">
+              Chat stopped waiting; a run record was still written when the process stopped.
+            </p>
+          ) : null}
+        </div>
+        {hasDetails ? (
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDetails((v) => !v);
+            }}
+          >
+            {showDetails ? "Hide details" : "Details"}
+          </button>
         ) : null}
       </div>
 
-      {cancelled ? (
-        <p className="text-muted-foreground">
-          Chat stopped waiting; a run record was still written when the process stopped.
-        </p>
+      {showDetails ? (
+        <div className="space-y-0.5 text-muted-foreground">
+          {exitRaw != null ? <Field label="exit" value={String(exitRaw)} /> : null}
+          {runId ? <Field label="run id" value={runId} /> : null}
+          {executionId ? <Field label="execution" value={executionId} /> : null}
+          {cwd ? <Field label="cwd" value={cwd} /> : null}
+          {logPath ? <Field label="log" value={logPath} /> : null}
+        </div>
       ) : null}
-
-      {command ? (
-        <p
-          className="truncate font-mono text-[length:var(--font-size-11)] text-foreground/80"
-          title={command}
-        >
-          {shortCommand(command)}
-        </p>
-      ) : null}
-
-      <OutputTail text={stdoutPreview} />
 
       {mergedArtifacts.length > 0 ? (
         <ChatArtifactGallery
@@ -222,28 +263,9 @@ function ExperimentRunFinishedBody({
         />
       ) : null}
 
-      {(runId || cwd || logPath || exitRaw != null) && (
-        <div>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowDetails((v) => !v);
-            }}
-          >
-            {showDetails ? "Hide details" : "Details"}
-          </button>
-          {showDetails ? (
-            <div className="mt-1.5 space-y-0.5 text-muted-foreground">
-              {exitRaw != null ? <Field label="exit" value={String(exitRaw)} /> : null}
-              {runId ? <Field label="run id" value={runId} /> : null}
-              {cwd ? <Field label="cwd" value={cwd} /> : null}
-              {logPath ? <Field label="log" value={logPath} /> : null}
-            </div>
-          ) : null}
-        </div>
-      )}
+      <div className="border-t border-border pt-2">
+        <ExperimentRunTerminal command={command} output={stdoutPreview} />
+      </div>
     </div>
   );
 }
@@ -464,15 +486,13 @@ function ExperimentRunLiveBody({
   return (
     <div className="space-y-2 text-[length:var(--font-chat-meta)]">
       <p className="text-muted-foreground">Streaming output…</p>
-      {command ? (
-        <p
-          className="truncate font-mono text-[length:var(--font-size-11)] text-foreground/80"
-          title={command}
-        >
-          {shortCommand(command)}
-        </p>
-      ) : null}
-      <OutputTail text={tail} emptyHint="Waiting for the first lines…" />
+      <div className="border-t border-border pt-2">
+        <ExperimentRunTerminal
+          command={command}
+          output={tail}
+          emptyHint="Waiting for the first lines…"
+        />
+      </div>
     </div>
   );
 }
@@ -499,8 +519,6 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
   const action = typeof input.action === "string" ? input.action : "run";
   const inputCommand = typeof input.command === "string" ? input.command : "";
   const finishedRun = data?.run as Record<string, unknown> | undefined;
-  const finishedCommand =
-    (typeof finishedRun?.command === "string" && finishedRun.command) || inputCommand;
   const finishedDuration = formatDurationMs(finishedRun?.startedAt, finishedRun?.finishedAt);
   const finishedExit =
     typeof data?.exitCode === "number"
@@ -513,10 +531,8 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
   const label =
     toolName === "experiment-run"
       ? (
-          <span className="truncate font-medium" title={finishedCommand || undefined}>
-            {finishedCommand
-              ? shortCommand(finishedCommand, 64)
-              : LABELS["experiment-run"]}
+          <span className="truncate font-medium">
+            {experimentRunRowLabel(input)}
           </span>
         )
       : toolName === "results-snapshot"
@@ -555,14 +571,17 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
     if (liveForThis) setExpanded(true);
   }, [liveForThis?.runId]);
 
-  const canOpenInExperiments = Boolean(experimentId) && !isError;
+  const finishedExecutionId =
+    typeof finishedRun?.executionId === "string" ? finishedRun.executionId : "";
+  const monitorExecutionId = liveForThis?.executionId || finishedExecutionId;
+  const canOpenInExperiments = Boolean(experimentId) && !isError && !monitorExecutionId;
   const openHint = liveForThis ? "Open live output in Experiments" : "Open in Experiments";
 
   let headerMeta: ReactNode = null;
   if (liveForThis) {
     headerMeta = (
       <span className="shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        Running
+        {liveForThis.cancelRequested ? "Cancelling" : "Running"}
       </span>
     );
   } else if (toolName === "experiment-run" && data && !isLoading) {
@@ -587,7 +606,21 @@ export const ExperimentToolWidget = memo(function ExperimentToolWidget({
       label={label}
       meta={headerMeta}
       headerEnd={
-        canOpenInExperiments ? (
+        monitorExecutionId ? (
+          <Hint label="Open job monitor">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 shrink-0 text-[length:var(--font-chat-meta)] text-muted-foreground hover:text-foreground transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                useRightPanelStore.getState().openJobMonitor(monitorExecutionId);
+              }}
+            >
+              <ExternalLinkIcon className="size-3" />
+              Monitor
+            </button>
+          </Hint>
+        ) : canOpenInExperiments ? (
           <Hint label={openHint}>
             <button
               type="button"

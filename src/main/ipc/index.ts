@@ -4,6 +4,7 @@ import { registerChatHandlers, disposeChat } from "./chat";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
+import { registerExecutionHandlers } from "./execution";
 import { registerGitHandlers } from "./git";
 import { registerWorktreeHandlers } from "./worktree";
 import { registerLogHandlers } from "./log";
@@ -40,6 +41,7 @@ export function registerIpcHandlers(): void {
   registerProLicenseHandlers();
   registerBrowserHandlers();
   registerTerminalHandlers();
+  registerExecutionHandlers();
   registerGitHandlers();
   registerWorktreeHandlers();
   registerLogHandlers();

@@ -14,6 +14,7 @@ export function TabCloseConfirmDialog() {
   const { t } = useTranslation();
   const pending = useTabCloseConfirmStore((s) => s.pending);
   const confirm = useTabCloseConfirmStore((s) => s.confirm);
+  const secondary = useTabCloseConfirmStore((s) => s.secondary);
   const cancel = useTabCloseConfirmStore((s) => s.cancel);
 
   return (
@@ -39,8 +40,13 @@ export function TabCloseConfirmDialog() {
           <Button variant="outline" onClick={cancel}>
             {t("common.cancel")}
           </Button>
+          {pending?.secondaryLabel ? (
+            <Button variant="destructive" onClick={secondary}>
+              {pending.secondaryLabel}
+            </Button>
+          ) : null}
           <Button
-            variant={pending?.destructive ? "destructive" : "default"}
+            variant={pending?.destructive && !pending?.secondaryLabel ? "destructive" : "default"}
             onClick={confirm}
           >
             {pending?.confirmLabel ?? t("common.close")}

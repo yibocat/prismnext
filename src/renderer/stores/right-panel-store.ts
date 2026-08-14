@@ -6,16 +6,19 @@ import { shellDisplayName } from "@/lib/terminal/shell-label";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import {
   isEditableFileTabKind,
+  isJobMonitorTab,
   modeRegistry,
   type RightTabKind,
   type RightTab,
 } from "@/lib/workspace/mode-registry";
+import { useExecutionStore } from "./execution-store";
+import { isChatScopedExecution } from "../../shared/execution";
 import { notifyModeLifecycleTransitions } from "@/lib/workspace/modes-from-tabs";
 import { isResearchPlanFilePath } from "@/lib/chat/plan-artifact-ui";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
 import { buildInitialTabShell } from "@/lib/workspace/tab-lifecycle";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { readTerminalExecutionSettings } from "@/lib/terminal/ai-prefs";
 import { useChatStore } from "@/stores/chat-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
@@ -82,6 +85,8 @@ interface RightPanelState {
     toolCallId?: string;
     title?: string;
   }) => string;
+  /** Attach a read-only Job Monitor to one Execution. Reuses an existing tab. */
+  openJobMonitor: (executionId: string) => string;
   openSettingsEditorTab: (slot: SettingsPanelSlot) => string;
   /** Create/update a settings editor tab without forcing it active. */
   ensureSettingsEditorTab: (slot: SettingsPanelSlot) => string;
@@ -107,7 +112,7 @@ interface RightPanelState {
    * `onAfterClose` runs after the tab is actually removed (immediate or post-confirm).
    */
   requestCloseTab: (id: string, options?: { onAfterClose?: () => void }) => boolean;
-  closeAllTabs: () => void;
+  closeAllTabs: (options?: { force?: boolean }) => void;
   /** Remove all tabs of a specific kind (used when deactivating transient modes) */
   closeTabsOfKind: (kind: RightTabKind, options?: { onClosed?: () => void }) => void;
   /** Check if any tabs of a given kind exist */
@@ -116,7 +121,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab" | "interactionId">>) => void;
+  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedExecutionId" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab" | "interactionId">>) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -298,7 +303,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   openTerminalAtCwd: (cwd, title) => {
     const { tabs } = get();
     // Reuse an existing terminal tab spawned at the same cwd.
-    const existing = tabs.find((t) => t.kind === "terminal" && t.terminalCwd === cwd);
+    const existing = tabs.find(
+      (t) => t.kind === "terminal" && t.terminalCwd === cwd && !isJobMonitorTab(t),
+    );
     if (existing) {
       set({ activeTabId: existing.id });
       return existing.id;
@@ -585,16 +592,59 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   },
 
   newAiTerminalTab: (opts) => {
+    const executionId = opts.toolCallId
+      ? useExecutionStore.getState().findByToolCallId(opts.toolCallId)
+      : undefined;
+    if (executionId) return get().openJobMonitor(executionId);
+    return "";
+  },
+
+  openJobMonitor: (executionId) => {
+    const idValue = (executionId || "").trim();
+    if (!idValue) return "";
+    const summary = useExecutionStore.getState().byId[idValue]?.summary;
+    const chatTabId = summary?.chatTabId;
+    const chatScoped = Boolean(summary && isChatScopedExecution(summary));
+    const existing = get().tabs.find((t) => {
+      if (!isJobMonitorTab(t)) return false;
+      if (t.linkedExecutionId === idValue) return true;
+      return Boolean(chatScoped && chatTabId && t.linkedChatTabId === chatTabId);
+    });
+    if (existing) {
+      const dismissChat = existing.linkedChatTabId ?? chatTabId;
+      if (dismissChat) useExecutionStore.getState().clearMonitorDismissed(dismissChat);
+      useLayoutStore.getState().requestRightAreaExpand();
+      set((s) => ({
+        activeTabId: existing.id,
+        tabs: s.tabs.map((t) =>
+          t.id === existing.id
+            ? {
+                ...t,
+                linkedExecutionId: idValue,
+                linkedToolCallId: summary?.toolCallId ?? t.linkedToolCallId,
+                linkedChatTabId: chatTabId ?? t.linkedChatTabId,
+                terminalCwd: summary?.cwd ?? t.terminalCwd,
+                title: chatScoped ? (t.title || "AI") : (summary?.command || t.title).slice(0, 48),
+              }
+            : t,
+        ),
+      }));
+      return existing.id;
+    }
+    if (chatTabId) useExecutionStore.getState().clearMonitorDismissed(chatTabId);
     const id = nextTabId();
     const tab: RightTab = {
       id,
       kind: "terminal",
-      title: opts.title ?? "AI Terminal",
+      title: chatScoped ? "AI" : (summary?.command || "Job").slice(0, 48),
       isInitial: false,
-      terminalSource: "ai",
-      linkedChatTabId: opts.chatTabId,
-      linkedToolCallId: opts.toolCallId,
+      terminalSource: "job-monitor",
+      linkedExecutionId: idValue,
+      terminalCwd: summary?.cwd,
+      linkedChatTabId: chatTabId,
+      linkedToolCallId: summary?.toolCallId,
     };
+    useLayoutStore.getState().requestRightAreaExpand();
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
@@ -668,15 +718,18 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
         ...confirmation,
         onConfirm: () => {
           if (
-            closingTab.terminalSource === "ai"
-            && useSettingsStore.getState().settings.aiTerminalCloseTabKillsProcess === true
-            && closingTab.linkedChatTabId
+            isJobMonitorTab(closingTab)
+            && readTerminalExecutionSettings().jobMonitorCloseCancels
           ) {
-            const sessionId = useChatStore
-              .getState()
-              .tabs.find((t) => t.id === closingTab.linkedChatTabId)?.sessionId;
-            if (sessionId) {
-              void window.electronAPI.chatCancel(sessionId);
+            if (closingTab.linkedExecutionId) {
+              void window.electronAPI.executionCancel(closingTab.linkedExecutionId);
+            } else if (closingTab.linkedChatTabId) {
+              const sessionId = useChatStore
+                .getState()
+                .tabs.find((t) => t.id === closingTab.linkedChatTabId)?.sessionId;
+              if (sessionId) {
+                void window.electronAPI.chatCancel(sessionId);
+              }
             }
           }
           finish();
@@ -695,7 +748,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     const fileId =
       tab && isEditableFileTabKind(tab.kind) && tab.fileId ? tab.fileId : "";
     useDocumentStore.getState().setActiveFile(fileId);
-    if (tab?.terminalSource === "ai" && tab.linkedChatTabId) {
+    if (tab && isJobMonitorTab(tab) && tab.linkedChatTabId) {
       useTerminalAiStore.getState().touchSessionViewed(tab.linkedChatTabId);
     }
   },
@@ -712,13 +765,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     }));
   },
 
-  closeAllTabs: () => {
+  closeAllTabs: (options) => {
     const tabs = get().tabs;
-    const confirmation = getBatchTabCloseConfirmation(tabs);
+    const confirmation = options?.force ? null : getBatchTabCloseConfirmation(tabs);
 
     const doCloseAll = () => {
       const terminalTabIds = tabs
-        .filter((t) => t.kind === "terminal" && t.terminalSource !== "ai")
+        .filter((t) => t.kind === "terminal" && !isJobMonitorTab(t))
         .map((t) => t.id);
       if (terminalTabIds.length > 0) {
         useTerminalStore.getState().destroyAllTerminalTabs(terminalTabIds);
@@ -763,7 +816,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
     const doClose = () => {
       const terminalTabIds = toClose
-        .filter((t) => t.kind === "terminal" && t.terminalSource !== "ai")
+        .filter((t) => t.kind === "terminal" && !isJobMonitorTab(t))
         .map((t) => t.id);
 
       if (kind === "terminal" && terminalTabIds.length > 0) {
@@ -838,12 +891,15 @@ function performCloseTab(
         : "";
     useDocumentStore.getState().setActiveFile(nextFileId);
 
-    if (closing?.kind === "terminal" && closing.terminalSource !== "ai" && !options?.skipTerminalDestroy) {
+    if (closing?.kind === "terminal" && !isJobMonitorTab(closing) && !options?.skipTerminalDestroy) {
       useTerminalStore.getState().destroyTab(closing.id);
     }
 
-    if (closing?.kind === "terminal" && closing.terminalSource === "ai") {
+    if (closing && isJobMonitorTab(closing)) {
       closedAiTabId = closing.id;
+      if (closing.linkedChatTabId && !options?.skipAiDismiss) {
+        useExecutionStore.getState().markMonitorDismissed(closing.linkedChatTabId);
+      }
     }
 
     return { tabs: next, activeTabId: nextActive };

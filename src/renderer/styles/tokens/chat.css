@@ -37,6 +37,12 @@
    * muted is soft-fill chrome and is brighter than card in dark mode.
    */
   --chat-float: var(--background);
+  /*
+   * Expanded tool panel. Light: muted inset vs white card bubbles.
+   * Dark: mix of canvas and card — a step above the page, below the
+   * brighter muted chrome and not the same fill as user bubbles.
+   */
+  --chat-tool-panel: var(--muted);
 }
 
 /* ============================================================
@@ -85,4 +91,5 @@ html[data-message-width="wide"]     { --chat-max-w: 64rem; }
 .dark {
   --composer-selection: color-mix(in oklch, var(--primary) 16%, var(--background));
   --composer-selection-focused: color-mix(in oklch, var(--primary) 24%, var(--background));
+  --chat-tool-panel: color-mix(in oklch, var(--card) 45%, var(--background));
 }

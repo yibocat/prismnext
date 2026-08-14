@@ -50,7 +50,10 @@ vi.mock("electron-store", () => ({
 }));
 
 import { registerExperimentHandlers } from "../../src/main/ipc/experiment";
-import { kickoffExperimentRun } from "../../src/main/services/experiment-run-executor";
+import {
+  kickoffExperimentRun,
+  _resetExperimentRunCancelledForTests,
+} from "../../src/main/services/experiment-run-executor";
 import {
   buildExperimentStorageContext,
   createExperiment,
@@ -60,6 +63,10 @@ import {
   _hasActiveAiPtyForSession,
   _resetAiPtyForTests,
 } from "../../src/main/services/ai-pty";
+import {
+  getExecutionRegistry,
+  _resetExecutionRegistryForTests,
+} from "../../src/main/services/execution-registry";
 
 interface FakeEvent {
   sender: { send: (channel: string, payload: unknown) => void };
@@ -75,6 +82,26 @@ function writeWorkspaceSettings(projectRoot: string, workspaceDirs: unknown[]): 
   writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ workspaceDirs }), "utf-8");
 }
 
+async function waitForSent(channel: string, timeoutMs = 30_000) {
+  const start = Date.now();
+  while (true) {
+    const found = sent.find((s) => s.channel === channel);
+    if (found) return found;
+    if (Date.now() - start > timeoutMs) {
+      throw new Error(`${channel} never fired`);
+    }
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
+async function waitUntil(pred: () => boolean, timeoutMs = 10_000, message = "timeout") {
+  const start = Date.now();
+  while (!pred()) {
+    if (Date.now() - start > timeoutMs) throw new Error(message);
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
 describe("experiment:* IPC (Sprint 0.7)", () => {
   let root: string;
   let ctx: ExperimentStorageContext;
@@ -88,6 +115,8 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
   afterEach(() => {
     if (root) rmSync(root, { recursive: true, force: true });
     _resetAiPtyForTests();
+    _resetExecutionRegistryForTests();
+    _resetExperimentRunCancelledForTests();
   });
 
   function setupWithExperimentFolder(): ExperimentStorageContext {
@@ -265,6 +294,73 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     expect(persisted.command).toBe("echo run-complete-ok");
   });
 
+  it("stores the execution id on a completed experiment run", async () => {
+    const c = setupWithExperimentFolder();
+    const created = createExperiment(c, { title: "Exec link" }, { ensureVenv: false });
+    if (!created.ok) throw new Error("create failed");
+
+    const handler = handlers.get("experiment:run")!;
+    const startResult = (await handler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      command: "echo experiment-ok",
+    })) as { ok: boolean; runId: string; executionId?: string };
+
+    expect(startResult.ok).toBe(true);
+    expect(startResult.executionId).toMatch(/[0-9a-f-]{36}/);
+
+    const event = await waitForSent("experiment:runComplete");
+    const payload = event.payload as {
+      result: { ok: boolean; run?: { executionId?: string; transcriptPath?: string } };
+    };
+    expect(payload.result.run?.executionId).toBe(startResult.executionId);
+    expect(payload.result.run?.transcriptPath).toBeTruthy();
+    expect(getExecutionRegistry().get(startResult.executionId!)?.origin).toBe("experiment-run");
+  });
+
+  it("cancels only the target experiment execution", async () => {
+    const c = setupWithExperimentFolder();
+    const created = createExperiment(c, { title: "Cancel target" }, { ensureVenv: false });
+    if (!created.ok) throw new Error("create failed");
+
+    const runHandler = handlers.get("experiment:run")!;
+    const first = (await runHandler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      command: "sleep 30",
+    })) as { ok: boolean; runId: string; executionId?: string };
+    const second = (await runHandler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      command: "sleep 30",
+    })) as { ok: boolean; runId: string; executionId?: string };
+
+    expect(first.executionId).toMatch(/[0-9a-f-]{36}/);
+    expect(second.executionId).toMatch(/[0-9a-f-]{36}/);
+
+    await waitUntil(
+      () =>
+        getExecutionRegistry().get(first.executionId!)?.state === "running" &&
+        getExecutionRegistry().get(second.executionId!)?.state === "running",
+      10_000,
+      "both experiment executions never reached running",
+    );
+
+    const cancelHandler = handlers.get("experiment:cancelRun")!;
+    expect(await cancelHandler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      runId: first.runId,
+    })).toEqual({ ok: true });
+
+    await waitUntil(
+      () => getExecutionRegistry().get(first.executionId!)?.state === "cancelled",
+      10_000,
+      "first execution never cancelled",
+    );
+    expect(getExecutionRegistry().get(second.executionId!)?.state).toBe("running");
+  });
+
   it("run forwards chatSessionId into the persisted run entry", async () => {
     const c = setupWithExperimentFolder();
     const created = createExperiment(c, { title: "Session bind" }, { ensureVenv: false });
@@ -376,7 +472,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     expect(_hasActiveAiPtyForSession(sessionId)).toBe(true);
 
     const handler = handlers.get("experiment:cancelRun")!;
-    const result = (handler(makeEvent(), { projectRoot: root, id, runId }) as Record<string, unknown>);
+    const result = (await handler(makeEvent(), { projectRoot: root, id, runId })) as Record<string, unknown>;
     expect(result).toEqual({ ok: true });
     expect(_hasActiveAiPtyForSession(sessionId)).toBe(false);
   });
@@ -422,6 +518,8 @@ describe("kickoffExperimentRun (executor refactor)", () => {
   afterEach(() => {
     if (root) rmSync(root, { recursive: true, force: true });
     _resetAiPtyForTests();
+    _resetExecutionRegistryForTests();
+    _resetExperimentRunCancelledForTests();
   });
 
   it("still writes the .result.json when called with resPath (legacy bridge path)", async () => {

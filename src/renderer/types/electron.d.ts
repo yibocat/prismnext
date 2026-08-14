@@ -827,7 +827,7 @@ export interface ElectronAPI {
     kind?: import("../../shared/experiment-log").ExperimentRunKind;
     chatSessionId?: string | null;
   }) => Promise<
-    | { ok: true; runId: string; status: "started" }
+    | { ok: true; runId: string; executionId?: string; status: "started" }
     | { ok: false; error: string; hint?: string }
   >;
   experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) => Promise<{ ok: true }>;
@@ -2087,13 +2087,6 @@ export interface ElectronAPI {
   terminalEnvInfo: () => Promise<TerminalEnvInfo>;
   terminalLoadConfig: (projectRoot: string) => Promise<TerminalConfig>;
   terminalSaveConfig: (projectRoot: string, config: TerminalConfig) => Promise<void>;
-  terminalRunAiBash: (args: {
-    sessionId: string;
-    chatTabId: string;
-    toolCallId: string;
-    command: string;
-    cwd?: string;
-  }) => Promise<{ output: string; exitCode: number; cwd: string }>;
   terminalRegisterBashJob: (args: {
     sessionId: string;
     toolCallId: string;
@@ -2101,25 +2094,26 @@ export interface ElectronAPI {
   }) => Promise<void>;
   terminalDestroyAllAiPty: () => Promise<void>;
 
+  executionGet: (executionId: string) => Promise<import("@shared/execution").ExecutionGetResult>;
+  executionFindByToolCallId: (
+    toolCallId: string,
+  ) => Promise<import("@shared/execution").ExecutionFindByToolCallIdResult>;
+  executionReplay: (
+    args: import("@shared/execution").ExecutionReplayArgs,
+  ) => Promise<import("@shared/execution").ExecutionReplayResult>;
+  executionCancel: (executionId: string) => Promise<import("@shared/execution").ExecutionCancelResult>;
+  executionRerun: (executionId: string) => Promise<import("@shared/execution").ExecutionRerunResult>;
+  executionListRunning: () => Promise<import("@shared/execution").ExecutionListRunningResult>;
+  executionApplyProjectSwitch: (
+    args: import("@shared/execution").ExecutionApplyProjectSwitchArgs,
+  ) => Promise<import("@shared/execution").ExecutionApplyProjectSwitchResult>;
+  onExecutionEvent: (
+    listener: (event: import("@shared/execution").TerminalExecutionEvent) => void,
+  ) => () => void;
+
   // Terminal events (Main → Renderer)
   onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => () => void;
   onTerminalExit: (callback: (data: { sessionId: string; tabId: string; exitCode: number }) => void) => () => void;
-  onTerminalAiStream: (callback: (data: {
-    sessionId: string;
-    chatTabId: string;
-    requestId: string;
-    toolCallId?: string;
-    chunk: string;
-    phase: "output";
-  }) => void) => () => void;
-  onTerminalAiExit: (callback: (data: {
-    sessionId: string;
-    chatTabId: string;
-    requestId: string;
-    toolCallId?: string;
-    exitCode: number;
-    cwd: string;
-  }) => void) => () => void;
 
   // Git operations
   gitWarmup: (projectRoot: string) => Promise<{ ok: boolean }>;

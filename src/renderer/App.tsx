@@ -25,7 +25,7 @@ import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
 import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
-import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
+import { useExecutionStore } from "@/stores/execution-store";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
 import { useAgentCompilePreview } from "@/hooks/use-agent-compile-preview";
@@ -126,7 +126,18 @@ export function App() {
   useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useProductShortcuts();
-  useTerminalAiStream();
+  useEffect(() => {
+    return window.electronAPI.onExecutionEvent((event) => {
+      const store = useExecutionStore.getState();
+      store.applyEvent(event);
+      if (event.type !== "created" && event.type !== "started") return;
+      void (async () => {
+        await store.hydrate(event.executionId);
+        const summary = useExecutionStore.getState().byId[event.executionId]?.summary;
+        if (summary) useExecutionStore.getState().onExecutionCreated(summary);
+      })();
+    });
+  }, []);
   useAiTerminalSweep();
   useSkillsIntegrationEvents();
   useAgentCompilePreview();
@@ -529,13 +540,7 @@ export function App() {
         <LocaleSync />
         <ProjectSetupDialog />
         <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
-        <Toaster
-          position="bottom-right"
-          duration={5000}
-          visibleToasts={5}
-          closeButton
-          richColors
-        />
+        <Toaster />
         <TabCloseConfirmDialog />
         {/* Full-screen warm splash when #L already dismissed (e.g. open from Welcome / switch). */}
         {isOpeningProject && appReady ? (
@@ -664,7 +669,7 @@ export function App() {
                   </Panel>
 
                   {/*
-                    Collapsed RightArea: keep `w-0` but do NOT strip the ±12px hit fringe
+                    Collapsed RightArea: keep `w-0` but do NOT strip the hit fringe
                     or set pointer-events-none — first edge-drag to open relies on it.
                     Maximized: hide width only; `disabled` blocks drag (restore via button).
                   */}

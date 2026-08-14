@@ -1,6 +1,8 @@
 import type { Terminal } from "@xterm/xterm";
 import {
   chipPositionAtSelectionTopRight,
+  chipPositionInViewport,
+  type ResolvedChipPosition,
   type SelectionChipAnchor,
 } from "@/lib/selection-chip-position";
 
@@ -11,20 +13,44 @@ export function getTerminalSelectionAnchor(
   term: Terminal,
   container: HTMLElement,
 ): SelectionChipAnchor | null {
+  const viewport = getTerminalSelectionAnchorViewport(term, container);
+  if (!viewport) return null;
+  const bounds = container.getBoundingClientRect();
+  return {
+    top: viewport.top - bounds.top,
+    bottom: viewport.bottom - bounds.top,
+    leftX: viewport.leftX - bounds.left,
+    rightX: viewport.rightX - bounds.left,
+  };
+}
+
+/** Viewport coords for the current xterm selection — use with `anchor="viewport"`. */
+export function getTerminalSelectionAnchorViewport(
+  term: Terminal,
+  container: HTMLElement,
+): SelectionChipAnchor | null {
   const text = term.getSelection().trim();
   if (!text) return null;
 
-  const domAnchor = getTerminalSelectionAnchorFromDom(container);
+  const domAnchor = getTerminalSelectionAnchorFromDomViewport(container);
   if (domAnchor) return domAnchor;
 
-  return getTerminalSelectionAnchorFromCells(term, container);
+  return getTerminalSelectionAnchorFromCellsViewport(term, container);
+}
+
+export function getTerminalSelectionChipPosition(
+  term: Terminal,
+  container: HTMLElement,
+): ResolvedChipPosition | null {
+  const anchor = getTerminalSelectionAnchorViewport(term, container);
+  if (!anchor) return null;
+  return chipPositionInViewport(anchor);
 }
 
 /** Prefer xterm's rendered selection layer — most accurate. */
-function getTerminalSelectionAnchorFromDom(
+function getTerminalSelectionAnchorFromDomViewport(
   container: HTMLElement,
 ): SelectionChipAnchor | null {
-  const containerBounds = container.getBoundingClientRect();
   const nodes = container.querySelectorAll(".xterm-selection div");
 
   let minTop = Infinity;
@@ -46,14 +72,14 @@ function getTerminalSelectionAnchorFromDom(
   if (!found) return null;
 
   return {
-    top: minTop - containerBounds.top,
-    bottom: maxBottom - containerBounds.top,
-    leftX: minLeft - containerBounds.left,
-    rightX: maxRight - containerBounds.left,
+    top: minTop,
+    bottom: maxBottom,
+    leftX: minLeft,
+    rightX: maxRight,
   };
 }
 
-function getTerminalSelectionAnchorFromCells(
+function getTerminalSelectionAnchorFromCellsViewport(
   term: Terminal,
   container: HTMLElement,
 ): SelectionChipAnchor | null {
@@ -78,23 +104,20 @@ function getTerminalSelectionAnchorFromCells(
       ? Math.max(range.start.x, range.end.x) + 1
       : term.cols;
 
-  const containerBounds = container.getBoundingClientRect();
   const screen = container.querySelector(".xterm-screen") as HTMLElement | null;
-  const screenBounds = screen?.getBoundingClientRect() ?? containerBounds;
+  const screenBounds = screen?.getBoundingClientRect() ?? container.getBoundingClientRect();
 
-  const top = screenBounds.top - containerBounds.top + displayRow * cellH;
+  const top = screenBounds.top + displayRow * cellH;
   const bottom = top + (bottomRow - topRow + 1) * cellH;
   const startCol = Math.min(range.start.x, range.end.x);
-  const contentLeft = screenBounds.left - containerBounds.left + startCol * cellW;
-  const contentRight = screenBounds.left - containerBounds.left + selectionEndCol * cellW;
-  const screenLeft = screenBounds.left - containerBounds.left;
-  const screenRight = screenBounds.right - containerBounds.left;
+  const contentLeft = screenBounds.left + startCol * cellW;
+  const contentRight = screenBounds.left + selectionEndCol * cellW;
 
   return {
-    top: Math.max(0, top),
-    bottom: Math.max(0, bottom),
-    leftX: Math.max(screenLeft, contentLeft),
-    rightX: Math.min(contentRight, screenRight),
+    top,
+    bottom,
+    leftX: Math.max(screenBounds.left, contentLeft),
+    rightX: Math.min(contentRight, screenBounds.right),
   };
 }
 
