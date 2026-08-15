@@ -38,6 +38,33 @@ function isAbortedLoad(errorDescription?: string, errorCode?: number): boolean {
   return Boolean(errorDescription && /ERR_ABORTED/i.test(errorDescription));
 }
 
+/**
+ * Electron keeps an internal iframe inside `<webview>` and requires flex
+ * display for that iframe to fill the guest. Never replace `flex` with `block`.
+ */
+export const BROWSER_WEBVIEW_CLASS = "flex h-full w-full";
+
+const MIN_STABLE_GUEST_SIZE_PX = 160;
+
+/**
+ * Pin the native guest after its content box settles. RightArea passes through
+ * narrow intermediate bounds while it opens or restores; those must not replace
+ * an already usable guest rectangle.
+ */
+export function syncWebviewGuestSize(
+  webview: Pick<HTMLElement, "style">,
+  box: { width: number; height: number },
+): boolean {
+  const width = Math.round(box.width);
+  const height = Math.round(box.height);
+  if (width < MIN_STABLE_GUEST_SIZE_PX || height < MIN_STABLE_GUEST_SIZE_PX) {
+    return false;
+  }
+  webview.style.width = `${width}px`;
+  webview.style.height = `${height}px`;
+  return true;
+}
+
 export function BrowserView() {
   const { tab, isActive } = useTabContext();
   const tabId = tab.id;
@@ -46,6 +73,7 @@ export function BrowserView() {
 
   const webviewRef = useRef<HTMLWebViewElement>(null);
   const webviewElRef = useRef<HTMLDivElement>(null);
+  const guestHostRef = useRef<HTMLDivElement>(null);
   /** Initial src for this webview mount — never updated by redirect sync. */
   const mountSrcRef = useRef(url);
   /** Last URL we intentionally asked the guest to load (user nav or mount). */
@@ -85,6 +113,27 @@ export function BrowserView() {
       registerWebview(tabId, el);
       return () => unregisterWebview(tabId);
     }
+  }, [tabId, hibernated, loadError, Boolean(url)]);
+
+  useEffect(() => {
+    const host = guestHostRef.current;
+    const webview = webviewRef.current;
+    if (!host || !webview || typeof ResizeObserver === "undefined") return;
+
+    let frame = 0;
+    const syncAfterLayout = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        syncWebviewGuestSize(webview, host.getBoundingClientRect());
+      });
+    };
+    syncAfterLayout();
+    const observer = new ResizeObserver(syncAfterLayout);
+    observer.observe(host);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [tabId, hibernated, loadError, Boolean(url)]);
 
   // User-intent URL changes (toolbar / home / open link) → loadURL.
@@ -336,19 +385,20 @@ export function BrowserView() {
           <div className="h-full w-1/3 bg-primary animate-[loading-bar_1.2s_ease-in-out_infinite]" />
         </div>
       )}
-      <webview
-        ref={webviewRef}
-        src={guestSrc}
-        className="flex-1"
-        style={{ width: "100%", height: "100%" }}
-        {...{
-          webpreferences: "contextIsolation=yes",
-          // Isolate browser cookies/storage from the renderer's default session
-          // (and from any CSP set on default session). Must match BROWSER_PARTITION
-          // in src/main/ipc/browser.ts.
-          partition: "persist:browser",
-        } as React.HTMLAttributes<HTMLElement>}
-      />
+      <div ref={guestHostRef} className="min-h-0 flex-1">
+        <webview
+          ref={webviewRef}
+          src={guestSrc}
+          className={BROWSER_WEBVIEW_CLASS}
+          {...{
+            webpreferences: "contextIsolation=yes",
+            // Isolate browser cookies/storage from the renderer's default session
+            // (and from any CSP set on default session). Must match BROWSER_PARTITION
+            // in src/main/ipc/browser.ts.
+            partition: "persist:browser",
+          } as React.HTMLAttributes<HTMLElement>}
+        />
+      </div>
 
       {linkMenu && (
         <BrowserLinkMenu
