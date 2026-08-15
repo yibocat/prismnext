@@ -489,7 +489,6 @@
     const normalized = String(base).replace(/\/$/, "");
     return [
       `${normalized}/pro/stable/version.json`,
-      `${normalized}/pro/beta/version.json`,
       "./version.json",
     ];
   }

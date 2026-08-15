@@ -11,8 +11,8 @@ credentials. A protected Host tag creates a short-lived GitHub App token that
 only dispatches the exact tag metadata to private `prismnext-pro`; private CI
 then builds the unified package, uploads it, and creates the public GitHub
 Release.
-The website uses `pro/stable/version.json` (falling back to `pro/beta` before
-the first stable cut), so it never offers a separate Free/Pro choice.
+The website uses only `pro/stable/version.json`, so beta releases never replace
+its stable download links or offer a separate Free/Pro choice.
 
 ## Cloudflare (required for P2+)
 

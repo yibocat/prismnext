@@ -1,10 +1,15 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+
+const { translate } = vi.hoisted(() => ({
+  translate: (key: string, fallback?: unknown) =>
+    typeof fallback === "string" ? fallback : key,
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
-    t: (k: string, fallback?: any) => (typeof fallback === "string" ? fallback : k),
+    t: translate,
     i18n: { language: "en" },
   }),
 }));
@@ -66,6 +71,7 @@ describe("WelcomePage", () => {
       updateCheck: vi.fn().mockResolvedValue({ status: "up-to-date" }),
       onUpdateProgress: vi.fn().mockReturnValue(() => {}),
       onUpdateChanged: vi.fn().mockReturnValue(() => {}),
+      compileDetectTexlive: vi.fn().mockResolvedValue(undefined),
       fsExists: vi.fn().mockResolvedValue(true),
       gitIsRepo: vi.fn().mockResolvedValue(true),
       gitBranches: vi.fn().mockResolvedValue({ current: "main" }),
@@ -88,11 +94,11 @@ describe("WelcomePage", () => {
     expect(screen.getByText("welcome.recentProjects")).toBeDefined();
     expect(screen.getByText("welcome.newProject")).toBeDefined();
 
-    screen.getByText("welcome.newProject").click();
+    fireEvent.click(screen.getByText("welcome.newProject"));
     expect(screen.getByText("project.new.title")).toBeDefined();
     expect(screen.getByText("project.new.form")).toBeDefined();
 
-    screen.getByRole("button", { name: "common.back" }).click();
+    fireEvent.click(screen.getByRole("button", { name: "common.back" }));
     expect(screen.getByText("welcome.recentProjects")).toBeDefined();
   });
 
@@ -100,13 +106,13 @@ describe("WelcomePage", () => {
     render(<WelcomePage />);
     expect(screen.getByText("welcome.status.pro")).toBeDefined();
     expect(screen.getByText("welcome.status.proInactive")).toBeDefined();
-    screen.getByText("settings.about.proActivate").click();
+    fireEvent.click(screen.getByText("settings.about.proActivate"));
     expect(screen.getByPlaceholderText("settings.about.proKeyPlaceholder")).toBeDefined();
   });
 
   it("shows a drop hint on the open-project pane", () => {
     render(<WelcomePage />);
-    screen.getByText("welcome.openExisting").click();
+    fireEvent.click(screen.getByText("welcome.openExisting"));
     expect(screen.getByText("welcome.openDropHint")).toBeDefined();
   });
 

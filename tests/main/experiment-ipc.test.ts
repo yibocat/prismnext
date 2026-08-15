@@ -651,7 +651,9 @@ describe("kickoffExperimentRun (executor refactor)", () => {
         command: "echo external-lane-ok",
         onComplete: resolve,
         interpreter: "external",
-        pythonPath: "/bin/echo",
+        // Node guarantees a portable, non-interactive `--version` response.
+        // `/bin/echo` differs: BSD echoes "--version", GNU prints its own version.
+        pythonPath: process.execPath,
         ensureVenv: false,
       });
     });
@@ -667,13 +669,12 @@ describe("kickoffExperimentRun (executor refactor)", () => {
         interpreter?: { kind: string; path: string | null; version: string | null } | null;
       };
     };
-    // macOS /bin/echo echoes the flag verbatim → first stdout line is "--version".
-    expect(last.env?.python).toBe("/bin/echo");
-    expect(last.env?.pythonVersion).toBe("--version");
+    expect(last.env?.python).toBe(process.execPath);
+    expect(last.env?.pythonVersion).toBe(process.version);
     expect(last.env?.interpreter).toEqual({
       kind: "external",
-      path: "/bin/echo",
-      version: "--version",
+      path: process.execPath,
+      version: process.version,
     });
 
     // The shared project venv must NOT have been created for this lane.
