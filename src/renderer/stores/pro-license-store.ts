@@ -44,6 +44,41 @@ function sameLicense(a: LicenseSnapshot | null, b: LicenseSnapshot | null): bool
   return a.key === b.key && a.plan === b.plan && a.expiresAt === b.expiresAt;
 }
 
+/**
+ * Main invalidates its Team resolver when the license changes. Mirror that
+ * change in the renderer so an already-open picker never retains stale
+ * `locked` / `enabled` views or an unusable tab-level Team selection.
+ */
+async function synchronizeTeamsAfterLicenseChange(): Promise<void> {
+  try {
+    const { useDocumentStore } = await import("./document-store");
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    if (!projectRoot) return;
+
+    const { useTeamsStore } = await import("./teams-store");
+    await useTeamsStore.getState().load(projectRoot, { force: true });
+
+    const usableTeamIds = new Set(
+      useTeamsStore
+        .getState()
+        .catalog
+        .filter((team) => team.enabled && team.hasOrchestrator && !team.locked)
+        .map((team) => team.manifest.id),
+    );
+
+    const { useChatStore } = await import("./chat-store");
+    const chat = useChatStore.getState();
+    for (const tab of chat.tabs) {
+      if (tab.sessionTeamId && !usableTeamIds.has(tab.sessionTeamId)) {
+        chat.setSessionTeamId(tab.id, null);
+      }
+    }
+  } catch {
+    // License activation/clear is already authoritative in main. A transient
+    // renderer catalog reload failure is retried on the next Team view load.
+  }
+}
+
 export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   license: null,
   loadStatus: "idle",
@@ -68,6 +103,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
         set({ license, hydrated: true });
         if (!sameLicense(prev, license) || get().loadStatus === "idle") {
           await get().reloadProModule();
+          await synchronizeTeamsAfterLicenseChange();
         }
       } catch {
         set({
@@ -88,6 +124,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
     if (result.ok) {
       set({ license: result.license });
       await get().reloadProModule();
+      await synchronizeTeamsAfterLicenseChange();
       toast.success(i18n.t("settings.about.proActivateSuccess"));
     }
     return result;
@@ -103,6 +140,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
       declaredFeatures: [],
       contributions: emptyContributions(),
     });
+    await synchronizeTeamsAfterLicenseChange();
   },
 
   reloadProModule: async () => {
