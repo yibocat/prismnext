@@ -24,7 +24,8 @@ its stable download links or offer a separate Free/Pro choice.
 ### Private `prismnext-pro` GitHub Environment secrets
 
 Put these in the private repository's `pro-release` Environment, not in the
-public Host repository. They should target this same public bucket so the
+public Host repository. Jobs that read them must set `environment: pro-release`
+(package and publish). They should target this same public bucket so the
 website and packaged updater use one feed.
 
 | Name | Purpose |
