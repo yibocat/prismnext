@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { compileLatex } from "../../src/main/services/compiler";
+import { resetTectonicBinaryCacheForTests } from "../../src/main/services/tectonic-binary";
 
 vi.mock("electron", () => ({
   app: {
@@ -16,6 +17,7 @@ describe("compileLatex bibliography integration", () => {
   let root: string;
 
   beforeEach(() => {
+    resetTectonicBinaryCacheForTests();
     root = mkdtempSync(join(tmpdir(), "prism-compile-bib-"));
     mkdirSync(join(root, "manuscript"), { recursive: true });
     writeFileSync(

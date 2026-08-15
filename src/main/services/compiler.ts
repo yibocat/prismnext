@@ -11,7 +11,10 @@ import { createLogger } from "./logger";
 const log = createLogger("compiler", "compile");
 
 const MAX_CONCURRENT = 3;
-const COMPILE_TIMEOUT_MS = 60000;
+const COMPILE_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.PRISM_COMPILE_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw >= 10_000 ? raw : 60_000;
+})();
 
 interface BuildInfo {
   workDir: string;
