@@ -382,8 +382,8 @@
 }
 
 /* ── Terminal (xterm.js) overrides ── */
-/* Make all xterm internal layers transparent so the container's theme
-   background (glass-content) shows through uniformly. */
+/* DOM layers stay transparent. The painted cell fill is theme.background
+   (must be #00000000 + allowTransparency) so [data-surface=content] shows. */
 
 .terminal-xterm,
 .terminal-xterm .xterm-screen,

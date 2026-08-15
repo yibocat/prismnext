@@ -67,6 +67,7 @@ import {
   syncOpenCodeGoEffortVariants,
 } from "./opencode-go-effort-sync";
 import {
+  assertOpencodeBinarySpawnable,
   probeBundledOpencodeVersionSync,
   shouldSkipEffortVariantConfigSync,
 } from "../services/opencode-binary";
@@ -1074,6 +1075,14 @@ export class AcpService {
       const msg =
         `OpenCode binary not found at ${binaryPath}. ` +
         "Install it from https://opencode.ai";
+      this.setLifecycle("error", msg);
+      throw new Error(msg);
+    }
+
+    try {
+      assertOpencodeBinarySpawnable(binaryPath);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       this.setLifecycle("error", msg);
       throw new Error(msg);
     }

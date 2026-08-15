@@ -548,6 +548,7 @@ export interface ElectronAPI {
   shellSetTrayStatus: (
     status: "idle" | "busy" | "attention",
     tooltip?: string | null,
+    runningCount?: number,
   ) => Promise<void>;
   shellSetTrayMenu: (snapshot: {
     showLabel: string;

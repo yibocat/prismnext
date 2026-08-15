@@ -26,12 +26,11 @@ import {
   PanelRight,
   MaximizeIcon,
   MinimizeIcon,
-  Minimize2Icon,
-  Maximize2Icon,
-  XIcon,
   ArrowLeftIcon,
   ChevronsLeftRightEllipsisIcon,
+  XIcon,
 } from "lucide-react";
+import { WindowControls } from "@/components/layout/window-controls";
 import {
   clampSidebarDragPreviewWidth,
   clampSidebarWidth,
@@ -556,37 +555,7 @@ function RightAreaWorkspace({
           </div>
           <div className="flex-1 min-w-0" />
           <div className="flex items-center gap-0.5 shrink-0">
-            {!isMac ? (
-              <>
-                <Hint label={t("shell.minimize")}>
-                  <button
-                    type="button"
-                    className={TITLEBAR_BTN}
-                    onClick={() => window.electronAPI?.windowMinimize()}
-                  >
-                    <Minimize2Icon className="size-3.5" />
-                  </button>
-                </Hint>
-                <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
-                  <button
-                    type="button"
-                    className={TITLEBAR_BTN}
-                    onClick={() => window.electronAPI?.windowMaximize()}
-                  >
-                    <Maximize2Icon className="size-3.5" />
-                  </button>
-                </Hint>
-                <Hint label={t("shell.close")}>
-                  <button
-                    type="button"
-                    className={cn(TITLEBAR_BTN, "hover:bg-destructive hover:text-white")}
-                    onClick={() => window.electronAPI?.windowClose()}
-                  >
-                    <XIcon className="size-3.5" />
-                  </button>
-                </Hint>
-              </>
-            ) : null}
+            <WindowControls buttonClassName={TITLEBAR_BTN} />
           </div>
         </div>
       ) : null}
@@ -679,42 +648,6 @@ function RightAreaWorkspace({
         </div>
 
         <div className="flex items-center gap-0.5 shrink-0">
-        {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
-        {editorMaximized && !isMac && (
-          <>
-            <Hint label={t("shell.minimize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMinimize()}
-              >
-                <Minimize2Icon className="size-3.5" />
-              </button>
-            </Hint>
-            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMaximize()}
-              >
-                <Maximize2Icon className="size-3.5" />
-              </button>
-            </Hint>
-            <Hint label={t("shell.close")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-                onClick={() => window.electronAPI?.windowClose()}
-              >
-                <XIcon className="size-3.5" />
-              </button>
-            </Hint>
-            <div className="mx-1 h-4 w-px bg-border shrink-0" />
-          </>
-        )}
-
-        <div className="mx-1 h-4 w-px bg-border shrink-0" />
-
         {/* Workspace only — settings RightArea keeps collapse, not panel maximize /「+」 */}
         {!inSettings ? (
           <Hint
@@ -760,6 +693,14 @@ function RightAreaWorkspace({
             <PanelRight className="size-3.5" />
           </button>
         </Hint>
+
+        {/* Window controls when editorMaximized (ContentTopBar is hidden) */}
+        {editorMaximized && !isMac && (
+          <>
+            <div className="mx-1 h-4 w-px bg-border shrink-0" />
+            <WindowControls />
+          </>
+        )}
         </div>
       </div>
 

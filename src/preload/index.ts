@@ -100,7 +100,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	shellSetTrayStatus: (
 		status: "idle" | "busy" | "attention",
 		tooltip?: string | null,
-	) => ipcRenderer.invoke("shell:setTrayStatus", { status, tooltip }),
+		runningCount?: number,
+	) => ipcRenderer.invoke("shell:setTrayStatus", { status, tooltip, runningCount }),
 	shellSetTrayMenu: (snapshot: {
 		showLabel: string;
 		newChatLabel: string;

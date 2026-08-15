@@ -82,10 +82,16 @@ function writeWorkspaceSettings(projectRoot: string, workspaceDirs: unknown[]): 
   writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ workspaceDirs }), "utf-8");
 }
 
-async function waitForSent(channel: string, timeoutMs = 30_000) {
+async function waitForSent(
+  channel: string,
+  timeoutMs = 30_000,
+  match?: (payload: unknown) => boolean,
+) {
   const start = Date.now();
   while (true) {
-    const found = sent.find((s) => s.channel === channel);
+    const found = sent.find(
+      (s) => s.channel === channel && (!match || match(s.payload)),
+    );
     if (found) return found;
     if (Date.now() - start > timeoutMs) {
       throw new Error(`${channel} never fired`);
@@ -102,6 +108,23 @@ async function waitUntil(pred: () => boolean, timeoutMs = 10_000, message = "tim
   }
 }
 
+async function drainLeftoverExecutions() {
+  let registry: ReturnType<typeof getExecutionRegistry> | undefined;
+  try {
+    registry = getExecutionRegistry();
+  } catch {
+    return;
+  }
+  await registry.finalizeForQuit();
+  await waitUntil(
+    () => registry!.listRunning().length === 0,
+    5_000,
+    "leftover executions did not drain",
+  );
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+}
+
 describe("experiment:* IPC (Sprint 0.7)", () => {
   let root: string;
   let ctx: ExperimentStorageContext;
@@ -112,7 +135,8 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     registerExperimentHandlers();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await drainLeftoverExecutions();
     if (root) rmSync(root, { recursive: true, force: true });
     _resetAiPtyForTests();
     _resetExecutionRegistryForTests();
@@ -359,6 +383,17 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
       "first execution never cancelled",
     );
     expect(getExecutionRegistry().get(second.executionId!)?.state).toBe("running");
+
+    expect(await cancelHandler(makeEvent(), {
+      projectRoot: root,
+      id: created.id,
+      runId: second.runId,
+    })).toEqual({ ok: true });
+    await waitUntil(
+      () => getExecutionRegistry().get(second.executionId!)?.state === "cancelled",
+      10_000,
+      "second execution never cancelled",
+    );
   });
 
   it("run forwards chatSessionId into the persisted run entry", async () => {
@@ -375,18 +410,18 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     })) as { ok: boolean; runId: string };
     expect(started.ok).toBe(true);
 
-    await new Promise<{ channel: string; payload: unknown }>((resolve, reject) => {
-      const start = Date.now();
-      const tick = () => {
-        const found = sent.find((s) => s.channel === "experiment:runComplete");
-        if (found) return resolve(found);
-        if (Date.now() - start > 30_000) return reject(new Error("experiment:runComplete never fired"));
-        setTimeout(tick, 25);
-      };
-      tick();
-    });
+    await waitForSent(
+      "experiment:runComplete",
+      30_000,
+      (payload) => (payload as { runId?: string }).runId === started.runId,
+    );
 
     const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
+    await waitUntil(
+      () => existsSync(runsPath) && readFileSync(runsPath, "utf-8").trim().length > 0,
+      5_000,
+      "runs.jsonl never received a persisted line",
+    );
     const persisted = JSON.parse(readFileSync(runsPath, "utf-8").trim()) as {
       chatSessionId?: string | null;
     };
@@ -515,7 +550,8 @@ describe("kickoffExperimentRun (executor refactor)", () => {
   let root: string;
   let ctx: ExperimentStorageContext;
 
-  afterEach(() => {
+  afterEach(async () => {
+    await drainLeftoverExecutions();
     if (root) rmSync(root, { recursive: true, force: true });
     _resetAiPtyForTests();
     _resetExecutionRegistryForTests();

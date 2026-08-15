@@ -790,12 +790,117 @@ export function App() {
               />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
-                <div className="flex h-full min-w-0 flex-col">
-                  <ContentTopBar leftSidebarRef={leftSidebarRef} />
-                  <div className="min-h-0 flex-1">
-                    <LeftMainArea />
-                  </div>
-                </div>
+                <Group
+                  id="center-right"
+                  orientation="horizontal"
+                  className="h-full"
+                  resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+                  disableCursor
+                >
+                  <Panel
+                    id="center"
+                    panelRef={centerRef}
+                    collapsible={!inSettings || settingsDetailStacked}
+                    collapsedSize={0}
+                    minSize={inSettings && settingsDetailStacked ? 0 : MAIN_AREA_MIN}
+                    className="overflow-hidden"
+                    groupResizeBehavior="preserve-pixel-size"
+                    onResize={(s) => {
+                      const st = useLayoutStore.getState();
+                      if (inSettings && !st.settingsDetailStacked) {
+                        enforceSettingsSplitLayout(
+                          centerRef.current,
+                          rightAreaRef.current,
+                        );
+                      }
+                    }}
+                  >
+                    <div className="flex h-full min-w-0 flex-col">
+                      <ContentTopBar
+                        leftSidebarRef={leftSidebarRef}
+                        centerRef={centerRef}
+                        rightAreaRef={rightAreaRef}
+                      />
+                      <div className="min-h-0 flex-1">
+                        <LeftMainArea />
+                      </div>
+                    </div>
+                  </Panel>
+
+                  <Separator
+                    id="sep-center-right"
+                    className={cn(
+                      PANEL_SASH_SEPARATOR_CLASS,
+                      rightAreaExpanded &&
+                        !(editorMaximized && !inSettings) &&
+                        SHELL_SASH_SHADOW_LEFT_CLASS,
+                      ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
+                    )}
+                    disabled={
+                      (editorMaximized && !inSettings) ||
+                      (inSettings && settingsDetailStacked)
+                    }
+                  />
+
+                  <Panel
+                    id="right-area"
+                    panelRef={rightAreaRef}
+                    collapsible
+                    collapsedSize={0}
+                    minSize={
+                      inSettings
+                        ? (settingsDetailOpen ? rightAreaMin : 0)
+                        : rightAreaMin
+                    }
+                    defaultSize={0}
+                    groupResizeBehavior="preserve-pixel-size"
+                    onResize={(s) => {
+                      const st = useLayoutStore.getState();
+                      const r = rightAreaRef.current;
+                      if (inSettings && !hasOpenSettingsEditor()) {
+                        if (st.settingsDetailStacked) {
+                          st.setSettingsDetailStacked(false);
+                        }
+                        if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
+                          r?.collapse();
+                          st.setRightAreaExpanded(false);
+                        }
+                        return;
+                      }
+
+                      const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
+
+                      if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
+                        if (st.rightAreaExpanded) st.setRightAreaExpanded(false);
+                        if (r && !r.isCollapsed()) {
+                          r.collapse();
+                        }
+                        return;
+                      }
+
+                      if (!st.editorMaximized || inSettings) {
+                        if (settingsSlotOpen && !st.settingsDetailStacked) {
+                          setSettingsDetailWidth(Math.min(s.inPixels, RIGHT_AREA_MAX));
+                        } else if (!inSettings) {
+                          setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
+                        }
+                      }
+                      if (!st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
+                        enforceSettingsSplitLayout(
+                          centerRef.current,
+                          rightAreaRef.current,
+                        );
+                      }
+                    }}
+                  >
+                    <RightArea
+                      leftSidebarRef={leftSidebarRef}
+                      centerRef={centerRef}
+                      rightAreaRef={rightAreaRef}
+                    />
+                  </Panel>
+                </Group>
               </Panel>
             </Group>
 

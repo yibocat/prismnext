@@ -40,10 +40,10 @@ export function registerShellHandlers(): void {
 
   ipcMain.handle(
     "shell:setTrayStatus",
-    (_event, args: { status: TrayStatus; tooltip?: string | null }) => {
+    (_event, args: { status: TrayStatus; tooltip?: string | null; runningCount?: number }) => {
       const status = args?.status;
       if (status === "idle" || status === "busy" || status === "attention") {
-        setTrayStatus(status, args?.tooltip);
+        setTrayStatus(status, args?.tooltip, args?.runningCount);
       }
     },
   );

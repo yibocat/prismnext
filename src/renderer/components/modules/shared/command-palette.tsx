@@ -105,6 +105,18 @@ const FILE_LIMIT_SINGLE = 30;
 const RECENT_FILE_PREVIEW = 5;
 const SESSION_LIMIT_ALL = 6;
 const SETTINGS_PREVIEW_COUNT = 5;
+const BACKDROP_PREVIEW_COUNT = 5;
+
+function previewWithSelected<T extends { id: string; selected: boolean }>(
+  items: T[],
+  limit: number,
+): T[] {
+  if (items.length <= limit) return items;
+  const head = items.slice(0, limit);
+  const selected = items.find((item) => item.selected);
+  if (!selected || head.some((item) => item.id === selected.id)) return head;
+  return [...head.slice(0, limit - 1), selected];
+}
 
 function localeOptionLabel(value: AppLocalePreference, t: (key: string) => string): string {
   switch (value) {
@@ -148,6 +160,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");
+  const [backdropExpanded, setBackdropExpanded] = useState(false);
   const [ignoredPaths, setIgnoredPaths] = useState<Set<string>>(() => new Set());
   const paletteInputRef = useRef<HTMLInputElement>(null);
 
@@ -188,8 +201,14 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     if (open) {
       setQuery("");
       setCategory("all");
+      setBackdropExpanded(false);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => paletteInputRef.current?.focus());
+  }, [category, open]);
 
   const close = () => onOpenChange(false);
   const goToCategory = (next: Category) => setCategory(next);
@@ -217,7 +236,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       const next = e.shiftKey
         ? (idx - 1 + CATEGORIES.length) % CATEGORIES.length
         : (idx + 1) % CATEGORIES.length;
-      setCategory(CATEGORIES[next].id);
+      goToCategory(CATEGORIES[next].id);
     }
   };
 
@@ -443,6 +462,17 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     appearanceLabel,
     currentBackdrop,
   ]);
+
+  const visibleBackdropItems = useMemo(() => {
+    if (hasQuery || backdropExpanded || !showRecentLayout) return backdropItems;
+    return previewWithSelected(backdropItems, BACKDROP_PREVIEW_COUNT);
+  }, [backdropItems, hasQuery, backdropExpanded, showRecentLayout]);
+
+  const showBackdropMore =
+    showRecentLayout &&
+    !backdropExpanded &&
+    !hasQuery &&
+    backdropItems.length > BACKDROP_PREVIEW_COUNT;
 
   const languageItems = useMemo(() => {
     if (!showAppearanceSection) return [] as { id: AppLocalePreference; label: string; selected: boolean }[];
@@ -736,6 +766,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     visibleSettingItems.length > 0 ||
     showSettingsMore ||
     showAppearanceGroups ||
+    showBackdropMore ||
     createOptions.length > 0 ||
     Boolean(urlToOpen) ||
     historyItems.length > 0;
@@ -753,7 +784,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
           requestAnimationFrame(() => paletteInputRef.current?.focus());
         }}
       >
+        {/* Remount per category so cmdk drops the previous tab's selection.
+            Otherwise History has no aria-selected row and Enter is a no-op. */}
         <Command
+          key={category}
           loop
           filter={passAllFilter}
           className="bg-transparent text-[length:var(--font-size-13)] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-[length:var(--font-size-12)] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-11 [&_[cmdk-input]]:text-[length:var(--font-size-13)] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[length:var(--font-size-13)] [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
@@ -858,7 +892,13 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     key={`hist-${h.at}-${h.query}`}
                     value={`history ${h.query}`}
                     onSelect={() => {
-                      setQuery(h.query);
+                      const replay = h.query;
+                      goToCategory("all");
+                      setQuery(replay);
+                      requestAnimationFrame(() => {
+                        setQuery(replay);
+                        paletteInputRef.current?.focus();
+                      });
                     }}
                   >
                     <HistoryIcon className="size-4" />
@@ -934,7 +974,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                     ))}
                   </CommandGroup>
                 ) : null}
-                {backdropItems.length > 0 ? (
+                {visibleBackdropItems.length > 0 || showBackdropMore ? (
                   <CommandGroup
                     heading={
                       <span className="flex w-full items-center justify-between gap-2 pr-1">
@@ -943,7 +983,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                       </span>
                     }
                   >
-                    {backdropItems.map((item) => (
+                    {visibleBackdropItems.map((item) => (
                       <CommandItem
                         key={`backdrop-${item.id}`}
                         value={`appearance backdrop ${item.searchText}`}
@@ -955,6 +995,13 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                         <span className="flex-1 truncate">{item.label}</span>
                       </CommandItem>
                     ))}
+                    {showBackdropMore ? (
+                      <PaletteMoreItem
+                        id="palette-more-backdrops"
+                        label={moreLabel}
+                        onGo={() => setBackdropExpanded(true)}
+                      />
+                    ) : null}
                   </CommandGroup>
                 ) : null}
                 {languageItems.length > 0 ? (

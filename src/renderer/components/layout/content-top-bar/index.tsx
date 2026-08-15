@@ -14,12 +14,10 @@ import { ServerStatusDot } from "@/components/server-status-dot";
 import { cn } from "@/lib/utils";
 import {
   PanelRight,
-  Minimize2Icon,
-  Maximize2Icon,
-  XIcon,
 } from "lucide-react";
 import { openRightArea } from "@/lib/workspace/right-area-layout";
 import { Hint } from "@/components/ui/hint";
+import { WindowControls } from "@/components/layout/window-controls";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -96,54 +94,26 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
         )}
       </div>
 
-      {/* ── Right: expand right panel (RightArea or Settings detail) ── */}
+      {/* ── Right: expand right panel (RightArea or Settings detail) + Window controls ── */}
       <div className="flex items-center gap-0.5 shrink-0">
-        {!isMac && (
-          <>
-            <Hint label={t("shell.minimize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMinimize()}
-              >
-                <Minimize2Icon className="size-3.5" />
-              </button>
-            </Hint>
-            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMaximize()}
-              >
-                <Maximize2Icon className="size-3.5" />
-              </button>
-            </Hint>
-            <Hint label={t("shell.close")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-                onClick={() => window.electronAPI?.windowClose()}
-              >
-                <XIcon className="size-3.5" />
-              </button>
-            </Hint>
-            <div className="mx-1 h-4 w-px bg-border shrink-0" />
-          </>
-        )}
-
         {!rightAreaExpanded && rightAreaRef && !inSettings ? (
-          <Hint shortcutId="shell.toggleRightArea">
-            <button
-              type="button"
-              className={cn(
-                "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-              )}
-              onClick={expandRightPanel}
-            >
-              <PanelRight className="size-3.5" />
-            </button>
-          </Hint>
+          <>
+            <Hint shortcutId="shell.toggleRightArea">
+              <button
+                type="button"
+                className={cn(
+                  "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+                )}
+                onClick={expandRightPanel}
+              >
+                <PanelRight className="size-3.5" />
+              </button>
+            </Hint>
+            {!isMac && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
+          </>
         ) : null}
+
+        <WindowControls />
       </div>
     </div>
   );

@@ -13,6 +13,34 @@ export function resolveTrayStatus(input: {
   return "idle";
 }
 
+/** Parent streaming tabs plus live / stopping sub-agents. */
+export function countActiveAgents(
+  tabs: ReadonlyArray<{
+    isStreaming?: boolean;
+    subAgentRuns?: Record<string, { status?: string }>;
+  }>,
+): number {
+  let n = 0;
+  for (const tab of tabs) {
+    if (tab.isStreaming) n += 1;
+    for (const run of Object.values(tab.subAgentRuns ?? {})) {
+      if (run.status === "running" || run.status === "stopping") n += 1;
+    }
+  }
+  return n;
+}
+
+/** Compact macOS extra title: a digit, `9+`, or `!` when a gate is waiting. */
+export function formatTrayAccessoryTitle(input: {
+  status: TrayStatus;
+  runningCount: number;
+}): string {
+  const n = Number.isFinite(input.runningCount) ? Math.max(0, Math.floor(input.runningCount)) : 0;
+  if (n > 0) return n > 9 ? "9+" : String(n);
+  if (input.status === "attention") return "!";
+  return "";
+}
+
 /** True when the main window should stay alive on close (hide instead). */
 export function shouldHideOnClose(input: {
   trayIconEnabled: boolean;
@@ -86,12 +114,18 @@ export function formatTrayTooltip(input: {
   status: TrayStatus;
   projectName?: string | null;
   appName?: string;
+  runningCount?: number;
 }): string {
   const app = (input.appName ?? "prismnext").trim() || "prismnext";
   const project = input.projectName?.trim() || "";
   const head = project || app;
-  if (input.status === "attention") return `${head} — Needs attention`;
-  if (input.status === "busy") return `${head} — Working…`;
+  const n = Number.isFinite(input.runningCount) ? Math.max(0, Math.floor(input.runningCount ?? 0)) : 0;
+  if (input.status === "attention") {
+    return n > 0 ? `${head} — Needs attention · ${n} running` : `${head} — Needs attention`;
+  }
+  if (input.status === "busy" || n > 0) {
+    return n > 0 ? `${head} — ${n} running` : `${head} — Working…`;
+  }
   return head;
 }
 

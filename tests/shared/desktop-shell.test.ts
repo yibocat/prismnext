@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  countActiveAgents,
+  formatTrayAccessoryTitle,
   formatTrayTooltip,
   notifyDedupeKey,
   pickRecentSessionsForTray,
@@ -85,8 +87,27 @@ describe("desktop-shell", () => {
     expect(picked.map((s) => s.id)).toEqual(["b", "c", "d"]);
   });
 
+  it("counts streaming tabs and live sub-agents", () => {
+    expect(
+      countActiveAgents([
+        { isStreaming: true, subAgentRuns: { a: { status: "running" }, b: { status: "done" } } },
+        { isStreaming: false, subAgentRuns: { c: { status: "stopping" } } },
+      ]),
+    ).toBe(3);
+  });
+
+  it("formats a compact extra title for running count", () => {
+    expect(formatTrayAccessoryTitle({ status: "idle", runningCount: 0 })).toBe("");
+    expect(formatTrayAccessoryTitle({ status: "busy", runningCount: 2 })).toBe("2");
+    expect(formatTrayAccessoryTitle({ status: "busy", runningCount: 12 })).toBe("9+");
+    expect(formatTrayAccessoryTitle({ status: "attention", runningCount: 0 })).toBe("!");
+  });
+
   it("formats tray tooltip with project name and status", () => {
     expect(formatTrayTooltip({ status: "idle", projectName: "MyPaper" })).toBe("MyPaper");
+    expect(formatTrayTooltip({ status: "busy", projectName: "MyPaper", runningCount: 2 })).toBe(
+      "MyPaper — 2 running",
+    );
     expect(formatTrayTooltip({ status: "busy", projectName: "MyPaper" })).toBe(
       "MyPaper — Working…",
     );
