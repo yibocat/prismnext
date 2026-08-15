@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  chipPositionInViewport,
   resolveSelectionChipPosition,
+  selectionActionX,
 } from "../../src/renderer/lib/selection-chip-position";
 import { codeSnippetDragPayload } from "../../src/renderer/lib/chat/code-snippet-drag";
 import { gitDiffDragPayload } from "../../src/renderer/lib/chat/git-diff-drag";
@@ -36,6 +38,24 @@ describe("resolveSelectionChipPosition", () => {
     );
     expect(pos.placement).not.toBe("after-top");
     expect(pos.top).toBeGreaterThanOrEqual(6);
+  });
+
+  it("uses selectionActionX so a top-right chip aligns to the trailing edge", () => {
+    const tight = {
+      top: 80,
+      bottom: 100,
+      leftX: 40,
+      rightX: window.innerWidth - 20,
+    };
+    const pos = chipPositionInViewport(tight);
+    const resolved = resolveSelectionChipPosition(tight, {
+      left: 8,
+      top: 8,
+      right: window.innerWidth - 8,
+      bottom: window.innerHeight - 8,
+    });
+    expect(pos.left).toBe(selectionActionX(resolved, tight));
+    expect(pos.placement).toBe(resolved.placement);
   });
 });
 

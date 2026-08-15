@@ -11,6 +11,7 @@ import {
   openTexWorkspaceMaximized,
 } from "@/lib/workspace/left-nav/panel-utils";
 import {
+  countActiveAgents,
   pickRecentSessionsForTray,
   resolveTrayStatus,
   type TrayMenuSnapshot,
@@ -29,14 +30,19 @@ function projectDisplayName(projectRoot: string | null | undefined): string | nu
 function trayTooltip(
   status: TrayStatus,
   projectName: string | null,
-  t: (key: string, opts?: Record<string, string>) => string,
+  runningCount: number,
+  t: (key: string, opts?: Record<string, string | number>) => string,
 ): string {
   const head = projectName || t("shell.notify.defaultTitle");
   if (status === "attention") {
-    return t("shell.tray.tooltipAttention", { project: head });
+    return runningCount > 0
+      ? t("shell.tray.tooltipAttentionCount", { project: head, count: runningCount })
+      : t("shell.tray.tooltipAttention", { project: head });
   }
-  if (status === "busy") {
-    return t("shell.tray.tooltipBusy", { project: head });
+  if (status === "busy" || runningCount > 0) {
+    return runningCount > 0
+      ? t("shell.tray.tooltipBusyCount", { project: head, count: runningCount })
+      : t("shell.tray.tooltipBusy", { project: head });
   }
   return t("shell.tray.tooltipIdle", { project: head });
 }
@@ -86,16 +92,21 @@ export function useTrayStatusSync(): void {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let lastStatusKey = "";
     const pushStatus = () => {
       const tabs = useChatStore.getState().tabs;
-      const isStreaming = tabs.some((tab) => tab.isStreaming);
+      const runningCount = countActiveAgents(tabs);
       const hasPendingPermission = usePermissionStore.getState().permissions.length > 0;
-      const status = resolveTrayStatus({ hasPendingPermission, isStreaming });
+      const status = resolveTrayStatus({
+        hasPendingPermission,
+        isStreaming: runningCount > 0,
+      });
       const projectName = projectDisplayName(useDocumentStore.getState().projectRoot);
-      void window.electronAPI.shellSetTrayStatus(
-        status,
-        trayTooltip(status, projectName, t),
-      );
+      const tooltip = trayTooltip(status, projectName, runningCount, t);
+      const key = `${status}\n${tooltip}\n${runningCount}`;
+      if (key === lastStatusKey) return;
+      lastStatusKey = key;
+      void window.electronAPI.shellSetTrayStatus(status, tooltip, runningCount);
     };
 
     const pushMenu = () => {
@@ -136,7 +147,12 @@ export function useTrayStatusSync(): void {
     };
 
     pushAll();
-    const unsubChat = useChatStore.subscribe(pushAll);
+    const unsubChat = useChatStore.subscribe((next, prev) => {
+      pushStatus();
+      const tabKey = (tabs: { id: string; sessionId?: string | null; title: string }[]) =>
+        tabs.map((tab) => `${tab.id}:${tab.sessionId}:${tab.title}`).join("|");
+      if (tabKey(next.tabs) !== tabKey(prev.tabs)) pushMenu();
+    });
     const unsubPerm = usePermissionStore.subscribe(pushStatus);
     const unsubDoc = useDocumentStore.subscribe(pushAll);
 

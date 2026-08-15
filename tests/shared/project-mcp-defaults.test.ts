@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  EAGER_MCP_SERVER_IDS,
   mergeMcpAllowlist,
   mcpAllowlistSetsEqual,
   PAPER_SEARCH_MCP_ID,
-  ensureBuiltinMcpInAllowlist,
 } from "../../src/main/services/project-mcp-defaults";
 
 describe("project-mcp-defaults", () => {
@@ -26,16 +24,4 @@ describe("project-mcp-defaults", () => {
     expect(mcpAllowlistSetsEqual(["a"], ["a", "b"])).toBe(false);
   });
 
-  it("has no eager MCP servers at session/new", () => {
-    expect(EAGER_MCP_SERVER_IDS).toEqual([]);
-  });
-
-  it("ensureBuiltinMcpInAllowlist is a pass-through (no forced inject)", () => {
-    expect(ensureBuiltinMcpInAllowlist(undefined)).toBeUndefined();
-    expect(ensureBuiltinMcpInAllowlist([])).toEqual([]);
-    expect(ensureBuiltinMcpInAllowlist(["memory", "github"])).toEqual([
-      "memory",
-      "github",
-    ]);
-  });
 });

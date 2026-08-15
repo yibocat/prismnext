@@ -3,13 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="prismnext-version" content="0.6.9" />
+    <meta name="prismnext-version" content="0.0.0-dev" />
     <meta
       name="description"
-      content="PrismNext — an integrated, local-first AI research environment: literature, experiments, notes, git, and first-class LaTeX in one gated workspace."
+      content="PrismNext — an integrated, local-first research environment powered by multi-agent scientific teams: literature, gated execution, notes, git, and first-class LaTeX in one unified installer."
     />
     <meta name="theme-color" content="#0b0c10" id="theme-color" />
-    <title>PrismNext — a local-first AI scientist</title>
+    <title>PrismNext — a local-first research desk</title>
     <link rel="icon" type="image/png" href="./assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -27,7 +27,7 @@
         if (pack) document.documentElement.setAttribute("data-pack", pack);
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260805d" />
+    <link rel="stylesheet" href="./styles.css?v=20260815c" />
   </head>
   <body>
     <header class="running-head">
@@ -46,8 +46,9 @@
       </a>
       <nav class="head-nav" aria-label="Sections">
         <a href="#loop" data-i18n="navLoop">§1 Loop</a>
-        <a href="#showcase" data-i18n="navCaps">§2 Capabilities</a>
-        <a href="#principles" data-i18n="navAxioms">§3 Axioms</a>
+        <a href="#architecture" data-i18n="navArch">§2 Architecture</a>
+        <a href="#showcase" data-i18n="navCaps">§3 Capabilities</a>
+        <a href="#pro" data-i18n="navPro">§4 Pro Teams</a>
         <a href="#references" data-i18n="navRefs">References</a>
       </nav>
       <div class="topbar-actions">
@@ -112,19 +113,22 @@
         </p>
 
         <h1 class="paper-title">Prism<em>Next</em></h1>
-        <p class="paper-authors" data-i18n="authors">A collaborative AI scientist on your desk.</p>
+        <p class="paper-authors" data-i18n="authors">A local-first scientific research environment powered by collaborative AI teams.</p>
 
         <div class="abstract-block">
           <h2 class="abstract-head" data-i18n="abstractTitle">Abstract</h2>
           <p class="abstract-text" data-i18n="abstractText">
-            PrismNext keeps read → design → run → write → review in one local workspace: a project
-            literature library, gated experiment runs, and first-class LaTeX. The agent advances
-            the work; you keep the veto.
+            PrismNext unifies read → design → run → write → review on a single local desk.
+            Structured around a Teams v2 multi-agent architecture and a unified terminal execution plane,
+            a modular research team (Lead orchestrator + domain specialists + MCP tools) operates directly across
+            a Zotero/MinerU-synced SQLite library, monitored experiment runs, notes, git, and native LaTeX.
+            Distributed as one single installer across all platforms: free core loop out of the box, with specialty
+            pro teams unlocked instantly via local license verification.
           </p>
           <p class="keywords">
             <em data-i18n="keywordsLabel">Keywords</em><span aria-hidden="true">:&nbsp;</span
             ><span data-i18n="keywords"
-              >local-first · LaTeX · literature · experiments · gated agent</span
+              >local-first · Teams v2 · execution plane · LaTeX · literature · provenance · gated multi-agent</span
             >
           </p>
 
@@ -144,7 +148,7 @@
           </div>
 
           <p class="meta-line">
-            <span data-i18n="pillars">Local-first · Bring your own API key</span>
+            <span data-i18n="pillars">Local-first · Open-Core · Bring your own API key · Zero telemetry</span>
           </p>
           <p class="notes" id="notes"></p>
         </div>
@@ -159,8 +163,8 @@
           <span data-i18n="loopTitle">The research loop</span>
         </h2>
         <p class="sec-lede reveal-on-scroll" data-i18n="loopLede">
-          Ideation, literature, experiments, and writing stay in the same local Agent surface — not
-          four disconnected tools.
+          Ideation, literature, experiments, and writing stay on the same local desk — staffed by
+          the active Team, not four disconnected tools.
         </p>
 
         <div class="loop-grid">
@@ -168,29 +172,29 @@
             <li>
               <span class="loop-idx">01</span>
               <div>
-                <strong data-i18n="loopIdeation">Ideation</strong>
-                <p data-i18n="loopIdeationDef">Problem and path, captured in Brief and Plan.</p>
+                <strong data-i18n="loopIdeation">Ideation &amp; Plan</strong>
+                <p data-i18n="loopIdeationDef">Problem formulation, Brief, and interactive Plan (⌥P) approval gates.</p>
               </div>
             </li>
             <li>
               <span class="loop-idx">02</span>
               <div>
                 <strong data-i18n="loopLiterature">Literature</strong>
-                <p data-i18n="loopLiteratureDef">A project shelf with citation health — not chat attachments.</p>
+                <p data-i18n="loopLiteratureDef">SQLite library, Zotero sync, MinerU parsing, and continuous citation auditing.</p>
               </div>
             </li>
             <li>
               <span class="loop-idx">03</span>
               <div>
                 <strong data-i18n="loopExperiment">Experiment</strong>
-                <p data-i18n="loopExperimentDef">Runs, logs, and provenance for Methods.</p>
+                <p data-i18n="loopExperimentDef">Unified terminal execution plane, live Job Monitor, and Methods provenance.</p>
               </div>
             </li>
             <li>
               <span class="loop-idx">04</span>
               <div>
                 <strong data-i18n="loopWriting">Writing</strong>
-                <p data-i18n="loopWritingDef">TeX workspace, live PDF, Proposed Changes review.</p>
+                <p data-i18n="loopWritingDef">First-class LaTeX, bundled Tectonic compilation, and Proposed Changes merge diffs.</p>
               </div>
             </li>
           </ol>
@@ -212,22 +216,72 @@
         <span class="margin-note mn-2 reveal-on-scroll" data-i18n="mn2">read → design → run → write</span>
       </section>
 
-      <!-- ═══ §2 Capabilities ═══ -->
-      <section class="section" id="showcase">
+      <!-- ═══ §2 Architecture ═══ -->
+      <section class="section" id="architecture">
         <h2 class="sec-title reveal-on-scroll">
           <span class="sec-no">§2</span>
+          <span data-i18n="archTitle">System Architecture</span>
+        </h2>
+        <p class="sec-lede reveal-on-scroll" data-i18n="archLede">
+          PrismNext is built on four core engineering pillars designed for rigorous, reproducible scientific computing.
+        </p>
+
+        <ol class="loop-def arch-def reveal-on-scroll">
+          <li>
+            <span class="loop-idx">01</span>
+            <div>
+              <strong data-i18n="archDesk">The Desk &amp; Security Boundary</strong>
+              <p data-i18n="archDeskDef">
+                A project is a directory on your local filesystem. All structured metadata, SQLite databases, and caches live inside .prismnext/. File watchers and markdown links are strictly locked to the authorized project root.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="loop-idx">02</span>
+            <div>
+              <strong data-i18n="archTeams">Teams v2 Multi-Agent Engine</strong>
+              <p data-i18n="archTeamsDef">
+                Agency is structured into modular Teams (exactly 1 Lead orchestrator + specialist subagents + skills + MCP tools). Supports global App-level suites and project-level repos (project.local), resolved via deterministic precedence. Always-on hangars (Common &amp; Project Team) guarantee zero-downtime chat fallbacks.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="loop-idx">03</span>
+            <div>
+              <strong data-i18n="archJobs">Unified Terminal Execution Plane</strong>
+              <p data-i18n="archJobsDef">
+                Chat bash commands and experiment runs share a unified executionId state machine. The read-only Job Monitor attaches directly to active process streams. Auto-logs receipts (command, exit code, duration, transcript, outputs) into runs.jsonl for direct citation in Methods.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="loop-idx">04</span>
+            <div>
+              <strong data-i18n="archOneApp">Open-Core &amp; Unified Single Installer</strong>
+              <p data-i18n="archOneAppDef">
+                The core desktop shell and compiler engine are open source (Apache-2.0). Official releases ship as one unified binary across macOS, Windows, and Linux. Free features are unlocked out of the box; pro specialty teams are verified locally without cloud roundtrips.
+              </p>
+            </div>
+          </li>
+        </ol>
+
+        <span class="margin-note mn-8 reveal-on-scroll" data-i18n="mn8">modular teams on one desk →</span>
+      </section>
+
+      <!-- ═══ §3 Capabilities ═══ -->
+      <section class="section" id="showcase">
+        <h2 class="sec-title reveal-on-scroll">
+          <span class="sec-no">§3</span>
           <span data-i18n="showcaseTitle">Capabilities</span>
         </h2>
         <p class="sec-lede reveal-on-scroll" data-i18n="showcaseLede">
-          Evidence over adjectives — nine surfaces that ship today, each wearing the theme pack you
-          pick in the header.
+          Evidence over adjectives — nine integrated surfaces shipping in today's build, themed live by the header palette.
         </p>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="shotHomeTitle">One prompt box, the whole desk</h3>
+          <h3 class="cap-head" data-i18n="shotHomeTitle">One prompt box, staffed by the active Team</h3>
           <p class="cap-text" data-i18n="shotHomeText">
-            A new Agent session starts here: pick a model, an expert, and skills, then aim the same
-            composer at a literature hunt, an experiment run, or a manuscript.
+            Select a Team, model, and allowed skills. Aim the composer across literature discovery, mathematical derivations, experiment execution, or LaTeX drafting.
           </p>
           <figure class="fig fig-compare reveal-on-scroll">
             <div
@@ -265,28 +319,25 @@
               <span class="compare-badge compare-badge--light" data-i18n="compareLight">Light</span>
               <span class="compare-badge compare-badge--dark" data-i18n="compareDark">Dark</span>
             </div>
-            <figcaption><b>Fig. 2.</b> <span data-i18n="figHome">The session composer — model, expert, and skills at hand.</span></figcaption>
+            <figcaption><b>Fig. 2.</b> <span data-i18n="figHome">The session composer — Team, model, and skills at hand.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="shotLitTitle">Literature, searched and shelved</h3>
           <p class="cap-text" data-i18n="shotLitText">
-            The agent hunts across sources and stages what it finds — Pending vs In library is
-            explicit, Zotero syncs in, MinerU parses the PDFs. Papers live in the project, not in
-            chat attachments.
+            Cross-database search across Crossref, arXiv, and OpenAlex. Two-way Zotero sync and MinerU PDF parsing. Continuous citation health audits verify .tex ↔ .bib ↔ library consistency.
           </p>
           <figure class="fig">
             <img data-shot="literature" src="./assets/shots/literature/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 3.</b> <span data-i18n="figLit">Search results with their shelf status, one click from the library.</span></figcaption>
+            <figcaption><b>Fig. 3.</b> <span data-i18n="figLit">Search results with shelf status, one click from the library.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="shotReadTitle">Reading with a co-pilot</h3>
           <p class="cap-text" data-i18n="shotReadText">
-            The PDF sits on one side, the agent on the other. Ask about a section, a figure, or a
-            claim — answers cite the page you are looking at.
+            Side-by-side PDF reader with section-linked margin notes. Ask questions about specific lemmas, experimental claims, or plots with automatic page citations.
           </p>
           <figure class="fig">
             <img data-shot="reading" src="./assets/shots/reading/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
@@ -295,10 +346,9 @@
         </div>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="shotIntensiveTitle">Intensive reading, line by line</h3>
+          <h3 class="cap-head" data-i18n="shotIntensiveTitle">Intensive reading, formula by formula</h3>
           <p class="cap-text" data-i18n="shotIntensiveText">
-            Lasso a formula, a figure, or a paragraph and the agent walks through it step by step —
-            notation unpacked, derivation explained, assumptions named.
+            Lasso any complex mathematical equation or theorem. The agent unpacks notation, verifies step-by-step derivations, and flags implicit assumptions.
           </p>
           <figure class="fig">
             <img data-shot="intensive" src="./assets/shots/intensive/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
@@ -309,137 +359,127 @@
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="shotNotesTitle">Notes that write back</h3>
           <p class="cap-text" data-i18n="shotNotesText">
-            Derivations, reading cards, and half-ideas live in project notes — and the agent works
-            inside them: expanding, organizing, and cross-linking as you think.
+            Derivations, reading cards, and exploratory sketches live in project notes. The active Team structures, expands, and cross-references them as your ideas mature.
           </p>
           <figure class="fig">
             <img data-shot="notes" src="./assets/shots/notes/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 6.</b> <span data-i18n="figNotes">Notes on the left, the agent expanding them on the right.</span></figcaption>
+            <figcaption><b>Fig. 6.</b> <span data-i18n="figNotes">Notes on the left, agent expansion on the right.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="shotExpTitle">Experiments with provenance</h3>
           <p class="cap-text" data-i18n="shotExpText">
-            The same agent writes the script, runs it gated, and files the receipt — command, exit
-            code, runtime, run id, output, artifacts. Methods-grade traceability by default.
+            The active Team formulates experimental matrices, dispatches jobs, and files complete receipts into runs.jsonl — command, exit code, runtime, stdout/stderr, and artifact links.
           </p>
           <figure class="fig">
             <img data-shot="experiment" src="./assets/shots/experiment/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 7.</b> <span data-i18n="figExp">A finished run with its full receipt.</span></figcaption>
+            <figcaption><b>Fig. 7.</b> <span data-i18n="figExp">A finished run with its full provenance receipt.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="shotGitTitle">Git, built into the workspace</h3>
+          <h3 class="cap-head" data-i18n="shotGitTitle">Git &amp; Worktrees, built into the workspace</h3>
           <p class="cap-text" data-i18n="shotGitText">
-            Every step — agent-written or yours — lands in git. Side-by-side diffs, commits, and
-            reverts without leaving the desk; the whole research trail stays diffable.
+            Every step lands in Git. Side-by-side visual diffs, branch management, and isolated worktree checkouts directly inside the desktop environment.
           </p>
           <figure class="fig">
             <img data-shot="git" src="./assets/shots/git/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 8.</b> <span data-i18n="figGit">The day's work as a side-by-side diff, ready to commit.</span></figcaption>
+            <figcaption><b>Fig. 8.</b> <span data-i18n="figGit">Visual diff viewer and commit management.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="shotWritingTitle">First-class LaTeX writing</h3>
+          <h3 class="cap-head" data-i18n="shotWritingTitle">First-class LaTeX authoring</h3>
           <p class="cap-text" data-i18n="shotWritingText">
-            A real TeX workbench: source with an outline sidebar, live PDF preview, bundled
-            Tectonic compile, and Proposed Changes review — serious manuscript editing, not a
-            Markdown sidebar.
+            A native TeX workbench: document outline, instant PDF synchronization, bundled Tectonic compilation, and Proposed Changes review for human-in-the-loop draft editing.
           </p>
           <figure class="fig">
             <img data-shot="writing" src="./assets/shots/writing/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 9.</b> <span data-i18n="figWriting">Source, outline, and the freshly compiled PDF.</span></figcaption>
+            <figcaption><b>Fig. 9.</b> <span data-i18n="figWriting">Source code, outline, and live compiled PDF.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
           <h3 class="cap-head" data-i18n="shotModelsTitle">Every provider, your keys</h3>
           <p class="cap-text" data-i18n="shotModelsText">
-            DeepSeek, Claude, Gemini, GPT, Grok, Kimi, Qwen, MiMo, MiniMax — switch models
-            mid-task, all on your own API keys. No Prism cloud, no middleman.
+            DeepSeek, Claude, Gemini, GPT, Grok, Kimi, Qwen, MiniMax, or local custom endpoints. Switch providers mid-session with full BYOK privacy.
           </p>
           <figure class="fig">
             <img data-shot="multimodel" src="./assets/shots/multimodel/academic-light.webp" alt="" loading="lazy" width="2000" height="1222" />
-            <figcaption><b>Fig. 10.</b> <span data-i18n="figModels">The model picker — every major provider under your keys.</span></figcaption>
+            <figcaption><b>Fig. 10.</b> <span data-i18n="figModels">Multi-provider configuration — zero Prism cloud.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="shotAgentTitle">Interactive research, with a human gate</h3>
+          <h3 class="cap-head" data-i18n="shotAgentTitle">Interactive research, human in the loop</h3>
           <p class="cap-text" data-i18n="shotAgentText">
-            The agent proposes, you dispose: plans ask for consent, large moves come with auditable
-            diffs, and permission modes decide how far autonomy goes — co-drive when you want
-            control, full loop when you don't.
+            The team proposes, you dispose: Plans require explicit consent, file changes provide visual diffs, and permission modes enforce strict boundaries.
           </p>
           <figure class="fig">
             <img src="./assets/shots/interactive.webp" alt="" loading="lazy" width="2000" height="1305" />
-            <figcaption><b>Fig. 11.</b> <span data-i18n="figAgent">A working session — the agent acts, you review every large move.</span></figcaption>
+            <figcaption><b>Fig. 11.</b> <span data-i18n="figAgent">An interactive session — the team acts under strict human governance.</span></figcaption>
           </figure>
         </div>
 
         <div class="cap-block reveal-on-scroll">
-          <h3 class="cap-head" data-i18n="skillsTitle">Research standards, codified</h3>
+          <h3 class="cap-head" data-i18n="skillsTitle">Research standards, codified (29 Skills)</h3>
           <p class="cap-text" data-i18n="skillsText">
-            29 bundled skills the agent is held to — each with reference tables, templates,
-            and runnable scripts. Always-on discipline lives in the prompt layer; skills load
-            on demand. Open format: plug in community sources or distill your own from practice.
+            29 bundled scientific skills in PrismNext Core — each complete with formal protocol tables, LaTeX templates, and verification scripts.
           </p>
           <div class="skill-tiers">
             <div class="skill-tier">
               <h4 class="skill-tier-head" data-i18n="skillTierDesign">Ideate, design &amp; run · 7</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameIdeaLab">Idea lab</code><span data-i18n="skIdeaLab">Brainstorm boldly — divergence before judgment, sparks filed in a dedicated ideas/ folder.</span></li>
-                <li><code data-i18n="skNameHypothesis">Hypothesis design</code><span data-i18n="skHypothesis">Sharpen a question into testable hypotheses.</span></li>
-                <li><code data-i18n="skNameMatrix">Experiment design matrix</code><span data-i18n="skDesignMatrix">Fix the factorial / ablation matrix — and the compute budget — before running.</span></li>
-                <li><code data-i18n="skNameMl">ML experiment protocol</code><span data-i18n="skMlProtocol">Multi-seed discipline, fair baselines, aggregation script.</span></li>
-                <li><code data-i18n="skNameStats">Statistical rigor</code><span data-i18n="skStatRigor">Test selection, effect sizes, runnable power analysis.</span></li>
-                <li><code data-i18n="skNameMgmt">Management &amp; decision science</code><span data-i18n="skMgmtSci">DiD/IV/RDD, behavioral experiments, robustness battery.</span></li>
-                <li><code data-i18n="skNameMethods">Experiment-to-Methods</code><span data-i18n="skToMethods">Run records become Methods prose — no invented numbers.</span></li>
+                <li><code data-i18n="skNameIdeaLab">Idea lab</code><span data-i18n="skIdeaLab">Divergence before judgment, ideas persisted in dedicated folders.</span></li>
+                <li><code data-i18n="skNameHypothesis">Hypothesis design</code><span data-i18n="skHypothesis">Sharpen a research question into falsifiable hypotheses.</span></li>
+                <li><code data-i18n="skNameMatrix">Experiment design matrix</code><span data-i18n="skDesignMatrix">Fix factorial / ablation matrix and compute budgets before execution.</span></li>
+                <li><code data-i18n="skNameMl">ML experiment protocol</code><span data-i18n="skMlProtocol">Multi-seed discipline, baseline fairness, aggregation scripts.</span></li>
+                <li><code data-i18n="skNameStats">Statistical rigor</code><span data-i18n="skStatRigor">Test selection, effect sizes, power analysis scripts.</span></li>
+                <li><code data-i18n="skNameMgmt">Management &amp; decision science</code><span data-i18n="skMgmtSci">DiD / IV / RDD econometric battery and behavioral experiment checks.</span></li>
+                <li><code data-i18n="skNameMethods">Experiment-to-Methods</code><span data-i18n="skToMethods">Convert execution receipts into publication-ready Methods prose.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
               <h4 class="skill-tier-head" data-i18n="skillTierWriting">Writing · 7</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameWritingDesign">Writing design</code><span data-i18n="skWritingDesign">Outline gate before prose: story, sections, promise map.</span></li>
-                <li><code data-i18n="skNameIntro">Introduction</code><span data-i18n="skIntro">Problem-driven, contribution-first, or story-arc — patterns, not molds.</span></li>
-                <li><code data-i18n="skNamePrelims">Preliminaries</code><span data-i18n="skPrelims">Notation tables, problem setup, symbol consistency.</span></li>
-                <li><code data-i18n="skNameMethodsCh">Methods chapter</code><span data-i18n="skMethodsCh">Motivation-driven structure; experiment receipts welcome.</span></li>
-                <li><code data-i18n="skNameResults">Results</code><span data-i18n="skResults">Numbers carry run ids; negative results reported.</span></li>
-                <li><code data-i18n="skNameConclusion">Conclusion</code><span data-i18n="skConclusion">Closes the Introduction's questions; honest limitations.</span></li>
-                <li><code data-i18n="skNameRelated">Related work</code><span data-i18n="skRelatedWork">Library → synthesis narrative, grounded citations.</span></li>
+                <li><code data-i18n="skNameWritingDesign">Writing design</code><span data-i18n="skWritingDesign">Outline gate before prose: promise map and argument arcs.</span></li>
+                <li><code data-i18n="skNameIntro">Introduction</code><span data-i18n="skIntro">Problem-driven, contribution-first, or story-arc structures.</span></li>
+                <li><code data-i18n="skNamePrelims">Preliminaries</code><span data-i18n="skPrelims">Notation tables, problem setup, and symbol consistency.</span></li>
+                <li><code data-i18n="skNameMethodsCh">Methods chapter</code><span data-i18n="skMethodsCh">Motivation-driven structure backed by experiment receipts.</span></li>
+                <li><code data-i18n="skNameResults">Results</code><span data-i18n="skResults">Numbers carry run ids; negative results reported honestly.</span></li>
+                <li><code data-i18n="skNameConclusion">Conclusion</code><span data-i18n="skConclusion">Resolves Introduction questions and articulates real limitations.</span></li>
+                <li><code data-i18n="skNameRelated">Related work</code><span data-i18n="skRelatedWork">Library-to-synthesis narrative with grounded citations.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
               <h4 class="skill-tier-head" data-i18n="skillTierFigures">Figures · 5</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameVis">Matplotlib figures</code><span data-i18n="skSciVis">Colorblind-safe matplotlib style + chart selection.</span></li>
-                <li><code data-i18n="skNameObservable">Observable Plot figures</code><span data-i18n="skObservable">Density, hexbin, facets, geo views — manuscript-grade SVG from spec + CSV.</span></li>
-                <li><code data-i18n="skNameTikz">TikZ &amp; pgfplots</code><span data-i18n="skTikz">TikZ/pgfplots templates that compile out of the box.</span></li>
-                <li><code data-i18n="skNameFigure">Figure pipeline</code><span data-i18n="skFigurePipeline">Data → figure → manuscript, end to end.</span></li>
-                <li><code data-i18n="skNamePanel">Panel figures</code><span data-i18n="skInteraction">RightArea figure &amp; plot objects, conventions included.</span></li>
+                <li><code data-i18n="skNameVis">Matplotlib figures</code><span data-i18n="skSciVis">Colorblind-safe styling and journal dimension guidelines.</span></li>
+                <li><code data-i18n="skNameObservable">Observable Plot figures</code><span data-i18n="skObservable">Density, hexbin, facets, geo views — headless SVG generation.</span></li>
+                <li><code data-i18n="skNameTikz">TikZ &amp; pgfplots</code><span data-i18n="skTikz">Compilation-ready TikZ / pgfplots templates.</span></li>
+                <li><code data-i18n="skNameFigure">Figure pipeline</code><span data-i18n="skFigurePipeline">Data → figure script → LaTeX inclusion end-to-end.</span></li>
+                <li><code data-i18n="skNamePanel">Panel figures</code><span data-i18n="skInteraction">Interactive RightArea figures and plot contracts.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
               <h4 class="skill-tier-head" data-i18n="skillTierReview">Reading &amp; review · 5</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameNotes">Intensive reading notes</code><span data-i18n="skReadingNotes">Structured deep-read notes from PDFs.</span></li>
-                <li><code data-i18n="skNamePrisma">PRISMA systematic review</code><span data-i18n="skPrisma">PRISMA 2020 protocol, screening log, flow counts.</span></li>
-                <li><code data-i18n="skNameReview">Critical review</code><span data-i18n="skCriticalReview">Reverse-angle pass over manuscripts, claims, decisions — and itself.</span></li>
-                <li><code data-i18n="skNamePreflight">Manuscript preflight</code><span data-i18n="skPreflight">Pass/fail gate before sharing: compile, citations, desk-reject.</span></li>
+                <li><code data-i18n="skNameNotes">Intensive reading notes</code><span data-i18n="skReadingNotes">Structured extraction and argument breakdown from PDFs.</span></li>
+                <li><code data-i18n="skNamePrisma">PRISMA systematic review</code><span data-i18n="skPrisma">PRISMA 2020 protocol, screening log, and flow counts.</span></li>
+                <li><code data-i18n="skNameReview">Critical review</code><span data-i18n="skCriticalReview">Devil's advocate peer review across claims, proofs, and evidence.</span></li>
+                <li><code data-i18n="skNamePreflight">Manuscript preflight</code><span data-i18n="skPreflight">Pre-submission gate: compilation, citations, desk-reject risks.</span></li>
                 <li><code data-i18n="skNameRebuttal">Rebuttal letter</code><span data-i18n="skRebuttal">Point-by-point reviewer rebuttal drafting.</span></li>
               </ul>
             </div>
             <div class="skill-tier">
               <h4 class="skill-tier-head" data-i18n="skillTierMeta">Math &amp; meta · 5</h4>
               <ul class="skill-list">
-                <li><code data-i18n="skNameSympy">Symbolic math</code><span data-i18n="skSymMath">SymPy-verified derivations, straight to LaTeX.</span></li>
-                <li><code data-i18n="skNameMathNumeric">Numeric verification</code><span data-i18n="skMathNumeric">Seeded probes, convergence orders, worst-case errors — PASS/FAIL exit.</span></li>
-                <li><code data-i18n="skNameManifold">Manifold &amp; geometry</code><span data-i18n="skManifold">Connections, curvature, geodesics, holonomy, gauge — symbolic + numeric checks.</span></li>
-                <li><code data-i18n="skNameLattice">Lattice &amp; algebra</code><span data-i18n="skLattice">Gröbner-basis membership, LLL equivalence, number fields — PASS/FAIL.</span></li>
-                <li><code data-i18n="skNameCreator">Skill creator</code><span data-i18n="skSkillCreator">Distill skills from workflows that just worked.</span></li>
+                <li><code data-i18n="skNameSympy">Symbolic math</code><span data-i18n="skSymMath">SymPy-verified derivations exported directly to LaTeX.</span></li>
+                <li><code data-i18n="skNameMathNumeric">Numeric verification</code><span data-i18n="skMathNumeric">Seeded probes, convergence orders, and worst-case error bounds.</span></li>
+                <li><code data-i18n="skNameManifold">Manifold &amp; geometry</code><span data-i18n="skManifold">Connections, curvature, geodesics, gauge invariants verification.</span></li>
+                <li><code data-i18n="skNameLattice">Lattice &amp; algebra</code><span data-i18n="skLattice">Gröbner-basis membership, LLL lattice equivalence, number fields.</span></li>
+                <li><code data-i18n="skNameCreator">Skill creator</code><span data-i18n="skSkillCreator">Distill reproducible research workflows into custom skills.</span></li>
               </ul>
             </div>
           </div>
@@ -450,28 +490,83 @@
         <span class="margin-note mn-7 reveal-on-scroll" data-i18n="mn7">runnable, not rhetoric ↓</span>
       </section>
 
-      <!-- ═══ §3 Axioms ═══ -->
+      <!-- ═══ §4 Pro & Early Access ═══ -->
+      <section class="section" id="pro">
+        <h2 class="sec-title reveal-on-scroll">
+          <span class="sec-no">§4</span>
+          <span data-i18n="proTitle">Pro Specialty Teams &amp; Early Access</span>
+        </h2>
+        <p class="sec-lede reveal-on-scroll" data-i18n="proLede">
+          Beyond the open-core Core suite, PrismNext provides specialized multi-agent teams for high-stakes research milestones.
+        </p>
+
+        <div class="pro-grid reveal-on-scroll">
+          <div class="pro-card">
+            <strong data-i18n="proIdeaArena">Idea Arena</strong>
+            <p data-i18n="proIdeaArenaDef">Multi-agent debate on research ideas: steel-man, devil's advocate, historian, and pragmatist stress-testing feasibility before compute.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proCommittee">The Committee</strong>
+            <p data-i18n="proCommitteeDef">Simulated conference/journal program committee: Area Chair + 3 independent Reviewers generating decision memos.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proRebuttal">Rebuttal War Room</strong>
+            <p data-i18n="proRebuttalDef">Point-by-point review triage, experimental feasibility matrix, and diplomatic rebuttal drafting.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proMilestone">Milestone Coach</strong>
+            <p data-i18n="proMilestoneDef">Paper submission deadline tracking, critical-path dependency management, and structured drafting sprints.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proClaimPolice">Claim Police</strong>
+            <p data-i18n="proClaimPoliceDef">Audits claims against evidence in the manuscript, flagging overclaiming, unsupported theorems, and missing baselines.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proTranslation">Translation Table</strong>
+            <p data-i18n="proTranslationDef">Cross-disciplinary concept mapping (e.g. bridging CS formalisms with economics/biology methodology).</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proTopicBrainstorm">Topic Brainstorm</strong>
+            <p data-i18n="proTopicBrainstormDef">Turn a vague research interest into testable hypothesis cards through deliberate divergence, convergence, and a documented kill list.</p>
+          </div>
+          <div class="pro-card">
+            <strong data-i18n="proIdeaLedger">Idea Ledger</strong>
+            <p data-i18n="proIdeaLedgerDef">Keeps a durable record of closed ideas, their closure reasons, and the conditions required to reopen them.</p>
+          </div>
+        </div>
+
+        <div class="early-access-banner reveal-on-scroll">
+          <h3 class="ea-head" data-i18n="eaHead">Free Early Access Activation</h3>
+          <p class="ea-text" data-i18n="eaText">
+            During the public preview, all Pro specialty teams can be activated for free. Go to <strong>Settings (⌘, / Ctrl+,) → About</strong>, enter the test key <code>PRISM-PRO-DEV-TEST</code>, and click Activate.
+          </p>
+        </div>
+
+        <span class="margin-note mn-9 reveal-on-scroll" data-i18n="mn9">unlocked via PRISM-PRO-DEV-TEST →</span>
+      </section>
+
+      <!-- ═══ §5 Axioms ═══ -->
       <section class="section" id="principles">
         <h2 class="sec-title reveal-on-scroll">
-          <span class="sec-no">§3</span>
+          <span class="sec-no">§5</span>
           <span data-i18n="principlesTitle">Axioms</span>
         </h2>
         <div class="axioms reveal-on-scroll">
           <p class="axiom">
             <strong data-i18n="pLocalTitle">Axiom 1 (Locality).</strong>
-            <span data-i18n="pLocalText">Your projects stay on your machine.</span>
+            <span data-i18n="pLocalText">Your projects stay strictly on your local machine.</span>
           </p>
           <p class="axiom">
             <strong data-i18n="pPrivacyTitle">Axiom 2 (Privacy).</strong>
-            <span data-i18n="pPrivacyText">No telemetry, no analytics — nothing leaves the machine.</span>
+            <span data-i18n="pPrivacyText">No telemetry, no analytics, no data collection — zero bytes leave without user initiation.</span>
           </p>
           <p class="axiom">
             <strong data-i18n="pKeyTitle">Axiom 3 (Keys).</strong>
-            <span data-i18n="pKeyText">Use your own model API keys.</span>
+            <span data-i18n="pKeyText">Model calls route directly to providers using your own API keys — no Prism cloud, no middleman.</span>
           </p>
           <p class="axiom">
             <strong data-i18n="pVetoTitle">Axiom 4 (Veto).</strong>
-            <span data-i18n="pVetoText">Every automated move is gated and auditable; you keep the veto.</span>
+            <span data-i18n="pVetoText">Every automated move is gated and auditable; the researcher retains absolute veto power.</span>
           </p>
         </div>
       </section>
@@ -498,18 +593,18 @@
           </li>
         </ol>
         <p class="colophon" data-i18n="foot">
-          Local-first collaborative AI Scientist — set in Instrument Serif, Sora &amp; Plex Mono.
+          Local-first collaborative AI research desk — set in Instrument Serif, Sora &amp; Plex Mono.
         </p>
-        <p class="colophon colophon--fine" data-i18n="footFine">© 2026 yibocat · No trackers, no accounts — nothing leaves the machine.</p>
+        <p class="colophon colophon--fine" data-i18n="footFine">© 2026 yibocat · No trackers, no accounts — everything stays local.</p>
 
         <span class="margin-note mn-5 reveal-on-scroll" data-i18n="mn5">fork it on GitHub →</span>
       </footer>
     </main>
 
     <script src="./config.js"></script>
-    <script src="./backdrops.js?v=20260805d"></script>
-    <script src="./theme-preview.js?v=20260805d"></script>
-    <script src="./site.js?v=20260805d"></script>
-    <script src="./manuscript.js?v=20260805d"></script>
+    <script src="./backdrops.js?v=20260815b"></script>
+    <script src="./theme-preview.js?v=20260815b"></script>
+    <script src="./site.js?v=20260815d"></script>
+    <script src="./manuscript.js?v=20260815b"></script>
   </body>
 </html>

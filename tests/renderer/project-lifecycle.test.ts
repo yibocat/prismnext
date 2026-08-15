@@ -1,0 +1,158 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const executionListRunning = vi.fn();
+const executionApplyProjectSwitch = vi.fn(async () => ({ ok: true }));
+const chatDispose = vi.fn(async () => undefined);
+const terminalDestroyAllAiPty = vi.fn(async () => undefined);
+
+vi.stubGlobal("window", {
+  electronAPI: {
+    executionListRunning,
+    executionApplyProjectSwitch,
+    chatDispose,
+    terminalDestroyAllAiPty,
+  },
+});
+
+import { useExecutionStore } from "../../src/renderer/stores/execution-store";
+import { useTabCloseConfirmStore } from "../../src/renderer/stores/tab-close-confirm-store";
+import {
+  confirmProjectSwitchIfNeeded,
+  listRunningExperimentIds,
+  resetApplicationStateForProjectSwitch,
+} from "../../src/renderer/lib/workspace/project-lifecycle";
+
+describe("project switch lifecycle", () => {
+  beforeEach(() => {
+    executionListRunning.mockReset();
+    executionApplyProjectSwitch.mockReset();
+    executionApplyProjectSwitch.mockResolvedValue({ ok: true });
+    chatDispose.mockReset();
+    terminalDestroyAllAiPty.mockReset();
+    useExecutionStore.getState().reset();
+    useTabCloseConfirmStore.setState({ pending: null });
+  });
+
+  it("lists only running experiment executions for a project", () => {
+    useExecutionStore.setState({
+      byId: {
+        bash: {
+          lastSequence: 1,
+          tail: "",
+          replaying: false,
+          summary: {
+            executionId: "bash",
+            origin: "agent-bash",
+            state: "running",
+            command: "ls",
+            cwd: "/tmp",
+            projectId: "/proj-a",
+            createdAt: 1,
+          },
+        },
+        exp: {
+          lastSequence: 1,
+          tail: "",
+          replaying: false,
+          summary: {
+            executionId: "exp",
+            origin: "experiment-run",
+            state: "running",
+            command: "python train.py",
+            cwd: "/tmp",
+            projectId: "/proj-a",
+            createdAt: 1,
+          },
+        },
+        other: {
+          lastSequence: 1,
+          tail: "",
+          replaying: false,
+          summary: {
+            executionId: "other",
+            origin: "experiment-run",
+            state: "running",
+            command: "python other.py",
+            cwd: "/tmp",
+            projectId: "/proj-b",
+            createdAt: 1,
+          },
+        },
+      },
+    });
+    expect(listRunningExperimentIds("/proj-a")).toEqual(["exp"]);
+  });
+
+  it("continues without a dialog when no experiments are running", async () => {
+    executionListRunning.mockResolvedValue({ ok: true, summaries: [] });
+    await expect(confirmProjectSwitchIfNeeded("/proj-a")).resolves.toBe("continue");
+    expect(useTabCloseConfirmStore.getState().pending).toBeNull();
+  });
+
+  it("resolves continue / stop / abort from the shared confirm dialog", async () => {
+    executionListRunning.mockResolvedValue({
+      ok: true,
+      summaries: [{
+        executionId: "exp",
+        origin: "experiment-run",
+        state: "running",
+        command: "python train.py",
+        cwd: "/tmp",
+        projectId: "/proj-a",
+        createdAt: 1,
+      }],
+    });
+
+    const pending = confirmProjectSwitchIfNeeded("/proj-a");
+    await vi.waitFor(() => {
+      expect(useTabCloseConfirmStore.getState().pending?.secondaryLabel).toBeTruthy();
+    });
+    useTabCloseConfirmStore.getState().confirm();
+    await expect(pending).resolves.toBe("continue");
+
+    const stopPending = confirmProjectSwitchIfNeeded("/proj-a");
+    await vi.waitFor(() => {
+      expect(useTabCloseConfirmStore.getState().pending).not.toBeNull();
+    });
+    useTabCloseConfirmStore.getState().secondary();
+    await expect(stopPending).resolves.toBe("stop");
+
+    const abortPending = confirmProjectSwitchIfNeeded("/proj-a");
+    await vi.waitFor(() => {
+      expect(useTabCloseConfirmStore.getState().pending).not.toBeNull();
+    });
+    useTabCloseConfirmStore.getState().cancel();
+    await expect(abortPending).resolves.toBe("abort");
+  });
+
+  it("does not destroy all AI PTYs or reset execution state when switching projects", async () => {
+    useExecutionStore.setState({
+      byId: {
+        exp: {
+          lastSequence: 1,
+          tail: "",
+          replaying: false,
+          summary: {
+            executionId: "exp",
+            origin: "experiment-run",
+            state: "running",
+            command: "python train.py",
+            cwd: "/tmp",
+            projectId: "/proj-a",
+            createdAt: 1,
+          },
+        },
+      },
+    });
+    await resetApplicationStateForProjectSwitch("/proj-b", {
+      previousProjectId: "/proj-a",
+      stopExperimentIds: [],
+    });
+    expect(terminalDestroyAllAiPty).not.toHaveBeenCalled();
+    expect(executionApplyProjectSwitch).toHaveBeenCalledWith({
+      projectId: "/proj-a",
+      stopExperimentIds: [],
+    });
+    expect(useExecutionStore.getState().byId.exp?.summary?.executionId).toBe("exp");
+  });
+});

@@ -153,7 +153,13 @@ export { buildPermissionRulesConfig, emptyPermissionRulesConfig } from "../../sh
 
 /** Build user permission rules from persisted app settings (main or renderer shape). */
 export function buildPermissionRulesFromSettings(
-  settings: Record<string, unknown> | null | undefined,
+  settings: {
+    permissionAllowedPaths?: unknown;
+    permissionAllowRules?: unknown;
+    permissionDenyRules?: unknown;
+    bashAllowAlwaysPatterns?: unknown;
+    toolAllowAlways?: unknown;
+  } | null | undefined,
 ): PermissionRulesConfig {
   if (!settings) return emptyPermissionRulesConfig();
   return buildPermissionRulesConfig({

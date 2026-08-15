@@ -17,10 +17,8 @@ import {
   SunIcon,
   MoonIcon,
   MonitorIcon,
-  Minimize2Icon,
-  Maximize2Icon,
-  XIcon,
 } from "lucide-react";
+import { WindowControls } from "@/components/layout/window-controls";
 
 function useWindowState() {
   const platform = window.electronAPI?.platform ?? "darwin";
@@ -113,42 +111,8 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* ── Right: Window controls (Win/Linux) + Actions ── */}
+      {/* ── Right: Actions + Window controls (Win/Linux) ── */}
       <div className="z-10 flex items-center gap-1">
-        {!isMac && (
-          <>
-            <Hint label={t("shell.minimize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMinimize()}
-              >
-                <Minimize2Icon className="size-4" />
-              </button>
-            </Hint>
-            <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                onClick={() => window.electronAPI?.windowMaximize()}
-              >
-                <Maximize2Icon className="size-4" />
-              </button>
-            </Hint>
-            <Hint label={t("shell.close")}>
-              <button
-                type="button"
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-                onClick={() => window.electronAPI?.windowClose()}
-              >
-                <XIcon className="size-4" />
-              </button>
-            </Hint>
-
-            <div className="mx-1 h-4 w-px bg-border" />
-          </>
-        )}
-
         <Hint label={t("common.theme", { theme })}>
           <button
             type="button"
@@ -195,6 +159,10 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           </button>
         </Hint>
         )}
+
+        {!isMac && <div className="mx-0.5 h-4 w-px bg-border shrink-0" />}
+
+        <WindowControls />
       </div>
     </div>
   );

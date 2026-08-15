@@ -38,7 +38,11 @@ const acpStub = {
   patchSessionToolOutput: vi.fn().mockResolvedValue(true),
 };
 vi.mock("../../src/main/acp/service", () => ({
-  AcpService: { getInstance: () => acpStub },
+  AcpService: {
+    getInstance: () => acpStub,
+    getInstanceForSession: () => acpStub,
+    getInstanceForProject: () => acpStub,
+  },
 }));
 
 import { EventMapper } from "../../src/main/acp/event-mapper";

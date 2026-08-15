@@ -26,7 +26,10 @@ export default tool({
 
   args: {
     command: tool.schema.string().describe("Shell command to execute"),
-    description: tool.schema.string().describe("Why this command is being run").optional(),
+    description: tool.schema
+      .string()
+      .describe("Short phrase of what this command does, shown in the chat UI instead of the raw command")
+      .optional(),
     workdir: tool.schema.string().describe("Working directory override").optional(),
   },
 

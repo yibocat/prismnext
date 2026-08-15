@@ -132,6 +132,7 @@ export async function resendFromUserTurn(opts: {
     hasPaperSnippets: compiled.paperSnippetCount > 0,
     selectedExpertIds: compiled.selectedExpertIds,
     orchestratorId: store.tabs.find((t) => t.id === tabId)?.orchestratorId ?? null,
+    sessionTeamId: store.tabs.find((t) => t.id === tabId)?.sessionTeamId ?? null,
     promptImages,
     promptFiles: compiled.promptFiles,
   });

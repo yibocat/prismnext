@@ -9,6 +9,7 @@ import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-g
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
@@ -24,7 +25,7 @@ import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
 import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
-import { useTerminalAiStream } from "@/hooks/use-terminal-ai-stream";
+import { useExecutionStore } from "@/stores/execution-store";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
 import { useAgentCompilePreview } from "@/hooks/use-agent-compile-preview";
@@ -89,6 +90,7 @@ export function App() {
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const rightAreaMin = RIGHT_AREA_MIN;
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const showWelcome = useDocumentStore((s) => s.showWelcome);
@@ -124,7 +126,18 @@ export function App() {
   useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useProductShortcuts();
-  useTerminalAiStream();
+  useEffect(() => {
+    return window.electronAPI.onExecutionEvent((event) => {
+      const store = useExecutionStore.getState();
+      store.applyEvent(event);
+      if (event.type !== "created" && event.type !== "started") return;
+      void (async () => {
+        await store.hydrate(event.executionId);
+        const summary = useExecutionStore.getState().byId[event.executionId]?.summary;
+        if (summary) useExecutionStore.getState().onExecutionCreated(summary);
+      })();
+    });
+  }, []);
   useAiTerminalSweep();
   useSkillsIntegrationEvents();
   useAgentCompilePreview();
@@ -273,6 +286,11 @@ export function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Open-core: hydrate activation key, then tryLoadPro (no-op when Free / absent).
+  useEffect(() => {
+    void hydrateProLicense();
+  }, [hydrateProLicense]);
 
   // Initialize theme system (injects <style id="prism-theme">)
   useEffect(() => {
@@ -522,13 +540,7 @@ export function App() {
         <LocaleSync />
         <ProjectSetupDialog />
         <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
-        <Toaster
-          position="bottom-right"
-          duration={5000}
-          visibleToasts={5}
-          closeButton
-          richColors
-        />
+        <Toaster />
         <TabCloseConfirmDialog />
         {/* Full-screen warm splash when #L already dismissed (e.g. open from Welcome / switch). */}
         {isOpeningProject && appReady ? (
@@ -657,7 +669,7 @@ export function App() {
                   </Panel>
 
                   {/*
-                    Collapsed RightArea: keep `w-0` but do NOT strip the ±12px hit fringe
+                    Collapsed RightArea: keep `w-0` but do NOT strip the hit fringe
                     or set pointer-events-none — first edge-drag to open relies on it.
                     Maximized: hide width only; `disabled` blocks drag (restore via button).
                   */}
@@ -778,12 +790,117 @@ export function App() {
               />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
-                <div className="flex h-full min-w-0 flex-col">
-                  <ContentTopBar leftSidebarRef={leftSidebarRef} />
-                  <div className="min-h-0 flex-1">
-                    <LeftMainArea />
-                  </div>
-                </div>
+                <Group
+                  id="center-right"
+                  orientation="horizontal"
+                  className="h-full"
+                  resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+                  disableCursor
+                >
+                  <Panel
+                    id="center"
+                    panelRef={centerRef}
+                    collapsible={!inSettings || settingsDetailStacked}
+                    collapsedSize={0}
+                    minSize={inSettings && settingsDetailStacked ? 0 : MAIN_AREA_MIN}
+                    className="overflow-hidden"
+                    groupResizeBehavior="preserve-pixel-size"
+                    onResize={(s) => {
+                      const st = useLayoutStore.getState();
+                      if (inSettings && !st.settingsDetailStacked) {
+                        enforceSettingsSplitLayout(
+                          centerRef.current,
+                          rightAreaRef.current,
+                        );
+                      }
+                    }}
+                  >
+                    <div className="flex h-full min-w-0 flex-col">
+                      <ContentTopBar
+                        leftSidebarRef={leftSidebarRef}
+                        centerRef={centerRef}
+                        rightAreaRef={rightAreaRef}
+                      />
+                      <div className="min-h-0 flex-1">
+                        <LeftMainArea />
+                      </div>
+                    </div>
+                  </Panel>
+
+                  <Separator
+                    id="sep-center-right"
+                    className={cn(
+                      PANEL_SASH_SEPARATOR_CLASS,
+                      rightAreaExpanded &&
+                        !(editorMaximized && !inSettings) &&
+                        SHELL_SASH_SHADOW_LEFT_CLASS,
+                      ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
+                    )}
+                    disabled={
+                      (editorMaximized && !inSettings) ||
+                      (inSettings && settingsDetailStacked)
+                    }
+                  />
+
+                  <Panel
+                    id="right-area"
+                    panelRef={rightAreaRef}
+                    collapsible
+                    collapsedSize={0}
+                    minSize={
+                      inSettings
+                        ? (settingsDetailOpen ? rightAreaMin : 0)
+                        : rightAreaMin
+                    }
+                    defaultSize={0}
+                    groupResizeBehavior="preserve-pixel-size"
+                    onResize={(s) => {
+                      const st = useLayoutStore.getState();
+                      const r = rightAreaRef.current;
+                      if (inSettings && !hasOpenSettingsEditor()) {
+                        if (st.settingsDetailStacked) {
+                          st.setSettingsDetailStacked(false);
+                        }
+                        if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
+                          r?.collapse();
+                          st.setRightAreaExpanded(false);
+                        }
+                        return;
+                      }
+
+                      const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
+
+                      if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
+                        if (st.rightAreaExpanded) st.setRightAreaExpanded(false);
+                        if (r && !r.isCollapsed()) {
+                          r.collapse();
+                        }
+                        return;
+                      }
+
+                      if (!st.editorMaximized || inSettings) {
+                        if (settingsSlotOpen && !st.settingsDetailStacked) {
+                          setSettingsDetailWidth(Math.min(s.inPixels, RIGHT_AREA_MAX));
+                        } else if (!inSettings) {
+                          setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
+                        }
+                      }
+                      if (!st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
+                        enforceSettingsSplitLayout(
+                          centerRef.current,
+                          rightAreaRef.current,
+                        );
+                      }
+                    }}
+                  >
+                    <RightArea
+                      leftSidebarRef={leftSidebarRef}
+                      centerRef={centerRef}
+                      rightAreaRef={rightAreaRef}
+                    />
+                  </Panel>
+                </Group>
               </Panel>
             </Group>
 

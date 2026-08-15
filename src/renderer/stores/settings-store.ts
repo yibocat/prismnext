@@ -199,6 +199,14 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command (default false). */
   aiTerminalCloseTabKillsProcess?: boolean;
+  /** Auto-open Job Monitor when an agent/experiment job starts. */
+  jobMonitorAutoOpen?: boolean;
+  /** Closing a Job Monitor also cancels that execution. */
+  jobMonitorCloseCancels?: boolean;
+  /** Ms to keep a finished job visible before idle cleanup. */
+  jobMonitorKeepFinishedMs?: number;
+  /** Ms of inactivity before an unpinned finished monitor is closed. */
+  jobMonitorIdleCloseMs?: number;
   /** User-added custom API providers */
   aiCustomProviders?: { id: string; name: string; baseUrl: string }[];
   /**
@@ -252,6 +260,12 @@ export interface AppSettings {
   chatHomeBackdropEnabled?: boolean;
   /** Default search engine for the in-app browser address bar. */
   searchEngine?: SearchEngineId;
+  /** Persisted theme generator / pack config. */
+  _themeConfig?: Record<string, unknown>;
+  /** One-shot: legacy themeColor migrated into `_themeConfig`. */
+  _themePackMigrated?: boolean;
+  /** @deprecated Legacy primary color; migrated into theme packs. */
+  themeColor?: string;
 }
 
 const defaults: AppSettings = {
@@ -552,7 +566,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       const hasOpenCodeCatalog =
         Boolean(r.aiApiKeys?.[OPENCODE_GO_PROVIDER_ID]?.trim())
         || Boolean(r.aiApiKeys?.[OPENCODE_ZEN_PROVIDER_ID]?.trim())
-        || r.aiCustomProviders?.some(
+        || remote.aiCustomProviders?.some(
           (p) => p.id === OPENCODE_GO_PROVIDER_ID || p.id === OPENCODE_ZEN_PROVIDER_ID,
         );
       if (hasOpenCodeCatalog) {

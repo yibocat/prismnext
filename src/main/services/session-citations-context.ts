@@ -31,7 +31,7 @@ function stagingPath(stagingSessionId: string): string {
 export function readSessionCitationRecords(sessionId: string): SessionCitationRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const stagingSessionId = AcpService.getInstance().resolveCitationStagingSessionId(id);
+  const stagingSessionId = AcpService.getInstanceForSession(id).resolveCitationStagingSessionId(id);
   try {
     const p = stagingPath(stagingSessionId);
     if (!existsSync(p)) return [];
@@ -207,5 +207,5 @@ export async function syncEnrichedTaskToolResultToOpenCode(
   const base = normalizeToolResultBase(rawContent);
   if (!enriched.trim() || enriched === base) return false;
 
-  return AcpService.getInstance().patchSessionToolOutput(id, callId, enriched);
+  return AcpService.getInstanceForSession(id).patchSessionToolOutput("id", callId, enriched);
 }

@@ -1,0 +1,23 @@
+\ProvidesPackage{cleantalk}
+% Minimal custom Beamer look (not a stock Madrid/Berlin theme).
+
+\RequirePackage{xcolor}
+\definecolor{CleanTalk}{HTML}{0B3D5C}
+\definecolor{CleanTalkSoft}{HTML}{E8EEF2}
+
+\setbeamercolor{structure}{fg=CleanTalk}
+\setbeamercolor{normal text}{fg=black,bg=white}
+\setbeamercolor{frametitle}{fg=CleanTalk,bg=white}
+\setbeamercolor{title}{fg=CleanTalk}
+\setbeamercolor{block title}{fg=white,bg=CleanTalk}
+\setbeamercolor{block body}{bg=CleanTalkSoft}
+
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \hspace*{1em}\tiny\color{CleanTalk}\insertshorttitle\hfill
+  \insertframenumber\,/\,\inserttotalframenumber\hspace*{1em}\vskip4pt%
+}
+\setbeamertemplate{frametitle}{%
+  \vspace{0.4em}\insertframetitle\par
+  {\color{CleanTalk}\hrule height 0.7pt}\vspace{0.6em}%
+}

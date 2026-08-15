@@ -127,18 +127,20 @@ export const StaticMarkdown = memo(function StaticMarkdown({
         .filter((n) => Number.isFinite(n) && n > 0),
     );
   }, [stagedCitationFingerprint]);
-  const remarkPlugins = useMemo<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]>(
-    () => [
+  const remarkPlugins = useMemo<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]>(() => {
+    const plugins: NonNullable<ComponentProps<typeof ReactMarkdown>["remarkPlugins"]> = [
       ...MARKDOWN_REMARK_BASE,
-      ...(stagedRefIds.size > 0
-        ? ([[remarkCitationRefs, { stagedRefIds }] as const] as const)
-        : []),
-      [remarkLibraryCiteRefs, { knownBibkeys: knownBibkeySet }] as const,
-      [remarkProjectFileRefs, { knownProjectPaths }] as const,
+    ];
+    if (stagedRefIds.size > 0) {
+      plugins.push([remarkCitationRefs, { stagedRefIds }]);
+    }
+    plugins.push(
+      [remarkLibraryCiteRefs, { knownBibkeys: knownBibkeySet }],
+      [remarkProjectFileRefs, { knownProjectPaths }],
       remarkExperimentRefs,
-    ],
-    [knownBibkeySet, knownProjectPaths, stagedRefIds],
-  );
+    );
+    return plugins;
+  }, [knownBibkeySet, knownProjectPaths, stagedRefIds]);
   const rehypePlugins = useMemo(() => rehypePluginsForSurface("chat"), []);
 
   const components = useMemo<Components>(() => {

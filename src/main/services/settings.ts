@@ -60,6 +60,10 @@ export interface AppSettings {
   aiTerminalIdleCloseMs?: number;
   /** Closing AI terminal tab while running also cancels the command. */
   aiTerminalCloseTabKillsProcess?: boolean;
+  jobMonitorAutoOpen?: boolean;
+  jobMonitorCloseCancels?: boolean;
+  jobMonitorKeepFinishedMs?: number;
+  jobMonitorIdleCloseMs?: number;
 
   /** When true (default), agent PDF body reads require intensive-reading list membership. */
   literatureStrictIntensivePdf?: boolean;
@@ -84,6 +88,12 @@ export interface AppSettings {
   autoDownloadUpdates?: boolean;
   /** Optional helper model ref (`provider/model`) used for image fallback. */
   aiVisionFallbackModel?: string | null;
+  /** Provider API keys keyed by provider id. */
+  aiApiKeys?: Record<string, string>;
+  /** Provider base URLs keyed by provider id. */
+  aiBaseUrls?: Record<string, string>;
+  /** User-added custom API providers. */
+  aiCustomProviders?: Array<{ id: string; name?: string; baseUrl?: string }>;
   /**
    * Optional default model for Task / subagents (`provider/model`).
    * Applied to OpenCode built-in subagents (explore/general/…) and Prism experts
@@ -339,6 +349,14 @@ export function updateSettings(patch: Partial<AppSettings>): void {
   }
 
   store.set(encrypted as any);
+}
+
+/**
+ * R11（Phase 3）：清空 legacy 的 builtin command 全局启停键。
+ * 状态已由 packs-state 迁移进首个迁移项目的 packs.json disabledContent。
+ */
+export function clearLegacyBuiltinCommandStates(): void {
+  store.delete("builtinCommands" as keyof AppSettings);
 }
 
 /**

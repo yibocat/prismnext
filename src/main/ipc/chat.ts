@@ -127,8 +127,10 @@ const sessionDisplayBackups = new Map<
 
 const mappers = new Map<number, EventMapper>();
 
-function getService(): AcpService {
-  return AcpService.getInstance();
+function getService(projectPath?: string): AcpService {
+  return projectPath?.trim()
+    ? AcpService.getInstanceForProject(projectPath)
+    : AcpService.getInstance();
 }
 
 function getMapper(win: BrowserWindow): EventMapper {
@@ -156,7 +158,9 @@ function registerTabSession(
   if (projectPath?.trim()) {
     setSessionProjectRoot(sessionId, projectPath.trim());
   }
-  bridge.start();
+  bridge.start(projectPath?.trim()
+    ? AcpService.getInstanceForProject(projectPath)
+    : AcpService.getInstance());
 }
 
 /**
@@ -165,24 +169,47 @@ function registerTabSession(
  * the child when credentials change (API keys are only applied at spawn).
  */
 async function ensureConnected(
+  service: AcpService,
   extraEnv?: Record<string, string>,
   preferredCatalogProvider?: string,
 ): Promise<void> {
-  await getService().initialize(
+  await service.initialize(
     buildOpenCodeCredentialEnv(extraEnv, { preferredCatalogProvider }),
   );
 }
 
 export function registerChatHandlers(): void {
   // ─── Dispose ───
-  // Clears event mappers but keeps the ACP process alive (app-level).
-  ipcMain.handle("chat:dispose", async () => {
-    for (const mapper of mappers.values()) {
-      mapper.stop();
-    }
-    mappers.clear();
-    return { success: true };
-  });
+  // Clears event mappers and tears down project OpenCode runtimes (single-project
+  // switch). Keeps the global opencode-server singleton for credentials/catalog.
+  // Optional keepProjectPath: same-project reopen keeps that runtime.
+  ipcMain.handle(
+    "chat:dispose",
+    async (_event, args?: { keepProjectPath?: string }) => {
+      for (const mapper of mappers.values()) {
+        mapper.stop();
+      }
+      mappers.clear();
+      try {
+        const keep = args?.keepProjectPath?.trim() || null;
+        const disposedRoots = await AcpService.disposeAllProjectRuntimesExcept(keep);
+        if (disposedRoots.length > 0) {
+          const { invalidateProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+          for (const root of disposedRoots) {
+            invalidateProjectChatPrewarm(root);
+          }
+          log.info("chat:dispose cleared project OpenCode runtimes", {
+            count: disposedRoots.length,
+            kept: keep,
+          });
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn(`chat:dispose project runtime cleanup failed: ${message}`);
+      }
+      return { success: true };
+    },
+  );
 
   // ─── Register tab ↔ session mapping (sidebar load, tab restore) ───
   ipcMain.handle(
@@ -296,6 +323,8 @@ export function registerChatHandlers(): void {
         /** Composer includes ```paper …``` excerpt block(s) this turn. */
         hasPaperSnippets?: boolean;
         orchestratorId?: string | null;
+        /** Session/tab active team override (v2); wins over project/app default. */
+        sessionTeamId?: string | null;
         sessionAgent?: "build" | "plan";
         selectedExpertIds?: string[];
         /** Vision images — sent as ACP ContentBlock::Image alongside the text prompt. */
@@ -319,7 +348,7 @@ export function registerChatHandlers(): void {
       };
 
       try {
-      const service = getService();
+      const service = getService(args.projectPath);
       const cwd = args.worktreePath || args.projectPath || app.getPath("home");
       const isFirstSend = !args.sessionId;
       const clearPrepare = () => {
@@ -364,32 +393,43 @@ export function registerChatHandlers(): void {
       let promptCtx = await buildPromptContext(args.projectPath);
 
       if (args.projectPath) {
-        const {
-          resolveOrchestratorId,
-          getOrchestrator,
-          getExpert,
-        } = await import("../services/experts-sync");
+        const { resolveChatOrchestrator } = await import("../teams/resolver");
+        const { getSubagent } = await import("../services/subagents-sync");
 
-        orchestratorId = resolveOrchestratorId(args.projectPath, args.orchestratorId);
-        const orchestrator = getOrchestrator(args.projectPath, orchestratorId);
-        if (orchestrator?.model) {
-          const slash = orchestrator.model.indexOf("/");
+        const activeOrch = resolveChatOrchestrator(args.projectPath, {
+          sessionTeamId: args.sessionTeamId,
+          orchestratorId: args.orchestratorId,
+        });
+        orchestratorId = activeOrch.runtimeName;
+        log.info("chat:send active lead", {
+          tabId,
+          teamId: activeOrch.teamId,
+          lead: activeOrch.runtimeName,
+          leadName: activeOrch.name,
+          sessionTeamId: args.sessionTeamId ?? null,
+          orchestratorIdArg: args.orchestratorId ?? null,
+        });
+        if (activeOrch.definition.model) {
+          const slash = activeOrch.definition.model.indexOf("/");
           if (slash > 0) {
-            provider = orchestrator.model.slice(0, slash);
-            modelId = orchestrator.model.slice(slash + 1);
+            provider = activeOrch.definition.model.slice(0, slash);
+            modelId = activeOrch.definition.model.slice(slash + 1);
           }
         }
-        if (orchestrator?.thoughtLevel && !args.thoughtLevel?.trim()) {
-          thoughtLevel = orchestrator.thoughtLevel;
+        if (activeOrch.definition.thoughtLevel && !args.thoughtLevel?.trim()) {
+          thoughtLevel = activeOrch.definition.thoughtLevel;
         }
 
         promptCtx = await buildPromptContext(args.projectPath);
 
-        const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
+        const {
+          ensureProjectChatPrewarm,
+          isProjectChatPrewarmReady,
+        } = await import("../services/project-chat-prewarm");
         emitChatPrepare(tabId, "syncing_project");
         // If credentials will restart OpenCode next, sync-only here so we don't
         // reload once for agents then again for API keys.
-        const credentialRestartPending = getService().wouldRestartForCredentials(
+        const credentialRestartPending = service.wouldRestartForCredentials(
           buildOpenCodeCredentialEnv(extraEnv, {
             preferredCatalogProvider: provider,
           }),
@@ -398,40 +438,66 @@ export function registerChatHandlers(): void {
           skipOpenCodeReload: credentialRestartPending,
         });
 
-        const { refreshProjectExpertsIntegrationIfNeeded } = await import("../services/project-experts-refresh");
-        try {
-          await refreshProjectExpertsIntegrationIfNeeded(args.projectPath, { promptCtx });
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          log.error(`Experts integration refresh failed: ${message}`);
-          clearPrepare();
-          win.webContents.send("chat:complete", {
-            tabId,
-            sessionId: args.sessionId || "",
-            success: false,
-            error: `Expert configuration could not be synced: ${message}`,
-          });
-          return;
+        // Prewarm already synced experts/skills when ready — skip duplicate IfNeeded
+        // work on the first-send hot path (still safe: invalidate clears ready).
+        const prewarmReady = isProjectChatPrewarmReady(args.projectPath);
+        if (!prewarmReady) {
+          const { refreshProjectSubagentsIntegrationIfNeeded } = await import("../services/project-subagents-refresh");
+          try {
+            await refreshProjectSubagentsIntegrationIfNeeded(args.projectPath, { promptCtx });
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            log.error(`Experts integration refresh failed: ${message}`);
+            clearPrepare();
+            win.webContents.send("chat:complete", {
+              tabId,
+              sessionId: args.sessionId || "",
+              success: false,
+              error: `Expert configuration could not be synced: ${message}`,
+            });
+            return;
+          }
         }
 
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
-          const { buildExpertTeamPreamble } = await import("../../shared/expert-team-preamble");
+          const { buildExpertTeamPreamble } = await import("../../shared/subagent-team-preamble");
+          const { projectAgentRuntimeName } = await import("../teams/agents-sync");
           const entries = expertIds
-            .map((id) => getExpert(args.projectPath!, id))
+            .map((id) => getSubagent(args.projectPath!, id))
             .filter((e): e is NonNullable<typeof e> => !!e?.enabled)
-            .map((e) => ({ id: e.id, name: e.name, description: e.description }));
+            .map((e) => ({
+              id: projectAgentRuntimeName(args.projectPath!, e.id),
+              name: e.name,
+              description: e.description,
+            }));
           const preamble = buildExpertTeamPreamble(entries);
           if (preamble) userPrompt = `${userPrompt}\n\n${preamble}`;
         }
 
-        const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
-        await refreshProjectSkillsIntegrationIfNeeded(args.projectPath);
+        if (!prewarmReady) {
+          const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+          await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
+            teamId: activeOrch.teamId,
+            extraAllowIds: args.skillIds,
+          });
+        } else if (args.skillIds?.length) {
+          // Allowlist-extra skills may still need a light pass even when warm.
+          const { refreshProjectSkillsIntegrationIfNeeded } = await import("../services/project-skills-refresh");
+          await refreshProjectSkillsIntegrationIfNeeded(args.projectPath, {
+            teamId: activeOrch.teamId,
+            extraAllowIds: args.skillIds,
+          });
+        }
       }
 
-      // Connect / apply credentials last — at most one spawn before session/new.
+      // Connect / apply credentials — usually a no-op when chat:prewarm already
+      // spawned the project runtime; otherwise surface "starting agent".
       try {
-        await ensureConnected(extraEnv, provider);
+        if (!service.isConnected()) {
+          emitChatPrepare(tabId, "starting_agent");
+        }
+        await ensureConnected(service, extraEnv, provider);
       } catch (err: any) {
         log.error(`OpenCode initialize failed: ${err.message}`);
         clearPrepare();
@@ -442,7 +508,7 @@ export function registerChatHandlers(): void {
       }
 
       const expertsSync = args.projectPath
-        ? await import("../services/experts-sync")
+        ? await import("../services/subagents-sync")
         : null;
       const composerMcps = args.mcpServerAllowlist?.filter(Boolean) ?? [];
       const mcpServerAllowlist = composerMcps.length > 0 ? composerMcps : undefined;
@@ -472,6 +538,9 @@ export function registerChatHandlers(): void {
           : modelId || undefined;
         try {
           // ACP standard: session/new connects MCP — only when the user sends.
+          // Pre-spawn (P0) already warmed the process; session/new is the
+          // remaining cold cost (~2–3s) and happens here, on the hot path,
+          // because the model/team is only known at send time.
           emitChatPrepare(tabId, "creating_session");
           const session = await service.createSession(
             cwd,
@@ -503,7 +572,13 @@ export function registerChatHandlers(): void {
       {
         const expertIds = args.selectedExpertIds?.filter(Boolean) ?? [];
         if (expertIds.length > 0) {
-          setSessionTaskAllowlist(sessionId, expertIds);
+          const { projectAgentRuntimeName } = await import("../teams/agents-sync");
+          setSessionTaskAllowlist(
+            sessionId,
+            args.projectPath
+              ? expertIds.map((id) => projectAgentRuntimeName(args.projectPath!, id))
+              : expertIds,
+          );
         } else {
           clearSessionTaskAllowlist(sessionId);
         }
@@ -527,19 +602,6 @@ export function registerChatHandlers(): void {
       const effortForSend = validatedEffort;
 
       const sessionAgent = resolveSessionAgent(args.sessionAgent);
-      // Plan wins over orchestrator for ACP agent key
-      if (sessionAgent === "plan") {
-        await service.applySessionAgent(sessionId, "plan");
-      } else if (orchestratorId) {
-        await service.applySessionAgent(sessionId, "build");
-        try {
-          await service.setConfigOption(sessionId, "agent", orchestratorId);
-        } catch (err: any) {
-          log.debug(`setConfigOption agent orchestrator failed: ${err.message}`);
-        }
-      } else {
-        await service.applySessionAgent(sessionId, "build");
-      }
 
       const citationsAppendix = buildSessionCitationsTurnAppendix(sessionId);
       const citeAuditAppendix = buildSessionCiteAuditTurnAppendix(sessionId);
@@ -578,16 +640,12 @@ export function registerChatHandlers(): void {
           syncProjectPromptFile(args.projectPath, promptCtx);
         }
         const { instructionsChanged } = service.applyProjectPromptIntegration(args.projectPath);
-        // Skip reload when we just spawned (credential ensure / prewarm) —
-        // the new process already reads instructions from disk.
-        if (instructionsChanged && !service.wasSpawnedRecently()) {
-          try {
-            await service.reloadAfterSkillsIntegration();
-          } catch (err: any) {
-            log.warn(`OpenCode reload after prompt integration failed: ${err.message}`);
-          }
-        } else if (instructionsChanged) {
-          log.info("Skip OpenCode reload after prompt integration (just spawned)", {
+        // Never reload OpenCode from the send path. instructions are read at
+        // process start; the current session already has the system prompt
+        // injected via prompt content. Reloading here (or after the turn via
+        // a deferred wait) only stalls the UI and tears down the session.
+        if (instructionsChanged) {
+          log.info("Prompt instructions updated (file written, no reload)", {
             spawnAgeMs: Date.now() - service.getLastSpawnAtMs(),
           });
         }
@@ -614,8 +672,35 @@ export function registerChatHandlers(): void {
       // task-link-timeout can abort this new prompt with opaque "Task cancelled".
       // Unlinked Tasks from a prior turn → structured superseded (not opaque cancel).
       getMapper(win).clearPendingTasksForTab(tabId);
-      if (!isFirstTurn && args.projectPath) {
+      // Hydrate BEFORE mode switch — prewarm may have restarted OpenCode and
+      // dropped in-memory sessions. OpenCode 1.18 switches agents via configId
+      // "mode" (not "agent"); modes are agent file bases (notes-lead, …).
+      if (args.projectPath) {
         await service.ensureSessionHydrated(sessionId, cwd, args.projectPath);
+      }
+      if (sessionAgent === "plan") {
+        await service.applySessionAgent(sessionId, "plan");
+      } else if (orchestratorId) {
+        service.setSessionAgent(sessionId, "build");
+        try {
+          const modeId = args.projectPath
+            ? (await import("../teams/agents-sync")).projectAgentRuntimeName(args.projectPath, orchestratorId)
+            : orchestratorId;
+          await service.applySessionMode(sessionId, modeId);
+          log.info("chat:send OpenCode mode set", {
+            tabId,
+            sessionId,
+            mode: modeId,
+            teamLead: orchestratorId,
+          });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          log.warn(`chat:send setConfigOption mode=${orchestratorId} failed: ${message}`);
+          // Last resort: built-in build mode (not the team lead).
+          await service.applySessionAgent(sessionId, "build");
+        }
+      } else {
+        await service.applySessionAgent(sessionId, "build");
       }
       if (args.projectPath && sessionId) {
         const wantsMcp = (mcpServerAllowlist?.length ?? 0) > 0;
@@ -1415,21 +1500,30 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Pre-warm ───
-  // Industry model: warm ACP + project config (skills/experts/prompts).
-  // Do NOT mint empty sessions — session/new happens on first chat:send.
+  // Sync project config (skills/experts/prompts), then pre-spawn the *project*
+  // OpenCode runtime so first chat:send skips cold process start.
+  // session/new still happens on first send (model/team unknown until then).
   ipcMain.handle(
     "chat:prewarm",
     async (_event, args: { projectPath?: string }) => {
       try {
-        await ensureConnected();
+        // Global singleton: credentials / effort catalog (lightweight app-level).
+        await ensureConnected(getService());
         if (args.projectPath) {
           const { ensureProjectChatPrewarm } = await import("../services/project-chat-prewarm");
           await ensureProjectChatPrewarm(args.projectPath);
-          const { commandRegistry } = await import("../commands/registry");
-          commandRegistry.setProjectRoot(args.projectPath);
-          commandRegistry.reload();
+          const projectService = AcpService.getInstanceForProject(args.projectPath);
+          // Hide project OpenCode cold-start while the user is still in the editor.
+          if (!projectService.isConnected()) {
+            log.info("chat:prewarm spawning project OpenCode runtime", {
+              projectPath: args.projectPath,
+            });
+            await ensureConnected(projectService);
+          }
+          const { getCommandRegistry } = await import("../commands/registry");
+          getCommandRegistry(args.projectPath).reload();
           const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
-          emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
+          emitAgentStatusChanged(projectService.getStatusSnapshot(args.projectPath));
         }
         return { ok: true as const };
       } catch (err: unknown) {
@@ -1438,7 +1532,9 @@ export function registerChatHandlers(): void {
         if (args.projectPath) {
           try {
             const { emitAgentStatusChanged } = await import("../services/agent-status-notify");
-            emitAgentStatusChanged(getService().getStatusSnapshot(args.projectPath));
+            emitAgentStatusChanged(
+              AcpService.getInstanceForProject(args.projectPath).getStatusSnapshot(args.projectPath),
+            );
           } catch { /* ignore */ }
         }
         return { ok: false as const, error: message };
@@ -1472,7 +1568,7 @@ export function registerChatHandlers(): void {
     "chat:ensureAgent",
     async (_event, args?: { projectPath?: string }) => {
       try {
-        await ensureConnected();
+        await ensureConnected(getService());
         if (args?.projectPath) {
           const {
             ensureProjectChatPrewarm,
@@ -1483,6 +1579,11 @@ export function registerChatHandlers(): void {
             invalidateProjectChatPrewarm(args.projectPath);
           }
           await ensureProjectChatPrewarm(args.projectPath);
+          const projectService = AcpService.getInstanceForProject(args.projectPath);
+          if (!projectService.isConnected()) {
+            await ensureConnected(projectService);
+          }
+          return projectService.getStatusSnapshot(args.projectPath);
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1493,27 +1594,42 @@ export function registerChatHandlers(): void {
   );
 
   // ─── Session Management ───
+  // Session SQLite lives per project under opencode-runtimes/<hash>/ — always
+  // resolve AcpService via projectPath / sessionId, never the global singleton.
 
   ipcMain.handle("session:list", async (_event, args: { projectPath?: string }) => {
-    const service = getService();
-    if (!service.getConnection()) {
-      try {
-        await service.initialize();
-      } catch (err: any) {
-        log.warn(`session:list — OpenCode not available: ${err.message}`);
-        return [];
+    const service = getService(args.projectPath);
+    // Listing only needs the project SQLite file; skip ACP spawn when possible.
+    try {
+      if (args.projectPath) {
+        return await service.listProjectSessions(args.projectPath);
       }
+      return await service.listSessions(args.projectPath);
+    } catch (err: any) {
+      // First open of a project may not have a runtime DB yet.
+      if (!service.getConnection()) {
+        try {
+          await service.initialize();
+          if (args.projectPath) {
+            return await service.listProjectSessions(args.projectPath);
+          }
+          return await service.listSessions(args.projectPath);
+        } catch (initErr: any) {
+          log.warn(`session:list — OpenCode not available: ${initErr.message}`);
+          return [];
+        }
+      }
+      log.warn(`session:list failed: ${err.message}`);
+      return [];
     }
-    if (args.projectPath) {
-      return await service.listProjectSessions(args.projectPath);
-    }
-    return await service.listSessions(args.projectPath);
   });
 
   ipcMain.handle(
     "session:load",
     async (_event, args: { sessionId: string; projectPath?: string; cwd?: string }) => {
-      const service = getService();
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
       if (!service.getConnection()) {
         try {
           await service.initialize();
@@ -1543,7 +1659,9 @@ export function registerChatHandlers(): void {
         limit: number;
       },
     ) => {
-      const service = getService();
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
       if (!service.getConnection()) {
         try {
           await service.initialize();
@@ -1564,15 +1682,12 @@ export function registerChatHandlers(): void {
 
 
   ipcMain.handle("session:getDirectory", async (_event, args: { sessionId: string }) => {
-    const service = getService();
-    if (!service.getConnection()) {
-      try {
-        await service.initialize();
-      } catch {
-        return null;
-      }
+    const service = AcpService.getInstanceForSession(args.sessionId);
+    try {
+      return await service.getSessionDirectory(args.sessionId);
+    } catch {
+      return null;
     }
-    return await service.getSessionDirectory(args.sessionId);
   });
 
   ipcMain.handle(
@@ -1589,32 +1704,26 @@ export function registerChatHandlers(): void {
           "session:rename requires { tabId: string; title: string; sessionId: string }",
         );
       }
-      const service = getService();
-      if (!service.getConnection()) {
-        try {
-          await service.initialize();
-        } catch (err: any) {
-          throw new Error(
-            `Cannot rename session: OpenCode is not available — ${err.message}`,
-          );
-        }
+      const service = AcpService.getInstanceForSession(args.sessionId);
+      try {
+        await service.renameSession(args.sessionId, args.title);
+      } catch (err: any) {
+        throw new Error(
+          `Cannot rename session: ${err.message}`,
+        );
       }
-      await service.renameSession(args.sessionId, args.title);
     },
   );
 
   ipcMain.handle(
     "session:reassignDirectory",
     async (_event, args: { fromDirectory: string; toDirectory: string }) => {
-      const service = getService();
-      if (!service.getConnection()) {
-        try {
-          await service.initialize();
-        } catch {
-          return 0;
-        }
+      const service = getService(args.toDirectory);
+      try {
+        return await service.reassignSessionsDirectory(args.fromDirectory, args.toDirectory);
+      } catch {
+        return 0;
       }
-      return await service.reassignSessionsDirectory(args.fromDirectory, args.toDirectory);
     },
   );
 
@@ -1625,7 +1734,10 @@ export function registerChatHandlers(): void {
       if (args.projectPath) {
         deleteSessionDisplays(args.projectPath, args.sessionId);
       }
-      return await getService().deleteSession(args.sessionId);
+      const service = args.projectPath
+        ? getService(args.projectPath)
+        : AcpService.getInstanceForSession(args.sessionId);
+      return await service.deleteSession(args.sessionId);
     },
   );
 
@@ -1640,9 +1752,9 @@ export function registerChatHandlers(): void {
         turnIndex: number;
       },
     ) => {
-      const service = getService();
+      const service = getService(args.projectPath);
       try {
-        await ensureConnected();
+        await ensureConnected(service);
       } catch (err: any) {
         throw new Error(`Cannot truncate session: OpenCode is not available — ${err.message}`);
       }
@@ -1683,7 +1795,7 @@ export function registerChatHandlers(): void {
 
       const displayBackup = sessionDisplayBackups.get(args.sessionId);
 
-      const service = getService();
+      const service = getService(args.projectPath);
       await service.restoreSessionFromBackup(backup);
       sessionTruncationBackups.delete(args.sessionId);
       sessionDisplayBackups.delete(args.sessionId);

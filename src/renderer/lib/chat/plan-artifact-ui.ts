@@ -6,7 +6,7 @@ import { param } from "@/components/modules/chat/tools/shared";
 import type { ContentBlock } from "@/stores/chat-store";
 
 /** True when a write/edit tool targets a research plan markdown file. */
-export function isPlanFileToolUse(toolUse: ContentBlock): boolean {
+export function isPlanFileToolUse(toolUse: { name?: string; input?: unknown }): boolean {
   const name = (toolUse.name || "").toLowerCase();
   if (name !== "write" && name !== "edit") return false;
   const filePath =

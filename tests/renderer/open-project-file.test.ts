@@ -1,11 +1,13 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
   ensureRightAreaVisibleForFiles,
   joinProjectPaths,
+  openProjectFileFromChat,
   parseGrepResultLine,
   resolveChatFilePath,
 } from "@/lib/files/open-project-file";
 import { useLayoutStore } from "@/stores/layout-store";
+import { useDocumentStore } from "@/stores/document-store";
 
 describe("open-project-file", () => {
   const root = "/Users/me/project";
@@ -48,6 +50,25 @@ describe("open-project-file", () => {
 
   it("rejects path traversal", () => {
     expect(resolveChatFilePath("../secret", root)).toBeNull();
+    expect(resolveChatFilePath("notes/../../etc/passwd.md", root)).toBeNull();
+  });
+
+  it("rejects absolute paths outside the project", () => {
+    expect(resolveChatFilePath("/tmp/a.md", root)).toBeNull();
+    expect(resolveChatFilePath("C:\\Users\\secret.md", root)).toBeNull();
+    expect(resolveChatFilePath("C:/Users/secret.md", root)).toBeNull();
+  });
+
+  it("does not open absolute paths outside the project from chat", async () => {
+    const openExternalFile = vi.fn(async () => {});
+    useDocumentStore.setState({
+      projectRoot: root,
+      openExternalFile,
+    } as any);
+
+    await expect(openProjectFileFromChat("/tmp/a.md")).resolves.toBe(false);
+    await expect(openProjectFileFromChat("C:/Users/secret.md")).resolves.toBe(false);
+    expect(openExternalFile).not.toHaveBeenCalled();
   });
 
   it("joins directory listings", () => {

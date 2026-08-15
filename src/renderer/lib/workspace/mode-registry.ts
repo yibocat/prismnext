@@ -21,6 +21,10 @@ export function isEditableFileTabKind(kind: RightTabKind): boolean {
   return kind === "file" || kind === "texworkspace" || kind === "research-plan";
 }
 
+export function isJobMonitorTab(tab: Pick<RightTab, "kind" | "terminalSource">): boolean {
+  return tab.kind === "terminal" && (tab.terminalSource === "job-monitor" || tab.terminalSource === "ai");
+}
+
 /** Where a mode may appear in the app chrome. */
 export type ModeSurface = "workspace" | "settings" | "any";
 
@@ -39,13 +43,15 @@ export interface RightTab {
   isLoading?: boolean;
   hibernated?: boolean;
   viewMode?: string;
-  /** User shell vs AI agent mirror terminal */
-  terminalSource?: "user" | "ai";
+  /** User shell vs read-only Job Monitor. Legacy `"ai"` is treated as job-monitor. */
+  terminalSource?: "user" | "job-monitor" | "ai";
   /** Optional cwd override for the terminal PTY. When set, TerminalView
    *  spawns at this path instead of resolveTerminalRoot(...) - used by
    *  Sprint 0.7 "Open terminal in lab" to land in an experiment island.
    *  Plain user/AI terminals leave it undefined. */
   terminalCwd?: string;
+  /** Execution this Job Monitor tab is attached to */
+  linkedExecutionId?: string;
   /** Chat tab that owns this AI terminal */
   linkedChatTabId?: string;
   /** Latest bash tool call mirrored in this tab */

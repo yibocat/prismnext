@@ -9,13 +9,43 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: "jsdom",
     setupFiles: ["tests/setup.ts"],
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    // Keep Node/Electron services out of Vite's client transform path: it
+    // cannot bundle node:sqlite. Renderer tests remain browser-like.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "main",
+          environment: "node",
+          include: ["tests/main/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "shared",
+          environment: "node",
+          include: ["tests/shared/**/*.test.ts", "tests/scripts/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "renderer",
+          environment: "jsdom",
+          include: ["tests/renderer/**/*.test.ts", "tests/renderer/**/*.test.tsx"],
+        },
+      },
+    ],
   },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src/renderer"),
+      "@prismnext/pro": path.resolve(
+        __dirname,
+        "src/renderer/lib/pro/absent-module.ts",
+      ),
     },
   },
 });

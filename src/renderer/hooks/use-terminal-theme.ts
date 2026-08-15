@@ -1,15 +1,25 @@
-import { useMemo, useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { useThemeStore } from "@/stores/theme-store";
 import type { ITheme } from "@xterm/xterm";
 
-// ─── VS Code Light+ inspired ───
+/**
+ * xterm paints `theme.background` onto a canvas. CSS `background: transparent`
+ * on the canvas element does not clear those pixels, so the terminal must use
+ * a fully transparent theme color and `allowTransparency` — the
+ * `[data-surface=content]` token (`--glass-content-bg` / `--background`) then
+ * shows through and matches the title bar.
+ *
+ * Do not sample `--background` via canvas `getImageData`: on Display-P3
+ * Electron that hex is often a warm-shifted sRGB misread of P3 values.
+ */
+const TRANSPARENT_BG = "#00000000";
+
+// ─── VS Code Light+ inspired ANSI ───
 
 const LIGHT_THEME: ITheme = {
   foreground: "#1a1a1a",
-  background: "#f8f8f8", // fallback — overridden by theme CSS variable below
+  background: TRANSPARENT_BG,
   cursor: "#1a1a1a",
-  cursorAccent: "#ffffff",
+  cursorAccent: TRANSPARENT_BG,
   selectionBackground: "#0066cc40",
   selectionForeground: "#1a1a1a",
   black: "#000000",
@@ -30,13 +40,13 @@ const LIGHT_THEME: ITheme = {
   brightWhite: "#1a1a1a",
 };
 
-// ─── VS Code Dark+ inspired ───
+// ─── VS Code Dark+ inspired ANSI ───
 
 const DARK_THEME: ITheme = {
   foreground: "#d4d4d4",
-  background: "#1e1e2a", // fallback — overridden by theme CSS variable below
+  background: TRANSPARENT_BG,
   cursor: "#d4d4d4",
-  cursorAccent: "#1e1e2a",
+  cursorAccent: TRANSPARENT_BG,
   selectionBackground: "#264f7840",
   selectionForeground: "#d4d4d4",
   black: "#000000",
@@ -57,59 +67,7 @@ const DARK_THEME: ITheme = {
   brightWhite: "#e5e5e5",
 };
 
-// ─── Helpers ───
-
-/** Read a CSS variable from <html> and return its value */
-function getCSSVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-/** Convert an oklch CSS color string to an rgba hex via canvas pixel sampling */
-function oklchToHex(oklch: string): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = 1;
-  canvas.height = 1;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = oklch;
-  ctx.fillRect(0, 0, 1, 1);
-  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-  // Return as hex (no alpha — xterm doesn't need it for background)
-  return "#" + [r, g, b].map((c) => c.toString(16).padStart(2, "0")).join("");
-}
-
-// ─── Hook ───
-
 export function useTerminalTheme(): ITheme {
   const { resolvedTheme } = useTheme();
-  const themeConfig = useThemeStore((s) => s.config);
-  // Read CSS variable synchronously on mount so the terminal is created
-  // with the correct background colour — avoids a one-frame colour flash.
-  const [backgroundHex, setBackgroundHex] = useState(() => {
-    const bg = getCSSVar("--background");
-    if (bg) {
-      try { return oklchToHex(bg); } catch { /* fall through */ }
-    }
-    return resolvedTheme === "light" ? "#f8f8f8" : "#1e1e2a";
-  });
-
-  useEffect(() => {
-    // next-themes may apply the .dark class asynchronously on theme switch,
-    // so defer reading CSS vars by one frame when the theme changes.
-    const raf = requestAnimationFrame(() => {
-      const bg = getCSSVar("--background");
-      if (bg) {
-        try {
-          setBackgroundHex(oklchToHex(bg));
-        } catch {
-          // keep current value
-        }
-      }
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [resolvedTheme, themeConfig]);
-
-  return useMemo(() => {
-    const base = resolvedTheme === "light" ? LIGHT_THEME : DARK_THEME;
-    return { ...base, background: backgroundHex };
-  }, [resolvedTheme, backgroundHex]);
+  return resolvedTheme === "light" ? LIGHT_THEME : DARK_THEME;
 }

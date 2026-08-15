@@ -19,7 +19,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
     useDocumentStore.setState({
       projectRoot: PROJECT,
       files: [],
-      getContent: () => null,
+      getAsset: () => null,
       refreshFileContent: async () => {},
       refreshFiles: async () => {},
     } as any);
@@ -217,7 +217,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
           absolutePath: `${PROJECT}/main.tex`,
         },
       ],
-      getContent: () => "tip",
+      getAsset: () => "tip",
       refreshFileContent: async () => {},
       refreshFiles: async () => {},
     } as any);
@@ -304,7 +304,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
     useDocumentStore.setState({
       projectRoot: PROJECT,
       files: [],
-      getContent: () => null,
+      getAsset: () => null,
       refreshFileContent: async () => {},
       refreshFiles: async () => {},
     } as any);

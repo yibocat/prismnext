@@ -9,13 +9,13 @@ import { AcpService } from "../acp/service";
 import { buildPromptContext } from "../prompts/context";
 import { createLogger } from "./logger";
 import {
-  refreshProjectExpertsIntegrationIfNeeded,
-} from "./project-experts-refresh";
+  refreshProjectSubagentsIntegrationIfNeeded,
+} from "./project-subagents-refresh";
 import {
   refreshProjectSkillsIntegrationIfNeeded,
 } from "./project-skills-refresh";
 import { syncProjectPromptFile } from "./prompt-sync";
-import { readPrismExpertsSyncState } from "./experts-sync";
+import { getAgentsSyncState } from "../teams/agents-sync";
 import { normalizeProjectRoot } from "./skills-sync";
 import type { ProjectWarmPhase } from "../../shared/agent-status";
 
@@ -29,6 +29,11 @@ export function invalidateProjectChatPrewarm(projectRoot: string): void {
   const root = normalizeProjectRoot(projectRoot);
   readyProjects.delete(root);
   warmErrors.delete(root);
+}
+
+/** True when file-level prewarm finished successfully for this project. */
+export function isProjectChatPrewarmReady(projectRoot: string): boolean {
+  return readyProjects.has(normalizeProjectRoot(projectRoot));
 }
 
 /** Project config warm phase for status UI (none | warming | ready | error). */
@@ -49,7 +54,7 @@ function emitWarmStatus(projectRoot: string): void {
     const { emitAgentStatusChanged } = require("./agent-status-notify") as {
       emitAgentStatusChanged: (s: unknown) => void;
     };
-    emitAgentStatusChanged(AcpService.getInstance().getStatusSnapshot(projectRoot));
+    emitAgentStatusChanged(AcpService.getInstanceForProject(projectRoot).getStatusSnapshot(projectRoot));
   } catch {
     /* windows may not be ready */
   }
@@ -106,18 +111,17 @@ async function runProjectChatPrewarm(
   options?: ProjectChatPrewarmOptions,
 ): Promise<void> {
   const t0 = Date.now();
-  const acp = AcpService.getInstance();
+  const acp = AcpService.getInstanceForProject(projectRoot);
   const skipReload = options?.skipOpenCodeReload === true;
 
-  const {
-    resolveOrchestratorId,
-  } = await import("./experts-sync");
-
-  const orchestratorId = resolveOrchestratorId(projectRoot, null);
+  // Touch active-team resolution so teams.json migration/defaults are warm
+  // before agents-sync; chat send uses the same resolver path.
+  const { resolveChatOrchestrator } = await import("../teams/resolver");
+  resolveChatOrchestrator(projectRoot);
   const promptCtx = await buildPromptContext(projectRoot);
 
-  const prevExpertsState = readPrismExpertsSyncState();
-  const expertsResult = await refreshProjectExpertsIntegrationIfNeeded(projectRoot, { promptCtx });
+  const prevExpertsState = getAgentsSyncState(projectRoot);
+  const expertsResult = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, { promptCtx });
   const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
 
   syncProjectPromptFile(projectRoot, promptCtx);

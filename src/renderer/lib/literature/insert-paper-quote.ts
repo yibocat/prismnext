@@ -67,7 +67,7 @@ async function resolveNotePathForPaper(
 
   if (stored) {
     const content = doc.openedContents.has(stored)
-      ? doc.getContent(stored)
+      ? doc.getAsset(stored)
       : (await window.electronAPI.fsRead(
           doc.fileMetadata.get(stored)?.absolutePath ?? "",
         ).catch(() => ({ content: "" }))).content;
@@ -81,7 +81,7 @@ async function resolveNotePathForPaper(
     const notePath = notes[notes.length - 1]!.relativePath;
     const meta = doc.fileMetadata.get(notePath);
     const content = doc.openedContents.has(notePath)
-      ? doc.getContent(notePath)
+      ? doc.getAsset(notePath)
       : meta
         ? (await window.electronAPI.fsRead(meta.absolutePath).catch(() => ({ content: "" }))).content
         : "";

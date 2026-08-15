@@ -70,7 +70,7 @@ export function hasDocumentClass(content: string): boolean {
 export function resolveCompileTarget(
   activeFileId: string,
   files: ProjectFile[],
-  getContent: (id: string) => string,
+  getAsset: (id: string) => string,
 ): { rootId: string; targetPath: string } | null {
   if (files.length === 0) return null;
 
@@ -87,7 +87,7 @@ export function resolveCompileTarget(
     const file = fileMap.get(currentId);
     if (!file) break;
 
-    const content = getContent(currentId);
+    const content = getAsset(currentId);
     const rootPath = parseTexRootMagicComment(content);
 
     if (!rootPath) {
@@ -118,7 +118,7 @@ export function resolveCompileTarget(
   // Step 2: Fall back to finding any file with \documentclass
   for (const file of files) {
     if (file.type !== "tex" && file.type !== "style") continue;
-    const content = getContent(file.id);
+    const content = getAsset(file.id);
     if (hasDocumentClass(content)) {
       return { rootId: file.id, targetPath: file.relativePath };
     }

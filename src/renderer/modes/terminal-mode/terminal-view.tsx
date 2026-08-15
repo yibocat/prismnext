@@ -86,6 +86,9 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     const term = new Terminal({
       theme: xtermTheme,
+      // Required for theme.background alpha; otherwise xterm paints an opaque
+      // cell fill that cannot match the content surface / glass token.
+      allowTransparency: true,
       fontSize: editorFontSize,
       fontFamily: editorFont,
       cursorBlink: true,

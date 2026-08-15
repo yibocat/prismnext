@@ -1,4 +1,4 @@
-import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, SettingsIcon } from "lucide-react";
+import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, Package, SettingsIcon } from "lucide-react";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -128,6 +128,31 @@ const templatesNav: LeftNavDefinition = {
     closeLiteraturePanel(ctx);
     useLayoutStore.getState().setLeftSidebarView("templates");
   },
+  onToggleOff: () => {
+    // Do not fall through to LEFT_NAV_DEFAULT_ID (new-agent) — that creates a chat tab.
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
+};
+
+const teamsNav: LeftNavDefinition = {
+  id: "teams",
+  section: "primary",
+  label: "Teams",
+  labelKey: "nav.teams",
+  icon: Package,
+  order: 25,
+  centerView: "teams",
+  immersive: true,
+  toggleable: true,
+  isActive: () => useLayoutStore.getState().leftSidebarView === "teams",
+  activate: (ctx) => {
+    closeTexWorkspace(ctx);
+    closeLiteraturePanel(ctx);
+    useLayoutStore.getState().setLeftSidebarView("teams");
+  },
+  onToggleOff: () => {
+    useLayoutStore.getState().setLeftSidebarView("sessions");
+  },
 };
 
 const texWorkspaceNav: LeftNavDefinition = {
@@ -182,6 +207,7 @@ export function registerLeftNavItems(): void {
   leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(experimentsNav);
   leftNavRegistry.register(templatesNav);
+  leftNavRegistry.register(teamsNav);
   leftNavRegistry.register(settingsNav);
   // leftNavRegistry.register(yourNav);  // ← 新入口加在这里，或拆到 feature 模块再 import
 }

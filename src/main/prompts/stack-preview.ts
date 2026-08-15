@@ -71,10 +71,12 @@ export async function buildPromptStackPreview(
   let orchestratorName: string | undefined;
 
   if (projectRoot) {
-    const { resolveOrchestratorId, getOrchestrator } = await import("../services/experts-sync");
-
-    orchestratorId = resolveOrchestratorId(projectRoot, explicitOrchestratorId ?? null);
-    orchestratorName = getOrchestrator(projectRoot, orchestratorId)?.name;
+    const { resolveChatOrchestrator } = await import("../teams/resolver");
+    const active = resolveChatOrchestrator(projectRoot, {
+      orchestratorId: explicitOrchestratorId ?? null,
+    });
+    orchestratorId = active.runtimeName;
+    orchestratorName = active.name;
   }
 
   const ctx: PromptContext = await buildPromptContext(projectRoot);
@@ -117,34 +119,19 @@ export async function buildPromptStackPreview(
   );
 
   if (projectRoot && orchestratorId) {
-    const {
-      getOrchestrator,
-      readOrchestratorInstructions,
-      renderOrchestratorAgentMarkdown,
-      listExperts,
-    } = await import("../services/experts-sync");
-
-    const orchestrator = getOrchestrator(projectRoot, orchestratorId);
-    if (orchestrator?.enabled) {
-      const enabledExperts = listExperts(projectRoot).filter((e) => e.enabled);
-      const enabledIds = new Set(enabledExperts.map((e) => e.id));
-      const allowedIds = orchestrator.allowedExperts?.length
-        ? orchestrator.allowedExperts.filter((id) => enabledIds.has(id))
-        : enabledExperts.map((e) => e.id);
-      const allowedRefs = allowedIds
-        .map((id) => enabledExperts.find((e) => e.id === id))
-        .filter((e): e is NonNullable<typeof e> => !!e)
-        .map((e) => ({ id: e.id, name: e.name, description: e.description }));
-
-      const instructions = readOrchestratorInstructions(projectRoot, orchestrator);
-      const agentMd = renderOrchestratorAgentMarkdown(orchestrator, instructions, allowedRefs);
+    const { buildAgentsPlan } = await import("../teams/agents-sync");
+    const plan = buildAgentsPlan(projectRoot, { promptCtx: ctx });
+    const opencodeOrchestratorId = plan.activeOrchestratorId;
+    const agentMd =
+      plan.agentEntries.find((e) => e.filename === `${opencodeOrchestratorId}.md`)?.content ?? "";
+    if (agentMd) {
       sections.push(
         section(
           "orchestrator-agent",
-          `Orchestrator agent (\`${orchestratorId}\`)`,
-          "OpenCode primary agent — instructions + profile Knowledge modules inline",
+          `Lead agent (\`${orchestratorId}\`)`,
+          "OpenCode primary agent — instructions + roster permission.task",
           agentMd,
-          `<userData>/opencode-server/config/opencode/agents/${orchestratorId}.md`,
+          `<userData>/opencode-server/config/opencode/agents/${opencodeOrchestratorId}.md`,
         ),
       );
     }

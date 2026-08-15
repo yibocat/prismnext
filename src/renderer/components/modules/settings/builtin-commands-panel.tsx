@@ -29,6 +29,17 @@ export function BuiltinCommandsPanel() {
     .filter((c) => c.source === "builtin")
     .sort((a, b) => a.order - b.order);
 
+  // 其余 pack 的命令按 pack 分组（badge = pack 名）
+  const packGroups = new Map<string, { teamName: string; commands: typeof commands }>();
+  for (const cmd of commands.filter((c) => c.source === "plugin")) {
+    const group = packGroups.get(cmd.teamId) ?? { teamName: cmd.teamName, commands: [] };
+    group.commands.push(cmd);
+    packGroups.set(cmd.teamId, group);
+  }
+  const sortedPackGroups = [...packGroups.values()].sort((a, b) =>
+    a.teamName.localeCompare(b.teamName),
+  );
+
   if (!loaded) {
     return (
       <div className="flex flex-1 items-center justify-center text-muted-foreground">
@@ -101,6 +112,48 @@ export function BuiltinCommandsPanel() {
           </div>
         )}
       </section>
+
+      {sortedPackGroups.map((group) => (
+        <section key={group.teamName} className="space-y-3">
+          <h3 className={SETTINGS_CATEGORY_HEADER}>{group.teamName}</h3>
+          <div className="space-y-3">
+            {group.commands
+              .sort((a, b) => a.order - b.order)
+              .map((cmd) => (
+                <article
+                  key={cmd.id}
+                  className="rounded-lg border border-border px-4 py-3 space-y-2"
+                >
+                  <div className={cn(SETTINGS_ROW, "!py-0")}>
+                    <div className="min-w-0 flex-1 pr-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-primary text-[length:var(--font-size-13)] font-medium">
+                          /{cmd.name}
+                        </span>
+                        {cmd.action ? (
+                          <span className={cn(BADGE, "bg-primary/10 text-primary")}>
+                            {t("settings.editor.builtinCommands.badgeShortcut")}
+                          </span>
+                        ) : null}
+                        <span className={cn(BADGE, "bg-muted text-muted-foreground")}>
+                          {group.teamName}
+                        </span>
+                      </div>
+                      <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
+                    </div>
+                    <Switch
+                      checked={cmd.enabled}
+                      onCheckedChange={(v) => void toggleCommand(cmd.id, v)}
+                      aria-label={t("settings.editor.builtinCommands.enableAria", {
+                        name: cmd.name,
+                      })}
+                    />
+                  </div>
+                </article>
+              ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

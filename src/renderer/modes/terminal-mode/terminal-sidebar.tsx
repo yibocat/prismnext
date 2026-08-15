@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { i18n } from "@/lib/i18n";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
-import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import {
   SidebarHeader,
   SidebarContent,
@@ -29,17 +28,17 @@ import {
   SparklesIcon,
   TerminalIcon,
   XIcon,
-  PinIcon,
 } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { QuickCommandDialog } from "./quick-command-dialog";
 import type { TerminalQuickCommand } from "@/types/terminal";
+import { isJobMonitorTab } from "@/lib/workspace/mode-registry";
 import {
-  collectTerminalSidebarAiItems,
+  collectTerminalSidebarJobItems,
   collectTerminalSidebarUserItems,
-  partitionAiSidebarItems,
-  type TerminalSidebarAiItem,
+  partitionJobSidebarItems,
+  type TerminalSidebarJobItem,
 } from "@/lib/terminal/terminal-sidebar-items";
 
 function SidebarSectionTrigger({
@@ -86,8 +85,10 @@ function SidebarSectionTrigger({
   );
 }
 
-function aiModeLabel(item: TerminalSidebarAiItem): string {
-  if (item.phase === "running") return i18n.t("modes.terminal.live");
+function jobModeLabel(item: TerminalSidebarJobItem): string {
+  if (item.state === "running" || item.state === "starting" || item.state === "cancel-requested") {
+    return i18n.t("modes.terminal.live");
+  }
   return i18n.t("modes.terminal.replay");
 }
 
@@ -97,39 +98,36 @@ function phaseBadgeClass(phase: string, busy?: boolean): string {
   return "text-muted-foreground/60";
 }
 
-function AiSessionRow({
+function JobSessionRow({
   item,
   onFocus,
   onClose,
 }: {
-  item: TerminalSidebarAiItem;
-  onFocus: (item: TerminalSidebarAiItem) => void;
-  onClose?: (aiTabId: string) => void;
+  item: TerminalSidebarJobItem;
+  onFocus: (item: TerminalSidebarJobItem) => void;
+  onClose?: (tabId: string) => void;
 }) {
-  const isLive = item.phase === "running";
+  const isLive = item.state === "running" || item.state === "starting" || item.state === "cancel-requested";
   return (
     <div
       className={cn(
         "group flex items-center gap-1 rounded-sm",
-        item.isActiveTab && "bg-accent/40",
+        item.isActiveTab && "bg-accent",
       )}
     >
       <button
         type="button"
-        className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left text-[length:var(--font-size-12)] hover:bg-accent/50 rounded-sm transition-colors"
+        className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left text-[length:var(--font-size-12)] hover:bg-accent rounded-sm transition-colors"
         onClick={() => onFocus(item)}
         title={item.statusLabel}
       >
-        <SparklesIcon className={cn("size-3 shrink-0", phaseBadgeClass(item.phase))} />
-        <span className="truncate flex-1 text-foreground/90">{item.title}</span>
-        <span className={cn("shrink-0 text-[length:var(--font-hint)]", phaseBadgeClass(item.phase))}>
-          {aiModeLabel(item)}
+        <SparklesIcon className={cn("size-3 shrink-0", phaseBadgeClass(item.state))} />
+        <span className="truncate flex-1 text-foreground">{item.title}</span>
+        <span className={cn("shrink-0 text-[length:var(--font-hint)]", phaseBadgeClass(item.state))}>
+          {jobModeLabel(item)}
         </span>
-        {item.pinned ? (
-          <PinIcon className="size-2.5 shrink-0 text-muted-foreground/50" />
-        ) : null}
       </button>
-      {item.aiTabId && onClose ? (
+      {item.tabId && onClose ? (
         <Hint
           label={
             isLive
@@ -139,8 +137,8 @@ function AiSessionRow({
         >
           <button
             type="button"
-            className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted-foreground/15 flex items-center justify-center"
-            onClick={() => onClose(item.aiTabId!)}
+            className="size-5 shrink-0 rounded-sm opacity-0 group-hover:opacity-100 hover:bg-muted flex items-center justify-center"
+            onClick={() => onClose(item.tabId!)}
           >
             <XIcon className="size-3" />
           </button>
@@ -150,16 +148,16 @@ function AiSessionRow({
   );
 }
 
-function AiSessionGroup({
+function JobSessionGroup({
   label,
   items,
   onFocus,
   onClose,
 }: {
   label: string;
-  items: TerminalSidebarAiItem[];
-  onFocus: (item: TerminalSidebarAiItem) => void;
-  onClose?: (aiTabId: string) => void;
+  items: TerminalSidebarJobItem[];
+  onFocus: (item: TerminalSidebarJobItem) => void;
+  onClose?: (tabId: string) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -168,7 +166,7 @@ function AiSessionGroup({
         {label}
       </p>
       {items.map((item) => (
-        <AiSessionRow key={item.key} item={item} onFocus={onFocus} onClose={onClose} />
+        <JobSessionRow key={item.key} item={item} onFocus={onFocus} onClose={onClose} />
       ))}
     </div>
   );
@@ -190,26 +188,21 @@ export function TerminalSidebar() {
   );
 
   const quickCommands = useTerminalStore((s) => s.quickCommands);
-  const sessionStates = useTerminalAiStore((s) => s.sessionStates);
-  const rightTabs = useRightPanelStore((s) => s.tabs);
   const terminalSessions = useTerminalStore((s) => s.sessions);
   const activeSession = activeTabId ? terminalSessions[activeTabId] : undefined;
   const addQuickCommand = useTerminalStore((s) => s.addQuickCommand);
   const updateQuickCommand = useTerminalStore((s) => s.updateQuickCommand);
   const removeQuickCommand = useTerminalStore((s) => s.removeQuickCommand);
   const setSessionCommand = useTerminalStore((s) => s.setSessionCommand);
-  const focusOrOpenAiTerminal = useTerminalAiStore((s) => s.focusOrOpenAiTerminal);
-  const focusLiveAiTerminal = useTerminalAiStore((s) => s.focusLiveAiTerminal);
-
-  const aiItems = collectTerminalSidebarAiItems(activeTabId);
-  const { live: aiLiveItems, saved: aiSavedItems } = partitionAiSidebarItems(aiItems);
+  const jobItems = collectTerminalSidebarJobItems(activeTabId);
+  const { live: jobLiveItems, saved: jobSavedItems } = partitionJobSidebarItems(jobItems);
   const userItems = collectTerminalSidebarUserItems(activeTabId);
-  const sessionCount = aiItems.length + userItems.length;
+  const sessionCount = jobItems.length + userItems.length;
 
   const activeSessionId = activeSession?.sessionId;
 
   const handleRunCommand = (command: string) => {
-    if (!activeSessionId || activeTab?.kind !== "terminal" || activeTab.terminalSource === "ai") return;
+    if (!activeSessionId || activeTab?.kind !== "terminal" || isJobMonitorTab(activeTab)) return;
     if (activeSession?.status !== "running" && activeSession?.status !== "starting") return;
     if (activeTabId) {
       useTerminalStore.getState().markCommandSubmitted(activeTabId);
@@ -235,15 +228,13 @@ export function TerminalSidebar() {
     setActiveTab(tabId);
   };
 
-  const focusAiItem = (item: TerminalSidebarAiItem) => {
-    if (item.aiTabId) {
-      focusTerminalTab(item.aiTabId);
+  const focusJobItem = (item: TerminalSidebarJobItem) => {
+    if (item.tabId) {
+      focusTerminalTab(item.tabId);
       return;
     }
-    if (item.phase === "running") {
-      focusLiveAiTerminal(item.chatTabId);
-    } else {
-      focusOrOpenAiTerminal(item.chatTabId);
+    if (item.executionId) {
+      useRightPanelStore.getState().openJobMonitor(item.executionId);
     }
   };
 
@@ -345,22 +336,22 @@ export function TerminalSidebar() {
                 </p>
               ) : null}
 
-              <AiSessionGroup
+              <JobSessionGroup
                 label={t("modes.terminal.live")}
-                items={aiLiveItems}
-                onFocus={focusAiItem}
+                items={jobLiveItems}
+                onFocus={focusJobItem}
                 onClose={closeAiTab}
               />
-              <AiSessionGroup
+              <JobSessionGroup
                 label={t("modes.terminal.saved")}
-                items={aiSavedItems}
-                onFocus={focusAiItem}
+                items={jobSavedItems}
+                onFocus={focusJobItem}
                 onClose={closeAiTab}
               />
 
               {userItems.length > 0 ? (
                 <div className="space-y-0.5">
-                  {userItems.length > 0 && aiItems.length > 0 ? (
+                  {userItems.length > 0 && jobItems.length > 0 ? (
                     <p className="px-1.5 pt-1 text-[length:var(--font-hint)] uppercase tracking-wide text-muted-foreground/50">
                       {t("modes.terminal.shells")}
                     </p>

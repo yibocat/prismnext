@@ -153,9 +153,36 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <div className="max-w-6xl mx-auto w-full px-8 pt-8 pb-8">
-        <h2 className="text-[length:var(--font-session-item)] font-semibold mb-6 hidden lg:block">
-          {selected ? selected.name : t("templates.center.title")}
-        </h2>
+        <div className="mb-6 hidden lg:block space-y-1">
+          <h2 className="text-[length:var(--font-session-item)] font-semibold">
+            {selected ? selected.name : t("templates.center.title")}
+          </h2>
+          {!selected ? (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("templates.center.subtitle")}
+            </p>
+          ) : null}
+          {!selected && currentTemplate ? (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("templates.center.current", {
+                name:
+                  templates?.find((x) => x.id === currentTemplate.id)?.name ??
+                  currentTemplate.id,
+                category: currentTemplate.category,
+              })}
+            </p>
+          ) : null}
+          {!canApply && projectRoot && workspaceLoaded && !manuscriptConfig ? (
+            <p className="text-[length:var(--font-size-12)] text-destructive">
+              {t("templates.center.needManuscript")}
+            </p>
+          ) : null}
+          {!projectRoot ? (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("templates.center.openProject")}
+            </p>
+          ) : null}
+        </div>
         <div className="flex flex-col lg:flex-row lg:items-start min-h-0 gap-6">
         <div className="shrink-0 w-full lg:w-[200px]">
           <button
@@ -168,11 +195,14 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
           </button>
           {!canApply && projectRoot && workspaceLoaded && !manuscriptConfig && (
             <p className="mb-4 text-[length:var(--font-size-12)] text-destructive lg:hidden">
-              Bind a manuscript folder in Workspace settings to apply templates.
+              {t("templates.center.needManuscript")}
             </p>
           )}
           {selected ? (
-            <DetailSidebar template={selected} />
+            <DetailSidebar
+              template={selected}
+              isCurrent={currentTemplate?.id === selected.id}
+            />
           ) : (
             <TemplateSidebar category={category} setCategory={setCategory} templates={templates} />
           )}
@@ -185,13 +215,14 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               onBack={() => setSelected(null)}
               onUse={handleUse}
               canApply={canApply}
+              isCurrent={currentTemplate?.id === selected.id}
               applyDisabledReason={
                 !projectRoot
                   ? t("templates.center.openProject")
                   : templateLoading
                     ? t("common.loading")
                     : !manuscriptConfig
-                      ? "Configure manuscript folder"
+                      ? t("templates.center.needManuscript")
                       : undefined
               }
             />
@@ -202,6 +233,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               setCategory={setCategory}
               search={search}
               setSearch={setSearch}
+              currentTemplateId={currentTemplate?.id ?? null}
               onSelect={async (t) => {
                 const full = await window.electronAPI.templateGet(t.id);
                 if (full) setSelected(full);

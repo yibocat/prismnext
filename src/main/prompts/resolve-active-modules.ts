@@ -40,7 +40,7 @@ export function resolveOrchestratorProfileModuleKeys(): string[] {
 }
 
 /** Module keys for expert/subagent agent.md (shared + expert-only). */
-export function resolveExpertProfileModuleKeys(): string[] {
+export function resolveSubagentProfileModuleKeys(): string[] {
   return ALL_MODULES.filter((m) => m.profileOnly && !m.orchestratorOnly).map((m) => m.key);
 }
 
@@ -51,8 +51,8 @@ export function resolveExpertProfileModuleKeys(): string[] {
  * attach (peer-reviewer needs no experiments/latex compile chain). expertOnly
  * modules (subagent-role) are always kept; unknown keys are ignored.
  */
-export function resolveExpertProfileModuleKeysFor(def: { modules?: string[] }): string[] {
-  const all = resolveExpertProfileModuleKeys();
+export function resolveSubagentProfileModuleKeysFor(def: { modules?: string[] }): string[] {
+  const all = resolveSubagentProfileModuleKeys();
   if (!def.modules?.length) return all;
   const sharedKeys = new Set(resolveSharedProfileModules().map((m) => m.key));
   const picked = def.modules.filter((k) => sharedKeys.has(k));
@@ -98,8 +98,8 @@ export function composeOrchestratorProfileModulePrompts(ctx: PromptContext = {})
   return composeProfileModulePrompts(resolveOrchestratorProfileModuleKeys(), ctx);
 }
 
-export function composeExpertProfileModulePrompts(ctx: PromptContext = {}): string {
-  return composeProfileModulePrompts(resolveExpertProfileModuleKeys(), ctx);
+export function composeSubagentProfileModulePrompts(ctx: PromptContext = {}): string {
+  return composeProfileModulePrompts(resolveSubagentProfileModuleKeys(), ctx);
 }
 
 /**
@@ -107,13 +107,13 @@ export function composeExpertProfileModulePrompts(ctx: PromptContext = {}): stri
  * Workspace is always present via OpenCode instructions; profile adds bundled modules.
  */
 export function resolveActiveModuleKeys(
-  ctx: Pick<PromptContext, "profileModules"> & { role?: "orchestrator" | "expert" },
+  ctx: Pick<PromptContext, "profileModules"> & { role?: "orchestrator" | "subagent" },
 ): string[] {
   const keys = resolveStableSystemModules().map((m) => m.key);
   const profileKeys =
     ctx.profileModules ??
-    (ctx.role === "expert"
-      ? resolveExpertProfileModuleKeys()
+    (ctx.role === "subagent"
+      ? resolveSubagentProfileModuleKeys()
       : ctx.role === "orchestrator"
         ? resolveOrchestratorProfileModuleKeys()
         : []);
@@ -130,6 +130,6 @@ export function resolveOrchestratorActiveModuleKeys(): string[] {
   return resolveActiveModuleKeys({ role: "orchestrator" });
 }
 
-export function resolveExpertActiveModuleKeys(): string[] {
-  return resolveActiveModuleKeys({ role: "expert" });
+export function resolveSubagentActiveModuleKeys(): string[] {
+  return resolveActiveModuleKeys({ role: "subagent" });
 }

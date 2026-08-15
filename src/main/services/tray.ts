@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getSettings } from "./settings";
 import {
+  formatTrayAccessoryTitle,
   formatTrayTooltip,
   shouldOpenTrayMenuOnClick,
   type TrayMenuSnapshot,
@@ -24,6 +25,12 @@ let menuSnapshot: TrayMenuSnapshot = {
   modes: [],
 };
 
+let lastAppliedStatus: TrayStatus | null = null;
+let lastAppliedTooltip: string | null = null;
+let lastAppliedTitle: string | null = null;
+let lastAppliedMenuKey = "";
+let runningCount = 0;
+
 function trayIconDir(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, "resources", "tray");
@@ -32,7 +39,7 @@ function trayIconDir(): string {
   return join(process.cwd(), "resources", "tray");
 }
 
-function loadIcon(name: "idleTemplate" | "busyTemplate" | "attentionTemplate"): NativeImage {
+function loadStaticIcon(name: "idleTemplate" | "busyTemplate" | "attentionTemplate"): NativeImage {
   const dir = trayIconDir();
   const basePath = join(dir, `${name}.png`);
   const retinaPath = join(dir, `${name}@2x.png`);
@@ -59,9 +66,9 @@ function loadIcon(name: "idleTemplate" | "busyTemplate" | "attentionTemplate"): 
 }
 
 function iconForStatus(s: TrayStatus): NativeImage {
-  if (s === "attention") return loadIcon("attentionTemplate");
-  if (s === "busy") return loadIcon("busyTemplate");
-  return loadIcon("idleTemplate");
+  if (s === "attention") return loadStaticIcon("attentionTemplate");
+  if (s === "busy") return loadStaticIcon("busyTemplate");
+  return loadStaticIcon("idleTemplate");
 }
 
 function tooltipForStatus(s: TrayStatus): string {
@@ -69,6 +76,7 @@ function tooltipForStatus(s: TrayStatus): string {
   return formatTrayTooltip({
     status: s,
     projectName: menuSnapshot.projectName,
+    runningCount,
   });
 }
 
@@ -84,6 +92,7 @@ function showMainWindow(): BrowserWindow | null {
 /**
  * After `popUpContextMenu` returns, the same click that dismissed the menu still
  * delivers `click` / `mouse-up` — ignore that echo so we don't flash reopen.
+ * macOS uses `setContextMenu` instead and does not need this window.
  */
 let ignoreMenuPopupUntil = 0;
 
@@ -159,28 +168,52 @@ function buildMenu(): Menu {
   return Menu.buildFromTemplate(template);
 }
 
-function applyStatusVisuals(): void {
-  if (!tray) return;
-  tray.setImage(iconForStatus(status));
-  tray.setToolTip(tooltipForStatus(status));
+function menuKey(snapshot: TrayMenuSnapshot): string {
+  return JSON.stringify({
+    showLabel: snapshot.showLabel,
+    newChatLabel: snapshot.newChatLabel,
+    quitLabel: snapshot.quitLabel,
+    projectName: snapshot.projectName ?? null,
+    recent: snapshot.recent.map((item) => [item.id, item.title, item.sessionId, item.tabId]),
+    modes: (snapshot.modes ?? []).map((mode) => [mode.id, mode.label]),
+  });
 }
 
-/**
- * Toggle tray menu: first click opens, second click closes (without reopening).
- * Do **not** keep a persistent `setContextMenu` on macOS — that opens on press.
- */
+function applyStatusVisuals(): void {
+  if (!tray) return;
+  if (lastAppliedStatus !== status) {
+    tray.setImage(iconForStatus(status));
+    lastAppliedStatus = status;
+  }
+  const tip = tooltipForStatus(status);
+  if (lastAppliedTooltip !== tip) {
+    tray.setToolTip(tip);
+    lastAppliedTooltip = tip;
+  }
+  const title = formatTrayAccessoryTitle({ status, runningCount });
+  if (lastAppliedTitle !== title) {
+    if (process.platform === "darwin") tray.setTitle(title);
+    lastAppliedTitle = title;
+  }
+}
+
+function refreshTrayMenu(): void {
+  if (!tray) return;
+  const key = menuKey(menuSnapshot);
+  if (key === lastAppliedMenuKey) return;
+  lastAppliedMenuKey = key;
+  if (process.platform === "darwin") {
+    // Native status-item menu: opens on mouse-down, second click dismisses.
+    tray.setContextMenu(buildMenu());
+  }
+}
+
 function popupTrayMenu(): void {
   if (!tray) return;
   const now = Date.now();
   if (!shouldOpenTrayMenuOnClick({ now, ignoreUntil: ignoreMenuPopupUntil })) return;
   tray.popUpContextMenu(buildMenu());
-  // Menu is closed when this returns; suppress the dismissing click's echo.
   ignoreMenuPopupUntil = Date.now() + 300;
-}
-
-function refreshTrayMenu(): void {
-  // Menu is built fresh on each popup; nothing to attach while idle.
-  if (!tray) return;
 }
 
 export function setTrayWindowGetter(getter: () => BrowserWindow | null): void {
@@ -206,9 +239,16 @@ export function isTrayIconEnabled(): boolean {
   return settings.trayIconEnabled !== false;
 }
 
-export function setTrayStatus(next: TrayStatus, tooltip?: string | null): void {
+export function setTrayStatus(
+  next: TrayStatus,
+  tooltip?: string | null,
+  nextRunningCount?: number,
+): void {
   status = next;
   statusTooltip = tooltip?.trim() ? tooltip.trim() : null;
+  if (typeof nextRunningCount === "number" && Number.isFinite(nextRunningCount)) {
+    runningCount = Math.max(0, Math.floor(nextRunningCount));
+  }
   applyStatusVisuals();
 }
 
@@ -221,8 +261,6 @@ export function setTrayMenuSnapshot(snapshot: TrayMenuSnapshot): void {
     projectName: snapshot.projectName?.trim() || null,
     modes: Array.isArray(snapshot.modes) ? snapshot.modes.slice(0, 8) : [],
   };
-  // Project name also affects the fallback tooltip when renderer has not
-  // pushed a localized one for the current status yet.
   applyStatusVisuals();
   refreshTrayMenu();
 }
@@ -254,19 +292,29 @@ export function ensureTray(): void {
   const icon = iconForStatus(status);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
   tray.setToolTip(tooltipForStatus(status));
-  // Click toggles menu open/close (suppress echo so dismiss does not reopen).
-  // Prefer `click` over bare `mouse-up` so we share one path with Windows/Linux.
-  tray.on("click", () => {
-    popupTrayMenu();
-  });
-  tray.on("right-click", () => {
-    popupTrayMenu();
-  });
-  applyStatusVisuals();
+  lastAppliedStatus = status;
+  lastAppliedTooltip = tooltipForStatus(status);
+  lastAppliedTitle = formatTrayAccessoryTitle({ status, runningCount });
+  if (process.platform === "darwin") {
+    tray.setTitle(lastAppliedTitle);
+    refreshTrayMenu();
+  } else {
+    tray.on("click", () => {
+      popupTrayMenu();
+    });
+    tray.on("right-click", () => {
+      popupTrayMenu();
+    });
+  }
 }
 
 export function destroyTray(): void {
   if (!tray) return;
   tray.destroy();
   tray = null;
+  lastAppliedStatus = null;
+  lastAppliedTooltip = null;
+  lastAppliedTitle = null;
+  lastAppliedMenuKey = "";
+  runningCount = 0;
 }

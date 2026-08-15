@@ -67,6 +67,8 @@ export interface ExperimentRunInFlight {
   command: string;
   /** Rolling PTY output (tail-truncated to match persisted run output). */
   liveOutput: string;
+  executionId?: string;
+  cancelRequested?: boolean;
 }
 
 interface ExperimentDetail {
@@ -525,6 +527,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
           runId: res.runId,
           command,
           liveOutput: tailBytes(buffered, RUN_OUTPUT_TAIL_BYTES),
+          ...(res.executionId ? { executionId: res.executionId } : {}),
         },
         runOutputBuffer: restBuffer,
         error: null,
@@ -602,6 +605,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
           runId,
           command,
           liveOutput: tailBytes(buffered, RUN_OUTPUT_TAIL_BYTES),
+          ...(data.executionId ? { executionId: data.executionId } : {}),
         },
         runOutputBuffer: restBuffer,
         error: null,
@@ -643,15 +647,14 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     try {
       await window.electronAPI.experimentCancelRun({ projectRoot, id, runId });
     } catch {
-      // Best-effort — clear the in-flight marker regardless of IPC outcome.
+      // Keep the in-flight card; the final event still clears it.
     }
     set((state) => {
-      const { [runId]: _drop, ...restBuffer } = state.runOutputBuffer;
       const inflight = state.runInFlight;
       if (inflight && inflight.runId === runId && inflight.id === id) {
-        return { runInFlight: null, runOutputBuffer: restBuffer };
+        return { runInFlight: { ...inflight, cancelRequested: true } };
       }
-      return { runOutputBuffer: restBuffer };
+      return state;
     });
   },
 

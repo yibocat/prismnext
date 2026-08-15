@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { compileStandaloneTexInPlace } from "../../src/main/services/compiler";
+import { resetTectonicBinaryCacheForTests } from "../../src/main/services/tectonic-binary";
 
 vi.mock("electron", () => ({
   app: {
@@ -21,6 +22,7 @@ describe("compileStandaloneTexInPlace (real engine)", () => {
   let root: string;
 
   beforeEach(() => {
+    resetTectonicBinaryCacheForTests();
     root = mkdtempSync(join(tmpdir(), "prism-standalone-real-"));
     mkdirSync(join(root, "figures"), { recursive: true });
     writeFileSync(
@@ -42,8 +44,7 @@ describe("compileStandaloneTexInPlace (real engine)", () => {
 
   it("produces the PDF next to the source and never touches .prismnext/compile", async () => {
     const result = await compileStandaloneTexInPlace(root, "figures/box.tex");
-    expect(result.error ?? "").toBe("");
-    expect(result.success).toBe(true);
+    expect(result.success, result.error || result.logContent || "compile failed").toBe(true);
     expect(result.pdfPath).toBe("figures/box.pdf");
     // In place: PDF + log + aux live next to the source…
     expect(existsSync(join(root, "figures", "box.pdf"))).toBe(true);

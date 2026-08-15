@@ -19,10 +19,12 @@ export function McpPresetFieldInputs({
   preset,
   values,
   onChange,
+  disabled = false,
 }: {
   preset: McpPreset;
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const [visible, setVisible] = useState<Record<string, boolean>>({});
@@ -44,12 +46,15 @@ export function McpPresetFieldInputs({
               placeholder={field.placeholder}
               value={values[field.key] ?? ""}
               onChange={(e) => onChange(field.key, e.target.value)}
+              disabled={disabled}
+              readOnly={disabled}
             />
             {field.secret && (
               <button
                 type="button"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 onClick={() => setVisible((v) => ({ ...v, [field.key]: !v[field.key] }))}
+                disabled={disabled}
               >
                 {visible[field.key] ? (
                   <EyeOffIcon className="size-3.5" />

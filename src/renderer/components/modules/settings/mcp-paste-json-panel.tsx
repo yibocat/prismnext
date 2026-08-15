@@ -1,15 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { useTeamsStore } from "@/stores/teams-store";
+import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
 import {
   mergeMcpEntries,
   namedEntryFromBareConfig,
   parsePastedMcpJson,
 } from "@/lib/agent/mcp-config";
+import { TeamPicker } from "../teams/team-picker";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
+import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import { SettingsJsonEditor } from "./settings-json-editor";
 import { SettingsJsonToolbar } from "./settings-json-toolbar";
 import {
@@ -43,17 +48,54 @@ const EXAMPLE_SINGLE_BLOCK = `{
   "command": ["npx", "-y", "@modelcontextprotocol/server-memory"]
 }`;
 
-export function McpPasteJsonPanel() {
+type PasteSlot = Extract<SettingsPanelSlot, { kind: "mcp-paste-json" }>;
+
+export function McpPasteJsonPanel({ slot }: { slot?: PasteSlot }) {
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const catalog = useTeamsStore((s) => s.catalog);
+  const loadTeams = useTeamsStore((s) => s.load);
   const servers = useMcpServersStore((s) => s.servers);
   const saving = useMcpServersStore((s) => s.saving);
+  const load = useMcpServersStore((s) => s.load);
   const persist = useMcpServersStore((s) => s.persist);
 
+  const lockedTeam = Boolean(slot?.targetTeamId);
+  const [targetTeamId, setTargetTeamId] = useState(
+    slot?.targetTeamId ?? PROJECT_DEFAULT_TEAM_ID,
+  );
   const [pasteText, setPasteText] = useState("");
   const [pasteBareName, setPasteBareName] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (slot?.targetTeamId) setTargetTeamId(slot.targetTeamId);
+  }, [slot?.targetTeamId]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void load(projectRoot, targetTeamId);
+  }, [projectRoot, targetTeamId, load]);
+
+  const pickerTeams = useMemo(
+    () =>
+      catalog
+        .filter((tm) => tm.writable && tm.installed)
+        .map((tm) => ({
+          ...tm,
+          manifest: {
+            ...tm.manifest,
+            name: teamDisplayName(tm.manifest.id, tm.manifest.name, t),
+          },
+        })),
+    [catalog, t],
+  );
 
   const pasteNeedsName = useMemo(() => {
     if (!pasteText.trim()) return false;
@@ -86,7 +128,7 @@ export function McpPasteJsonPanel() {
         setPasteError(t("settings.editor.mcpPaste.errorName"));
         return;
       }
-      await persist(projectRoot, mergeMcpEntries(servers, [entry]));
+      await persist(projectRoot, mergeMcpEntries(servers, [entry]), targetTeamId);
       toast.success(t("settings.editor.mcpPaste.toastAddedOne", { name: entry.name }));
       closePanel();
       return;
@@ -97,7 +139,7 @@ export function McpPasteJsonPanel() {
       return;
     }
 
-    await persist(projectRoot, mergeMcpEntries(servers, parsed.entries));
+    await persist(projectRoot, mergeMcpEntries(servers, parsed.entries), targetTeamId);
     toast.success(
       parsed.entries.length === 1
         ? t("settings.editor.mcpPaste.toastAddedOne", { name: parsed.entries[0].name })
@@ -137,6 +179,17 @@ export function McpPasteJsonPanel() {
       />
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>{t("settings.editor.mcpPaste.intro")}</p>
+        {!lockedTeam && (
+          <div className="space-y-1.5">
+            <p className={SETTINGS_ROW_DESC}>{t("settings.mcp.targetTeam")}</p>
+            <TeamPicker
+              teams={pickerTeams}
+              value={targetTeamId}
+              onChange={setTargetTeamId}
+              onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
+            />
+          </div>
+        )}
 
         {pasteError ? (
           <p className="text-[length:var(--font-size-12)] text-destructive">{pasteError}</p>
@@ -190,7 +243,7 @@ function FormatHint({ title, example }: { title: string; example: string }) {
   };
 
   return (
-    <div className="rounded-md border border-border/80 bg-muted/30 px-3 py-2">
+    <div className="rounded-md border border-border bg-muted px-3 py-2">
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <p className="text-[length:var(--font-size-11)] text-muted-foreground min-w-0">{title}</p>
         <button

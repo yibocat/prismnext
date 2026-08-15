@@ -1,4 +1,8 @@
+import { icons, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
+import { normalizeIconSpec, type IconSpec } from "@shared/icon-spec";
+import { useIconImageSrc } from "../shared/use-icon-image-src";
 
 export interface ProjectIconCategory {
   label: string;
@@ -42,7 +46,7 @@ function projectAvatarTone(name: string): string {
   return PROJECT_AVATAR_TONES[Math.abs(hash) % PROJECT_AVATAR_TONES.length];
 }
 
-/** Keep a short glyph (emoji / symbol); reject empty or oversized junk. */
+/** @deprecated Use `normalizeIconSpec` for new code; kept for legacy emoji-string callers. */
 export function normalizeProjectIcon(raw: string | null | undefined): string | null {
   const value = (raw ?? "").trim();
   if (!value) return null;
@@ -50,8 +54,13 @@ export function normalizeProjectIcon(raw: string | null | undefined): string | n
   return value;
 }
 
-/** Read `projectIcon` from a project's `.prismnext/settings.json`. */
-export async function loadProjectIcon(projectPath: string): Promise<string | null> {
+/** Absolute `.prismnext` dir for a project root. */
+export function projectIconBaseDir(projectPath: string): string {
+  return `${projectPath.replace(/[/\\]+$/, "")}/.prismnext`;
+}
+
+/** Read `projectIcon` (IconSpec) from a project's `.prismnext/settings.json`. */
+export async function loadProjectIcon(projectPath: string): Promise<IconSpec | null> {
   const root = projectPath.replace(/[/\\]+$/, "");
   try {
     const settingsRes = await window.electronAPI.fsRead(
@@ -60,36 +69,75 @@ export async function loadProjectIcon(projectPath: string): Promise<string | nul
     const raw = settingsRes?.content?.trim();
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { projectIcon?: unknown };
-    if (typeof parsed.projectIcon !== "string") return null;
-    return normalizeProjectIcon(parsed.projectIcon);
+    return normalizeIconSpec(parsed.projectIcon);
   } catch {
     return null;
   }
 }
 
+/**
+ * Project icon badge. Accepts an `IconSpec` (emoji / lucide / image) or a legacy
+ * emoji string. Image icons resolve from `<project>/.prismnext/icon.png`.
+ */
 export function ProjectIconBadge({
   icon,
   name,
   muted,
   className,
+  projectPath,
+  previewSrc,
 }: {
-  icon?: string | null;
+  icon?: IconSpec | string | null;
   name: string;
   muted?: boolean;
   className?: string;
+  /** Project root — required to resolve image icons from disk. */
+  projectPath?: string | null;
+  /** Local preview data URL before the file is written. */
+  previewSrc?: string | null;
 }) {
-  const normalized = normalizeProjectIcon(icon);
-  if (normalized) {
+  const spec = normalizeIconSpec(icon);
+  const imageSrc = useIconImageSrc(
+    spec,
+    projectPath ? projectIconBaseDir(projectPath) : null,
+    previewSrc,
+  );
+  const base =
+    "flex size-7 shrink-0 items-center justify-center rounded-md bg-muted leading-none";
+
+  if (spec?.kind === "emoji" && spec.value) {
     return (
       <span
         className={cn(
-          "flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-[length:var(--font-size-14)] leading-none",
+          base,
+          "text-[length:var(--font-size-14)]",
           muted && "opacity-45",
           className,
         )}
         aria-hidden
       >
-        {normalized}
+        {spec.value}
+      </span>
+    );
+  }
+  if (spec?.kind === "lucide" && isValidLucideIconName(spec.value)) {
+    const Icon = icons[spec.value] as LucideIcon;
+    return (
+      <span
+        className={cn(base, "text-muted-foreground", muted && "opacity-45", className)}
+        aria-hidden
+      >
+        <Icon className="size-3.5 shrink-0" />
+      </span>
+    );
+  }
+  if (spec?.kind === "image" && imageSrc) {
+    return (
+      <span
+        className={cn(base, "overflow-hidden", muted && "opacity-45", className)}
+        aria-hidden
+      >
+        <img src={imageSrc} alt="" className="size-full object-cover" />
       </span>
     );
   }

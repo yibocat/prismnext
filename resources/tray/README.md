@@ -1,12 +1,13 @@
 # Tray icons
 
-macOS menu-bar / system-tray — **circular disk + variant A ribbon** (template mono).
+macOS menu-bar / system-tray — **rounded square + variant A ribbon** (template mono).
+Fixed corner radius (not wired to Appearance — a 16px extra cannot show that slider).
 
 ## Composition
 
-- Solid circle (`r ≈ 31.5` in viewBox 64), then ribbon strokes on top (**not** knockout)
-- Optical: lighter disk (~0.35) + near-full-slot ribbon (`scale ≈ 0.98`) for menu-bar weight
-- Status (`idle` / `busy` / `attention`): **same circle**; ribbon opacity + stroke weight only
+- Rounded rect (inset 2 in viewBox 64), then ribbon strokes on top (**not** knockout)
+- Optical: lighter plate (~0.35) + near-full-slot ribbon (`scale ≈ 0.98`) for menu-bar weight
+- Status (`idle` / `busy` / `attention`): **same plate**; ribbon opacity + stroke weight only
 - Black + alpha, no brand color, no D2
 
 ## Sizing
@@ -20,7 +21,7 @@ Electron’s recommended menu-bar size. Using 22–32 as **1x** makes the status
 
 ## Interaction
 
-Do not attach a persistent `tray.setContextMenu` on macOS — the system opens it on **mouse-down**. prismnext opens the menu on **mouse-up** via `popUpContextMenu` only.
+On macOS the menu is a native status-item context menu (opens on **mouse-down**, second click dismisses). Do not also `popUpContextMenu` on `click` — that races the system and feels sticky. Windows / Linux still open on click via `popUpContextMenu`.
 
 ## Regenerate
 
@@ -31,5 +32,3 @@ for name in idleTemplate busyTemplate attentionTemplate; do
   rsvg-convert -w 32 -h 32 "${name}.svg" -o "${name}@2x.png"
 done
 ```
-
-Spec: `docs-private/superpowers/specs/2026-07-17-tray-circular-mark-design.md`

@@ -2,8 +2,7 @@
 import { writeFileSync, readFileSync } from "node:fs";
 import { ipcMain } from "electron";
 import { CommandEngine } from "../commands";
-import { commandRegistry } from "../commands/registry";
-import { getSettings, updateSettings } from "../services/settings";
+import { getCommandRegistry } from "../commands/registry";
 import type {
   CreateCommandPayload,
   UpdateCommandPayload,
@@ -13,9 +12,9 @@ import { assertUnderHome } from "../services/active-project-roots";
 
 const engine = CommandEngine.getInstance();
 
-function ensureProjectRoot(projectRoot: string): void {
+function requireProjectRoot(projectRoot: string | null | undefined): string {
   if (!projectRoot) throw new Error("No project root");
-  commandRegistry.setProjectRoot(projectRoot);
+  return projectRoot;
 }
 
 export function registerCommandsHandlers(): void {
@@ -24,10 +23,9 @@ export function registerCommandsHandlers(): void {
   ipcMain.handle(
     "commands:list",
     async (_event, args?: { projectRoot?: string | null }) => {
-      if (args?.projectRoot) {
-        commandRegistry.setProjectRoot(args.projectRoot);
-      }
-      return engine.list();
+      // 无项目 → 空列表（命令解析需要项目态 teams.json）
+      if (!args?.projectRoot) return [];
+      return engine.list(args.projectRoot);
     },
   );
 
@@ -37,13 +35,12 @@ export function registerCommandsHandlers(): void {
       _event,
       args: { name: string; rawInput: string; projectRoot: string },
     ) => {
-      ensureProjectRoot(args.projectRoot);
-      const expanded = engine.execute(args.rawInput, args.projectRoot);
+      const expanded = engine.execute(args.rawInput, requireProjectRoot(args.projectRoot));
       return expanded ?? "";
     },
   );
 
-  // ── CRUD ──
+  // ── CRUD（Local Pack only —— 非 local 在 registry 层报错）──
 
   ipcMain.handle(
     "commands:create",
@@ -51,8 +48,7 @@ export function registerCommandsHandlers(): void {
       _event,
       args: { projectRoot: string; payload: CreateCommandPayload },
     ) => {
-      ensureProjectRoot(args.projectRoot);
-      return commandRegistry.create(args.payload);
+      return getCommandRegistry(requireProjectRoot(args.projectRoot)).create(args.payload);
     },
   );
 
@@ -62,53 +58,42 @@ export function registerCommandsHandlers(): void {
       _event,
       args: { projectRoot: string; id: string; payload: UpdateCommandPayload },
     ) => {
-      ensureProjectRoot(args.projectRoot);
-      return commandRegistry.update(args.id, args.payload);
+      return getCommandRegistry(requireProjectRoot(args.projectRoot)).update(args.id, args.payload);
     },
   );
 
   ipcMain.handle(
     "commands:delete",
     async (_event, args: { projectRoot: string; id: string }) => {
-      ensureProjectRoot(args.projectRoot);
-      commandRegistry.remove(args.id);
+      getCommandRegistry(requireProjectRoot(args.projectRoot)).remove(args.id);
     },
   );
 
   ipcMain.handle(
     "commands:toggle",
-    async (_event, args: { id: string; enabled: boolean }) => {
-      commandRegistry.setEnabled(args.id, args.enabled);
-      const cmd = commandRegistry.list().find((c) => c.id === args.id);
-      if (cmd?.source === "builtin") {
-        const settings = getSettings() as Record<string, unknown>;
-        const states = {
-          ...((settings.builtinCommands as Record<string, boolean> | undefined) ?? {}),
-          [cmd.name]: args.enabled,
-        };
-        updateSettings({ builtinCommands: states } as Parameters<typeof updateSettings>[0]);
-      }
-      return engine.list();
+    async (_event, args: { projectRoot: string; id: string; enabled: boolean }) => {
+      const root = requireProjectRoot(args.projectRoot);
+      // 启停唯一状态操作 = teams.json assetEnabled（registry 内完成）；
+      // settings 的 builtinCommands 全局持久化已在 Phase 3 移除（R11 迁移）。
+      getCommandRegistry(root).setEnabled(args.id, args.enabled);
+      return engine.list(root);
     },
   );
 
   ipcMain.handle(
     "commands:reload",
     async (_event, args?: { projectRoot?: string | null }) => {
-      if (args?.projectRoot) {
-        commandRegistry.setProjectRoot(args.projectRoot);
-      }
-      return engine.reload();
+      if (!args?.projectRoot) return [];
+      return engine.reload(args.projectRoot);
     },
   );
 
-  // ── Export / import ──
+  // ── Export / import（作用域 = Local Pack commands）──
 
   ipcMain.handle(
     "commands:previewImport",
     async (_event, args: { projectRoot: string; pack: unknown }) => {
-      ensureProjectRoot(args.projectRoot);
-      return commandRegistry.previewImport(args.pack);
+      return getCommandRegistry(requireProjectRoot(args.projectRoot)).previewImport(args.pack);
     },
   );
 
@@ -122,17 +107,15 @@ export function registerCommandsHandlers(): void {
         strategy: CommandImportConflictStrategy;
       },
     ) => {
-      ensureProjectRoot(args.projectRoot);
-      return commandRegistry.importPack(args.pack, args.strategy);
+      return getCommandRegistry(requireProjectRoot(args.projectRoot)).importPack(args.pack, args.strategy);
     },
   );
 
   ipcMain.handle(
     "commands:writeExportFile",
     async (_event, args: { filePath: string; projectRoot: string }) => {
-      ensureProjectRoot(args.projectRoot);
       assertUnderHome(args.filePath, "commands:writeExportFile");
-      const pack = commandRegistry.exportPack();
+      const pack = getCommandRegistry(requireProjectRoot(args.projectRoot)).exportPack();
       writeFileSync(args.filePath, JSON.stringify(pack, null, 2), "utf-8");
     },
   );

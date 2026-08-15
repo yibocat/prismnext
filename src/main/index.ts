@@ -6,6 +6,10 @@ import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
+import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
+import { ensureUserTeamsRegistered } from "./services/user-teams";
+import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
+import { ensureMyContentTeam } from "./teams/my-content";
 import { registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
@@ -18,6 +22,8 @@ import { installApplicationMenu } from "./menu";
 import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
+import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
+import { startExecutionEventBroadcast } from "./ipc/execution";
 import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
 import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
@@ -178,8 +184,17 @@ function pickWindowForShell(): BrowserWindow | null {
   return getPrimaryWindow();
 }
 
+function finalizeExecutionsForQuit(): void {
+  try {
+    void getExecutionRegistry().finalizeForQuit();
+  } catch {
+    // Registry may not be initialized during early quit.
+  }
+}
+
 function disposeGlobalsWhenNoWindows(): void {
   if (BrowserWindow.getAllWindows().length > 0) return;
+  finalizeExecutionsForQuit();
   disposeChat();
   destroyAllAiPty();
   destroyAllTerminalSessions();
@@ -316,6 +331,10 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+// Pro 私有包的 packs 发现与注册必须先于 IPC 注册（§8.2）：
+// catalog 在任何 packs:* handler 服务前就要包含 pro pack（locked 与否由 resolver 门控）。
+discoverAndRegisterProTeams();
+
 // Register IPC handlers that don't need the window reference
 registerIpcHandlers();
 registerWindowHandlers();
@@ -324,6 +343,18 @@ registerNewWindowHandler(createWindow);
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
+  // Wire session→projectRoot so AcpService.getInstanceForSession can route to
+  // the correct per-project OpenCode runtime.
+  const { getSessionProjectRoot } = await import("./services/chat-session-registry");
+  const { AcpService } = await import("./acp/service");
+  AcpService.setSessionProjectRootResolver(getSessionProjectRoot);
+  // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
+  ensureUserTeamsMigrated();
+  // Always-on My Content + chat lead (safety net so Core can be offloaded).
+  ensureMyContentTeam();
+  // Temporary read compatibility for any legacy directory that could not be
+  // migrated safely (for example, an unreadable manifest).
+  ensureUserTeamsRegistered();
   // Inject CSP on the default session (renderer only — browser webviews use a
   // separate persist:browser partition). Must run before createWindow().
   installCsp(session.defaultSession);
@@ -337,6 +368,8 @@ app.whenReady().then(async () => {
   });
 
   startTerminalBridge();
+  initExecutionRegistry(join(app.getPath("userData"), "execution-history"));
+  startExecutionEventBroadcast();
   startLiteratureBridge();
   startLatexBridge();
   startResearchBriefBridge();
@@ -401,10 +434,19 @@ app.whenReady().then(async () => {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
       }
 
-      const { commandRegistry } = await import("./commands/registry");
-      if ((settings as any).builtinCommands) {
-        commandRegistry.applyBuiltinStates((settings as any).builtinCommands as Record<string, boolean>);
-      }
+      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/teams-state");
+      const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
+      // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
+      // legacy settings.builtinCommands → teams.json migration; consumed once.。
+      registerLegacyBuiltinCommandStatesHooks({
+        read: () => {
+          const states = (getSettings() as Record<string, unknown>).builtinCommands;
+          return states && typeof states === "object" && !Array.isArray(states)
+            ? (states as Record<string, boolean>)
+            : null;
+        },
+        clear: () => clearLegacyBuiltinCommandStates(),
+      });
 
       log.info("Prompt system initialized");
     } catch (err: any) {
@@ -486,6 +528,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   setIsQuitting(true);
   disposeAllTectonicDaemonSessions();
+  finalizeExecutionsForQuit();
   destroyAllAiPty();
   destroyAllTerminalSessions();
 });

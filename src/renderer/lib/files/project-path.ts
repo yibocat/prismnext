@@ -9,9 +9,14 @@ export function normalizeProjectRoot(root: string): string {
 
 /** Project-relative paths safe to resolve under the project root (no `..` segments). */
 export function isSafeProjectRelativePath(relativePath: string): boolean {
-  const normalized = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!normalized) return false;
-  if (normalized.includes("..")) return false;
+  const withSlashes = relativePath.replace(/\\/g, "/");
+  if (!withSlashes) return false;
+  if (withSlashes.startsWith("/") || withSlashes.startsWith("//") || /^[A-Za-z]:/.test(withSlashes)) {
+    return false;
+  }
+  const segments = withSlashes.split("/").filter((segment) => segment && segment !== ".");
+  if (segments.length === 0) return false;
+  if (segments.some((segment) => segment === "..")) return false;
   return true;
 }
 

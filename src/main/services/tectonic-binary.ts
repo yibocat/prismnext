@@ -101,6 +101,11 @@ function probeVersion(binaryPath: string): string | null {
 
 let cached: TectonicBinaryInfo | null = null;
 
+/** Drop the process-wide resolve cache (tests that mock `app.getAppPath`). */
+export function resetTectonicBinaryCacheForTests(): void {
+  cached = null;
+}
+
 /** Resolve bundled Tectonic first, then system install. */
 export async function resolveTectonicBinary(opts?: { force?: boolean }): Promise<TectonicBinaryInfo> {
   if (cached && !opts?.force) return cached;

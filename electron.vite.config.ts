@@ -47,6 +47,10 @@ export default defineConfig({
       alias: {
         "@": resolve("src/renderer"),
         "@commands": resolve("src/main/commands"),
+        // Open-core: OSS → no-op stub. Dev/official: `PRISM_PRO_PATH=../prism-next-pro/src`
+        "@prismnext/pro": process.env.PRISM_PRO_PATH
+          ? resolve(process.env.PRISM_PRO_PATH)
+          : resolve("src/renderer/lib/pro/absent-module.ts"),
       },
       dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge", "pdfjs-dist"],
     },

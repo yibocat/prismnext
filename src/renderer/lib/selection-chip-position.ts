@@ -137,6 +137,44 @@ export function selectionActionX(
   return resolved.left;
 }
 
+/** Viewport-anchored chip — same geometry Files uses with `anchor="viewport"`. */
+export function chipPositionInViewport(
+  anchor: SelectionChipAnchor,
+  chipW = SELECTION_CHIP_WIDTH,
+  chipH = SELECTION_CHIP_HEIGHT,
+): ResolvedChipPosition {
+  const resolved = resolveSelectionChipPosition(
+    anchor,
+    {
+      left: 8,
+      top: 8,
+      right: window.innerWidth - 8,
+      bottom: window.innerHeight - 8,
+    },
+    chipW,
+    chipH,
+  );
+  return {
+    left: selectionActionX(resolved, anchor),
+    top: resolved.top,
+    placement: resolved.placement,
+  };
+}
+
+/** Chip from the current DOM selection, in viewport coordinates. */
+export function chipPositionFromDomSelection(): ResolvedChipPosition | null {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  if (rect.width < 1 && rect.height < 1) return null;
+  return chipPositionInViewport({
+    top: rect.top,
+    bottom: rect.bottom,
+    leftX: rect.left,
+    rightX: rect.right,
+  });
+}
+
 /** @deprecated Use resolveSelectionChipPosition */
 export function chipPositionAtSelectionTopRight(
   anchor: SelectionChipAnchor,

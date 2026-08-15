@@ -22,7 +22,10 @@ interface TurnRailProps {
 function PopoverPanel({ preview, index }: { preview: TurnRailPreview; index: number }) {
   const meta = preview.meta;
   return (
-    <div className="pointer-events-none absolute right-full top-1/2 mr-2 -translate-y-1/2 w-64 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md">
+    <div
+      data-chat-turn-popover
+      className="pointer-events-none absolute right-full top-1/2 z-50 mr-2 -translate-y-1/2 w-64 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md"
+    >
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between text-[length:var(--font-chat-meta)] text-muted-foreground">
           <span>Turn {index + 1}</span>
@@ -146,7 +149,7 @@ export const TurnRail = memo(function TurnRail({
       data-chat-turn-rail
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="absolute right-6 top-1/2 -translate-y-1/2 z-20 flex w-6 flex-col items-end gap-0.5 cursor-pointer"
+      className="absolute right-1 top-1/2 -translate-y-1/2 z-40 flex w-6 flex-col items-end gap-0.5 cursor-pointer"
     >
       {previews.map((preview, i) => {
         const isHovered = i === hoveredIndex;

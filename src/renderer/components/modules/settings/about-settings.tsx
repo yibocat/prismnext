@@ -8,6 +8,7 @@ import {
   RocketIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/lib/updates/map-updater-status";
 import { requestUpdateInstall } from "@/lib/updates/request-update-install";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import type { UpdaterStatus } from "@/types/electron";
 import {
   SETTINGS_CARD,
@@ -56,6 +58,14 @@ export function AboutSettings() {
   const [appVersion, setAppVersion] = useState<string>("—");
   const [opencodeInfo, setOpencodeInfo] = useState<OpencodeInfo | null>(null);
   const [busy, setBusy] = useState(false);
+  const [licenseKeyDraft, setLicenseKeyDraft] = useState("");
+  const [licenseBusy, setLicenseBusy] = useState(false);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
+  const license = useProLicenseStore((s) => s.license);
+  const loadResult = useProLicenseStore((s) => s.loadResult);
+  const activateLicense = useProLicenseStore((s) => s.activate);
+  const clearLicense = useProLicenseStore((s) => s.clear);
 
   const autoDownloadUpdates = useSettingsStore(
     (s) => s.settings.autoDownloadUpdates !== false,
@@ -334,6 +344,99 @@ export function AboutSettings() {
                 <p className={ROW_DESC + " whitespace-pre-wrap mt-0"}>{status.releaseNotes}</p>
               </div>
             ) : null}
+          </div>
+        </div>
+
+        <div>
+          <h3 className={CATEGORY_HEADER}>{t("settings.about.proLicense")}</h3>
+          <div className={CARD}>
+            <div className="flex flex-col gap-2 py-2.5">
+              <div className="min-w-0">
+                <p className={ROW_LABEL}>{t("settings.about.proLicenseTitle")}</p>
+                <p className={ROW_DESC}>{t("settings.about.proLicenseDesc")}</p>
+              </div>
+              {license?.plan === "pro" ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+                    {t("settings.about.proActive", {
+                      label: license.label || license.key.slice(0, 16),
+                    })}
+                    {loadResult?.status === "loaded"
+                      ? ` · ${t("settings.about.proModuleLoaded")}`
+                      : null}
+                    {loadResult?.reason === "pro-module-absent"
+                      ? ` · ${t("settings.about.proModuleAbsent")}`
+                      : null}
+                    {loadResult?.status === "error"
+                      ? ` · ${loadResult.errorMessage ?? t("settings.about.proModuleError")}`
+                      : null}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={licenseBusy}
+                    onClick={() => {
+                      setLicenseBusy(true);
+                      setLicenseError(null);
+                      void clearLicense()
+                        .catch(() => {
+                          setLicenseError(t("settings.about.proClearFailed"));
+                        })
+                        .finally(() => setLicenseBusy(false));
+                    }}
+                  >
+                    {t("settings.about.proDeactivate")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-1">
+                  <Input
+                    value={licenseKeyDraft}
+                    onChange={(e) => setLicenseKeyDraft(e.target.value)}
+                    placeholder={t("settings.about.proKeyPlaceholder")}
+                    className="h-6 shadow-none px-2 font-mono text-[length:var(--font-size-12)] md:text-[length:var(--font-size-12)]"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <Button
+                    variant="default"
+                    size="xs"
+                    className="shrink-0"
+                    disabled={licenseBusy || !licenseKeyDraft.trim()}
+                    onClick={() => {
+                      setLicenseBusy(true);
+                      setLicenseError(null);
+                      void activateLicense(licenseKeyDraft)
+                        .then((result) => {
+                          if (!result.ok) {
+                            setLicenseError(
+                              result.error === "empty"
+                                ? t("settings.about.proKeyEmpty")
+                                : t("settings.about.proKeyInvalid"),
+                            );
+                            return;
+                          }
+                          setLicenseKeyDraft("");
+                        })
+                        .catch(() => {
+                          setLicenseError(t("settings.about.proActivateFailed"));
+                        })
+                        .finally(() => setLicenseBusy(false));
+                    }}
+                  >
+                    {licenseBusy ? (
+                      <Loader2Icon className="animate-spin" />
+                    ) : null}
+                    {t("settings.about.proActivate")}
+                  </Button>
+                </div>
+              )}
+              {licenseError ? (
+                <p className="text-[length:var(--font-size-12)] text-destructive">
+                  {licenseError}
+                </p>
+              ) : null}
+            </div>
           </div>
         </div>
 

@@ -1,0 +1,7 @@
+{
+  "id": "research-prism",
+  "name": "prismnext",
+  "description": "Primary research orchestrator — coordinates literature, analysis, writing, and project tools across the workspace.",
+  "thoughtLevel": "medium",
+  "allowedExperts": ["literature-synthesizer", "research-design-coach", "methodology-auditor", "structure-diagnostician", "peer-reviewer"]
+}

@@ -12,10 +12,9 @@ import { SelectionInsertAction } from "@/components/modules/shared/selection-ins
 import { insertTerminalToChat } from "@/lib/chat/insert-to-chat";
 import { matchesShortcutEvent, shortcutChordLabel } from "@/lib/shortcuts";
 import {
-  getTerminalSelectionAnchor,
-  type TerminalSelectionAnchor,
+  getTerminalSelectionChipPosition,
 } from "@/lib/terminal/selection-anchor";
-import { chipPositionAtSelectionTopRight } from "@/lib/selection-chip-position";
+import type { ResolvedChipPosition } from "@/lib/selection-chip-position";
 
 interface TerminalInsertHostProps {
   tabId: string;
@@ -35,12 +34,12 @@ export function TerminalInsertHost({
 }: TerminalInsertHostProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectionAnchor, setSelectionAnchor] = useState<TerminalSelectionAnchor | null>(null);
-  const [chipPos, setChipPos] = useState<{ left: number; top: number } | null>(null);
+  const [hasSelection, setHasSelection] = useState(false);
+  const [chipPos, setChipPos] = useState<ResolvedChipPosition | null>(null);
   const selectionDisposableRef = useRef<{ dispose: () => void } | null>(null);
 
   const dismissAction = useCallback(() => {
-    setSelectionAnchor(null);
+    setHasSelection(false);
     setChipPos(null);
   }, []);
 
@@ -53,13 +52,13 @@ export function TerminalInsertHost({
       dismissAction();
       return;
     }
-    const anchor = getTerminalSelectionAnchor(term, container);
-    if (!anchor) {
+    const pos = getTerminalSelectionChipPosition(term, container);
+    if (!pos) {
       dismissAction();
       return;
     }
-    setSelectionAnchor(anchor);
-    setChipPos(chipPositionAtSelectionTopRight(anchor, container));
+    setHasSelection(true);
+    setChipPos(pos);
   }, [termRef, dismissAction]);
 
   const runInsert = useCallback(() => {
@@ -88,7 +87,8 @@ export function TerminalInsertHost({
     const disposable = term.onSelectionChange(() => {
       const text = term.getSelection().trim();
       if (!text) {
-        setSelectionAnchor(null);
+        setHasSelection(false);
+        setChipPos(null);
         return;
       }
       requestAnimationFrame(updateActionPosition);
@@ -117,7 +117,7 @@ export function TerminalInsertHost({
   }, [termRef, tabId, termReadySignal, updateActionPosition]);
 
   useEffect(() => {
-    if (!selectionAnchor) return;
+    if (!hasSelection) return;
     const onKeyDown = (e: KeyboardEvent) => {
       // ⌥L / Alt+L — capture so Win/Linux terminals do not eat Alt+letter.
       if (!matchesShortcutEvent("workspace.insertToChat", e)) return;
@@ -127,17 +127,17 @@ export function TerminalInsertHost({
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [selectionAnchor, runInsert]);
+  }, [hasSelection, runInsert]);
 
   return (
     <div ref={containerRef} className="relative h-full w-full">
       {children}
       <SelectionInsertAction
-        open={!!selectionAnchor && !!chipPos}
+        open={hasSelection && !!chipPos}
         x={chipPos?.left ?? 0}
         y={chipPos?.top ?? 0}
-        anchor="parent"
-        placement="selection-top-right"
+        chipPlacement={chipPos?.placement}
+        anchor="viewport"
         shortcut={shortcutChordLabel("workspace.insertToChat")}
         label={t("common.addToChat")}
         onInsert={runInsert}

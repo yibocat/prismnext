@@ -1,5 +1,4 @@
 import type { LibraryCatalogItem } from "../../shared/skill-library-types";
-import { copyBundledSkillToProject, listBundledSkills } from "./bundled-skills";
 import {
   analyzeGitHubSkillSource,
   githubSourceToAnalyzeUrl,
@@ -9,9 +8,7 @@ import {
 import { fetchRegistryIndex, installRegistrySkill, type RegistrySkillEntry } from "./skills-registry";
 import { installSkillPackages } from "./skill-install";
 import {
-  deleteProjectSkill,
   listLibrarySources,
-  listProjectSkills,
   type SkillLibrarySourceInfo,
 } from "./skills-sync";
 
@@ -27,18 +24,9 @@ export async function fetchLibraryCatalogForSource(
   projectRoot: string,
   source: SkillLibrarySourceInfo,
 ): Promise<LibraryCatalogItem[]> {
+  // Legacy kind "bundled" (prismnext Curated = Core) is no longer a library source.
   if (source.kind === "bundled") {
-    const bundled = listBundledSkills();
-    return bundled.map((skill) => ({
-      key: `bundled:${skill.id}`,
-      skillId: skill.id,
-      name: skill.name,
-      description: skill.description,
-      sourceId: source.id,
-      sourceLabel: source.name,
-      sourceKind: "bundled",
-      category: skill.category,
-    }));
+    return [];
   }
 
   if (source.kind === "github") {
@@ -85,8 +73,9 @@ export async function installLibraryCatalogItem(
   item: LibraryCatalogItem,
 ): Promise<{ installedIds: string[] }> {
   if (item.sourceKind === "bundled") {
-    copyBundledSkillToProject(projectRoot, item.skillId);
-    return { installedIds: [item.skillId] };
+    throw new Error(
+      "Built-in Core skills are not installed from the library — they ship with the PrismNext Core team.",
+    );
   }
 
   if (item.sourceKind === "github") {
@@ -121,17 +110,8 @@ export async function installAllFromLibrarySource(
 ): Promise<{ installedIds: string[] }> {
   const source = findSource(projectRoot, sourceId);
 
-  if (source.kind === "bundled") {
-    const installedIds: string[] = [];
-    for (const skill of listBundledSkills()) {
-      copyBundledSkillToProject(projectRoot, skill.id);
-      installedIds.push(skill.id);
-    }
-    return { installedIds };
-  }
-
   if (source.kind !== "github") {
-    throw new Error("Install all is only supported for built-in and GitHub sources.");
+    throw new Error("Install all is only supported for GitHub sources.");
   }
 
   const analysis = await analyzeGitHubSkillSource(githubSourceToAnalyzeUrl(source));
@@ -144,23 +124,12 @@ export async function installAllFromLibrarySource(
 }
 
 export async function uninstallAllFromLibrarySource(
-  projectRoot: string,
-  sourceId: string,
+  _projectRoot: string,
+  _sourceId: string,
 ): Promise<{ removedIds: string[] }> {
-  const source = findSource(projectRoot, sourceId);
-
-  if (source.kind === "bundled") {
-    const bundledIds = new Set(listBundledSkills().map((skill) => skill.id));
-    const removedIds: string[] = [];
-    for (const skill of listProjectSkills(projectRoot)) {
-      if (!bundledIds.has(skill.id)) continue;
-      deleteProjectSkill(projectRoot, skill.id);
-      removedIds.push(skill.id);
-    }
-    return { removedIds };
-  }
-
-  throw new Error("Uninstall all is only supported for built-in skills.");
+  throw new Error(
+    "Uninstall all is no longer supported — remove individual skills from Settings → Skills, or delete the Project / Common Team copy.",
+  );
 }
 
 export async function fetchLibraryCatalog(

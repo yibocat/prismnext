@@ -13,10 +13,8 @@ import {
   SunIcon,
   MoonIcon,
   MonitorIcon,
-  Minimize2Icon,
-  Maximize2Icon,
-  XIcon,
 } from "lucide-react";
+import { WindowControls } from "@/components/layout/window-controls";
 
 function useWindowState() {
   const platform = window.electronAPI?.platform ?? "darwin";
@@ -58,39 +56,6 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
 
   return (
     <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center justify-end gap-1 px-2" data-surface="content">
-      {!isMac && (
-        <>
-          <Hint label={t("shell.minimize")}>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              onClick={() => window.electronAPI?.windowMinimize()}
-            >
-              <Minimize2Icon className="size-4" />
-            </button>
-          </Hint>
-          <Hint label={isMaximized ? t("shell.restore") : t("shell.maximize")}>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-              onClick={() => window.electronAPI?.windowMaximize()}
-            >
-              <Maximize2Icon className="size-4" />
-            </button>
-          </Hint>
-          <Hint label={t("shell.close")}>
-            <button
-              type="button"
-              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive hover:text-white transition-colors"
-              onClick={() => window.electronAPI?.windowClose()}
-            >
-              <XIcon className="size-4" />
-            </button>
-          </Hint>
-          <div className="mx-1 h-4 w-px bg-border" />
-        </>
-      )}
-
       <Hint label={t("common.theme", { theme })}>
         <button
           type="button"
@@ -134,6 +99,10 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
           <PanelRight className="size-3.5" />
         </button>
       </Hint>
+
+      {!isMac && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
+
+      <WindowControls />
     </div>
   );
 }

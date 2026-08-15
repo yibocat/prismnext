@@ -11,6 +11,7 @@ import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
   prefetchOpenCodeModelsCatalog,
   resolveSelectedModelContextTokens,
@@ -28,12 +29,9 @@ import {
   CompilerSettings,
   ModelSettings,
   BackupsSettings,
-  AgentSettings,
+  AgentAssetsSettings,
   PromptsRulesSettings,
   PermissionsSettings,
-  SlashCommandsSettings,
-  ToolsMcpSettings,
-  SkillsSettings,
   WorkspaceSettings,
   TerminalSettings,
   TexworkspaceSettings,
@@ -42,6 +40,7 @@ import {
   AboutSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
+import { TeamsCenter } from "@/components/modules/teams/teams-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
@@ -192,6 +191,7 @@ export function LeftMainArea() {
 
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
+  const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   // centerView 型导航项的页面路由：新增入口时在此增加 leftSidebarView 分支
   // （定义见 left-nav/items.tsx，centerView 字段须与下方判断一致）
@@ -205,32 +205,58 @@ export function LeftMainArea() {
     );
   }
 
+  if (leftSidebarView === "teams") {
+    return (
+      <div className="flex h-full flex-col min-w-0" data-surface="content">
+        <TeamsCenter
+          onBack={() => useLayoutStore.getState().setLeftSidebarView("sessions")}
+        />
+      </div>
+    );
+  }
+
   if (leftSidebarView === "settings") {
     const resolvedCategory =
       settingsCategory === "zotero" ? "literature" : settingsCategory;
-    const SettingsContent = {
+    const BuiltinSettings = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
       models: ModelSettings,
-      agent: AgentSettings,
+      "teams-agents": AgentAssetsSettings,
       terminal: TerminalSettings,
       browser: BrowserSettings,
       "prompts-rules": PromptsRulesSettings,
       "prompts-rules-commands": PromptsRulesSettings,
       permissions: PermissionsSettings,
-      commands: SlashCommandsSettings,
-      "tools-mcp": ToolsMcpSettings,
-      skills: SkillsSettings,
+      commands: AgentAssetsSettings,
+      "tools-mcp": AgentAssetsSettings,
+      skills: AgentAssetsSettings,
       compiler: CompilerSettings,
       texworkspace: TexworkspaceSettings,
       workspace: WorkspaceSettings,
       literature: LiteratureSettings,
       backups: BackupsSettings,
       about: AboutSettings,
-    }[resolvedCategory] || GeneralSettings;
+    }[resolvedCategory];
+    if (BuiltinSettings) {
+      return (
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden" data-surface="content">
+          <BuiltinSettings />
+        </div>
+      );
+    }
+    const pro = proSettings.find((c) => c.id === resolvedCategory);
+    if (pro) {
+      const ProSettingsContent = pro.Content;
+      return (
+        <div className="flex h-full flex-col min-w-0" data-surface="content">
+          <ProSettingsContent />
+        </div>
+      );
+    }
     return (
       <div className="flex h-full flex-col min-w-0" data-surface="content">
-        <SettingsContent />
+        <GeneralSettings />
       </div>
     );
   }

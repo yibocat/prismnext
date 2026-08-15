@@ -11,7 +11,7 @@ import { Compartment, EditorState, EditorSelection, Prec } from "@codemirror/sta
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { CommandDef } from "@commands/types";
-import type { ExpertInfo } from "@shared/agent-experts";
+import type { SubagentInfo } from "@shared/agent-subagents";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -291,7 +291,7 @@ export interface InlineComposerEditorProps {
   onChange: (parts: ComposerPart[]) => void;
   placeholder?: string;
   disabled?: boolean;
-  experts: ExpertInfo[];
+  experts: SubagentInfo[];
   files: ProjectFile[];
   searchCommands: (query: string) => CommandDef[];
   slashSkills: SlashCatalogSkill[];
@@ -328,7 +328,7 @@ function insertFromDropdown(
   if (q.kind === "mention") {
     const opt = mentionOptions[index];
     if (!opt || opt.kind === "show-more") return;
-    if (opt.kind === "expert") {
+    if (opt.kind === "subagent") {
       insertComposerToken(
         view,
         {
@@ -449,7 +449,7 @@ function insertFromDropdown(
 
 export function buildMentionOptions(
   query: string,
-  experts: ExpertInfo[],
+  experts: SubagentInfo[],
   files: ProjectFile[],
   papers: LiteraturePaper[] = [],
   experiments: ExperimentSummary[] = [],
@@ -466,10 +466,10 @@ export function buildMentionOptions(
         p.description.toLowerCase().includes(q)),
   );
   if (expandedSections.has("expert") || matchedExperts.length <= MENTIONS_LIMIT) {
-    for (const expert of matchedExperts) options.push({ kind: "expert", expert });
+    for (const expert of matchedExperts) options.push({ kind: "subagent", expert });
   } else {
     for (const expert of matchedExperts.slice(0, MENTIONS_LIMIT)) {
-      options.push({ kind: "expert", expert });
+      options.push({ kind: "subagent", expert });
     }
     options.push({
       kind: "show-more",
@@ -790,7 +790,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     );
 
     const insertExpert = useCallback(
-      (expert: ExpertInfo) => {
+      (expert: SubagentInfo) => {
         insertAtQuery({
           type: "mention",
           mentionType: "expert",

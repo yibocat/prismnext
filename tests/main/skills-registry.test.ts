@@ -117,7 +117,7 @@ describe("skills-registry", () => {
         "https://registry.test/index.json",
       );
 
-      const skillDir = join(root, ".prismnext/agent/skills/local-pack");
+      const skillDir = join(root, ".prismnext/agent/teams/project.local/skills/local-pack");
       expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
       expect(existsSync(join(skillDir, "README.md"))).toBe(true);
       expect(readFileSync(join(skillDir, "README.md"), "utf-8")).toContain("# Notes");
@@ -129,8 +129,8 @@ describe("skills-registry", () => {
 });
 
 describe("skill-libraries", () => {
-  it("includes built-in remote cards", () => {
-    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "prism-curated")).toBe(true);
+  it("includes built-in remote cards (no Core-as-curated)", () => {
+    expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "prism-curated")).toBe(false);
     expect(SKILL_LIBRARY_CARDS.some((c) => c.id === "cloudflare-docs")).toBe(true);
     expect(REMOTE_SKILL_LIBRARY_PRESETS.length).toBeGreaterThan(0);
   });

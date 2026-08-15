@@ -1,6 +1,19 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { WorkspaceFolder } from "../renderer/types/workspace";
 import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
+import type { IconSpec } from "../shared/icon-spec";
+import type {
+	ExecutionApplyProjectSwitchArgs,
+	ExecutionApplyProjectSwitchResult,
+	ExecutionCancelResult,
+	ExecutionFindByToolCallIdResult,
+	ExecutionGetResult,
+	ExecutionListRunningResult,
+	ExecutionReplayArgs,
+	ExecutionReplayResult,
+	ExecutionRerunResult,
+	TerminalExecutionEvent,
+} from "../shared/execution";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -66,8 +79,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("template:deleteBackup", args),
 
 	// File watcher
-	fsWatchStart: (rootPath: string) =>
-		ipcRenderer.invoke("fs:watch-start", { rootPath }),
+	fsWatchStart: () => ipcRenderer.invoke("fs:watch-start"),
 	fsWatchStop: () => ipcRenderer.invoke("fs:watch-stop"),
 
 	// Dialog operations
@@ -88,7 +100,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	shellSetTrayStatus: (
 		status: "idle" | "busy" | "attention",
 		tooltip?: string | null,
-	) => ipcRenderer.invoke("shell:setTrayStatus", { status, tooltip }),
+		runningCount?: number,
+	) => ipcRenderer.invoke("shell:setTrayStatus", { status, tooltip, runningCount }),
 	shellSetTrayMenu: (snapshot: {
 		showLabel: string;
 		newChatLabel: string;
@@ -147,14 +160,26 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	projectCreate: (
 		rootPath: string,
 		workspaceDirs?: WorkspaceFolder[],
-		options?: { initGit?: boolean; projectIcon?: string },
+		options?: {
+			initGit?: boolean;
+			projectIcon?: IconSpec | string | null;
+			projectIconImagePngBase64?: string;
+		},
 	) =>
 		ipcRenderer.invoke("project:create", {
 			rootPath,
 			workspaceDirs,
 			initGit: options?.initGit,
 			projectIcon: options?.projectIcon,
+			projectIconImagePngBase64: options?.projectIconImagePngBase64,
 		}),
+	projectSetIcon: (rootPath: string, icon: IconSpec | null) =>
+		ipcRenderer.invoke("project:setIcon", { rootPath, icon }),
+	projectSetIconImage: (rootPath: string, pngBase64: string) =>
+		ipcRenderer.invoke("project:setIconImage", { rootPath, pngBase64 }),
+	projectOpen: (rootPath: string) => ipcRenderer.invoke("project:open", { rootPath }),
+	projectActivate: (rootPath: string) => ipcRenderer.invoke("project:activate", { rootPath }),
+	projectClose: () => ipcRenderer.invoke("project:close"),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
 	projectScaffoldAgentsMd: (rootPath: string) =>
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
@@ -175,7 +200,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	researchPlanWrite: (args: {
 		projectRoot: string;
-		doc: import("../../shared/research-plan").ResearchPlanDoc;
+		doc: import("../shared/research-plan").ResearchPlanDoc;
 	}) => ipcRenderer.invoke("researchPlan:write", args),
 	researchPlanReadDraft: (args: { projectRoot: string; sessionId?: string }) =>
 		ipcRenderer.invoke("researchPlan:readDraft", args),
@@ -261,7 +286,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("interaction:list", { projectRoot }),
 	interactionWrite: (args: {
 		projectRoot: string;
-		spec: import("../../shared/interaction-spec").InteractionSpec;
+		spec: import("../shared/interaction-spec").InteractionSpec;
 	}) => ipcRenderer.invoke("interaction:write", args),
 	onInteractionChanged: (
 		callback: (data: {
@@ -364,6 +389,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 			return () => ipcRenderer.removeListener("update:changed", handler);
 		},
 		aboutGetVersions: () => ipcRenderer.invoke("about:getVersions"),
+
+	// Pro license (open-core activation; Free builds have no private Pro module)
+	proGetLicense: () => ipcRenderer.invoke("pro:getLicense"),
+	proActivate: (rawKey: string) => ipcRenderer.invoke("pro:activate", rawKey),
+	proClearLicense: () => ipcRenderer.invoke("pro:clearLicense"),
 
 	// Window operations
 	windowSetTitle: (title: string) =>
@@ -813,7 +843,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("bibliography:resolve", opts),
 
 	// OpenCode agent operations
-	chatDispose: () => ipcRenderer.invoke("chat:dispose"),
+	chatDispose: (opts?: { keepProjectPath?: string }) =>
+		ipcRenderer.invoke("chat:dispose", opts),
 	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
 	chatEnsureAgent: (projectPath?: string) =>
 		ipcRenderer.invoke("chat:ensureAgent", { projectPath }),
@@ -837,6 +868,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	mcpApply: (projectPath: string) =>
 		ipcRenderer.invoke("mcp:apply", { projectPath }) as Promise<{
 			ok: boolean;
+			reloadedSessions: number;
+			error?: string;
+		}>,
+	mcpReadTeamJson: (projectPath: string, teamId?: string) =>
+		ipcRenderer.invoke("mcp:readTeamJson", { projectPath, teamId }) as Promise<{
+			teamId: string;
+			content: string;
+		}>,
+	mcpWriteTeamJson: (projectPath: string, content: string, teamId?: string) =>
+		ipcRenderer.invoke("mcp:writeTeamJson", { projectPath, teamId, content }) as Promise<{
+			ok: boolean;
+			teamId?: string;
 			reloadedSessions: number;
 			error?: string;
 		}>,
@@ -882,8 +925,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:disconnectSkillRegistry", { projectPath, registryUrl }),
 	agentSetSkillEnabled: (projectPath: string, skillId: string, enabled: boolean) =>
 		ipcRenderer.invoke("agent:setSkillEnabled", { projectPath, skillId, enabled }),
-	agentInstallSkill: (projectPath: string, skillId: string, content: string) =>
-		ipcRenderer.invoke("agent:installSkill", { projectPath, skillId, content }),
+	agentInstallSkill: (
+		projectPath: string,
+		skillId: string,
+		content: string,
+		targetTeamId?: string,
+	) =>
+		ipcRenderer.invoke("agent:installSkill", { projectPath, skillId, content, targetTeamId }),
 	agentInstallSkillFromRegistry: (
 		projectPath: string,
 		skillName: string,
@@ -921,48 +969,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:checkSkillUpdates", { projectPath }),
 	agentDeleteSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:deleteSkill", { projectPath, skillId }),
-	expertsList: (projectPath: string) =>
-		ipcRenderer.invoke("experts:list", { projectPath }),
+	subagentsList: (projectPath: string) =>
+		ipcRenderer.invoke("subagents:list", { projectPath }),
 	orchestratorsList: (projectPath: string) =>
 		ipcRenderer.invoke("orchestrators:list", { projectPath }),
-	expertsGetManifest: (projectPath: string) =>
-		ipcRenderer.invoke("experts:getManifest", { projectPath }),
-	orchestratorsGetManifest: (projectPath: string) =>
-		ipcRenderer.invoke("orchestrators:getManifest", { projectPath }),
-	expertsGetDetail: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:getDetail", { projectPath, expertId }),
-	expertsSetBuiltinEnabled: (projectPath: string, expertId: string, enabled: boolean) =>
-		ipcRenderer.invoke("experts:setBuiltinEnabled", { projectPath, expertId, enabled }),
-	expertsSaveCustom: (
+	subagentsGetDetail: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:getDetail", { projectPath, expertId }),
+	subagentsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-	) => ipcRenderer.invoke("experts:saveCustom", { projectPath, payload }),
-	expertsSaveBuiltinOverride: (
-		projectPath: string,
-		payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
-	) => ipcRenderer.invoke("experts:saveBuiltinOverride", { projectPath, payload }),
-	expertsDeleteCustom: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:deleteCustom", { projectPath, expertId }),
-	orchestratorsSetDefault: (projectPath: string, orchestratorId: string) =>
-		ipcRenderer.invoke("orchestrators:setDefault", { projectPath, orchestratorId }),
-	orchestratorsSaveBuiltinOverride: (
-		projectPath: string,
-		payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
-	) => ipcRenderer.invoke("orchestrators:saveBuiltinOverride", { projectPath, payload }),
-	orchestratorsResetBuiltinOverride: (projectPath: string, orchestratorId: string) =>
-		ipcRenderer.invoke("orchestrators:resetBuiltinOverride", { projectPath, orchestratorId }),
+		payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+		targetTeamId?: string,
+	) => ipcRenderer.invoke("subagents:saveCustom", { projectPath, payload, targetTeamId }),
+	subagentsListRosterReferrers: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:listRosterReferrers", { projectPath, expertId }),
+	subagentsDeleteCustom: (projectPath: string, expertId: string) =>
+		ipcRenderer.invoke("subagents:deleteCustom", { projectPath, expertId }),
 	orchestratorsGetDetail: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:getDetail", { projectPath, orchestratorId }),
 	orchestratorsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
-	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload }),
+		payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+		targetTeamId?: string,
+	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetTeamId }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
-	expertsResetBuiltinOverride: (projectPath: string, expertId: string) =>
-		ipcRenderer.invoke("experts:resetBuiltinOverride", { projectPath, expertId }),
-	expertsResetBuiltinsToDefaults: (projectPath: string) =>
-		ipcRenderer.invoke("experts:resetBuiltinsToDefaults", { projectPath }),
 	chatSend: (args: {
 		projectPath: string;
 		worktreePath?: string;
@@ -980,6 +1010,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		intensivePaperIds?: string[];
 		hasPaperSnippets?: boolean;
 		orchestratorId?: string | null;
+		sessionTeamId?: string | null;
 		sessionAgent?: "build" | "plan";
 		selectedExpertIds?: string[];
 		promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
@@ -1194,8 +1225,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("commands:update", { projectRoot, id, payload }),
 	commandsDelete: (projectRoot: string, id: string) =>
 		ipcRenderer.invoke("commands:delete", { projectRoot, id }),
-	commandsToggle: (id: string, enabled: boolean) =>
-		ipcRenderer.invoke("commands:toggle", { id, enabled }),
+	commandsToggle: (projectRoot: string, id: string, enabled: boolean) =>
+		ipcRenderer.invoke("commands:toggle", { projectRoot, id, enabled }),
 	commandsReload: (projectRoot?: string | null) =>
 		ipcRenderer.invoke("commands:reload", { projectRoot }),
 	commandsPreviewImport: (projectRoot: string, pack: unknown) =>
@@ -1209,6 +1240,101 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("commands:writeExportFile", { filePath, projectRoot }),
 	commandsReadImportFile: (filePath: string) =>
 		ipcRenderer.invoke("commands:readImportFile", { filePath }),
+
+	// Agent Packs（生命周期 + 视图，§9.5）
+	teamsList: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:list", { projectRoot }),
+	teamsInstall: (teamId: string) =>
+		ipcRenderer.invoke("teams:install", { teamId }),
+	teamsSetEnabled: (
+		projectRoot: string,
+		teamId: string,
+		enabled: boolean | null,
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:setEnabled", { projectRoot, teamId, enabled, scope }),
+	teamsUninstall: (teamId: string) =>
+		ipcRenderer.invoke("teams:uninstall", { teamId }),
+	teamsSetAssetEnabled: (
+		projectRoot: string,
+		fqid: string,
+		enabled: boolean | null,
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:setAssetEnabled", { projectRoot, fqid, enabled, scope }),
+	teamsSaveAssetOverride: (
+		projectRoot: string,
+		fqid: string,
+		patch: import("@shared/teams/types").AssetOverride,
+		scope?: "app" | "project",
+	) => ipcRenderer.invoke("teams:saveAssetOverride", { projectRoot, fqid, patch, scope }),
+	teamsGetActiveTeam: (projectRoot: string, sessionTeamId?: string | null) =>
+		ipcRenderer.invoke("teams:getActiveTeam", { projectRoot, sessionTeamId }),
+	teamsSetActiveTeam: (projectRoot: string, teamId: string, scope?: "project" | "app") =>
+		ipcRenderer.invoke("teams:setActiveTeam", { projectRoot, teamId, scope }),
+	teamsGetRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getRoster", { projectRoot, teamId }),
+	teamsGetSkillsRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getSkillsRoster", { projectRoot, teamId }),
+	teamsGetCommandsRoster: (projectRoot: string, teamId: string) =>
+		ipcRenderer.invoke("teams:getCommandsRoster", { projectRoot, teamId }),
+	teamsCreate: (
+		projectRoot: string,
+		input: {
+			name: string;
+			description?: string;
+			longDescription?: string;
+			tags?: string[];
+			scope: "app" | "project";
+			leadName?: string;
+			leadInstructions?: string;
+			icon?: IconSpec | null;
+			iconImagePngBase64?: string;
+		},
+	) => ipcRenderer.invoke("teams:create", { projectRoot, ...input }),
+	teamsUpdateIcon: (
+		teamId: string,
+		icon: IconSpec | null,
+		projectRoot?: string | null,
+	) => ipcRenderer.invoke("teams:updateIcon", { teamId, icon, projectRoot }),
+	teamsSetIconImage: (
+		teamId: string,
+		pngBase64: string,
+		projectRoot?: string | null,
+	) => ipcRenderer.invoke("teams:setIconImage", { teamId, pngBase64, projectRoot }),
+	teamsDelete: (teamId: string, projectRoot?: string) =>
+		ipcRenderer.invoke("teams:delete", { teamId, projectRoot }),
+	teamsGetCoreState: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:getCoreState", { projectRoot }),
+	teamsResetCoreDefaults: (projectRoot: string, kind: "subagent" | "orchestrator") =>
+		ipcRenderer.invoke("teams:resetCoreDefaults", { projectRoot, kind }),
+	teamsResolveOrigin: (projectRoot: string, fqidOrId: string) =>
+		ipcRenderer.invoke("teams:resolveOrigin", { projectRoot, fqidOrId }),
+	teamsListAssets: (projectRoot: string, kind: string) =>
+		ipcRenderer.invoke("teams:listAssets", { projectRoot, kind }),
+	teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) =>
+		ipcRenderer.invoke("teams:setDefaultOrchestrator", { projectRoot, fqid }),
+	teamsGetTeamContents: (teamId: string, projectRoot?: string | null) =>
+		ipcRenderer.invoke("teams:getTeamContents", { teamId, projectRoot }),
+	teamsListProjectMcps: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:listProjectMcps", { projectRoot }),
+	teamsListMcp: (projectRoot: string) =>
+		ipcRenderer.invoke("teams:listMcp", { projectRoot }) as Promise<
+			Array<{ name: string; enabled: boolean; origin: string; autoStart: boolean }>
+		>,
+
+	// User teams (app-level, like installed teams)
+	teamsListUserTeams: () =>
+		ipcRenderer.invoke("teams:listUserTeams") as Promise<
+			Array<{ teamId: string; name: string; description: string; version: string }>
+		>,
+	teamsCreateUserTeam: (name: string, description?: string) =>
+		ipcRenderer.invoke("teams:createUserTeam", { name, description }) as Promise<{
+			teamId: string;
+			name: string;
+			description: string;
+			version: string;
+		}>,
+	teamsDeleteUserTeam: (teamId: string) =>
+		ipcRenderer.invoke("teams:deleteUserTeam", { teamId }),
 
 	// Workspace operations
 	workspaceGetConfig: (projectRoot: string) =>
@@ -1251,19 +1377,35 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("terminal:loadConfig", { projectRoot }),
 	terminalSaveConfig: (projectRoot: string, config: unknown) =>
 		ipcRenderer.invoke("terminal:saveConfig", { projectRoot, config }),
-	terminalRunAiBash: (args: {
-		sessionId: string;
-		chatTabId: string;
-		toolCallId: string;
-		command: string;
-		cwd?: string;
-	}) => ipcRenderer.invoke("terminal:runAiBash", args),
 	terminalRegisterBashJob: (args: {
 		sessionId: string;
 		toolCallId: string;
 		command: string;
 	}) => ipcRenderer.invoke("terminal:registerBashJob", args),
 	terminalDestroyAllAiPty: () => ipcRenderer.invoke("terminal:destroyAllAiPty"),
+
+	executionGet: (executionId: string): Promise<ExecutionGetResult> =>
+		ipcRenderer.invoke("execution:get", { executionId }),
+	executionFindByToolCallId: (toolCallId: string): Promise<ExecutionFindByToolCallIdResult> =>
+		ipcRenderer.invoke("execution:findByToolCallId", { toolCallId }),
+	executionReplay: (args: ExecutionReplayArgs): Promise<ExecutionReplayResult> =>
+		ipcRenderer.invoke("execution:replay", args),
+	executionCancel: (executionId: string): Promise<ExecutionCancelResult> =>
+		ipcRenderer.invoke("execution:cancel", { executionId }),
+	executionRerun: (executionId: string): Promise<ExecutionRerunResult> =>
+		ipcRenderer.invoke("execution:rerun", { executionId }),
+	executionListRunning: (): Promise<ExecutionListRunningResult> =>
+		ipcRenderer.invoke("execution:listRunning"),
+	executionApplyProjectSwitch: (
+		args: ExecutionApplyProjectSwitchArgs,
+	): Promise<ExecutionApplyProjectSwitchResult> =>
+		ipcRenderer.invoke("execution:applyProjectSwitch", args),
+	onExecutionEvent: (listener: (event: TerminalExecutionEvent) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, payload: TerminalExecutionEvent) =>
+			listener(payload);
+		ipcRenderer.on("execution:event", handler);
+		return () => ipcRenderer.removeListener("execution:event", handler);
+	},
 
 	// Terminal events (Main → Renderer)
 	onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => {
@@ -1276,55 +1418,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("terminal:exit", handler);
 		return () => ipcRenderer.removeListener("terminal:exit", handler);
 	},
-	onTerminalAiStream: (
-		callback: (data: {
-			sessionId: string;
-			chatTabId: string;
-			requestId: string;
-			toolCallId?: string;
-			chunk: string;
-			phase: "output";
-		}) => void,
-	) => {
-		const handler = (
-			_event: Electron.IpcRendererEvent,
-			data: {
-				sessionId: string;
-				chatTabId: string;
-				requestId: string;
-				toolCallId?: string;
-				chunk: string;
-				phase: "output";
-			},
-		) => callback(data);
-		ipcRenderer.on("terminal:aiStream", handler);
-		return () => ipcRenderer.removeListener("terminal:aiStream", handler);
-	},
-	onTerminalAiExit: (
-		callback: (data: {
-			sessionId: string;
-			chatTabId: string;
-			requestId: string;
-			toolCallId?: string;
-			exitCode: number;
-			cwd: string;
-		}) => void,
-	) => {
-		const handler = (
-			_event: Electron.IpcRendererEvent,
-			data: {
-				sessionId: string;
-				chatTabId: string;
-				requestId: string;
-				toolCallId?: string;
-				exitCode: number;
-				cwd: string;
-			},
-		) => callback(data);
-		ipcRenderer.on("terminal:aiExit", handler);
-		return () => ipcRenderer.removeListener("terminal:aiExit", handler);
-	},
-
 	// Git operations
 	gitWarmup: (projectRoot: string) =>
 		ipcRenderer.invoke("git:warmup", { projectRoot }),
@@ -1452,6 +1545,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
 		ipcRenderer.on("skills:integrationChanged", handler);
 		return () => ipcRenderer.removeListener("skills:integrationChanged", handler);
+	},
+	onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: { projectPath: string }) => callback(data);
+		ipcRenderer.on("subagents:integrationChanged", handler);
+		return () => ipcRenderer.removeListener("subagents:integrationChanged", handler);
 	},
 
 	// Log system

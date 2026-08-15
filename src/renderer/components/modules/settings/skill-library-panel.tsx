@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { ArrowUpRightIcon, EyeIcon, LibraryIcon, Loader2Icon, SearchIcon } from "lucide-react";
+import { ArrowUpRightIcon, LibraryIcon, Loader2Icon, SearchIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
-import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 import { SKILL_CATEGORY_LABELS } from "@/lib/agent/skill-categories";
 import { GITHUB_SKILL_PRESETS } from "@/lib/agent/skill-libraries";
@@ -202,8 +201,7 @@ export function SkillLibraryPanel() {
   };
 
   const installAllFromSource = async (source: LibrarySource) => {
-    if (!projectRoot) return;
-    if (source.kind !== "github" && source.kind !== "bundled") return;
+    if (!projectRoot || source.kind !== "github") return;
     setSaving(true);
     try {
       const result = await window.electronAPI.agentInstallAllFromLibrarySource(
@@ -222,36 +220,6 @@ export function SkillLibraryPanel() {
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : t("settings.editor.skills.toast.installAllFailed"),
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const uninstallAllFromSource = async (source: LibrarySource) => {
-    if (!projectRoot || source.kind !== "bundled") return;
-    setSaving(true);
-    try {
-      const result = await window.electronAPI.agentUninstallAllFromLibrarySource(
-        projectRoot,
-        source.id,
-      );
-      await window.electronAPI.chatPrewarm(projectRoot);
-      bumpSkillsRefresh();
-      setInstalledIds((prev) => {
-        const next = new Set(prev);
-        for (const id of result.removedIds) next.delete(id);
-        return next;
-      });
-      toast.success(
-        t("settings.editor.skills.toast.uninstalledBatch", {
-          count: result.removedIds.length,
-          name: source.name,
-        }),
-      );
-    } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : t("settings.editor.skills.toast.uninstallAllFailed"),
       );
     } finally {
       setSaving(false);
@@ -395,24 +363,18 @@ export function SkillLibraryPanel() {
                       <span
                         className={cn(
                           BADGE,
-                          source.kind === "bundled"
-                            ? "bg-muted text-muted-foreground normal-case tracking-normal"
-                            : source.kind === "github"
-                              ? "bg-muted/60 text-muted-foreground/80 normal-case tracking-normal"
-                              : "bg-muted/60 text-muted-foreground/80 normal-case tracking-normal",
+                          "bg-muted text-muted-foreground normal-case tracking-normal",
                         )}
                       >
-                        {source.kind === "bundled"
-                          ? t("settings.editor.skills.kind.bundled")
-                          : source.kind === "github"
-                            ? t("settings.editor.skills.kind.github")
-                            : t("settings.editor.skills.kind.registry")}
+                        {source.kind === "github"
+                          ? t("settings.editor.skills.kind.github")
+                          : t("settings.editor.skills.kind.registry")}
                       </span>
                       <span
                         className={cn(
                           BADGE,
                           source.connected
-                            ? "bg-primary/10 text-primary"
+                            ? "bg-primary text-primary-foreground"
                             : "bg-muted text-muted-foreground",
                         )}
                       >
@@ -434,7 +396,7 @@ export function SkillLibraryPanel() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {(source.kind === "github" || source.kind === "bundled") && source.connected && (
+                    {source.kind === "github" && source.connected && (
                       <Button
                         variant="outline"
                         size="xs"
@@ -442,16 +404,6 @@ export function SkillLibraryPanel() {
                         onClick={() => void installAllFromSource(source)}
                       >
                         {t("settings.editor.skills.installAll")}
-                      </Button>
-                    )}
-                    {source.kind === "bundled" && source.connected && (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        disabled={saving}
-                        onClick={() => void uninstallAllFromSource(source)}
-                      >
-                        {t("settings.editor.skills.uninstallAll")}
                       </Button>
                     )}
                     {source.connected ? (
@@ -566,23 +518,6 @@ export function SkillLibraryPanel() {
                           {item.sourceLabel}
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
-                          {item.sourceKind === "bundled" ? (
-                            <button
-                              type="button"
-                              className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                              title={t("settings.editor.skills.preview")}
-                              onClick={() =>
-                                openSettingsPanel({
-                                  kind: "skill-markdown",
-                                  mode: "preview-bundled",
-                                  skillId: item.skillId,
-                                  title: item.name,
-                                })
-                              }
-                            >
-                              <EyeIcon className="size-3.5" />
-                            </button>
-                          ) : null}
                           {item.sourceKind === "remote" && item.artifactUrl ? (
                             <button
                               type="button"
@@ -597,7 +532,7 @@ export function SkillLibraryPanel() {
                             <span
                               className={cn(
                                 BADGE,
-                                "bg-primary/10 text-primary normal-case tracking-normal shrink-0",
+                                "bg-muted text-muted-foreground normal-case tracking-normal shrink-0",
                               )}
                             >
                               {t("settings.editor.skills.installed")}

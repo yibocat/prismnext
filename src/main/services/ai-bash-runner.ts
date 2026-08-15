@@ -6,10 +6,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { BrowserWindow } from "electron";
+import { tmpdir } from "node:os";
 import { getTerminalBridgeRoot } from "./prism-bridge-paths";
-import { runAiCommand } from "./ai-pty";
 import { resolveChatTabId, getSessionProjectRoot } from "./chat-session-registry";
+import {
+  getExecutionRegistry,
+  initExecutionRegistry,
+  type ExecutionRegistry,
+} from "./execution-registry";
+import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../shared/execution";
 import { createLogger } from "./logger";
 import {
   isDirectLatexCompileBashCommand,
@@ -22,24 +27,6 @@ import {
 import { gateExperimentPythonExecution } from "./experiment-log-service";
 
 const log = createLogger("ai-bash-runner", "agent");
-
-export interface TerminalAiStreamPayload {
-  sessionId: string;
-  chatTabId: string;
-  requestId: string;
-  toolCallId?: string;
-  chunk: string;
-  phase: "output";
-}
-
-export interface TerminalAiExitPayload {
-  sessionId: string;
-  chatTabId: string;
-  requestId: string;
-  toolCallId?: string;
-  exitCode: number;
-  cwd: string;
-}
 
 export interface RunAiBashJobArgs {
   sessionId: string;
@@ -55,27 +42,62 @@ export interface RunAiBashJobResult {
   output: string;
   exitCode: number;
   cwd: string;
+  executionId: string;
 }
 
 function getBridgeRoot(): string {
   return getTerminalBridgeRoot();
 }
 
-let mainWindow: BrowserWindow | null = null;
 const inFlight = new Map<string, Promise<RunAiBashJobResult>>();
 
-export function setAiBashRunnerWindow(win: BrowserWindow | null): void {
-  mainWindow = win;
+/** @deprecated Job output is broadcast via execution:event; kept for caller compatibility. */
+export function setAiBashRunnerWindow(_win: unknown): void {}
+
+function writeBridgeResult(
+  resPath: string,
+  streamPath: string | undefined,
+  result: RunAiBashJobResult,
+): void {
+  try {
+    writeFileSync(resPath, JSON.stringify(result), "utf-8");
+  } catch {
+    // ignore
+  }
+  if (streamPath && result.output) {
+    try {
+      writeFileSync(streamPath, result.output, "utf-8");
+    } catch {
+      // ignore
+    }
+  }
 }
 
-function emitAiStream(payload: TerminalAiStreamPayload): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("terminal:aiStream", payload);
+function resultFromSummary(
+  summary: TerminalExecutionSummary,
+  cwd: string,
+): RunAiBashJobResult {
+  return {
+    output: summary.transcriptTail ?? "",
+    exitCode: summary.exitCode ?? 1,
+    cwd,
+    executionId: summary.executionId,
+  };
 }
 
-function emitAiExit(payload: TerminalAiExitPayload): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send("terminal:aiExit", payload);
+async function reuseExistingExecution(
+  registry: ExecutionRegistry,
+  existing: TerminalExecutionSummary,
+  args: RunAiBashJobArgs,
+  resPath: string,
+  streamPath: string,
+): Promise<RunAiBashJobResult> {
+  const final = terminalExecutionIsFinal(existing.state)
+    ? existing
+    : await registry.waitForFinal(existing.executionId);
+  const result = resultFromSummary(final, args.cwd);
+  writeBridgeResult(resPath, streamPath, result);
+  return result;
 }
 
 function resolveChatTab(sessionId: string, chatTabId?: string): string {
@@ -84,6 +106,16 @@ function resolveChatTab(sessionId: string, chatTabId?: string): string {
 
 function jobKey(sessionId: string, toolCallId: string): string {
   return `${sessionId}:${toolCallId}`;
+}
+
+function requireRegistry(): ExecutionRegistry {
+  try {
+    return getExecutionRegistry();
+  } catch {
+    return initExecutionRegistry(
+      process.env.PRISM_EXECUTION_HISTORY_ROOT ?? join(tmpdir(), "prism-execution-history"),
+    );
+  }
 }
 
 /** Register pending bash job before user approves — OpenCode polls bridge by sessionId. */
@@ -146,56 +178,38 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     // ignore
   }
 
-  if (isDirectLatexCompileBashCommand(args.command)) {
+  const failWithoutSpawn = async (output: string, reason: string): Promise<RunAiBashJobResult> => {
+    const registry = requireRegistry();
+    const created = await registry.create(
+      {
+        origin: "agent-bash",
+        command: args.command,
+        cwd: args.cwd,
+        projectId: args.projectRoot || args.cwd,
+        chatTabId,
+        opencodeSessionId: args.sessionId,
+        toolCallId: args.toolCallId,
+      },
+      { start: false },
+    );
+    await registry.reject(created.executionId, { output, exitCode: 1 });
     const blocked: RunAiBashJobResult = {
-      output: latexCompileBashBlockMessage(),
+      output,
       exitCode: 1,
       cwd: args.cwd,
+      executionId: created.executionId,
     };
-    try {
-      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
-    } catch {
-      // ignore
-    }
-    emitAiExit({
-      sessionId: args.sessionId,
-      chatTabId,
-      requestId: args.toolCallId,
-      toolCallId: args.toolCallId,
-      exitCode: 1,
-      cwd: args.cwd,
-    });
-    log.warn("AI bash blocked by LaTeX compile gate", {
-      chatTabId,
-      command: args.command.slice(0, 120),
-    });
-    return Promise.resolve(blocked);
+    writeBridgeResult(resPath, undefined, blocked);
+    log.warn(reason, { chatTabId, command: args.command.slice(0, 120) });
+    return blocked;
+  };
+
+  if (isDirectLatexCompileBashCommand(args.command)) {
+    return failWithoutSpawn(latexCompileBashBlockMessage(), "AI bash blocked by LaTeX compile gate");
   }
 
   if (isWholeDiskSearchBashCommand(args.command)) {
-    const blocked: RunAiBashJobResult = {
-      output: wholeDiskSearchBlockMessage(),
-      exitCode: 1,
-      cwd: args.cwd,
-    };
-    try {
-      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
-    } catch {
-      // ignore
-    }
-    emitAiExit({
-      sessionId: args.sessionId,
-      chatTabId,
-      requestId: args.toolCallId,
-      toolCallId: args.toolCallId,
-      exitCode: 1,
-      cwd: args.cwd,
-    });
-    log.warn("AI bash blocked by whole-disk search gate", {
-      chatTabId,
-      command: args.command.slice(0, 120),
-    });
-    return Promise.resolve(blocked);
+    return failWithoutSpawn(wholeDiskSearchBlockMessage(), "AI bash blocked by whole-disk search gate");
   }
 
   const gate = gateExperimentPythonExecution({
@@ -206,71 +220,50 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
   });
 
   if (gate.action === "block") {
-    const blocked: RunAiBashJobResult = {
-      output: gate.error,
-      exitCode: 1,
-      cwd: args.cwd,
-    };
-    try {
-      writeFileSync(resPath, JSON.stringify(blocked), "utf-8");
-    } catch {
-      // ignore
-    }
-    emitAiExit({
-      sessionId: args.sessionId,
-      chatTabId,
-      requestId: args.toolCallId,
-      toolCallId: args.toolCallId,
-      exitCode: 1,
-      cwd: args.cwd,
-    });
-    log.warn("AI bash blocked by experiment Python gate", {
-      chatTabId,
-      error: gate.error,
-    });
-    return Promise.resolve(blocked);
+    return failWithoutSpawn(gate.error, "AI bash blocked by experiment Python gate");
   }
 
   const envExtra = gate.action === "apply" ? gate.envExtra : undefined;
 
-  const promise = runAiCommand({
-    command: args.command,
-    cwd: args.cwd,
-    sessionId: args.sessionId,
-    chatTabId,
-    requestId: args.toolCallId,
-    toolCallId: args.toolCallId,
-    envExtra,
-    onChunk: (chunk) => {
+  const promise = (async () => {
+    const registry = requireRegistry();
+    const existing = registry.findByToolCallId(args.toolCallId);
+    if (existing) {
+      return reuseExistingExecution(registry, existing, args, resPath, streamPath);
+    }
+    const created = await registry.create(
+      {
+        origin: "agent-bash",
+        command: args.command,
+        cwd: args.cwd,
+        projectId: args.projectRoot || args.cwd,
+        chatTabId,
+        opencodeSessionId: args.sessionId,
+        toolCallId: args.toolCallId,
+        envExtra,
+      },
+      { start: false },
+    );
+    const unsubscribe = registry.subscribe((event) => {
+      if (event.executionId !== created.executionId || event.type !== "output" || !event.data) return;
       try {
-        appendFileSync(streamPath, chunk, "utf-8");
+        appendFileSync(streamPath, event.data, "utf-8");
       } catch {
         // ignore
       }
-      emitAiStream({
-        sessionId: args.sessionId,
-        chatTabId,
-        requestId: args.toolCallId,
-        toolCallId: args.toolCallId,
-        chunk,
-        phase: "output",
-      });
-    },
-  }).then((result) => {
-    writeFileSync(resPath, JSON.stringify(result), "utf-8");
-    emitAiExit({
-      sessionId: args.sessionId,
-      chatTabId,
-      requestId: args.toolCallId,
-      toolCallId: args.toolCallId,
-      exitCode: result.exitCode,
-      cwd: result.cwd,
     });
-    log.info("AI bash job finished", { chatTabId, exitCode: result.exitCode });
-    return result;
-  }).finally(() => {
-    inFlight.delete(key);
-  });
+    try {
+      await registry.start(created.executionId);
+      const final = await registry.waitForFinal(created.executionId);
+      const result = resultFromSummary(final, args.cwd);
+      writeBridgeResult(resPath, undefined, result);
+      log.info("AI bash job finished", { chatTabId, exitCode: result.exitCode });
+      return result;
+    } finally {
+      unsubscribe();
+      inFlight.delete(key);
+    }
+  })();
 
   inFlight.set(key, promise);
   return promise;

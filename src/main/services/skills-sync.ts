@@ -1,17 +1,52 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { countPromptTokens } from "../lib/token-estimate";
-import { libraryCardForRegistryUrl, PRISM_CURATED_LIBRARY } from "../../shared/skill-libraries";
+import {
+  libraryCardForRegistryUrl,
+  PRISM_CURATED_SOURCE_ID,
+} from "../../shared/skill-libraries";
 import type { SkillInstallRecord } from "../../shared/skill-install-types";
+import {
+  CORE_TEAM_ID,
+  isProjectLocalTeamId,
+  LOCAL_TEAM_ID,
+  LOCAL_TEAM_REL,
+  MY_CONTENT_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
+  PROJECT_TEAMS_REL,
+  type TeamSource,
+} from "../../shared/teams/types";
+import { parseFqid } from "../../shared/teams/state";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
-import { listBundledSkills } from "./bundled-skills";
+import {
+  listAssets,
+  resolveActiveTeam,
+  resolveRef,
+  resolveSkillsRoster,
+} from "../teams/resolver";
+import { precedenceRank } from "../teams/precedence";
+import { setProjectAssetEnabled } from "../teams/state-project";
+import { ensureMyContentTeam } from "../teams/my-content";
+import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
+import { getTeamRecord } from "../teams/catalog";
 
+/** Legacy flat skills tree (R6 migrate-in only; new writes must not use this). */
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
+/**
+ * Project Team hangar skills — default write target for custom / library installs
+ * (`.prismnext/agent/teams/project.local/skills`).
+ * `LOCAL_TEAM_REL` kept for watcher / pre-M8 path matching.
+ */
+export const PRISM_LOCAL_SKILLS_REL = `${PROJECT_TEAMS_REL}/${PROJECT_DEFAULT_TEAM_ID}/skills`;
+export const PRISM_LEGACY_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
 /**
  * OpenCode `skills.paths` entry (relative to session cwd).
- * Must be the parent of a `skills/` folder (OpenCode globs skill folders beneath it).
+ * OpenCode discovers SKILL.md at ANY depth beneath each entry, so this single
+ * relative entry covers `teams/project.local/skills/<id>` and the legacy
+ * `skills/<id>` backstop. It is always emitted LAST — OpenCode resolves
+ * duplicate skill names "later wins", so hangar skills shadow team/bundle skills.
  */
 export const PRISM_OPENCODE_SKILLS_SCAN_REL = ".prismnext/agent";
 
@@ -59,9 +94,11 @@ export function isSkillsIntegrationPath(absPath: string, projectRoot: string): b
 
   const rel = normalized.slice(root.length).replace(/^\//, "");
   const manifestRel = SKILLS_MANIFEST_REL.replace(/\\/g, "/");
-  const skillsRel = PRISM_SKILLS_REL.replace(/\\/g, "/");
   if (rel === manifestRel || rel.startsWith(`${manifestRel}/`)) return true;
-  if (rel === skillsRel || rel.startsWith(`${skillsRel}/`)) return true;
+  for (const skillsRel of [PRISM_SKILLS_REL, PRISM_LOCAL_SKILLS_REL]) {
+    const prefix = skillsRel.replace(/\\/g, "/");
+    if (rel === prefix || rel.startsWith(`${prefix}/`)) return true;
+  }
   return false;
 }
 
@@ -76,9 +113,15 @@ export function isSkillsManifestPath(absPath: string, projectRoot: string): bool
   return rel === SKILLS_MANIFEST_REL.replace(/\\/g, "/");
 }
 
-export const PRISM_CURATED_SOURCE_ID = "prism-curated";
+/** Re-export — legacy id stripped from manifests on read (Core ≠ install library). */
+export { PRISM_CURATED_SOURCE_ID };
 
 export type SkillLibrarySourceKind = "bundled" | "remote" | "github";
+
+/** Hangar teams where user-created / source-installed skills live. */
+function isHangarSkillTeam(teamId: string): boolean {
+  return isProjectLocalTeamId(teamId) || teamId === MY_CONTENT_TEAM_ID;
+}
 
 export interface SkillLibrarySource {
   id: string;
@@ -94,6 +137,7 @@ export interface SkillLibrarySource {
 }
 
 export interface SkillsManifest {
+  /** @deprecated 启停已迁入 teams.json assetEnabled（R10）；仅为迁移输入保留读取 */
   disabled?: string[];
   /** @deprecated migrated to `sources` on read */
   registryUrls?: string[];
@@ -108,37 +152,27 @@ export interface SkillLibrarySourceInfo extends SkillLibrarySource {
 }
 
 export interface InstalledSkillInfo {
+  /** 全局唯一身份（`${teamId}:${contentId}`）；启停/删除按 FQID 操作 */
+  fqid: string;
+  /** pack 内 id（目录名；OpenCode 的技能名） */
   id: string;
   name: string;
   description: string;
+  /** local 内容为项目相对路径；pack 内容为绝对路径（仅供展示/打开） */
   skillDirRel: string;
   enabled: boolean;
   /** o200k_base BPE estimate of SKILL.md body */
   tokenCount: number;
   installOrigin?: import("../../shared/skill-install-types").SkillInstallOrigin;
   /**
-   * Where this installed copy came from: shipped with the app ("bundled"),
-   * installed from a registry/GitHub ("registry"), or written by the user /
-   * skill-creator in this project ("custom").
+   * 来源（§5.6.2）：local 且有 install 记录 → "registry"；local 无记录 →
+   * "custom"；core pack → "bundled"；其余 pack → "plugin"（badge 显示 pack 名）。
    */
-  origin: "bundled" | "registry" | "custom";
-}
-
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
-
-function parseFrontmatterField(block: string, key: string): string {
-  const match = block.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
-  if (!match) return "";
-  return match[1].trim().replace(/^['"]|['"]$/g, "");
-}
-
-function parseSkillMd(content: string): { name: string; description: string } {
-  const fm = content.match(FRONTMATTER_RE);
-  if (!fm) return { name: "", description: "" };
-  return {
-    name: parseFrontmatterField(fm[1], "name"),
-    description: parseFrontmatterField(fm[1], "description"),
-  };
+  origin: "bundled" | "registry" | "custom" | "plugin";
+  /** origin === "plugin" 时的 pack 展示名（badge 用） */
+  originTeamName?: string;
+  /** 是否可删除（= local 内容；pack 内容只能禁用，结构上杜绝误删） */
+  removable: boolean;
 }
 
 export function readSkillsManifest(projectRoot: string): SkillsManifest {
@@ -159,7 +193,9 @@ export function readSkillsManifest(projectRoot: string): SkillsManifest {
 }
 
 function defaultLibrarySources(): SkillLibrarySource[] {
-  return [{ id: PRISM_CURATED_SOURCE_ID, kind: "bundled", connected: true }];
+  // No built-in “curated = Core” source — Core skills ship with the Core team.
+  // Users add GitHub / registry sources and install copies into hangars.
+  return [];
 }
 
 function sourceIdForUrl(url: string): string {
@@ -173,8 +209,8 @@ function sourceIdForGitHub(repo: string, ref: string): string {
 function displayNameForSource(source: SkillLibrarySource): { name: string; description: string } {
   if (source.kind === "bundled") {
     return {
-      name: PRISM_CURATED_LIBRARY.name,
-      description: PRISM_CURATED_LIBRARY.description,
+      name: source.id,
+      description: "Legacy built-in source (removed — Core skills live on the Core team)",
     };
   }
   if (source.kind === "github") {
@@ -213,11 +249,11 @@ export function normalizeLibrarySources(manifest: SkillsManifest): SkillLibraryS
       }));
   }
 
-  if (!sources.some((s) => s.id === PRISM_CURATED_SOURCE_ID)) {
-    sources.unshift({ id: PRISM_CURATED_SOURCE_ID, kind: "bundled", connected: true });
-  }
-
-  return sources;
+  // Drop legacy “prismnext Curated” (= Core pack mirror). Core skills are not
+  // an install-library catalog anymore.
+  return sources.filter(
+    (s) => s.kind !== "bundled" && s.id !== PRISM_CURATED_SOURCE_ID,
+  );
 }
 
 export function activeRemoteRegistryUrls(sources: SkillLibrarySource[]): string[] {
@@ -226,9 +262,9 @@ export function activeRemoteRegistryUrls(sources: SkillLibrarySource[]): string[
     .map((s) => s.url!.trim());
 }
 
-export function isBundledLibraryConnected(sources: SkillLibrarySource[]): boolean {
-  const bundled = sources.find((s) => s.id === PRISM_CURATED_SOURCE_ID);
-  return bundled?.connected !== false;
+/** @deprecated Always false — bundled curated library removed. */
+export function isBundledLibraryConnected(_sources: SkillLibrarySource[]): boolean {
+  return false;
 }
 
 export function listLibrarySources(projectRoot: string): SkillLibrarySourceInfo[] {
@@ -269,16 +305,35 @@ export function removeSkillInstallRecord(projectRoot: string, skillId: string): 
   writeSkillsManifest(projectRoot, { ...manifest, installs });
 }
 
-/** Remove an installed skill folder and clear manifest entries (disabled + install record). */
-export function deleteProjectSkill(projectRoot: string, skillId: string): void {
-  const skillDir = join(projectRoot, PRISM_SKILLS_REL, skillId);
+/** 解析技能引用（FQID 原样；裸 id 按 resolver 规则解析）→ local 内容 id；非 local 或不存在 → null */
+function resolveLocalSkillId(projectRoot: string, fqidOrBareId: string): string | null {
+  const parsed = parseFqid(fqidOrBareId);
+  if (parsed) {
+    return isProjectLocalTeamId(parsed.teamId) ? parsed.contentId : null;
+  }
+  const fqid = resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
+  if (!fqid) return null;
+  const resolved = parseFqid(fqid);
+  return resolved && isProjectLocalTeamId(resolved.teamId) ? resolved.contentId : null;
+}
+
+/**
+ * 删除项目技能 —— 只允许 local 内容（pack 内容只能禁用，结构上杜绝误删；
+ * 治 P9 同类问题）。同时清理 install 记录与该 FQID 的禁用项。
+ */
+export function deleteProjectSkill(projectRoot: string, fqidOrBareId: string): void {
+  const localId = resolveLocalSkillId(projectRoot, fqidOrBareId);
+  if (!localId) {
+    throw new Error(
+      `Only project-local skills can be deleted (disable pack skills instead): ${fqidOrBareId}`,
+    );
+  }
+  const skillDir = join(projectRoot, PRISM_LOCAL_SKILLS_REL, localId);
   if (existsSync(skillDir)) {
     rmSync(skillDir, { recursive: true, force: true });
   }
-  const manifest = readSkillsManifest(projectRoot);
-  const disabled = (manifest.disabled ?? []).filter((id) => id !== skillId);
-  const installs = (manifest.installs ?? []).filter((item) => item.skillId !== skillId);
-  writeSkillsManifest(projectRoot, { ...manifest, disabled, installs });
+  removeSkillInstallRecord(projectRoot, localId);
+  setProjectAssetEnabled(projectRoot, `${PROJECT_DEFAULT_TEAM_ID}:${localId}`, true);
 }
 
 export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
@@ -287,42 +342,49 @@ export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifes
   writeFileSync(path, JSON.stringify(manifest, null, 2), "utf-8");
 }
 
+/**
+ * 项目技能列表 —— 唯一来源 = PackResolver（§5.6.2）：
+ * core / firstparty / external packs + Local Pack 的统一视图，
+ * enabled 直接取 resolver 的 isAssetActive 判定（D3）。
+ */
 export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
-  const skillsRoot = join(projectRoot, PRISM_SKILLS_REL);
-  if (!existsSync(skillsRoot)) return [];
-
   const manifest = readSkillsManifest(projectRoot);
-  const disabled = new Set(manifest.disabled ?? []);
   const installBySkillId = new Map(
     (manifest.installs ?? []).map((item) => [item.skillId, item.origin]),
   );
-  const bundledIds = new Set(listBundledSkills().map((skill) => skill.id));
+
   const results: InstalledSkillInfo[] = [];
-
-  for (const entry of readdirSync(skillsRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
-    const skillMdPath = join(skillsRoot, entry.name, "SKILL.md");
-    if (!existsSync(skillMdPath)) continue;
-
-    let content = "";
+  for (const skill of listAssets(projectRoot, "skill")) {
+    let tokenCount = 0;
     try {
-      content = readFileSync(skillMdPath, "utf-8");
+      tokenCount = countPromptTokens(readFileSync(join(skill.dir, "SKILL.md"), "utf-8")).tokenCount;
     } catch {
-      continue;
+      // 读不到按 0 处理（目录扫描已确认 SKILL.md 存在，极端竞态才到这里）
     }
-
-    const meta = parseSkillMd(content);
-    const id = entry.name;
-    const installOrigin = installBySkillId.get(id);
+    const hangar = isHangarSkillTeam(skill.teamId);
+    const installOrigin = hangar ? installBySkillId.get(skill.id) : undefined;
+    const skillDirRel = isProjectLocalTeamId(skill.teamId)
+      ? `${PRISM_LOCAL_SKILLS_REL}/${skill.id}`
+      : skill.dir;
     results.push({
-      id,
-      name: meta.name || id,
-      description: meta.description || "",
-      skillDirRel: `${PRISM_SKILLS_REL}/${id}`,
-      enabled: !disabled.has(id),
-      tokenCount: countPromptTokens(content).tokenCount,
+      fqid: skill.fqid,
+      id: skill.id,
+      name: skill.name || skill.id,
+      description: skill.description || "",
+      skillDirRel,
+      enabled: skill.enabled,
+      tokenCount,
       installOrigin,
-      origin: installOrigin ? "registry" : bundledIds.has(id) ? "bundled" : "custom",
+      origin: hangar
+        ? installOrigin
+          ? "registry"
+          : "custom"
+        : skill.teamId === CORE_TEAM_ID
+          ? "bundled"
+          : "plugin",
+      originTeamName:
+        !hangar && skill.teamId !== CORE_TEAM_ID ? skill.origin.teamName : undefined,
+      removable: skill.editable,
     });
   }
 
@@ -330,19 +392,72 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
 }
 
 /**
+ * 逐项启停 —— 唯一状态操作 = teams.json assetEnabled（§5.6.2 / D3）。
+ * FQID 原样使用；裸 id 按 resolver 规则解析（core → 全局唯一）。
+ * 返回解析后的 FQID（未命中 → null）。
+ */
+export function setSkillContentEnabled(
+  projectRoot: string,
+  fqidOrBareId: string,
+  enabled: boolean,
+): string | null {
+  const fqid = parseFqid(fqidOrBareId)
+    ? fqidOrBareId
+    : resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
+  if (!fqid) return null;
+  setProjectAssetEnabled(projectRoot, fqid, enabled ? true : false);
+  return fqid;
+}
+
+export interface SkillPermissionScope {
+  /** Active chat team — auto-available skills come from its skills roster. */
+  teamId?: string | null;
+  /** Bare skill ids explicitly invoked this turn (slash `/` escape hatch). */
+  extraAllowIds?: string[];
+}
+
+/**
  * Compute which skills should be denied in OpenCode config.
  *
- * Only the project's `skills-manifest.json` `disabled` list denies skills.
- * A profile's `skills` field is a *recommendation / ensure-enabled* list —
- * it does NOT deny other skills. (Previous behavior denied every skill
- * outside the profile whitelist, which blocked the whole skill toolbox.)
+ * 1) Disabled assets (D3): bare id denied when no enabled same-name twin.
+ * 2) Team scope: enabled skills not on the active team's skills allowlist
+ *    (own-team + `+` foreign) are denied — unless listed in extraAllowIds
+ *    (composer `/` manual invoke).
  */
 export function computeProfileSkillDisabled(
   projectRoot: string,
-  _profileSkillAllowlist?: string[],
+  scope?: SkillPermissionScope,
 ): string[] {
-  const manifest = readSkillsManifest(projectRoot);
-  return Array.from(new Set((manifest.disabled ?? []).filter(Boolean)));
+  const skills = listAssets(projectRoot, "skill");
+  const activeIds = new Set(skills.filter((s) => s.enabled).map((s) => s.id));
+  const denied = new Set<string>();
+  for (const skill of skills) {
+    if (!skill.enabled && !activeIds.has(skill.id)) denied.add(skill.id);
+  }
+
+  const teamId = scope?.teamId ?? resolveActiveTeam(projectRoot)?.manifest.id ?? null;
+  if (teamId) {
+    const roster = resolveSkillsRoster(projectRoot, teamId);
+    const allowed = new Set<string>();
+    for (const entry of roster?.entries ?? []) {
+      if (entry.unavailable) continue;
+      const bare = parseFqid(entry.fqid)?.contentId ?? entry.fqid;
+      if (bare) allowed.add(bare);
+    }
+    for (const id of scope?.extraAllowIds ?? []) {
+      const trimmed = id.trim();
+      if (!trimmed) continue;
+      allowed.add(parseFqid(trimmed)?.contentId ?? trimmed);
+    }
+    for (const skill of skills) {
+      if (!skill.enabled) continue;
+      if (!allowed.has(skill.id) && !allowed.has(skill.runtimeName)) {
+        denied.add(skill.id);
+      }
+    }
+  }
+
+  return [...denied].sort();
 }
 
 export function buildSkillPermissions(disabled: string[]): Record<string, string> {
@@ -433,36 +548,103 @@ export interface ProjectSkillsOpencodePatch {
 }
 
 /**
- * Prepare project skills state for OpenCode. Skill files live only in
- * `.prismnext/agent/skills/`. OpenCode config is written to app userData
+ * Prepare project skills state for OpenCode. Skill files are referenced in
+ * place — bundled/store team skills stay in their team dirs (reference model,
+ * no copying); user skills live under the Project Team hangar
+ * (`.prismnext/agent/teams/project.local/skills/`).
+ * OpenCode config is written to app userData
  * via `AcpService.applyProjectSkillsIntegration` — never project-root `.opencode/`.
+ *
+ * skills.paths order = OpenCode same-name shadow priority (later wins):
+ *   [other teams (id sort)…, core team, .prismnext/agent (hangar + legacy, highest)]
+ * Matches resolver bare-id precedence (project.local > core > others).
+ * Disabled / unlicensed teams omit their dirs; per-skill deny uses skillPermissions.
  */
 export function syncProjectSkillsIntegration(
   projectRoot: string,
-  options?: { profileSkillAllowlist?: string[] },
+  scope?: SkillPermissionScope,
 ): {
   skillsCount: number;
   skillsPaths: string[];
   skillPermissions: Record<string, string>;
-  registryUrls: string[];
 } {
   const root = normalizeProjectRoot(projectRoot);
   cleanupProjectOpenCodeArtifacts(root);
   ensureOpencodeArtifactsGitignored(root);
 
-  const skillsRoot = join(root, PRISM_SKILLS_REL);
-  if (!existsSync(skillsRoot)) {
-    mkdirSync(skillsRoot, { recursive: true });
+  // Local Pack 技能目录是项目技能的唯一写入位置；确保存在（OpenCode 扫描根稳定）
+  const localSkillsRoot = join(root, PRISM_LOCAL_SKILLS_REL);
+  if (!existsSync(localSkillsRoot)) {
+    mkdirSync(localSkillsRoot, { recursive: true });
   }
 
-  const disabled = computeProfileSkillDisabled(root, options?.profileSkillAllowlist);
+  // 有激活技能的团队目录（去重）。skills.paths 顺序 = OpenCode 同名遮蔽优先级
+  // （later wins），按 §7.5 优先级 rank 降序排列：core（rank 5，最弱）最前，
+  // 项目团队（rank 0，最强）最后。这修正了 v1 把 core 排在其他 pack 之后、
+  // 等于内置团队反而覆盖用户安装团队的问题（D-9 行为变更）。
+  // Paths stay broad so slash `/` can still resolve foreign skills; permission.skill
+  // enforces the active-team allowlist (+ extraAllowIds for this turn).
+  const teamDirs = new Map<string, string>(); // teamId → teamDir
+  const teamMeta = new Map<string, { scope: "app" | "project"; source: TeamSource }>();
+  for (const skill of listAssets(root, "skill")) {
+    // Project-local skills are covered by the trailing `.prismnext/agent` path.
+    if (!skill.enabled || isProjectLocalTeamId(skill.teamId)) continue;
+    if (!teamDirs.has(skill.teamId)) {
+      teamDirs.set(skill.teamId, dirname(dirname(skill.dir)));
+      teamMeta.set(skill.teamId, { scope: skill.origin.scope, source: skill.origin.source });
+    }
+  }
+  const orderedPackIds = [...teamDirs.keys()].sort((a, b) => {
+    const ma = teamMeta.get(a)!;
+    const mb = teamMeta.get(b)!;
+    // rank 降序（数字大的在前 = 更通用的排最前，later-wins 下最弱）。
+    const d = precedenceRank({ scope: mb.scope, source: mb.source })
+      - precedenceRank({ scope: ma.scope, source: ma.source });
+    return d !== 0 ? d : a.localeCompare(b);
+  });
+
+  const effectiveScope: SkillPermissionScope = {
+    teamId: scope?.teamId ?? resolveActiveTeam(root)?.manifest.id ?? null,
+    extraAllowIds: scope?.extraAllowIds,
+  };
+  const disabled = computeProfileSkillDisabled(root, effectiveScope);
 
   return {
     skillsCount: listProjectSkills(root).length,
-    skillsPaths: [PRISM_OPENCODE_SKILLS_SCAN_REL],
+    skillsPaths: [
+      ...orderedPackIds.map((teamId) => normalizeOpencodeConfigPath(teamDirs.get(teamId)!)),
+      PRISM_OPENCODE_SKILLS_SCAN_REL,
+    ],
     skillPermissions: buildSkillPermissions(disabled),
-    registryUrls: [] as string[],
   };
+}
+
+/** Write a user skill into a writable team (default: project.local). */
+export function installProjectSkill(
+  projectRoot: string,
+  skillId: string,
+  content: string,
+  targetTeamId?: string,
+): { teamId: string; dir: string } {
+  const root = normalizeProjectRoot(projectRoot);
+  const id = skillId.trim();
+  if (!id) throw new Error("Skill id is required");
+  const tid = (targetTeamId?.trim() || PROJECT_DEFAULT_TEAM_ID);
+  let teamDir: string;
+  if (tid === MY_CONTENT_TEAM_ID) {
+    teamDir = ensureMyContentTeam().dir;
+  } else if (tid === PROJECT_DEFAULT_TEAM_ID || isProjectLocalTeamId(tid)) {
+    teamDir = ensureProjectDefaultTeamDir(root);
+  } else {
+    const record = getTeamRecord(tid, [root]);
+    if (!record) throw new Error(`Target team not found: ${tid}`);
+    if (!record.writable) throw new Error(`Target team is read-only: ${tid}`);
+    teamDir = record.dir;
+  }
+  const dir = join(teamDir, "skills", id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "SKILL.md"), content, "utf-8");
+  return { teamId: tid, dir };
 }
 
 export async function addSkillLibrarySource(
@@ -551,9 +733,6 @@ export async function addLibrarySourceFromInput(
 }
 
 export function removeSkillLibrarySource(projectRoot: string, sourceId: string): SkillLibrarySourceInfo[] {
-  if (sourceId === PRISM_CURATED_SOURCE_ID) {
-    throw new Error("The built-in prismnext Curated library cannot be removed.");
-  }
   const manifest = readSkillsManifest(projectRoot);
   const sources = (manifest.sources ?? defaultLibrarySources()).filter((s) => s.id !== sourceId);
   persistSources(projectRoot, manifest, sources);

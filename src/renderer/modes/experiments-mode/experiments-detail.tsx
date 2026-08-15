@@ -73,7 +73,7 @@ function HistorySection({
         <div className="border-b border-border/60">
           <div className="flex h-[var(--height-right-area-subtoolbar)] items-center gap-2 px-3">
             <span className="text-[length:var(--font-size-11)] font-medium text-info">
-              {t("experiments.running")}
+              {t(live.cancelRequested ? "experiments.cancelling" : "experiments.running")}
             </span>
             <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--font-code)] text-foreground/85">
               {live.command}

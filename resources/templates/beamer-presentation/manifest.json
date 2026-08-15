@@ -1,13 +1,9 @@
 {
   "id": "beamer-presentation",
   "name": "Beamer Presentation",
-  "description": "Professional slide deck with Madrid theme, progress bar, and structured sections.",
+  "description": "Classic 16:9 Madrid Beamer deck with outline frames and authoryear bibliography. Prefer Clean Talk if you want a custom style file instead of stock themes.",
   "category": "beamer",
-  "tags": [
-    "beamer",
-    "slides",
-    "presentation"
-  ],
+  "tags": ["beamer", "slides", "madrid"],
   "documentClass": "beamer",
   "icon": "🎯"
 }

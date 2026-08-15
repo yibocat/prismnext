@@ -119,6 +119,7 @@ export const BUILTIN_TOOLS: BuiltinToolMeta[] = [
     usageHint: "Run shell commands in the project directory when file tools are insufficient.",
     workflowRules: [
       "Prefer dedicated file tools (move, delete) over bash for single-file operations.",
+      "Always pass description: a few words of what the command is doing. The chat UI shows that phrase, not the raw command.",
     ],
   },
   {

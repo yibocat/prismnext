@@ -140,7 +140,9 @@ export function paperSnippetLabel(req: Pick<PaperSnippetRequest, "bibkey" | "pag
   return `${req.bibkey}:p${req.page}`;
 }
 
-export function contextInsertToPart(req: ContextInsertRequest): ComposerPart {
+export function contextInsertToPart(
+  req: ContextInsertRequest,
+): Exclude<ComposerPart, { type: "text" }> {
   if (req.kind === "terminal") {
     const command = req.command?.trim();
     const output = truncateTerminalOutput(req.output || req.selection || "");

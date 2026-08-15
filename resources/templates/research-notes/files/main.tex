@@ -1,0 +1,47 @@
+\documentclass[11pt]{article}
+
+\usepackage{prism-notes}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=PrismNote,citecolor=PrismNote,urlcolor=PrismNote]{hyperref}
+\usepackage[backend=biber,style=authoryear]{biblatex}
+\addbibresource{references.bib}
+
+\title{}
+\author{}
+\date{}
+
+\begin{document}
+
+\noteheadline{Working title}
+\noindent\textit{Author Name} · \today
+
+\begin{abstract}
+\noindent
+Short note abstract: what question you are probing and why it matters now.
+\end{abstract}
+
+\section{Question}
+\label{sec:question}
+
+What exactly are you trying to learn or decide?
+
+\section{Setup}
+\label{sec:setup}
+
+Assumptions, data, or experimental setup in plain language.
+
+\section{Observations}
+\label{sec:observations}
+
+Bullet-friendly workspace for findings (keep \texttt{sec:} labels stable for merges).
+
+\section{Open threads}
+\label{sec:open-threads}
+
+Unresolved risks, follow-ups, and next experiments.
+
+\printbibliography
+
+\end{document}

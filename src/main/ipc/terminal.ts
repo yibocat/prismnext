@@ -1,9 +1,8 @@
 import { ipcMain, BrowserWindow } from "electron";
 import * as terminalService from "../services/terminal";
 import * as terminalConfig from "../services/terminal-config";
-import { runAiBashJob, setAiBashRunnerWindow, registerBashJobIntent } from "../services/ai-bash-runner";
+import { registerBashJobIntent } from "../services/ai-bash-runner";
 import { destroyAllAiPty } from "../services/ai-pty";
-import { getSessionProjectRoot } from "../services/chat-session-registry";
 import type { TerminalConfig } from "../services/terminal-config";
 
 export function registerTerminalHandlers(): void {
@@ -57,33 +56,6 @@ export function registerTerminalHandlers(): void {
     "terminal:destroyTabs",
     async (_event, args: { tabIds: string[] }) => {
       terminalService.destroySessionsByTabIds(args.tabIds);
-    },
-  );
-
-  ipcMain.handle(
-    "terminal:runAiBash",
-    async (
-      event,
-      args: {
-        sessionId: string;
-        chatTabId: string;
-        toolCallId: string;
-        command: string;
-        cwd?: string;
-      },
-    ) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      if (win) setAiBashRunnerWindow(win);
-      return runAiBashJob({
-        sessionId: args.sessionId,
-        chatTabId: args.chatTabId,
-        toolCallId: args.toolCallId,
-        command: args.command,
-        cwd: args.cwd || process.cwd(),
-        // Keep the Python gate anchored to the session's project even when
-        // cwd alone would not reveal one.
-        projectRoot: getSessionProjectRoot(args.sessionId),
-      });
     },
   );
 

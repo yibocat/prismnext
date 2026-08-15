@@ -10,7 +10,8 @@
     "paths": {
       "@/*": ["./src/renderer/*"],
       "@shared/*": ["./src/main/services/*", "./src/shared/*"],
-      "@commands/*": ["./src/main/commands/*"]
+      "@commands/*": ["./src/main/commands/*"],
+      "@prismnext/pro": ["./src/renderer/lib/pro/absent-module.ts"]
     }
   },
   "include": [

@@ -1,32 +1,20 @@
-import { describe, expect, it } from "vitest";
-import { migrateMirrorLogOnSessionBound } from "../../src/renderer/lib/terminal/mirror-key";
+import { beforeEach, describe, expect, it } from "vitest";
+import { resolveAiMirrorKey } from "../../src/renderer/lib/terminal/mirror-key";
+import { useChatStore } from "@/stores/chat-store";
 
-describe("migrateMirrorLogOnSessionBound", () => {
-  it("moves provisional chat-tab log to sessionId", () => {
-    const next = migrateMirrorLogOnSessionBound(
-      { "chat-1": "$ echo hi\nhi\n" },
-      "chat-1",
-      "sess-abc",
-    );
-    expect(next["sess-abc"]).toBe("$ echo hi\nhi\n");
-    expect(next["chat-1"]).toBeUndefined();
+describe("resolveAiMirrorKey", () => {
+  beforeEach(() => {
+    useChatStore.setState({ tabs: [] } as never);
   });
 
-  it("merges longer provisional log into existing session log", () => {
-    const next = migrateMirrorLogOnSessionBound(
-      {
-        "chat-1": "$ echo hi\nhi\nexit 0\n",
-        "sess-abc": "$ echo hi\n",
-      },
-      "chat-1",
-      "sess-abc",
-    );
-    expect(next["sess-abc"]).toContain("exit 0");
-    expect(next["chat-1"]).toBeUndefined();
+  it("falls back to chatTabId when the session is unbound", () => {
+    expect(resolveAiMirrorKey("chat-1")).toBe("chat-1");
   });
 
-  it("no-op when sessionId equals chatTabId", () => {
-    const input = { "chat-1": "log" };
-    expect(migrateMirrorLogOnSessionBound(input, "chat-1", "chat-1")).toBe(input);
+  it("uses the bound OpenCode sessionId", () => {
+    useChatStore.setState({
+      tabs: [{ id: "chat-1", sessionId: "sess-abc" }],
+    } as never);
+    expect(resolveAiMirrorKey("chat-1")).toBe("sess-abc");
   });
 });

@@ -10,7 +10,7 @@ import {
 
 // ─── Status Icon ───
 
-export function StatusIcon({ isLoading, isError }: { isLoading: boolean; isError: boolean }) {
+export function StatusIcon({ isLoading, isError = false }: { isLoading: boolean; isError?: boolean }) {
   if (isLoading) return <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />;
   if (isError) return <AlertCircleIcon className="size-3.5 text-destructive" />;
   return <CheckIcon className="size-3.5 text-success" />;
@@ -19,9 +19,9 @@ export function StatusIcon({ isLoading, isError }: { isLoading: boolean; isError
 // ─── Shared panel tokens (ToolCard expanded, Todo, Question) ───
 
 export const TOOL_PANEL_CLASS =
-  "rounded-lg border border-border bg-muted shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden";
+  "rounded-lg border border-border bg-chat-tool-panel shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden";
 export const TOOL_PANEL_HEADER_CLASS =
-  "border-b border-border bg-muted";
+  "border-b border-border bg-chat-tool-panel";
 /** Collapsed tool row — UI Font + muted vs assistant prose (Cursor-like hierarchy). */
 export const TOOL_INLINE_ROW_CLASS =
   "flex items-center gap-2 font-sans text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors min-w-0";
@@ -33,9 +33,12 @@ export const TOOL_INLINE_ROW_CLASS =
  */
 export const TOOL_INLINE_LABEL_CLASS =
   "min-w-0 truncate font-sans font-normal text-muted-foreground/70 [&_*]:font-sans [&_[role=link]]:font-normal [&_[role=link]]:text-muted-foreground/70 [&_[role=link]]:hover:text-muted-foreground/85";
-/** Expanded tool body — opaque muted fill (never bg-muted/N — reads as transparent on dark chat). */
+/**
+ * Expanded tool body — `--chat-tool-panel` (never bg-muted/N).
+ * Light: muted inset vs white card bubbles. Dark: between canvas and card.
+ */
 export const TOOL_EXPANDED_CONTENT_CLASS =
-  "my-1.5 min-w-0 max-w-full rounded-lg border border-border bg-muted px-3 py-2 text-[length:var(--font-code)] overflow-x-auto overflow-y-hidden animate-in fade-in slide-in-from-top-1 duration-150";
+  "my-1.5 min-w-0 max-w-full rounded-lg border border-border bg-chat-tool-panel px-3 py-2 text-[length:var(--font-code)] overflow-x-auto overflow-y-hidden animate-in fade-in slide-in-from-top-1 duration-150";
 
 // ─── ToolCard — shared shell for all tool widgets ───
 
@@ -84,7 +87,7 @@ export function ToolCard({
   className,
 }: ToolCardProps) {
   const collapsible = hasContent;
-  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggleRef = useRef<HTMLDivElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
 
   useLayoutEffect(() => {
@@ -103,19 +106,28 @@ export function ToolCard({
 
   return (
     <div className={cn("min-w-0 max-w-full", className)}>
-      <button
+      <div
         ref={toggleRef}
-        type="button"
+        role="button"
+        tabIndex={collapsible ? 0 : -1}
+        aria-disabled={!collapsible}
         className={cn(
           TOOL_INLINE_ROW_CLASS,
           // Match assistant body size (--font-chat-message); hierarchy comes from color, not size.
-          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-chat-message)] py-1",
+          "w-full max-w-full overflow-hidden text-left text-[length:var(--font-chat-message)] py-1 outline-none focus-visible:ring-1 focus-visible:ring-ring/40 rounded",
           collapsible ? "cursor-pointer" : "cursor-default",
         )}
         onMouseDown={(e) => {
           if (collapsible) e.preventDefault();
         }}
         onClick={handleToggle}
+        onKeyDown={(e) => {
+          if (!collapsible) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleToggle();
+          }
+        }}
       >
         {/* Status + tool icons must never flex-shrink — long label/meta text
          *  would otherwise squash the SVG (the "wobbling icon size" bug). */}
@@ -137,7 +149,7 @@ export function ToolCard({
             )}
           />
         )}
-      </button>
+      </div>
       {expanded && collapsible && (
         <div className={cn(TOOL_EXPANDED_CONTENT_CLASS, bodyClassName)}>
           {typeof children === "function" ? (children as () => ReactNode)() : children}

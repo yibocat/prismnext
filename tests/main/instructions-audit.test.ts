@@ -1,14 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  getBundledExpertsDir,
-  readBundledExpertInstructions,
-} from "../../src/main/services/bundled-experts";
-import {
-  getBundledOrchestratorsDir,
-  readBundledOrchestratorInstructions,
-} from "../../src/main/services/bundled-orchestrators";
 import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
 import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
 import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
@@ -17,6 +9,21 @@ import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/litera
 import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
 import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
 import type { PromptContext } from "../../src/main/prompts/types";
+
+/** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
+const CORE_PACK_DIR = join(process.cwd(), "resources", "teams", "prismnext.core");
+
+function getCoreAgentsDir(kind: "subagents" | "orchestrators"): string {
+  return join(CORE_PACK_DIR, kind);
+}
+
+function readCoreAgentInstructions(
+  kind: "subagents" | "orchestrators",
+  id: string,
+): string | null {
+  const path = join(CORE_PACK_DIR, kind, id, "instructions.md");
+  return existsSync(path) ? readFileSync(path, "utf-8") : null;
+}
 
 /** Binding tables and module headings must live in Knowledge Modules, not Instructions. */
 const MODULE_BINDING_MARKERS = [
@@ -33,7 +40,7 @@ const MODULE_BINDING_MARKERS = [
   "### Orchestrator judgment",
 ];
 
-function listBuiltinInstructionPaths(baseDir: string, kind: "experts" | "orchestrators"): string[] {
+function listBuiltinInstructionPaths(baseDir: string, kind: "subagents" | "orchestrators"): string[] {
   const entries = readdirSync(baseDir, { withFileTypes: true });
   return entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("."))
@@ -50,7 +57,7 @@ function listBuiltinInstructionPaths(baseDir: string, kind: "experts" | "orchest
 
 describe("builtin instructions audit (Phase 1.3)", () => {
   it("orchestrator instructions omit module binding text", () => {
-    const body = readBundledOrchestratorInstructions("research-prism");
+    const body = readCoreAgentInstructions("orchestrators", "research-prism");
     expect(body).toBeTruthy();
     for (const marker of MODULE_BINDING_MARKERS) {
       expect(body!).not.toContain(marker);
@@ -58,9 +65,9 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(body).toContain("capability modules");
   });
 
-  it("expert instructions omit module binding text", () => {
+  it("all five built-in subagent instructions omit module binding text", () => {
     for (const id of ["literature-synthesizer", "research-design-coach", "methodology-auditor", "structure-diagnostician", "peer-reviewer"]) {
-      const body = readBundledExpertInstructions(id);
+      const body = readCoreAgentInstructions("subagents", id);
       expect(body, id).toBeTruthy();
       for (const marker of MODULE_BINDING_MARKERS) {
         expect(body!, `${id} should not contain ${marker}`).not.toContain(marker);
@@ -98,8 +105,8 @@ describe("builtin instructions audit (Phase 1.3)", () => {
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {
-    const expertPaths = listBuiltinInstructionPaths(getBundledExpertsDir(), "experts");
-    const orchestratorPaths = listBuiltinInstructionPaths(getBundledOrchestratorsDir(), "orchestrators");
+    const expertPaths = listBuiltinInstructionPaths(getCoreAgentsDir("subagents"), "subagents");
+    const orchestratorPaths = listBuiltinInstructionPaths(getCoreAgentsDir("orchestrators"), "orchestrators");
     const staleModulePhrases = [
       "## Academic Writing",
       "## Citations & Bibliography",

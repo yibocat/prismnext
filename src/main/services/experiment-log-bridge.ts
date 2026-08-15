@@ -39,6 +39,7 @@ import {
   NO_EXPERIMENT_FOLDER_HINT,
   readExperiment,
   resolveExperimentCtx,
+  isExperimentCtxError,
   type ExperimentStorageContext,
 } from "./experiment-log-service";
 import {
@@ -154,8 +155,8 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
   }
 
   const ctxResult = resolveExperimentCtx(projectRoot);
-  if ("ok" in ctxResult && ctxResult.ok === false) return notConfigured();
-  const ctx: ExperimentStorageContext = ctxResult as ExperimentStorageContext;
+  if (isExperimentCtxError(ctxResult)) return notConfigured();
+  const ctx = ctxResult;
 
   // ── results-snapshot: read-only lab scan (needs experiment folder) ──
   if (req.tool === "results-snapshot") {

@@ -26,7 +26,7 @@ import {
   appMenuInlineChevronTriggerClass,
 } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
-import type { ExpertInfo } from "@shared/agent-experts";
+import type { SubagentInfo } from "@shared/agent-subagents";
 import type { ProjectFile } from "@/stores/document-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
@@ -42,7 +42,7 @@ export type { SlashCatalogMcp, SlashCatalogSkill };
 export type MentionSectionKind = "expert" | "paper" | "file" | "experiment";
 
 export type MentionOption =
-  | { kind: "expert"; expert: ExpertInfo }
+  | { kind: "subagent"; expert: SubagentInfo }
   | { kind: "paper"; paper: LiteraturePaper }
   | { kind: "file"; file: ProjectFile }
   | { kind: "experiment"; experiment: ExperimentSummary }
@@ -493,7 +493,7 @@ export function MentionDropdown({
   activeIndex: number;
   anchor: CursorAnchor | null;
   open: boolean;
-  onSelectExpert: (expert: ExpertInfo) => void;
+  onSelectExpert: (expert: SubagentInfo) => void;
   onSelectFile: (file: ProjectFile) => void;
   onSelectPaper?: (paper: LiteraturePaper) => void;
   onSelectExperiment?: (experiment: ExperimentSummary) => void;
@@ -560,7 +560,7 @@ export function MentionDropdown({
             );
           }
 
-          if (option.kind === "expert") {
+          if (option.kind === "subagent") {
             const { expert } = option;
             return (
               <div key={`expert:${expert.id}`} data-composer-option-group>

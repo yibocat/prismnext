@@ -11,6 +11,8 @@ import { join } from "node:path";
 const RENDER_SCRIPT = join(
   process.cwd(),
   "resources",
+  "teams",
+  "prismnext.core",
   "skills",
   "figure-observable-plot",
   "scripts",

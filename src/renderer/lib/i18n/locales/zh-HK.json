@@ -42,6 +42,28 @@
     "addToChat": "新增到聊天",
     "more": "更多"
   },
+  "icon": {
+    "picker": {
+      "choose": "選擇圖示",
+      "clear": "清除",
+      "default": "使用預設",
+      "tab": {
+        "emoji": "表情",
+        "lucide": "圖示",
+        "image": "圖片"
+      },
+      "emoji": {
+        "paste": "貼上 emoji"
+      },
+      "image": {
+        "badType": "不是有效的圖片檔案。",
+        "failed": "無法讀取該圖片。",
+        "current": "目前圖示",
+        "replace": "取代",
+        "drop": "點擊選擇圖片"
+      }
+    }
+  },
   "menu": {
     "file": "檔案",
     "closeTab": "關閉分頁",
@@ -67,7 +89,19 @@
       "texWorkspace": "TeX 工作區",
       "terminal": "終端",
       "browser": "瀏覽器",
-      "literature": "文獻"
+      "literature": "文獻",
+      "pro": "Pro",
+      "teams": "團隊與智能體"
+    },
+    "agentAssets": {
+      "title": "團隊與智能體",
+      "pageDesc": "團隊及其技能、斜杠命令與 MCP — 用標籤頁分別管理。",
+      "searchPlaceholder": "搜尋目前標籤…",
+      "tabTeams": "團隊",
+      "tabSkills": "技能",
+      "tabCommands": "命令",
+      "tabMcp": "MCP",
+      "noMatches": "沒有符合的結果。"
     },
     "general": {
       "title": "通用",
@@ -110,6 +144,7 @@
       "newCommand": "新建命令",
       "command": "命令",
       "mcpCatalog": "MCP 目錄",
+      "installMcp": "安裝 MCP",
       "addFromJson": "從 JSON 新增",
       "createSkill": "建立技能",
       "installSkills": "安裝技能",
@@ -117,7 +152,9 @@
       "logs": "日誌",
       "editor": "編輯器",
       "settingsEditor": "設定編輯器",
-      "mcpJson": "mcp.json"
+      "mcpJson": "mcp.json",
+      "packDetail": "團隊詳情",
+      "newTeam": "新建團隊"
     },
     "appearance": {
       "title": "外觀",
@@ -245,6 +282,7 @@
       "default": "預設",
       "toast": {
         "defaultOrchestratorUpdated": "預設編排器已更新。",
+        "defaultOrchestratorFailed": "設定預設編排器失敗。",
         "orchestratorDeleted": "編排器已刪除。",
         "expertDeleted": "專家已刪除。",
         "deleteFailed": "刪除失敗。",
@@ -293,7 +331,7 @@
         "skills": "{{count}} 個技能",
         "mcp": "{{count}} 個 MCP",
         "standardExpert": "標準子智慧體預設",
-        "allowedExperts": "{{count}} 個允許的專家",
+        "roster": "{{count}} 個允許的專家",
         "modules": "{{count}} 個模組",
         "standardOrchestrator": "研究編排器"
       }
@@ -302,14 +340,19 @@
       "title": "MCP",
       "subtitle": "可供 Agent 使用的 Model Context Protocol 伺服器。",
       "browseCatalog": "瀏覽目錄",
+      "install": "安裝",
+      "create": "新建",
+      "loadMore": "載入更多（{{count}}）",
+      "targetTeam": "儲存到團隊",
       "installed": "已安裝",
       "configure": "配置",
       "applyToChats": "應用到對話",
-      "pageDesc": "通過 Model Context Protocol 伺服器為 Agent 擴充套件外部工具。",
+      "pageDesc": "每個 MCP 歸屬一個團隊，僅該團隊啟用時可用。此列表匯總所有團隊的伺服器 — 點擊某列配置該伺服器。",
       "openProject": "開啟專案以管理 MCP 伺服器。",
       "empty": "暫無 MCP 伺服器。",
       "addFromJson": "從 JSON 新增",
-      "editJson": "編輯 mcp.json",
+      "editJson": "編輯團隊 JSON",
+      "editJsonHint": "編輯某一個可寫團隊的 mcp.json（在面板裡選團隊）。套件/示範團隊的檔案不在這裡改。",
       "toast": {
         "applyFailed": "應用 MCP 配置失敗。",
         "removed": "已移除「{{name}}」。",
@@ -317,7 +360,13 @@
         "appliedNoSessions": "MCP 配置已應用（當前尚無開啟的對話）。",
         "fillRequired": "請填寫所有必填項。",
         "installed": "已安裝 {{name}} — 請開新對話以使用。"
-      }
+      },
+      "disabledInProject": "此專案已停用",
+      "sourceTeam": "來自團隊 {{team}}",
+      "sourceProject": "此專案",
+      "sourceBuiltin": "內建",
+      "active": "已啟用",
+      "applyToChatsHint": "將 MCP 工具重新推送到已開啟的對話（通常自動執行）。"
     },
     "prompts": {
       "title": "提示與規則",
@@ -354,8 +403,8 @@
       "rowDesc": {
         "customPrompt": "自定義提示會替換 `_prism-system.md` 中的內建預設內容。",
         "builtinPrompt": "內建 prismnext 人設會在聊天同步時寫入 `_prism-system.md`。",
-        "stackSummary": "基線 _prism-system：約 {{tokens}} tokens · 預覽中共 {{layers}} 層",
-        "openForStack": "開啟專案以檢視完整提示棧預覽。",
+        "stackSummary": "共 {{layers}} 層注入 · 合計約 {{tokens}} tokens（_prism-system、AGENTS.md、專案規則、主 Agent）",
+        "openForStack": "開啟專案以檢視完整注入棧預覽。",
         "openForInstructions": "開啟專案以編輯專案說明。",
         "instructions": "專案專用說明 — 獨立的 OpenCode 說明檔案，不會合並進 `_prism-system.md`。",
         "agentsChars": "專案說明共 {{count}} 個字元。",
@@ -368,7 +417,8 @@
       "empty": {
         "openForRules": "開啟專案以管理專案規則。",
         "noRules": "尚無專案規則。"
-      }
+      },
+      "stackBaseAgent": "基於主 Agent：{{name}}"
     },
     "workspace": {
       "title": "工作區",
@@ -472,7 +522,22 @@
       "retry": "重試",
       "noSourceLabel": "暫無可用更新源",
       "noSourceDetail": "請在上方設定更新源 URL 或本地路徑以啟用更新檢查。",
-      "noSourceDevOnly": "一般只會出現在未寫入釋出地址的本地開發構建。"
+      "noSourceDevOnly": "一般只會出現在未寫入釋出地址的本地開發構建。",
+      "proLicense": "Pro",
+      "proLicenseTitle": "啟用碼",
+      "proLicenseDesc": "解鎖可選 Pro 增強（需使用含 Pro 模組的建置，如 pnpm dev:pro）。前期測試請用 PRISM-PRO-DEV-TEST，暫不收費；免費功能永不需要啟用碼。",
+      "proKeyPlaceholder": "PRISM-PRO-DEV-TEST",
+      "proActivate": "啟用",
+      "proActivateSuccess": "Pro 已啟用",
+      "proDeactivate": "取消啟用",
+      "proActive": "Pro 已啟用（{{label}}）",
+      "proModuleAbsent": "目前建置未包含 Pro 模組",
+      "proModuleLoaded": "Pro 模組已載入",
+      "proModuleError": "Pro 模組載入失敗",
+      "proKeyEmpty": "請輸入啟用碼。",
+      "proKeyInvalid": "啟用碼無效。",
+      "proActivateFailed": "無法啟用。",
+      "proClearFailed": "無法清除授權。"
     },
     "compiler": {
       "title": "編譯器",
@@ -480,11 +545,41 @@
     },
     "terminalPage": {
       "title": "終端",
-      "subtitle": "Shell 與 AI 終端行為。",
+      "subtitle": "Shell 與作業監視。",
+      "pageDesc": "互動式 Shell 仍然可寫。Chat bash 和實驗執行透過唯讀 Job Monitor 觀察同一條真實執行。",
+      "userShell": "使用者 Shell",
+      "userShellDesc": "互動式終端保留輸入、縮放、快捷命令和 Shell integration。字級跟隨編輯器。分頁以系統 Shell 命名，例如 zsh、bash 或 PowerShell。",
+      "jobMonitor": "作業監視",
+      "jobMonitorDesc": "開啟監視器會附著到正在執行的作業，而不會在同一目錄新開一個 Shell。",
+      "openOnJob": "作業開始時開啟監視器",
+      "openOnJobDesc": "Chat 開始 bash 作業時自動聚焦 Job Monitor。你隨時可以從工具卡再次開啟。",
+      "closeAction": "關閉監視器",
+      "closeActionDesc": "預設只關閉檢視，作業繼續跑。只有選擇取消時，關閉檢視才會停止這一條作業。",
+      "keepFinished": "完成後保留作業",
+      "keepFinishedDesc": "已結束的作業在空閒清理前還會保留多久。",
+      "idleCleanup": "清理空閒的已結束作業",
+      "idleCleanupDesc": "超過此時長未檢視的已結束監視器會被關閉。",
+      "lifecycle": "生命週期",
+      "lifecycleChat": "關閉對話",
+      "lifecycleChatDesc": "只停止該對話裡仍在執行的 Agent 作業。實驗繼續跑。",
+      "lifecycleProject": "切換專案",
+      "lifecycleProjectDesc": "Agent 作業會停止。仍在執行的實驗會詢問是背景繼續還是停止。",
+      "lifecycleQuit": "結束 PrismNext",
+      "lifecycleQuitDesc": "結束前會提示正在執行的實驗。確認後停止全部作業和 Shell。",
+      "optAutoOpen": "自動開啟",
+      "optManual": "僅手動",
+      "optKeep": "作業繼續執行",
+      "optCancel": "取消作業",
+      "opt30s": "30 秒",
+      "opt1m": "1 分鐘",
+      "opt2m": "2 分鐘",
+      "opt5m": "5 分鐘",
+      "opt10m": "10 分鐘",
+      "opt30m": "30 分鐘",
+      "opt1h": "1 小時",
       "aiTerminal": "AI 終端",
       "advanced": "高階",
       "userTerminal": "使用者終端",
-      "pageDesc": "AI Agent 終端生命週期與使用者 Shell 預設設定。",
       "ai": {
         "execution": "Agent 終端執行方式",
         "executionDesc": "PTY 流在命令執行時顯示即時輸出。Mirror 等命令結束後再回放日誌。Shell 使用 PTY，僅在許可權門中允許後執行。",
@@ -615,9 +710,13 @@
       "checkUpdates": "檢查更新",
       "install": "安裝技能",
       "create": "建立技能",
-      "pageDesc": "可在對話中載入的可複用指令包。",
+      "pageDesc": "對話可用的可複用指令包。自建或從來源安裝到專案/通用團隊；Core 與商店技能此處僅瀏覽。自有技能可在此刪除。",
+      "openFolder": "開啟資料夾",
       "openProject": "開啟專案以管理技能。",
       "empty": "尚未安裝技能。",
+      "emptyHint": "從 GitHub 或註冊來源安裝，或自行建立 SKILL.md。",
+      "loadMore": "載入更多（{{count}}）",
+      "updateAvailable": "有更新",
       "showAll": "顯示全部（{{count}} 個技能）",
       "showLess": "收起",
       "origin": {
@@ -632,6 +731,14 @@
         "updateFailed": "更新技能失敗。",
         "reinstalled": "已重新安裝「{{name}}」— 請開新對話以使用。",
         "removed": "已移除「{{name}}」。"
+      },
+      "group": {
+        "core": "內建",
+        "mine": "我的"
+      },
+      "scope": {
+        "app": "應用級",
+        "project": "此專案"
       }
     },
     "permissions": {
@@ -753,12 +860,18 @@
     "commandsPage": {
       "title": "命令",
       "subtitle": "聊天中可用的斜槓命令。",
+      "pageDesc": "聊天斜槓命令。應用級命令（compile、compact 等）屬於產品本身，不屬於任何團隊。團隊命令歸屬本專案 / 通用 / 自訂團隊；套件專用命令可在團隊詳情「新增」。",
+      "appLabel": "應用",
+      "appHint": "標註為「應用」的命令在所有對話中始終可用，不是 PrismNext Core 團隊資產。",
+      "installed": "已安裝",
+      "loadMore": "載入更多（{{count}}）",
       "builtin": "內建",
       "custom": "自定義命令",
       "toast": {
         "exported": "命令已匯出。",
         "noValid": "檔案中沒有有效命令。",
-        "importReadFailed": "無法讀取匯入檔案。"
+        "importReadFailed": "無法讀取匯入檔案。",
+        "removed": "已刪除「/{{name}}」。"
       },
       "import": {
         "title": "匯入命令",
@@ -777,19 +890,19 @@
         "renamed": "已重新命名 {{count}} 個",
         "failed": "匯入失敗。"
       },
-      "builtinSection": "內建命令",
-      "builtinDesc": "應用斜槓快捷命令（編譯、設定、檢查點）。可在輸入框 / 選單中切換可見性。",
-      "appShortcuts": "應用快捷命令",
-      "enabledCount": "輸入框選單中已啟用 {{enabled}} / {{total}}。",
-      "loadingBuiltin": "正在載入內建命令…",
-      "viewBuiltin": "檢視內建命令",
-      "customSection": "自定義命令",
-      "customOpenProject": "請先開啟專案以建立和管理自定義命令。",
-      "customDesc": "專案級提示詞模板，位於",
-      "emptyCustom": "暫無自定義命令。",
-      "addCustom": "+ 新增自定義命令",
+      "addCustom": "新建命令",
       "export": "匯出",
-      "importBtn": "匯入"
+      "importBtn": "匯入",
+      "mine": "我的命令",
+      "emptyCommands": "暫無命令。",
+      "openProject": "開啟專案以管理斜線命令。",
+      "disabledInProject": "此專案已停用",
+      "showAll": "顯示全部（{{count}}）",
+      "showLess": "收起",
+      "scope": {
+        "app": "應用級",
+        "project": "此專案"
+      }
     },
     "texWorkspacePage": {
       "title": "TeX 工作區",
@@ -948,8 +1061,8 @@
         "thisProvider": "此提供商"
       },
       "expert": {
-        "create": "建立專家",
-        "deleteTitle": "刪除專家",
+        "create": "建立子代理",
+        "deleteTitle": "刪除子代理？",
         "toast": {
           "created": "專家已建立。",
           "saved": "專家已儲存。",
@@ -963,13 +1076,15 @@
           "resetFailed": "重置專家失敗。",
           "deleteFailed": "刪除專家失敗。"
         },
-        "introBuiltin": "內建專家 — 可為本專案自定義模型、能力與工具許可權。名稱與指令保持固定。",
-        "introNew": "建立同步到專家團隊的 OpenCode 子智慧體專家，可通過 @ 提及或編排器 Task 委託使用。",
-        "introEdit": "編輯此專家的指令與能力。",
+        "introBuiltin": "內建 / 已安裝子代理 — 名稱與指令唯讀；可為本專案覆蓋模型與工具許可權（自動儲存）。",
+        "introNew": "填好名稱與指令後點「建立子代理」。預設歸屬「通用團隊」（應用級），也可選自訂團隊。建立之後的修改會自動儲存。",
+        "introEdit": "編輯此自訂子代理。修改會自動儲存。",
         "toolPermissions": "工具許可權",
         "toolPermissionsDesc": "OpenCode 子智慧體工具訪問預設",
         "resetDefaults": "恢復預設",
-        "deleteDesc": "從專案中刪除此專家？此操作無法撤銷。",
+        "deleteDesc": "刪除此子代理？此操作無法撤銷。",
+        "deleteDescInUse": "此子代理仍在以下團隊的 Task 名冊中：",
+        "deleteDescInUseFooter": "確認後將刪除，並從這些團隊的名冊中移除。",
         "permissionPreset": {
           "readonly": "只讀",
           "standard": "標準",
@@ -978,10 +1093,13 @@
           "standardDesc": "可讀工具，編輯/終端前詢問",
           "fullDesc": "允許全部工具（仍不可委託子智慧體）"
         },
-        "openProject": "請先開啟專案以編輯專家。"
+        "openProject": "請先開啟專案以編輯專家。",
+        "targetTeam": "目標團隊",
+        "localTarget": "此專案（本機）",
+        "targetTeamDesc": "預設歸屬「通用團隊」（跨專案可用）。也可選自訂團隊；不能寫入內建 / 商店 / Pro 團隊。"
       },
       "orchestrator": {
-        "allowedExperts": "允許的專家",
+        "roster": "允許的專家",
         "deleteTitle": "刪除編排器？",
         "toast": {
           "created": "編排器已建立。",
@@ -996,18 +1114,26 @@
           "resetFailed": "重置編排器失敗。",
           "deleteFailed": "刪除編排器失敗。"
         },
-        "introBuiltin": "內建編排器 — 可自定義模型、能力，以及可通過 Task 呼叫的專家。",
-        "introNew": "建立主會話編排器，通過 OpenCode Task 將工作委託給專家。",
-        "introEdit": "編輯此編排器的指令與專家白名單。",
-        "allowedExpertsDesc": "編排器可通過 Task 呼叫的專家。",
+        "introBuiltin": "內建 / 已安裝 Lead — 名稱與指令唯讀。模型請在聊天輸入框選擇；可委派的子代理在團隊詳情管理。",
+        "introSafetyNet": "「通用團隊」的 Chat 是始終可用的安全網 Lead — 唯讀且不可刪除。需要新的 Lead 請新建自訂團隊。",
+        "introNew": "Lead 隨自訂團隊建立（一隊一個 Lead）。",
+        "introEdit": "編輯此自訂 Lead。修改會自動儲存；刪除會從團隊中移除。",
+        "createViaTeam": "請先新建團隊以新增 Lead（一隊一個 Lead）。",
+        "allowedExpertsDesc": "此主 Agent 可通過 Task 呼叫的子 Agent。未勾選即不允許。空名單 = 無（不會自動帶上 Core 的子 Agent）。",
+        "allowedExpertsAllDesc": "目前為「不限制」——所有已啟用的子 Agent 都可用。勾選任意一項後會切換為顯式白名單。",
         "subagentRoster": "同步的子代理名單",
-        "subagentRosterDesc": "儲存/同步時追加到編排器 agent 末尾——內建子代理加上方勾選的專家。模型讀的是這份名單，不是 Instructions 裡的硬編碼表格。",
+        "subagentRosterDesc": "儲存/同步時追加到編排器 agent 末尾——僅含上方白名單。模型讀的是這份名單，不是 Instructions 裡的硬編碼表格。",
+        "rosterManagedInTeamDetail": "本主 Agent 可委派誰，請在團隊詳情頁管理：用開關啟停本團隊自帶子 Agent；用 + 引入其他團隊的子 Agent。下方為同步時會寫入的預覽。",
         "noneSelected": "未選擇",
         "allowedCount": "已允許 {{selected}} / {{total}}",
         "noExperts": "暫無已啟用的專家。",
         "resetDefaults": "恢復預設",
         "deleteDesc": "從專案中刪除此編排器？此操作無法撤銷。",
-        "openProject": "請先開啟專案以編輯編排器。"
+        "openProject": "請先開啟專案以編輯編排器。",
+        "allExperts": "預設全部可用專家",
+        "targetTeam": "目標團隊",
+        "localTarget": "此專案（本機）",
+        "targetTeamDesc": "預設建立在此專案本地；選擇團隊可建立跨專案複用的應用級主 Agent。"
       },
       "command": {
         "add": "新增命令",
@@ -1018,9 +1144,15 @@
           "notFound": "未找到命令。",
           "deleted": "命令已刪除。",
           "deleteFailed": "刪除命令失敗。",
-          "saveFailed": "儲存命令失敗。"
+          "saveFailed": "儲存命令失敗。",
+          "needWritableTeam": "請選擇本專案團隊、通用團隊或自訂團隊。"
         },
         "intro": "聊天輸入框的自定義斜槓命令。模板支援 $ARGUMENTS、編號引數與 @檔案 提及。",
+        "introReadOnly": "套件 / 內建命令 — 唯讀。若要自訂，請在可寫團隊中新建一份。",
+        "targetTeam": "儲存到團隊",
+        "targetTeamDesc": "本專案團隊、通用團隊（跨專案），或你建立的自訂團隊。套件團隊（Core / Pro / 商店）不能承載新建命令。",
+        "ownerTeam": "所屬團隊",
+        "ownerTeamDesc": "命令歸建立時所選團隊所有。",
         "name": "命令名稱",
         "nameDesc": "小寫字母、數字與連字元，不要加前導斜槓。",
         "namePlaceholder": "review-section",
@@ -1029,7 +1161,7 @@
         "template": "提示詞模板",
         "templateDesc": "支援 $ARGUMENTS、$1…$9，以及 @path/to/file。",
         "templatePlaceholder": "請審閱本節清晰度：$ARGUMENTS",
-        "deleteDesc": "從專案中刪除此自定義命令？此操作無法撤銷。",
+        "deleteDesc": "刪除此自定義命令？此操作無法撤銷。",
         "validationName": "請輸入有效的命令名稱（小寫字母、數字、連字元）。",
         "validationTemplate": "提示詞模板不能為空。",
         "openProject": "請先開啟專案以建立自定義命令。",
@@ -1119,8 +1251,9 @@
         "toast": {
           "added": "已新增 {{name}} — 請開新對話以使用。"
         },
-        "openProject": "請先開啟專案以瀏覽 MCP 目錄。",
+        "openProject": "請先開啟專案以安裝 MCP 伺服器。",
         "intro": "面向研究工作流的精選 MCP 伺服器，需要 npx。外部文獻發現使用內建 literature-discover；暫存與文獻庫引用仍使用 prismnext 的 literature-* 工具。",
+        "introInstall": "選擇團隊後安裝預設。安裝後歸屬該團隊，僅該團隊啟用時可用。",
         "searchPlaceholder": "搜尋 MCP 伺服器…",
         "badgeBuiltin": "內建",
         "badgeRecommended": "推薦",
@@ -1178,8 +1311,9 @@
             "__path__": "資料庫檔案路徑"
           },
           "postgres": {
-            "__path__": "連線字串"
-          }
+            "connection_string": "連線字串"
+          },
+          "connection_string": "連線字串"
         },
         "documentation": "文件"
       },
@@ -1300,6 +1434,7 @@
         "loading": "載入中…",
         "introPreset": "{{name}} MCP 伺服器的憑據與選項。",
         "introCustom": "自定義 MCP 伺服器 — 請編輯下方 JSON 配置。",
+        "introReadOnly": "此 MCP 由所屬團隊提供，此處不可編輯。請到可寫團隊新增你自己的伺服器。",
         "serverJson": "伺服器 JSON",
         "openFullJson": "開啟完整 mcp.json"
       },
@@ -1313,7 +1448,7 @@
         },
         "openProject": "請先開啟專案以編輯 MCP 配置。",
         "loading": "載入中…",
-        "intro": "編輯本專案的 .prismnext/agent/mcp.json。無效 JSON 無法儲存。"
+        "intro": "正在編輯「{{team}}」的 mcp.json（{{path}}）。此檔案只含該團隊自己的伺服器，不是下方列表裡所有列。套件/示範團隊請從列表點開唯讀檢視。無效 JSON 無法儲存。"
       },
       "brief": {
         "toast": {
@@ -1334,7 +1469,8 @@
           "saveFailed": "儲存技能失敗。"
         },
         "openProject": "請先開啟專案以編輯技能。",
-        "loading": "載入中…"
+        "loading": "載入中…",
+        "targetTeam": "儲存到團隊"
       },
       "mcpPaste": {
         "openProject": "請先開啟專案以新增 MCP 伺服器。",
@@ -1387,6 +1523,32 @@
           "literature": "存放學術研究與引用所需的文獻與參考 PDF。",
           "notebook": "存放各類筆記，如 Markdown 或 Jupyter 筆記本。"
         }
+      },
+      "teamCreate": {
+        "intro": "為本工作區建立一個自訂團隊。自訂團隊只保存在本機，不會發佈到團隊商店。",
+        "name": "團隊名稱",
+        "nameDesc": "顯示在設定 → 團隊與活動團隊選擇器中。",
+        "namePlaceholder": "例如：寫作台",
+        "icon": "圖示",
+        "iconDesc": "顯示在團隊名旁邊的表情、圖示或圖片。",
+        "scope": "作用域",
+        "scopeDesc": "本專案團隊僅在此專案可用；應用級團隊可跨專案使用。",
+        "description": "簡短描述",
+        "descriptionPlaceholder": "這個團隊做什麼（可選）",
+        "longDescription": "詳細描述",
+        "longDescriptionDesc": "顯示在團隊詳情頁。",
+        "longDescriptionPlaceholder": "可選補充說明…",
+        "tags": "標籤",
+        "tagsDesc": "逗號分隔，僅供你自己整理（不是商店上架資訊）。",
+        "tagsPlaceholder": "寫作, 審稿",
+        "leadSection": "主 Agent（Lead）",
+        "leadName": "Lead 名稱",
+        "leadNameDesc": "留空則使用團隊名稱。",
+        "leadNamePlaceholder": "Lead 名稱",
+        "leadInstructions": "Lead 指令",
+        "leadInstructionsDesc": "該團隊 Lead 的系統指令。留空則使用簡短預設文案。",
+        "leadInstructionsPlaceholder": "你是該團隊的主 Agent…",
+        "create": "建立團隊"
       }
     },
     "panels": {
@@ -1396,32 +1558,201 @@
         "missingPayload": "缺少設定編輯器資料。",
         "placeholderReserved": "此槽位預留給將從主列表遷入的設定編輯器。"
       }
+    },
+    "teams": {
+      "title": "團隊",
+      "pageDesc": "點擊團隊開啟詳情，在右側管理主 Agent、子 Agent 與名冊。",
+      "createTeam": "新建團隊",
+      "browse": "瀏覽團隊",
+      "activeTeam": "活動團隊",
+      "noLead": "無主 Agent",
+      "noLeadCapability": "無主 Agent（僅提供能力）",
+      "setActive": "設為活動",
+      "activateLicense": "啟用 Pro",
+      "leadAgent": "主 Agent",
+      "rosterTitle": "名冊 —— 本主 Agent 可以委派誰",
+      "teamSubagents": "本團隊的子 Agent",
+      "teamSubagentsDesc": "可被任何團隊的名冊引用。",
+      "noSubagents": "本團隊暫無子 Agent",
+      "noSkills": "本團隊暫無技能",
+      "noCommands": "本團隊暫無命令",
+      "noMcps": "本團隊暫無 MCP 伺服器",
+      "skillsRoster": {
+        "add": "新增",
+        "addExternal": "從其他團隊新增技能",
+        "install": "安裝",
+        "createNew": "新建",
+        "emptyExternal": "沒有可新增的其他技能"
+      },
+      "commandsRoster": {
+        "add": "新增",
+        "addExternal": "從其他團隊新增命令",
+        "createNew": "新建",
+        "emptyExternal": "沒有可新增的其他命令"
+      },
+      "mcpActions": {
+        "install": "安裝",
+        "fromJson": "JSON",
+        "createNew": "新建"
+      },
+      "capabilities": "能力",
+      "capabilitiesSummary": "技能 {{skills}} · 命令 {{commands}} · MCP {{mcps}} —— 歸屬本團隊；MCP 僅本團隊啟用時可用（技能/子 Agent 仍可透過 + 引入）",
+      "scopeLabel": "作用域",
+      "teamNamePlaceholder": "團隊名稱",
+      "teamDescPlaceholder": "描述（可選）",
+      "toast": {
+        "activeUpdated": "活動團隊已更新",
+        "teamCreated": "團隊已建立",
+        "iconUpdated": "團隊圖示已更新",
+        "defaultMovedToBuiltin": "該團隊的預設主 Agent 已停用，活動團隊已切到安全兜底（通用團隊或 Core）。",
+        "lastLead": "這是最後一個帶主 Agent 的團隊。請先啟用或新建另一個帶主 Agent 的團隊，再解除安裝/停用。",
+        "myContentLocked": "「通用團隊」與「本專案團隊」始終可用，不能關閉、解除安裝或刪除。"
+      },
+      "scope": {
+        "app": "全域",
+        "project": "本專案",
+        "appDesc": "在所有專案可用",
+        "projectDesc": "僅在本專案可用"
+      },
+      "origin": {
+        "builtin": "內置",
+        "official": "官方",
+        "pro": "Pro",
+        "registry": "市場",
+        "mine": "我的"
+      },
+      "override": {
+        "label": "已覆蓋",
+        "ariaLabel": "本專案覆蓋了全域設定",
+        "tooltip": "本專案覆蓋了全域設定（全域：{{global}}）。點擊恢復跟隨全域。",
+        "globalDefault": "預設",
+        "globalOn": "啟用",
+        "globalOff": "停用"
+      },
+      "assets": {
+        "empty": "暫無內容",
+        "count": "{{count}} 項"
+      },
+      "card": {
+        "active": "活動",
+        "activated": "已啟用"
+      },
+      "coreTeam": "PrismNext Core",
+      "myContentTeam": "通用團隊",
+      "myContentLabel": "始終可用",
+      "myContentDesc": "未指定團隊時的公共內容掛載點，並提供始終可用的 Chat 主 Agent——在其他團隊（含 PrismNext Core）關閉或解除安裝後作為安全兜底。",
+      "myContentAlwaysOn": "始終可用",
+      "myContentAlwaysOnDesc": "「通用團隊」不可關閉或解除安裝。其中的 Chat 主 Agent 是對話的最終兜底。",
+      "noProject": "開啟專案以管理團隊和子 Agent。",
+      "emptyTeamCards": "暫無團隊。",
+      "coreLabel": "內建",
+      "localLabel": "本機",
+      "myTeam": "我的團隊",
+      "viewDetails": "詳情",
+      "teamEmptyAgentsHint": "該團隊暫無主 Agent 或子 Agent。技能與命令請在 設定 → 團隊 的「技能 / 命令」標籤中管理。",
+      "cancel": "取消",
+      "deleteTeam": "刪除團隊",
+      "enableInProject": "在此專案啟用",
+      "enableInProjectDesc": "啟用後，該團隊的主 Agent、子 Agent、技能與命令可在目前專案使用；停用的團隊會灰顯。",
+      "newLead": "新建主 Agent",
+      "newSubagent": "新建子 Agent",
+      "teamDetailEmpty": "該團隊暫無內容。",
+      "notInstalledHint": "該團隊尚未安裝。重新安裝後即可使用其主 Agent、子 Agent、技能與命令。",
+      "confirm": {
+        "disableCore": "停用核心團隊會停用全部內建 Agent。是否繼續？"
+      },
+      "actions": {
+        "uninstall": "解除安裝",
+        "uninstallCore": "解除安裝內建團隊"
+      },
+      "kinds": {
+        "lead": "主 Agent",
+        "subagent": "子 Agent",
+        "skill": "技能",
+        "command": "命令",
+        "mcp": "MCP"
+      },
+      "roster": {
+        "allAvailable": "全部可用子 Agent",
+        "specificList": "指定名單",
+        "crossScope": "跨作用域",
+        "empty": "暫無可用子 Agent",
+        "addExternal": "新增其他團隊的子 Agent",
+        "hidePicker": "收起",
+        "emptyExternal": "沒有可新增的其他子 Agent",
+        "remove": "移除",
+        "noLead": "該團隊沒有主 Agent，無法編輯名冊"
+      },
+      "picker": {
+        "placeholder": "選擇團隊",
+        "projectGroup": "本專案",
+        "appGroup": "全域",
+        "newProjectTeam": "新建專案團隊…",
+        "newAppTeam": "新建全域團隊…"
+      },
+      "blocked": {
+        "notInstalled": "未安裝",
+        "license": "需要 Pro 授權",
+        "incompatible": "與目前應用版本不相容",
+        "teamDisabledApp": "團隊「{{team}}」已在所有專案停用",
+        "teamDisabledProject": "團隊「{{team}}」已在本專案停用",
+        "assetDisabledApp": "已在所有專案停用",
+        "assetDisabledProject": "已在本專案停用",
+        "shadowed": "被「{{team}}」中的同名項覆蓋",
+        "outOfScope": "無法跨作用域引用"
+      },
+      "projectLocalDesc": "本專案掛架——僅屬於目前專案的內容，以及始終可用的 Project 主 Agent。",
+      "projectLocalAlwaysOnDesc": "本專案團隊不可關閉或刪除。其中的 Project 主 Agent 始終可用於本專案本地內容。",
+      "projectLocalTeam": "本專案團隊",
+      "hangarsSection": "始終可用掛載"
     }
   },
   "welcome": {
     "brand": "PrismNext",
-    "newProject": "新建專案",
+    "tagline": "本地優先 · 多智能體學術研究工作台",
+    "intro": "整合 LaTeX 論文寫作、文獻管理與 AI 實驗運行於一體的科研環境。",
+    "newProject": "新建科研專案",
+    "newProjectDesc": "從論文模板、多智能體實驗環境或空白手稿建立",
     "open": "開啟",
+    "openExisting": "開啟本地專案",
+    "openExistingDesc": "選擇已有科研資料夾或 LaTeX 論文目錄",
+    "openDropHint": "也可以把專案資料夾拖到這裡",
+    "openDropActive": "鬆開即可開啟此資料夾",
     "recent": "最近",
+    "recentProjects": "最近開啟的專案",
+    "recentDesc": "回到之前開啟過的專案",
     "recentCount": "最近 · {{count}}",
     "emptyRecent": "開啟過的專案會顯示在這裡。",
+    "emptyRecentDesc": "點選左側「新建科研專案」或「開啟本地專案」開啟工作。",
+    "filterPlaceholder": "搜尋專案名稱或路徑...",
+    "noMatchingProjects": "未找到符合的專案。",
+    "revealInFolder": "在檔案管理器中顯示",
     "removeRecent": "從最近中移除",
     "gitRepo": "Git 倉庫",
     "gitBranch": "Git · {{branch}}",
     "missingOnDisk": "磁碟上不存在",
+    "shortcuts": {
+      "palette": "命令面板",
+      "settings": "設定"
+    },
     "status": {
-      "app": "應用",
+      "cardTitle": "系統環境與核心引擎",
+      "app": "PrismNext",
       "agent": "OpenCode",
-      "compiler": "編譯器",
+      "compiler": "TeX 編譯器",
       "updateAvailable": "有可用更新 {{version}}",
       "updateDownloading": "正在下載 {{version}}… {{percent}}%",
       "updateReady": "更新 {{version}} 已就緒，可安裝",
       "updateHint": "點「一鍵更新」即可下載並自動重啟安裝。",
+      "updateAction": "一鍵更新",
       "openAbout": "關於",
       "agentReady": "就緒",
       "agentStarting": "啟動中…",
       "agentMissing": "未找到",
-      "compilerMissing": "未檢測到"
+      "compilerMissing": "未檢測到",
+      "pro": "Pro",
+      "proActive": "已啟用",
+      "proInactive": "未啟用"
     }
   },
   "project": {
@@ -1434,26 +1765,38 @@
     },
     "new": {
       "title": "新建專案",
-      "description": "名稱、位置與工作區模板。",
+      "description": "設定專案名稱、儲存路徑與工作區預設架構。",
       "projectName": "專案名稱",
       "chooseIcon": "選擇專案圖示",
       "pasteEmoji": "貼上表情…",
-      "location": "位置",
+      "location": "儲存位置",
       "chooseParent": "選擇父資料夾…",
-      "template": "模板",
-      "minimal": "精簡",
-      "paper": "論文",
-      "research": "研究",
+      "template": "工作區模板",
+      "minimal": "精簡手稿",
+      "paper": "學術論文",
+      "research": "科研實驗室",
       "custom": "自定義",
+      "recommended": "推薦",
+      "paperDesc": "標準學術論文架構，整合 LaTeX 手稿與文獻引用庫。",
+      "researchDesc": "全功能科研工作區，包含實驗腳本、文獻管理與智能體協同。",
+      "minimalDesc": "極簡單一手稿目錄，預設基礎 LaTeX 論文模板。",
+      "customDesc": "自由配置各子目錄的名稱與功能對應。",
+      "fullPath": "將建立於",
+      "gitInitialized": "Git",
+      "previewTitle": "目錄結構預覽",
+      "manuscriptTag": "LaTeX 論文原始碼與 main.tex",
+      "literatureTag": "文獻管理與 BibTeX 引用",
+      "experimentsTag": "AI 實驗腳本與執行記錄",
+      "prismnextConfigTag": "智能體規則與專案配置",
       "noFolders": "無資料夾",
-      "editFolders": "編輯資料夾",
-      "folders": "資料夾",
-      "addFolder": "新增",
-      "initGit": "初始化 Git",
-      "initGitDesc": "在新專案資料夾中建立 git 倉庫。",
+      "editFolders": "自定義資料夾",
+      "folders": "資料夾清單",
+      "addFolder": "新增資料夾",
+      "initGit": "初始化 Git 倉庫",
+      "initGitDesc": "在專案目錄中建立 Git 倉庫，方便版本追蹤與分支協同。",
       "createProject": "建立專案",
       "creating": "建立中…",
-      "needManuscript": "需要包含 manuscript 資料夾。",
+      "needManuscript": "必須包含一個 manuscript（手稿）資料夾。",
       "removeFolder": "移除資料夾",
       "createFailed": "建立專案失敗"
     }
@@ -1542,7 +1885,9 @@
       "quit": "退出 prismnext",
       "tooltipIdle": "{{project}}",
       "tooltipBusy": "{{project}} — 工作中…",
-      "tooltipAttention": "{{project}} — 需要關注"
+      "tooltipBusyCount": "{{project}} — {{count}} 個 Agent 在執行",
+      "tooltipAttention": "{{project}} — 需要關注",
+      "tooltipAttentionCount": "{{project}} — 需要關注 · {{count}} 個 Agent 在執行"
     },
     "collapseSidebar": "收起側欄",
     "expandSidebar": "展開側欄",
@@ -1676,7 +2021,8 @@
       "newProject": "新建專案…",
       "openProject": "開啟專案…",
       "closeProject": "關閉專案"
-    }
+    },
+    "teams": "團隊"
   },
   "chat": {
     "activity": {
@@ -1788,7 +2134,12 @@
       "queueDelete": "從佇列刪除",
       "taskPlanTitle": "任務計劃",
       "taskPlanInProgress": "進行中",
-      "taskPlanDismiss": "隱藏任務計劃"
+      "taskPlanDismiss": "隱藏任務計劃",
+      "activeTeam": "活動團隊",
+      "activeTeamHint": "切換本對話使用的團隊（主 Agent）",
+      "activeTeamHintWithLead": "目前主 Agent：{{lead}}。點擊切換團隊。",
+      "activeTeamSwitched": "已切換活動團隊 → {{team}}（{{lead}}）。發一則訊息即可驗證。",
+      "activeTeamSwitchFailed": "切換活動團隊失敗"
     },
     "questionPanel": {
       "title": "需要你確認",
@@ -1961,7 +2312,8 @@
       "planningNext": "正在規劃下一步…",
       "describing_images": "正在用視覺輔助模型識圖…",
       "thinking": "思考中…",
-      "syncing_project": "正在準備專案…",
+      "syncing_project": "正在同步專案設定…",
+      "starting_agent": "正在啟動 Agent…",
       "creating_session": "正在建立會話…",
       "connecting_mcp": "正在連線工具…",
       "starting_model": "正在啟動模型…",
@@ -2012,6 +2364,19 @@
       "undonePartial": "介面已撤銷回退 — 會話歷史可能不完整（重啟後備份已丟失）",
       "undoFailed": "撤銷失敗：{{message}}",
       "dismiss": "關閉"
+    },
+    "tools": {
+      "bash": {
+        "runCommand": "執行命令",
+        "running": "正在執行…",
+        "noOutput": "無輸出",
+        "denied": "已拒絕",
+        "confirmAbove": "請在上方確認",
+        "shellCommand": "shell 命令",
+        "openMonitor": "Monitor",
+        "openMonitorHint": "開啟作業監視器",
+        "monitorUnavailable": "這條作業已經無法再監視"
+      }
     }
   },
   "modes": {
@@ -2119,6 +2484,13 @@
       "pinTab": "固定標籤（跳過空閒清理）",
       "unpinTab": "取消固定（允許空閒清理）",
       "copyOutput": "複製輸出",
+      "copyTranscript": "複製完整日誌",
+      "copyTranscriptEmpty": "還沒有可複製的輸出",
+      "copyTranscriptFailed": "無法寫入剪貼簿",
+      "noAttachedJob": "沒有附著的作業",
+      "jobUnavailable": "這條作業已經無法查看",
+      "cancelJob": "取消此作業",
+      "openShellAtCwd": "在此目錄開啟 Shell",
       "copyCwd": "複製工作目錄",
       "newShellTab": "新建 {{shell}} 標籤",
       "addCommand": "新增命令",
@@ -2392,6 +2764,7 @@
     "tabClose": {
       "closeTab": "關閉分頁",
       "closeAiTerminal": "關閉 AI 終端",
+      "closeJobMonitor": "關閉作業監視",
       "closeTerminal": "關閉終端",
       "closeTerminals": "關閉終端",
       "closeFile": "關閉檔案",
@@ -2401,12 +2774,23 @@
       "aiRunningKeep": "仍有命令在執行。分頁會關閉，但命令會在後臺繼續執行。",
       "aiDetailKill": "可從會話面板或 bash 元件重新開啟終端。",
       "aiDetailKeep": "可使用會話標題選單檢視進度或重新開啟終端。",
+      "jobRunningKill": "此作業仍在執行。關閉將取消它。",
+      "jobRunningKeep": "此作業仍在執行。監視器會關閉，但作業繼續。",
+      "jobDetailKill": "可從對話或實驗重新開啟監視器。",
+      "jobDetailKeep": "可從對話或實驗重新開啟監視器檢視進度。",
       "terminalRunning": "此終端仍有命令在執行。",
       "terminalDetail": "關閉將中斷正在執行的程序。",
       "terminalsRunning": "仍有 {{count}} 個終端的命令在執行。",
       "terminalsDetail": "關閉將中斷正在執行的程序。",
       "fileUnsaved": "「{{label}}」有未儲存的更改。",
       "fileDetail": "除非先儲存，否則編輯內容將丟失。"
+    },
+    "projectSwitch": {
+      "title": "離開目前專案？",
+      "description": "仍有實驗在執行。可以繼續在後臺執行，或先停止再切換。",
+      "detail": "目前專案的對話 bash 作業會停止。後臺實驗仍可透過作業監視查看。",
+      "continue": "繼續後臺執行",
+      "stop": "停止實驗"
     },
     "permission": {
       "shellCommand": "Shell 命令",
@@ -2692,6 +3076,7 @@
     "reuseLast": "複用上次",
     "terminal": "終端",
     "running": "執行中",
+    "cancelling": "正在取消",
     "command": "命令",
     "type": "型別",
     "exit": "退出碼",
@@ -2823,7 +3208,7 @@
       "cancelRun": "取消進行中的執行",
       "noPrior": "沒有可複用的歷史執行。",
       "populateLast": "填入最近一次執行的命令",
-      "openTerminal": "在此實驗的工作目錄中開啟終端",
+      "openTerminal": "在實驗目錄開啟 Shell",
       "typeTitle": "可選的執行分類（不確定時可省略）",
       "labTab": "目錄：{{name}}"
     },
@@ -2948,21 +3333,44 @@
   "templates": {
     "center": {
       "title": "模板中心",
+      "subtitle": "將 LaTeX 腳手架寫入手稿目錄。覆蓋前會說明會動到哪些檔案。",
       "search": "搜尋模板…",
       "noFound": "未找到模板",
       "all": "全部模板",
+      "categories": "分類",
       "openProject": "請先開啟專案再應用模板。",
-      "needManuscript": "請先在工作區設定中配置手稿資料夾。"
+      "needManuscript": "請先在工作區設定中配置手稿資料夾。",
+      "current": "目前：{{name}}（{{category}}）",
+      "inUse": "使用中",
+      "status": "狀態",
+      "countAll": "共 {{count}} 個模板",
+      "countFiltered": "顯示 {{shown}} / {{total}}",
+      "categoryLabel": "分類：{{name}}",
+      "clearSearch": "清除搜尋"
+    },
+    "categories": {
+      "paper": "學術論文",
+      "thesis": "學位論文",
+      "cv": "履歷",
+      "beamer": "Beamer 投影片",
+      "poster": "海報",
+      "letter": "信件"
     },
     "detail": {
       "back": "返回模板列表",
       "description": "說明",
       "filesStructure": "檔案與結構",
       "use": "使用",
+      "reapply": "重新套用",
       "viewSource": "檢視原始碼",
       "viewPdf": "檢視 PDF",
       "preview": "預覽",
-      "noPreview": "無預覽"
+      "noPreview": "無預覽",
+      "info": "資訊",
+      "documentClass": "文件類",
+      "fileCount": "檔案數",
+      "category": "分類",
+      "applyHint": "套用會把模板檔案寫入手稿目錄。若已有同名檔案或你改過舊模板，會先列出將觸及的路徑，並在寫入前備份。"
     },
     "switch": {
       "switchTitle": "切換模板",
@@ -2976,6 +3384,10 @@
       "applyNamed": "應用 {{name}}（{{category}}）",
       "arrow": "{{oldName}}（{{oldCategory}}）→ {{newName}}（{{newCategory}}）",
       "affected": "受影響的檔案：",
+      "willTouch": "將寫入或覆蓋的檔案：",
+      "willRemove": "將移除的舊模板檔案：",
+      "noFileList": "此步驟沒有逐檔列表 — 確認後繼續。",
+      "backupNote": "寫入前會把重疊或先前套用的模板檔案備份到 .prismnext/backups。",
       "backupMerge": "備份併合並",
       "backupReplace": "備份並替換"
     }
@@ -2993,5 +3405,66 @@
       "optional": "（可選）",
       "descPlaceholder": "簡要說明此命令的作用"
     }
+  },
+  "teamsCenter": {
+    "title": "團隊",
+    "searchPlaceholder": "搜尋團隊…",
+    "tabs": {
+      "all": "全部",
+      "installed": "已安裝"
+    },
+    "noProject": "開啟一個項目後即可瀏覽和安裝團隊。",
+    "empty": "沒有匹配的團隊。",
+    "categories": {
+      "general": "通用",
+      "research": "研究"
+    },
+    "card": {
+      "install": "安裝",
+      "uninstall": "卸載",
+      "manage": "管理",
+      "moreActions": "更多操作",
+      "added": "已安裝",
+      "disabled": "已停用",
+      "proLocked": "Pro",
+      "incompatible": "不兼容",
+      "notInstalled": "未安裝",
+      "installedActive": "已安裝·啟用中",
+      "installedDisabled": "已安裝·已停用",
+      "installedProLocked": "已安裝·Pro 鎖定",
+      "goActivate": "前往啟用"
+    },
+    "kinds": {
+      "orchestrator": "主 Agent",
+      "expert": "專家",
+      "skill": "技能",
+      "command": "命令",
+      "mcp": "MCP 服務"
+    },
+    "meta": {
+      "title": "資訊",
+      "status": "狀態",
+      "publisher": "發佈者",
+      "version": "版本",
+      "tier": "層級",
+      "category": "分類",
+      "tags": "標籤",
+      "minHostVersion": "需要應用版本"
+    },
+    "toast": {
+      "installed": "團隊已安裝。",
+      "uninstalled": "團隊已卸載。"
+    },
+    "suggestion": {
+      "text": "將「{{pack}}」的主 Agent 設為預設？",
+      "accept": "設為預設",
+      "done": "預設主 Agent 已更新。"
+    },
+    "subtitle": "安裝由主 Agent、專家、技能和命令組成的團隊。",
+    "backToList": "返回團隊列表",
+    "manage": "在設定中管理",
+    "sidebar": "瀏覽",
+    "count": "{{count}} 個團隊",
+    "clearSearch": "清除搜尋"
   }
 }

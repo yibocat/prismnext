@@ -3,13 +3,14 @@ export const PANEL_COLLAPSE_THRESHOLD_PX = 30;
 
 /**
  * Hit target for react-resizable-panels Separators.
- * Must match CSS `after:-left-3 after:-right-3` (~12px each side + 1px line ≈ 25px).
- * Smaller library hits than CSS caused col-resize cursor with no drag on the outer fringe.
+ * Must match CSS `after:-left-px after:-right-px` (1px each side + 1px line ≈ 3px).
+ * The library expands the 1px line to this size; keep it tight so scrollbars
+ * and the chat turn rail stay clickable.
  */
-export const PANEL_RESIZE_HIT = { fine: 24, coarse: 28 } as const;
+export const PANEL_RESIZE_HIT = { fine: 4, coarse: 6 } as const;
 
 const PANEL_SASH_HIT_FRINGE =
-  "after:absolute after:inset-y-0 after:-left-3 after:-right-3";
+  "after:absolute after:inset-y-0 after:-left-px after:-right-px";
 
 /** Shared resize sash chrome — line color supplied per surface via CSS vars. */
 const PANEL_SASH_BASE = `w-px transition-colors outline-none cursor-col-resize shrink-0 relative z-10 ${PANEL_SASH_HIT_FRINGE}`;
@@ -36,7 +37,7 @@ export const SHELL_SASH_SHADOW_LEFT_CLASS = "shell-sash-shadow-left";
 /**
  * Fully non-interactive sash (no hit fringe).
  * Do NOT use on the shell center↔RightArea sash when RightArea is merely
- * collapsed — first edge-drag-to-open needs the ±12px `after` fringe (`w-0` only).
+ * collapsed — first edge-drag-to-open needs the `after` fringe (`w-0` only).
  */
 export const PANEL_SASH_HIDDEN_CLASS =
   "w-0 after:hidden pointer-events-none";

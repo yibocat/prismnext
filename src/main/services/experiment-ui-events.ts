@@ -12,6 +12,7 @@ import type {
 
 export type ExperimentChangedReason =
   | "create"
+  | "update"
   | "append_run"
   | "run_complete"
   | "open"

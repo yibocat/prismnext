@@ -1,3 +1,5 @@
+import type { AppSettings } from "../stores/settings-store";
+
 export interface TexliveStatus {
   available: boolean;
   engines: string[];
@@ -515,7 +517,7 @@ export interface ElectronAPI {
   }) => Promise<{ deleted: boolean }>;
 
   // File watcher operations
-  fsWatchStart: (rootPath: string) => Promise<void>;
+  fsWatchStart: () => Promise<void>;
   fsWatchStop: () => Promise<void>;
 
   // Dialog operations
@@ -546,6 +548,7 @@ export interface ElectronAPI {
   shellSetTrayStatus: (
     status: "idle" | "busy" | "attention",
     tooltip?: string | null,
+    runningCount?: number,
   ) => Promise<void>;
   shellSetTrayMenu: (snapshot: {
     showLabel: string;
@@ -585,8 +588,23 @@ export interface ElectronAPI {
   projectCreate: (
     rootPath: string,
     workspaceDirs?: import("./workspace").WorkspaceFolder[],
-    options?: { initGit?: boolean; projectIcon?: string },
+    options?: {
+      initGit?: boolean;
+      projectIcon?: import("../../shared/icon-spec").IconSpec | string | null;
+      projectIconImagePngBase64?: string;
+    },
   ) => Promise<void>;
+  projectSetIcon: (
+    rootPath: string,
+    icon: import("../../shared/icon-spec").IconSpec | null,
+  ) => Promise<void>;
+  projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
+  /** Validate a project path and return its canonical root without authorizing watchers. */
+  projectOpen: (rootPath: string) => Promise<{ rootPath: string }>;
+  /** Authorize the current project after the UI commits it; returns its canonical root. */
+  projectActivate: (rootPath: string) => Promise<{ rootPath: string }>;
+  /** Stop lifecycle-owned services and revoke project authorization. */
+  projectClose: () => Promise<void>;
   /** Check feed / manifest and return full updater status. */
   updateCheck: () => Promise<UpdaterStatus>;
   /** Last known status without re-hitting the network. */
@@ -605,6 +623,12 @@ export interface ElectronAPI {
   onUpdateChanged: (callback: (status: UpdaterStatus) => void) => () => void;
   /** prismnext app version + bundled OpenCode agent binary version. */
   aboutGetVersions: () => Promise<AboutVersions>;
+  /** Open-core Pro license (activation key). Null when Free / inactive. */
+  proGetLicense: () => Promise<import("../../shared/pro").LicenseSnapshot | null>;
+  proActivate: (
+    rawKey: string,
+  ) => Promise<import("../../shared/pro").ActivateLicenseResult>;
+  proClearLicense: () => Promise<{ ok: true }>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
@@ -804,7 +828,7 @@ export interface ElectronAPI {
     kind?: import("../../shared/experiment-log").ExperimentRunKind;
     chatSessionId?: string | null;
   }) => Promise<
-    | { ok: true; runId: string; status: "started" }
+    | { ok: true; runId: string; executionId?: string; status: "started" }
     | { ok: false; error: string; hint?: string }
   >;
   experimentCancelRun: (args: { projectRoot: string; id: string; runId: string }) => Promise<{ ok: true }>;
@@ -1282,7 +1306,7 @@ export interface ElectronAPI {
   }>;
 
   // OpenCode chat operations
-  chatDispose: () => Promise<{ success: boolean }>;
+  chatDispose: (opts?: { keepProjectPath?: string }) => Promise<{ success: boolean }>;
   chatPrewarm: (projectPath: string) => Promise<{
     ok: boolean;
     error?: string;
@@ -1308,7 +1332,22 @@ export interface ElectronAPI {
     reloadedSessions: number;
     error?: string;
   }>;
+  mcpReadTeamJson: (
+    projectPath: string,
+    teamId?: string,
+  ) => Promise<{ teamId: string; content: string }>;
+  mcpWriteTeamJson: (
+    projectPath: string,
+    content: string,
+    teamId?: string,
+  ) => Promise<{
+    ok: boolean;
+    teamId?: string;
+    reloadedSessions: number;
+    error?: string;
+  }>;
   agentListSkills: (projectPath: string) => Promise<Array<{
+    fqid: string;
     id: string;
     name: string;
     description: string;
@@ -1318,7 +1357,9 @@ export interface ElectronAPI {
     installOrigin?:
       | { adapter: "github"; repo: string; ref: string; path: string }
       | { adapter: "discovery"; indexUrl: string };
-    origin: "bundled" | "registry" | "custom";
+    origin: "bundled" | "registry" | "custom" | "plugin";
+    originTeamName?: string;
+    removable: boolean;
   }>>;
   agentListRules: (projectPath: string) => Promise<Array<{
     id: string;
@@ -1492,6 +1533,7 @@ export interface ElectronAPI {
     configPath: string;
     registryUrls: string[];
     skills: Array<{
+      fqid: string;
       id: string;
       name: string;
       description: string;
@@ -1501,10 +1543,17 @@ export interface ElectronAPI {
       installOrigin?:
         | { adapter: "github"; repo: string; ref: string; path: string }
         | { adapter: "discovery"; indexUrl: string };
-      origin: "bundled" | "registry" | "custom";
+      origin: "bundled" | "registry" | "custom" | "plugin";
+      originTeamName?: string;
+      removable: boolean;
     }>;
   }>;
-  agentInstallSkill: (projectPath: string, skillId: string, content: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentInstallSkill: (
+    projectPath: string,
+    skillId: string,
+    content: string,
+    targetTeamId?: string,
+  ) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentInstallSkillFromRegistry: (
     projectPath: string,
     skillName: string,
@@ -1576,74 +1625,41 @@ export interface ElectronAPI {
     }>
   >;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
-  expertsList: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertInfo[]>;
-  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorInfo[]>;
-  expertsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").ExpertsManifest>;
-  orchestratorsGetManifest: (projectPath: string) => Promise<import("@shared/agent-experts").OrchestratorsManifest>;
-  expertsGetDetail: (
+  subagentsList: (projectPath: string) => Promise<import("@shared/agent-subagents").SubagentInfo[]>;
+  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-subagents").OrchestratorInfo[]>;
+  subagentsGetDetail: (
     projectPath: string,
     expertId: string,
-  ) => Promise<(import("@shared/agent-experts").ExpertInfo & { instructions: string }) | null>;
-  expertsSetBuiltinEnabled: (
+  ) => Promise<(import("@shared/agent-subagents").SubagentInfo & { instructions: string }) | null>;
+  subagentsSaveCustom: (
+    projectPath: string,
+    payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+    targetTeamId?: string,
+  ) => Promise<{ expert: import("@shared/agent-subagents").SubagentInfo; experts: import("@shared/agent-subagents").SubagentInfo[] }>;
+  subagentsListRosterReferrers: (
     projectPath: string,
     expertId: string,
-    enabled: boolean,
-  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsSaveCustom: (
-    projectPath: string,
-    payload: import("@shared/agent-experts").SaveCustomExpertPayload,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsSaveBuiltinOverride: (
-    projectPath: string,
-    payload: import("@shared/agent-experts").SaveBuiltinExpertOverridePayload,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsDeleteCustom: (
+  ) => Promise<Array<{ teamId: string; teamName: string; orchestratorFqid: string }>>;
+  subagentsDeleteCustom: (
     projectPath: string,
     expertId: string,
-  ) => Promise<{ experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  orchestratorsSetDefault: (
-    projectPath: string,
-    orchestratorId: string,
-  ) => Promise<{
-    manifest: import("@shared/agent-experts").OrchestratorsManifest;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
-  orchestratorsSaveBuiltinOverride: (
-    projectPath: string,
-    payload: import("@shared/agent-experts").SaveBuiltinOrchestratorOverridePayload,
-  ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
-  orchestratorsResetBuiltinOverride: (
-    projectPath: string,
-    orchestratorId: string,
-  ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
-  }>;
+  ) => Promise<{ experts: import("@shared/agent-subagents").SubagentInfo[] }>;
   orchestratorsGetDetail: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<(import("@shared/agent-experts").OrchestratorInfo & { instructions: string }) | null>;
+  ) => Promise<(import("@shared/agent-subagents").OrchestratorInfo & { instructions: string }) | null>;
   orchestratorsSaveCustom: (
     projectPath: string,
-    payload: import("@shared/agent-experts").SaveCustomOrchestratorPayload,
+    payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+    targetTeamId?: string,
   ) => Promise<{
-    orchestrator: import("@shared/agent-experts").OrchestratorInfo;
-    orchestrators: import("@shared/agent-experts").OrchestratorInfo[];
+    orchestrator: import("@shared/agent-subagents").OrchestratorInfo;
+    orchestrators: import("@shared/agent-subagents").OrchestratorInfo[];
   }>;
   orchestratorsDeleteCustom: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<{ orchestrators: import("@shared/agent-experts").OrchestratorInfo[] }>;
-  expertsResetBuiltinOverride: (
-    projectPath: string,
-    expertId: string,
-  ) => Promise<{ expert: import("@shared/agent-experts").ExpertInfo; experts: import("@shared/agent-experts").ExpertInfo[] }>;
-  expertsResetBuiltinsToDefaults: (
-    projectPath: string,
-  ) => Promise<{ manifest: import("@shared/agent-experts").ExpertsManifest; experts: import("@shared/agent-experts").ExpertInfo[] }>;
+  ) => Promise<{ orchestrators: import("@shared/agent-subagents").OrchestratorInfo[] }>;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;
@@ -1661,6 +1677,7 @@ export interface ElectronAPI {
     intensivePaperIds?: string[];
     hasPaperSnippets?: boolean;
     orchestratorId?: string | null;
+    sessionTeamId?: string | null;
     sessionAgent?: "build" | "plan";
     selectedExpertIds?: string[];
     promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
@@ -1693,7 +1710,7 @@ export interface ElectronAPI {
     subSessionId?: string;
   }) => Promise<{
     subSessionId: string | null;
-    blocks: Array<Record<string, unknown>>;
+    blocks: unknown[];
     status: "done" | "error" | "running";
     error?: string;
   }>;
@@ -1842,26 +1859,9 @@ export interface ElectronAPI {
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
   onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
-
+  onExpertsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
   // Settings operations
-  settingsGet: () => Promise<{
-    aiModel: string;
-    theme: string;
-    sidebarCollapsed: boolean;
-    rightPanelCollapsed: boolean;
-    lastProjectPath?: string | null;
-    lastActiveFileId?: string | null;
-    zoteroApiKey?: string;
-    zoteroUserId?: string;
-    zoteroLastBBTDetected?: boolean;
-    pdfDarkMode?: "off" | "on" | "follow";
-    autoCreateMainTex?: boolean;
-    defaultDocClass?: "article" | "report" | "book";
-    agentSystemPrompt?: string;
-    editorSyntaxTheme?: string;
-    defaultWorkspaceDirs?: import("./workspace").WorkspaceFolder[];
-    defaultInitGit?: boolean;
-  }>;
+  settingsGet: () => Promise<AppSettings>;
   settingsSet: (patch: Record<string, unknown>) => Promise<void>;
   settingsGetKnowledgeModules: (projectRoot?: string) => Promise<Array<{
     key: string;
@@ -1925,7 +1925,7 @@ export interface ElectronAPI {
     payload: import("@commands/types").UpdateCommandPayload,
   ) => Promise<import("@commands/types").CommandDef>;
   commandsDelete: (projectRoot: string, id: string) => Promise<void>;
-  commandsToggle: (id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
+  commandsToggle: (projectRoot: string, id: string, enabled: boolean) => Promise<import("@commands/types").CommandDef[]>;
   commandsReload: (projectRoot?: string | null) => Promise<import("@commands/types").CommandDef[]>;
   commandsPreviewImport: (
     projectRoot: string,
@@ -1938,6 +1938,127 @@ export interface ElectronAPI {
   ) => Promise<import("@commands/export-import").CommandImportResult>;
   commandsWriteExportFile: (filePath: string, projectRoot: string) => Promise<void>;
   commandsReadImportFile: (filePath: string) => Promise<unknown>;
+
+  // Agent Packs（生命周期 + 视图，§9.5）
+  teamsList: (
+    projectRoot: string,
+  ) => Promise<import("../../shared/teams/view").TeamViewV2[]>;
+  teamsInstall: (
+    teamId: string,
+  ) => Promise<{
+    applied?: boolean;
+    suggestedActiveTeam?: string;
+  }>;
+  teamsSetEnabled: (
+    projectRoot: string,
+    teamId: string,
+    enabled: boolean | null,
+    scope?: "app" | "project",
+  ) => Promise<{
+    suggestedActiveTeam?: string;
+    defaultMovedTo?: string;
+  }>;
+  teamsUninstall: (teamId: string) => Promise<void>;
+  teamsSetAssetEnabled: (
+    projectRoot: string,
+    fqid: string,
+    enabled: boolean | null,
+    scope?: "app" | "project",
+  ) => Promise<void>;
+  teamsSaveAssetOverride: (
+    projectRoot: string,
+    fqid: string,
+    patch: import("../../shared/teams/types").AssetOverride,
+    scope?: "app" | "project",
+  ) => Promise<void>;
+  teamsGetActiveTeam: (
+    projectRoot: string,
+    sessionTeamId?: string | null,
+  ) => Promise<import("../../shared/teams/view").TeamViewV2 | null>;
+  teamsSetActiveTeam: (projectRoot: string, teamId: string, scope?: "project" | "app") => Promise<void>;
+  teamsGetRoster: (
+    projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsGetSkillsRoster: (
+    projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsGetCommandsRoster: (
+    projectRoot: string,
+    teamId: string,
+  ) => Promise<import("../../shared/teams/view").RosterView | null>;
+  teamsCreate: (
+    projectRoot: string,
+    input: {
+      name: string;
+      description?: string;
+      longDescription?: string;
+      tags?: string[];
+      scope: "app" | "project";
+      leadName?: string;
+      leadInstructions?: string;
+      icon?: import("../../shared/icon-spec").IconSpec | null;
+      iconImagePngBase64?: string;
+    },
+  ) => Promise<{ teamId: string; dir: string }>;
+  teamsUpdateIcon: (
+    teamId: string,
+    icon: import("../../shared/icon-spec").IconSpec | null,
+    projectRoot?: string | null,
+  ) => Promise<void>;
+  teamsSetIconImage: (
+    teamId: string,
+    pngBase64: string,
+    projectRoot?: string | null,
+  ) => Promise<void>;
+  teamsDelete: (teamId: string, projectRoot?: string) => Promise<void>;
+  teamsGetCoreState: (projectRoot: string) => Promise<{
+    defaultOrchestratorId: string | null;
+    defaultOrchestratorFqid: string | null;
+    coreSubagentDisabledCount: number;
+    coreSubagentOverrideCount: number;
+    coreOrchestratorDisabledCount: number;
+    coreOrchestratorOverrideCount: number;
+  }>;
+  teamsResetCoreDefaults: (
+    projectRoot: string,
+    kind: "subagent" | "orchestrator",
+  ) => Promise<void>;
+  teamsResolveOrigin: (
+    projectRoot: string,
+    fqidOrId: string,
+  ) => Promise<import("../../shared/teams/types").OriginInfo | null>;
+  teamsListAssets: (
+    projectRoot: string,
+    kind: import("../../shared/teams/types").AssetKind,
+  ) => Promise<import("../../shared/teams/view").AssetViewV2[]>;
+  teamsSetDefaultOrchestrator: (projectRoot: string, fqid: string) => Promise<void>;
+  teamsGetTeamContents: (
+    teamId: string,
+    projectRoot?: string | null,
+  ) => Promise<{
+    kind: import("../../shared/teams/types").AssetKind;
+    id: string;
+    name: string;
+    description: string;
+  }[]>;
+  teamsListProjectMcps: (
+    projectRoot: string,
+  ) => Promise<import("../../shared/teams/view").AssetViewV2[]>;
+  teamsListMcp: (
+    projectRoot: string,
+  ) => Promise<Array<{ name: string; enabled: boolean; origin: string; autoStart: boolean }>>;
+
+  // User teams (app-level, like installed teams)
+  teamsListUserTeams: () => Promise<
+    Array<{ teamId: string; name: string; description: string; version: string }>
+  >;
+  teamsCreateUserTeam: (
+    name: string,
+    description?: string,
+  ) => Promise<{ teamId: string; name: string; description: string; version: string }>;
+  teamsDeleteUserTeam: (teamId: string) => Promise<void>;
 
   // Workspace operations
   workspaceGetConfig: (projectRoot: string) => Promise<import("./workspace").WorkspaceFolder[]>;
@@ -1967,13 +2088,6 @@ export interface ElectronAPI {
   terminalEnvInfo: () => Promise<TerminalEnvInfo>;
   terminalLoadConfig: (projectRoot: string) => Promise<TerminalConfig>;
   terminalSaveConfig: (projectRoot: string, config: TerminalConfig) => Promise<void>;
-  terminalRunAiBash: (args: {
-    sessionId: string;
-    chatTabId: string;
-    toolCallId: string;
-    command: string;
-    cwd?: string;
-  }) => Promise<{ output: string; exitCode: number; cwd: string }>;
   terminalRegisterBashJob: (args: {
     sessionId: string;
     toolCallId: string;
@@ -1981,25 +2095,26 @@ export interface ElectronAPI {
   }) => Promise<void>;
   terminalDestroyAllAiPty: () => Promise<void>;
 
+  executionGet: (executionId: string) => Promise<import("@shared/execution").ExecutionGetResult>;
+  executionFindByToolCallId: (
+    toolCallId: string,
+  ) => Promise<import("@shared/execution").ExecutionFindByToolCallIdResult>;
+  executionReplay: (
+    args: import("@shared/execution").ExecutionReplayArgs,
+  ) => Promise<import("@shared/execution").ExecutionReplayResult>;
+  executionCancel: (executionId: string) => Promise<import("@shared/execution").ExecutionCancelResult>;
+  executionRerun: (executionId: string) => Promise<import("@shared/execution").ExecutionRerunResult>;
+  executionListRunning: () => Promise<import("@shared/execution").ExecutionListRunningResult>;
+  executionApplyProjectSwitch: (
+    args: import("@shared/execution").ExecutionApplyProjectSwitchArgs,
+  ) => Promise<import("@shared/execution").ExecutionApplyProjectSwitchResult>;
+  onExecutionEvent: (
+    listener: (event: import("@shared/execution").TerminalExecutionEvent) => void,
+  ) => () => void;
+
   // Terminal events (Main → Renderer)
   onTerminalData: (callback: (data: { sessionId: string; tabId: string; data: string }) => void) => () => void;
   onTerminalExit: (callback: (data: { sessionId: string; tabId: string; exitCode: number }) => void) => () => void;
-  onTerminalAiStream: (callback: (data: {
-    sessionId: string;
-    chatTabId: string;
-    requestId: string;
-    toolCallId?: string;
-    chunk: string;
-    phase: "output";
-  }) => void) => () => void;
-  onTerminalAiExit: (callback: (data: {
-    sessionId: string;
-    chatTabId: string;
-    requestId: string;
-    toolCallId?: string;
-    exitCode: number;
-    cwd: string;
-  }) => void) => () => void;
 
   // Git operations
   gitWarmup: (projectRoot: string) => Promise<{ ok: boolean }>;

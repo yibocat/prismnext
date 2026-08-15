@@ -41,6 +41,7 @@ export function resolveChatHomeBackdrop(
     if (packDefault === "none" || packDefault === "auto") return null;
     return packDefault;
   }
+  if (choice === "none") return null;
   return choice;
 }
 

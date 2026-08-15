@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { ModelThoughtSelect } from "./model-thought-select";
 import { PlanModeChip } from "../plan-mode-chip";
+import { ActiveTeamSelect } from "../active-team-select";
 import { IntensiveReadingListButton, useIntensiveReadingCount } from "../intensive-reading-list-button";
 import { useComposerCompact } from "./use-composer-compact";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export function ComposerToolbar({
       <div className={cn("flex min-w-0 flex-1 items-center gap-0.5")}>
         {addMenu}
         <PlanModeChip />
+        <ActiveTeamSelect presentation="default" compact={compact} />
         {!modelBesideSend ? <ModelThoughtSelect compact={compact} /> : null}
         {intensiveCount > 0 ? (
           <>

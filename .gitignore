@@ -14,6 +14,13 @@ bin/opencode/
 bin/tectonic/
 .cursor/
 
+# Copilot local instructions (mirror of .cursor/rules/ — machine-local, not committed)
+.github/instructions/
+scripts/sync-cursor-rules.mjs
+
+# Pro packs staging dir — build artifact of scripts/prepare-pro-packs.mjs (private content, never commit)
+resources/pro-package/
+
 # Private / internal docs (specs, plans, audits) — not for open source
 docs-private/
 

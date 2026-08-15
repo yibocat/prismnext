@@ -175,6 +175,17 @@ export function PromptStackPreviewPanel() {
     void loadPreview();
   }, [loadPreview]);
 
+  // Live-update when main process re-syncs experts (default main agent or
+  // orchestrator content changed) — keeps the stack preview in sync with the
+  // configured base agent without a manual refresh.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onExpertsIntegrationChanged(({ projectPath }) => {
+      if (!projectRoot || projectPath !== projectRoot) return;
+      void loadPreview({ silent: true });
+    });
+    return unsubscribe;
+  }, [projectRoot, loadPreview]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     try {

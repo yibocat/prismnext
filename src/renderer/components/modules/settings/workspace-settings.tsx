@@ -19,6 +19,9 @@ import { appDefaultWorkspaceTemplate } from "@/lib/settings/workspace-template";
 import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { loadProjectIcon, projectIconBaseDir } from "@/components/modules/project/project-icon";
+import { IconPicker } from "@/components/modules/shared/icon-picker";
+import { ICON_IMAGE_FILENAME, normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/icon-spec";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -171,6 +174,44 @@ export function WorkspaceSettings() {
   const templateDirs = settings.defaultWorkspaceDirs ?? [];
   const defaultInitGit = settings.defaultInitGit !== false;
 
+  const [projectIcon, setProjectIcon] = useState<IconSpec | null>(null);
+
+  // Load the project's icon whenever the project changes.
+  useEffect(() => {
+    if (!projectRoot) {
+      setProjectIcon(null);
+      return;
+    }
+    let cancelled = false;
+    void loadProjectIcon(projectRoot).then((icon) => {
+      if (!cancelled) setProjectIcon(icon);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot]);
+
+  const onProjectIconChange = async (next: IconSpec | null) => {
+    if (!projectRoot || next?.kind === "image") return;
+    if (iconSpecEquals(normalizeIconSpec(projectIcon), next)) return;
+    setProjectIcon(next);
+    try {
+      await window.electronAPI.projectSetIcon(projectRoot, next);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      // Revert to the on-disk value on failure.
+      void loadProjectIcon(projectRoot).then((icon) => setProjectIcon(icon));
+    }
+  };
+
+  const persistProjectImage = async (pngBase64: string): Promise<IconSpec> => {
+    if (!projectRoot) throw new Error("No project");
+    await window.electronAPI.projectSetIconImage(projectRoot, pngBase64);
+    const next: IconSpec = { kind: "image", value: ICON_IMAGE_FILENAME };
+    setProjectIcon(next);
+    return next;
+  };
+
   // Default to the project tab when a project is open (project-first mental
   // model); fall back to the template tab when no project is open, since the
   // project tab has nothing to show.
@@ -238,15 +279,27 @@ export function WorkspaceSettings() {
           <TabsContent value="project" className="mt-6 focus-visible:ring-0">
             {projectRoot ? (
               <div>
-                <p className="text-[length:var(--font-size-12)] text-muted-foreground mb-2">
-                  <span className="font-medium text-foreground">{projectDisplayName(projectRoot)}</span>
-                  {statusLabel ? (
-                    <>
-                      <span className="text-muted-foreground/40 mx-1.5">·</span>
-                      {statusLabel}
-                    </>
-                  ) : null}
-                </p>
+                <div className="flex items-center gap-2 mb-2">
+                  <IconPicker
+                    value={projectIcon}
+                    onChange={(next) => void onProjectIconChange(next)}
+                    persistImage={persistProjectImage}
+                    imageBaseDir={projectIconBaseDir(projectRoot)}
+                    name={projectDisplayName(projectRoot)}
+                    fallback="letter"
+                    size="sm"
+                    triggerLabel={t("icon.picker.choose")}
+                  />
+                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                    <span className="font-medium text-foreground">{projectDisplayName(projectRoot)}</span>
+                    {statusLabel ? (
+                      <>
+                        <span className="text-muted-foreground/40 mx-1.5">·</span>
+                        {statusLabel}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <Button variant="outline" size="xs" onClick={() => openAddFolder("project")}>
                     <PlusIcon className="size-3 mr-1" />

@@ -14,7 +14,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const skillsDir = join(root, "resources", "skills");
+// Core-pack layout (Phase 2): bundled skills live inside prismnext.core.
+const skillsDir = join(root, "resources", "teams", "prismnext.core", "skills");
 
 /** skill-id → manifest category (renderer union: "academic" | "general"). */
 const CATEGORIES = {

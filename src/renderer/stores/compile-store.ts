@@ -49,7 +49,7 @@ function collectCompilePdfDiskCandidates(projectRoot: string): string[] {
   const resolved = resolveCompileTarget(
     doc.activeFileId || "",
     doc.files,
-    doc.getContent,
+    doc.getAsset,
   );
   if (resolved?.targetPath) push(resolved.targetPath);
 
@@ -409,7 +409,7 @@ export const useCompileStore = create<CompileState>()(
           let targetPath: string | null = null;
 
           if (activeFileId) {
-            const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
+            const resolved = resolveCompileTarget(activeFileId, files, docState.getAsset);
             if (resolved) targetPath = resolved.targetPath;
           }
 
@@ -418,7 +418,7 @@ export const useCompileStore = create<CompileState>()(
             const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
             const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
             if (mainTexFile) {
-              const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getContent);
+              const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getAsset);
               if (resolved) targetPath = resolved.targetPath;
             }
           }
@@ -481,7 +481,7 @@ export async function compileCurrentDocument(): Promise<void> {
   let targetPath: string | null = null;
 
   if (activeFileId) {
-    const resolved = resolveCompileTarget(activeFileId, files, docState.getContent);
+    const resolved = resolveCompileTarget(activeFileId, files, docState.getAsset);
     if (resolved) targetPath = resolved.targetPath;
   }
 
@@ -490,7 +490,7 @@ export async function compileCurrentDocument(): Promise<void> {
     const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
     const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
     if (mainTexFile) {
-      const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getContent);
+      const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getAsset);
       if (resolved) targetPath = resolved.targetPath;
     }
   }

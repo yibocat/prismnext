@@ -1,0 +1,9 @@
+{
+  "id": "research-notes",
+  "name": "Research Notes",
+  "description": "Lightweight working-note article with a custom prism-notes.sty (colored header rule and section styling). Better for exploratory write-ups than a full IMRaD paper.",
+  "category": "paper",
+  "tags": ["notes", "style-file", "working-draft"],
+  "documentClass": "article",
+  "icon": "📝"
+}

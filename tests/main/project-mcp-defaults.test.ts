@@ -25,15 +25,17 @@ describe("ensureDefaultMcpServers", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("writes empty mcp.json when mcp.json is missing", () => {
+  it("writes an empty project.local mcp array when no MCP config exists", () => {
     const agentDir = join(root, ".prismnext", "agent");
     const result = ensureDefaultMcpServers(agentDir);
     expect(result.added).toBe(false);
+    expect(result.migrated).toBe(false);
     expect(result.removed).toBe(false);
-    const mcpPath = join(agentDir, "mcp.json");
+    const mcpPath = join(agentDir, "teams", "project.local", "mcp.json");
     expect(existsSync(mcpPath)).toBe(true);
     const parsed = JSON.parse(readFileSync(mcpPath, "utf-8"));
-    expect(parsed.mcpServers).toEqual({});
+    expect(parsed).toEqual([]);
+    expect(existsSync(join(agentDir, "mcp.json"))).toBe(false);
   });
 
   it("does not add paper-search-mcp to an empty mcp.json", () => {
@@ -46,8 +48,8 @@ describe("ensureDefaultMcpServers", () => {
     );
     const result = ensureDefaultMcpServers(agentDir);
     expect(result.removed).toBe(false);
-    const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
-    expect(parsed.mcpServers[PAPER_SEARCH_MCP_ID]).toBeUndefined();
+    const parsed = JSON.parse(readFileSync(join(agentDir, "teams", "project.local", "mcp.json"), "utf-8"));
+    expect(parsed).toEqual([]);
   });
 
   it("does not inject paper-search alongside existing unrelated servers", () => {
@@ -68,9 +70,8 @@ describe("ensureDefaultMcpServers", () => {
     );
     const result = ensureDefaultMcpServers(agentDir);
     expect(result.removed).toBe(false);
-    const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
-    expect(parsed.mcpServers.github).toBeDefined();
-    expect(parsed.mcpServers[PAPER_SEARCH_MCP_ID]).toBeUndefined();
+    const parsed = JSON.parse(readFileSync(join(agentDir, "teams", "project.local", "mcp.json"), "utf-8"));
+    expect(parsed.map((server: { id: string }) => server.id)).toEqual(["github"]);
   });
 
   it("removes legacy paper-search-mcp and keeps other servers", () => {
@@ -95,10 +96,9 @@ describe("ensureDefaultMcpServers", () => {
       "utf-8",
     );
     const result = ensureDefaultMcpServers(agentDir);
-    expect(result.removed).toBe(true);
-    const parsed = JSON.parse(readFileSync(join(agentDir, "mcp.json"), "utf-8"));
-    expect(parsed.mcpServers[PAPER_SEARCH_MCP_ID]).toBeUndefined();
-    expect(parsed.mcpServers.github).toBeDefined();
+    expect(result.migrated).toBe(true);
+    const parsed = JSON.parse(readFileSync(join(agentDir, "teams", "project.local", "mcp.json"), "utf-8"));
+    expect(parsed.map((server: { id: string }) => server.id)).toEqual(["github"]);
   });
 
   it("is a no-op when paper-search-mcp is already absent", () => {
@@ -115,7 +115,8 @@ describe("ensureDefaultMcpServers", () => {
     );
     writeFileSync(join(agentDir, "mcp.json"), before, "utf-8");
     const result = ensureDefaultMcpServers(agentDir);
-    expect(result.removed).toBe(false);
-    expect(readFileSync(join(agentDir, "mcp.json"), "utf-8")).toBe(before);
+    expect(result.migrated).toBe(true);
+    const parsed = JSON.parse(readFileSync(join(agentDir, "teams", "project.local", "mcp.json"), "utf-8"));
+    expect(parsed.map((server: { id: string }) => server.id)).toEqual(["memory"]);
   });
 });

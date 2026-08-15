@@ -5,7 +5,33 @@ import { tmpdir } from "node:os";
 import { processBridgeOnceForTests } from "../../src/main/services/terminal-bridge";
 import { registerChatSession, _resetChatSessionRegistryForTests } from "../../src/main/services/chat-session-registry";
 import { _resetAiPtyForTests } from "../../src/main/services/ai-pty";
-import { _resetAiBashRunnerForTests } from "../../src/main/services/ai-bash-runner";
+import {
+  _readBridgeResultForTests,
+  _resetAiBashRunnerForTests,
+} from "../../src/main/services/ai-bash-runner";
+import {
+  getExecutionRegistry,
+  initExecutionRegistry,
+  _resetExecutionRegistryForTests,
+  type ExecutionTransport,
+  type ExecutionTransportHandlers,
+} from "../../src/main/services/execution-registry";
+
+function createFakeTransport() {
+  const started: string[] = [];
+  const handlers = new Map<string, ExecutionTransportHandlers>();
+  const transport: ExecutionTransport & { started: string[] } = {
+    started,
+    async start(execution, next) {
+      started.push(execution.executionId);
+      handlers.set(execution.executionId, next);
+      next.onOutput("already-running\n");
+      next.onExit(0);
+    },
+    async cancel() {},
+  };
+  return transport;
+}
 
 describe("terminal-bridge", () => {
   const bridgeRoot = join(tmpdir(), "prism-terminal-bridge-test");
@@ -16,6 +42,7 @@ describe("terminal-bridge", () => {
     _resetChatSessionRegistryForTests();
     _resetAiPtyForTests();
     _resetAiBashRunnerForTests();
+    _resetExecutionRegistryForTests();
     registerChatSession("test-session", "chat-tab-1");
     mkdirSync(sessionDir, { recursive: true });
   });
@@ -25,6 +52,7 @@ describe("terminal-bridge", () => {
     _resetChatSessionRegistryForTests();
     _resetAiPtyForTests();
     _resetAiBashRunnerForTests();
+    _resetExecutionRegistryForTests();
     try {
       rmSync(bridgeRoot, { recursive: true, force: true });
     } catch {}
@@ -53,5 +81,41 @@ describe("terminal-bridge", () => {
     expect(result.output).toContain("bridge-ok");
     expect(result.exitCode).toBe(0);
     expect(readFileSync(streamPath, "utf-8")).toContain("bridge-ok");
+  });
+
+  it("does not start a second PTY when a legacy bridge request maps to an existing execution", async () => {
+    const historyRoot = join(bridgeRoot, "execution-history");
+    mkdirSync(historyRoot, { recursive: true });
+    const transport = createFakeTransport();
+    initExecutionRegistry(historyRoot, transport);
+
+    const execution = await getExecutionRegistry().create({
+      origin: "agent-bash",
+      command: "echo already",
+      cwd: process.cwd(),
+      projectId: process.cwd(),
+      chatTabId: "chat-tab-1",
+      opencodeSessionId: "test-session",
+      toolCallId: "tool-existing",
+    });
+
+    writeFileSync(
+      join(sessionDir, "tool-existing.request.json"),
+      JSON.stringify({
+        command: "echo already",
+        cwd: process.cwd(),
+        sessionId: "test-session",
+        requestId: "tool-existing",
+        toolCallId: "tool-existing",
+      }),
+      "utf-8",
+    );
+
+    await processBridgeOnceForTests();
+
+    expect(transport.started).toEqual([execution.executionId]);
+    expect(_readBridgeResultForTests("test-session", "tool-existing")?.executionId).toBe(
+      execution.executionId,
+    );
   });
 });

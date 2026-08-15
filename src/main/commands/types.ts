@@ -2,12 +2,16 @@
 // Command type definitions — owned by the command engine (main process).
 // Renderer imports these as pure types via the @commands alias (erased at compile time).
 
-export type CommandSource = "builtin" | "user";
+/**
+ * 内容来源（§5.6.3）：core pack → "builtin"；Local Pack → "user"；
+ * 其余 pack → "plugin"（UI 按 pack 分组 + badge）。
+ */
+export type CommandSource = "builtin" | "user" | "plugin";
 
 export interface CommandDef {
-  /** Unique ID: "builtin:setup" | "builtin:compile" | "user:review-section" */
+  /** 全局唯一身份（FQID）："app:setup" | "project.local:review-section" | "<teamId>:<name>" */
   id: string;
-  /** Command name WITHOUT / prefix */
+  /** Command name WITHOUT / prefix（pack 内 id） */
   name: string;
   /** Description shown in dropdown and settings */
   description: string;
@@ -25,8 +29,14 @@ export interface CommandDef {
   model?: string;
   /** Sort order (lower = first) */
   order: number;
-  /** Toggle state — disabled commands are hidden from / dropdown */
+  /** Toggle state — disabled commands are hidden from / dropdown（唯一判定 = resolver） */
   enabled: boolean;
+  /** 所属 pack */
+  teamId: string;
+  /** pack 展示名（badge 用） */
+  teamName: string;
+  /** 是否可删除（= Local Pack 内容；pack 内容只能禁用） */
+  removable: boolean;
 }
 
 /** Payload for creating a new user command */
@@ -37,6 +47,8 @@ export interface CreateCommandPayload {
   action?: string;
   agent?: string;
   model?: string;
+  /** Writable team to own the command (Common / Project / custom). Default project.local. */
+  targetTeamId?: string;
 }
 
 /** Payload for updating an existing user command */

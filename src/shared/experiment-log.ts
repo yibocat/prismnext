@@ -183,6 +183,12 @@ export interface ExperimentRunEntry {
    * {@link RUN_OUTPUT_TAIL_BYTES} (e.g. `logs/<runId>.log`).
    */
   logPath?: string | null;
+  /** Main-process Execution this run attached to (optional; old lines omit it). */
+  executionId?: string;
+  /** Absolute transcript path owned by ExecutionRegistry. */
+  transcriptPath?: string;
+  /** Absolute captured-stderr path owned by ExecutionRegistry, when present. */
+  stderrPath?: string;
 }
 
 /** Summary entry returned by `list` (no run bodies). */
@@ -214,6 +220,9 @@ export interface ExperimentRunInput {
   cancelled?: boolean;
   kind?: ExperimentRunKind;
   logPath?: string | null;
+  executionId?: string;
+  transcriptPath?: string;
+  stderrPath?: string;
 }
 
 /**
@@ -244,6 +253,7 @@ export interface ExperimentRunStartedEvent {
   id: string;
   runId: string;
   command: string;
+  executionId?: string;
 }
 
 /** Renderer / preload payload for `experiment:runOutput`. */

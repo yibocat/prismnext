@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
@@ -16,10 +16,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useCommandStore } from "@/stores/command-store";
-import { closeSettingsPanel } from "@/stores/settings-panel-store";
+import { useTeamsStore } from "@/stores/teams-store";
+import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { cn } from "@/lib/utils";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { isValidCommandName, promptTemplateForEdit } from "@commands/template-utils";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import { TeamPicker } from "../teams/team-picker";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SECTION,
@@ -37,6 +41,8 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   const { t } = useTranslation();
   const closePanel = closeSettingsPanel;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const catalog = useTeamsStore((s) => s.catalog);
+  const loadTeams = useTeamsStore((s) => s.load);
   const commands = useCommandStore((s) => s.commands);
   const commandsLoaded = useCommandStore((s) => s.loaded);
   const loadCommands = useCommandStore((s) => s.loadCommands);
@@ -47,9 +53,34 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   const isNew = slot.mode === "new";
   const commandId = slot.mode === "edit" ? slot.commandId : undefined;
 
+  const writableTeams = useMemo(
+    () => catalog.filter((tm) => tm.writable && tm.installed),
+    [catalog],
+  );
+
+  const pickerTeams = useMemo(
+    () =>
+      writableTeams.map((tm) => ({
+        ...tm,
+        manifest: {
+          ...tm.manifest,
+          name: teamDisplayName(tm.manifest.id, tm.manifest.name, t),
+        },
+      })),
+    [writableTeams, t],
+  );
+
+  const [targetTeamId, setTargetTeamId] = useState(
+    slot.mode === "new"
+      ? (slot.targetTeamId ?? PROJECT_DEFAULT_TEAM_ID)
+      : slot.mode === "edit"
+        ? (slot.teamId ?? PROJECT_DEFAULT_TEAM_ID)
+        : PROJECT_DEFAULT_TEAM_ID,
+  );
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [template, setTemplate] = useState("");
@@ -57,6 +88,21 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   useEffect(() => {
     void loadCommands();
   }, [loadCommands]);
+
+  useEffect(() => {
+    if (!projectRoot) return;
+    void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
+
+  // Keep create target on a writable hangar/custom team if catalog loads later.
+  useEffect(() => {
+    if (!isNew || writableTeams.length === 0) return;
+    if (writableTeams.some((tm) => tm.manifest.id === targetTeamId)) return;
+    const fallback =
+      writableTeams.find((tm) => tm.manifest.id === PROJECT_DEFAULT_TEAM_ID)
+      ?? writableTeams[0];
+    if (fallback) setTargetTeamId(fallback.manifest.id);
+  }, [isNew, writableTeams, targetTeamId]);
 
   useEffect(() => {
     if (!projectRoot) {
@@ -67,6 +113,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
       setName("");
       setDescription("");
       setTemplate("");
+      setReadOnly(false);
       setDeleteDialogOpen(false);
       setLoading(false);
       return;
@@ -74,7 +121,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
     if (!commandsLoaded) return;
 
     const cmd = commands.find((c) => c.id === commandId);
-    if (!cmd || cmd.source !== "user") {
+    if (!cmd) {
       toast.error(t("settings.editor.command.toast.notFound"));
       closePanel();
       return;
@@ -83,17 +130,32 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
     setName(cmd.name);
     setDescription(cmd.description);
     setTemplate(promptTemplateForEdit(cmd.template));
+    setTargetTeamId(cmd.teamId);
+    setReadOnly(!cmd.removable);
     setDeleteDialogOpen(false);
     setLoading(false);
-  }, [projectRoot, isNew, commandId, commands, commandsLoaded, closePanel]);
+  }, [projectRoot, isNew, commandId, commands, commandsLoaded, closePanel, t]);
 
   const trimmedName = name.trim().toLowerCase();
   const nameValid = isValidCommandName(trimmedName);
   const canSave =
-    nameValid && description.trim().length > 0 && template.trim().length > 0 && !saving;
+    !readOnly
+    && nameValid
+    && description.trim().length > 0
+    && template.trim().length > 0
+    && !saving;
+
+  const ownerTeamLabel = useMemo(() => {
+    const team = catalog.find((tm) => tm.manifest.id === targetTeamId);
+    return teamDisplayName(targetTeamId, team?.manifest.name, t);
+  }, [catalog, targetTeamId, t]);
 
   const handleSave = async () => {
     if (!projectRoot || !canSave) return;
+    if (isNew && !writableTeams.some((tm) => tm.manifest.id === targetTeamId)) {
+      toast.error(t("settings.editor.command.toast.needWritableTeam"));
+      return;
+    }
     setSaving(true);
     try {
       const basePayload = {
@@ -103,7 +165,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
       };
 
       if (isNew) {
-        await createCommand(basePayload);
+        await createCommand({ ...basePayload, targetTeamId });
         toast.success(t("settings.editor.command.toast.added"));
       } else if (commandId) {
         await updateCommand(commandId, {
@@ -121,7 +183,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   };
 
   const handleDelete = async () => {
-    if (!commandId) return;
+    if (!commandId || readOnly) return;
     setDeleteDialogOpen(false);
     setSaving(true);
     try {
@@ -154,7 +216,11 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
   return (
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
-        <p className={SETTINGS_ROW_DESC}>{t("settings.editor.command.intro")}</p>
+        <p className={SETTINGS_ROW_DESC}>
+          {readOnly
+            ? t("settings.editor.command.introReadOnly")
+            : t("settings.editor.command.intro")}
+        </p>
 
         {/!`[^`]+`/.test(template) ? (
           <p className="rounded-md border border-border bg-muted px-3 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
@@ -170,6 +236,29 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
         ) : null}
 
         <div className={SETTINGS_DETAIL_SECTION}>
+          {isNew ? (
+            <SettingsFormField
+              label={t("settings.editor.command.targetTeam")}
+              description={t("settings.editor.command.targetTeamDesc")}
+            >
+              <TeamPicker
+                teams={pickerTeams}
+                value={targetTeamId}
+                onChange={setTargetTeamId}
+                onCreateTeam={(scope) => openSettingsPanel({ kind: "team-create", scope })}
+                variant="field"
+                className={saving ? "pointer-events-none opacity-60" : undefined}
+              />
+            </SettingsFormField>
+          ) : (
+            <SettingsFormField
+              label={t("settings.editor.command.ownerTeam")}
+              description={t("settings.editor.command.ownerTeamDesc")}
+            >
+              <p className="text-[length:var(--font-size-13)] text-foreground">{ownerTeamLabel}</p>
+            </SettingsFormField>
+          )}
+
           <SettingsFormField
             label={t("settings.editor.command.name")}
             htmlFor="custom-command-name"
@@ -181,6 +270,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("settings.editor.command.namePlaceholder")}
+              disabled={readOnly || saving}
             />
             {name.trim() && !nameValid ? (
               <p className="text-[length:var(--font-size-11)] text-destructive mt-1">
@@ -199,6 +289,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("settings.editor.command.descriptionPlaceholder")}
+              disabled={readOnly || saving}
             />
           </SettingsFormField>
 
@@ -216,8 +307,9 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
               placeholder={t("settings.editor.command.templatePlaceholder")}
+              disabled={readOnly || saving}
             />
-            {!template.trim() && nameValid ? (
+            {!template.trim() && nameValid && !readOnly ? (
               <p className="text-[length:var(--font-size-11)] text-destructive mt-1">
                 {t("settings.editor.command.validationTemplate")}
               </p>
@@ -226,14 +318,16 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
         </div>
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
-          <Button size="xs" onClick={() => void handleSave()} disabled={!canSave}>
-            {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {isNew ? t("settings.editor.command.add") : t("common.save")}
-          </Button>
+          {!readOnly ? (
+            <Button size="xs" onClick={() => void handleSave()} disabled={!canSave}>
+              {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
+              {isNew ? t("settings.editor.command.add") : t("common.save")}
+            </Button>
+          ) : null}
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            {t("common.cancel")}
+            {readOnly ? t("common.close") : t("common.cancel")}
           </Button>
-          {!isNew ? (
+          {!isNew && !readOnly ? (
             <>
               <span className="flex-1 min-w-[1rem]" />
               <Button

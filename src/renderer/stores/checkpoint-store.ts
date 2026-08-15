@@ -184,7 +184,7 @@ async function readFileSnapshot(
   const file = docState.files.find((f) => f.relativePath === relativePath);
   if (file) {
     await docState.refreshFileContent(file.id);
-    const content = docState.getContent(file.id);
+    const content = docState.getAsset(file.id);
     if (content != null) return content;
   }
   try {

@@ -1,13 +1,9 @@
 {
   "id": "phd-thesis",
   "name": "PhD Thesis",
-  "description": "Multi-chapter thesis with front matter, dedication, and appendices. Uses the report class.",
+  "description": "Multi-file report-class thesis: front matter, numbered chapters, appendix, and biblatex. Keep section/chapter titles stable if you later merge with another thesis template.",
   "category": "thesis",
-  "tags": [
-    "book",
-    "thesis",
-    "chapters"
-  ],
+  "tags": ["thesis", "chapters", "report"],
   "documentClass": "report",
   "icon": "🎓"
 }

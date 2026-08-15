@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { SUBAGENT_ROLE_PROMPT } from "../../src/main/prompts/modules/subagent-role";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
 import {
-  composeExpertProfileModulePrompts,
+  composeSubagentProfileModulePrompts,
   composeOrchestratorProfileModulePrompts,
-  resolveExpertProfileModuleKeys,
+  resolveSubagentProfileModuleKeys,
   resolveOrchestratorProfileModuleKeys,
   resolveSharedProfileModules,
 } from "../../src/main/prompts/resolve-active-modules";
@@ -26,11 +26,11 @@ describe("SUBAGENT_ROLE_PROMPT", () => {
     expect(mod?.expertOnly).toBe(true);
     expect(mod?.orchestratorOnly).toBeFalsy();
 
-    expect(resolveExpertProfileModuleKeys()).toContain("subagent-role");
+    expect(resolveSubagentProfileModuleKeys()).toContain("subagent-role");
     expect(resolveOrchestratorProfileModuleKeys()).not.toContain("subagent-role");
     expect(resolveSharedProfileModules().map((m) => m.key)).not.toContain("subagent-role");
 
-    expect(composeExpertProfileModulePrompts({})).toContain("## Subagent role");
+    expect(composeSubagentProfileModulePrompts({})).toContain("## Subagent role");
     expect(composeOrchestratorProfileModulePrompts({})).not.toContain("## Subagent role");
   });
 });

@@ -72,7 +72,7 @@ export function ExperimentsRunDialog({
   const permissionMode = useSettingsStore((s) => s.settings.permissionMode);
   const settings = useSettingsStore((s) => s.settings);
   const permRules = useMemo(
-    () => buildPermissionRulesFromSettings(settings as Record<string, unknown>),
+    () => buildPermissionRulesFromSettings(settings),
     [settings],
   );
   const resolvedMode = resolvePermissionMode(permissionMode);
@@ -313,7 +313,9 @@ export function ExperimentsRunDialog({
                   aria-live="polite"
                 >
                   <Loader2Icon className="size-3 shrink-0 animate-spin" aria-hidden />
-                  <span className="font-medium">{t("experiments.running")}</span>
+                  <span className="font-medium">
+                    {t(runInFlight?.cancelRequested ? "experiments.cancelling" : "experiments.running")}
+                  </span>
                 </span>
                 <Button
                   type="button"

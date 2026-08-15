@@ -310,7 +310,7 @@ export async function stageLiteratureCitation(
     discoveredFrom?: StagedCitationPayload["discoveredFrom"];
   },
 ): Promise<StageResult> {
-  const stagingSessionId = AcpService.getInstance().resolveCitationStagingSessionId(sessionId);
+  const stagingSessionId = AcpService.getInstanceForSession(sessionId).resolveCitationStagingSessionId(sessionId);
   const normDoi = payload.doi?.trim() ? normalizeDoi(payload.doi.trim()) : null;
   const normArxiv = payload.arxivId?.trim() ? normalizeArxivId(payload.arxivId.trim()) : null;
 

@@ -1,8 +1,7 @@
 // prism-next/src/main/commands/registry.ts
-import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, renameSync } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { CommandDef, CreateCommandPayload, UpdateCommandPayload } from "./types";
-import { BUILTIN_COMMANDS } from "./builtin-commands";
 import {
   buildCommandPack,
   parseCommandPack,
@@ -13,85 +12,79 @@ import {
   type CommandPack,
 } from "./export-import";
 import { isValidCommandName } from "./template-utils";
+import {
+  APP_COMMANDS_OWNER_ID,
+  CORE_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
+} from "../../shared/teams/types";
+import { parseFqid } from "../../shared/teams/state";
+import type { AssetViewV2 } from "../../shared/teams/view";
+import {
+  invalidateResolver,
+  listAssets,
+  listEffectiveSlashCommands,
+  resolveActiveTeam,
+  resolveInvocation,
+  resolveRef,
+} from "../teams/resolver";
+import { setProjectAssetEnabled } from "../teams/state-project";
+import { resolveWritableTeamDir } from "../services/team-mcp-files";
 
 /**
- * CommandRegistry — merges three layers into a unified list.
- *
- * Layer priority (highest wins):
- *   1. User custom commands (shadow built-in of same name)
- *   2. App commands
- *   3. OpenCode built-in commands
- *
- * Cached in memory; call reload() after filesystem changes.
+ * CommandRegistry — resolver facade for slash commands, per-project.
+ * CRUD targets any writable team (Common / Project / user-created).
  */
 export class CommandRegistry {
-  private cache: CommandDef[] | null = null;
-  private projectRoot: string | null = null;
+  constructor(private readonly projectRoot: string) {}
 
-  /** Path to user commands directory */
-  private get commandsDir(): string {
-    return join(this.projectRoot!, ".prismnext", "agent", "commands");
+  private commandsDirFor(teamId: string): string {
+    return join(resolveWritableTeamDir(this.projectRoot, teamId), "commands");
   }
 
-  /**
-   * Set the active project root. Resets the cache.
-   */
-  setProjectRoot(root: string | null): void {
-    this.projectRoot = root;
-    this.cache = null;
-  }
-
-  /**
-   * Return the full merged command list (all three layers).
-   * User commands shadow built-in commands of the same name.
-   */
   list(): CommandDef[] {
-    if (this.cache) return this.cache;
-    this.cache = this.buildList();
-    return this.cache;
+    return listAssets(this.projectRoot, "command").map((cmd) => toCommandDef(cmd));
   }
 
-  /**
-   * Look up a single command by name.
-   * Returns undefined if not found or disabled.
-   */
   lookup(name: string): CommandDef | undefined {
-    return this.list().find((c) => c.name === name && c.enabled);
+    const asset = resolveInvocation(this.projectRoot, "command", name);
+    return asset ? toCommandDef(asset) : undefined;
   }
 
-  /**
-   * Search commands by name or description substring.
-   */
   search(query: string): CommandDef[] {
     const q = query.toLowerCase();
-    return this.list()
+    const activeTeamId = resolveActiveTeam(this.projectRoot)?.manifest.id ?? null;
+    return listEffectiveSlashCommands(this.projectRoot, activeTeamId)
+      .map((asset) => toCommandDef(asset))
       .filter((c) => c.enabled)
       .filter(
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.description.toLowerCase().includes(q),
       )
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => {
+        const aApp = a.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        const bApp = b.teamId === APP_COMMANDS_OWNER_ID ? 0 : 1;
+        if (aApp !== bApp) return aApp - bApp;
+        return a.order - b.order;
+      });
   }
 
-  /**
-   * Reload: flush cache and rescan user command files.
-   */
   reload(): CommandDef[] {
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return this.list();
   }
 
-  // ── User command CRUD ──
-
-  /**
-   * Create a new user command as a .md file.
-   */
   create(payload: CreateCommandPayload): CommandDef {
-    this.ensureDir();
+    const teamId = payload.targetTeamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
+    const dir = this.commandsDirFor(teamId);
+    mkdirSync(dir, { recursive: true });
+
+    if (this.teamCommands(teamId).some((c) => c.name === payload.name)) {
+      throw new Error(`Command already exists: ${payload.name}`);
+    }
 
     const def: CommandDef = {
-      id: `user:${payload.name}`,
+      id: `${teamId}:${payload.name}`,
       name: payload.name,
       description: payload.description,
       source: "user",
@@ -101,29 +94,30 @@ export class CommandRegistry {
       model: payload.model,
       order: 1000,
       enabled: true,
+      teamId,
+      teamName: teamId,
+      removable: true,
     };
 
-    this.writeFile(def);
-    this.cache = null;
+    this.writeFile(def, teamId);
+    invalidateResolver(this.projectRoot);
     return def;
   }
 
-  /**
-   * Update an existing user command.
-   */
   update(id: string, payload: UpdateCommandPayload): CommandDef {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
-    if (existing.source !== "user") throw new Error(`Cannot modify built-in command: ${id}`);
+    if (!existing.removable) throw new Error(`Cannot modify pack command (disable it instead): ${id}`);
 
-    // If name changed, delete old file
+    const teamId = existing.teamId;
     if (payload.name && payload.name !== existing.name) {
-      this.deleteFile(existing);
+      this.deleteFile(existing.name, teamId);
     }
 
     const updated: CommandDef = {
       ...existing,
       name: payload.name ?? existing.name,
+      id: `${teamId}:${payload.name ?? existing.name}`,
       description: payload.description ?? existing.description,
       template: payload.template ?? existing.template,
       action:
@@ -134,73 +128,35 @@ export class CommandRegistry {
       model: payload.model !== undefined ? payload.model : existing.model,
     };
 
-    this.writeFile(updated);
-    this.cache = null;
+    this.writeFile(updated, teamId);
+    invalidateResolver(this.projectRoot);
     return updated;
   }
 
-  /**
-   * Delete a user command (removes the .md file).
-   */
   remove(id: string): void {
     const existing = this.list().find((c) => c.id === id);
     if (!existing) throw new Error(`Command not found: ${id}`);
-    if (existing.source !== "user") throw new Error(`Cannot delete built-in command: ${id}`);
-    this.deleteFile(existing);
-    this.cache = null;
+    if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
+    this.deleteFile(existing.name, existing.teamId);
+    setProjectAssetEnabled(this.projectRoot, existing.id, true);
+    invalidateResolver(this.projectRoot);
   }
 
-  /**
-   * Enable or disable any command by id.
-   * For user commands: renames .md ↔ .md.disabled
-   * For built-in: toggles in-memory only.
-   */
   setEnabled(id: string, enabled: boolean): void {
-    const existing = this.list().find((c) => c.id === id);
-    if (!existing) throw new Error(`Command not found: ${id}`);
-
-    if (existing.source === "user") {
-      const oldPath = this.filePath(existing.name, existing.enabled);
-      const newPath = this.filePath(existing.name, enabled);
-      if (existsSync(oldPath) && oldPath !== newPath) {
-        renameSync(oldPath, newPath);
-      }
-    }
-
-    existing.enabled = enabled;
-    this.cache = null;
-  }
-
-  /**
-   * Restore built-in command enabled states from persisted settings.
-   */
-  applyBuiltinStates(states: Record<string, boolean>): void {
-    for (const cmd of BUILTIN_COMMANDS) {
-      if (cmd.name in states) {
-        cmd.enabled = states[cmd.name];
-      }
-    }
-    this.cache = null;
-  }
-
-  /**
-   * Export built-in command enabled states for persistence.
-   */
-  dumpBuiltinStates(): Record<string, boolean> {
-    const result: Record<string, boolean> = {};
-    for (const cmd of BUILTIN_COMMANDS) {
-      result[cmd.name] = cmd.enabled;
-    }
-    return result;
+    const fqid = parseFqid(id)
+      ? id
+      : resolveRef(this.projectRoot, id, undefined, "command");
+    if (!fqid) throw new Error(`Command not found: ${id}`);
+    setProjectAssetEnabled(this.projectRoot, fqid, enabled ? true : false);
   }
 
   exportPack(): CommandPack {
-    return buildCommandPack(this.scanUserCommands());
+    return buildCommandPack(this.exportableCommands());
   }
 
   previewImport(packRaw: unknown): CommandImportPreview {
     const pack = parseCommandPack(packRaw);
-    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+    const existingNames = new Set(this.exportableCommands().map((c) => c.name));
     return previewCommandImport(existingNames, pack);
   }
 
@@ -212,7 +168,8 @@ export class CommandRegistry {
       renamed: [],
     };
 
-    const existingNames = new Set(this.scanUserCommands().map((c) => c.name));
+    const existingNames = new Set(this.exportableCommands().map((c) => c.name));
+    const teamId = PROJECT_DEFAULT_TEAM_ID;
 
     for (const entry of pack.commands) {
       const baseName = entry.name?.trim().toLowerCase();
@@ -233,7 +190,7 @@ export class CommandRegistry {
       }
 
       const def: CommandDef = {
-        id: `user:${targetName}`,
+        id: `${teamId}:${targetName}`,
         name: targetName,
         description: entry.description ?? "",
         source: "user",
@@ -243,144 +200,107 @@ export class CommandRegistry {
         model: entry.model || undefined,
         order: 1000,
         enabled: entry.enabled !== false,
+        teamId,
+        teamName: "This project",
+        removable: true,
       };
 
       if (strategy === "replace" && existingNames.has(baseName) && targetName === baseName) {
-        const existing = this.list().find((c) => c.id === `user:${baseName}`);
-        if (existing && existing.source === "user" && existing.name !== targetName) {
-          this.deleteFile(existing);
-        }
+        this.deleteFile(baseName, teamId);
       }
 
-      this.writeFile(def);
+      this.writeFile(def, teamId);
+      if (!def.enabled) {
+        setProjectAssetEnabled(this.projectRoot, def.id, false);
+      }
       existingNames.add(targetName);
       result.imported += 1;
     }
 
-    this.cache = null;
+    invalidateResolver(this.projectRoot);
     return result;
   }
 
-  // ── Private helpers ──
-
-  private buildList(): CommandDef[] {
-    const userCommands = this.scanUserCommands();
-    const userNames = new Set(userCommands.map((c) => c.name));
-    const builtins = BUILTIN_COMMANDS.filter((c) => !userNames.has(c.name));
-    return [...builtins, ...userCommands];
+  /** User-editable commands across writable teams (export / import conflict set). */
+  private exportableCommands(): CommandDef[] {
+    return this.list().filter((c) => c.removable);
   }
 
-  private scanUserCommands(): CommandDef[] {
-    if (!this.projectRoot) return [];
-    const dir = this.commandsDir;
-    if (!existsSync(dir)) return [];
-
-    const commands: CommandDef[] = [];
-    try {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        if (entry.endsWith(".disabled")) continue;
-        if (!entry.endsWith(".md") && !entry.endsWith(".mdx")) continue;
-
-        const filePath = join(dir, entry);
-        try {
-          const def = this.parseFile(filePath);
-          if (def) commands.push(def);
-        } catch (err: any) {
-          console.warn(`[commands] Skipping invalid command file ${entry}: ${err.message}`);
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[commands] Failed to scan ${dir}: ${err.message}`);
-    }
-
-    return commands;
+  private teamCommands(teamId: string): CommandDef[] {
+    return this.list().filter((c) => c.teamId === teamId);
   }
 
-  private parseFile(filePath: string): CommandDef | null {
-    const raw = readFileSync(filePath, "utf-8");
-
-    // Parse YAML frontmatter (--- ... ---)
-    const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-    if (!fmMatch) {
-      // No frontmatter — entire file is the template
-      const name = basename(filePath, extname(filePath));
-      return {
-        id: `user:${name}`,
-        name,
-        description: "",
-        source: "user",
-        template: raw.trim(),
-        order: 1000,
-        enabled: true,
-      };
-    }
-
-    const fmRaw = fmMatch[1];
-    const body = fmMatch[2].trim();
-
-    // Simple YAML parser (flat keys only, no library needed)
-    const fm: Record<string, string> = {};
-    for (const line of fmRaw.split("\n")) {
-      const colonIdx = line.indexOf(":");
-      if (colonIdx === -1) continue;
-      const key = line.slice(0, colonIdx).trim();
-      const value = line.slice(colonIdx + 1).trim();
-      if (key) fm[key] = value;
-    }
-
-    const name = basename(filePath, extname(filePath));
-
-    return {
-      id: `user:${name}`,
-      name,
-      description: fm.description || "",
-      source: "user",
-      template: body,
-      action: fm.action || undefined,
-      agent: fm.agent || undefined,
-      model: fm.model || undefined,
-      order: 1000,
-      enabled: fm.enabled !== "false",
-    };
+  private filePath(name: string, teamId: string): string {
+    return join(this.commandsDirFor(teamId), `${name}.md`);
   }
 
-  private filePath(name: string, enabled: boolean): string {
-    const ext = enabled ? ".md" : ".md.disabled";
-    return join(this.commandsDir, `${name}${ext}`);
-  }
+  private writeFile(def: CommandDef, teamId: string): void {
+    const dir = this.commandsDirFor(teamId);
+    mkdirSync(dir, { recursive: true });
 
-  private writeFile(def: CommandDef): void {
-    this.ensureDir();
-
+    const fmValue = (v: string) => v.replace(/\s+/g, " ").trim();
     const frontmatter = [
       "---",
-      `description: ${def.description || ""}`,
-      ...(def.action ? [`action: ${def.action}`] : []),
-      ...(def.agent ? [`agent: ${def.agent}`] : []),
-      ...(def.model ? [`model: ${def.model}`] : []),
-      `enabled: ${def.enabled}`,
+      `description: ${fmValue(def.description || "")}`,
+      ...(def.action ? [`action: ${fmValue(def.action)}`] : []),
+      ...(def.agent ? [`agent: ${fmValue(def.agent)}`] : []),
+      ...(def.model ? [`model: ${fmValue(def.model)}`] : []),
+      `order: ${def.order ?? 1000}`,
       "---",
     ].join("\n");
 
     const content = `${frontmatter}\n\n${def.template || ""}\n`;
-    const path = this.filePath(def.name, def.enabled);
-    writeFileSync(path, content, "utf-8");
+    writeFileSync(this.filePath(def.name, teamId), content, "utf-8");
   }
 
-  private deleteFile(def: CommandDef): void {
-    const path = this.filePath(def.name, def.enabled);
-    if (existsSync(path)) unlinkSync(path);
-    const altPath = this.filePath(def.name, !def.enabled);
-    if (existsSync(altPath)) unlinkSync(altPath);
-  }
-
-  private ensureDir(): void {
-    if (!this.projectRoot) throw new Error("No project root set");
-    const dir = this.commandsDir;
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  private deleteFile(name: string, teamId: string): void {
+    const path = this.filePath(name, teamId);
+    if (existsSync(path)) rmSync(path, { force: true });
   }
 }
 
-/** Singleton */
-export const commandRegistry = new CommandRegistry();
+function toCommandDef(asset: AssetViewV2): CommandDef {
+  const teamId = asset.teamId;
+  const cmd = (asset.definition ?? {}) as {
+    template?: string;
+    action?: string;
+    agent?: string;
+    model?: string;
+    order?: number;
+  };
+  return {
+    id: asset.fqid,
+    name: asset.id,
+    description: asset.description,
+    source:
+      teamId === APP_COMMANDS_OWNER_ID || teamId === CORE_TEAM_ID
+        ? "builtin"
+        : asset.editable
+          ? "user"
+          : "plugin",
+    template: cmd.template ?? "",
+    action: cmd.action,
+    agent: cmd.agent,
+    model: cmd.model,
+    order: cmd.order ?? 1000,
+    enabled: asset.enabled,
+    teamId,
+    teamName: asset.origin.teamName,
+    removable: asset.editable,
+  };
+}
+
+const registryPool = new Map<string, CommandRegistry>();
+
+export function getCommandRegistry(projectRoot: string): CommandRegistry {
+  let registry = registryPool.get(projectRoot);
+  if (!registry) {
+    registry = new CommandRegistry(projectRoot);
+    registryPool.set(projectRoot, registry);
+  }
+  return registry;
+}
+
+export function __resetCommandRegistriesForTests(): void {
+  registryPool.clear();
+}

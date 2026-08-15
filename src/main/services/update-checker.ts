@@ -130,18 +130,38 @@ function maybeAutoDownloadAfterCheck(status: UpdaterStatus): void {
  * caller decides whether to treat unknown as "not an update").
  */
 export function compareVersions(a: string, b: string): number {
-  const parse = (v: string): number[] => {
-    const clean = v.replace(/^v/i, "").trim();
-    const parts = clean.split(".").map((p) => parseInt(p, 10));
-    // Pad to 3 segments; NaN → 0.
-    while (parts.length < 3) parts.push(0);
-    return parts.slice(0, 3).map((n) => (Number.isNaN(n) ? 0 : n));
+  const parse = (v: string): { core: number[]; prerelease: string[] | null } => {
+    const match = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+.*)?$/i.exec(
+      v.trim(),
+    );
+    if (!match) return { core: [0, 0, 0], prerelease: null };
+    return {
+      core: [match[1], match[2] ?? "0", match[3] ?? "0"].map(Number),
+      prerelease: match[4] ? match[4].split(".") : null,
+    };
   };
   const pa = parse(a);
   const pb = parse(b);
   for (let i = 0; i < 3; i++) {
-    if (pa[i] > pb[i]) return 1;
-    if (pa[i] < pb[i]) return -1;
+    if (pa.core[i] > pb.core[i]) return 1;
+    if (pa.core[i] < pb.core[i]) return -1;
+  }
+  if (!pa.prerelease && !pb.prerelease) return 0;
+  if (!pa.prerelease) return 1;
+  if (!pb.prerelease) return -1;
+  const length = Math.max(pa.prerelease.length, pb.prerelease.length);
+  for (let i = 0; i < length; i++) {
+    const left = pa.prerelease[i];
+    const right = pb.prerelease[i];
+    if (left === undefined) return -1;
+    if (right === undefined) return 1;
+    if (left === right) continue;
+    const leftNumeric = /^\d+$/.test(left);
+    const rightNumeric = /^\d+$/.test(right);
+    if (leftNumeric && rightNumeric) return Number(left) > Number(right) ? 1 : -1;
+    if (leftNumeric) return -1;
+    if (rightNumeric) return 1;
+    return left.localeCompare(right);
   }
   return 0;
 }

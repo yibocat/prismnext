@@ -1,14 +1,14 @@
 // prism-next/src/main/commands/index.ts
 import { parseCommand } from "./parser";
 import { expandTemplate } from "./expander";
-import { commandRegistry } from "./registry";
+import { getCommandRegistry } from "./registry";
 
 /**
  * CommandEngine — single entry point.
  *
  * Every command works the same way:
  *   1. Parse /command args
- *   2. Look up the command definition
+ *   2. Look up the command definition (per-project registry, resolver-backed)
  *   3. Expand its template with the args
  *   4. Return the expanded text → goes into the composer input box
  *
@@ -29,21 +29,21 @@ export class CommandEngine {
     const parsed = parseCommand(input);
     if (!parsed) return null;
 
-    const cmd = commandRegistry.lookup(parsed.command);
+    const cmd = getCommandRegistry(projectRoot).lookup(parsed.command);
     if (!cmd) return null;
 
     return expandTemplate(cmd.template, parsed, projectRoot);
   }
 
-  list() {
-    return commandRegistry.list();
+  list(projectRoot: string) {
+    return getCommandRegistry(projectRoot).list();
   }
 
-  search(query: string) {
-    return commandRegistry.search(query);
+  search(projectRoot: string, query: string) {
+    return getCommandRegistry(projectRoot).search(query);
   }
 
-  reload() {
-    return commandRegistry.reload();
+  reload(projectRoot: string) {
+    return getCommandRegistry(projectRoot).reload();
   }
 }

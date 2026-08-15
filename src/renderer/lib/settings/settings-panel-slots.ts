@@ -13,6 +13,7 @@ import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { getProvider } from "@/lib/providers";
 import { i18n } from "@/lib/i18n";
 import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
+import { MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 
 export type SettingsPanelSlot =
   | { kind: "placeholder"; title: string; description?: string }
@@ -23,10 +24,12 @@ export type SettingsPanelSlot =
   | { kind: "ai-provider"; mode: "builtin-key"; providerId: string }
   | { kind: "agent-expert"; mode: "new" }
   | { kind: "agent-expert"; mode: "edit"; expertId: string; title?: string }
-  | { kind: "agent-expert"; mode: "customize-builtin"; expertId: string; title?: string }
+  /** Pack-provided (bundled / store / Pro) — identity read-only; overrides only. */
+  | { kind: "agent-expert"; mode: "installed"; expertId: string; title?: string }
   | { kind: "agent-orchestrator"; mode: "new" }
   | { kind: "agent-orchestrator"; mode: "edit"; orchestratorId: string; title?: string }
-  | { kind: "agent-orchestrator"; mode: "customize-builtin"; orchestratorId: string; title?: string }
+  /** Pack-provided (bundled / store / Pro) — identity read-only. */
+  | { kind: "agent-orchestrator"; mode: "installed"; orchestratorId: string; title?: string }
   | { kind: "prompt-markdown"; doc: "system-prompt" | "agents-md" }
   | { kind: "prompt-stack-preview" }
   | { kind: "research-brief"; focusSection?: string }
@@ -35,16 +38,45 @@ export type SettingsPanelSlot =
   | { kind: "builtin-commands" }
   | { kind: "rule-markdown"; mode: "new" }
   | { kind: "rule-markdown"; mode: "edit"; ruleId: string; title?: string }
-  | { kind: "custom-command"; mode: "new" }
-  | { kind: "custom-command"; mode: "edit"; commandId: string; title?: string }
-  | { kind: "mcp-json" }
-  | { kind: "mcp-catalog" }
-  | { kind: "mcp-paste-json" }
-  | { kind: "mcp-server"; serverName: string; title?: string }
-  | { kind: "skill-markdown"; mode: "new" }
-  | { kind: "skill-markdown"; mode: "edit"; skillId: string; title?: string }
-  | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string }
+  | { kind: "custom-command"; mode: "new"; targetTeamId?: string }
+  | {
+      kind: "custom-command";
+      mode: "edit";
+      commandId: string;
+      title?: string;
+      teamId?: string;
+    }
+  /**
+   * Edit one writable team's mcp.json.
+   * - Settings → MCP: omit targetTeamId so TeamPicker can switch teams.
+   * - Team detail: pass targetTeamId (+ lockTarget) to edit that team only.
+   */
+  | { kind: "mcp-json"; targetTeamId?: string; lockTarget?: boolean }
+  | { kind: "mcp-catalog"; targetTeamId?: string }
+  | { kind: "mcp-paste-json"; targetTeamId?: string }
+  | {
+      kind: "mcp-server";
+      serverName: string;
+      title?: string;
+      /** Owning team (writable → edit; pack → read-only preview). */
+      teamId?: string;
+      readOnly?: boolean;
+    }
+  | { kind: "skill-markdown"; mode: "new"; targetTeamId?: string }
+  | {
+      kind: "skill-markdown";
+      mode: "edit";
+      skillId: string;
+      title?: string;
+      /** Owning team for save target (defaults to project.local). */
+      teamId?: string;
+      absPath?: string;
+    }
+  | { kind: "skill-markdown"; mode: "preview-bundled"; skillId: string; title?: string; absPath?: string }
   | { kind: "skill-library" }
+  | { kind: "team-detail"; teamId: string; title?: string }
+  /** Create a custom (non-store) team — app or project scope. */
+  | { kind: "team-create"; scope?: "app" | "project" }
   | { kind: "shortcuts" }
   | { kind: "logs" }
   | { kind: "permission-rules"; field: "allowed-paths" | "allow-rules" | "deny-rules" };
@@ -108,12 +140,13 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     }
     case "custom-command": {
       if (slot.mode === "new") return tt("settings.slots.newCommand", "New command");
-      return slot.title ? `/${slot.title}` : tt("settings.slots.command", "Command");
+      if (!slot.title) return tt("settings.slots.command", "Command");
+      return slot.title.startsWith("/") ? slot.title : `/${slot.title}`;
     }
     case "mcp-json":
       return tt("settings.slots.mcpJson", "mcp.json");
     case "mcp-catalog":
-      return tt("settings.slots.mcpCatalog", "MCP catalog");
+      return tt("settings.slots.installMcp", "Install MCP");
     case "mcp-paste-json":
       return tt("settings.slots.addFromJson", "Add from JSON");
     case "mcp-server":
@@ -124,6 +157,16 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     }
     case "skill-library":
       return tt("settings.slots.installSkills", "Install skills");
+    case "team-detail":
+      if (slot.teamId === MY_CONTENT_TEAM_ID) {
+        return slot.title ?? tt("settings.teams.myContentTeam", "Common Team");
+      }
+      if (slot.teamId === PROJECT_DEFAULT_TEAM_ID) {
+        return slot.title ?? tt("settings.teams.projectLocalTeam", "Project Team");
+      }
+      return slot.title ?? tt("settings.slots.packDetail", "Team details");
+    case "team-create":
+      return tt("settings.slots.newTeam", "New team");
     case "shortcuts":
       return tt("settings.slots.shortcuts", "Shortcuts");
     case "logs":

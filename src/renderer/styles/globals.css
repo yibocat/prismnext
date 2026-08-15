@@ -68,6 +68,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-chat-float: var(--chat-float);
+  --color-chat-tool-panel: var(--chat-tool-panel);
   --radius-sm: max(0px, calc(var(--radius) - 4px));
   --radius-md: max(0px, calc(var(--radius) - 2px));
   --radius-lg: var(--radius);
@@ -381,8 +382,8 @@
 }
 
 /* ── Terminal (xterm.js) overrides ── */
-/* Make all xterm internal layers transparent so the container's theme
-   background (glass-content) shows through uniformly. */
+/* DOM layers stay transparent. The painted cell fill is theme.background
+   (must be #00000000 + allowTransparency) so [data-surface=content] shows. */
 
 .terminal-xterm,
 .terminal-xterm .xterm-screen,

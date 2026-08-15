@@ -8,7 +8,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { cancelAiCommandForSession } from "../services/ai-pty";
 import { getSettings } from "../services/settings";
 import {
   archiveExperiment,
@@ -23,10 +22,11 @@ import {
   updateExperiment,
   updateRunNotes,
   workspaceIslandPathForId,
+  isExperimentCtxError,
 } from "../services/experiment-log-service";
 import {
+  cancelExperimentExecution,
   kickoffExperimentRun,
-  markExperimentRunCancelled,
 } from "../services/experiment-run-executor";
 import { snapshotExperiment } from "../services/experiment-results-snapshot";
 import { broadcastExperimentChanged } from "../services/experiment-ui-events";
@@ -99,7 +99,7 @@ interface ExperimentSnapshotArgs {
 export function registerExperimentHandlers(): void {
   ipcMain.handle("experiment:list", async (_event, args: ExperimentListArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const list = listExperiments(ctxResult, {
       includeArchived: args.includeArchived === true,
     });
@@ -116,7 +116,7 @@ export function registerExperimentHandlers(): void {
     "experiment:archive",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = archiveExperiment(ctxResult, (args.id || "").trim());
       if (!result.ok) return { ok: false as const, error: result.error };
       broadcastExperimentChanged({
@@ -145,7 +145,7 @@ export function registerExperimentHandlers(): void {
       },
     ) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = createExperiment(ctxResult, {
         title: args.title,
         tags: args.tags,
@@ -165,7 +165,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:update", async (_event, args: ExperimentUpdateArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = updateExperiment(ctxResult, args.id, {
       title: args.title,
       tags: args.tags,
@@ -188,7 +188,7 @@ export function registerExperimentHandlers(): void {
       args: { projectRoot: string; id: string; runId: string; notes: string },
     ) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = updateRunNotes(
         ctxResult,
         (args.id || "").trim(),
@@ -209,7 +209,7 @@ export function registerExperimentHandlers(): void {
     "experiment:restore",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const result = restoreExperiment(ctxResult, (args.id || "").trim());
       if (!result.ok) return { ok: false as const, error: result.error };
       broadcastExperimentChanged({
@@ -225,7 +225,7 @@ export function registerExperimentHandlers(): void {
     "experiment:delete",
     async (_event, args: { projectRoot: string; id: string; removeLab?: boolean }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
-      if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+      if (isExperimentCtxError(ctxResult)) return ctxResult;
       const id = (args.id || "").trim();
       const result = deleteExperiment(ctxResult, id, { removeLab: args.removeLab === true });
       if (!result.ok) return { ok: false as const, error: result.error };
@@ -240,7 +240,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:read", async (_event, args: ExperimentReadArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const limit = typeof args.runsLimit === "number" && args.runsLimit > 0 ? args.runsLimit : 20;
     // Human UI needs stdout/stderr tails; agent bridge uses lean reads separately.
     const result = readExperiment(ctxResult, args.id, limit, { includeOutput: true });
@@ -260,7 +260,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:detectEnv", async (_event, args: ExperimentDetectEnvArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = detectEnvForIsland(ctxResult, args.id);
     if (!result.ok) return { ok: false as const, error: result.error };
     return { ok: true as const, env: result.env, workspacePath: result.workspacePath };
@@ -268,7 +268,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:getPaths", async (_event, args: ExperimentGetPathsArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const workspaceAbs = workspaceIslandPathForId(ctxResult, args.id);
     if (!workspaceAbs) return { ok: false as const, error: "experiment_not_found" };
     if (!existsSync(workspaceAbs)) {
@@ -284,7 +284,7 @@ export function registerExperimentHandlers(): void {
 
   ipcMain.handle("experiment:run", async (event, args: ExperimentRunArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();
     const command = (args.command || "").trim();
     if (!id) return { ok: false as const, error: "experiment_not_found" };
@@ -303,7 +303,7 @@ export function registerExperimentHandlers(): void {
     const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
     const permRules = buildPermissionRulesFromSettings(settings);
     const sessionAgent = chatSessionId
-      ? AcpService.getInstance().getSessionAgent(chatSessionId)
+      ? AcpService.getInstanceForSession(chatSessionId).getSessionAgent(chatSessionId)
       : undefined;
     const action = resolvePermissionAction(mode, "experiment-run", sessionAgent, {
       projectRoot: args.projectRoot,
@@ -333,7 +333,7 @@ export function registerExperimentHandlers(): void {
     // Stream events (started / output / complete) are broadcast from the
     // executor so Agent bridge runs share the same Chat live path (Station 2).
     // Pass originSender so this window still gets events origin-first (Bug #4).
-    kickoffExperimentRun({
+    const started = await kickoffExperimentRun({
       ctx: ctxResult,
       id,
       command,
@@ -344,23 +344,26 @@ export function registerExperimentHandlers(): void {
       chatSessionId,
       originSender: sender,
     });
-    return { ok: true as const, runId, status: "started" as const };
+    return {
+      ok: true as const,
+      runId: started?.runId ?? runId,
+      executionId: started?.executionId,
+      status: "started" as const,
+    };
   });
 
-  ipcMain.handle("experiment:cancelRun", (_event, args: ExperimentCancelRunArgs) => {
+  ipcMain.handle("experiment:cancelRun", async (_event, args: ExperimentCancelRunArgs) => {
     const id = (args.id || "").trim();
     const runId = (args.runId || "").trim();
     if (!id || !runId) return { ok: true as const };
-    // Stamp before kill so the eventual appendRun can mark cancelled (Bug #21).
-    markExperimentRunCancelled(id, runId);
-    cancelAiCommandForSession(`experiment:${id}:${runId}`);
+    await cancelExperimentExecution(id, runId);
     return { ok: true as const };
   });
 
   // Station 3 — read-only workspace scan for Results panel (same core as agent tool).
   ipcMain.handle("experiment:snapshot", async (_event, args: ExperimentSnapshotArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
-    if ("ok" in ctxResult && ctxResult.ok === false) return ctxResult;
+    if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();
     if (!id) return { ok: false as const, error: "experiment_not_found" };
     const result = snapshotExperiment(ctxResult, id, {

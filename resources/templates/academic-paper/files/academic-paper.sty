@@ -1,0 +1,21 @@
+\ProvidesPackage{academic-paper}
+% Community Free scaffold style — distinctive but generic (not a journal class).
+
+\RequirePackage{geometry}
+\geometry{margin=1in}
+\RequirePackage{microtype}
+\RequirePackage{setspace}
+\onehalfspacing
+\RequirePackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.75em}{}
+\titlespacing*{\section}{0pt}{1.4em}{0.6em}
+
+\RequirePackage{amsmath,amssymb,amsthm}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}[section]
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}[section]

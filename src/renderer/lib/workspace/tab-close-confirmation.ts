@@ -1,9 +1,12 @@
 import type { RightTab } from "./mode-registry";
+import { isJobMonitorTab } from "./mode-registry";
+import { useExecutionStore } from "@/stores/execution-store";
+import { terminalExecutionIsFinal } from "../../../shared/execution";
 import { isFileTabDirty } from "./tab-lifecycle";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
-import { useSettingsStore } from "@/stores/settings-store";
+import { readTerminalExecutionSettings } from "@/lib/terminal/ai-prefs";
 import { i18n } from "@/lib/i18n";
 
 export interface TabCloseConfirmation {
@@ -13,11 +16,22 @@ export interface TabCloseConfirmation {
   detail?: string;
   confirmLabel: string;
   destructive?: boolean;
+  secondaryLabel?: string;
 }
 
 export function isTerminalTabBusy(tabId: string): boolean {
   const tab = useRightPanelStore.getState().tabs.find((t) => t.id === tabId);
-  if (tab?.terminalSource === "ai") {
+  if (tab && isJobMonitorTab(tab)) {
+    if (tab.linkedChatTabId) {
+      const running = useExecutionStore.getState().listForChat(tab.linkedChatTabId).some(
+        (view) => view.summary && !terminalExecutionIsFinal(view.summary.state),
+      );
+      if (running) return true;
+    }
+    if (tab.linkedExecutionId) {
+      const state = useExecutionStore.getState().byId[tab.linkedExecutionId]?.summary?.state;
+      return Boolean(state && !terminalExecutionIsFinal(state));
+    }
     return useTerminalAiStore.getState().getSessionStateForAiTab(tabId)?.phase === "running";
   }
   return useTerminalStore.getState().sessions[tabId]?.busy === true;
@@ -26,19 +40,18 @@ export function isTerminalTabBusy(tabId: string): boolean {
 export function getTabCloseConfirmation(tab: RightTab): TabCloseConfirmation | null {
   if (tab.kind === "terminal") {
     if (!isTerminalTabBusy(tab.id)) return null;
-    const killOnClose =
-      useSettingsStore.getState().settings.aiTerminalCloseTabKillsProcess === true;
-    if (tab.terminalSource === "ai") {
+    const killOnClose = readTerminalExecutionSettings().jobMonitorCloseCancels;
+    if (isJobMonitorTab(tab)) {
       return {
         tabId: tab.id,
-        title: i18n.t("dialogs.tabClose.closeAiTerminal"),
+        title: i18n.t("dialogs.tabClose.closeJobMonitor"),
         description: killOnClose
-          ? i18n.t("dialogs.tabClose.aiRunningKill")
-          : i18n.t("dialogs.tabClose.aiRunningKeep"),
+          ? i18n.t("dialogs.tabClose.jobRunningKill")
+          : i18n.t("dialogs.tabClose.jobRunningKeep"),
         detail: killOnClose
-          ? i18n.t("dialogs.tabClose.aiDetailKill")
-          : i18n.t("dialogs.tabClose.aiDetailKeep"),
-        confirmLabel: i18n.t("dialogs.tabClose.closeAiTerminal"),
+          ? i18n.t("dialogs.tabClose.jobDetailKill")
+          : i18n.t("dialogs.tabClose.jobDetailKeep"),
+        confirmLabel: i18n.t("dialogs.tabClose.closeJobMonitor"),
         destructive: killOnClose,
       };
     }

@@ -1,0 +1,90 @@
+name: Request unified release
+
+# A public Host tag is the only release signal. This workflow never checks out
+# private Pro code or receives R2 credentials; it sends the pinned tag metadata
+# to the private release repository using a one-hour GitHub App token.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch private unified build
+    runs-on: ubuntu-latest
+    environment: pro-release-dispatch
+    steps:
+      - name: Checkout tagged Host commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - name: Resolve and validate release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="$(node -p "require('./package.json').version")"
+          test "$TAG" = "v$VERSION"
+          if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+            CHANNEL="beta"
+          elif [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL="stable"
+          else
+            echo "Unsupported release version: $VERSION" >&2
+            exit 1
+          fi
+          HOST_SHA="$(git rev-parse "${TAG}^{commit}")"
+          {
+            echo "host_tag=$TAG"
+            echo "host_sha=$HOST_SHA"
+            echo "release_tag=pro-v$VERSION"
+            echo "channel=$CHANNEL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create short-lived private-dispatch token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.PRISMNEXT_RELEASE_APP_ID }}
+          private-key: ${{ secrets.PRISMNEXT_RELEASE_APP_PRIVATE_KEY }}
+          owner: yibocat
+          repositories: prismnext-pro
+
+      - name: Dispatch the pinned release to private Pro CI
+        shell: bash
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+          HOST_TAG: ${{ steps.release.outputs.host_tag }}
+          HOST_SHA: ${{ steps.release.outputs.host_sha }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          CHANNEL: ${{ steps.release.outputs.channel }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const response = await fetch("https://api.github.com/repos/yibocat/prismnext-pro/dispatches", {
+            method: "POST",
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Bearer ${process.env.TOKEN}`,
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+            body: JSON.stringify({
+              event_type: "prismnext-release",
+              client_payload: {
+                host_tag: process.env.HOST_TAG,
+                host_sha: process.env.HOST_SHA,
+                release_tag: process.env.RELEASE_TAG,
+                channel: process.env.CHANNEL,
+              },
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(`repository_dispatch failed: ${response.status} ${await response.text()}`);
+          }
+          NODE

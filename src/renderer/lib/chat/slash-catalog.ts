@@ -1,32 +1,27 @@
-import { parseMcpConfig } from "@/lib/agent/mcp-config";
-
 export type SlashCatalogSkill = { id: string; name: string; enabled: boolean };
 export type SlashCatalogMcp = { name: string };
 
-const MCP_REL = ".prismnext/agent/mcp.json";
-
-/** Load installed skills + MCP servers — same sources as Settings → Skills / MCP. */
+/**
+ * Load installed skills + MCP servers — same sources as Settings → Skills / MCP.
+ * MCP entries come from `teams:listMcp` (project mcp.json + every enabled
+ * team's MCP servers), so team-provided MCPs appear in the `/` menu and can
+ * actually be lazy-loaded (B1 fix — previously only project mcp.json was read,
+ * so team MCPs were unreachable).
+ */
 export async function loadSlashCatalog(projectRoot: string | null): Promise<{
   skills: SlashCatalogSkill[];
   mcps: SlashCatalogMcp[];
 }> {
   if (!projectRoot) return { skills: [], mcps: [] };
 
-  const mcpPath = `${projectRoot}/${MCP_REL}`;
-
   const [skills, mcps] = await Promise.all([
     window.electronAPI.agentListSkills(projectRoot).catch(() => [] as SlashCatalogSkill[]),
-    window.electronAPI.fsExists(mcpPath).then(async (exists) => {
-      if (!exists) return [] as SlashCatalogMcp[];
-      try {
-        const { content } = await window.electronAPI.fsRead(mcpPath);
-        return parseMcpConfig(content ?? "")
-          .filter((entry) => entry.enabled !== false)
-          .map((entry) => ({ name: entry.name }));
-      } catch {
-        return [];
-      }
-    }),
+    window.electronAPI
+      .teamsListMcp(projectRoot)
+      .then((list) =>
+        list.filter((entry) => entry.enabled).map((entry) => ({ name: entry.name })),
+      )
+      .catch(() => [] as SlashCatalogMcp[]),
   ]);
 
   return { skills, mcps };

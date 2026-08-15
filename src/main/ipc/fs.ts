@@ -1,10 +1,16 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
-import { startWatching, stopWatching } from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { createLogger } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
-import { writeWorkspaceDirs, createConfiguredFolders, validateWorkspaceDirs } from "../services/workspace-config";
+import {
+  writeWorkspaceDirs,
+  createConfiguredFolders,
+  validateWorkspaceDirs,
+  writeProjectIcon,
+  writeProjectIconImage,
+} from "../services/workspace-config";
+import { ICON_IMAGE_FILENAME, normalizeIconSpec, type IconSpec } from "../../shared/icon-spec";
 import type { Dirent } from "node:fs";
 import {
   assertSafeRelativePath,
@@ -13,24 +19,27 @@ import {
 } from "../lib/template-path";
 import { findProjectRelByBasename } from "../lib/find-project-file";
 import {
-  registerProjectRoot,
-  clearRoots,
   isPathUnderHome,
   assertContained,
   assertUnderHome,
 } from "../services/active-project-roots";
+import {
+  projectLifecycleAuthority,
+  type ProjectLifecycleAuthority,
+} from "../services/project-lifecycle-authority";
 
 const templateLog = createLogger("template-ipc", "ipc");
 const fsLog = createLogger("fs-ipc", "fs");
 
-export function registerFsHandlers(): void {
+export function registerFsHandlers(
+  watcher: Pick<typeof fs, "startWatching" | "stopWatching"> = fs,
+  authority: ProjectLifecycleAuthority = projectLifecycleAuthority,
+): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
-    registerProjectRoot(args.rootPath); // best-effort: register active project root for path containment
     return fs.scanProjectFolder(args.rootPath);
   });
 
   ipcMain.handle("fs:scanMetadata", async (_event, args: { rootPath: string }) => {
-    registerProjectRoot(args.rootPath);
     return fs.scanMetadata(args.rootPath);
   });
 
@@ -175,15 +184,19 @@ export function registerFsHandlers(): void {
 
   // ─── File watcher ───
 
-  ipcMain.handle("fs:watch-start", async (_event, args: { rootPath: string }) => {
-    // Project switch: reset path-containment roots to the newly opened project.
-    clearRoots();
-    registerProjectRoot(args.rootPath);
-    await startWatching(args.rootPath);
+  ipcMain.handle("fs:watch-start", async () => {
+    const rootPath = authority.currentRoot;
+    if (!rootPath) {
+      throw new Error("Cannot watch an unopened project");
+    }
+    await watcher.startWatching(rootPath);
+    if (authority.currentRoot !== rootPath) {
+      throw new Error("Cannot watch an unopened project");
+    }
   });
 
   ipcMain.handle("fs:watch-stop", async () => {
-    await stopWatching();
+    await watcher.stopWatching();
   });
 
   // ─── Dialog ───
@@ -361,23 +374,15 @@ export function registerFsHandlers(): void {
     }
 
     // Create new directory structure
-    const skillsDir = join(newAgentDir, "skills");
     if (!existsSync(newAgentDir)) {
       mkdirSync(newAgentDir, { recursive: true });
     }
-    if (!existsSync(skillsDir)) {
-      mkdirSync(skillsDir, { recursive: true });
-    }
 
     // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
+    // M11 moves this to teams/project.local/mcp.json — the old agent/mcp.json
+    // is only a migration input now.
     const { ensureDefaultMcpServers } = await import("../services/project-mcp-defaults");
     ensureDefaultMcpServers(newAgentDir);
-
-    // Create .gitkeep in skills/
-    const gitkeepPath = join(skillsDir, ".gitkeep");
-    if (!existsSync(gitkeepPath)) {
-      writeFileSync(gitkeepPath, "", "utf-8");
-    }
 
     // Create AGENTS.md template (empty, ready for user to fill in)
     const agentsMdPath = join(newAgentDir, "AGENTS.md");
@@ -394,7 +399,9 @@ export function registerFsHandlers(): void {
         rootPath: string;
         workspaceDirs?: WorkspaceFolder[];
         initGit?: boolean;
-        projectIcon?: string;
+        projectIcon?: IconSpec | string | null;
+        /** Optional PNG bytes (base64) written to `.prismnext/icon.png`. */
+        projectIconImagePngBase64?: string;
       },
     ) => {
     const { join } = require("node:path");
@@ -431,18 +438,25 @@ export function registerFsHandlers(): void {
     // writeWorkspaceDirs does a read-modify-write, so we pre-populate the initial settings
     // to avoid a second read-write cycle.
     const settingsPath = join(prismDir, "settings.json");
-    const projectIcon =
-      typeof args.projectIcon === "string" ? args.projectIcon.trim().slice(0, 16) : "";
+    const iconSpec = normalizeIconSpec(args.projectIcon);
     const initialSettings: Record<string, unknown> = {
       version: 1,
       compiler: "tectonic",
     };
-    if (projectIcon) initialSettings.projectIcon = projectIcon;
+    // Image icons are written as a sibling file (not Base64 in JSON).
+    if (args.projectIconImagePngBase64) {
+      const png = Buffer.from(args.projectIconImagePngBase64, "base64");
+      if (png.length > 0 && png.length <= 256 * 1024) {
+        writeFileSync(join(prismDir, ICON_IMAGE_FILENAME), png);
+        initialSettings.projectIcon = { kind: "image", value: ICON_IMAGE_FILENAME };
+      }
+    } else if (iconSpec && iconSpec.kind !== "image") {
+      initialSettings.projectIcon = iconSpec;
+    }
     writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
     writeWorkspaceDirs(prismDir, workspaceDirs);
 
-    writeFileSync(join(prismDir, "state.json"), JSON.stringify({}, null, 2));
-    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\n");
+    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\ncache/\nstate/\n");
 
     // Create agent-config templates
     await createAgentConfig(prismDir);
@@ -482,6 +496,25 @@ export function registerFsHandlers(): void {
     }
   });
 
+  // ─── Update a project's visual identity in `.prismnext/settings.json` ───
+  ipcMain.handle(
+    "project:setIcon",
+    async (_event, args: { rootPath: string; icon: IconSpec | null }) => {
+      const { join } = require("node:path");
+      const prismDir = join(args.rootPath, ".prismnext");
+      writeProjectIcon(prismDir, args.icon);
+    },
+  );
+
+  ipcMain.handle(
+    "project:setIconImage",
+    async (_event, args: { rootPath: string; pngBase64: string }) => {
+      const { join } = require("node:path");
+      const prismDir = join(args.rootPath, ".prismnext");
+      writeProjectIconImage(prismDir, Buffer.from(args.pngBase64, "base64"));
+    },
+  );
+
   // ─── Ensure .prismnext/ exists (idempotent) ───
   // Called on every project open (not just create) so that the data hub
   // directory tree is always present. Safe to call on already-initialized
@@ -493,9 +526,6 @@ export function registerFsHandlers(): void {
     const prismDir = join(args.rootPath, ".prismnext");
     if (!existsSync(prismDir)) {
       mkdirSync(prismDir, { recursive: true });
-    }
-    if (!existsSync(join(prismDir, "sessions"))) {
-      mkdirSync(join(prismDir, "sessions"), { recursive: true });
     }
     if (!existsSync(join(prismDir, "compile"))) {
       mkdirSync(join(prismDir, "compile"), { recursive: true });
@@ -532,8 +562,8 @@ export function registerFsHandlers(): void {
     const { existsSync } = require("node:fs");
 
     const PRISM_DIR = ".prismnext";
-    const PRISM_FILES = ["settings.json", "state.json", ".gitignore"];
-    const PRISM_SUBDIRS = ["sessions", "compile"];
+    const PRISM_FILES = ["settings.json", ".gitignore"];
+    const PRISM_SUBDIRS = ["compile"];
 
     const missing: string[] = [];
 

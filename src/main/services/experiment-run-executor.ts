@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, resolve as pathResolve } from "node:path";
 import { tmpdir } from "node:os";
 import { app } from "electron";
-import { runAiCommand } from "./ai-pty";
+import { cancelAiCommandForSession } from "./ai-pty";
 import {
   appendRun,
   detectEnv,
@@ -23,6 +23,7 @@ import {
   type ExperimentStorageContext,
   type ExperimentVenvRunner,
 } from "./experiment-log-service";
+import { ensureExecutionRegistry } from "./execution-registry";
 import {
   isPythonRelatedCommand,
   parseExperimentRunKind,
@@ -48,6 +49,8 @@ export type { ExperimentRunResult };
 
 /** Runs the human cancelled before natural PTY exit (Bug #21). Cleared on append. */
 const cancelledRunKeys = new Set<string>();
+/** `experimentId\0runId` → executionId, while the run is in flight. */
+const executionByRun = new Map<string, string>();
 
 function cancelledKey(experimentId: string, runId: string): string {
   return `${experimentId}\0${runId}`;
@@ -80,6 +83,30 @@ function notesForCancel(notes: string | undefined, cancelled: boolean): string |
 /** @internal */
 export function _resetExperimentRunCancelledForTests(): void {
   cancelledRunKeys.clear();
+  executionByRun.clear();
+}
+
+export function resolveExperimentExecutionId(experimentId: string, runId: string): string | undefined {
+  return executionByRun.get(cancelledKey(experimentId, runId));
+}
+
+/** Mark + cancel the Execution for this run; fall back to the legacy session id. */
+export async function cancelExperimentExecution(
+  experimentId: string,
+  runId: string,
+  reason = "user",
+): Promise<void> {
+  markExperimentRunCancelled(experimentId, runId);
+  const executionId = resolveExperimentExecutionId(experimentId, runId);
+  if (executionId) {
+    try {
+      await ensureExecutionRegistry().cancel(executionId, reason);
+      return;
+    } catch {
+      // Fall through to the session-id kill so in-flight PTYs still stop.
+    }
+  }
+  cancelAiCommandForSession(`experiment:${experimentId}:${runId}`);
 }
 
 /** @internal */
@@ -202,7 +229,9 @@ function detectIslandEnv(
   });
 }
 
-export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
+export async function kickoffExperimentRun(
+  args: KickoffExperimentRunArgs,
+): Promise<{ runId: string; executionId: string } | undefined> {
   const { ctx, id, command } = args;
   const island = workspaceIslandPathForId(ctx, id);
 
@@ -210,11 +239,11 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     // Defer to nextTick so the caller (IPC handler) can return its immediate
     // response first; otherwise the sync callback would race the handler.
     queueMicrotask(() => reportResult(args, { ok: false, error: "experiment_not_found" }));
-    return;
+    return undefined;
   }
   if (!command.trim()) {
     queueMicrotask(() => reportResult(args, { ok: false, error: "missing_command" }));
-    return;
+    return undefined;
   }
 
   // External-interpreter lane (SageMath & co): run the command as-is with the
@@ -226,15 +255,14 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
       queueMicrotask(() =>
         reportResult(args, { ok: false, error: "missing_python_path" }),
       );
-      return;
+      return undefined;
     }
     const env = detectIslandEnv(ctx, island);
     const version = probeInterpreterVersion(pythonPath, island);
     env.python = pythonPath;
     env.pythonVersion = version;
     env.interpreter = { kind: "external", path: pythonPath, version };
-    kickoffWithEnv(args, island, env, { PYTHONUNBUFFERED: "1" });
-    return;
+    return kickoffWithEnv(args, island, env, { PYTHONUNBUFFERED: "1" });
   }
 
   // Hard gate: Python under Experiment uses the shared project `.prismnext/.venv`.
@@ -247,7 +275,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
     });
     if (gate.action === "block") {
       queueMicrotask(() => reportResult(args, { ok: false, error: gate.error }));
-      return;
+      return undefined;
     }
     if (gate.action === "apply") {
       const env = detectIslandEnv(ctx, island);
@@ -255,8 +283,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
       const gatedArgs = gate.warning
         ? { ...args, notes: [gate.warning, args.notes].filter(Boolean).join(" ") }
         : args;
-      kickoffWithEnv(gatedArgs, island, env, gate.envExtra);
-      return;
+      return kickoffWithEnv(gatedArgs, island, env, gate.envExtra);
     }
   } else if (args.ensureVenv !== false) {
     // Non-Python: best-effort ensure so later Python runs share the project venv.
@@ -267,7 +294,7 @@ export function kickoffExperimentRun(args: KickoffExperimentRunArgs): void {
 
   const env = detectIslandEnv(ctx, island);
   env.interpreter = { kind: "project", path: env.python, version: env.pythonVersion };
-  kickoffWithEnv(args, island, env, buildPythonEnvExtra(env));
+  return kickoffWithEnv(args, island, env, buildPythonEnvExtra(env));
 }
 
 /**
@@ -294,12 +321,12 @@ function prismRuntimeEnv(): Record<string, string> {
   return env;
 }
 
-function kickoffWithEnv(
+async function kickoffWithEnv(
   args: KickoffExperimentRunArgs,
   island: string,
   env: ExperimentEnv,
   envExtra: Record<string, string>,
-): void {
+): Promise<{ runId: string; executionId: string }> {
   const { ctx, id, command } = args;
   const runId = args.runId ?? generateRunId();
   const startedAt = new Date().toISOString();
@@ -308,61 +335,74 @@ function kickoffWithEnv(
   const workspacePath = `${ctx.workspaceRel}/${id}`;
   const kind = parseExperimentRunKind(args.kind);
   const origin = args.originSender;
+  const runKey = cancelledKey(id, runId);
 
-  // Announce before PTY so Chat / panel can lift runInFlight (Station 2).
-  // Agent bridge and Human UI share this path.
-  broadcastExperimentRunStarted({ id, runId, command }, origin);
-
-  // Defer PTY spawn so the IPC handler returns runId before output chunks
-  // reach the renderer (avoids losing early chunks before runInFlight is set).
-  setImmediate(() => {
-    // Allocate a temp file for stderr capture (Bug #11 — see
-    // docs-private/audit/experiment-agent-architecture-analysis.md). A PTY merges
-    // stdout+stderr onto a single stream; ai-pty wraps the command so stderr
-    // is teed into this file — joining the live stream (progress/logging
-    // visible in real time) while still leaving a clean stderr-only record.
-    // The temp dir is OS-managed and the file is unlinked by
-    // ai-pty after the PTY exits.
-    const stderrTmpDir = mkdtempSync(join(tmpdir(), "prism-exp-stderr-"));
-    const stderrPath = join(stderrTmpDir, `${runId}.log`);
-    runAiCommand({
+  // Allocate a temp file for stderr capture (Bug #11). A PTY merges
+  // stdout+stderr onto a single stream; ai-pty wraps the command so stderr
+  // is teed into this file. The temp file is unlinked by ai-pty after exit.
+  const stderrTmpDir = mkdtempSync(join(tmpdir(), "prism-exp-stderr-"));
+  const stderrCapturePath = join(stderrTmpDir, `${runId}.log`);
+  const registry = ensureExecutionRegistry();
+  const created = await registry.create(
+    {
+      origin: "experiment-run",
       command,
       cwd,
-      sessionId,
+      projectId: ctx.projectRoot,
       chatTabId: "experiment",
-      requestId: runId,
+      opencodeSessionId: sessionId,
       toolCallId: runId,
+      experimentId: id,
+      runId,
       envExtra: { ...prismRuntimeEnv(), ...envExtra },
-      captureStderr: stderrPath,
-      onChunk: (chunk) => {
-        const cleaned = stripAnsi(chunk);
-        broadcastExperimentRunOutput({ id, runId, chunk: cleaned }, origin);
-        if (args.onOutputChunk) {
-          try {
-            args.onOutputChunk(cleaned);
-          } catch {
-            // ignore callback errors
-          }
-        }
-      },
-    })
-      .then((ptyResult) => {
+      captureStderr: stderrCapturePath,
+    },
+    { start: false },
+  );
+  executionByRun.set(runKey, created.executionId);
+
+  // Announce before PTY so Chat / panel can lift runInFlight (Station 2).
+  broadcastExperimentRunStarted(
+    { id, runId, command, executionId: created.executionId },
+    origin,
+  );
+
+  const unsubscribe = registry.subscribe((event) => {
+    if (event.executionId !== created.executionId || event.type !== "output" || !event.data) {
+      return;
+    }
+    const cleaned = stripAnsi(event.data);
+    broadcastExperimentRunOutput({ id, runId, chunk: cleaned }, origin);
+    if (args.onOutputChunk) {
+      try {
+        args.onOutputChunk(cleaned);
+      } catch {
+        // ignore callback errors
+      }
+    }
+  });
+
+  // Defer spawn so the IPC handler can return runId + executionId before
+  // output chunks reach the renderer.
+  setImmediate(() => {
+    void (async () => {
+      try {
+        await registry.start(created.executionId);
+        const final = await registry.waitForFinal(created.executionId);
         const finishedAt = new Date().toISOString();
-        const stdout = ptyResult.output ?? "";
-        const stderr = ptyResult.stderr ?? "";
+        const stdout = final.transcriptTail ?? "";
+        const stderr = final.stderrTail ?? "";
         const logPath = maybeWriteFullLog(island, runId, stdout, stderr);
-        const cancelled = consumeExperimentRunCancelled(id, runId);
+        const cancelled =
+          consumeExperimentRunCancelled(id, runId) || final.state === "cancelled";
         const append = appendRun(ctx, id, {
           runId,
           startedAt,
           finishedAt,
           command,
           cwd: workspacePath,
-          exitCode: ptyResult.exitCode,
+          exitCode: final.exitCode ?? 1,
           stdoutTail: stdout,
-          // Best-effort: PTY may have failed before the redirect fired
-          // (e.g. bash itself crashed, in which case the file was never
-          // created). ai-pty returns "" in that case and we persist "".
           stderrTail: stderr,
           artifacts: args.artifacts ?? [],
           env,
@@ -370,6 +410,9 @@ function kickoffWithEnv(
           cancelled: cancelled || undefined,
           kind,
           logPath,
+          executionId: created.executionId,
+          transcriptPath: final.transcriptPath,
+          stderrPath: final.stderrPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         if (!append.ok) {
           reportResult(args, { ok: false, error: append.error }, runId);
@@ -387,8 +430,7 @@ function kickoffWithEnv(
           },
           runId,
         );
-      })
-      .catch((err: unknown) => {
+      } catch (err: unknown) {
         const finishedAt = new Date().toISOString();
         const message = err instanceof Error ? err.message : String(err);
         log.warn("experiment-run failed", { id, runId, error: message });
@@ -410,6 +452,8 @@ function kickoffWithEnv(
           cancelled: cancelled || undefined,
           kind,
           logPath,
+          executionId: created.executionId,
+          transcriptPath: created.transcriptPath,
         }, { chatSessionId: args.chatSessionId ?? null });
         const run: ExperimentRunEntry | null = append.ok ? append.run : null;
         reportResult(
@@ -421,8 +465,14 @@ function kickoffWithEnv(
           },
           runId,
         );
-      });
+      } finally {
+        unsubscribe();
+        executionByRun.delete(runKey);
+      }
+    })();
   });
+
+  return { runId, executionId: created.executionId };
 }
 
 function reportResult(

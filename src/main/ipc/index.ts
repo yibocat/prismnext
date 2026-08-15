@@ -4,6 +4,7 @@ import { registerChatHandlers, disposeChat } from "./chat";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
+import { registerExecutionHandlers } from "./execution";
 import { registerGitHandlers } from "./git";
 import { registerWorktreeHandlers } from "./worktree";
 import { registerLogHandlers } from "./log";
@@ -12,7 +13,7 @@ import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
 import { registerSkillsHandlers } from "./skills";
 import { registerRulesHandlers } from "./rules";
-import { registerExpertsHandlers } from "./experts";
+import { registerExpertsHandlers } from "./subagents";
 import { registerShellHandlers } from "./shell";
 import { registerLiteratureHandlers } from "./literature";
 import { registerLiteratureExtractHandlers } from "./literature-extract";
@@ -25,15 +26,22 @@ import { registerExperimentHandlers } from "./experiment";
 import { registerProvenanceHandlers } from "./provenance";
 import { registerMcpHandlers } from "./mcp";
 import { registerInteractionHandlers } from "./interaction";
+import { registerProLicenseHandlers } from "./pro-license";
+import { registerPacksHandlers } from "./teams";
+import { registerUserPacksHandlers } from "./user-teams";
+import { registerProjectLifecycleHandlers } from "./project-lifecycle";
 
 export function registerIpcHandlers(): void {
+  registerProjectLifecycleHandlers();
   registerFsHandlers();
   registerCompileHandlers();
   registerChatHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();
+  registerProLicenseHandlers();
   registerBrowserHandlers();
   registerTerminalHandlers();
+  registerExecutionHandlers();
   registerGitHandlers();
   registerWorktreeHandlers();
   registerLogHandlers();
@@ -54,6 +62,8 @@ export function registerIpcHandlers(): void {
   registerExperimentHandlers();
   registerProvenanceHandlers();
   registerInteractionHandlers();
+  registerPacksHandlers();
+  registerUserPacksHandlers();
 }
 
 export { disposeChat };

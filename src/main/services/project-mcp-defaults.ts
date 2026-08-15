@@ -1,21 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createLogger } from "./logger";
+import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
 
 const log = createLogger("project-mcp-defaults");
 
 /** Legacy built-in MCP id — stripped on project open (replaced by literature-discover). */
 export const PAPER_SEARCH_MCP_ID = "paper-search-mcp";
-
-/**
- * MCP servers connected at session/new (before first model turn).
- * Empty on purpose: MCP loads only via session/load when @-mentioned or allowlist requires them.
- */
-export const EAGER_MCP_SERVER_IDS = [] as const;
-
-export function isEagerMcpServer(id: string): boolean {
-  return (EAGER_MCP_SERVER_IDS as readonly string[]).includes(id);
-}
 
 /** Dedupe explicit allowlist only — does not inject legacy Paper Search. */
 export function mergeMcpAllowlist(allowlist?: string[] | null): string[] {
@@ -34,21 +25,15 @@ export function mcpAllowlistSetsEqual(a: readonly string[], b: readonly string[]
 
 export interface EnsureDefaultMcpResult {
   added: boolean;
-  /** @deprecated Paper Search migration removed — always false. */
+  /** True only when the legacy agent/mcp.json was migrated. */
   migrated: boolean;
+  /** True when Teams layout/seed work ran without changing MCP configuration. */
+  teamsMigrated: boolean;
   /** @deprecated Always false. */
   reenabled: boolean;
   /** True when legacy paper-search-mcp was removed from mcp.json. */
   removed: boolean;
   path: string;
-}
-
-/** Pass-through — no built-in MCP is forced into allowlists. */
-export function ensureBuiltinMcpInAllowlist(
-  allowlist: string[] | undefined | null,
-): string[] | undefined {
-  if (!allowlist?.length) return allowlist ?? undefined;
-  return allowlist;
 }
 
 function readMcpServers(
@@ -83,25 +68,54 @@ function writeMcpServers(
 /**
  * Ensure mcp.json exists and strip legacy Paper Search MCP.
  * New projects get `{}`; existing projects lose `paper-search-mcp` on open.
+ * After M11, user MCP lives in `teams/project.local/mcp.json` — do not recreate
+ * the legacy agent-level file once that target exists.
  */
 export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResult {
   mkdirSync(agentDir, { recursive: true });
-  const mcpPath = join(agentDir, "mcp.json");
-  const fileMissing = !existsSync(mcpPath);
-  if (fileMissing) {
-    writeMcpServers(mcpPath, {});
-    return { added: false, migrated: false, reenabled: false, removed: false, path: mcpPath };
+  // M11 is the only permitted reader/converter of agent/mcp.json. Derive the
+  // project root from <project>/.prismnext/agent and migrate before creating
+  // a v2 default file.
+  const legacyMcpPath = join(agentDir, "mcp.json");
+  const hadLegacyMcp = existsSync(legacyMcpPath);
+  const teamsMigrated = ensureProjectContentMigrated(dirname(dirname(agentDir)));
+  // Seeding Project Team is a Teams change, not an MCP change. Only a legacy
+  // mcp.json that was actually consumed should reload open ACP sessions.
+  const migrated = hadLegacyMcp && !existsSync(legacyMcpPath);
+  const projectLocalMcp = join(agentDir, "teams", "project.local", "mcp.json");
+  if (!existsSync(projectLocalMcp)) {
+    mkdirSync(dirname(projectLocalMcp), { recursive: true });
+    writeFileSync(projectLocalMcp, "[]\n", "utf-8");
   }
 
-  const { servers, rawOk } = readMcpServers(mcpPath);
-  if (!rawOk || !(PAPER_SEARCH_MCP_ID in servers)) {
-    return { added: false, migrated: false, reenabled: false, removed: false, path: mcpPath };
+  let servers: Array<{ id?: unknown }> = [];
+  try {
+    const parsed = JSON.parse(readFileSync(projectLocalMcp, "utf-8"));
+    if (Array.isArray(parsed)) servers = parsed;
+  } catch {
+    return {
+      added: false,
+      migrated,
+      teamsMigrated,
+      reenabled: false,
+      removed: false,
+      path: projectLocalMcp,
+    };
   }
-
-  const { [PAPER_SEARCH_MCP_ID]: _legacy, ...rest } = servers;
-  writeMcpServers(mcpPath, rest);
-  log.info(
-    `Removed legacy ${PAPER_SEARCH_MCP_ID} from mcp.json — use built-in literature-discover`,
-  );
-  return { added: false, migrated: false, reenabled: false, removed: true, path: mcpPath };
+  const filtered = servers.filter((server) => server?.id !== PAPER_SEARCH_MCP_ID);
+  const removed = filtered.length !== servers.length;
+  if (removed) {
+    writeFileSync(projectLocalMcp, `${JSON.stringify(filtered, null, 2)}\n`, "utf-8");
+    log.info(
+      `Removed legacy ${PAPER_SEARCH_MCP_ID} from project.local MCP — use built-in literature-discover`,
+    );
+  }
+  return {
+    added: false,
+    migrated,
+    teamsMigrated,
+    reenabled: false,
+    removed,
+    path: projectLocalMcp,
+  };
 }

@@ -58,8 +58,8 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
 
   loadConfig: async () => {
     try {
-      const raw = (await window.electronAPI.settingsGet()) as Record<string, unknown>;
-      const saved = (raw._themeConfig ?? {}) as Record<string, unknown>;
+      const raw = await window.electronAPI.settingsGet();
+      const saved = raw._themeConfig ?? {};
       const migrated = migrateToThemePackConfig({
         ...saved,
         themeColor: raw.themeColor,

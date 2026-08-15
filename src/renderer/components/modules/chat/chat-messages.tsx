@@ -284,16 +284,31 @@ export const ChatMessages = memo(function ChatMessages() {
   const turnMeta = useChatStore((s) => s.turnMeta);
   const todoAnchorUserIndex = useChatStore(selectMessageTodoAnchorUserIndex);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  // Generic wait copy while streaming has no assistant content yet.
-  // Only `describing_images` is surfaced — other prepare phases stay collapsed
-  // into this label so setup noise (sync / MCP / start model) does not flash.
+  // Wait copy while streaming has no assistant content yet — surface each
+  // prepare phase so first-send cold start (sync / agent / session) is not a hang.
   const preparePhase = useChatStore((s) => s.preparePhase);
-  const streamingLabel =
-    preparePhase === "describing_images"
-      ? t("chat.prepare.describing_images")
-      : preparePhase === "waiting_model"
-        ? t("chat.prepare.waiting_model")
-        : t("chat.prepare.planningNext");
+  const streamingLabel = (() => {
+    switch (preparePhase) {
+      case "describing_images":
+        return t("chat.prepare.describing_images");
+      case "syncing_project":
+        return t("chat.prepare.syncing_project");
+      case "starting_agent":
+        return t("chat.prepare.starting_agent");
+      case "creating_session":
+        return t("chat.prepare.creating_session");
+      case "connecting_mcp":
+        return t("chat.prepare.connecting_mcp");
+      case "starting_model":
+        return t("chat.prepare.starting_model");
+      case "waiting_model":
+        return t("chat.prepare.waiting_model");
+      case "stalled":
+        return t("chat.prepare.stalled");
+      default:
+        return t("chat.prepare.planningNext");
+    }
+  })();
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -973,7 +988,7 @@ export const ChatMessages = memo(function ChatMessages() {
       <div
         ref={scrollRef}
         data-chat-scroll
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 z-0 overflow-y-auto overflow-x-hidden"
       >
         <div ref={contentRef} data-chat-width className="w-full min-w-0">
           {windowStart > 0 && (

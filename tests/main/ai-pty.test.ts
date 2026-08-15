@@ -8,9 +8,31 @@ import {
   _hasActiveAiPtyForSession,
 } from "../../src/main/services/ai-pty";
 
+async function waitUntil(predicate: () => boolean, message: string, timeoutMs = 2_000): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (predicate()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(message);
+}
+
 describe("ai-pty", () => {
   afterEach(() => {
     _resetAiPtyForTests();
+  });
+
+  it("runs a one-shot PTY under the test runtime", async () => {
+    const result = await runAiCommand({
+      command: process.platform === "win32" ? "echo pty-probe" : "printf pty-probe",
+      cwd: process.cwd(),
+      sessionId: "pty-probe",
+      chatTabId: "test",
+      requestId: "probe",
+      onChunk: () => {},
+    });
+    expect(result.output).toContain("pty-probe");
+    expect(result.exitCode).toBe(0);
   });
 
   it("streams command output chunks", async () => {
@@ -39,8 +61,10 @@ describe("ai-pty", () => {
       onChunk: () => {},
     });
 
-    await new Promise((r) => setTimeout(r, 80));
-    expect(_hasActiveAiPtyForSession("sess-cancel")).toBe(true);
+    await waitUntil(
+      () => _hasActiveAiPtyForSession("sess-cancel"),
+      "PTY never became active for sess-cancel",
+    );
     cancelAiCommandForSession("sess-cancel");
     expect(_getActiveAiPtyCountForTests()).toBe(0);
 
@@ -57,8 +81,10 @@ describe("ai-pty", () => {
       onChunk: () => {},
     });
 
-    await new Promise((r) => setTimeout(r, 80));
-    expect(_getActiveAiPtyCountForTests()).toBe(1);
+    await waitUntil(
+      () => _getActiveAiPtyCountForTests() === 1,
+      "PTY never became active for sess-quit",
+    );
     destroyAllAiPty();
     expect(_getActiveAiPtyCountForTests()).toBe(0);
     await expect(promise).resolves.toMatchObject({ cwd: process.cwd() });
@@ -73,7 +99,10 @@ describe("ai-pty", () => {
       requestId: "req-settle",
       onChunk: () => {},
     });
-    await new Promise((r) => setTimeout(r, 80));
+    await waitUntil(
+      () => _hasActiveAiPtyForSession("sess-settle"),
+      "PTY never became active for sess-settle",
+    );
     cancelAiCommandForSession("sess-settle");
     // Must resolve via onExit or the 2s force-settle — never hang the test suite.
     await expect(promise).resolves.toMatchObject({ cwd: process.cwd() });

@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { MAX_RECENT_PROJECTS } from "@/styles/constants";
 
 interface RecentProject {
   path: string;
@@ -34,14 +33,10 @@ export const useProjectStore = create<ProjectState>()(
               ...state.recentProjects.filter((p) => p.path !== path),
             ];
           } else {
-            // Add new project
             newProjects = [{ path, name, lastOpened: now }, ...state.recentProjects];
           }
 
-          // Keep only the most recent MAX_RECENT_PROJECTS
-          return {
-            recentProjects: newProjects.slice(0, MAX_RECENT_PROJECTS),
-          };
+          return { recentProjects: newProjects };
         });
       },
 

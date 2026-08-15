@@ -3,6 +3,7 @@ import { createHighlighter, type Highlighter } from "shiki";
 import { CheckIcon, CopyIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Hint } from "@/components/ui/hint";
+import { cn } from "@/lib/utils";
 import { ChatArtifactFence } from "@/lib/markdown/chat-artifact-block";
 import { ChatInteractionFence } from "@/lib/markdown/chat-interaction-block";
 
@@ -215,6 +216,57 @@ const ShikiHighlightedCode = memo(function ShikiHighlightedCode({
         )}
       </div>
     </div>
+  );
+});
+
+const INLINE_SHIKI_CLASS =
+  "shiki-wrapper min-w-0 [&_pre]:!bg-transparent [&_pre]:!m-0 [&_pre]:!p-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_pre]:text-[length:var(--font-code)] [&_code]:whitespace-pre-wrap [&_code]:break-all";
+
+/** Command line only — follows Settings → Appearance editor syntax theme. No fence chrome. */
+export const ShikiInlineHighlight = memo(function ShikiInlineHighlight({
+  code,
+  lang = "bash",
+  className,
+}: {
+  code: string;
+  lang?: string;
+  className?: string;
+}) {
+  const [html, setHtml] = useState("");
+  const editorSyntaxTheme = useSettingsStore(
+    (s) => s.settings?.editorSyntaxTheme || "prism",
+  );
+  const shikiThemes = THEME_TO_SHIKI[editorSyntaxTheme] || THEME_TO_SHIKI.prism;
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const hl = await getHighlighter();
+        if (cancelled) return;
+        const langForShiki = COMMON_LANGS.includes(lang) ? lang : "bash";
+        const result = hl.codeToHtml(code, {
+          lang: langForShiki,
+          themes: shikiThemes,
+          defaultColor: "light",
+        });
+        if (!cancelled) setHtml(result);
+      } catch {
+        // Keep the plain fallback so the command is still readable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, lang, shikiThemes.light, shikiThemes.dark]);
+
+  return (
+    <div
+      className={cn(INLINE_SHIKI_CLASS, className)}
+      dangerouslySetInnerHTML={{
+        __html: html || `<pre><code>${escapeHtml(code)}</code></pre>`,
+      }}
+    />
   );
 });
 

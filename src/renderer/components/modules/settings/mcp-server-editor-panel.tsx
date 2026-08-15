@@ -10,6 +10,7 @@ import { useMcpServersStore } from "@/stores/mcp-servers-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   entryToJsonSnippet,
+  mcpServerDefToEntry,
   namedEntryFromBareConfig,
   parsePastedMcpJson,
   type McpServerEntry,
@@ -17,8 +18,11 @@ import {
 import {
   entryFieldValues,
   findPresetForEntry,
+  presetRequiresFields,
   presetToEntry,
 } from "@/lib/agent/mcp-presets";
+import type { McpServerDef } from "@shared/teams/types";
+import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 import { McpPresetFieldInputs } from "./mcp-preset-field-inputs";
 import { cn } from "@/lib/utils";
 import {
@@ -37,7 +41,11 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
   const servers = useMcpServersStore((s) => s.servers);
   const loaded = useMcpServersStore((s) => s.loaded);
   const saving = useMcpServersStore((s) => s.saving);
+  const load = useMcpServersStore((s) => s.load);
   const persist = useMcpServersStore((s) => s.persist);
+
+  const teamId = slot.teamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
+  const readOnly = Boolean(slot.readOnly);
 
   const [loading, setLoading] = useState(true);
   const [entry, setEntry] = useState<McpServerEntry | null>(null);
@@ -45,44 +53,122 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
   const [configureJson, setConfigureJson] = useState("");
 
   useEffect(() => {
-    if (!loaded) {
-      setLoading(true);
-      return;
-    }
-    const found = servers.find((s) => s.name === slot.serverName) ?? null;
-    if (!found) {
-      toast.error(t("settings.editor.mcpServer.toast.notFound"));
-      closePanel();
-      return;
-    }
-    setEntry(found);
-    const preset = findPresetForEntry(found);
-    if (preset) {
-      setConfigureValues(entryFieldValues(found, preset));
-      setConfigureJson("");
-    } else {
-      setConfigureValues({});
+    if (!projectRoot || readOnly) return;
+    void load(projectRoot, teamId);
+  }, [projectRoot, teamId, readOnly, load]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromEntry = (found: McpServerEntry) => {
+      setEntry(found);
+      const preset = findPresetForEntry(found);
+      if (preset && presetRequiresFields(preset)) {
+        setConfigureValues(entryFieldValues(found, preset));
+      } else {
+        setConfigureValues({});
+      }
+      // Always keep a JSON view so presets with no fields (e.g. Memory) are not blank.
       setConfigureJson(entryToJsonSnippet(found));
-    }
-    setLoading(false);
-  }, [loaded, servers, slot.serverName, closePanel]);
+      setLoading(false);
+    };
+
+    const hydrate = async () => {
+      setLoading(true);
+      if (readOnly) {
+        if (!projectRoot) {
+          setEntry(null);
+          setLoading(false);
+          return;
+        }
+        try {
+          const list = await window.electronAPI.teamsListAssets(projectRoot, "mcp");
+          const asset = list.find(
+            (a) =>
+              a.teamId === teamId
+              && (a.id === slot.serverName || a.name === slot.serverName),
+          );
+          const fromDef = asset
+            ? mcpServerDefToEntry(asset.definition as McpServerDef)
+            : null;
+          if (!fromDef) {
+            toast.error(t("settings.editor.mcpServer.toast.notFound"));
+            closePanel();
+            return;
+          }
+          if (cancelled) return;
+          hydrateFromEntry(fromDef);
+        } catch {
+          toast.error(t("settings.editor.mcpServer.toast.notFound"));
+          closePanel();
+        }
+        return;
+      }
+
+      if (!loaded) return;
+      const found = servers.find((s) => s.name === slot.serverName) ?? null;
+      if (!found) {
+        // Fallback: asset list (store may be mid-reload after install).
+        try {
+          const list = await window.electronAPI.teamsListAssets(projectRoot!, "mcp");
+          const asset = list.find(
+            (a) =>
+              a.teamId === teamId
+              && (a.id === slot.serverName || a.name === slot.serverName),
+          );
+          const fromDef = asset
+            ? mcpServerDefToEntry(asset.definition as McpServerDef)
+            : null;
+          if (!fromDef) {
+            toast.error(t("settings.editor.mcpServer.toast.notFound"));
+            closePanel();
+            return;
+          }
+          if (cancelled) return;
+          hydrateFromEntry(fromDef);
+        } catch {
+          toast.error(t("settings.editor.mcpServer.toast.notFound"));
+          closePanel();
+        }
+        return;
+      }
+      if (cancelled) return;
+      hydrateFromEntry(found);
+    };
+
+    void hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    readOnly,
+    projectRoot,
+    teamId,
+    loaded,
+    servers,
+    slot.serverName,
+    closePanel,
+    t,
+  ]);
 
   const preset = entry ? findPresetForEntry(entry) : undefined;
-  const isCustom = entry && !preset;
+  const showPresetFields = Boolean(preset && presetRequiresFields(preset));
+  /** Writable team copy: edit fields and/or JSON. Pack-shipped: view only. */
+  const canEdit = !readOnly;
 
   const handleSave = async () => {
-    if (!projectRoot || !entry) return;
+    if (!projectRoot || !entry || !canEdit) return;
 
     let nextEntry: McpServerEntry | null = null;
 
-    if (preset) {
+    if (showPresetFields && preset) {
       nextEntry = presetToEntry(preset, configureValues);
       if (nextEntry) nextEntry.enabled = entry.enabled;
     } else {
       try {
         const parsed = parsePastedMcpJson(configureJson);
         if (parsed.entries.length === 1) {
-          nextEntry = { ...parsed.entries[0], enabled: entry.enabled };
+          nextEntry = { ...parsed.entries[0], name: entry.name, enabled: entry.enabled };
         } else if (parsed.bareConfig) {
           nextEntry = namedEntryFromBareConfig(entry.name, parsed.bareConfig);
           if (nextEntry) nextEntry.enabled = entry.enabled;
@@ -98,8 +184,11 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
       return;
     }
 
-    const next = servers.map((s) => (s.name === entry.name ? nextEntry! : s));
-    await persist(projectRoot, next);
+    // Prefer merging into the loaded team list; if missing, replace/append.
+    const next = servers.some((s) => s.name === entry.name)
+      ? servers.map((s) => (s.name === entry.name ? nextEntry! : s))
+      : [...servers, nextEntry];
+    await persist(projectRoot, next, teamId);
     toast.success(t("settings.editor.mcpServer.toast.updated"));
     closePanel();
   };
@@ -124,16 +213,19 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          {preset
-            ? t("settings.editor.mcpServer.introPreset", { name: preset.name })
-            : t("settings.editor.mcpServer.introCustom")}
+          {readOnly
+            ? t("settings.editor.mcpServer.introReadOnly")
+            : showPresetFields && preset
+              ? t("settings.editor.mcpServer.introPreset", { name: preset.name })
+              : t("settings.editor.mcpServer.introCustom")}
         </p>
 
-        {preset ? (
+        {showPresetFields && preset ? (
           <McpPresetFieldInputs
             preset={preset}
             values={configureValues}
             onChange={(key, value) => setConfigureValues((v) => ({ ...v, [key]: value }))}
+            disabled={!canEdit}
           />
         ) : (
           <div>
@@ -147,28 +239,34 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
               )}
               value={configureJson}
               onChange={(e) => setConfigureJson(e.target.value)}
+              readOnly={!canEdit}
+              disabled={!canEdit}
             />
           </div>
         )}
 
-        {isCustom ? (
+        {canEdit ? (
           <Button
             variant="ghost"
             size="xs"
             className="px-0 h-auto text-primary hover:text-primary"
-            onClick={() => openSettingsPanel({ kind: "mcp-json" })}
+            onClick={() =>
+              openSettingsPanel({ kind: "mcp-json", targetTeamId: teamId, lockTarget: true })
+            }
           >
             {t("settings.editor.mcpServer.openFullJson")}
           </Button>
         ) : null}
 
         <div className={SETTINGS_DETAIL_ACTIONS}>
-          <Button size="xs" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
-            {t("common.save")}
-          </Button>
+          {canEdit && (
+            <Button size="xs" onClick={() => void handleSave()} disabled={saving}>
+              {saving ? <Loader2Icon className="size-3 animate-spin mr-1" /> : null}
+              {t("common.save")}
+            </Button>
+          )}
           <Button variant="ghost" size="xs" onClick={closePanel} disabled={saving}>
-            {t("common.cancel")}
+            {readOnly ? t("settings.editor.mcp.close") : t("common.cancel")}
           </Button>
         </div>
       </div>

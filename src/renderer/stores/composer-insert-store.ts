@@ -27,7 +27,9 @@ interface ComposerInsertState {
   consumeTerminalSnippet: () => LegacyTerminalSnippetRequest | null;
 }
 
-export function contextInsertToComposerPart(req: ContextInsertRequest): ComposerPart {
+export function contextInsertToComposerPart(
+  req: ContextInsertRequest,
+): Exclude<ComposerPart, { type: "text" }> {
   return contextInsertToPart(req);
 }
 

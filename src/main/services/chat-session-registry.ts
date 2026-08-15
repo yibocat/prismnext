@@ -128,7 +128,7 @@ export function isSessionIntensiveBibkey(sessionId: string | undefined, bibkey: 
 }
 
 /** Add one bibkey to the intensive-reading allowlist; returns the new list. */
-export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): readonly string[] {
   const key = bibkey.trim();
   if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
   const next = [...new Set([...getSessionIntensiveBibkeys(sessionId), key])];
@@ -137,7 +137,7 @@ export function addSessionIntensiveBibkey(sessionId: string, bibkey: string): st
 }
 
 /** Remove one bibkey from the intensive-reading allowlist; returns the new list. */
-export function removeSessionIntensiveBibkey(sessionId: string, bibkey: string): string[] {
+export function removeSessionIntensiveBibkey(sessionId: string, bibkey: string): readonly string[] {
   const key = bibkey.trim();
   if (!sessionId.trim() || !key) return getSessionIntensiveBibkeys(sessionId);
   const next = getSessionIntensiveBibkeys(sessionId).filter((k) => k !== key);
@@ -229,7 +229,7 @@ export async function flushDeferredTaskAllowlistFollowUp(
 
   try {
     const { AcpService } = await import("../acp/service");
-    const service = AcpService.getInstance();
+    const service = AcpService.getInstanceForSession(sessionId);
     await service.sendPrompt(sessionId, followUp, {
       model: deferred.model,
       provider: deferred.provider,
@@ -246,7 +246,7 @@ export async function flushDeferredTaskAllowlistFollowUp(
   if (stillMissing.length > 0) {
     try {
       const { AcpService } = await import("../acp/service");
-      AcpService.getInstance().setPendingTaskDenial(
+      AcpService.getInstanceForSession(sessionId).setPendingTaskDenial(
         sessionId,
         formatTaskError("task_allowlist_not_invoked", {
           allowlist: stillMissing,

@@ -1,238 +1,275 @@
-import { useEffect, useState } from "react";
+// Commands settings — flat SETTINGS_CARD list (name · team · description),
+// aligned with Skills / MCP. No per-command Switch — availability is the
+// active team's Commands allowlist (+ foreign) plus enabled assets.
+// New commands always pick a writable team (Project / Common / custom).
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { PlusIcon, TerminalIcon } from "lucide-react";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
-import { CommandsImportDialog } from "./commands-import-dialog";
 import {
-  SETTINGS_CARD,
-  SETTINGS_ROW,
-  SETTINGS_ROW_DESC,
-  SETTINGS_ROW_LABEL,
+  SETTINGS_CARD as CARD,
+  SETTINGS_CATEGORY_HEADER as CATEGORY_HEADER,
+  SETTINGS_ROW as ROW,
+  SETTINGS_ROW_DESC as ROW_DESC,
+  SETTINGS_ROW_LABEL as ROW_LABEL,
 } from "./settings-tokens";
+import type { AssetViewV2 } from "@shared/teams/view";
+import type { CommandDef } from "@commands/types";
+import {
+  matchesAgentAssetQuery,
+  type AgentAssetPaneProps,
+} from "./agent-assets-shared";
 
-const SUB_HEADER = "text-[length:var(--font-size-12)] font-medium text-foreground mb-1.5";
-const SUB_DESC = "text-[length:var(--font-size-12)] text-muted-foreground mb-2";
+const COMMANDS_LIST_PREVIEW = 15;
 
-export default function CommandsSettings() {
+export default function CommandsSettings({
+  embedded = false,
+  searchQuery = "",
+}: AgentAssetPaneProps = {}) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+
+  const [assets, setAssets] = useState<AssetViewV2[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [listExpanded, setListExpanded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const commands = useCommandStore((s) => s.commands);
-  const loaded = useCommandStore((s) => s.loaded);
   const loadCommands = useCommandStore((s) => s.loadCommands);
   const deleteCommand = useCommandStore((s) => s.deleteCommand);
-  const writeExportFile = useCommandStore((s) => s.writeExportFile);
-  const readImportFile = useCommandStore((s) => s.readImportFile);
-  const previewImport = useCommandStore((s) => s.previewImport);
 
   const deleteConfirm = useInlineDeleteConfirm();
 
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [importPack, setImportPack] = useState<unknown>(null);
-  const [importPreview, setImportPreview] = useState<{
-    incoming: string[];
-    conflicts: string[];
-    invalid: string[];
-  } | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const cmdByFqid = useMemo(() => {
+    const map = new Map<string, CommandDef>();
+    for (const c of commands) map.set(c.id, c);
+    return map;
+  }, [commands]);
+
+  const sortedAssets = useMemo(() => {
+    const sorted = [...assets].sort(
+      (a, b) => a.name.localeCompare(b.name) || a.teamId.localeCompare(b.teamId),
+    );
+    return sorted.filter((a) => {
+      const cmd = cmdByFqid.get(a.fqid);
+      return matchesAgentAssetQuery(
+        searchQuery,
+        a.name,
+        `/${a.name}`,
+        a.id,
+        a.fqid,
+        a.description,
+        a.teamId,
+        a.origin.teamName,
+        cmd?.description,
+      );
+    });
+  }, [assets, searchQuery, cmdByFqid]);
+
+  const visibleAssets = useMemo(() => {
+    if (listExpanded || sortedAssets.length <= COMMANDS_LIST_PREVIEW) return sortedAssets;
+    return sortedAssets.slice(0, COMMANDS_LIST_PREVIEW);
+  }, [sortedAssets, listExpanded]);
+
+  const hiddenCount = Math.max(0, sortedAssets.length - COMMANDS_LIST_PREVIEW);
+  const unfilteredCount = assets.length;
+
+  const loadAll = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setLoaded(false);
+    try {
+      if (!projectRoot) {
+        setAssets([]);
+        return;
+      }
+      const [assetList] = await Promise.all([
+        window.electronAPI.teamsListAssets(projectRoot, "command"),
+        loadCommands(),
+      ]);
+      setAssets(assetList);
+    } catch {
+      setAssets([]);
+    } finally {
+      setLoaded(true);
+    }
+  }, [projectRoot, loadCommands]);
 
   useEffect(() => {
-    void loadCommands();
-  }, [loadCommands]);
+    void loadAll();
+  }, [loadAll]);
+
+  useEffect(() => {
+    setListExpanded(false);
+  }, [projectRoot]);
 
   useOnSettingsEditorKindsClosed(["custom-command", "builtin-commands"], () => {
-    void loadCommands();
+    void loadAll({ silent: true });
   });
 
-  const customCommands = commands.filter((c) => c.source === "user");
-  const builtInCount = commands.filter((c) => c.source === "builtin").length;
-  const builtInEnabledCount = commands.filter((c) => c.source === "builtin" && c.enabled).length;
+  const openCreate = () => {
+    deleteConfirm.clearPending();
+    openSettingsPanel({ kind: "custom-command", mode: "new" });
+  };
 
-  const openEdit = (commandId: string, title: string) => {
+  const openCommand = (asset: AssetViewV2) => {
     deleteConfirm.clearPending();
     openSettingsPanel({
       kind: "custom-command",
       mode: "edit",
-      commandId,
-      title,
+      commandId: asset.fqid,
+      title: `/${asset.name}`,
+      teamId: asset.teamId,
     });
   };
 
-  const confirmDelete = async (id: string) => {
+  const confirmDelete = async (fqid: string) => {
     deleteConfirm.clearPending();
-    await deleteCommand(id);
-  };
-
-  const handleExport = async () => {
-    if (!projectRoot) return;
-    setExporting(true);
+    setSaving(true);
     try {
-      const dlg = await window.electronAPI.dialogSaveJsonFile("prismnext-commands.json");
-      if (dlg.canceled || !dlg.path) return;
-      await writeExportFile(dlg.path, projectRoot);
-      toast.success(t("settings.commandsPage.toast.exported"));
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Export failed.");
+      await deleteCommand(fqid);
+      await loadAll({ silent: true });
+      toast.success(t("settings.commandsPage.toast.removed", { name: fqid.split(":").pop() }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("settings.editor.command.toast.deleteFailed"));
     } finally {
-      setExporting(false);
+      setSaving(false);
     }
   };
 
-  const handleImportPick = async () => {
-    if (!projectRoot) return;
-    try {
-      const dlg = await window.electronAPI.dialogOpenJsonFile();
-      if (dlg.canceled || !dlg.path) return;
-      const pack = await readImportFile(dlg.path);
-      const preview = await previewImport(projectRoot, pack);
-      if (preview.incoming.length === 0) {
-        toast.error(t("settings.commandsPage.toast.noValid"));
-        return;
-      }
-      setImportPack(pack);
-      setImportPreview(preview);
-      setImportDialogOpen(true);
-    } catch (err: unknown) {
-      toast.error(
-        err instanceof Error ? err.message : t("settings.commandsPage.toast.importReadFailed"),
-      );
-    }
-  };
+  const listBody = !projectRoot ? (
+    <div className={cn(CARD, "min-w-0 !divide-y-0")}>
+      <div className="flex flex-col items-center gap-3 py-10 text-center">
+        <TerminalIcon className="size-8 text-muted-foreground/30" />
+        <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+          {t("settings.commandsPage.openProject")}
+        </p>
+      </div>
+    </div>
+  ) : (
+    <div className="min-w-0 space-y-3">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <p className={cn(CATEGORY_HEADER, "mb-0")}>{t("settings.commandsPage.installed")}</p>
+        <Button variant="outline" size="xs" onClick={openCreate}>
+          <PlusIcon className="size-3 mr-1" />
+          {t("settings.commandsPage.addCustom")}
+        </Button>
+      </div>
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className={SUB_HEADER}>{t("settings.commandsPage.builtinSection")}</p>
-        <p className={SUB_DESC}>{t("settings.commandsPage.builtinDesc")}</p>
-        <div className={SETTINGS_CARD}>
-          <div className={SETTINGS_ROW}>
-            <div className="min-w-0 flex-1 pr-4">
-              <p className={SETTINGS_ROW_LABEL}>{t("settings.commandsPage.appShortcuts")}</p>
-              <p className={SETTINGS_ROW_DESC}>
-                {loaded && builtInCount > 0
-                  ? t("settings.commandsPage.enabledCount", {
-                      enabled: builtInEnabledCount,
-                      total: builtInCount,
-                    })
-                  : t("settings.commandsPage.loadingBuiltin")}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="shrink-0"
-              onClick={() => openSettingsPanel({ kind: "builtin-commands" })}
-            >
-              {t("settings.commandsPage.viewBuiltin")}
+      {!loaded ? (
+        <div className={cn(CARD, "py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+          {t("common.loading")}
+        </div>
+      ) : unfilteredCount === 0 ? (
+        <div className={cn(CARD, "!divide-y-0")}>
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <TerminalIcon className="size-8 text-muted-foreground/30" />
+            <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+              {t("settings.commandsPage.emptyCommands")}
+            </p>
+            <Button variant="outline" size="xs" onClick={openCreate}>
+              <PlusIcon className="size-3 mr-1" />
+              {t("settings.commandsPage.addCustom")}
             </Button>
           </div>
         </div>
-      </div>
+      ) : sortedAssets.length === 0 ? (
+        <div className={cn(CARD, "min-w-0 py-3 text-[length:var(--font-size-12)] text-muted-foreground")}>
+          {t("settings.agentAssets.noMatches")}
+        </div>
+      ) : (
+        <div className={cn(CARD, "min-w-0 overflow-hidden")}>
+          {visibleAssets.map((asset) => {
+            const cmd = cmdByFqid.get(asset.fqid);
+            const canDelete = Boolean(cmd?.removable ?? asset.editable);
+            const teamLabel = teamDisplayName(
+              asset.teamId,
+              asset.origin.teamName,
+              t,
+            );
+            const description = (cmd?.description || asset.description || "").trim();
 
-      <div>
-        <div className="flex items-start justify-between gap-3 mb-1.5">
-          <p className={SUB_HEADER}>{t("settings.commandsPage.customSection")}</p>
-          {projectRoot ? (
-            <div className="flex items-center gap-1 shrink-0">
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                disabled={exporting || customCommands.length === 0}
-                onClick={() => void handleExport()}
-              >
-                {t("settings.commandsPage.export")}
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="shrink-0"
-                onClick={() => void handleImportPick()}
-              >
-                {t("settings.commandsPage.importBtn")}
-              </Button>
-            </div>
+            return (
+              <div key={asset.fqid} className={cn(ROW, "min-w-0 items-start")}>
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 pr-2 text-left"
+                  disabled={saving}
+                  onClick={() => openCommand(asset)}
+                >
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className={cn(ROW_LABEL, "min-w-0 max-w-full truncate font-mono")}>
+                      /{asset.name}
+                    </span>
+                    <span
+                      className="min-w-0 max-w-full truncate text-[length:var(--font-size-11)] text-muted-foreground"
+                      title={teamLabel}
+                    >
+                      {teamLabel}
+                    </span>
+                  </div>
+                  {description ? (
+                    <p className={cn(ROW_DESC, "line-clamp-2 break-words")} title={description}>
+                      {description}
+                    </p>
+                  ) : null}
+                </button>
+                {canDelete ? (
+                  <InlineDeleteButton
+                    itemId={asset.fqid}
+                    pending={deleteConfirm.isPending(asset.fqid)}
+                    disabled={saving}
+                    onRequest={() => deleteConfirm.setPendingId(asset.fqid)}
+                    onConfirm={() => void confirmDelete(asset.fqid)}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+          {!listExpanded && hiddenCount > 0 ? (
+            <button
+              type="button"
+              className={cn(
+                ROW,
+                "w-full justify-center text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground",
+              )}
+              onClick={() => setListExpanded(true)}
+            >
+              {t("settings.commandsPage.loadMore", { count: hiddenCount })}
+            </button>
           ) : null}
         </div>
-        {!projectRoot ? (
-          <p className={SUB_DESC}>{t("settings.commandsPage.customOpenProject")}</p>
-        ) : (
-          <>
-            <p className={SUB_DESC}>
-              {t("settings.commandsPage.customDesc")}{" "}
-              <code className="text-[length:var(--font-size-11)] bg-muted px-1 py-0.5 rounded">
-                .prismnext/agent/commands/
-              </code>
-            </p>
-            <div className={SETTINGS_CARD}>
-              {customCommands.length === 0 ? (
-                <div className={cn(SETTINGS_ROW, "!block")}>
-                  <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                    {t("settings.commandsPage.emptyCustom")}
-                  </p>
-                </div>
-              ) : (
-                customCommands.map((cmd) => (
-                  <div key={cmd.id} className={SETTINGS_ROW}>
-                    <div className="min-w-0 flex-1 pr-4">
-                      <div className="flex items-center gap-2">
-                        <p className={SETTINGS_ROW_LABEL}>/{cmd.name}</p>
-                      </div>
-                      <p className={SETTINGS_ROW_DESC}>{cmd.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        className="shrink-0"
-                        onClick={() => openEdit(cmd.id, cmd.name)}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <InlineDeleteButton
-                        itemId={cmd.id}
-                        pending={deleteConfirm.isPending(cmd.id)}
-                        onRequest={() => deleteConfirm.setPendingId(cmd.id)}
-                        onConfirm={() => void confirmDelete(cmd.id)}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-              <div className="py-2.5">
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() =>
-                    openSettingsPanel({ kind: "custom-command", mode: "new" })
-                  }
-                >
-                  {t("settings.commandsPage.addCustom")}
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      )}
+    </div>
+  );
 
-      {projectRoot && importPreview && importPack ? (
-        <CommandsImportDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-          projectRoot={projectRoot}
-          conflictCount={importPreview.conflicts.length}
-          invalidCount={importPreview.invalid.length}
-          incomingCount={importPreview.incoming.length}
-          pack={importPack}
-          onComplete={() => void loadCommands()}
-        />
-      ) : null}
+  if (embedded) {
+    return <div className="min-w-0 space-y-6">{listBody}</div>;
+  }
+
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto">
+      <div className="mx-auto w-full max-w-3xl min-w-0 space-y-6 px-4 py-8 sm:px-8">
+        <div className="min-w-0">
+          <h2 className="text-[length:var(--font-dialog-title)] font-semibold">
+            {t("settings.commandsPage.title")}
+          </h2>
+          <p className="mt-0.5 text-[length:var(--font-dialog-label)] text-muted-foreground">
+            {t("settings.commandsPage.pageDesc")}
+          </p>
+          <p className="mt-1 text-[length:var(--font-size-11)] text-muted-foreground">
+            {t("settings.commandsPage.appHint")}
+          </p>
+        </div>
+        {listBody}
+      </div>
     </div>
   );
 }

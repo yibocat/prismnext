@@ -108,6 +108,20 @@ export interface ContentBlock {
   _backfillName?: string | null;
 }
 
+const CONTENT_BLOCK_TYPES = new Set<ContentBlock["type"]>([
+  "text",
+  "tool_use",
+  "tool_result",
+  "thinking",
+  "command",
+  "profile",
+]);
+
+function isContentBlock(value: unknown): value is ContentBlock {
+  if (!value || typeof value !== "object") return false;
+  const type = (value as { type?: unknown }).type;
+  return typeof type === "string" && CONTENT_BLOCK_TYPES.has(type as ContentBlock["type"]);
+}
 
 export interface TurnMessageMeta {
   /** Wall-clock when the assistant turn finished (ms). */
@@ -215,6 +229,8 @@ interface TabState {
   promptStale: boolean;
   /** Expert team orchestrator id (null → project default). */
   orchestratorId: string | null;
+  /** Tab-level active team override (null → project/app default via Teams resolver). */
+  sessionTeamId: string | null;
   /** OpenCode primary agent for this tab. */
   sessionAgent: SessionAgent;
   /** True while session history is being loaded from disk (avoids homepage flash). */
@@ -332,6 +348,7 @@ function makeDefaultTab(id: string): TabState {
     contextUsageSource: null,
     promptStale: false,
     orchestratorId: null,
+    sessionTeamId: null,
     sessionAgent: "build",
     isLoadingSession: false,
     sessionCwd: null,
@@ -598,6 +615,10 @@ interface ChatState {
   setSessionAgent: (agent: SessionAgent, tabId?: string) => void;
   /** Soft-block entry when leaving Plan with a dirty draft. */
   requestSetSessionAgent: (agent: SessionAgent, tabId?: string) => void;
+  /** Tab-level active team (Teams v2); null clears override. */
+  setSessionTeamId: (tabId: string, teamId: string | null) => void;
+  /** Clear all tab sessionTeamId overrides (Settings changed project default). */
+  clearSessionTeamOverrides: () => void;
   /**
    * After reopening a session with a pending draft: restore Plan agent + chip +
    * permissions, but suppress the composer confirm strip (Approve lives on draft toolbar).
@@ -647,6 +668,7 @@ interface ChatState {
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      sessionTeamId?: string | null;
       promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
       promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
@@ -1121,6 +1143,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
         useTerminalAiStore.getState().removeAiTabsForChat(id);
       });
+      void import("./execution-store").then(({ useExecutionStore }) => {
+        void useExecutionStore.getState().cancelForChat(id);
+      });
   },
 
   renameSession: async (tabId, title) => {
@@ -1323,6 +1348,30 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return;
     }
     get().setSessionAgent(agent, resolvedTabId);
+  },
+
+  setSessionTeamId: (tabId, teamId) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, sessionTeamId: teamId, orchestratorId: null }
+          : t,
+      ),
+    }));
+  },
+
+  /**
+   * Settings (or any project-default change) won — clear tab overrides so
+   * Composer follows `teams.json.defaultTeam` instead of a stale sessionTeamId.
+   */
+  clearSessionTeamOverrides: () => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.sessionTeamId == null && t.orchestratorId == null
+          ? t
+          : { ...t, sessionTeamId: null, orchestratorId: null },
+      ),
+    }));
   },
 
   restorePendingPlanModeIfNeeded: async (tabId?: string) => {
@@ -1817,6 +1866,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       hasPaperSnippets?: boolean;
       selectedExpertIds?: string[];
       orchestratorId?: string | null;
+      sessionTeamId?: string | null;
       promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
       promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
@@ -1954,6 +2004,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           sessionAgent === "plan"
             ? undefined
             : composerExtras?.orchestratorId ?? activeTab?.orchestratorId ?? undefined,
+        sessionTeamId:
+          sessionAgent === "plan"
+            ? undefined
+            : composerExtras?.sessionTeamId ?? activeTab?.sessionTeamId ?? undefined,
         selectedExpertIds: composerExtras?.selectedExpertIds,
         mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
         skillIds: composerExtras?.skillIds,
@@ -2040,7 +2094,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           prompt: meta.prompt || live?.prompt || "",
           subSessionId: result.subSessionId ?? live?.subSessionId,
           status: result.status,
-          blocks: (result.blocks ?? []) as ContentBlock[],
+          blocks: (result.blocks ?? []).filter(isContentBlock),
           error: result.error,
         });
       } catch (err: unknown) {
@@ -2757,7 +2811,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // ─── Internal ───
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
-    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
+    const stampedBox: {
+      value: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null;
+    } = { value: null };
     set((s) => {
       const tabIdx = s.tabs.findIndex((t) => t.id === tabId);
       if (tabIdx === -1) return {};
@@ -2794,7 +2850,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         });
         turnMeta = merged.turnMeta;
         pendingTurnMeta = null;
-        stamped = {
+        stampedBox.value = {
           sessionId: tab.sessionId,
           turnIndex: merged.turnIndex,
           meta: merged.meta,
@@ -2824,8 +2880,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       };
       return { tabs: newTabs, ...projectActiveTab(newTabs, s.activeTabId) };
     });
-    if (stamped) {
-      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    if (stampedBox.value) {
+      persistTurnMetaToDisk(
+        stampedBox.value.sessionId,
+        stampedBox.value.turnIndex,
+        stampedBox.value.meta,
+      );
     }
   },
 
@@ -3028,7 +3088,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   _setStreaming: (tabId: string, isStreaming: boolean) => {
-    let stamped: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null = null;
+    const stampedBox: {
+      value: { sessionId: string | null; turnIndex: number; meta: TurnMessageMeta } | null;
+    } = { value: null };
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
@@ -3059,7 +3121,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             );
             turnMeta = merged.turnMeta;
             pendingTurnMeta = null;
-            stamped = {
+            stampedBox.value = {
               sessionId: t.sessionId,
               turnIndex: merged.turnIndex,
               meta: merged.meta,
@@ -3093,8 +3155,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
       return { tabs, ...projected };
     });
-    if (stamped) {
-      persistTurnMetaToDisk(stamped.sessionId, stamped.turnIndex, stamped.meta);
+    if (stampedBox.value) {
+      persistTurnMetaToDisk(
+        stampedBox.value.sessionId,
+        stampedBox.value.turnIndex,
+        stampedBox.value.meta,
+      );
     }
     if (!isStreaming) {
       const tab = get().tabs.find((t) => t.id === tabId);

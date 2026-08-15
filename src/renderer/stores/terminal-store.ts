@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { isJobMonitorTab } from "@/lib/workspace/mode-registry";
 import { shellDisplayName, isGenericTerminalTabTitle } from "@/lib/terminal/shell-label";
 import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
 import type {
@@ -107,7 +108,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
       for (const tab of useRightPanelStore.getState().tabs) {
         if (
           tab.kind === "terminal"
-          && tab.terminalSource !== "ai"
+          && !isJobMonitorTab(tab)
           && isGenericTerminalTabTitle(tab.title)
         ) {
           useRightPanelStore.getState().updateTerminalTabTitle(tab.id, label);
