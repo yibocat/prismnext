@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   CheckCircle2Icon,
+  ExternalLinkIcon,
   Loader2Icon,
   RefreshCwIcon,
   RocketIcon,
@@ -16,6 +17,7 @@ import {
   type UpdateUiStatus,
 } from "@/lib/updates/map-updater-status";
 import { requestUpdateInstall } from "@/lib/updates/request-update-install";
+import { toast } from "sonner";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import type { UpdaterStatus } from "@/types/electron";
@@ -30,6 +32,14 @@ const CARD = SETTINGS_CARD;
 const CATEGORY_HEADER = SETTINGS_CATEGORY_HEADER;
 const ROW_LABEL = SETTINGS_ROW_LABEL;
 const ROW_DESC = SETTINGS_ROW_DESC;
+
+const WEBSITE_ORIGIN = "https://prismnext.pages.dev";
+const LEGAL_PAGES = [
+  { id: "privacy", url: `${WEBSITE_ORIGIN}/privacy.html` },
+  { id: "terms", url: `${WEBSITE_ORIGIN}/terms.html` },
+  { id: "notices", url: `${WEBSITE_ORIGIN}/notices.html` },
+  { id: "security", url: `${WEBSITE_ORIGIN}/security.html` },
+] as const;
 
 type Status = UpdateUiStatus;
 
@@ -461,6 +471,40 @@ export function AboutSettings() {
                 {opencodeVersion}
               </span>
             </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className={CATEGORY_HEADER}>{t("settings.about.legal")}</h3>
+          <div className={CARD}>
+            {LEGAL_PAGES.map((page, index) => (
+              <div
+                key={page.id}
+                className={
+                  index === 0
+                    ? "flex items-center justify-between gap-3 py-2.5"
+                    : "flex items-center justify-between gap-3 py-2.5 border-t border-border/60"
+                }
+              >
+                <div className="min-w-0 flex-1 pr-4">
+                  <p className={ROW_LABEL}>{t(`settings.about.${page.id}`)}</p>
+                  <p className={ROW_DESC}>{t(`settings.about.${page.id}Desc`)}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0"
+                  onClick={() => {
+                    void window.electronAPI.shellOpenExternal(page.url).catch(() => {
+                      toast.error(t("settings.about.openPageFailed"));
+                    });
+                  }}
+                >
+                  <ExternalLinkIcon />
+                  {t("settings.about.openPage")}
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
       </div>

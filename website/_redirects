@@ -1,0 +1,3 @@
+# Missing paths must not fall back to the homepage (Cloudflare SPA default).
+# Existing files still win; this only applies when the path is absent.
+/*    /404.html   404

@@ -242,8 +242,10 @@ flowchart TB
 1. **本地数据（Locality）**：手稿、项目元数据、文献数据库、实验数据与项目级团队配置保留在本地磁盘；项目状态位于 `.prismnext/`。
 2. **自备密钥（BYOK）**：模型 API 调用在本机与你指定的模型供应商之间直连；绝无 Prism 模型代理或 Prism 云。
 3. **显式的第三方请求**：用户发起文献动作后，元数据检索与可选 MinerU PDF 处理会使用第三方服务；MinerU 会接收被选中的 PDF 进行处理。
-4. **零数据遥测（Zero Telemetry）**：无用户行为追踪、无后台遥测收集。
+4. **零数据遥测（Zero Telemetry）**：无用户行为追踪、无产品遥测。更新检查与用户发起的第三方请求见[隐私说明](https://prismnext.pages.dev/privacy.html)。
 5. **人类控制（Human Control）**：Plan、权限模式与差异视图提供审阅节点；请按任务性质选择合适的权限模式。
+
+详见[隐私政策](https://prismnext.pages.dev/privacy.html)、[使用条款](https://prismnext.pages.dev/terms.html)、[开源与第三方声明](https://prismnext.pages.dev/notices.html)与[安全报告](https://prismnext.pages.dev/security.html)。
 
 ---
 

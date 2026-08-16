@@ -242,8 +242,10 @@ In addition to the open-source Core team, PrismNext includes specialized multi-a
 1. **Locality**: Manuscripts, project metadata, literature databases, experiments, and project-team configuration remain on your local disk. Project state lives under `.prismnext/`.
 2. **BYOK (Bring Your Own Key)**: Model API calls go directly between your machine and your chosen provider. PrismNext has no model proxy or Prism cloud.
 3. **Explicit Third-Party Requests**: Literature metadata lookups and optional MinerU PDF processing use third-party services after a user starts that literature action; MinerU receives the selected PDF for processing.
-4. **Zero Telemetry**: No tracking, user analytics, or background data collection.
+4. **Zero Telemetry**: No tracking or user analytics. Update checks and user-started third-party requests are documented in the [Privacy note](https://prismnext.pages.dev/privacy.html).
 5. **Human Control**: Plans, permission modes, and visual diffs provide review points; choose the permission mode that matches the task.
+
+See the [Privacy Policy](https://prismnext.pages.dev/privacy.html), [Terms of Use](https://prismnext.pages.dev/terms.html), [Open Source Notices](https://prismnext.pages.dev/notices.html), and [Security](https://prismnext.pages.dev/security.html).
 
 ---
 

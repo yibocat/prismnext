@@ -537,7 +537,18 @@
       "proKeyEmpty": "Enter an activation key.",
       "proKeyInvalid": "That key is not valid.",
       "proActivateFailed": "Could not activate the key.",
-      "proClearFailed": "Could not clear the license."
+      "proClearFailed": "Could not clear the license.",
+      "legal": "Legal",
+      "privacy": "Privacy Policy",
+      "privacyDesc": "How PrismNext stores data on your machine and when anything is sent elsewhere.",
+      "terms": "Terms of Use",
+      "termsDesc": "License, Early Access, and your responsibility when using the app and this website.",
+      "notices": "Open Source Notices",
+      "noticesDesc": "Apache License 2.0 and the principal bundled components (Electron, OpenCode, Tectonic, PDF.js).",
+      "security": "Security",
+      "securityDesc": "How to report a vulnerability. Do not open a public GitHub issue for security reports.",
+      "openPage": "Open",
+      "openPageFailed": "Could not open the page in your browser."
     },
     "compiler": {
       "title": "Compiler",

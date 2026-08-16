@@ -8,6 +8,20 @@
       navCaps: "§3 Capabilities",
       navPro: "§4 Pro Teams",
       navRefs: "References",
+      navHome: "Home",
+      navPrivacy: "Privacy",
+      navTerms: "Terms",
+      navPrivacyPolicy: "Privacy Policy",
+      navTermsOfUse: "Terms of Use",
+      navNotices: "Licenses",
+      navNoticesFull: "Open Source",
+      navSecurity: "Security",
+      titlePrivacy: "PrismNext — Privacy Policy",
+      titleTerms: "PrismNext — Terms of Use",
+      titleNotices: "PrismNext — Open Source Notices",
+      titleSecurity: "PrismNext — Security",
+      titleNotFound: "PrismNext — Page not found",
+      footCopy: "© 2026 yibocat",
       pubMeta: "Preprint",
       versionLabel: "Version",
       authors: "A local-first scientific research environment powered by collaborative AI teams.",
@@ -216,7 +230,8 @@
       pLocalTitle: "Axiom 1 (Locality).",
       pLocalText: "Your projects stay strictly on your local machine.",
       pPrivacyTitle: "Axiom 2 (Privacy).",
-      pPrivacyText: "No telemetry, no analytics, no data collection — zero bytes leave without user initiation.",
+      pPrivacyText:
+        "No product telemetry or analytics. We do not collect usage data or operate a PrismNext cloud.",
       pKeyTitle: "Axiom 3 (Keys).",
       pKeyText: "Model calls route directly to providers using your own API keys — no Prism cloud, no middleman.",
       pVetoTitle: "Axiom 4 (Veto).",
@@ -227,7 +242,7 @@
       refGithub: "Author's GitHub",
       refEmail: "Contact",
       foot: "Local-first collaborative AI research desk — set in Instrument Serif, Sora & Plex Mono.",
-      footFine: "© 2026 yibocat · No trackers, no accounts — everything stays local.",
+      footFine: "© 2026 yibocat",
       osMac: "macOS",
       osWin: "Windows",
       osLinux: "Linux",
@@ -247,6 +262,20 @@
       navCaps: "§3 能力",
       navPro: "§4 Pro 团队",
       navRefs: "参考文献",
+      navHome: "首页",
+      navPrivacy: "隐私",
+      navTerms: "条款",
+      navPrivacyPolicy: "隐私政策",
+      navTermsOfUse: "使用条款",
+      navNotices: "许可",
+      navNoticesFull: "开源声明",
+      navSecurity: "安全",
+      titlePrivacy: "PrismNext — 隐私政策",
+      titleTerms: "PrismNext — 使用条款",
+      titleNotices: "PrismNext — 开源与第三方声明",
+      titleSecurity: "PrismNext — 安全报告",
+      titleNotFound: "PrismNext — 页面不存在",
+      footCopy: "© 2026 yibocat",
       pubMeta: "预印本",
       versionLabel: "版本",
       authors: "本地优先的集成式科研工作台 —— 由有闸门的多智能体科学团队协同驱动。",
@@ -431,7 +460,7 @@
       pLocalTitle: "公理 1（绝对本地性）。",
       pLocalText: "所有科研项目数据、手稿与数据库严格保留在你的本地机器上。",
       pPrivacyTitle: "公理 2（零遥测隐私）。",
-      pPrivacyText: "无遥测、无行为追踪、不收集任何数据——绝无未经用户显式发起的网络外发。",
+      pPrivacyText: "无产品遥测、无行为分析。我们不收集使用数据，也不运营 PrismNext 云。",
       pKeyTitle: "公理 3（自带密钥 BYOK）。",
       pKeyText: "模型调用走你自己的 API Key 与你信赖的供应商——无中转代理，绝无 Prism 云端。",
       pVetoTitle: "公理 4（人类终审否决）。",
@@ -442,7 +471,7 @@
       refGithub: "作者 GitHub",
       refEmail: "联系邮箱",
       foot: "本地优先的协作式 AI 科研工作台 —— 排版于 Instrument Serif、Sora 与 Plex Mono。",
-      footFine: "© 2026 yibocat · 无追踪器、无用户账号 —— 一切留在本机。",
+      footFine: "© 2026 yibocat",
       osMac: "macOS",
       osWin: "Windows",
       osLinux: "Linux",
@@ -566,7 +595,20 @@
   function applyI18n() {
     const t = STRINGS[lang];
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-    document.title = t.title;
+    const page = document.documentElement.getAttribute("data-page");
+    const pageTitle = {
+      privacy: t.titlePrivacy,
+      terms: t.titleTerms,
+      notices: t.titleNotices,
+      security: t.titleSecurity,
+      notfound: t.titleNotFound,
+    };
+    document.title = (page && pageTitle[page]) || t.title;
+
+    document.querySelectorAll("[data-legal-lang]").forEach((el) => {
+      const want = lang === "zh" ? "zh" : "en";
+      el.hidden = el.getAttribute("data-legal-lang") !== want;
+    });
 
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       const key = el.getAttribute("data-i18n");
@@ -721,6 +763,8 @@
     applyI18n();
     setupScrollReveal();
     setupScrollSpy();
+
+    if (document.documentElement.getAttribute("data-page")) return;
 
     try {
       const v = await loadVersionJson();

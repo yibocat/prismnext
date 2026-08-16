@@ -537,7 +537,18 @@
       "proKeyEmpty": "请输入激活码。",
       "proKeyInvalid": "激活码无效。",
       "proActivateFailed": "无法激活。",
-      "proClearFailed": "无法清除许可证。"
+      "proClearFailed": "无法清除许可证。",
+      "legal": "说明",
+      "privacy": "隐私政策",
+      "privacyDesc": "PrismNext 如何在本机保存数据，以及何时会向外部发送信息。",
+      "terms": "使用条款",
+      "termsDesc": "许可、Early Access，以及使用本应用与本网站时的责任。",
+      "notices": "开源与第三方声明",
+      "noticesDesc": "Apache License 2.0，以及主要捆绑组件（Electron、OpenCode、Tectonic、PDF.js）。",
+      "security": "安全报告",
+      "securityDesc": "如何报告安全漏洞。请不要为此开公开的 GitHub Issue。",
+      "openPage": "打开",
+      "openPageFailed": "无法在浏览器中打开该页面。"
     },
     "compiler": {
       "title": "编译器",

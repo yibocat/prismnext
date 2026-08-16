@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-pack="academic" data-page="security">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="How to report a security vulnerability in PrismNext."
+    />
+    <meta name="theme-color" content="#0b0c10" id="theme-color" />
+    <title>PrismNext — Security</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("prismnext-theme");
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        const pack = localStorage.getItem("prismnext-pack");
+        if (pack) document.documentElement.setAttribute("data-pack", pack);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260816c" />
+  </head>
+  <body>
+    <header class="running-head">
+      <a class="wordmark" href="./" aria-label="PrismNext">
+        <img
+          id="wordmark-icon"
+          class="wordmark-icon"
+          src="./assets/app-icon-light.png"
+          width="24"
+          height="24"
+          alt=""
+          data-icon-dark="./assets/app-icon-light.png"
+          data-icon-light="./assets/app-icon-dark.png"
+        />
+        <span>PrismNext</span>
+      </a>
+      <nav class="head-nav" aria-label="Legal">
+        <a href="./" data-i18n="navHome">Home</a>
+        <a href="./privacy.html" data-i18n="navPrivacy">Privacy</a>
+        <a href="./terms.html" data-i18n="navTerms">Terms</a>
+        <a href="./notices.html" data-i18n="navNotices">Licenses</a>
+      </nav>
+      <div class="topbar-actions">
+        <div data-pack-picker class="pack-dots" role="group" aria-label="Theme packs"></div>
+        <button type="button" class="topbar-icon-btn theme-cycle" title="Theme" aria-label="Theme">
+          <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+            />
+          </svg>
+          <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+          </svg>
+          <svg class="theme-icon theme-icon--system" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="12" rx="2" />
+            <path d="M8 20h8M12 16v4" />
+          </svg>
+        </button>
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="sheet sheet--legal">
+      <article class="legal" data-legal-lang="en">
+        <header class="legal-head">
+          <p class="legal-meta">Effective 16 August 2026</p>
+          <h1>Security</h1>
+          <p class="legal-lede">
+            How to report a vulnerability in PrismNext. Please do not open a public GitHub issue
+            for security reports. The repository file
+            <a href="https://github.com/yibocat/prismnext/blob/master/SECURITY.md" rel="noopener"
+              >SECURITY.md</a
+            >
+            is the same policy.
+          </p>
+        </header>
+
+        <h2>1. Supported versions</h2>
+        <p>
+          PrismNext is in Early Access. We primarily support the latest released version from
+          GitHub Releases and the in-app updater feed. Please upgrade before reporting an issue
+          that may already be fixed.
+        </p>
+
+        <h2>2. How to report</h2>
+        <p>Use one of the following:</p>
+        <ul>
+          <li>
+            GitHub Private Vulnerability Reporting, if enabled on the repository: Security tab →
+            Report a vulnerability.
+          </li>
+          <li>
+            Email
+            <a href="mailto:yibocat@yeah.net?subject=%5BPrismNext%20Security%5D"
+              >yibocat@yeah.net</a
+            >
+            with the subject prefix <code>[PrismNext Security]</code>.
+          </li>
+        </ul>
+
+        <h2>3. What to include</h2>
+        <p>Please include as much of the following as you can:</p>
+        <ul>
+          <li>affected version and platform (macOS, Windows, or Linux);</li>
+          <li>the impact, so far as you understand it (for example data exposure or privilege escalation);</li>
+          <li>enough information for us to reproduce the issue; and</li>
+          <li>whether you plan to disclose publicly, and on what timeline.</li>
+        </ul>
+        <p>
+          We will acknowledge receipt when we can, assess the report, and coordinate a fix and
+          disclosure window. Please give us reasonable time before public disclosure.
+        </p>
+
+        <h2>4. Scope</h2>
+        <p>
+          PrismNext is local-first and uses bring-your-own-key model credentials. Treat API keys
+          and project files on disk as sensitive.
+        </p>
+        <p>
+          Reports about third-party model providers, OpenCode upstream, or dependency
+          vulnerabilities are welcome when they affect this application’s packaging or defaults. We
+          may redirect a purely upstream issue to the relevant project.
+        </p>
+
+        <h2>5. Contact</h2>
+        <p>
+          <a href="mailto:yibocat@yeah.net?subject=%5BPrismNext%20Security%5D">yibocat@yeah.net</a>
+          ·
+          <a href="https://github.com/yibocat/prismnext" rel="noopener">github.com/yibocat/prismnext</a>
+        </p>
+      </article>
+
+      <article class="legal" data-legal-lang="zh" hidden>
+        <header class="legal-head">
+          <p class="legal-meta">生效日期：2026 年 8 月 16 日</p>
+          <h1>安全报告</h1>
+          <p class="legal-lede">
+            如何报告 PrismNext 的安全漏洞。请不要为此开公开的 GitHub Issue。仓库中的
+            <a href="https://github.com/yibocat/prismnext/blob/master/SECURITY.md" rel="noopener"
+              >SECURITY.md</a
+            >
+            与本页为同一政策。
+          </p>
+        </header>
+
+        <h2>1. 支持的版本</h2>
+        <p>
+          PrismNext 仍处于 Early Access。我们主要支持 GitHub Releases 与应用内更新源上的最新已发布版本。请先升级，再报告可能已被修复的问题。
+        </p>
+
+        <h2>2. 如何报告</h2>
+        <p>请使用下列方式之一：</p>
+        <ul>
+          <li>若仓库已启用 GitHub 非公开漏洞报告：Security 标签 → Report a vulnerability。</li>
+          <li>
+            发送邮件至
+            <a href="mailto:yibocat@yeah.net?subject=%5BPrismNext%20Security%5D"
+              >yibocat@yeah.net</a
+            >，主题请以 <code>[PrismNext Security]</code> 开头。
+          </li>
+        </ul>
+
+        <h2>3. 请尽量提供</h2>
+        <ul>
+          <li>受影响的版本与平台（macOS、Windows 或 Linux）；</li>
+          <li>就您所知的影响（例如数据暴露或权限提升）；</li>
+          <li>足以让我们复现问题的信息；以及</li>
+          <li>您是否计划公开披露，以及时间安排。</li>
+        </ul>
+        <p>
+          我们会在能够处理时确认收到，评估报告，并协调修复与披露窗口。请在公开披露前给予合理时间。
+        </p>
+
+        <h2>4. 范围</h2>
+        <p>
+          PrismNext 是本地优先应用，并使用自备密钥调用模型。请将磁盘上的 API Key 与项目文件视为敏感信息。
+        </p>
+        <p>
+          有关第三方模型供应商、OpenCode 上游或依赖漏洞的报告，若影响本应用的打包或默认配置，欢迎提交。纯上游问题我们可能会转到相应项目。
+        </p>
+
+        <h2>5. 联系</h2>
+        <p>
+          <a href="mailto:yibocat@yeah.net?subject=%5BPrismNext%20Security%5D">yibocat@yeah.net</a>
+          ·
+          <a href="https://github.com/yibocat/prismnext" rel="noopener">github.com/yibocat/prismnext</a>
+        </p>
+      </article>
+
+      <footer class="references">
+        <div class="site-foot">
+          <nav class="site-foot-nav" aria-label="Legal">
+            <a href="./privacy.html" data-i18n="navPrivacyPolicy">Privacy Policy</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./terms.html" data-i18n="navTermsOfUse">Terms of Use</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./notices.html" data-i18n="navNoticesFull">Open Source</a>
+          </nav>
+          <p class="site-foot-copy" data-i18n="footCopy">© 2026 yibocat</p>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./theme-preview.js?v=20260815b"></script>
+    <script src="./site.js?v=20260816c"></script>
+  </body>
+</html>

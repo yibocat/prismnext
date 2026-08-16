@@ -84,6 +84,7 @@ When both the baked default and `updateSource` are empty (typical unsigned local
 3. **Root directory:** `website`
 4. Build command: empty (or `exit 0`)
 5. Deploy → open the `*.pages.dev` URL
+6. **Not Found Handling:** None (do not enable Single-page application). Missing paths should serve `website/404.html`, not the homepage. `website/_redirects` also forces `/* → /404.html` with HTTP 404.
 
 ### R2 CORS (required for the download page)
 

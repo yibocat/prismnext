@@ -537,7 +537,18 @@
       "proKeyEmpty": "請輸入啟用碼。",
       "proKeyInvalid": "啟用碼無效。",
       "proActivateFailed": "無法啟用。",
-      "proClearFailed": "無法清除授權。"
+      "proClearFailed": "無法清除授權。",
+      "legal": "說明",
+      "privacy": "隱私政策",
+      "privacyDesc": "PrismNext 如何在本機保存資料，以及何時會向外部傳送資訊。",
+      "terms": "使用條款",
+      "termsDesc": "授權、Early Access，以及使用本應用與本網站時的責任。",
+      "notices": "開源與第三方聲明",
+      "noticesDesc": "Apache License 2.0，以及主要捆綁組件（Electron、OpenCode、Tectonic、PDF.js）。",
+      "security": "安全報告",
+      "securityDesc": "如何回報安全漏洞。請不要為此開公開的 GitHub Issue。",
+      "openPage": "開啟",
+      "openPageFailed": "無法在瀏覽器中開啟該頁面。"
     },
     "compiler": {
       "title": "編譯器",

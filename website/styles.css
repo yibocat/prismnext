@@ -1300,10 +1300,204 @@ html[data-theme="dark"] .backdrop-shell--constellation {
   text-align: center;
 }
 
-.colophon--fine {
-  padding-top: 0.3rem;
-  padding-bottom: 0.4rem;
+.site-foot {
+  margin-top: 2rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+
+.site-foot-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.site-foot-nav a {
+  color: var(--ink-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.site-foot-nav a:hover {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.site-foot-dot {
+  color: var(--ink-faint);
+}
+
+.site-foot-copy,
+.site-foot-note {
+  margin: 0.55rem 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+
+.site-foot-note {
+  margin-top: 0.2rem;
+  padding-bottom: 0.2rem;
+}
+
+/* ── Legal notes (privacy / terms) ── */
+
+.sheet--legal {
+  padding-top: clamp(2.25rem, 5vw, 3.5rem);
+}
+
+.sheet--legal .references {
+  margin-top: 2.5rem;
+  padding-top: 0;
   border-top: 0;
+}
+
+.legal {
+  max-width: 40.5rem;
+}
+
+.legal-head {
+  margin-bottom: 0.4rem;
+}
+
+.legal-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.legal-head h1 {
+  margin: 0.55rem 0 0.85rem;
+  font-family: var(--font-serif);
+  font-size: clamp(2.1rem, 5vw, 2.85rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.legal-lede {
+  margin: 0 0 0.4rem;
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: var(--ink-muted);
+}
+
+.legal h2 {
+  margin: 2rem 0 0.65rem;
+  padding-top: 1.15rem;
+  border-top: 1px dashed var(--line-strong);
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+}
+
+.legal h2:first-of-type {
+  border-top: 0;
+  padding-top: 1.4rem;
+}
+
+.legal h3 {
+  margin: 1.15rem 0 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.legal p,
+.legal li {
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--ink-muted);
+}
+
+.legal p {
+  margin: 0 0 0.85rem;
+}
+
+.legal ul,
+.legal ol {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.legal li + li {
+  margin-top: 0.35rem;
+}
+
+.legal strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.legal em {
+  font-style: italic;
+}
+
+.legal code {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0.08em 0.32em;
+}
+
+.legal a {
+  color: var(--accent-hot);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.legal a:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.legal-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.35rem 0 1.25rem;
+  font-size: 0.88rem;
+}
+
+.legal-table th,
+.legal-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.55rem 0.75rem 0.55rem 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.legal-table th {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.legal-table td:first-child {
+  color: var(--ink);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* ── Marginalia (handwritten side notes, wide screens only) ── */

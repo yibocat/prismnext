@@ -19,7 +19,7 @@ import { setCatalogFetch } from "../../shared/bibliographic-metadata/catalog-fet
 
 const DEFAULT_HEADERS = {
   Accept: "application/json",
-  "User-Agent": "PrismNext/1.0 (mailto:support@researchprism.app)",
+  "User-Agent": "PrismNext/1.0 (mailto:yibocat@yeah.net)",
 } as const;
 
 const DEFAULT_TIMEOUT_MS = 20_000;

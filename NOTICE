@@ -12,6 +12,11 @@ Binary distributions of PrismNext bundle the following third-party
 components. Each remains under its own license, which accompanies the
 component upstream:
 
+* Electron — desktop application framework (MIT License)
+  https://github.com/electron/electron
+  Official installers are Electron applications and therefore include
+  Chromium and Node.js as part of that framework.
+
 * OpenCode — open-source AI coding agent (MIT License)
   https://github.com/anomalyco/opencode
   Bundled as the agent runtime binary; the pinned release is recorded in

@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-pack="academic" data-page="notices">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Open-source licenses and third-party notices for PrismNext."
+    />
+    <meta name="theme-color" content="#0b0c10" id="theme-color" />
+    <title>PrismNext — Open Source Notices</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("prismnext-theme");
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        const pack = localStorage.getItem("prismnext-pack");
+        if (pack) document.documentElement.setAttribute("data-pack", pack);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260816c" />
+  </head>
+  <body>
+    <header class="running-head">
+      <a class="wordmark" href="./" aria-label="PrismNext">
+        <img
+          id="wordmark-icon"
+          class="wordmark-icon"
+          src="./assets/app-icon-light.png"
+          width="24"
+          height="24"
+          alt=""
+          data-icon-dark="./assets/app-icon-light.png"
+          data-icon-light="./assets/app-icon-dark.png"
+        />
+        <span>PrismNext</span>
+      </a>
+      <nav class="head-nav" aria-label="Legal">
+        <a href="./" data-i18n="navHome">Home</a>
+        <a href="./privacy.html" data-i18n="navPrivacy">Privacy</a>
+        <a href="./terms.html" data-i18n="navTerms">Terms</a>
+        <a href="./notices.html" class="is-current" data-i18n="navNotices">Licenses</a>
+      </nav>
+      <div class="topbar-actions">
+        <div data-pack-picker class="pack-dots" role="group" aria-label="Theme packs"></div>
+        <button type="button" class="topbar-icon-btn theme-cycle" title="Theme" aria-label="Theme">
+          <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+            />
+          </svg>
+          <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+          </svg>
+          <svg class="theme-icon theme-icon--system" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="12" rx="2" />
+            <path d="M8 20h8M12 16v4" />
+          </svg>
+        </button>
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="sheet sheet--legal">
+      <article class="legal" data-legal-lang="en">
+        <header class="legal-head">
+          <p class="legal-meta">Effective 16 August 2026</p>
+          <h1>Open Source Notices</h1>
+          <p class="legal-lede">
+            This page identifies the license for PrismNext and the principal third-party components
+            bundled in official installers. It restates the repository
+            <a href="https://github.com/yibocat/prismnext/blob/master/NOTICE" rel="noopener">NOTICE</a>
+            and
+            <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener">LICENSE</a>
+            for readers of this website.
+          </p>
+        </header>
+
+        <h2>1. PrismNext source code</h2>
+        <p>
+          Copyright 2026 yibocat. The PrismNext source code is licensed under the
+          <a href="https://www.apache.org/licenses/LICENSE-2.0" rel="noopener">Apache License, Version 2.0</a>.
+          You may obtain a copy of the license in the
+          <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener">repository LICENSE file</a>.
+        </p>
+        <p>
+          Unless required by applicable law or agreed to in writing, software distributed under the
+          License is distributed on an “AS IS” BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+          either express or implied. See the License for the specific language governing permissions
+          and limitations under the License.
+        </p>
+        <p>
+          Redistribution and modification of the source code are governed by that license, not by
+          the <a href="./terms.html">Terms of Use</a> for the official installer. If the two
+          conflict on source-code redistribution, the Apache License controls.
+        </p>
+
+        <h2>2. Bundled components in official installers</h2>
+        <p>
+          Official binary distributions include the following third-party components. Each remains
+          under its own license. The versions pinned for a given release are recorded in the
+          repository (for example <code>scripts/opencode-version.txt</code> and
+          <code>scripts/tectonic-version.txt</code>).
+        </p>
+        <table class="legal-table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Role in PrismNext</th>
+              <th>License</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Electron</td>
+              <td>
+                Desktop application shell. Official installers therefore also include Chromium and
+                Node.js as part of that framework.
+              </td>
+              <td>
+                MIT —
+                <a href="https://github.com/electron/electron" rel="noopener">electron/electron</a>
+              </td>
+            </tr>
+            <tr>
+              <td>OpenCode</td>
+              <td>Bundled agent runtime used for chat (ACP).</td>
+              <td>
+                MIT —
+                <a href="https://github.com/anomalyco/opencode" rel="noopener">anomalyco/opencode</a>
+              </td>
+            </tr>
+            <tr>
+              <td>Tectonic</td>
+              <td>Default bundled TeX/LaTeX compile engine.</td>
+              <td>
+                MIT —
+                <a href="https://tectonic-typesetting.github.io/" rel="noopener">tectonic-typesetting.github.io</a>
+              </td>
+            </tr>
+            <tr>
+              <td>PDF.js</td>
+              <td>
+                Built-in PDF reader, including viewer resources (cmaps, standard fonts, wasm, iccs).
+              </td>
+              <td>
+                Apache-2.0 —
+                <a href="https://github.com/mozilla/pdf.js" rel="noopener">mozilla/pdf.js</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>3. Other dependencies</h2>
+        <p>
+          JavaScript and native modules declared in <code>package.json</code> /
+          <code>pnpm-lock.yaml</code> carry their own licenses. The repository NOTICE does not
+          attempt to enumerate them. Chromium, as shipped by Electron, is subject to the licenses
+          distributed with that framework.
+        </p>
+
+        <h2>4. Pro modules</h2>
+        <p>
+          Certain official builds include Pro modules. Those modules, when present, are unlocked by
+          a local activation key as described in the Terms of Use. They are not a transfer of
+          source code and are not covered by the Apache License that applies to the open-source
+          core.
+        </p>
+
+        <h2>5. Obtaining the texts</h2>
+        <p>The authoritative copies in the source repository are:</p>
+        <ul>
+          <li>
+            <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener"
+              >LICENSE</a
+            >
+            — Apache License 2.0
+          </li>
+          <li>
+            <a href="https://github.com/yibocat/prismnext/blob/master/NOTICE" rel="noopener">NOTICE</a>
+            — bundled-component list
+          </li>
+        </ul>
+        <p>
+          Upstream projects publish their own license texts. If a summary on this page differs from
+          an upstream file, the upstream file controls for that component.
+        </p>
+
+        <h2>6. Contact</h2>
+        <p>
+          Questions about licensing may be sent to
+          <a href="mailto:yibocat@yeah.net">yibocat@yeah.net</a>.
+        </p>
+      </article>
+
+      <article class="legal" data-legal-lang="zh" hidden>
+        <header class="legal-head">
+          <p class="legal-meta">生效日期：2026 年 8 月 16 日</p>
+          <h1>开源与第三方声明</h1>
+          <p class="legal-lede">
+            本页说明 PrismNext 的许可，以及官方安装包中主要的第三方组件。内容与仓库中的
+            <a href="https://github.com/yibocat/prismnext/blob/master/NOTICE" rel="noopener">NOTICE</a>
+            和
+            <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener">LICENSE</a>
+            一致，供本网站读者查阅。
+          </p>
+        </header>
+
+        <h2>1. PrismNext 源码</h2>
+        <p>
+          Copyright 2026 yibocat。PrismNext 源码以
+          <a href="https://www.apache.org/licenses/LICENSE-2.0" rel="noopener">Apache License 2.0</a>
+          授权。完整文本见仓库
+          <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener">LICENSE</a>
+          文件。
+        </p>
+        <p>
+          除非适用法律要求或书面约定，按该许可分发的软件按「现状」提供，不附带任何明示或默示保证。许可中的权限与限制，以该许可文本为准。
+        </p>
+        <p>
+          源码的再分发与修改受该许可约束，而不受官方安装包
+          <a href="./terms.html">使用条款</a>
+          约束。二者在源码再分发事项上冲突时，以 Apache 许可为准。
+        </p>
+
+        <h2>2. 官方安装包中的捆绑组件</h2>
+        <p>
+          官方二进制分发包含下列第三方组件，各组件仍受其自身许可约束。某一发布所固定的版本记录在仓库中（例如
+          <code>scripts/opencode-version.txt</code> 与
+          <code>scripts/tectonic-version.txt</code>）。
+        </p>
+        <table class="legal-table">
+          <thead>
+            <tr>
+              <th>组件</th>
+              <th>在 PrismNext 中的作用</th>
+              <th>许可</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Electron</td>
+              <td>桌面应用外壳。因此官方安装包还包含该框架附带的 Chromium 与 Node.js。</td>
+              <td>
+                MIT —
+                <a href="https://github.com/electron/electron" rel="noopener">electron/electron</a>
+              </td>
+            </tr>
+            <tr>
+              <td>OpenCode</td>
+              <td>捆绑的 Agent 运行时，用于聊天（ACP）。</td>
+              <td>
+                MIT —
+                <a href="https://github.com/anomalyco/opencode" rel="noopener">anomalyco/opencode</a>
+              </td>
+            </tr>
+            <tr>
+              <td>Tectonic</td>
+              <td>默认捆绑的 TeX/LaTeX 编译引擎。</td>
+              <td>
+                MIT —
+                <a href="https://tectonic-typesetting.github.io/" rel="noopener">tectonic-typesetting.github.io</a>
+              </td>
+            </tr>
+            <tr>
+              <td>PDF.js</td>
+              <td>内置 PDF 阅读器，含 viewer 资源（cmaps、标准字体、wasm、iccs）。</td>
+              <td>
+                Apache-2.0 —
+                <a href="https://github.com/mozilla/pdf.js" rel="noopener">mozilla/pdf.js</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>3. 其他依赖</h2>
+        <p>
+          <code>package.json</code> / <code>pnpm-lock.yaml</code> 中声明的 JavaScript 与原生模块各有其许可。仓库 NOTICE 不试图逐一列举。经 Electron 附带的 Chromium，适用该框架随附的许可。
+        </p>
+
+        <h2>4. Pro 模块</h2>
+        <p>
+          部分官方构建包含 Pro 模块。这些模块（如存在）按使用条款所述，由本机激活码解锁。这不是源码转让，也不在开源核心所适用的 Apache 许可范围内。
+        </p>
+
+        <h2>5. 获取文本</h2>
+        <p>源码仓库中的权威文本为：</p>
+        <ul>
+          <li>
+            <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener"
+              >LICENSE</a
+            >
+            — Apache License 2.0
+          </li>
+          <li>
+            <a href="https://github.com/yibocat/prismnext/blob/master/NOTICE" rel="noopener">NOTICE</a>
+            — 捆绑组件清单
+          </li>
+        </ul>
+        <p>上游项目自行公布其许可文本。若本页摘要与上游文件不一致，就该组件而言以上游文件为准。</p>
+
+        <h2>6. 联系</h2>
+        <p>许可相关问题请发送至 <a href="mailto:yibocat@yeah.net">yibocat@yeah.net</a>。</p>
+      </article>
+
+      <footer class="references">
+        <div class="site-foot">
+          <nav class="site-foot-nav" aria-label="Legal">
+            <a href="./privacy.html" data-i18n="navPrivacyPolicy">Privacy Policy</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./terms.html" data-i18n="navTermsOfUse">Terms of Use</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./security.html" data-i18n="navSecurity">Security</a>
+          </nav>
+          <p class="site-foot-copy" data-i18n="footCopy">© 2026 yibocat</p>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./theme-preview.js?v=20260815b"></script>
+    <script src="./site.js?v=20260816c"></script>
+  </body>
+</html>

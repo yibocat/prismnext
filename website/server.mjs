@@ -50,7 +50,16 @@ createServer(async (req, res) => {
     });
     res.end(body);
   } catch {
-    res.writeHead(404).end("Not found");
+    try {
+      const body = await readFile(join(root, "404.html"));
+      res.writeHead(404, {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+      });
+      res.end(body);
+    } catch {
+      res.writeHead(404).end("Not found");
+    }
   }
 }).listen(port, host, () => {
   console.log(`PrismNext website → http://${host}:${port}/`);

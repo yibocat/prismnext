@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-pack="academic" data-page="terms">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Terms of Use for the PrismNext desktop application and website."
+    />
+    <meta name="theme-color" content="#0b0c10" id="theme-color" />
+    <title>PrismNext — Terms of Use</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("prismnext-theme");
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        const pack = localStorage.getItem("prismnext-pack");
+        if (pack) document.documentElement.setAttribute("data-pack", pack);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260816c" />
+  </head>
+  <body>
+    <header class="running-head">
+      <a class="wordmark" href="./" aria-label="PrismNext">
+        <img
+          id="wordmark-icon"
+          class="wordmark-icon"
+          src="./assets/app-icon-light.png"
+          width="24"
+          height="24"
+          alt=""
+          data-icon-dark="./assets/app-icon-light.png"
+          data-icon-light="./assets/app-icon-dark.png"
+        />
+        <span>PrismNext</span>
+      </a>
+      <nav class="head-nav" aria-label="Legal">
+        <a href="./" data-i18n="navHome">Home</a>
+        <a href="./privacy.html" data-i18n="navPrivacy">Privacy</a>
+        <a href="./terms.html" class="is-current" data-i18n="navTerms">Terms</a>
+        <a href="./notices.html" data-i18n="navNotices">Licenses</a>
+      </nav>
+      <div class="topbar-actions">
+        <div data-pack-picker class="pack-dots" role="group" aria-label="Theme packs"></div>
+        <button type="button" class="topbar-icon-btn theme-cycle" title="Theme" aria-label="Theme">
+          <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4" />
+            <path
+              d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+            />
+          </svg>
+          <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+          </svg>
+          <svg class="theme-icon theme-icon--system" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="12" rx="2" />
+            <path d="M8 20h8M12 16v4" />
+          </svg>
+        </button>
+        <div class="lang" role="group" aria-label="Language">
+          <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+          <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="sheet sheet--legal">
+      <article class="legal" data-legal-lang="en">
+        <header class="legal-head">
+          <p class="legal-meta">Effective 16 August 2026</p>
+          <h1>Terms of Use</h1>
+          <p class="legal-lede">
+            These Terms of Use govern your use of the PrismNext desktop application and this
+            website. Please read them together with the
+            <a href="./privacy.html">Privacy Policy</a>.
+          </p>
+        </header>
+
+        <h2>1. Acceptance</h2>
+        <p>
+          By downloading, installing, or using the official PrismNext software, you agree to these
+          Terms. If you do not agree, do not install or use the software.
+        </p>
+        <p>
+          Use of this website is limited to reading the pages and downloading official installers.
+          The website-related provisions of these Terms (acceptable use, intellectual property,
+          disclaimers, and limitation of liability) apply to that use. Opening a page does not
+          grant the Publisher rights in anything on your computer.
+        </p>
+        <p>
+          These Terms are a product notice issued by yibocat (the “Publisher”). They are not legal
+          advice. They do not replace the
+          <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener"
+            >Apache License 2.0</a
+          >
+          that governs the open-source source code.
+        </p>
+
+        <h2>2. The software and the website</h2>
+        <p>
+          “Software” means the official PrismNext desktop installer and the installed application,
+          including bundled components such as the agent runtime and, where present in a given
+          build, Pro modules. “Website” means the public site at the address above and its static
+          assets.
+        </p>
+        <p>
+          PrismNext is a local research environment. The Publisher does not provide hosting for
+          your projects, does not operate a PrismNext cloud for manuscripts or chats, and does not
+          act as your model-inference provider.
+        </p>
+
+        <h2>3. Eligibility</h2>
+        <p>
+          You must be able to form a binding agreement under the laws that apply to you. The
+          Software is intended for research and professional use. It is not directed at children.
+        </p>
+
+        <h2>4. License to use the Software</h2>
+        <p>
+          Subject to these Terms, the Publisher grants you a non-exclusive, non-transferable,
+          revocable license to install and use the official installer on devices you or your
+          research group control, for research or internal evaluation.
+        </p>
+        <p>
+          This license does not transfer ownership of the Software. It does not grant you rights in
+          the Publisher’s name, marks, or website design, except as needed to identify the
+          Software.
+        </p>
+        <p>
+          If you copy, modify, or redistribute source code, the Apache License 2.0 controls that
+          activity. If these Terms and the Apache License conflict on the subject of source-code
+          redistribution, the Apache License controls.
+        </p>
+
+        <h2>5. Open-source components</h2>
+        <p>
+          The Software incorporates or bundles third-party and open-source components (including,
+          without limitation, Electron, Chromium, and OpenCode). Those components remain subject to
+          their own licenses. Nothing in these Terms limits rights you have under those licenses
+          with respect to those components alone.
+        </p>
+
+        <h2>6. Early Access and Pro modules</h2>
+        <p>
+          The Software is offered in Early Access. Features may change, be delayed, break, or be
+          withdrawn without notice. The Publisher does not promise any particular roadmap,
+          publication date, or continued availability of any feature.
+        </p>
+        <p>
+          Certain official builds include Pro modules. Those modules are not licensed under Apache
+          2.0 unless a given module’s own notice says otherwise. During the public preview, the
+          test key <code>PRISM-PRO-DEV-TEST</code> unlocks bundled Pro teams without payment. Free
+          core features do not require a key. An activation key, when used, is permission to use
+          the corresponding modules in that installation. It is not a transfer of source code, not
+          a sale of the open-source core, and not a subscription.
+        </p>
+        <p>
+          There is presently no paid plan, refund policy, service-level agreement, or guaranteed
+          support. If paid licensing is introduced, these Terms will be updated.
+        </p>
+
+        <h2>7. No account</h2>
+        <p>
+          The Publisher does not require a PrismNext account. You are responsible for the security
+          of the device on which the Software runs and for any credentials you store in settings.
+        </p>
+
+        <h2>8. Your content and local data</h2>
+        <p>
+          You retain whatever rights you already have in files, notes, libraries, and other
+          materials you create or import (“Your Content”). The Software stores Your Content on your
+          device as described in the Privacy Policy. The Publisher does not claim ownership of Your
+          Content and does not receive a license to use it, because the Publisher does not host it.
+        </p>
+        <p>
+          You represent that you have the rights needed to use Your Content with the Software,
+          including rights in papers, data, and third-party materials you import.
+        </p>
+        <p>
+          If you send feedback or a bug report by email, the Publisher may use that message to
+          improve the Software without payment to you. That permission does not extend to Your
+          Content stored on your device.
+        </p>
+
+        <h2>9. Acceptable use</h2>
+        <p>You agree not to use the Software or Website to:</p>
+        <ul>
+          <li>violate applicable law;</li>
+          <li>infringe intellectual-property or privacy rights of others;</li>
+          <li>attempt to disable, interfere with, or circumvent security or permission gates except as needed to debug software you are authorized to modify;</li>
+          <li>misrepresent the origin of generated text, data, or code in a manner that violates the rules of a journal, conference, employer, or funder; or</li>
+          <li>present a mere redistribution of the official installer as an independent product, or use the PrismNext name or marks in a way that suggests the Publisher sponsors or endorses you.</li>
+        </ul>
+        <p>
+          You remain responsible for commands, file edits, package installs, and network requests
+          that you authorize the agent to perform.
+        </p>
+
+        <h2>10. Artificial intelligence and research outputs</h2>
+        <p>
+          The Software may generate or transform text, code, citations, figures, and experimental
+          commands using models and tools you configure. Outputs may be incorrect, incomplete,
+          fabricated, or inconsistent with your sources. You are solely responsible for reviewing
+          outputs before relying on them.
+        </p>
+        <p>
+          The Software does not replace peer review, statistical review, an ethics board, legal
+          counsel, or your advisor. Citation, authorship, plagiarism, data integrity, and
+          compliance with venue rules remain your responsibility.
+        </p>
+        <p>
+          The Software is not a medical device and is not intended for clinical diagnosis,
+          treatment decisions, or other high-risk uses where an error could cause injury or
+          material harm. Do not rely on outputs for those purposes without independent qualified
+          review.
+        </p>
+
+        <h2>11. Third-party services</h2>
+        <p>
+          Model calls, catalog lookups, PDF parsing, web search (including Exa), browsing, TeX
+          package downloads, git remotes, MCP servers, and skill downloads occur between your
+          machine and the relevant third party. The Publisher is not a party to those contracts
+          and does not broker Your Content. Your use of those services is governed by their terms.
+          The Privacy Policy lists the principal categories.
+        </p>
+
+        <h2>12. Updates and availability</h2>
+        <p>
+          Official builds may check a release feed and, if automatic download is enabled, retrieve
+          a newer installer. You decide whether to install. The Publisher may stop providing
+          updates or the Website at any time. The Software is not warranted to be available,
+          uninterrupted, or error-free.
+        </p>
+
+        <h2>13. Intellectual property</h2>
+        <p>
+          Except for Your Content, open-source components under their own licenses, and rights
+          expressly granted in these Terms or the Apache License, the Publisher and its licensors
+          retain all rights in the Software, the Website, and their documentation and design.
+        </p>
+
+        <h2>14. Disclaimer of warranties</h2>
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE AND WEBSITE ARE PROVIDED
+          “AS IS” AND “AS AVAILABLE,” WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR
+          STATUTORY, INCLUDING IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+          PURPOSE, TITLE, AND NON-INFRINGEMENT. THE PUBLISHER DOES NOT WARRANT THAT OUTPUTS WILL BE
+          ACCURATE, THAT EXPERIMENTS WILL BE REPRODUCIBLE, OR THAT THE SOFTWARE WILL NOT DAMAGE
+          FILES OR DATA.
+        </p>
+
+        <h2>15. Limitation of liability</h2>
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE PUBLISHER SHALL NOT BE LIABLE FOR
+          ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR
+          ANY LOSS OF PROFITS, DATA, GOODWILL, OR RESEARCH TIME, ARISING OUT OF OR RELATED TO THE
+          SOFTWARE OR WEBSITE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+        </p>
+        <p>
+          TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE PUBLISHER’S TOTAL LIABILITY FOR
+          ALL CLAIMS ARISING OUT OF OR RELATED TO THE SOFTWARE OR WEBSITE SHALL NOT EXCEED THE
+          AMOUNT YOU ACTUALLY PAID THE PUBLISHER FOR THE SOFTWARE, IF ANY.
+        </p>
+        <p>
+          Some jurisdictions do not allow certain limitations. In those jurisdictions, the
+          limitation applies to the fullest extent permitted.
+        </p>
+
+        <h2>16. Indemnity</h2>
+        <p>
+          You agree to defend, indemnify, and hold harmless the Publisher from and against claims,
+          damages, losses, and expenses (including reasonable legal fees) arising out of your use
+          of the Software, Your Content, your violation of these Terms, or your violation of any
+          third-party right, except to the extent caused by the Publisher’s willful misconduct.
+        </p>
+
+        <h2>17. Termination</h2>
+        <p>
+          You may stop using the Software at any time by uninstalling it. The Publisher may
+          terminate the license granted in Section 4 if you materially breach these Terms. Sections
+          that by their nature should survive (including 8–16 and 18–19) survive termination.
+        </p>
+
+        <h2>18. Changes</h2>
+        <p>
+          The Publisher may revise these Terms. The effective date at the top of this page will be
+          updated. If you do not agree to a revision, discontinue use. Continued use of a new
+          version after the effective date constitutes acceptance of the revised Terms.
+        </p>
+
+        <h2>19. Miscellaneous</h2>
+        <p>
+          These Terms do not create a partnership, employment, or agency relationship. If a
+          provision is held unenforceable, the remaining provisions continue. Failure to enforce a
+          provision is not a waiver. These Terms, together with the Privacy Policy and, for source
+          code, the Apache License 2.0, are the entire agreement between you and the Publisher
+          concerning the official Software and Website. They do not designate a governing law or
+          forum; mandatory consumer-protection rules that apply to you remain unaffected.
+        </p>
+
+        <h2>20. Contact</h2>
+        <p>
+          Questions about these Terms may be sent to
+          <a href="mailto:yibocat@yeah.net">yibocat@yeah.net</a>.
+        </p>
+      </article>
+
+      <article class="legal" data-legal-lang="zh" hidden>
+        <header class="legal-head">
+          <p class="legal-meta">生效日期：2026 年 8 月 16 日</p>
+          <h1>使用条款</h1>
+          <p class="legal-lede">
+            本使用条款适用于 PrismNext 桌面应用及本网站。请与
+            <a href="./privacy.html">隐私政策</a>
+            一并阅读。
+          </p>
+        </header>
+
+        <h2>1. 接受</h2>
+        <p>
+          下载、安装或使用官方 PrismNext 软件，即表示您同意本条款。如不同意，请勿安装或使用本软件。
+        </p>
+        <p>
+          对本网站的使用限于阅读页面与下载官方安装包。本条款中与网站相关的规定（可接受的使用、知识产权、免责声明与责任限制）适用于该使用。打开网页并不授予发布者对您计算机上任何内容的权利。
+        </p>
+        <p>
+          本条款由 yibocat（下称「发布者」）发布，属于产品说明，不构成法律意见，亦不替代规范开源源码的
+          <a href="https://github.com/yibocat/prismnext/blob/master/LICENSE" rel="noopener"
+            >Apache License 2.0</a
+          >。
+        </p>
+
+        <h2>2. 软件与网站</h2>
+        <p>
+          「软件」指官方 PrismNext 桌面安装包及安装后的应用程序，包括捆绑组件（如 Agent 运行时），以及特定构建中可能包含的 Pro 模块。「网站」指上述地址的公开站点及其静态资源。
+        </p>
+        <p>
+          PrismNext 是本地科研环境。发布者不托管您的项目，不运营用于手稿或对话的 PrismNext 云，也不作为您的模型推理服务提供方。
+        </p>
+
+        <h2>3. 资格</h2>
+        <p>
+          您须具备适用法律下订立有约束力协议的能力。本软件面向研究与专业用途，不以儿童为对象。
+        </p>
+
+        <h2>4. 软件使用许可</h2>
+        <p>
+          在遵守本条款的前提下，发布者授予您一项非独占的、不可转让的、可撤销的许可，允许您在自己或所在研究组控制的设备上安装并使用官方安装包，用于研究或内部评估。
+        </p>
+        <p>
+          本许可不转让软件所有权，亦不授予您对发布者名称、标识或网站设计的权利，但为识别本软件所必要者除外。
+        </p>
+        <p>
+          若您复制、修改或再分发源码，以 Apache License 2.0 为准。本条款与 Apache 许可在源码再分发事项上冲突时，以 Apache 许可为准。
+        </p>
+
+        <h2>5. 开源组件</h2>
+        <p>
+          本软件包含或捆绑第三方及开源组件（包括但不限于 Electron、Chromium 与 OpenCode）。这些组件仍受其各自许可约束。就上述组件本身而言，本条款不限制您依据其许可已享有的权利。
+        </p>
+
+        <h2>6. Early Access 与 Pro 模块</h2>
+        <p>
+          本软件以 Early Access 形式提供。功能可能变更、延迟、损坏或被撤回，且无需另行通知。发布者不承诺特定路线图、发布日期或任何功能的持续可用。
+        </p>
+        <p>
+          部分官方构建包含 Pro 模块。除非某一模块自身的声明另有规定，这些模块不受 Apache 2.0 许可。公开预览期间，测试密钥
+          <code>PRISM-PRO-DEV-TEST</code>
+          可在不付费的情况下解锁安装包内已有的 Pro 团队。免费核心功能不需要密钥。激活码（如使用）仅表示允许在该安装中使用相应模块，不构成源码转让、开源核心的出售或订阅。
+        </p>
+        <p>
+          目前不存在付费方案、退款政策、服务等级协议或有保证的支持。若日后开始收费授权，本条款将相应更新。
+        </p>
+
+        <h2>7. 无账号</h2>
+        <p>
+          发布者不要求 PrismNext 账号。运行本软件的设备安全，以及您保存在设置中的凭证，均由您负责。
+        </p>
+
+        <h2>8. 您的内容与本地数据</h2>
+        <p>
+          您对创建或导入的文件、笔记、文献库及其他材料（「您的内容」）保留原有权利。本软件按隐私政策所述将您的内容保存在您的设备上。发布者不主张对您的内容享有所有权，亦不获得使用许可，因为发布者并不托管这些内容。
+        </p>
+        <p>
+          您陈述并保证：您拥有将您的内容用于本软件所需的权利，包括您导入的论文、数据及第三方材料上的权利。
+        </p>
+        <p>
+          若您通过邮件发送反馈或缺陷报告，发布者可使用该邮件改进本软件，且无需向您支付对价。该许可不及于保存在您设备上的「您的内容」。
+        </p>
+
+        <h2>9. 可接受的使用</h2>
+        <p>您同意不将本软件或本网站用于：</p>
+        <ul>
+          <li>违反适用法律；</li>
+          <li>侵犯他人的知识产权或隐私权；</li>
+          <li>试图停用、干扰或规避安全或权限闸门，但调试您有权修改的软件所必要者除外；</li>
+          <li>以违反期刊、会议、雇主或资助方规则的方式，虚报生成文本、数据或代码的来源；或</li>
+          <li>将官方安装包原样再分发并宣称为独立产品，或以暗示发布者赞助或背书的方式使用 PrismNext 名称或标识。</li>
+        </ul>
+        <p>您授权 Agent 执行的命令、文件修改、软件包安装与网络请求，均由您承担责任。</p>
+
+        <h2>10. 人工智能与研究成果</h2>
+        <p>
+          本软件可能使用您配置的模型与工具生成或改写文本、代码、引用、图表与实验命令。输出可能错误、不完整、虚构，或与您的来源不一致。在依赖任何输出之前，您须自行审阅。
+        </p>
+        <p>
+          本软件不能替代同行评审、统计审阅、伦理审查、法律顾问或您的导师。引用、署名、抄袭、数据完整性以及遵守目标刊物规则，均由您负责。
+        </p>
+        <p>
+          本软件不是医疗器械，不用于临床诊断、治疗决策，或其他一旦出错可能造成人身伤害或重大损害的高风险用途。未经独立的合格审阅，请勿为此类目的依赖输出。
+        </p>
+
+        <h2>11. 第三方服务</h2>
+        <p>
+          模型调用、目录查询、PDF 解析、联网搜索（含 Exa）、浏览、TeX 宏包下载、Git 远程、MCP 服务器与技能下载，发生在您的机器与相应第三方之间。发布者不是这些合同的一方，也不中转您的内容。您使用这些服务，适用对方条款。主要类别见隐私政策。
+        </p>
+
+        <h2>12. 更新与可用性</h2>
+        <p>
+          官方构建可能检查更新源，并在开启自动下载时获取新的安装包。是否安装由您决定。发布者可随时停止提供更新或本网站。本软件不保证可用、不中断或没有错误。
+        </p>
+
+        <h2>13. 知识产权</h2>
+        <p>
+          除您的内容、受其自身许可约束的开源组件，以及本条款或 Apache 许可明确授予的权利外，发布者及其许可方保留对本软件、本网站及其文档与设计的全部权利。
+        </p>
+
+        <h2>14. 免责声明</h2>
+        <p>
+          在适用法律允许的最大范围内，本软件与本网站按「现状」和「可用」提供，不附带任何明示、默示或法定保证，包括适销性、特定用途适用性、权利完整性及不侵权的默示保证。发布者不保证输出准确、实验可复现，或本软件不会损坏文件或数据。
+        </p>
+
+        <h2>15. 责任限制</h2>
+        <p>
+          在适用法律允许的最大范围内，对于因本软件或本网站引起或与之相关的任何间接、附带、特殊、后果性、惩戒性或惩罚性损害，或任何利润、数据、商誉或研究时间损失，即使已被告知可能发生，发布者亦不承担责任。
+        </p>
+        <p>
+          在适用法律允许的最大范围内，发布者就本软件或本网站引起或与之相关的全部索赔承担的责任，不超过您就本软件实际向发布者支付的金额（如有）。
+        </p>
+        <p>部分法域不允许某些限制。在该等法域，上述限制在法律允许的最大范围内适用。</p>
+
+        <h2>16. 赔偿</h2>
+        <p>
+          对于因您使用本软件、您的内容、您违反本条款或您侵犯任何第三方权利而产生的索赔、损害、损失与费用（包括合理的律师费），您同意为发布者抗辩、赔偿并使其免受损害，但由发布者故意不当行为造成的部分除外。
+        </p>
+
+        <h2>17. 终止</h2>
+        <p>
+          您可随时通过卸载停止使用本软件。若您严重违反本条款，发布者可终止第 4 条授予的许可。依其性质应继续有效的条款（包括第 8–16 条及第 18–19 条）在终止后仍然有效。
+        </p>
+
+        <h2>18. 变更</h2>
+        <p>
+          发布者可以修订本条款，并更新本页顶部的生效日期。如您不同意修订，请停止使用。在生效日后继续使用新版本，即视为接受经修订的条款。
+        </p>
+
+        <h2>19. 其他</h2>
+        <p>
+          本条款不构成合伙、雇佣或代理关系。某一条款被认定不可执行的，其余条款继续有效。未行使某项权利不构成弃权。本条款连同隐私政策，以及就源码而言的 Apache License 2.0，构成您与发布者之间关于官方软件与本网站的完整约定。本条款不指定管辖法律或管辖法院；对您适用的强制性消费者保护规则不受影响。
+        </p>
+
+        <h2>20. 联系</h2>
+        <p>有关本条款的问题，请发送至 <a href="mailto:yibocat@yeah.net">yibocat@yeah.net</a>。</p>
+      </article>
+
+      <footer class="references">
+        <div class="site-foot">
+          <nav class="site-foot-nav" aria-label="Legal">
+            <a href="./privacy.html" data-i18n="navPrivacyPolicy">Privacy Policy</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./notices.html" data-i18n="navNoticesFull">Open Source</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./security.html" data-i18n="navSecurity">Security</a>
+          </nav>
+          <p class="site-foot-copy" data-i18n="footCopy">© 2026 yibocat</p>
+        </div>
+      </footer>
+    </main>
+
+    <script src="./theme-preview.js?v=20260815b"></script>
+    <script src="./site.js?v=20260816c"></script>
+  </body>
+</html>

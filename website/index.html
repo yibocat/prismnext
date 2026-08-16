@@ -27,7 +27,7 @@
         if (pack) document.documentElement.setAttribute("data-pack", pack);
       })();
     </script>
-    <link rel="stylesheet" href="./styles.css?v=20260815c" />
+    <link rel="stylesheet" href="./styles.css?v=20260816c" />
   </head>
   <body>
     <header class="running-head">
@@ -558,7 +558,7 @@
           </p>
           <p class="axiom">
             <strong data-i18n="pPrivacyTitle">Axiom 2 (Privacy).</strong>
-            <span data-i18n="pPrivacyText">No telemetry, no analytics, no data collection — zero bytes leave without user initiation.</span>
+            <span data-i18n="pPrivacyText">No product telemetry or analytics. We do not collect usage data or operate a PrismNext cloud.</span>
           </p>
           <p class="axiom">
             <strong data-i18n="pKeyTitle">Axiom 3 (Keys).</strong>
@@ -592,10 +592,21 @@
             <a href="mailto:yibocat@yeah.net">yibocat@yeah.net</a>
           </li>
         </ol>
-        <p class="colophon" data-i18n="foot">
-          Local-first collaborative AI research desk — set in Instrument Serif, Sora &amp; Plex Mono.
-        </p>
-        <p class="colophon colophon--fine" data-i18n="footFine">© 2026 yibocat · No trackers, no accounts — everything stays local.</p>
+        <div class="site-foot">
+          <nav class="site-foot-nav" aria-label="Legal">
+            <a href="./privacy.html" data-i18n="navPrivacyPolicy">Privacy Policy</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./terms.html" data-i18n="navTermsOfUse">Terms of Use</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./notices.html" data-i18n="navNoticesFull">Open Source</a>
+            <span class="site-foot-dot" aria-hidden="true">·</span>
+            <a href="./security.html" data-i18n="navSecurity">Security</a>
+          </nav>
+          <p class="site-foot-copy" data-i18n="footCopy">© 2026 yibocat</p>
+          <p class="site-foot-note" data-i18n="foot">
+            Local-first collaborative AI research desk — set in Instrument Serif, Sora &amp; Plex Mono.
+          </p>
+        </div>
 
         <span class="margin-note mn-5 reveal-on-scroll" data-i18n="mn5">fork it on GitHub →</span>
       </footer>
@@ -604,7 +615,7 @@
     <script src="./config.js"></script>
     <script src="./backdrops.js?v=20260815b"></script>
     <script src="./theme-preview.js?v=20260815b"></script>
-    <script src="./site.js?v=20260815d"></script>
+    <script src="./site.js?v=20260816c"></script>
     <script src="./manuscript.js?v=20260815b"></script>
   </body>
 </html>
