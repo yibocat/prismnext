@@ -10,8 +10,12 @@ import {
   isWholeDiskSearchBashCommand,
   wholeDiskSearchBlockMessage,
 } from "../../shared/project-escape-guard";
+import { bashCommandMatchesAnyPattern } from "../../shared/bash-allow-always";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import { getPermissionRuleForTool, resolvePermissionAction } from "../services/permission-modes";
+import {
+  emptyPermissionRulesConfig,
+  type PermissionRulesConfig,
+} from "../../shared/permission-rules";
 import { getNativeToolByName } from "./tools/index";
 
 export type GateDecision = "allow" | "deny";
@@ -33,6 +37,7 @@ export interface PermissionGateRequest {
   bashCwd?: string | null;
   sourcePath?: string | null;
   destinationPath?: string | null;
+  rules?: PermissionRulesConfig;
 }
 
 export interface PermissionGateResult {
@@ -191,12 +196,13 @@ export class PermissionGate {
   constructor(
     private readonly opts: {
       timeoutMs?: number;
+      rules?: PermissionRulesConfig;
       onPrompt?: PermissionPromptHandler;
     } = {},
   ) {}
 
   get timeoutMs(): number {
-    return this.opts.timeoutMs ?? 30_000;
+    return this.opts.timeoutMs ?? 120_000;
   }
 
   pendingCount(): number {
@@ -204,42 +210,58 @@ export class PermissionGate {
   }
 
   async decide(request: PermissionGateRequest): Promise<PermissionGateResult> {
+    // 1. Hard Deny invariants: whole-disk search, raw latex compilation, project escaping
     const hard = evaluateHardDeny(request);
     if (hard.deny) {
       return { decision: "deny", reason: hard.reason, requestId: request.requestId };
     }
 
-    const rule = getPermissionRuleForTool(request.permissionMode, request.toolName);
-    if (rule === "allow") {
-      return { decision: "allow", reason: "policy_allow", requestId: request.requestId };
+    const rules = request.rules ?? this.opts.rules ?? emptyPermissionRulesConfig();
+    const tool = getNativeToolByName(request.toolName);
+    const category = tool?.permission?.category ?? (
+      FALLBACK_MUTATING_TOOLS.has(request.toolName.toLowerCase()) ? "safe_write" : "read_only"
+    );
+
+    // 2. Always Allow / Explicit Rules overrides
+    const normalizedName = request.toolName.toLowerCase();
+    if (rules.toolAllowAlways.includes(normalizedName)) {
+      return { decision: "allow", reason: "tool_always_allow", requestId: request.requestId };
     }
-    if (rule === "deny") {
-      return { decision: "deny", reason: "policy_deny", requestId: request.requestId };
-    }
-    if (rule !== "ask") {
-      const action = resolvePermissionAction(
-        request.permissionMode,
-        request.toolName,
-        request.sessionAgent,
-        {
-          filePath: request.filePath,
-          projectRoot: request.projectRoot,
-          bashCommand: request.bashCommand,
-          bashCwd: request.bashCwd,
-          sourcePath: request.sourcePath,
-          destinationPath: request.destinationPath,
-          sessionId: request.runtimeSessionId,
-        },
-      );
-      if (action === "allow") {
-        return { decision: "allow", reason: "policy_allow", requestId: request.requestId };
-      }
-      if (action === "deny") {
-        return { decision: "deny", reason: "policy_deny", requestId: request.requestId };
+    if (request.bashCommand && rules.bashAllowAlwaysPatterns.length > 0) {
+      if (bashCommandMatchesAnyPattern(request.bashCommand, rules.bashAllowAlwaysPatterns)) {
+        return { decision: "allow", reason: "bash_always_allow", requestId: request.requestId };
       }
     }
 
-    this.opts.onPrompt?.(request);
+    // 3. PermissionMode evaluation
+    const mode = request.permissionMode;
+
+    if (mode === "readonly") {
+      if (category === "read_only") {
+        return { decision: "allow", reason: "readonly_allowed", requestId: request.requestId };
+      }
+      return { decision: "deny", reason: "readonly_mode", requestId: request.requestId };
+    }
+
+    if (mode === "auto") {
+      return { decision: "allow", reason: "auto_allowed", requestId: request.requestId };
+    }
+
+    if (mode === "edit_auto") {
+      if (category === "read_only" || category === "safe_write") {
+        return { decision: "allow", reason: "edit_auto_allowed", requestId: request.requestId };
+      }
+      // destructive and shell_exec require user prompt
+    }
+
+    if (mode === "ask") {
+      if (category === "read_only") {
+        return { decision: "allow", reason: "ask_read_allowed", requestId: request.requestId };
+      }
+      // safe_write, destructive, shell_exec require user prompt
+    }
+
+    // 4. Suspend for UI prompt
     return await new Promise<PermissionGateResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.requestId);
@@ -249,11 +271,15 @@ export class PermissionGate {
           requestId: request.requestId,
         });
       }, this.timeoutMs);
+
       this.pending.set(request.requestId, {
         runtimeSessionId: request.runtimeSessionId,
         timer,
         resolve,
       });
+
+      // Call onPrompt after pending map is registered so sync resolve works
+      this.opts.onPrompt?.(request);
     });
   }
 
