@@ -129,7 +129,7 @@ export function registerBrowserHandlers(): void {
       await browserSession.clearCache();
       // Also clear localStorage / service worker caches for all origins
       await browserSession.clearStorageData({
-        storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb", "websql"],
+        storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb"],
       });
       return { success: true };
     } catch (err: any) {
