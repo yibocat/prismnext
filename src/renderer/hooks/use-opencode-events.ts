@@ -30,6 +30,13 @@ import { isPlanFileToolUse } from "@/lib/chat/plan-artifact-ui";
 import { parsePlanSteps } from "@/lib/chat/parse-plan-steps";
 import { isBackgroundTaskStartedResult } from "@shared/opencode-background-task";
 import { isPrismSystemPromptText } from "@/lib/chat/session-message-hydrate";
+import {
+  applyAgentEvent,
+  contentBlocksFromAgentSink,
+  emptyAgentEventPaintSink,
+  isLegacyTextOrThinkingPart,
+  shouldDropAssistantText,
+} from "@/lib/chat/apply-agent-event";
 import { canClearStreamingForGeneration } from "@/lib/chat/stream-generation";
 import { refreshGitStatusNow } from "@/lib/git/checkout-context";
 import { isChatPreparePhase } from "../../shared/chat-prepare-phases";
@@ -58,6 +65,7 @@ export function useOpenCodeEvents() {
   const hasTexChangesRef = useRef(new Map<string, boolean>());
   const aiSessionActiveRef = useRef(new Map<string, boolean>());
   const fileContentTrackerRef = useRef(new Map<string, string>());
+  const agentPaintSinkRef = useRef(new Map<string, ReturnType<typeof emptyAgentEventPaintSink>>());
 
   // Clear file content tracker on project switch
   useEffect(() => {
@@ -76,6 +84,7 @@ export function useOpenCodeEvents() {
     pendingToolUsesRef.current.delete(tabId);
     hasTexChangesRef.current.delete(tabId);
     aiSessionActiveRef.current.delete(tabId);
+    agentPaintSinkRef.current.delete(tabId);
   }
 
   function noteCheckpointForDiskTool(
@@ -433,6 +442,12 @@ export function useOpenCodeEvents() {
             break;
           }
           const part = data.part || data;
+          if (
+            useSettingsStore.getState().settings.agentEventUi
+            && isLegacyTextOrThinkingPart(String(part?.type || ""))
+          ) {
+            break;
+          }
           const block = convertPartToBlock(part);
 
           if (block) {
@@ -1101,8 +1116,58 @@ export function useOpenCodeEvents() {
       pauseAutoCompileForAi();
     });
 
+    const subscribeAgentEvent = window.electronAPI.onChatAgentEvent;
+    const unsubAgentEvent = typeof subscribeAgentEvent === "function"
+      ? subscribeAgentEvent((event) => {
+          if (!useSettingsStore.getState().settings.agentEventUi) return;
+          const chatStore = useChatStore.getState();
+          const tab = chatStore.tabs.find((t) => t.id === event.tabId);
+          if (!tab) return;
+
+          const prev = agentPaintSinkRef.current.get(event.tabId) ?? emptyAgentEventPaintSink();
+          const next = applyAgentEvent(prev, event);
+          agentPaintSinkRef.current.set(event.tabId, next);
+
+          if (event.type !== "text_delta" && event.type !== "thinking_delta") return;
+          if (!tab.isStreaming) return;
+
+          if (event.type === "text_delta") {
+            const existing = tab.streamingMessage?.message?.content || [];
+            const hasRealContent = existing.some(
+              (b) => (b.type === "text" || b.type === "thinking") && !b._progress,
+            );
+            const lastUserMsg = [...tab.messages].reverse().find((m) => m.type === "user");
+            const lastUserText = lastUserMsg?.message?.content
+              ?.filter((b) => b.type === "text")
+              ?.map((b) => b.text)
+              ?.join(" ") || "";
+            if (shouldDropAssistantText(next.text, { lastUserText, hasRealContent })) {
+              const thinkingOnly = contentBlocksFromAgentSink({ text: "", thinking: next.thinking });
+              if (thinkingOnly.length === 0) return;
+              chatStore._upsertLastMessage(event.tabId, {
+                type: "assistant",
+                message: { content: thinkingOnly },
+              }, event.turnId !== "live" ? event.turnId : undefined);
+              return;
+            }
+          }
+
+          const blocks = contentBlocksFromAgentSink(next);
+          if (blocks.length === 0) return;
+          chatStore._upsertLastMessage(
+            event.tabId,
+            { type: "assistant", message: { content: blocks } },
+            event.turnId !== "live" ? event.turnId : undefined,
+          );
+          if (useChatStore.getState().tabs.find((t) => t.id === event.tabId)?.preparePhase) {
+            chatStore._setPreparePhase(event.tabId, null);
+          }
+        })
+      : undefined;
+
     return () => {
       unsubStream();
+      unsubAgentEvent?.();
       unsubPermission();
       unsubComplete();
       unsubSessionCreated();

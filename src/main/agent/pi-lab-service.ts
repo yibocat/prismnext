@@ -22,6 +22,14 @@ import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { AgentSessionStore, resolvePiAgentRoot } from "./session-store";
 import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
+import { createLiteratureNativeTools } from "./literature-native-tools";
+import { createLatexNativeTools } from "./latex-native-tools";
+import { createResearchBriefNativeTools } from "./research-brief-native-tools";
+import { createExperimentNativeTools } from "./experiment-native-tools";
+import { createInteractionNativeTools } from "./interaction-native-tools";
+import { createImageDescribeNativeTools } from "./image-describe-native-tools";
+import { createShellAndFsNativeTools } from "./shell-and-fs-native-tools";
+import { createInteractiveNativeTools } from "./interactive-native-tools";
 import {
   PI_SDK_PACKAGE,
   PI_SDK_PINNED_VERSION,
@@ -38,8 +46,33 @@ import { parseExperimentRunKind } from "../../shared/experiment-log";
 const LAB_TOOLS = [
   "literature-search",
   "literature-discover",
+  "literature-read",
+  "literature-read-pdf",
+  "literature-intensive-reading",
+  "literature-stage",
+  "literature-add",
+  "literature-delete",
+  "citation-health",
+  "literature-export-bib",
+  "latex-root",
+  "latex-compile",
+  "research-brief-read",
   "research-brief-update",
+  "experiment-log",
   "experiment-run",
+  "results-snapshot",
+  "provenance-query",
+  "interaction-list",
+  "interaction-read",
+  "interaction-write",
+  "interaction-open",
+  "image-describe",
+  "bash",
+  "delete",
+  "move",
+  "project-rule-write",
+  "question",
+  "suggest-plan",
 ] as const;
 
 /** Pi uses this sentence when ResourceLoader.getSystemPrompt() is empty. */
@@ -133,30 +166,40 @@ export function createPiLabExperimentRunner(deps: {
 export function createPiLabNativeTools(deps?: {
   runExperiment?: ExperimentRunFn;
 }) {
-  return createRepresentativeTools({
-    searchPapers: ({ projectRoot, query, limit, tag, collection }) => {
-      return searchPapers(projectRoot, query, limit ?? 20, { tag, collection }).map((row) => ({
-        id: row.id,
-        bibkey: row.bibkey,
-        title: row.title,
-        authors: row.authors,
-        year: row.year,
-        doi: row.doi,
-      }));
-    },
-    discoverLiterature,
-    runExperiment: deps?.runExperiment ?? (async (input) => {
-      const [{ resolveExperimentCtx, isExperimentCtxError }, { kickoffExperimentRun }] = await Promise.all([
-        import("../services/experiment-log-service"),
-        import("../services/experiment-run-executor"),
-      ]);
-      return createPiLabExperimentRunner({
-        resolveCtx: resolveExperimentCtx,
-        isCtxError: isExperimentCtxError,
-        kickoff: kickoffExperimentRun,
-      })(input);
+  return [
+    ...createRepresentativeTools({
+      searchPapers: ({ projectRoot, query, limit, tag, collection }) => {
+        return searchPapers(projectRoot, query, limit ?? 20, { tag, collection }).map((row) => ({
+          id: row.id,
+          bibkey: row.bibkey,
+          title: row.title,
+          authors: row.authors,
+          year: row.year,
+          doi: row.doi,
+        }));
+      },
+      discoverLiterature,
+      runExperiment: deps?.runExperiment ?? (async (input) => {
+        const [{ resolveExperimentCtx, isExperimentCtxError }, { kickoffExperimentRun }] = await Promise.all([
+          import("../services/experiment-log-service"),
+          import("../services/experiment-run-executor"),
+        ]);
+        return createPiLabExperimentRunner({
+          resolveCtx: resolveExperimentCtx,
+          isCtxError: isExperimentCtxError,
+          kickoff: kickoffExperimentRun,
+        })(input);
+      }),
     }),
-  });
+    ...createLiteratureNativeTools(),
+    ...createLatexNativeTools(),
+    ...createResearchBriefNativeTools(),
+    ...createExperimentNativeTools(),
+    ...createInteractionNativeTools(),
+    ...createImageDescribeNativeTools(),
+    ...createShellAndFsNativeTools(),
+    ...createInteractiveNativeTools(),
+  ];
 }
 
 function permissionModeFromSettings(settings: Record<string, unknown>): PermissionMode {

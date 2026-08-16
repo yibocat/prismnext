@@ -210,12 +210,32 @@ describe("pi lab service status", () => {
     const missingKey = lab.status("/tmp/project");
     expect(missingKey.ready).toBe(false);
     expect(missingKey.reason).toBe("missing_pi_api_key");
-    expect(missingKey.tools).toEqual([
+    expect(missingKey.tools).toEqual(expect.arrayContaining([
       "literature-search",
       "literature-discover",
+      "literature-read",
+      "literature-stage",
+      "latex-root",
+      "latex-compile",
+      "research-brief-read",
       "research-brief-update",
+      "experiment-log",
       "experiment-run",
-    ]);
+      "results-snapshot",
+      "provenance-query",
+      "interaction-list",
+      "interaction-read",
+      "interaction-write",
+      "interaction-open",
+      "image-describe",
+      "bash",
+      "delete",
+      "move",
+      "project-rule-write",
+      "question",
+      "suggest-plan",
+    ]));
+    expect(missingKey.tools).toHaveLength(29);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createPiLabService({

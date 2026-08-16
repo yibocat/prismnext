@@ -14,6 +14,7 @@ import type {
 	ExecutionRerunResult,
 	TerminalExecutionEvent,
 } from "../shared/execution";
+import type { AgentEvent } from "../shared/agent-runtime";
 
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -1532,6 +1533,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("chat:stream", handler);
 		return () => ipcRenderer.removeListener("chat:stream", handler);
 	},
+	onChatAgentEvent: (callback: (data: AgentEvent) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: AgentEvent) => callback(data);
+		ipcRenderer.on("chat:agent-event", handler);
+		return () => ipcRenderer.removeListener("chat:agent-event", handler);
+	},
 	onChatComplete: (callback: (data: {
 		tabId: string;
 		sessionId: string;
@@ -1562,6 +1568,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	removeChatListeners: () => {
 		ipcRenderer.removeAllListeners("chat:stream");
+		ipcRenderer.removeAllListeners("chat:agent-event");
 		ipcRenderer.removeAllListeners("chat:complete");
 		ipcRenderer.removeAllListeners("chat:permission");
 		ipcRenderer.removeAllListeners("chat:sessionCreated");

@@ -125,14 +125,17 @@ describe("pi sdk spike", () => {
       }),
     });
 
-    expect(tools.map((tool) => tool.name)).toEqual([
+    expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([
       "literature-search",
       "literature-discover",
       "research-brief-update",
       "experiment-run",
-    ]);
+      "literature-read",
+      "literature-stage",
+    ]));
 
-    const result = await tools[2]!.execute("brief-call", {
+    const brief = tools.find((tool) => tool.name === "research-brief-update");
+    const result = await brief!.execute("brief-call", {
       section: "Research question",
       content: "Does X affect Y?",
     });

@@ -77,6 +77,12 @@ export function extractToolPathContext(
   if (name === "research-brief-update") {
     return { filePath: ".brief.md" };
   }
+  if (name === "project-rule-write") {
+    const ruleName = str("name");
+    return {
+      filePath: ruleName ? `.prismnext/agent/rules/${ruleName}/RULE.md` : null,
+    };
+  }
   if (name === "bash" || name === "experiment-run") {
     return {
       bashCommand: str("command"),

@@ -13,7 +13,7 @@ import {
 
 const log = createLogger("research-brief-bridge", "agent");
 
-interface ResearchBriefBridgeRequest {
+export interface ResearchBriefActionRequest {
   action: "read" | "update";
   sessionId?: string;
   projectRoot?: string;
@@ -22,16 +22,23 @@ interface ResearchBriefBridgeRequest {
   append?: boolean;
 }
 
+/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+export function executeResearchBriefAction(
+  req: ResearchBriefActionRequest,
+): Record<string, unknown> {
+  return dispatch(req);
+}
+
 function bridgeRoot(): string {
   return getResearchBriefBridgeRoot();
 }
 
-function resolveProjectRoot(req: ResearchBriefBridgeRequest): string {
+function resolveProjectRoot(req: ResearchBriefActionRequest): string {
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
   return (fromSession || req.projectRoot?.trim() || "").replace(/\\/g, "/");
 }
 
-function dispatch(req: ResearchBriefBridgeRequest): Record<string, unknown> {
+function dispatch(req: ResearchBriefActionRequest): Record<string, unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -86,7 +93,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     processingRequests.add(reqPath);
     try {
       const raw = readFileSync(reqPath, "utf-8");
-      const req = JSON.parse(raw) as ResearchBriefBridgeRequest;
+      const req = JSON.parse(raw) as ResearchBriefActionRequest;
       const result = dispatch(req);
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}

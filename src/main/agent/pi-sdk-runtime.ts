@@ -247,6 +247,248 @@ export function createPiNativeTools(input: {
         pythonPath: Type.Optional(Type.String()),
       }),
     ),
+    bridge(
+      "literature-read",
+      "Read Paper",
+      "Read library metadata, abstract, highlights, and PDF path by bibkey.",
+      Type.Object({
+        bibkey: Type.String({ minLength: 1 }),
+      }),
+    ),
+    bridge(
+      "literature-read-pdf",
+      "Read Paper PDF",
+      "Read extracted PDF body text for an intensive-reading library paper.",
+      Type.Object({
+        bibkey: Type.String({ minLength: 1 }),
+        pages: Type.Optional(Type.String()),
+        query: Type.Optional(Type.String()),
+        source: Type.Optional(Type.String()),
+        force: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "literature-intensive-reading",
+      "Intensive Reading",
+      "Add, remove, or list papers on this session's intensive-reading list.",
+      Type.Object({
+        action: Type.Optional(Type.String()),
+        bibkey: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "literature-stage",
+      "Stage Citation",
+      "Verify a DOI or arXiv ID and stage a session citation without writing the library.",
+      Type.Object({
+        doi: Type.Optional(Type.String()),
+        arxivId: Type.Optional(Type.String()),
+        sourceUrl: Type.Optional(Type.String()),
+        discoveredFrom: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "literature-add",
+      "Add Paper",
+      "Add a verified paper to the project literature library.",
+      Type.Object({
+        doi: Type.Optional(Type.String()),
+        arxivId: Type.Optional(Type.String()),
+        collection: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "literature-delete",
+      "Delete Paper",
+      "Delete a library paper by exact bibkey.",
+      Type.Object({
+        bibkey: Type.String({ minLength: 1 }),
+      }),
+    ),
+    bridge(
+      "citation-health",
+      "Citation Health",
+      "Audit .tex citations against the project .bib and literature library.",
+      Type.Object({
+        verify: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "literature-export-bib",
+      "Export Library to .bib",
+      "Append literature library BibTeX entries into the project references.bib.",
+      Type.Object({
+        bibkeys: Type.Optional(Type.Array(Type.String())),
+        all: Type.Optional(Type.Boolean()),
+        onlyCitedInTex: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "latex-root",
+      "Resolve LaTeX Root",
+      "Find the active root document, engine, and build directory for the manuscript.",
+      Type.Object({
+        mainFile: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "latex-compile",
+      "Compile LaTeX",
+      "Compile the manuscript using Tectonic or TeX Live.",
+      Type.Object({
+        mainFile: Type.Optional(Type.String()),
+        useTexlive: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "research-brief-read",
+      "Read Research Brief",
+      "Read the project research design brief (.brief.md).",
+      Type.Object({}),
+    ),
+    bridge(
+      "experiment-log",
+      "Manage Experiment Log",
+      "List, create, read, or append runs to experiment islands in the workspace.",
+      Type.Object({
+        action: Type.String({ minLength: 1 }),
+        title: Type.Optional(Type.String()),
+        id: Type.Optional(Type.String()),
+        runsLimit: Type.Optional(Type.Number()),
+        includeOutput: Type.Optional(Type.Boolean()),
+        briefLinks: Type.Optional(Type.Any()),
+        tags: Type.Optional(Type.Array(Type.String())),
+        run: Type.Optional(Type.Any()),
+      }),
+    ),
+    bridge(
+      "results-snapshot",
+      "Snapshot Experiment Results",
+      "Scan an experiment island for figures, tables, and metrics.",
+      Type.Object({
+        id: Type.String({ minLength: 1 }),
+        scanDirs: Type.Optional(Type.Array(Type.String())),
+        metricsFiles: Type.Optional(Type.Array(Type.String())),
+        maxFiles: Type.Optional(Type.Number()),
+      }),
+    ),
+    bridge(
+      "provenance-query",
+      "Query Provenance",
+      "Query provenance event history by artifact, runId, or recent list.",
+      Type.Object({
+        action: Type.String({ minLength: 1 }),
+        artifactPath: Type.Optional(Type.String()),
+        runId: Type.Optional(Type.String()),
+        limit: Type.Optional(Type.Number()),
+      }),
+    ),
+    bridge(
+      "interaction-list",
+      "List Interactions",
+      "List figure and plot Interaction objects in the workspace.",
+      Type.Object({
+        kindPrefix: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "interaction-read",
+      "Read Interaction",
+      "Read one Interaction spec by id.",
+      Type.Object({
+        id: Type.String({ minLength: 1 }),
+      }),
+    ),
+    bridge(
+      "interaction-write",
+      "Write Interaction",
+      "Create or update a figure or plot Interaction spec.",
+      Type.Object({
+        spec: Type.Any(),
+      }),
+    ),
+    bridge(
+      "interaction-open",
+      "Open Interaction",
+      "Open an Interaction in the RightArea panel.",
+      Type.Object({
+        id: Type.String({ minLength: 1 }),
+        focus: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "image-describe",
+      "Describe Image",
+      "Describe an image with the configured multimodal vision helper.",
+      Type.Object({
+        path: Type.Optional(Type.String()),
+        imagePath: Type.Optional(Type.String()),
+        question: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "bash",
+      "Run Shell Command",
+      "Run a shell command in the project directory via ai-pty.",
+      Type.Object({
+        command: Type.String({ minLength: 1 }),
+        cwd: Type.Optional(Type.String()),
+        description: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "delete",
+      "Delete File",
+      "Delete a file by path in the project.",
+      Type.Object({
+        path: Type.Optional(Type.String()),
+        filePath: Type.Optional(Type.String()),
+        file: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "move",
+      "Move File",
+      "Move or rename a file in the project.",
+      Type.Object({
+        source: Type.Optional(Type.String()),
+        from: Type.Optional(Type.String()),
+        sourcePath: Type.Optional(Type.String()),
+        destination: Type.Optional(Type.String()),
+        to: Type.Optional(Type.String()),
+        destinationPath: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "project-rule-write",
+      "Write Project Rule",
+      "Create or update a project rule (.prismnext/agent/rules/<name>/RULE.md).",
+      Type.Object({
+        name: Type.String({ minLength: 1 }),
+        description: Type.String({ minLength: 1 }),
+        body: Type.String({ minLength: 1 }),
+        mode: Type.Optional(Type.String()),
+        apply: Type.Optional(Type.String()),
+      }),
+    ),
+    bridge(
+      "question",
+      "Ask User Question",
+      "Ask the user a question and wait for their answer before continuing.",
+      Type.Object({
+        question: Type.String({ minLength: 1 }),
+        options: Type.Optional(Type.Array(Type.String())),
+        multiSelect: Type.Optional(Type.Boolean()),
+      }),
+    ),
+    bridge(
+      "suggest-plan",
+      "Suggest Plan Mode",
+      "Suggest entering Plan mode for complex multi-phase research tasks.",
+      Type.Object({
+        reason: Type.Optional(Type.String()),
+      }),
+    ),
   ];
 }
 

@@ -1852,6 +1852,7 @@ export interface ElectronAPI {
 
   // Chat events (Main → Renderer)
   onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
+  onChatAgentEvent: (callback: (data: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
   onChatComplete: (callback: (data: {
     tabId: string;
     sessionId: string;

@@ -11,7 +11,7 @@ import { resolveLatexRoot } from "../lib/latex-root";
 
 const log = createLogger("latex-bridge", "agent");
 
-interface LatexBridgeRequest {
+export interface LatexActionRequest {
   action: "root" | "compile";
   sessionId?: string;
   projectRoot?: string;
@@ -19,16 +19,23 @@ interface LatexBridgeRequest {
   useTexlive?: boolean;
 }
 
+/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+export function executeLatexAction(
+  req: LatexActionRequest,
+): unknown | Promise<unknown> {
+  return dispatch(req);
+}
+
 function bridgeRoot(): string {
   return getLatexBridgeRoot();
 }
 
-function resolveProjectRoot(req: LatexBridgeRequest): string {
+function resolveProjectRoot(req: LatexActionRequest): string {
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
   return (fromSession || req.projectRoot?.trim() || "").replace(/\\/g, "/");
 }
 
-function dispatch(req: LatexBridgeRequest): unknown | Promise<unknown> {
+function dispatch(req: LatexActionRequest): unknown | Promise<unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -84,7 +91,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     processingRequests.add(reqPath);
     try {
       const raw = readFileSync(reqPath, "utf-8");
-      const req = JSON.parse(raw) as LatexBridgeRequest;
+      const req = JSON.parse(raw) as LatexActionRequest;
       const result = await Promise.resolve(dispatch(req));
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}

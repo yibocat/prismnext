@@ -135,6 +135,13 @@ function notConfigured(): Record<string, unknown> {
   };
 }
 
+/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+export function executeExperimentAction(
+  req: ExperimentLogBridgeRequest,
+): Record<string, unknown> | null {
+  return dispatch(req, "");
+}
+
 /**
  * Dispatch a SYNC experiment-log action. Returns the result to write to the
  * result file, OR `null` for experiment-run (the executor writes the result

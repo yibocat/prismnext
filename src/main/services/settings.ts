@@ -32,6 +32,8 @@ export interface AppSettings {
   /** Custom system prompt — replaces the built-in core persona (Layer 0) when set.
    *  Modules, AGENTS.md, and project rules still append below. */
   agentSystemPrompt?: string;
+  /** Experimental: paint production chat text from AgentEvent. Default off. */
+  agentEventUi?: boolean;
 
   /** Prompt module toggle states. { "citations": true, "workspace-folders": true, ... }
    *  Missing keys default to the module's built-in default. */

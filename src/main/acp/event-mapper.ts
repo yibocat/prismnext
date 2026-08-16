@@ -53,6 +53,7 @@ import {
   loadSessionContext,
   persistSessionContext,
 } from "../services/session-context-store";
+import { broadcastChatStream, ChatStreamDeltaTracker } from "../agent/events";
 const log = createLogger("event-mapper", "agent");
 
 /**
@@ -65,6 +66,7 @@ const log = createLogger("event-mapper", "agent");
  */
 export class EventMapper {
   private win: BrowserWindow;
+  private readonly streamDeltaTracker = new ChatStreamDeltaTracker();
   private sessionToTab = new Map<string, string>();
   private tabToSession = new Map<string, string>();
   private unregisterNotifications = new Map<AcpService, () => void>();
@@ -309,7 +311,7 @@ export class EventMapper {
       this.openTaskToolToTab.delete(pending.toolUseId);
       this.backgroundOpenTasks.delete(pending.toolUseId);
       this.taskToolExpertById.delete(pending.toolUseId);
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "subAgent.completed",
         data: {
@@ -321,7 +323,7 @@ export class EventMapper {
       });
       // Same shape as handleTaskLinkTimeout — stream switch ignores top-level
       // tool_result; UI gets the body via subAgent.completed → _injectToolResult.
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "tool_result",
         data: {
@@ -336,6 +338,23 @@ export class EventMapper {
         `clearPendingTasksForTab: tab=${tabId} toolUse=${pending.toolUseId} expert=@${pending.expertId}`,
       );
     }
+  }
+
+  private emitChatStream(payload: { tabId: string; type: string; data?: unknown }): void {
+    if (this.win.isDestroyed?.()) return;
+    const data = payload.data && typeof payload.data === "object"
+      ? payload.data as Record<string, unknown>
+      : {};
+    const messageId = typeof data.messageId === "string" ? data.messageId : undefined;
+    broadcastChatStream(
+      (channel, body) => this.win.webContents.send(channel, body),
+      payload,
+      {
+        runtimeSessionId: this.tabToSession.get(payload.tabId) ?? payload.tabId,
+        turnId: messageId ?? "live",
+        tracker: this.streamDeltaTracker,
+      },
+    );
   }
 
   /**
@@ -361,7 +380,7 @@ export class EventMapper {
     this.taskToolExpertById.set(toolUseId, expertId);
     const rawPrompt = String(toolInput.prompt || toolInput.description || pending.prompt || "");
     if (rawPrompt && rawPrompt !== pending.prompt) pending.prompt = rawPrompt;
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.linked",
       data: {
@@ -391,7 +410,7 @@ export class EventMapper {
     const duration = Math.round(((ended - started) / 1000) * 10) / 10;
     this.thinkingStartedAt.delete(key);
     this.accumThinking.delete(key);
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "message.part.updated",
       data: {
@@ -412,7 +431,7 @@ export class EventMapper {
   private handleNotification(method: string, params: any): void {
     // Global agent lifecycle events — no session/tab mapping needed
     if (method === "agent/reconnected") {
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId: "",
         type: "agent.reconnected",
         data: {},
@@ -420,7 +439,7 @@ export class EventMapper {
       return;
     }
     if (method === "agent/connectionLost") {
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId: "",
         type: "agent.connectionLost",
         data: params,
@@ -487,7 +506,7 @@ export class EventMapper {
         break;
 
       case "session/todo":
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "todo.updated",
           data: params,
@@ -510,7 +529,7 @@ export class EventMapper {
 
       case "session/plan":
         // OpenCode plan event — the agent's execution plan with steps
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "plan.updated",
           data: params,
@@ -680,7 +699,7 @@ export class EventMapper {
     this.openTaskToolToTab.set(toolUseId, tabId);
     this.startTaskLinkWatchdog(tabId, toolUseId, expertId);
     this.startTaskAwaitTimeout(tabId, toolUseId, expertId);
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.linked",
       data: { taskToolUseId: toolUseId, expertId, prompt, rawPrompt, hasStagingPreface: !!stagingPreface },
@@ -803,7 +822,7 @@ export class EventMapper {
     if (this.subAgentDbSyncFingerprint.get(subSessionId) === fingerprint) return;
     this.subAgentDbSyncFingerprint.set(subSessionId, fingerprint);
     if (blocks.length === 0) return;
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.snapshot",
       data: { taskToolUseId, blocks },
@@ -958,7 +977,7 @@ export class EventMapper {
     toolInput: Record<string, unknown>,
     message: string,
   ): void {
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "message.part.updated",
       data: {
@@ -977,7 +996,7 @@ export class EventMapper {
     // Prefer message.updated so the renderer stores a real tool_result (not lost
     // under an unhandled stream type). OpenCode may still emit "Task cancelled"
     // afterward — our explicit error content should already be on the widget.
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "message.updated",
       data: {
@@ -993,7 +1012,7 @@ export class EventMapper {
         },
       },
     });
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.completed",
       data: {
@@ -1103,7 +1122,7 @@ export class EventMapper {
       parentSessionId ? getSessionProjectRoot(parentSessionId) : undefined,
     );
     AcpService.getInstanceForSession(subSessionId).markSubAgentSession(subSessionId);
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId: parentTabId,
       type: "subAgent.linked",
       data: {
@@ -1145,7 +1164,7 @@ export class EventMapper {
     if (!taskToolUseId) return;
     // User Stop — do not keep streaming tools/text into the run panel.
     if (this.isUserStoppedTask(taskToolUseId)) return;
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.activity",
       data: { taskToolUseId, block },
@@ -1291,7 +1310,7 @@ export class EventMapper {
     }
     const errorText =
       isError && typeof error === "string" && error.trim() ? error.trim() : undefined;
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.completed",
       data: {
@@ -1443,7 +1462,7 @@ export class EventMapper {
     const prompt =
       this.pendingTasksByTab.get(tabId)?.find((t) => t.toolUseId === taskToolUseId)?.prompt
       || "";
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.started",
       data: {
@@ -1860,7 +1879,7 @@ export class EventMapper {
         `— no child session linked within ${secs}s; orphan retries continue; ` +
         `Task still owned by OpenCode`,
     );
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.linkDegraded",
       data: {
@@ -1883,7 +1902,7 @@ export class EventMapper {
       `task-await-timeout: expert=@${expertId} toolUse=${toolUseId} tab=${tabId} ` +
         `— still unlinked after ${EventMapper.TASK_AWAIT_TIMEOUT_MS / 1000}s`,
     );
-    this.win.webContents.send("chat:stream", {
+    this.emitChatStream( {
       tabId,
       type: "subAgent.linkDegraded",
       data: {
@@ -1910,7 +1929,7 @@ export class EventMapper {
         || (typeof update.error === "string" && update.error)
         || (typeof update.content === "string" && update.content)
         || "";
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "session.error",
         data: { message: detail, raw: update },
@@ -1922,7 +1941,7 @@ export class EventMapper {
     const usageUpdate = parseAcpUsageUpdate(update);
     if (usageUpdate) {
       this.lastUsageBySession.set(sessionId, { ...usageUpdate, at: Date.now() });
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "session.usage",
         data: {
@@ -2214,7 +2233,7 @@ export class EventMapper {
       }
 
       this.noteTurnContent(sessionId);
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "message.part.updated",
         data: {
@@ -2556,7 +2575,7 @@ export class EventMapper {
           ? (ocTime as { end: number }).end
           : undefined;
       this.noteTurnContent(sessionId);
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "message.updated",
         data: {
@@ -2585,7 +2604,7 @@ export class EventMapper {
     // ═══════════════════════════════════════════════════════════════
     if (chunkType === "plan" || update.plan) {
       const plan = update.plan || update;
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "plan.updated",
         data: plan,
@@ -2638,7 +2657,7 @@ export class EventMapper {
         this.accumThinking.set(key, full);
         this.pruneAccum(this.accumThinking);
         this.noteTurnContent(sessionId);
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "message.part.updated",
           data: {
@@ -2671,7 +2690,7 @@ export class EventMapper {
         this.pruneAccum(this.accumText);
         this.maybeJoinBackgroundTaskFromText(tabId, full);
         this.noteTurnContent(sessionId);
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "message.part.updated",
           data: {
@@ -2683,7 +2702,7 @@ export class EventMapper {
       } else {
         // Generic text update (no recognised chunk type)
         this.noteTurnContent(sessionId);
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "message.part.updated",
           data: {
@@ -2698,7 +2717,7 @@ export class EventMapper {
       const legacyName = update.name || update.tool?.name || "";
       log.info(`tool call: ${legacyName || "?"}`);
       this.noteTurnContent(sessionId);
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "message.part.updated",
         data: {
@@ -2715,7 +2734,7 @@ export class EventMapper {
       });
     } else if (update.type === "tool_result" || update.type === "tool-result") {
       // ── Legacy tool result (update.type style) ──
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "message.updated",
         data: {
@@ -2771,7 +2790,7 @@ export class EventMapper {
         const full = (this.accumThinking.get(key) || "") + delta;
         this.accumThinking.set(key, full);
         this.pruneAccum(this.accumThinking);
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "message.part.updated",
           data: { messageId: msgId, part: { type: "thinking", thinking: full }, delta },
@@ -2784,7 +2803,7 @@ export class EventMapper {
         const full = (this.accumText.get(key) || "") + delta;
         this.accumText.set(key, full);
         this.pruneAccum(this.accumText);
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "message.part.updated",
           data: { messageId: msgId, part: { type: "text", text: full }, delta },
@@ -2800,7 +2819,7 @@ export class EventMapper {
         this._missedShapes.add(shape);
         log.debug(`Unhandled session/update shape: { ${shape} } — sample keys: ${JSON.stringify(Object.keys(update))}`);
       }
-      this.win.webContents.send("chat:stream", {
+      this.emitChatStream( {
         tabId,
         type: "message.part.updated",
         data: { part: update },
@@ -2902,7 +2921,7 @@ export class EventMapper {
         // prevented chat:complete (isStreaming would otherwise stay true).
         this.accumText.clear();
         this.accumThinking.clear();
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "session.status",
           data: { status, sessionId, ...params },
@@ -2912,7 +2931,7 @@ export class EventMapper {
       case "error":
         this.accumText.clear();
         this.accumThinking.clear();
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "session.status",
           data: { status, sessionId, ...params },
@@ -2921,7 +2940,7 @@ export class EventMapper {
 
       default:
         // running, aborted — forward as stream event for status tracking
-        this.win.webContents.send("chat:stream", {
+        this.emitChatStream( {
           tabId,
           type: "session.status",
           data: { status, sessionId, ...params },

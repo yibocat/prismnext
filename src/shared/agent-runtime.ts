@@ -13,6 +13,8 @@ export type AgentTabId = string;
 export type AgentToolCallId = string;
 
 export const AGENT_EVENT_TYPES = [
+  "session_created",
+  "prepare_phase",
   "text_delta",
   "thinking_delta",
   "tool_started",
@@ -26,6 +28,9 @@ export const AGENT_EVENT_TYPES = [
   "turn_cancelled",
 ] as const;
 
+/** Settings / env flag: when true, production chat may paint text from AgentEvent. */
+export const AGENT_EVENT_UI_SETTING_KEY = "agentEventUi";
+
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 
 export interface AgentEventBase {
@@ -33,6 +38,16 @@ export interface AgentEventBase {
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
   turnId: AgentTurnId;
+}
+
+export interface SessionCreatedEvent extends AgentEventBase {
+  type: "session_created";
+  sessionId: string;
+}
+
+export interface PreparePhaseEvent extends AgentEventBase {
+  type: "prepare_phase";
+  phase: string | null;
 }
 
 export interface TextDeltaEvent extends AgentEventBase {
@@ -106,6 +121,8 @@ export interface TurnCancelledEvent extends AgentEventBase {
 }
 
 export type AgentEvent =
+  | SessionCreatedEvent
+  | PreparePhaseEvent
   | TextDeltaEvent
   | ThinkingDeltaEvent
   | ToolStartedEvent

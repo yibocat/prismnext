@@ -7,7 +7,14 @@
 
 export type { AgentRuntime, AgentEventListener } from "./runtime";
 export { newRuntimeSessionId, newTurnId, newToolCallId } from "./runtime";
-export { toChatStreamEnvelope, mapPiSessionEvent, assertAgentEvent } from "./events";
+export {
+  toChatStreamEnvelope,
+  mapPiSessionEvent,
+  mapChatStreamToAgentEvent,
+  broadcastChatStream,
+  ChatStreamDeltaTracker,
+  assertAgentEvent,
+} from "./events";
 export { ToolHost } from "./tool-host";
 export type { NativeToolDefinition, ToolExecuteContext, ToolExecuteResult } from "./tool-host";
 export { PermissionGate, evaluateHardDeny, extractToolPathContext } from "./permission-gate";
@@ -46,4 +53,12 @@ export {
   PI_DEFAULT_CODING_IDENTITY,
 } from "./pi-lab-service";
 export { createRepresentativeTools } from "./representative-tools";
+export { createLiteratureNativeTools } from "./literature-native-tools";
+export { createLatexNativeTools } from "./latex-native-tools";
+export { createResearchBriefNativeTools } from "./research-brief-native-tools";
+export { createExperimentNativeTools } from "./experiment-native-tools";
+export { createInteractionNativeTools } from "./interaction-native-tools";
+export { createImageDescribeNativeTools } from "./image-describe-native-tools";
+export { createShellAndFsNativeTools } from "./shell-and-fs-native-tools";
+export { createInteractiveNativeTools } from "./interactive-native-tools";
 export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";

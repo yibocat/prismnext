@@ -177,6 +177,12 @@ export interface AppSettings {
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | edit_auto | auto | readonly */
   permissionMode?: PermissionMode;
+  /**
+   * Experimental: paint production chat text from AgentEvent instead of
+   * OpenCode `message.part.updated`. Default off — appearance unchanged.
+   * Testers set this in the settings JSON (no Settings UI).
+   */
+  agentEventUi?: boolean;
   /** Tools pinned via permission-gate "Always" (lowercased names). */
   toolAllowAlways?: string[];
   /** Bash command patterns from "Always" (e.g. `git status*`). */

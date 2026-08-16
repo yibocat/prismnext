@@ -71,7 +71,7 @@ import {
   snapshotSessionDraftMeta,
 } from "../services/research-plan-service";
 import { getQuestionsBridgeRoot } from "../services/prism-bridge-paths";
-import { emitChatStream } from "../services/chat-stream-notify";
+import { emitAgentEvent, emitChatStream } from "../services/chat-stream-notify";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import { resolveSessionAgent } from "../../shared/session-agent";
 import { formatTaskError } from "../../shared/task-error-codes";
@@ -523,9 +523,7 @@ export function registerChatHandlers(): void {
         );
       } else {
         log.warn("Assembled prompt is EMPTY — agent will use OpenCode defaults only");
-        win.webContents.send("chat:stream", {
-          tabId, type: "system.promptEmpty", data: {},
-        });
+        emitChatStream(tabId, "system.promptEmpty", {});
       }
 
       let sessionId = args.sessionId;
@@ -555,6 +553,13 @@ export function registerChatHandlers(): void {
           // session/update is not treated as an orphan subagent.
           registerTabSession(win, tabId, sessionId, args.projectPath);
           win.webContents.send("chat:sessionCreated", { tabId, sessionId });
+          emitAgentEvent({
+            type: "session_created",
+            runtimeSessionId: sessionId,
+            tabId,
+            turnId: "live",
+            sessionId,
+          });
         } catch (err: any) {
           log.error(`createSession failed: ${err.message}`);
           clearPrepare();
@@ -802,11 +807,7 @@ export function registerChatHandlers(): void {
             // the log line immediately and abort useless retries.
             turnSettledByProviderError = true;
             clearPrepare();
-            win.webContents.send("chat:stream", {
-              tabId,
-              type: "session.error",
-              data: { message },
-            });
+            emitChatStream(tabId, "session.error", { message });
             void service.abortPrimarySession(sessionId!).catch(() => {});
           },
           onTimeout: (silentMs, busy) => {
@@ -1039,11 +1040,7 @@ export function registerChatHandlers(): void {
         log.info(
           `deferring chat:complete until background Tasks settle sessionId=${sessionId}`,
         );
-        win.webContents.send("chat:stream", {
-          tabId,
-          type: "turn.awaitingBackground",
-          data: { sessionId },
-        });
+        emitChatStream(tabId, "turn.awaitingBackground", { sessionId });
         try {
           await getMapper(win).waitForBackgroundTurnSettle(tabId);
         } catch (err: unknown) {
@@ -1464,18 +1461,12 @@ export function registerChatHandlers(): void {
       clearSessionContextUsage(args.projectPath, args.sessionId);
       const tabId = resolveChatTabId(args.sessionId);
       if (tabId) {
-        for (const win of BrowserWindow.getAllWindows()) {
-          win.webContents.send("chat:stream", {
-            tabId,
-            type: "session.usage",
-            data: {
-              used: null,
-              size: null,
-              source: null,
-              cleared: true,
-            },
-          });
-        }
+        emitChatStream(tabId, "session.usage", {
+          used: null,
+          size: null,
+          source: null,
+          cleared: true,
+        });
       }
       return { ok: true as const };
     },

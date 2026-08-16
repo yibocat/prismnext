@@ -34,7 +34,7 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
   webp: "image/webp",
 };
 
-type ImageDescribeBridgeRequest = {
+export type ImageDescribeActionRequest = {
   action?: string;
   sessionId?: string;
   projectRoot?: string;
@@ -42,16 +42,23 @@ type ImageDescribeBridgeRequest = {
   question?: string;
 };
 
+/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+export async function executeImageDescribeAction(
+  req: ImageDescribeActionRequest,
+): Promise<Record<string, unknown>> {
+  return dispatch(req);
+}
+
 function bridgeRoot(): string {
   return getImageDescribeBridgeRoot();
 }
 
-function resolveProjectRoot(req: ImageDescribeBridgeRequest): string {
+function resolveProjectRoot(req: ImageDescribeActionRequest): string {
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
   return (fromSession || req.projectRoot?.trim() || "").replace(/\\/g, "/");
 }
 
-async function dispatch(req: ImageDescribeBridgeRequest): Promise<Record<string, unknown>> {
+async function dispatch(req: ImageDescribeActionRequest): Promise<Record<string, unknown>> {
   if (req.action !== "describe") {
     return { ok: false, error: `Unknown image-describe bridge action: ${String(req.action)}` };
   }
@@ -161,7 +168,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     processingRequests.add(reqPath);
     try {
       const raw = readFileSync(reqPath, "utf-8");
-      const req = JSON.parse(raw) as ImageDescribeBridgeRequest;
+      const req = JSON.parse(raw) as ImageDescribeActionRequest;
       const result = await dispatch(req);
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
       try { unlinkSync(reqPath); } catch {}

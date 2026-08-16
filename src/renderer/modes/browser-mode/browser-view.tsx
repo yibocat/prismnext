@@ -379,17 +379,18 @@ export function BrowserView() {
   const guestSrc = mountSrcRef.current || url;
 
   return (
-    <div ref={webviewElRef} className="flex h-full flex-col min-h-0">
+    <div ref={webviewElRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-white">
       {isLoading && (
         <div className="h-0.5 shrink-0 bg-primary/30 overflow-hidden">
           <div className="h-full w-1/3 bg-primary animate-[loading-bar_1.2s_ease-in-out_infinite]" />
         </div>
       )}
-      <div ref={guestHostRef} className="min-h-0 flex-1">
+      <div ref={guestHostRef} className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-white">
         <webview
           ref={webviewRef}
           src={guestSrc}
           className={BROWSER_WEBVIEW_CLASS}
+          style={{ width: "100%", height: "100%", backgroundColor: "#ffffff" }}
           {...{
             webpreferences: "contextIsolation=yes",
             // Isolate browser cookies/storage from the renderer's default session

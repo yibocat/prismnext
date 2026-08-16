@@ -59,7 +59,7 @@ function libraryPdfRelativePath(pdfPath: string | null): string | null {
   return `.prismnext/library/${pdfPath.replace(/\\/g, "/")}`;
 }
 
-interface LiteratureBridgeRequest {
+export interface LiteratureActionRequest {
   action:
     | "read"
     | "read-pdf"
@@ -130,7 +130,7 @@ function writeSessionStaging(sessionId: string, records: SessionStageRecord[]): 
   }
 }
 
-function resolveProjectRoot(req: LiteratureBridgeRequest): string {
+function resolveProjectRoot(req: LiteratureActionRequest): string {
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
   const raw = fromSession || req.projectRoot?.trim() || "";
   return raw ? resolveLibraryProjectRoot(raw) : "";
@@ -270,7 +270,7 @@ function handleDelete(projectRoot: string, bibkey: string): Record<string, unkno
 
 function handleExportBib(
   projectRoot: string,
-  req: LiteratureBridgeRequest,
+  req: LiteratureActionRequest,
 ): Record<string, unknown> {
   try {
     const result = mergeLibraryIntoProjectBib(projectRoot, {
@@ -533,7 +533,7 @@ function intensiveReadPdfBlocked(
   };
 }
 
-function handleIntensiveReading(req: LiteratureBridgeRequest): Record<string, unknown> {
+function handleIntensiveReading(req: LiteratureActionRequest): Record<string, unknown> {
   const sessionId = (req.sessionId ?? "").trim();
   if (!sessionId || sessionId === "unknown") {
     return { error: "Missing sessionId for intensive reading." };
@@ -604,7 +604,7 @@ function handleIntensiveReading(req: LiteratureBridgeRequest): Record<string, un
   };
 }
 
-async function handleDiscover(req: LiteratureBridgeRequest): Promise<Record<string, unknown>> {
+async function handleDiscover(req: LiteratureActionRequest): Promise<Record<string, unknown>> {
   const query = req.query?.trim() ?? "";
   if (!query) {
     return {
@@ -630,7 +630,14 @@ async function handleDiscover(req: LiteratureBridgeRequest): Promise<Record<stri
   };
 }
 
-function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
+/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+export function executeLiteratureAction(
+  req: LiteratureActionRequest,
+): unknown | Promise<unknown> {
+  return dispatch(req);
+}
+
+function dispatch(req: LiteratureActionRequest): unknown | Promise<unknown> {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -724,7 +731,7 @@ function dispatch(req: LiteratureBridgeRequest): unknown | Promise<unknown> {
 
 function recordLibraryTaskHitsFromBridgeResult(
   sessionId: string | undefined,
-  action: LiteratureBridgeRequest["action"],
+  action: LiteratureActionRequest["action"],
   result: Record<string, unknown>,
 ): void {
   if (!sessionId?.trim() || result.error) return;
@@ -764,7 +771,7 @@ async function processSessionDir(sessionDir: string): Promise<void> {
     processingRequests.add(reqPath);
     try {
       const raw = readFileSync(reqPath, "utf-8");
-      const req = JSON.parse(raw) as LiteratureBridgeRequest;
+      const req = JSON.parse(raw) as LiteratureActionRequest;
       const result = await Promise.resolve(dispatch(req)) as Record<string, unknown>;
       recordLibraryTaskHitsFromBridgeResult(req.sessionId, req.action, result);
       writeFileSync(resPath, JSON.stringify(result), "utf-8");
