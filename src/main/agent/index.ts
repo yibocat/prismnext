@@ -19,6 +19,8 @@ export {
   PiSdkRuntime,
   ClosedResourceLoader,
   closedPiSessionOptions,
+  createPiNativeTools,
+  createPiSdkSessionFactory,
   probePiEmbedCompatibility,
   isNodeCompatibleWithPi,
   tryLoadPiSdkModule,
@@ -27,5 +29,17 @@ export {
   PI_SDK_PINNED_VERSION,
   PI_MIN_NODE,
 } from "./pi-sdk-runtime";
+export type {
+  PiSdkSessionFactoryInput,
+  PiToolExecutionContext,
+} from "./pi-sdk-runtime";
+export {
+  resolvePiLabAuth,
+  buildPiLabSystemPrompt,
+  buildPiLabUserText,
+  createPiLabService,
+  getPiLabService,
+  disposePiLabService,
+} from "./pi-lab-service";
 export { createRepresentativeTools } from "./representative-tools";
 export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";

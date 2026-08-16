@@ -91,7 +91,8 @@
       "browser": "瀏覽器",
       "literature": "文獻",
       "pro": "Pro",
-      "teams": "團隊與智能體"
+      "teams": "團隊與智能體",
+      "lab": "Agent 實驗室"
     },
     "agentAssets": {
       "title": "團隊與智能體",
@@ -121,6 +122,42 @@
       "applicationLogs": "應用日誌",
       "applicationLogsDesc": "瀏覽、篩選、搜尋並匯出應用日誌（主程序與介面）。",
       "open": "開啟"
+    },
+    "lab": {
+      "title": "Agent 實驗室",
+      "subtitle": "獨立的 Pi 實驗對話。正式聊天仍走 OpenCode，不會被取代。",
+      "bannerTitle": "實驗執行時",
+      "bannerBody": "此頁在 PrismNext 主程序裡直接跑 Pi。正式聊天仍使用 OpenCode。這裡只暴露四個原生工具，每次呼叫都經過 PrismNext 權限門。",
+      "status": "執行時",
+      "node": "Node {{version}}",
+      "ready": "就緒",
+      "empty": "先開啟一個專案，在「設定 → 模型」選好自帶金鑰的模型，再在這裡送出一則短提示。",
+      "placeholder": "向 Pi 實驗室提問…",
+      "send": "傳送",
+      "cancel": "停止",
+      "reset": "新對話",
+      "sendFailed": "實驗室無法開始這一輪。",
+      "allow": "允許",
+      "deny": "拒絕",
+      "permissionTitle": "允許 {{name}}？",
+      "toolStarted": "正在執行 {{name}}",
+      "toolFinished": "{{name}} 已完成",
+      "toolDenied": "{{name}} 已被拒絕",
+      "toolFailed": "{{name}} 失敗：{{error}}",
+      "role": {
+        "user": "你",
+        "assistant": "Pi 實驗室",
+        "tool": "工具",
+        "system": "實驗室"
+      },
+      "reason": {
+        "missing_project": "請先開啟一個專案",
+        "missing_pi_api_key": "請在「設定 → 模型」填寫 API 金鑰",
+        "missing_pi_provider": "請在「設定 → 模型」選擇供應商",
+        "missing_pi_model": "請在「設定 → 模型」選擇模型",
+        "electron_node_incompatible": "目前 Electron 無法嵌入 Pi",
+        "unsupportedProvider": "實驗室不支援 OpenCode 目錄（Zen / Go）。請改用 DeepSeek、Anthropic、OpenAI 等直連金鑰。"
+      }
     },
     "slots": {
       "addFolder": "新增資料夾",

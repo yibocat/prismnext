@@ -28,6 +28,7 @@ import {
   ShieldIcon,
   InfoIcon,
   SparklesIcon,
+  FlaskConicalIcon,
 } from "lucide-react";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { isAgentAssetsCategory } from "./agent-assets-shared";
@@ -52,6 +53,7 @@ export const SETTINGS_GROUPS = [
       { id: "teams-agents", labelKey: "settings.nav.teams", icon: Bot },
       { id: "prompts-rules", labelKey: "settings.nav.promptsRules", icon: FileTextIcon },
       { id: "permissions", labelKey: "settings.nav.permissions", icon: ShieldIcon },
+      { id: "lab", labelKey: "settings.nav.lab", icon: FlaskConicalIcon },
     ],
   },
   {

@@ -6,6 +6,7 @@ import { mapPiSessionEvent, toChatStreamEnvelope } from "../../src/main/agent/ev
 import {
   ClosedResourceLoader,
   closedPiSessionOptions,
+  createPiSdkSessionFactory,
   isNodeCompatibleWithPi,
   PI_MIN_NODE,
   PI_SDK_PACKAGE,
@@ -50,20 +51,166 @@ describe("pi sdk spike", () => {
 
   it("uses a closed resource loader that never lists project or home skills", () => {
     const loader = new ClosedResourceLoader();
-    expect(loader.getExtensions()).toEqual([]);
-    expect(loader.getSkills()).toEqual([]);
-    expect(loader.getPrompts()).toEqual([]);
+    expect(loader.getExtensions().extensions).toEqual([]);
+    expect(loader.getSkills().skills).toEqual([]);
+    expect(loader.getPrompts().prompts).toEqual([]);
     expect(loader.getAgentsFiles()).toEqual({ agentsFiles: [] });
     const opts = closedPiSessionOptions({
       cwd: "/tmp/project",
       agentDir: "/tmp/userData/pi-agent",
       systemPrompt: "direct prompt, no _prism-system.md",
     });
-    expect(opts.noTools).toBe("all");
+    expect(opts.noTools).toBe("builtin");
     expect(opts.settingsManagerMode).toBe("inMemory");
     expect(opts.sessionManagerMode).toBe("inMemory");
     expect(opts.forbiddenDiscovery).toEqual(FORBIDDEN_PROJECT_RESOURCE_DIRS);
     expect(opts.systemPrompt).toContain("direct prompt");
+  });
+
+  it("passes the composed prompt directly without exposing discovered resources", () => {
+    const opts = closedPiSessionOptions({
+      cwd: "/tmp/project",
+      agentDir: "/tmp/userData/pi-agent",
+      systemPrompt: "Only this composed PrismNext prompt is visible.",
+    });
+    const loader = opts.resourceLoader as unknown as {
+      getSystemPrompt(): string | undefined;
+      getAppendSystemPrompt(): string[];
+      getExtensions(): { extensions: unknown[]; errors: unknown[] };
+      getSkills(): { skills: unknown[]; diagnostics: unknown[] };
+    };
+
+    expect(loader.getSystemPrompt()).toBe("Only this composed PrismNext prompt is visible.");
+    expect(loader.getAppendSystemPrompt()).toEqual([]);
+    expect(loader.getExtensions()).toMatchObject({ extensions: [], errors: [] });
+    expect(loader.getSkills()).toEqual({ skills: [], diagnostics: [] });
+  });
+
+  it("exposes only PrismNext native tools to Pi and delegates with the active turn context", async () => {
+    const module = await import("../../src/main/agent/pi-sdk-runtime");
+    const createNativeTools = (module as unknown as {
+      createPiNativeTools: (input: {
+        toolHost: {
+          execute: (
+            toolName: string,
+            args: Record<string, unknown>,
+            context: Record<string, unknown>,
+          ) => Promise<unknown>;
+        };
+        getContext: () => Record<string, unknown>;
+      }) => Array<{
+        name: string;
+        execute: (
+          toolCallId: string,
+          args: Record<string, unknown>,
+          signal?: AbortSignal,
+        ) => Promise<{ content: Array<{ type: string; text: string }> }>;
+      }>;
+    }).createPiNativeTools;
+
+    const calls: Array<{ name: string; args: Record<string, unknown>; context: Record<string, unknown> }> = [];
+    const tools = createNativeTools({
+      toolHost: {
+        async execute(name, args, context) {
+          calls.push({ name, args, context });
+          return { ok: true, result: { source: "PrismNext" } };
+        },
+      },
+      getContext: () => ({
+        runtimeSessionId: "rt-1",
+        tabId: "tab-1",
+        turnId: "turn-1",
+        projectRoot: "/tmp/project",
+        permissionMode: "edit_auto",
+      }),
+    });
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "literature-search",
+      "literature-discover",
+      "research-brief-update",
+      "experiment-run",
+    ]);
+
+    const result = await tools[2]!.execute("brief-call", {
+      section: "Research question",
+      content: "Does X affect Y?",
+    });
+    expect(calls).toEqual([{
+      name: "research-brief-update",
+      args: {
+        section: "Research question",
+        content: "Does X affect Y?",
+      },
+      context: {
+        runtimeSessionId: "rt-1",
+        tabId: "tab-1",
+        turnId: "turn-1",
+        projectRoot: "/tmp/project",
+        permissionMode: "edit_auto",
+        toolCallId: "brief-call",
+        abortSignal: undefined,
+      },
+    }]);
+    expect(result.content[0]).toEqual({
+      type: "text",
+      text: JSON.stringify({ ok: true, result: { source: "PrismNext" } }),
+    });
+  });
+
+  it("requires an explicit BYOK key before creating a real Pi session factory", async () => {
+    const module = await import("../../src/main/agent/pi-sdk-runtime");
+    const createFactory = (module as unknown as {
+      createPiSdkSessionFactory: (input: {
+        providerId: string;
+        modelId: string;
+        apiKey?: string;
+        systemPrompt: string;
+        toolHost: unknown;
+      }) => unknown;
+    }).createPiSdkSessionFactory;
+
+    expect(() => createFactory({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-4-5",
+      systemPrompt: "PrismNext system prompt",
+      toolHost: {},
+    })).toThrow("missing_pi_api_key");
+  });
+
+  it("creates a real in-memory Pi SDK session with no built-in tools", async () => {
+    const root = mkdtempSync(join(tmpdir(), "prism-pi-sdk-"));
+    dirs.push(root);
+    const factory = createPiSdkSessionFactory({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-4-5",
+      apiKey: "test-key-never-sent",
+      systemPrompt: "Only the PrismNext prompt reaches this session.",
+      toolHost: {
+        async execute() {
+          return { ok: false, error: "test_tool_host" };
+        },
+      },
+    });
+
+    const session = await factory({
+      runtimeSessionId: "pi-real-session",
+      tabId: "tab-pi-real",
+      cwd: root,
+      agentDir: join(root, "pi-agent"),
+      projectRoot: root,
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+      allowedPaths: undefined,
+      resourceLoader: new ClosedResourceLoader(),
+    });
+
+    expect(session.sessionId).toBeTruthy();
+    expect(typeof session.prompt).toBe("function");
+    expect(existsSync(join(root, "pi-agent", "auth.json"))).toBe(false);
+    expect(existsSync(join(root, "pi-agent", "models.json"))).toBe(false);
+    await session.abort();
+    session.dispose();
   });
 
   it("maps Pi session events into AgentEvent without leaking runtime types", () => {

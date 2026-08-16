@@ -993,6 +993,38 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetTeamId }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
+	piLabStatus: (args?: { projectRoot?: string }) =>
+		ipcRenderer.invoke("pi-lab:status", args),
+	piLabSend: (args: {
+		projectRoot: string;
+		text: string;
+		provider?: string;
+		modelId?: string;
+		apiKey?: string;
+		permissionMode?: "ask" | "edit_auto" | "auto" | "readonly";
+	}) => ipcRenderer.invoke("pi-lab:send", args),
+	piLabCancel: () => ipcRenderer.invoke("pi-lab:cancel"),
+	piLabReset: () => ipcRenderer.invoke("pi-lab:reset"),
+	piLabResolvePermission: (args: { requestId: string; decision: "allow" | "deny" }) =>
+		ipcRenderer.invoke("pi-lab:resolvePermission", args),
+	onPiLabEvent: (callback: (event: import("../shared/agent-runtime").AgentEvent) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: import("../shared/agent-runtime").AgentEvent) => callback(data);
+		ipcRenderer.on("pi-lab:event", handler);
+		return () => ipcRenderer.removeListener("pi-lab:event", handler);
+	},
+	onPiLabPermission: (callback: (request: {
+		requestId: string;
+		toolName: string;
+		args: Record<string, unknown>;
+	}) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: {
+			requestId: string;
+			toolName: string;
+			args: Record<string, unknown>;
+		}) => callback(data);
+		ipcRenderer.on("pi-lab:permission", handler);
+		return () => ipcRenderer.removeListener("pi-lab:permission", handler);
+	},
 	chatSend: (args: {
 		projectPath: string;
 		worktreePath?: string;

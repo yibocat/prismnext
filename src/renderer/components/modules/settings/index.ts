@@ -7,6 +7,7 @@ export { SettingsSidebar, type SettingsCategory } from "./settings-sidebar";
 export { GeneralSettings } from "./general-settings";
 export { AppearanceSettings } from "./appearance-settings";
 export { AboutSettings } from "./about-settings";
+export { PiLabSettings } from "./pi-lab-settings";
 export { CompilerSettings } from "./compiler-settings";
 export { ModelSettings } from "./model-settings";
 export { LiteratureSettings } from "./literature-settings";

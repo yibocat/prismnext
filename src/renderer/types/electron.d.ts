@@ -1660,6 +1660,20 @@ export interface ElectronAPI {
     projectPath: string,
     orchestratorId: string,
   ) => Promise<{ orchestrators: import("@shared/agent-subagents").OrchestratorInfo[] }>;
+  piLabStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/pi-lab").PiLabStatus>;
+  piLabSend: (args: import("../../shared/pi-lab").PiLabSendInput) => Promise<import("../../shared/pi-lab").PiLabSendResult>;
+  piLabCancel: () => Promise<{ ok: boolean }>;
+  piLabReset: () => Promise<{ ok: boolean }>;
+  piLabResolvePermission: (args: {
+    requestId: string;
+    decision: "allow" | "deny";
+  }) => Promise<{ ok: boolean }>;
+  onPiLabEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
+  onPiLabPermission: (callback: (request: {
+    requestId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+  }) => void) => () => void;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;

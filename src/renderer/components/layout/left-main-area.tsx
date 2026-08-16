@@ -38,6 +38,7 @@ import {
   BrowserSettings,
   LiteratureSettings,
   AboutSettings,
+  PiLabSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { TeamsCenter } from "@/components/modules/teams/teams-center";
@@ -237,6 +238,7 @@ export function LeftMainArea() {
       literature: LiteratureSettings,
       backups: BackupsSettings,
       about: AboutSettings,
+      lab: PiLabSettings,
     }[resolvedCategory];
     if (BuiltinSettings) {
       return (

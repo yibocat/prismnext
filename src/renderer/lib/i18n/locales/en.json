@@ -91,7 +91,8 @@
       "browser": "Browser",
       "literature": "Literature",
       "pro": "Pro",
-      "teams": "Teams & Agents"
+      "teams": "Teams & Agents",
+      "lab": "Agent Lab"
     },
     "agentAssets": {
       "title": "Teams & Agents",
@@ -121,6 +122,42 @@
       "applicationLogs": "Application logs",
       "applicationLogsDesc": "Browse, filter, search, and export app logs (main + UI).",
       "open": "Open"
+    },
+    "lab": {
+      "title": "Agent Lab",
+      "subtitle": "A separate Pi conversation for architecture experiments. Your normal chat is unchanged.",
+      "bannerTitle": "Experimental runtime",
+      "bannerBody": "This page talks to Pi in the PrismNext main process. Production chat still uses OpenCode. Only four native tools are exposed, and each call goes through PrismNext’s permission gate.",
+      "status": "Runtime",
+      "node": "Node {{version}}",
+      "ready": "Ready",
+      "empty": "Open a project, pick a BYOK model in Settings → Models, then send a short prompt here.",
+      "placeholder": "Ask the Pi lab…",
+      "send": "Send",
+      "cancel": "Stop",
+      "reset": "New conversation",
+      "sendFailed": "The lab could not start this turn.",
+      "allow": "Allow",
+      "deny": "Deny",
+      "permissionTitle": "Allow {{name}}?",
+      "toolStarted": "Running {{name}}",
+      "toolFinished": "{{name}} finished",
+      "toolDenied": "{{name}} was denied",
+      "toolFailed": "{{name}} failed: {{error}}",
+      "role": {
+        "user": "You",
+        "assistant": "Pi lab",
+        "tool": "Tool",
+        "system": "Lab"
+      },
+      "reason": {
+        "missing_project": "Open a project first",
+        "missing_pi_api_key": "Add an API key in Settings → Models",
+        "missing_pi_provider": "Choose a provider in Settings → Models",
+        "missing_pi_model": "Choose a model in Settings → Models",
+        "electron_node_incompatible": "This Electron build cannot embed Pi",
+        "unsupportedProvider": "OpenCode catalog providers (Zen / Go) are not available in the lab. Use a direct BYOK vendor such as DeepSeek, Anthropic, or OpenAI."
+      }
     },
     "slots": {
       "addFolder": "Add folder",
