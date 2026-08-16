@@ -207,6 +207,8 @@ describe("pi sdk spike", () => {
 
     expect(session.sessionId).toBeTruthy();
     expect(typeof session.prompt).toBe("function");
+    expect(session.getSystemPrompt?.()).toContain("Only the PrismNext prompt reaches this session.");
+    expect(session.getSystemPrompt?.()).not.toMatch(/expert coding assistant operating inside pi/i);
     expect(existsSync(join(root, "pi-agent", "auth.json"))).toBe(false);
     expect(existsSync(join(root, "pi-agent", "models.json"))).toBe(false);
     await session.abort();
@@ -231,7 +233,7 @@ describe("pi sdk spike", () => {
     const end = mapPiSessionEvent({ type: "agent_end" }, ctx);
     expect(text[0]).toMatchObject({ type: "text_delta", text: "Hello", tabId: "tab-1" });
     expect(think[0]).toMatchObject({ type: "thinking_delta", text: "hmm" });
-    expect(tool[0]).toMatchObject({ type: "tool_started", toolName: "literature-search" });
+    expect(tool).toEqual([]);
     expect(end[0]).toMatchObject({ type: "turn_finished" });
     expect(JSON.stringify([text, think, tool, end])).not.toMatch(/assistantMessageEvent|tool_execution_start/);
     expect(toChatStreamEnvelope(text[0]!).type).toBe("text_delta");

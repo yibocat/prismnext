@@ -21,7 +21,7 @@ import { isOpenCodeCatalogProvider } from "../../shared/opencode-provider";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { AgentSessionStore, resolvePiAgentRoot } from "./session-store";
-import { createRepresentativeTools } from "./representative-tools";
+import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
 import {
   PI_SDK_PACKAGE,
   PI_SDK_PINNED_VERSION,
@@ -31,6 +31,9 @@ import {
 } from "./pi-sdk-runtime";
 import { searchPapers } from "../services/literature-service";
 import { discoverLiterature } from "../services/literature-discovery";
+import type { ExperimentCtxResult } from "../services/experiment-log-service";
+import type { KickoffExperimentRunArgs } from "../services/experiment-run-executor";
+import { parseExperimentRunKind } from "../../shared/experiment-log";
 
 const LAB_TOOLS = [
   "literature-search",
@@ -38,6 +41,18 @@ const LAB_TOOLS = [
   "research-brief-update",
   "experiment-run",
 ] as const;
+
+/** Pi uses this sentence when ResourceLoader.getSystemPrompt() is empty. */
+export const PI_DEFAULT_CODING_IDENTITY =
+  "You are an expert coding assistant operating inside pi";
+
+export const HOST_SYSTEM_IDENTITY = [
+  "You are the PrismNext research collaborator for this project.",
+  "Do not claim to be Claude, GPT, Gemini, DeepSeek, or any other vendor model.",
+  "Use only the tools this host registered.",
+  "Prefer literature-search for local papers, literature-discover for catalogs,",
+  "research-brief-update for the project brief, and experiment-run for island commands.",
+].join(" ");
 
 export function resolvePiLabAuth(input: PiLabAuthInput): PiLabAuthResult {
   const provider = (input.provider ?? input.settings.aiProvider ?? "").trim();
@@ -67,7 +82,7 @@ export function buildPiLabSystemPrompt(input: {
   stableSystem: string;
   agentsMd?: string;
 }): string {
-  return [input.stableSystem.trim(), input.agentsMd?.trim()]
+  return [HOST_SYSTEM_IDENTITY, input.stableSystem.trim(), input.agentsMd?.trim()]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -81,7 +96,43 @@ export function buildPiLabUserText(input: {
   return rules ? `${rules}\n\n${text}` : text;
 }
 
-export function createPiLabNativeTools() {
+export function createPiLabExperimentRunner(deps: {
+  resolveCtx: (projectRoot: string) => ExperimentCtxResult;
+  isCtxError: (ctx: ExperimentCtxResult) => boolean;
+  kickoff: (args: KickoffExperimentRunArgs) => Promise<{ runId: string; executionId: string } | undefined>;
+}): ExperimentRunFn {
+  return async (input) => {
+    const ctx = deps.resolveCtx(input.projectRoot);
+    if (deps.isCtxError(ctx)) {
+      const err = ctx as Extract<ExperimentCtxResult, { ok: false }>;
+      return { ok: false, error: err.error, hint: err.hint };
+    }
+    const started = await deps.kickoff({
+      ctx: ctx as Exclude<ExperimentCtxResult, { ok: false }>,
+      id: input.experimentId,
+      command: input.command,
+      artifacts: input.artifacts,
+      notes: input.notes,
+      kind: parseExperimentRunKind(input.kind),
+      interpreter: input.interpreter === "external" ? "external" : undefined,
+      pythonPath: input.pythonPath,
+      chatSessionId: input.toolCallId,
+    });
+    if (!started) {
+      return { ok: false, error: "experiment_not_found" };
+    }
+    return {
+      ok: true,
+      started: true,
+      runId: started.runId,
+      executionId: started.executionId,
+    };
+  };
+}
+
+export function createPiLabNativeTools(deps?: {
+  runExperiment?: ExperimentRunFn;
+}) {
   return createRepresentativeTools({
     searchPapers: ({ projectRoot, query, limit, tag, collection }) => {
       return searchPapers(projectRoot, query, limit ?? 20, { tag, collection }).map((row) => ({
@@ -94,9 +145,16 @@ export function createPiLabNativeTools() {
       }));
     },
     discoverLiterature,
-    runExperiment: async () => ({
-      ok: false,
-      error: "experiment_run_not_available_in_lab",
+    runExperiment: deps?.runExperiment ?? (async (input) => {
+      const [{ resolveExperimentCtx, isExperimentCtxError }, { kickoffExperimentRun }] = await Promise.all([
+        import("../services/experiment-log-service"),
+        import("../services/experiment-run-executor"),
+      ]);
+      return createPiLabExperimentRunner({
+        resolveCtx: resolveExperimentCtx,
+        isCtxError: isExperimentCtxError,
+        kickoff: kickoffExperimentRun,
+      })(input);
     }),
   });
 }
@@ -160,6 +218,7 @@ export class PiLabService {
       projectRoot: root ?? null,
       sessionId: this.sessionId,
       tools: [...LAB_TOOLS],
+      permissionMode: permissionModeFromSettings(settings),
     };
   }
 

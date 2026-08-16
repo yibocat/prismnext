@@ -72,29 +72,10 @@ export function mapPiSessionEvent(
       return [];
     }
     case "tool_execution_start":
-      return [{
-        ...base,
-        type: "tool_started",
-        toolCallId: event.toolCallId || "unknown",
-        toolName: event.toolName || "unknown",
-        args: {},
-      }];
     case "tool_execution_update":
-      return [{
-        ...base,
-        type: "tool_progress",
-        toolCallId: event.toolCallId || "unknown",
-        toolName: event.toolName || "unknown",
-      }];
     case "tool_execution_end":
-      return [{
-        ...base,
-        type: "tool_finished",
-        toolCallId: event.toolCallId || "unknown",
-        toolName: event.toolName || "unknown",
-        ok: event.isError !== true,
-        error: event.isError ? (event.error || event.message || "tool_error") : undefined,
-      }];
+      // ToolHost already emits tool_started / tool_finished with real args.
+      return [];
     case "agent_end":
     case "turn_end":
       return [{ ...base, type: "turn_finished" }];

@@ -37,9 +37,13 @@ export {
   resolvePiLabAuth,
   buildPiLabSystemPrompt,
   buildPiLabUserText,
+  createPiLabNativeTools,
+  createPiLabExperimentRunner,
   createPiLabService,
   getPiLabService,
   disposePiLabService,
+  HOST_SYSTEM_IDENTITY,
+  PI_DEFAULT_CODING_IDENTITY,
 } from "./pi-lab-service";
 export { createRepresentativeTools } from "./representative-tools";
 export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";

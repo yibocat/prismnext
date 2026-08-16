@@ -48,6 +48,7 @@ export interface PiLabStatus {
   projectRoot?: string | null;
   sessionId?: string | null;
   tools: string[];
+  permissionMode: PermissionMode;
 }
 
 export interface PiLabSendInput {

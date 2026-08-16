@@ -42,6 +42,11 @@ export type ExperimentRunFn = (input: {
   toolCallId: string;
   projectRoot: string;
   abortSignal?: AbortSignal;
+  artifacts?: string[];
+  notes?: string;
+  kind?: string;
+  interpreter?: string;
+  pythonPath?: string;
 }) => Promise<unknown>;
 
 export interface RepresentativeToolDeps {
@@ -134,12 +139,20 @@ export function createRepresentativeTools(deps: RepresentativeToolDeps): NativeT
         if (!experimentId.trim() || !command.trim()) {
           return { ok: false, error: "missing_id_or_command" };
         }
+        const artifacts = Array.isArray(args.artifacts)
+          ? args.artifacts.filter((item): item is string => typeof item === "string")
+          : undefined;
         return deps.runExperiment({
           experimentId,
           command,
           toolCallId: ctx.toolCallId,
           projectRoot: ctx.projectRoot,
           abortSignal: ctx.abortSignal,
+          artifacts,
+          notes: str(args, "notes") || undefined,
+          kind: str(args, "kind") || undefined,
+          interpreter: str(args, "interpreter") || undefined,
+          pythonPath: str(args, "pythonPath") || undefined,
         });
       },
     },

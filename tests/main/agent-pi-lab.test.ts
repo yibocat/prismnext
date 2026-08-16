@@ -4,8 +4,12 @@ import {
   PI_LAB_TAB_ID,
 } from "../../src/shared/pi-lab";
 import {
+  HOST_SYSTEM_IDENTITY,
+  PI_DEFAULT_CODING_IDENTITY,
   buildPiLabSystemPrompt,
   buildPiLabUserText,
+  createPiLabExperimentRunner,
+  createPiLabNativeTools,
   createPiLabService,
   resolvePiLabAuth,
 } from "../../src/main/agent/pi-lab-service";
@@ -79,6 +83,114 @@ describe("pi lab auth and prompt assembly", () => {
       projectRules: "Always cite bibkeys.",
     })).toBe("Always cite bibkeys.\n\nSearch local papers about transformers.");
   });
+
+  it("never hands Pi an empty prompt that would restore the coding-agent template", () => {
+    const empty = buildPiLabSystemPrompt({ stableSystem: "  ", agentsMd: "" });
+    expect(empty.trim().length).toBeGreaterThan(0);
+    expect(empty).toContain(HOST_SYSTEM_IDENTITY);
+    expect(empty).not.toContain(PI_DEFAULT_CODING_IDENTITY);
+    // Pi's buildSystemPrompt uses `if (customPrompt)` — empty string falls
+    // through to "You are an expert coding assistant operating inside pi".
+    expect(Boolean(empty)).toBe(true);
+  });
+});
+
+describe("pi lab native tools", () => {
+  it("runs experiment-run through the injected executor instead of a lab stub", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const tools = createPiLabNativeTools({
+      runExperiment: async (input) => {
+        calls.push(input);
+        return { ok: true, started: true };
+      },
+    });
+    const experiment = tools.find((tool) => tool.name === "experiment-run");
+    expect(experiment).toBeTruthy();
+    const result = await experiment!.execute({
+      id: "exp-1",
+      command: "echo hi",
+      artifacts: ["plot.png"],
+      notes: "lab run",
+    }, {
+      runtimeSessionId: "rt-1",
+      tabId: "pi-lab",
+      turnId: "turn-1",
+      toolCallId: "call-1",
+      projectRoot: "/tmp/project",
+      permissionMode: "auto",
+    });
+    expect(result).toEqual({ ok: true, started: true });
+    expect(calls).toEqual([{
+      experimentId: "exp-1",
+      command: "echo hi",
+      toolCallId: "call-1",
+      projectRoot: "/tmp/project",
+      abortSignal: undefined,
+      artifacts: ["plot.png"],
+      notes: "lab run",
+      kind: undefined,
+      interpreter: undefined,
+      pythonPath: undefined,
+    }]);
+  });
+
+  it("maps a missing experiment folder to a structured error and does not kick off", async () => {
+    const kickoffs: unknown[] = [];
+    const run = createPiLabExperimentRunner({
+      resolveCtx: () => ({ ok: false, error: "no_experiment_folder", hint: "create one" }),
+      isCtxError: (ctx) => "ok" in ctx && ctx.ok === false,
+      kickoff: async (args) => {
+        kickoffs.push(args);
+        return { runId: "r1", executionId: "e1" };
+      },
+    });
+    await expect(run({
+      experimentId: "exp-1",
+      command: "echo hi",
+      toolCallId: "call-1",
+      projectRoot: "/tmp/project",
+    })).resolves.toEqual({
+      ok: false,
+      error: "no_experiment_folder",
+      hint: "create one",
+    });
+    expect(kickoffs).toEqual([]);
+  });
+
+  it("kicks off an existing island with the tool args", async () => {
+    const run = createPiLabExperimentRunner({
+      resolveCtx: (projectRoot) => ({
+        projectRoot,
+        registryRoot: `${projectRoot}/.prismnext/experiments`,
+        workspaceRel: "experiment",
+        workspaceAbs: `${projectRoot}/experiment`,
+      }),
+      isCtxError: (ctx) => "ok" in ctx && ctx.ok === false,
+      kickoff: async (args) => {
+        expect(args.id).toBe("exp-1");
+        expect(args.command).toBe("python train.py");
+        expect(args.artifacts).toEqual(["metrics.json"]);
+        expect(args.notes).toBe("from lab");
+        expect(args.kind).toBe("train");
+        expect(args.chatSessionId).toBe("call-1");
+        return { runId: "run-1", executionId: "exec-1" };
+      },
+    });
+    await expect(run({
+      experimentId: "exp-1",
+      command: "python train.py",
+      toolCallId: "call-1",
+      projectRoot: "/tmp/project",
+      artifacts: ["metrics.json"],
+      notes: "from lab",
+      kind: "train",
+    })).resolves.toEqual({
+      ok: true,
+      started: true,
+      runId: "run-1",
+      executionId: "exec-1",
+    });
+  });
 });
 
 describe("pi lab service status", () => {
@@ -104,6 +216,7 @@ describe("pi lab service status", () => {
       "research-brief-update",
       "experiment-run",
     ]);
+    expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createPiLabService({
       userDataDir: "/tmp/prism-pi-lab-test",

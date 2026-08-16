@@ -11,7 +11,7 @@ import {
   wholeDiskSearchBlockMessage,
 } from "../../shared/project-escape-guard";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import { resolvePermissionAction } from "../services/permission-modes";
+import { getPermissionRuleForTool, resolvePermissionAction } from "../services/permission-modes";
 
 export type GateDecision = "allow" | "deny";
 
@@ -162,26 +162,34 @@ export class PermissionGate {
       return { decision: "deny", reason: hard.reason, requestId: request.requestId };
     }
 
-    const action = resolvePermissionAction(
-      request.permissionMode,
-      request.toolName,
-      request.sessionAgent,
-      {
-        filePath: request.filePath,
-        projectRoot: request.projectRoot,
-        bashCommand: request.bashCommand,
-        bashCwd: request.bashCwd,
-        sourcePath: request.sourcePath,
-        destinationPath: request.destinationPath,
-        sessionId: request.runtimeSessionId,
-      },
-    );
-
-    if (action === "allow") {
+    const rule = getPermissionRuleForTool(request.permissionMode, request.toolName);
+    if (rule === "allow") {
       return { decision: "allow", reason: "policy_allow", requestId: request.requestId };
     }
-    if (action === "deny") {
+    if (rule === "deny") {
       return { decision: "deny", reason: "policy_deny", requestId: request.requestId };
+    }
+    if (rule !== "ask") {
+      const action = resolvePermissionAction(
+        request.permissionMode,
+        request.toolName,
+        request.sessionAgent,
+        {
+          filePath: request.filePath,
+          projectRoot: request.projectRoot,
+          bashCommand: request.bashCommand,
+          bashCwd: request.bashCwd,
+          sourcePath: request.sourcePath,
+          destinationPath: request.destinationPath,
+          sessionId: request.runtimeSessionId,
+        },
+      );
+      if (action === "allow") {
+        return { decision: "allow", reason: "policy_allow", requestId: request.requestId };
+      }
+      if (action === "deny") {
+        return { decision: "deny", reason: "policy_deny", requestId: request.requestId };
+      }
     }
 
     this.opts.onPrompt?.(request);

@@ -94,6 +94,44 @@ describe("agent vertical slice", () => {
     }
   });
 
+  it("asks before writing the brief in ask mode and honors a deny", async () => {
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-brief-ask-"));
+    dirs.push(project);
+    ensureResearchBrief(project);
+    const before = readFileSync(join(project, ".brief.md"), "utf-8");
+    const { spike } = setup(project);
+    const session = await spike.runtime.createSession({ tabId: "tab-1", projectRoot: project });
+    spike.runtime.scriptNextTurn(session.runtimeSessionId, [{
+      toolName: "research-brief-update",
+      args: { section: "Research question", content: "Should wait for ask" },
+      toolCallId: "brief-ask",
+    }]);
+    const pending = spike.runtime.sendTurn({
+      runtimeSessionId: session.runtimeSessionId,
+      tabId: "tab-1",
+      text: "update brief",
+      permissionMode: "ask",
+    });
+    const requested = await new Promise<Extract<(typeof spike.events)[number], { type: "permission_requested" }>>((resolve, reject) => {
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const event = spike.events.find((item) => item.type === "permission_requested");
+        if (event?.type === "permission_requested") {
+          clearInterval(timer);
+          resolve(event);
+          return;
+        }
+        if (Date.now() - started > 200) {
+          clearInterval(timer);
+          reject(new Error("permission_requested not emitted"));
+        }
+      }, 5);
+    });
+    expect(spike.gate.resolve(requested.requestId, "deny")).toBe(true);
+    await pending;
+    expect(readFileSync(join(project, ".brief.md"), "utf-8")).toBe(before);
+  });
+
   it("leaves the brief unchanged when an update is denied", async () => {
     const project = mkdtempSync(join(tmpdir(), "prism-agent-brief-"));
     dirs.push(project);

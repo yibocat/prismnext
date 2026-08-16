@@ -89,31 +89,40 @@ export function PiLabSettings() {
         return;
       }
       if (event.type === "tool_started") {
-        setMessages((prev) => [
-          ...prev,
-          {
+        setMessages((prev) => {
+          const next = {
             id: event.toolCallId,
-            role: "tool",
+            role: "tool" as const,
             toolName: event.toolName,
             text: t("settings.lab.toolStarted", { name: event.toolName }),
-          },
-        ]);
+          };
+          return prev.some((item) => item.id === event.toolCallId)
+            ? prev.map((item) => (item.id === event.toolCallId ? next : item))
+            : [...prev, next];
+        });
         return;
       }
       if (event.type === "tool_finished") {
-        setMessages((prev) => prev.map((item) => (
-          item.id === event.toolCallId
-            ? {
-                ...item,
-                ok: event.ok,
-                text: event.denied
-                  ? t("settings.lab.toolDenied", { name: event.toolName })
-                  : event.error
-                    ? t("settings.lab.toolFailed", { name: event.toolName, error: event.error })
-                    : t("settings.lab.toolFinished", { name: event.toolName }),
-              }
-            : item
-        )));
+        const preview = event.result === undefined
+          ? ""
+          : `\n${JSON.stringify(event.result, null, 2).slice(0, 800)}`;
+        setMessages((prev) => {
+          const text = event.denied
+            ? t("settings.lab.toolDenied", { name: event.toolName })
+            : event.error
+              ? t("settings.lab.toolFailed", { name: event.toolName, error: event.error })
+              : `${t("settings.lab.toolFinished", { name: event.toolName })}${preview}`;
+          const next = {
+            id: event.toolCallId,
+            role: "tool" as const,
+            toolName: event.toolName,
+            ok: event.ok,
+            text,
+          };
+          return prev.some((item) => item.id === event.toolCallId)
+            ? prev.map((item) => (item.id === event.toolCallId ? { ...item, ...next } : item))
+            : [...prev, next];
+        });
         return;
       }
       if (event.type === "turn_failed") {
@@ -232,6 +241,8 @@ export function PiLabSettings() {
             <span>{modelLabel}</span>
             <span>·</span>
             <span>{reasonLabel(status?.ready ? undefined : status?.reason, t)}</span>
+            <span>·</span>
+            <span>{t("settings.lab.permissionMode", { mode: status?.permissionMode ?? "edit_auto" })}</span>
           </div>
         </div>
       </div>

@@ -265,6 +265,7 @@ interface PiSessionHandle {
   dispose: () => void;
   subscribe: (listener: (event: PiLikeSessionEvent) => void) => () => void;
   setTurnContext?: (context: PiToolExecutionContext) => void;
+  getSystemPrompt?: () => string | undefined;
 }
 
 export type PiSessionFactory = (opts: {
@@ -344,6 +345,10 @@ export function createPiSdkSessionFactory(
       ),
       setTurnContext: (next: PiToolExecutionContext) => {
         turnContext = next;
+      },
+      getSystemPrompt: () => {
+        const agent = (session as { agent?: { state?: { systemPrompt?: string } } }).agent;
+        return agent?.state?.systemPrompt;
       },
     };
   };
