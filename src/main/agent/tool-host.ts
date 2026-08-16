@@ -1,7 +1,11 @@
 /**
- * Native ToolHost — PermissionGate.decide() always runs before the service.
+ * Native ToolHost — Single host execution layer for PrismNext Pi Agent.
+ *
+ * Enforces PermissionGate.decide() before execution, ensures toolCallId idempotency,
+ * and emits standardized AgentEvents (tool_started / tool_finished).
  */
 
+import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { AgentEvent, AgentToolCallId } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import {
@@ -9,6 +13,9 @@ import {
   type PermissionGate,
   type PermissionGateRequest,
 } from "./permission-gate";
+import type { NativeToolDefinition } from "./tools/types";
+
+export type { NativeToolDefinition } from "./tools/types";
 
 export interface ToolExecuteContext {
   runtimeSessionId: string;
@@ -20,12 +27,6 @@ export interface ToolExecuteContext {
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
   abortSignal?: AbortSignal;
-}
-
-export interface NativeToolDefinition {
-  name: string;
-  description: string;
-  execute: (args: Record<string, unknown>, ctx: ToolExecuteContext) => Promise<unknown>;
 }
 
 export interface ToolExecuteResult {
@@ -53,8 +54,16 @@ export class ToolHost {
     this.tools.set(tool.name, tool);
   }
 
-  registerAll(tools: NativeToolDefinition[]): void {
+  registerAll(tools: readonly NativeToolDefinition[]): void {
     for (const tool of tools) this.register(tool);
+  }
+
+  get(name: string): NativeToolDefinition | undefined {
+    return this.tools.get(name);
+  }
+
+  getAll(): NativeToolDefinition[] {
+    return Array.from(this.tools.values());
   }
 
   has(name: string): boolean {
@@ -67,6 +76,29 @@ export class ToolHost {
 
   forget(toolCallId: string): void {
     this.executed.delete(toolCallId);
+  }
+
+  /** Convert registered native tools into Pi SDK ToolDefinition objects dynamically. */
+  toPiTools(getContext: () => Omit<ToolExecuteContext, "toolCallId" | "abortSignal">): ToolDefinition[] {
+    return Array.from(this.tools.values()).map((tool) =>
+      defineTool({
+        name: tool.name,
+        label: tool.label,
+        description: tool.description,
+        parameters: tool.parameters,
+        execute: async (toolCallId, args, signal) => {
+          const result = await this.execute(tool.name, args as Record<string, unknown>, {
+            ...getContext(),
+            toolCallId,
+            abortSignal: signal,
+          });
+          return {
+            content: [{ type: "text", text: JSON.stringify(result) }],
+            details: result,
+          };
+        },
+      }),
+    );
   }
 
   async execute(
@@ -106,12 +138,11 @@ export class ToolHost {
     });
 
     if (ctx.abortSignal?.aborted) {
-      const finished = this.finish(ctx, toolName, {
+      return this.finish(ctx, toolName, {
         ok: false,
         denied: true,
         error: "cancelled",
       });
-      return finished;
     }
 
     const paths = extractToolPathContext(toolName, args, ctx.projectRoot);

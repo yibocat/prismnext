@@ -3,6 +3,7 @@
  * Services are injected so tests never need Electron or a live catalog.
  */
 
+import { Type } from "@earendil-works/pi-ai";
 import { updateResearchBriefSection } from "../services/research-brief-service";
 import { TOOL_NAMES } from "../../shared/tool-names";
 import type { DiscoverLiteratureInput, DiscoverLiteratureResult } from "../../shared/literature-discovery";
@@ -78,7 +79,15 @@ export function createRepresentativeTools(deps: RepresentativeToolDeps): NativeT
   return [
     {
       name: TOOL_NAMES.literatureSearch,
+      label: "Search Literature",
       description: "Search papers in the project literature library (local only).",
+      parameters: Type.Object({
+        query: Type.Optional(Type.String()),
+        limit: Type.Optional(Type.Number()),
+        tag: Type.Optional(Type.String()),
+        collection: Type.Optional(Type.String()),
+      }),
+      permission: { category: "read_only" },
       async execute(args, ctx: ToolExecuteContext) {
         const query = str(args, "query");
         const limit = typeof args.limit === "number" ? args.limit : 20;
@@ -98,7 +107,16 @@ export function createRepresentativeTools(deps: RepresentativeToolDeps): NativeT
     },
     {
       name: TOOL_NAMES.literatureDiscover,
+      label: "Discover Literature",
       description: "Search external academic catalogs by topic.",
+      parameters: Type.Object({
+        query: Type.String({ minLength: 1 }),
+        sources: Type.Optional(Type.Array(Type.String())),
+        limit: Type.Optional(Type.Number()),
+        year: Type.Optional(Type.String()),
+        author: Type.Optional(Type.String()),
+      }),
+      permission: { category: "read_only" },
       async execute(args) {
         const query = str(args, "query");
         if (!query.trim()) {
@@ -118,7 +136,14 @@ export function createRepresentativeTools(deps: RepresentativeToolDeps): NativeT
     },
     {
       name: TOOL_NAMES.researchBriefUpdate,
+      label: "Update Research Brief",
       description: "Update one section of the project research brief.",
+      parameters: Type.Object({
+        section: Type.String({ minLength: 1 }),
+        content: Type.String({ minLength: 1 }),
+        append: Type.Optional(Type.Boolean()),
+      }),
+      permission: { category: "safe_write", extractPath: () => ".brief.md" },
       async execute(args, ctx) {
         const section = str(args, "section");
         const content = str(args, "content");
@@ -132,7 +157,21 @@ export function createRepresentativeTools(deps: RepresentativeToolDeps): NativeT
     },
     {
       name: TOOL_NAMES.experimentRun,
+      label: "Run Experiment",
       description: "Run a shell command in an experiment island after PermissionGate.",
+      parameters: Type.Object({
+        id: Type.String({ minLength: 1 }),
+        command: Type.String({ minLength: 1 }),
+        artifacts: Type.Optional(Type.Array(Type.String())),
+        notes: Type.Optional(Type.String()),
+        kind: Type.Optional(Type.String()),
+        interpreter: Type.Optional(Type.String()),
+        pythonPath: Type.Optional(Type.String()),
+      }),
+      permission: {
+        category: "shell_exec",
+        extractBash: (args, projectRoot) => ({ command: str(args, "command"), cwd: projectRoot }),
+      },
       async execute(args, ctx) {
         const experimentId = str(args, "id");
         const command = str(args, "command");

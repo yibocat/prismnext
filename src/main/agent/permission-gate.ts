@@ -12,6 +12,7 @@ import {
 } from "../../shared/project-escape-guard";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import { getPermissionRuleForTool, resolvePermissionAction } from "../services/permission-modes";
+import { getNativeToolByName } from "./tools/index";
 
 export type GateDecision = "allow" | "deny";
 
@@ -42,7 +43,7 @@ export interface PermissionGateResult {
 
 export type PermissionPromptHandler = (request: PermissionGateRequest) => void;
 
-const MUTATING_PATH_TOOLS = new Set([
+const FALLBACK_MUTATING_TOOLS = new Set([
   "write",
   "edit",
   "apply_patch",
@@ -68,6 +69,41 @@ export function extractToolPathContext(
   sourcePath?: string | null;
   destinationPath?: string | null;
 } {
+  const tool = getNativeToolByName(toolName);
+  if (tool?.permission) {
+    const result: {
+      filePath?: string | null;
+      bashCommand?: string | null;
+      bashCwd?: string | null;
+      sourcePath?: string | null;
+      destinationPath?: string | null;
+    } = {};
+
+    if (tool.permission.extractPath) {
+      const extracted = tool.permission.extractPath(args, projectRoot);
+      if (typeof extracted === "string") {
+        result.filePath = extracted;
+      } else if (extracted && typeof extracted === "object") {
+        result.filePath = extracted.filePath ?? null;
+        result.sourcePath = extracted.sourcePath ?? null;
+        result.destinationPath = extracted.destinationPath ?? null;
+      }
+    }
+
+    if (tool.permission.extractBash) {
+      const bash = tool.permission.extractBash(args, projectRoot);
+      if (bash) {
+        result.bashCommand = bash.command;
+        result.bashCwd = bash.cwd ?? projectRoot;
+      }
+    }
+
+    if (result.filePath !== undefined || result.bashCommand !== undefined || result.sourcePath !== undefined) {
+      return result;
+    }
+  }
+
+  // Fallback heuristic for ad-hoc or standard tools
   const name = toolName.toLowerCase();
   const str = (key: string): string | null => {
     const v = args[key];
@@ -123,8 +159,13 @@ export function evaluateHardDeny(request: PermissionGateRequest): { deny: true; 
     }
   }
 
+  const tool = getNativeToolByName(request.toolName);
+  const isMutating = tool?.permission
+    ? tool.permission.category === "safe_write" || tool.permission.category === "destructive"
+    : FALLBACK_MUTATING_TOOLS.has(name) || name === "write" || name === "edit";
+
   const pathsToCheck: Array<string | null | undefined> = [];
-  if (MUTATING_PATH_TOOLS.has(name) || name === "write" || name === "edit") {
+  if (isMutating) {
     pathsToCheck.push(request.filePath, request.sourcePath, request.destinationPath);
   }
   for (const p of pathsToCheck) {

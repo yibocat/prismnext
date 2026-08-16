@@ -225,7 +225,7 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
   return dispatchExperimentLog(req, ctx);
 }
 
-function dispatchExperimentLog(
+export function dispatchExperimentLog(
   req: ExperimentLogBridgeRequest,
   ctx: ExperimentStorageContext,
 ): Record<string, unknown> {

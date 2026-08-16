@@ -16,7 +16,7 @@ export {
   assertAgentEvent,
 } from "./events";
 export { ToolHost } from "./tool-host";
-export type { NativeToolDefinition, ToolExecuteContext, ToolExecuteResult } from "./tool-host";
+export type { ToolExecuteContext, ToolExecuteResult } from "./tool-host";
 export { PermissionGate, evaluateHardDeny, extractToolPathContext } from "./permission-gate";
 export type { PermissionGateRequest, PermissionGateResult } from "./permission-gate";
 export { AgentSessionStore, resolvePiAgentRoot, FORBIDDEN_PROJECT_RESOURCE_DIRS } from "./session-store";
@@ -53,12 +53,5 @@ export {
   PI_DEFAULT_CODING_IDENTITY,
 } from "./pi-lab-service";
 export { createRepresentativeTools } from "./representative-tools";
-export { createLiteratureNativeTools } from "./literature-native-tools";
-export { createLatexNativeTools } from "./latex-native-tools";
-export { createResearchBriefNativeTools } from "./research-brief-native-tools";
-export { createExperimentNativeTools } from "./experiment-native-tools";
-export { createInteractionNativeTools } from "./interaction-native-tools";
-export { createImageDescribeNativeTools } from "./image-describe-native-tools";
-export { createShellAndFsNativeTools } from "./shell-and-fs-native-tools";
-export { createInteractiveNativeTools } from "./interactive-native-tools";
+export * from "./tools/index";
 export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";
