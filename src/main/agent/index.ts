@@ -19,7 +19,22 @@ export { ToolHost } from "./tool-host";
 export type { ToolExecuteContext, ToolExecuteResult } from "./tool-host";
 export { PermissionGate, evaluateHardDeny, extractToolPathContext } from "./permission-gate";
 export type { PermissionGateRequest, PermissionGateResult } from "./permission-gate";
-export { AgentSessionStore, resolvePiAgentRoot, FORBIDDEN_PROJECT_RESOURCE_DIRS } from "./session-store";
+export {
+  AgentSessionStore,
+  resolvePiAgentRoot,
+  FORBIDDEN_PROJECT_RESOURCE_DIRS,
+  SESSION_SCHEMA_VERSION,
+} from "./session-store";
+export type {
+  AgentSessionRecord,
+  AgentTurnRecord,
+  AgentToolCallSnapshot,
+  CreateSessionRecordInput,
+  RollbackSessionResult,
+  RestoreRegretResult,
+} from "./session-store";
+export { hydrateSessionRecordToChatMessages, hydrateTurnToChatMessages } from "./session-hydrator";
+export type { HydratedChatMessage, HydratedContentBlock } from "./session-hydrator";
 export { InProcessAgentRuntime, createInProcessSpike } from "./in-process-runtime";
 export type { ScriptedToolCall } from "./in-process-runtime";
 export {
@@ -53,5 +68,7 @@ export {
   PI_DEFAULT_CODING_IDENTITY,
 } from "./pi-lab-service";
 export { createRepresentativeTools } from "./representative-tools";
+export * from "./team-binding";
+export * from "./pi-subsession-runtime";
 export * from "./tools/index";
 export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";

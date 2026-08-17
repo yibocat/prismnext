@@ -33,11 +33,18 @@ export const AGENT_EVENT_UI_SETTING_KEY = "agentEventUi";
 
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 
+export interface SubagentEventContext {
+  parentToolCallId: string;
+  expertFqid: string;
+  expertName: string;
+}
+
 export interface AgentEventBase {
   type: AgentEventType;
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
   turnId: AgentTurnId;
+  subagent?: SubagentEventContext;
 }
 
 export interface SessionCreatedEvent extends AgentEventBase {
@@ -138,6 +145,7 @@ export type AgentEvent =
 export interface CreateSessionInput {
   tabId: AgentTabId;
   projectRoot: string;
+  boundCheckoutPath?: string;
   permissionMode?: PermissionMode;
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];

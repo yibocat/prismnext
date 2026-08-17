@@ -255,4 +255,86 @@ describe("pi lab service status", () => {
     const send = await lab.send({ projectRoot: "", text: "hello" });
     expect(send).toEqual({ ok: false, error: "missing_project" });
   });
+
+  it("reflects team binding in status and system prompt", async () => {
+    const lab = createPiLabService({
+      userDataDir: "/tmp/prism-pi-lab-test",
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable prompt",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+      resolveTeamBinding: (input) => {
+        if (input.sessionTeamId === "disabled-team") {
+          return { ok: false, error: "team_disabled:disabled-team" };
+        }
+        return {
+          ok: true,
+          lead: {
+            teamId: "academic-lead-team",
+            fqid: "academic-lead-team:orchestrator",
+            runtimeName: "academic-lead",
+            name: "Academic Lead",
+            description: "Lead researcher",
+            instructions: "Focus on formal academic tone.",
+            modelRef: { provider: "anthropic", modelId: "claude-3-7-sonnet" },
+          },
+          roster: [
+            {
+              fqid: "academic-lead-team:auditor",
+              name: "Citation Auditor",
+              runtimeName: "auditor",
+              description: "Audit citations",
+              instructions: "Check all bibtex entries",
+              originTeamId: "academic-lead-team",
+              via: "all",
+              available: true,
+              isDelegatable: true,
+              allowedTools: ["literature-search"],
+            },
+          ],
+          availableRoster: [
+            {
+              fqid: "academic-lead-team:auditor",
+              name: "Citation Auditor",
+              runtimeName: "auditor",
+              description: "Audit citations",
+              instructions: "Check all bibtex entries",
+              originTeamId: "academic-lead-team",
+              via: "all",
+              available: true,
+              isDelegatable: true,
+              allowedTools: ["literature-search"],
+            },
+          ],
+        };
+      },
+    });
+
+    const status = lab.status("/tmp/project");
+    expect(status.ready).toBe(true);
+    expect(status.teamId).toBe("academic-lead-team");
+    expect(status.leadName).toBe("Academic Lead");
+    expect(status.leadFqid).toBe("academic-lead-team:orchestrator");
+    expect(status.roster).toHaveLength(1);
+    expect(status.roster?.[0].fqid).toBe("academic-lead-team:auditor");
+
+    const disabledStatus = lab.status("/tmp/project", "disabled-team");
+    expect(disabledStatus.ready).toBe(false);
+    expect(disabledStatus.reason).toBe("team_disabled:disabled-team");
+
+    expect(buildPiLabSystemPrompt({
+      stableSystem: "stable prompt",
+      leadInstructions: "Focus on formal academic tone.",
+      leadName: "Academic Lead",
+    })).toContain("Active Team Lead: Academic Lead");
+    expect(buildPiLabSystemPrompt({
+      stableSystem: "stable prompt",
+      leadInstructions: "Focus on formal academic tone.",
+      leadName: "Academic Lead",
+    })).toContain("Focus on formal academic tone.");
+  });
 });

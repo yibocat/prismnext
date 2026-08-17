@@ -35,6 +35,13 @@ export type PiLabAuthResult =
   | { ok: true; provider: PiLabSupportedProvider; modelId: string; apiKey: string }
   | { ok: false; reason: string };
 
+export interface PiLabRosterEntrySummary {
+  fqid: string;
+  name: string;
+  available: boolean;
+  unavailableReason?: string;
+}
+
 export interface PiLabStatus {
   ready: boolean;
   reason?: string;
@@ -47,6 +54,10 @@ export interface PiLabStatus {
   hasApiKey: boolean;
   projectRoot?: string | null;
   sessionId?: string | null;
+  teamId?: string;
+  leadName?: string;
+  leadFqid?: string;
+  roster?: PiLabRosterEntrySummary[];
   tools: string[];
   permissionMode: PermissionMode;
 }
@@ -54,6 +65,7 @@ export interface PiLabStatus {
 export interface PiLabSendInput {
   projectRoot: string;
   text: string;
+  sessionTeamId?: string;
   provider?: string;
   modelId?: string;
   apiKey?: string;

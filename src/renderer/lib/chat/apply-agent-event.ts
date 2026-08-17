@@ -22,6 +22,9 @@ export function applyAgentEvent(
   sink: AgentEventPaintSink,
   event: AgentEvent,
 ): AgentEventPaintSink {
+  if (event.subagent) {
+    return sink;
+  }
   switch (event.type) {
     case "text_delta":
       return { ...sink, text: sink.text + event.text };

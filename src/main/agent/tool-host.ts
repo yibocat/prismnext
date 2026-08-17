@@ -42,6 +42,7 @@ export type ToolHostEventSink = (event: AgentEvent) => void;
 export class ToolHost {
   private readonly tools = new Map<string, NativeToolDefinition>();
   private readonly executed = new Map<string, Promise<ToolExecuteResult>>();
+  private readonly sinks = new Set<ToolHostEventSink>();
 
   constructor(
     private readonly opts: {
@@ -49,6 +50,18 @@ export class ToolHost {
       onEvent?: ToolHostEventSink;
     },
   ) {}
+
+  addEventSink(sink: ToolHostEventSink): () => void {
+    this.sinks.add(sink);
+    return () => this.sinks.delete(sink);
+  }
+
+  private dispatchEvent(event: AgentEvent): void {
+    this.opts.onEvent?.(event);
+    for (const sink of this.sinks) {
+      sink(event);
+    }
+  }
 
   register(tool: NativeToolDefinition): void {
     this.tools.set(tool.name, tool);
@@ -127,7 +140,7 @@ export class ToolHost {
       return { ok: false, error: `unknown_tool:${toolName}` };
     }
 
-    this.opts.onEvent?.({
+    this.dispatchEvent({
       type: "tool_started",
       runtimeSessionId: ctx.runtimeSessionId,
       tabId: ctx.tabId,
@@ -194,7 +207,7 @@ export class ToolHost {
     toolName: string,
     result: ToolExecuteResult,
   ): ToolExecuteResult {
-    this.opts.onEvent?.({
+    this.dispatchEvent({
       type: "tool_finished",
       runtimeSessionId: ctx.runtimeSessionId,
       tabId: ctx.tabId,

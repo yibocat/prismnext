@@ -12,7 +12,11 @@ import type {
 } from "../../shared/agent-runtime";
 import type { AgentEventListener, AgentRuntime } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
-import type { AgentSessionStore } from "./session-store";
+import type {
+  AgentSessionStore,
+  AgentToolCallSnapshot,
+  AgentTurnRecord,
+} from "./session-store";
 import { ToolHost, type NativeToolDefinition } from "./tool-host";
 import { PermissionGate } from "./permission-gate";
 
@@ -93,7 +97,7 @@ export class InProcessAgentRuntime implements AgentRuntime {
 
   async createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
     const runtimeSessionId = newRuntimeSessionId();
-    const now = new Date().toISOString();
+    const boundCheckoutPath = input.boundCheckoutPath || input.projectRoot;
     this.sessions.set(runtimeSessionId, {
       runtimeSessionId,
       tabId: input.tabId,
@@ -101,15 +105,14 @@ export class InProcessAgentRuntime implements AgentRuntime {
       abort: null,
       cancelled: false,
     });
-    this.opts.store.put({
+    this.opts.store.createSession({
       runtimeSessionId,
       tabId: input.tabId,
       projectRoot: input.projectRoot,
+      boundCheckoutPath,
       backend: "in-process",
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
-      createdAt: now,
-      updatedAt: now,
     });
     return { runtimeSessionId, tabId: input.tabId };
   }
@@ -135,6 +138,12 @@ export class InProcessAgentRuntime implements AgentRuntime {
       for (const listener of this.listeners) listener(event);
     };
 
+    const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
+    const turnIndex = existingRecord?.turns.length ?? 0;
+    const createdAt = Date.now();
+    let assistantText = "";
+    const toolCallSnapshots: AgentToolCallSnapshot[] = [];
+
     try {
       if (abort.signal.aborted || session.cancelled) {
         emit({
@@ -143,6 +152,15 @@ export class InProcessAgentRuntime implements AgentRuntime {
           tabId: session.tabId,
           turnId,
         });
+        this.opts.store.appendTurn(session.runtimeSessionId, {
+          turnIndex,
+          turnId,
+          createdAt,
+          finishedAt: Date.now(),
+          user: { text: input.text },
+          assistant: { text: "", toolCalls: [] },
+          status: "cancelled",
+        });
         return;
       }
 
@@ -150,6 +168,7 @@ export class InProcessAgentRuntime implements AgentRuntime {
       this.scripted.delete(session.runtimeSessionId);
 
       if (calls.length === 0 && input.text.trim()) {
+        assistantText = input.text;
         emit({
           type: "text_delta",
           runtimeSessionId: session.runtimeSessionId,
@@ -167,18 +186,39 @@ export class InProcessAgentRuntime implements AgentRuntime {
             tabId: session.tabId,
             turnId,
           });
+          this.opts.store.appendTurn(session.runtimeSessionId, {
+            turnIndex,
+            turnId,
+            createdAt,
+            finishedAt: Date.now(),
+            user: { text: input.text },
+            assistant: { text: assistantText, toolCalls: toolCallSnapshots },
+            status: "cancelled",
+          });
           return;
         }
-        await this.opts.toolHost.execute(call.toolName, call.args, {
+        const callId = call.toolCallId || `scripted-${turnId}-${index}`;
+        const start = Date.now();
+        const execResult = await this.opts.toolHost.execute(call.toolName, call.args, {
           runtimeSessionId: session.runtimeSessionId,
           tabId: session.tabId,
           turnId,
-          toolCallId: call.toolCallId || `scripted-${turnId}-${index}`,
+          toolCallId: callId,
           projectRoot: session.projectRoot,
           permissionMode: input.permissionMode,
           sessionAgent: input.sessionAgent,
           allowedPaths: input.allowedPaths,
           abortSignal: abort.signal,
+        });
+        toolCallSnapshots.push({
+          toolCallId: callId,
+          toolName: call.toolName,
+          args: call.args,
+          startedAt: start,
+          finishedAt: Date.now(),
+          result: execResult.result,
+          error: execResult.error,
+          denied: execResult.denied,
         });
       }
 
@@ -188,6 +228,15 @@ export class InProcessAgentRuntime implements AgentRuntime {
           runtimeSessionId: session.runtimeSessionId,
           tabId: session.tabId,
           turnId,
+        });
+        this.opts.store.appendTurn(session.runtimeSessionId, {
+          turnIndex,
+          turnId,
+          createdAt,
+          finishedAt: Date.now(),
+          user: { text: input.text },
+          assistant: { text: assistantText, toolCalls: toolCallSnapshots },
+          status: "cancelled",
         });
         return;
       }
@@ -198,6 +247,15 @@ export class InProcessAgentRuntime implements AgentRuntime {
         tabId: session.tabId,
         turnId,
       });
+      this.opts.store.appendTurn(session.runtimeSessionId, {
+        turnIndex,
+        turnId,
+        createdAt,
+        finishedAt: Date.now(),
+        user: { text: input.text },
+        assistant: { text: assistantText, toolCalls: toolCallSnapshots },
+        status: "completed",
+      });
     } catch (err) {
       if (abort.signal.aborted || session.cancelled) {
         emit({
@@ -206,14 +264,34 @@ export class InProcessAgentRuntime implements AgentRuntime {
           tabId: session.tabId,
           turnId,
         });
+        this.opts.store.appendTurn(session.runtimeSessionId, {
+          turnIndex,
+          turnId,
+          createdAt,
+          finishedAt: Date.now(),
+          user: { text: input.text },
+          assistant: { text: assistantText, toolCalls: toolCallSnapshots },
+          status: "cancelled",
+        });
         return;
       }
+      const errorMsg = err instanceof Error ? err.message : String(err);
       emit({
         type: "turn_failed",
         runtimeSessionId: session.runtimeSessionId,
         tabId: session.tabId,
         turnId,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMsg,
+      });
+      this.opts.store.appendTurn(session.runtimeSessionId, {
+        turnIndex,
+        turnId,
+        createdAt,
+        finishedAt: Date.now(),
+        user: { text: input.text },
+        assistant: { text: assistantText, toolCalls: toolCallSnapshots },
+        status: "failed",
+        error: errorMsg,
       });
     } finally {
       input.abortSignal?.removeEventListener("abort", onAbort);
@@ -233,6 +311,6 @@ export class InProcessAgentRuntime implements AgentRuntime {
     await this.cancelTurn(runtimeSessionId);
     this.sessions.delete(runtimeSessionId);
     this.scripted.delete(runtimeSessionId);
-    this.opts.store.delete(runtimeSessionId);
+    // Note: Do not delete session from store; preserve JSON history
   }
 }

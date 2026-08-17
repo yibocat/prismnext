@@ -27,7 +27,11 @@ import type {
 import type { AgentEventListener, AgentRuntime } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import { mapPiSessionEvent, type PiLikeSessionEvent } from "./events";
-import type { AgentSessionStore } from "./session-store";
+import type {
+  AgentSessionStore,
+  AgentToolCallSnapshot,
+  AgentTurnRecord,
+} from "./session-store";
 import { FORBIDDEN_PROJECT_RESOURCE_DIRS } from "./session-store";
 import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
@@ -306,13 +310,31 @@ export function createPiSdkSessionFactory(
   };
 }
 
+interface LiveTurnAccumulator {
+  turnIndex: number;
+  turnId: string;
+  createdAt: number;
+  userText: string;
+  assistantText: string;
+  assistantThinking: string;
+  toolCalls: Map<string, AgentToolCallSnapshot>;
+  usage?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
+}
+
 interface LivePiSession {
   runtimeSessionId: RuntimeSessionId;
   tabId: string;
   projectRoot: string;
+  boundCheckoutPath: string;
   handle: PiSessionHandle;
   unsubscribe: () => void;
   turnId: string;
+  activeTurn: LiveTurnAccumulator | null;
 }
 
 /**
@@ -332,7 +354,13 @@ export class PiSdkRuntime implements AgentRuntime {
       gate: PermissionGate;
       agentDir: string;
     },
-  ) {}
+  ) {
+    if (typeof this.opts.toolHost?.addEventSink === "function") {
+      this.opts.toolHost.addEventSink((event) => {
+        this.emit(event);
+      });
+    }
+  }
 
   subscribe(listener: AgentEventListener): () => void {
     this.listeners.add(listener);
@@ -340,16 +368,129 @@ export class PiSdkRuntime implements AgentRuntime {
   }
 
   private emit(event: AgentEvent): void {
+    this.processTurnAccumulation(event);
     for (const listener of this.listeners) listener(event);
+  }
+
+  private processTurnAccumulation(event: AgentEvent): void {
+    const session = this.sessions.get(event.runtimeSessionId);
+    if (!session || !session.activeTurn) return;
+    const turn = session.activeTurn;
+    if (turn.turnId !== event.turnId) return;
+
+    switch (event.type) {
+      case "text_delta":
+        turn.assistantText += event.text;
+        break;
+      case "thinking_delta":
+        turn.assistantThinking += event.text;
+        break;
+      case "tool_started":
+        turn.toolCalls.set(event.toolCallId, {
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+          startedAt: Date.now(),
+        });
+        break;
+      case "tool_finished": {
+        const existing = turn.toolCalls.get(event.toolCallId);
+        if (existing) {
+          existing.finishedAt = Date.now();
+          existing.result = event.result;
+          existing.error = event.error;
+          existing.denied = event.denied;
+        } else {
+          turn.toolCalls.set(event.toolCallId, {
+            toolCallId: event.toolCallId,
+            toolName: event.toolName,
+            args: {},
+            startedAt: Date.now(),
+            finishedAt: Date.now(),
+            result: event.result,
+            error: event.error,
+            denied: event.denied,
+          });
+        }
+        break;
+      }
+      case "usage_updated":
+        turn.usage = {
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          cacheReadTokens: event.cacheReadTokens,
+          cacheWriteTokens: event.cacheWriteTokens,
+        };
+        break;
+      case "turn_finished": {
+        const record: AgentTurnRecord = {
+          turnIndex: turn.turnIndex,
+          turnId: turn.turnId,
+          createdAt: turn.createdAt,
+          finishedAt: Date.now(),
+          user: { text: turn.userText },
+          assistant: {
+            text: turn.assistantText,
+            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
+            toolCalls: Array.from(turn.toolCalls.values()),
+          },
+          ...(turn.usage ? { usage: turn.usage } : {}),
+          status: "completed",
+        };
+        this.opts.store.appendTurn(session.runtimeSessionId, record);
+        session.activeTurn = null;
+        break;
+      }
+      case "turn_failed": {
+        const record: AgentTurnRecord = {
+          turnIndex: turn.turnIndex,
+          turnId: turn.turnId,
+          createdAt: turn.createdAt,
+          finishedAt: Date.now(),
+          user: { text: turn.userText },
+          assistant: {
+            text: turn.assistantText,
+            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
+            toolCalls: Array.from(turn.toolCalls.values()),
+          },
+          ...(turn.usage ? { usage: turn.usage } : {}),
+          status: "failed",
+          error: event.error,
+        };
+        this.opts.store.appendTurn(session.runtimeSessionId, record);
+        session.activeTurn = null;
+        break;
+      }
+      case "turn_cancelled": {
+        const record: AgentTurnRecord = {
+          turnIndex: turn.turnIndex,
+          turnId: turn.turnId,
+          createdAt: turn.createdAt,
+          finishedAt: Date.now(),
+          user: { text: turn.userText },
+          assistant: {
+            text: turn.assistantText,
+            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
+            toolCalls: Array.from(turn.toolCalls.values()),
+          },
+          ...(turn.usage ? { usage: turn.usage } : {}),
+          status: "cancelled",
+        };
+        this.opts.store.appendTurn(session.runtimeSessionId, record);
+        session.activeTurn = null;
+        break;
+      }
+    }
   }
 
   async createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
     const runtimeSessionId = newRuntimeSessionId();
     const agentDir = join(this.opts.agentDir, runtimeSessionId);
+    const boundCheckoutPath = input.boundCheckoutPath || input.projectRoot;
     const handle = await this.opts.createPiSession({
       runtimeSessionId,
       tabId: input.tabId,
-      cwd: input.projectRoot,
+      cwd: boundCheckoutPath,
       agentDir,
       projectRoot: input.projectRoot,
       permissionMode: input.permissionMode,
@@ -373,20 +514,20 @@ export class PiSdkRuntime implements AgentRuntime {
       runtimeSessionId,
       tabId: input.tabId,
       projectRoot: input.projectRoot,
+      boundCheckoutPath,
       handle,
       unsubscribe,
       turnId,
+      activeTurn: null,
     });
-    const now = new Date().toISOString();
-    this.opts.store.put({
+    this.opts.store.createSession({
       runtimeSessionId,
       tabId: input.tabId,
       projectRoot: input.projectRoot,
+      boundCheckoutPath,
       backend: "pi-sdk",
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
-      createdAt: now,
-      updatedAt: now,
     });
     return { runtimeSessionId, tabId: input.tabId };
   }
@@ -395,7 +536,20 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(input.runtimeSessionId);
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
+
+    const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
+    const turnIndex = existingRecord?.turns.length ?? 0;
     session.turnId = newTurnId();
+    session.activeTurn = {
+      turnIndex,
+      turnId: session.turnId,
+      createdAt: Date.now(),
+      userText: input.text,
+      assistantText: "",
+      assistantThinking: "",
+      toolCalls: new Map(),
+    };
+
     session.handle.setTurnContext?.({
       runtimeSessionId: session.runtimeSessionId,
       tabId: session.tabId,
@@ -438,7 +592,7 @@ export class PiSdkRuntime implements AgentRuntime {
     await session.handle.abort().catch(() => {});
     session.handle.dispose();
     this.sessions.delete(runtimeSessionId);
-    this.opts.store.delete(runtimeSessionId);
+    // Note: Do NOT delete session from store! Session JSON history is preserved.
   }
 }
 

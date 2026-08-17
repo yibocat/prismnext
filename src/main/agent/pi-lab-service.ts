@@ -24,6 +24,17 @@ import { AgentSessionStore, resolvePiAgentRoot } from "./session-store";
 import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
 import {
+  resolveTeamPiBinding,
+  type ResolvedPiLeadConfig,
+  type ResolvedPiRosterEntry,
+  type TeamPiBindingInput,
+  type TeamPiBindingResult,
+} from "./team-binding";
+import {
+  createTaskDelegationTool,
+  PiSubsessionRuntime,
+} from "./pi-subsession-runtime";
+import {
   PI_SDK_PACKAGE,
   PI_SDK_PINNED_VERSION,
   PiSdkRuntime,
@@ -75,8 +86,18 @@ export function resolvePiLabAuth(input: PiLabAuthInput): PiLabAuthResult {
 export function buildPiLabSystemPrompt(input: {
   stableSystem: string;
   agentsMd?: string;
+  leadInstructions?: string;
+  leadName?: string;
 }): string {
-  return [HOST_SYSTEM_IDENTITY, input.stableSystem.trim(), input.agentsMd?.trim()]
+  const leadSection = input.leadInstructions?.trim()
+    ? `## Active Team Lead: ${input.leadName || "Lead"}\n\n${input.leadInstructions.trim()}`
+    : "";
+  return [
+    HOST_SYSTEM_IDENTITY,
+    input.stableSystem.trim(),
+    input.agentsMd?.trim(),
+    leadSection,
+  ]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -174,6 +195,7 @@ export interface PiLabServiceDeps {
   composeStableSystem: (projectRoot: string) => Promise<string>;
   composeProjectRules: (projectRoot: string) => Promise<string>;
   composeAgentsMd: (projectRoot: string) => Promise<string>;
+  resolveTeamBinding?: (input: TeamPiBindingInput) => TeamPiBindingResult;
 }
 
 export class PiLabService {
@@ -187,7 +209,7 @@ export class PiLabService {
 
   constructor(private readonly deps: PiLabServiceDeps) {}
 
-  status(projectRoot?: string | null): PiLabStatus {
+  status(projectRoot?: string | null, sessionTeamId?: string | null): PiLabStatus {
     const settings = this.deps.getSettings();
     const auth = resolvePiLabAuth({ settings: settings as PiLabAuthInput["settings"] });
     const probe = probePiEmbedCompatibility({
@@ -196,15 +218,28 @@ export class PiLabService {
       electronVersion: process.versions.electron ?? "unknown",
     });
     const root = projectRoot?.trim() || this.projectRoot;
+
+    let teamBinding: TeamPiBindingResult | undefined;
+    if (root) {
+      const resolverFn = this.deps.resolveTeamBinding ?? resolveTeamPiBinding;
+      try {
+        teamBinding = resolverFn({ projectRoot: root, sessionTeamId });
+      } catch {
+        // non-fatal in status probing
+      }
+    }
+
     const ready = Boolean(
       probe.canEmbedInElectronMain
       && auth.ok
-      && root,
+      && root
+      && (!teamBinding || teamBinding.ok),
     );
     let reason: string | undefined;
     if (!probe.canEmbedInElectronMain) reason = "electron_node_incompatible";
     else if (!root) reason = "missing_project";
     else if (!auth.ok) reason = auth.reason;
+    else if (teamBinding && !teamBinding.ok) reason = teamBinding.error;
 
     return {
       ready,
@@ -218,6 +253,15 @@ export class PiLabService {
       hasApiKey: auth.ok,
       projectRoot: root ?? null,
       sessionId: this.sessionId,
+      teamId: teamBinding?.lead?.teamId,
+      leadName: teamBinding?.lead?.name,
+      leadFqid: teamBinding?.lead?.fqid,
+      roster: teamBinding?.roster?.map((r) => ({
+        fqid: r.fqid,
+        name: r.name,
+        available: r.available,
+        unavailableReason: r.unavailableReason,
+      })),
       tools: [...LAB_TOOLS],
       permissionMode: permissionModeFromSettings(settings),
     };
@@ -228,10 +272,28 @@ export class PiLabService {
     if (!projectRoot) return { ok: false, error: "missing_project" };
     if (this.sending) return { ok: false, error: "lab_busy" };
 
+    const resolverFn = this.deps.resolveTeamBinding ?? resolveTeamPiBinding;
+    let teamBinding: TeamPiBindingResult | undefined;
+    try {
+      teamBinding = resolverFn({
+        projectRoot,
+        sessionTeamId: input.sessionTeamId,
+      });
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
+    if (teamBinding && !teamBinding.ok) {
+      return { ok: false, error: teamBinding.error || "team_resolution_failed" };
+    }
+
     const settings = this.deps.getSettings();
+    const effectiveProvider = input.provider ?? teamBinding?.lead?.modelRef?.provider;
+    const effectiveModelId = input.modelId ?? teamBinding?.lead?.modelRef?.modelId;
+
     const auth = resolvePiLabAuth({
-      provider: input.provider,
-      modelId: input.modelId,
+      provider: effectiveProvider,
+      modelId: effectiveModelId,
       apiKey: input.apiKey,
       settings: settings as PiLabAuthInput["settings"],
     });
@@ -250,6 +312,8 @@ export class PiLabService {
           modelId: auth.modelId,
           apiKey: auth.apiKey,
           permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
+          lead: teamBinding?.lead,
+          roster: teamBinding?.availableRoster,
         });
       }
 
@@ -312,9 +376,11 @@ export class PiLabService {
     modelId: string;
     apiKey: string;
     permissionMode: PermissionMode;
+    lead?: ResolvedPiLeadConfig;
+    roster?: ResolvedPiRosterEntry[];
   }): Promise<void> {
     const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
-    const store = new AgentSessionStore(join(agentRoot, "lab"));
+    const store = new AgentSessionStore(agentRoot);
     const gate = new PermissionGate({
       timeoutMs: 120_000,
       onPrompt: (request) => {
@@ -337,9 +403,25 @@ export class PiLabService {
     });
     toolHost.registerAll(createPiLabNativeTools());
 
+    // Register dynamic task tool if team has a valid roster
+    if (input.roster && input.roster.length > 0) {
+      const subsessionRuntime = new PiSubsessionRuntime({
+        allTools: ALL_NATIVE_TOOLS,
+        gate,
+        onEvent: (event) => this.sink?.(event),
+      });
+      const taskTool = createTaskDelegationTool({
+        subsessionRuntime,
+        roster: input.roster,
+      });
+      toolHost.register(taskTool);
+    }
+
     const systemPrompt = buildPiLabSystemPrompt({
       stableSystem: await this.deps.composeStableSystem(input.projectRoot),
       agentsMd: await this.deps.composeAgentsMd(input.projectRoot),
+      leadInstructions: input.lead?.instructions,
+      leadName: input.lead?.name,
     });
     const runtime = new PiSdkRuntime({
       createPiSession: createPiSdkSessionFactory({
