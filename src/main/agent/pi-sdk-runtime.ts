@@ -1,7 +1,5 @@
 /**
- * Controlled Pi SDK adapter.
- *
- * Production chat must not import this as the default backend.
+ * Pi SDK adapter for the product Agent host.
  * Electron 43 embeds Node 24.18, which meets Pi's Node >= 22.19.0 requirement.
  */
 
@@ -37,6 +35,10 @@ import { FORBIDDEN_PROJECT_RESOURCE_DIRS } from "./session-store";
 import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
 import type { PermissionGate } from "./permission-gate";
+import { isPiPrimitiveToolName } from "./capability-matrix";
+import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
+import type { InteractionBroker } from "./interaction-broker";
+import { PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 
 export const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
 export const PI_AI_PACKAGE = "@earendil-works/pi-ai";
@@ -168,7 +170,7 @@ export function closedPiSessionOptions(input: {
 }): {
   cwd: string;
   agentDir: string;
-  noTools: "builtin";
+  primitiveTools: readonly string[];
   resourceLoader: ClosedResourceLoader;
   settingsManagerMode: "inMemory";
   sessionManagerMode: "inMemory";
@@ -178,7 +180,7 @@ export function closedPiSessionOptions(input: {
   return {
     cwd: input.cwd,
     agentDir: input.agentDir,
-    noTools: "builtin",
+    primitiveTools: PI_PRIMITIVE_TOOL_NAMES,
     resourceLoader: new ClosedResourceLoader(input.systemPrompt),
     settingsManagerMode: "inMemory",
     sessionManagerMode: "inMemory",
@@ -195,17 +197,18 @@ export type PiToolExecutionContext = Omit<
 >;
 
 /**
- * Maps host NativeToolDefinition entries into Pi ToolDefinition objects.
- * Pi's built-in file and shell tools remain disabled; every call routes to ToolHost.
+ * Maps host research / interactive tools into Pi ToolDefinition objects.
+ * File and shell primitives are registered separately from Pi's own factories.
  */
 export function createPiNativeTools(input: {
   toolHost: Pick<ToolHost, "execute"> & { toPiTools?: (getContext: () => PiToolExecutionContext) => ToolDefinition[] };
   getContext: () => PiToolExecutionContext;
 }): ToolDefinition[] {
   if (typeof (input.toolHost as ToolHost).toPiTools === "function") {
-    return (input.toolHost as ToolHost).toPiTools(input.getContext);
+    return (input.toolHost as ToolHost).toPiTools(input.getContext)
+      .filter((tool) => !isPiPrimitiveToolName(tool.name));
   }
-  return ALL_NATIVE_TOOLS.map((tool) =>
+  return ALL_NATIVE_TOOLS.filter((tool) => !isPiPrimitiveToolName(tool.name)).map((tool) =>
     defineTool({
       name: tool.name,
       label: tool.label,
@@ -232,6 +235,8 @@ export interface PiSdkSessionFactoryInput {
   apiKey?: string;
   systemPrompt: string;
   toolHost: Pick<ToolHost, "execute">;
+  gate: PermissionGate;
+  interactions?: InteractionBroker;
 }
 
 interface PiSessionHandle {
@@ -286,6 +291,7 @@ export function createPiSdkSessionFactory(
       throw new Error(`unknown_pi_model:${input.providerId}/${input.modelId}`);
     }
 
+    const getContext = (): PiToolExecutionContext => turnContext;
     let turnContext: PiToolExecutionContext = {
       runtimeSessionId: opts.runtimeSessionId,
       tabId: opts.tabId,
@@ -294,11 +300,37 @@ export function createPiSdkSessionFactory(
       permissionMode: opts.permissionMode ?? "edit_auto",
       sessionAgent: opts.sessionAgent,
       allowedPaths: opts.allowedPaths,
+      askUser: input.interactions
+        ? (question) => input.interactions!.askQuestion({
+            requestId: `q-${turnContext.turnId}-${Date.now().toString(36)}`,
+            runtimeSessionId: turnContext.runtimeSessionId,
+            tabId: turnContext.tabId,
+            turnId: turnContext.turnId,
+            prompt: question.prompt,
+            options: question.options,
+            multiSelect: question.multiSelect,
+          })
+        : undefined,
+      suggestPlan: input.interactions
+        ? (plan) => input.interactions!.suggestPlan({
+            requestId: `plan-${turnContext.turnId}-${Date.now().toString(36)}`,
+            runtimeSessionId: turnContext.runtimeSessionId,
+            tabId: turnContext.tabId,
+            turnId: turnContext.turnId,
+            reason: plan.reason,
+          })
+        : undefined,
     };
-    const customTools = createPiNativeTools({
+    const hostTools = createPiNativeTools({
       toolHost: input.toolHost,
-      getContext: () => turnContext,
+      getContext,
     });
+    const primitiveTools = wrapPiPrimitiveTools({
+      cwd: opts.cwd,
+      gate: input.gate,
+      getContext,
+    });
+    const customTools = [...primitiveTools, ...hostTools];
     const resourceLoader = new ClosedResourceLoader(input.systemPrompt);
     const sessionManager = createPiSessionManager(opts.cwd, opts.persist);
     const { session } = await createAgentSession({
@@ -324,7 +356,11 @@ export function createPiSdkSessionFactory(
         session.subscribe((event) => listener(event as PiLikeSessionEvent))
       ),
       setTurnContext: (next: PiToolExecutionContext) => {
-        turnContext = next;
+        turnContext = {
+          ...next,
+          askUser: next.askUser ?? turnContext.askUser,
+          suggestPlan: next.suggestPlan ?? turnContext.suggestPlan,
+        };
       },
       getSystemPrompt: () => {
         const agent = (session as { agent?: { state?: { systemPrompt?: string } } }).agent;

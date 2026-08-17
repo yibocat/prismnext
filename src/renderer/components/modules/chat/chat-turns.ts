@@ -141,11 +141,9 @@ export interface TurnUserPreview {
   hasAttachments: boolean;
 }
 
-export function extractTurnUserPreview(
-  userMessage: ChatStreamMessage | null | undefined,
+export function extractTurnUserPreviewFromBlocks(
+  allBlocks: ContentBlock[],
 ): TurnUserPreview {
-  if (!userMessage) return { text: "", hasAttachments: false };
-  const allBlocks = contentBlocks(userMessage.message?.content);
   const inlineParts: ComposerPart[] = [];
   let hasAttachments = false;
   for (const b of allBlocks) {
@@ -177,4 +175,11 @@ export function extractTurnUserPreview(
         .map((b) => b.text)
         .join("\n");
   return { text: text ?? "", hasAttachments };
+}
+
+export function extractTurnUserPreview(
+  userMessage: ChatStreamMessage | null | undefined,
+): TurnUserPreview {
+  if (!userMessage) return { text: "", hasAttachments: false };
+  return extractTurnUserPreviewFromBlocks(contentBlocks(userMessage.message?.content));
 }

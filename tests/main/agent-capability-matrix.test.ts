@@ -1,36 +1,31 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUILTIN_TOOLS } from "../../src/main/tools/index";
+import { ALL_NATIVE_TOOLS } from "../../src/main/agent/tools/index";
 import {
-  BUILTIN_TOOL_CAPABILITIES,
-  OPENCODE_BUILTIN_REBUILD,
+  HOST_CUSTOM_TOOL_CAPABILITIES,
+  PI_PRIMITIVE_TOOL_NAMES,
+  PI_PRIMITIVE_TOOLS,
+  isPiPrimitiveToolName,
 } from "../../src/main/agent/capability-matrix";
-import { ALL_TOOL_NAMES } from "../../src/shared/tool-names";
 import { AGENT_EVENT_TYPES } from "../../src/shared/agent-runtime";
 
 const REPO = join(__dirname, "../..");
 
 describe("agent capability baseline", () => {
-  it("freezes exactly 29 built-in tools", () => {
-    expect(BUILTIN_TOOLS).toHaveLength(29);
-    expect(ALL_TOOL_NAMES).toHaveLength(29);
-    expect(BUILTIN_TOOL_CAPABILITIES).toHaveLength(29);
-  });
-
-  it("covers every built-in tool name exactly once", () => {
-    const fromRegistry = new Set(BUILTIN_TOOLS.map((tool) => tool.name));
-    const fromMatrix = new Set(BUILTIN_TOOL_CAPABILITIES.map((row) => row.name));
-    expect(fromMatrix).toEqual(fromRegistry);
-    expect(fromMatrix.size).toBe(29);
-  });
-
-  it("keeps OpenCode builtins on a separate rebuild list", () => {
-    const builtin = new Set(BUILTIN_TOOLS.map((tool) => tool.name));
-    for (const row of OPENCODE_BUILTIN_REBUILD) {
-      expect(builtin.has(row.name)).toBe(false);
-      expect(row.kind).toBe("opencode_builtin_rebuild");
+  it("keeps Pi primitives out of the host custom catalog", () => {
+    expect(PI_PRIMITIVE_TOOLS).toHaveLength(PI_PRIMITIVE_TOOL_NAMES.length);
+    for (const name of PI_PRIMITIVE_TOOL_NAMES) {
+      expect(isPiPrimitiveToolName(name)).toBe(true);
+      expect(ALL_NATIVE_TOOLS.some((tool) => tool.name === name)).toBe(false);
     }
+  });
+
+  it("covers every host custom tool name exactly once", () => {
+    const fromRegistry = new Set(ALL_NATIVE_TOOLS.map((tool) => tool.name));
+    const fromMatrix = new Set(HOST_CUSTOM_TOOL_CAPABILITIES.map((row) => row.name));
+    expect(fromMatrix).toEqual(fromRegistry);
+    expect(fromMatrix.size).toBe(ALL_NATIVE_TOOLS.length);
   });
 
   it("does not expose ACP part or OpenCode Task types on AgentEvent", () => {

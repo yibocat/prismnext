@@ -57,12 +57,20 @@ export interface AgentStatus {
   permissionMode: PermissionMode;
 }
 
+export interface AgentSendAttachment {
+  name: string;
+  kind: "image" | "file";
+  path: string;
+}
+
 export interface AgentSendInput {
   conversationId: string;
-  tabId: string;
+  /** UI window id. Defaults to conversationId. Not a product primary key. */
+  tabId?: string;
   turnId: string;
   projectRoot: string;
   text: string;
+  attachments?: AgentSendAttachment[];
   sessionTeamId?: string;
   provider?: string;
   modelId?: string;
@@ -100,6 +108,21 @@ export interface AgentLoadSessionResult {
 export interface AgentRenameSessionInput {
   conversationId: string;
   title: string;
+}
+
+export interface AgentDeleteSessionInput {
+  conversationId: string;
+}
+
+export interface AgentAnswerQuestionInput {
+  requestId: string;
+  answer?: string;
+  selected?: string[];
+}
+
+export interface AgentResolvePlanSuggestInput {
+  requestId: string;
+  decision: "accept" | "dismiss";
 }
 
 export type AgentRendererEvent = AgentEvent;

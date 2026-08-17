@@ -1,8 +1,7 @@
 /**
  * Unified Native Tool Catalog for PrismNext Pi Agent Host.
  *
- * Exactly 29 built-in native tools covering all research, LaTeX, experiment,
- * interaction, system, and interactive capabilities.
+ * Host research / interactive tools. File and shell primitives come from Pi.
  */
 
 export * from "./types";

@@ -16,15 +16,19 @@ export { emptyConversation };
 
 export function beginConversationTurn(
   conv: Conversation,
-  input: { turnId: string; userText: string },
+  input: { turnId: string; userText?: string; userBlocks?: ContentBlock[] },
 ): Conversation {
+  const userBlocks = input.userBlocks?.length
+    ? input.userBlocks
+    : [{ type: "text" as const, text: input.userText ?? "" }];
   return {
     ...conv,
     pendingQuestion: null,
+    pendingPlanSuggest: null,
     live: {
       turnId: input.turnId,
       turnIndex: conv.turns.length,
-      user: { blocks: [{ type: "text", text: input.userText }] },
+      user: { blocks: userBlocks },
       assistant: { blocks: [] },
       status: "streaming",
     },
@@ -52,6 +56,14 @@ export function applyConversationEvent(
     case "prepare_phase":
     case "permission_requested":
       return marked;
+    case "plan_suggested":
+      return {
+        ...marked,
+        pendingPlanSuggest: {
+          requestId: event.requestId,
+          reason: event.reason,
+        },
+      };
     case "question_requested":
       return {
         ...marked,
@@ -214,5 +226,6 @@ function commitLive(
     turns: [...conv.turns, turn],
     live: null,
     pendingQuestion: null,
+    pendingPlanSuggest: null,
   };
 }

@@ -97,30 +97,9 @@ describe("chat-store session loading", () => {
     expect(loaded?.legacyReadOnly).toBe(false);
     expect(loaded?.conversation.conversationId).toBe("conv-1");
     expect(loaded?.title).toBe("Hello");
-    expect(useChatStore.getState().messages).toEqual([
-      { type: "user", message: { content: [{ type: "text", text: "Hello" }] } },
-      {
-        type: "assistant",
-        message: {
-          content: [
-            {
-              type: "tool_use",
-              id: "call-1",
-              name: "read",
-              input: { file_path: "paper/main.tex" },
-              status: "completed",
-            },
-            {
-              type: "tool_result",
-              tool_use_id: "call-1",
-              name: "read",
-              content: "",
-              is_error: false,
-              status: "completed",
-            },
-          ],
-        },
-      },
+    expect(loaded?.conversation.turns).toHaveLength(1);
+    expect(loaded?.conversation.turns[0]?.user.blocks).toEqual([
+      { type: "text", text: "Hello" },
     ]);
   });
 
@@ -153,7 +132,8 @@ describe("chat-store session loading", () => {
     await loadPromise;
 
     expect(useChatStore.getState().isLoadingSession).toBe(false);
-    expect(useChatStore.getState().messages.length).toBeGreaterThan(0);
+    const loaded = useChatStore.getState().tabs.find((tab) => tab.id === "conv-loading");
+    expect(loaded?.conversation.turns.length).toBeGreaterThan(0);
   });
 
   it("activates an already-open conversation without reloading it", async () => {

@@ -352,7 +352,6 @@ export const projectRuleWriteTool: NativeToolDefinition = {
 
 export const SYSTEM_TOOLS: NativeToolDefinition[] = [
   imageDescribeTool,
-  bashTool,
   deleteTool,
   moveTool,
   projectRuleWriteTool,

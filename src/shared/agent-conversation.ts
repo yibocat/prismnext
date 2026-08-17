@@ -88,6 +88,11 @@ export interface PendingQuestion {
   options?: string[];
 }
 
+export interface PendingPlanSuggest {
+  requestId: string;
+  reason: string;
+}
+
 export interface Conversation {
   conversationId: ConversationId;
   title: string;
@@ -95,6 +100,7 @@ export interface Conversation {
   live: LiveTurn | null;
   usage: ConversationUsage | null;
   pendingQuestion: PendingQuestion | null;
+  pendingPlanSuggest: PendingPlanSuggest | null;
   appliedEventIds: string[];
 }
 
@@ -126,6 +132,7 @@ export function emptyConversation(input: {
     live: null,
     usage: null,
     pendingQuestion: null,
+    pendingPlanSuggest: null,
     appliedEventIds: [],
   };
 }

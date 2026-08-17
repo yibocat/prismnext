@@ -3,7 +3,7 @@ import {
   ChatStreamDeltaTracker,
   broadcastChatStream,
   mapChatStreamToAgentEvent,
-} from "../../src/main/agent/events";
+} from "../../src/main/acp/chat-stream-map";
 
 const ctx = {
   runtimeSessionId: "ses-1",

@@ -1,14 +1,14 @@
 /**
- * Frozen capability matrix for the 29 BUILTIN_TOOLS.
- * Do not invent a "34 tools" count — OpenCode builtins are a separate rebuild list.
+ * Tool ownership for the Pi host.
+ * Pi primitives stay Pi's. Host research / interactive tools are customTools.
  */
 
 import { TOOL_NAMES } from "../../shared/tool-names";
 
 export type ToolCapabilityKind =
-  | "reuse_main_service"
-  | "reimplement_in_tool_host"
-  | "opencode_builtin_rebuild";
+  | "pi_primitive"
+  | "host_research"
+  | "host_interactive";
 
 export interface ToolCapability {
   name: string;
@@ -16,74 +16,78 @@ export interface ToolCapability {
   notes: string;
 }
 
-/** PrismNext custom tools that already have a Main-process service. */
-export const REUSE_MAIN_SERVICE_TOOLS: readonly ToolCapability[] = [
-  { name: TOOL_NAMES.literatureSearch, kind: "reuse_main_service", notes: "literature-service.searchPapers" },
-  { name: TOOL_NAMES.literatureDiscover, kind: "reuse_main_service", notes: "literature-discovery.discoverLiterature" },
-  { name: TOOL_NAMES.literatureStage, kind: "reuse_main_service", notes: "literature-bridge / enrich" },
-  { name: TOOL_NAMES.literatureAdd, kind: "reuse_main_service", notes: "literature-service create/enrich" },
-  { name: TOOL_NAMES.literatureDelete, kind: "reuse_main_service", notes: "literature-service delete" },
-  { name: TOOL_NAMES.literatureRead, kind: "reuse_main_service", notes: "literature-service + extracts" },
-  { name: TOOL_NAMES.literatureReadPdf, kind: "reuse_main_service", notes: "literature-pdf-resolve" },
-  { name: TOOL_NAMES.literatureIntensiveReading, kind: "reuse_main_service", notes: "literature intensive pipeline" },
-  { name: TOOL_NAMES.citationHealth, kind: "reuse_main_service", notes: "citation health service" },
-  { name: TOOL_NAMES.literatureExportBib, kind: "reuse_main_service", notes: "bibliography export" },
-  { name: TOOL_NAMES.latexRoot, kind: "reuse_main_service", notes: "latex-service root resolve" },
-  { name: TOOL_NAMES.latexCompile, kind: "reuse_main_service", notes: "compiler.ts under .prismnext/compile" },
-  { name: TOOL_NAMES.researchBriefRead, kind: "reuse_main_service", notes: "research-brief-service.read" },
-  { name: TOOL_NAMES.researchBriefUpdate, kind: "reuse_main_service", notes: "research-brief-service.update" },
-  { name: TOOL_NAMES.projectRuleWrite, kind: "reuse_main_service", notes: "project-rules writer" },
-  { name: TOOL_NAMES.experimentLog, kind: "reuse_main_service", notes: "experiment-log-service" },
-  { name: TOOL_NAMES.experimentRun, kind: "reuse_main_service", notes: "experiment-run-executor + PTY" },
-  { name: TOOL_NAMES.resultsSnapshot, kind: "reuse_main_service", notes: "experiment-results-snapshot" },
-  { name: TOOL_NAMES.provenanceQuery, kind: "reuse_main_service", notes: "provenance-service" },
-  { name: TOOL_NAMES.interactionList, kind: "reuse_main_service", notes: "interaction store" },
-  { name: TOOL_NAMES.interactionRead, kind: "reuse_main_service", notes: "interaction store" },
-  { name: TOOL_NAMES.interactionWrite, kind: "reuse_main_service", notes: "interaction store" },
-  { name: TOOL_NAMES.interactionOpen, kind: "reuse_main_service", notes: "interaction UI focus" },
-  { name: TOOL_NAMES.imageDescribe, kind: "reuse_main_service", notes: "vision helper model" },
+export const PI_PRIMITIVE_TOOL_NAMES = [
+  "read",
+  "bash",
+  "edit",
+  "write",
+  "grep",
+  "find",
+  "ls",
+] as const;
+
+export type PiPrimitiveToolName = (typeof PI_PRIMITIVE_TOOL_NAMES)[number];
+
+export function isPiPrimitiveToolName(name: string): name is PiPrimitiveToolName {
+  return (PI_PRIMITIVE_TOOL_NAMES as readonly string[]).includes(name);
+}
+
+export const PI_PRIMITIVE_TOOLS: readonly ToolCapability[] = [
+  { name: "read", kind: "pi_primitive", notes: "Pi createReadTool; PermissionGate wraps execute" },
+  { name: "bash", kind: "pi_primitive", notes: "Pi createBashTool; hard-deny + Ask wrap execute" },
+  { name: "edit", kind: "pi_primitive", notes: "Pi createEditTool; PermissionGate wraps execute" },
+  { name: "write", kind: "pi_primitive", notes: "Pi createWriteTool; PermissionGate wraps execute" },
+  { name: "grep", kind: "pi_primitive", notes: "Pi createGrepTool" },
+  { name: "find", kind: "pi_primitive", notes: "Pi createFindTool" },
+  { name: "ls", kind: "pi_primitive", notes: "Pi createLsTool" },
 ];
 
-/**
- * Custom tools that today poll a disk bridge from an OpenCode plugin.
- * ToolHost must call Main services / UI roundtrips directly.
- */
-export const REIMPLEMENT_IN_TOOL_HOST: readonly ToolCapability[] = [
-  { name: TOOL_NAMES.question, kind: "reimplement_in_tool_host", notes: "UI question roundtrip; no disk poll" },
-  { name: TOOL_NAMES.bash, kind: "reimplement_in_tool_host", notes: "ai-pty / ai-bash-runner after PermissionGate" },
-  { name: TOOL_NAMES.delete, kind: "reimplement_in_tool_host", notes: "fs delete after PermissionGate" },
-  { name: TOOL_NAMES.move, kind: "reimplement_in_tool_host", notes: "fs move after PermissionGate" },
-  { name: TOOL_NAMES.suggestPlan, kind: "reimplement_in_tool_host", notes: "Plan consent strip; no OpenCode Task" },
+export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
+  { name: TOOL_NAMES.literatureSearch, kind: "host_research", notes: "literature-service.searchPapers" },
+  { name: TOOL_NAMES.literatureDiscover, kind: "host_research", notes: "literature-discovery.discoverLiterature" },
+  { name: TOOL_NAMES.literatureStage, kind: "host_research", notes: "literature-bridge / enrich" },
+  { name: TOOL_NAMES.literatureAdd, kind: "host_research", notes: "literature-service create/enrich" },
+  { name: TOOL_NAMES.literatureDelete, kind: "host_research", notes: "literature-service delete" },
+  { name: TOOL_NAMES.literatureRead, kind: "host_research", notes: "literature-service + extracts" },
+  { name: TOOL_NAMES.literatureReadPdf, kind: "host_research", notes: "literature-pdf-resolve" },
+  { name: TOOL_NAMES.literatureIntensiveReading, kind: "host_research", notes: "literature intensive pipeline" },
+  { name: TOOL_NAMES.citationHealth, kind: "host_research", notes: "citation health service" },
+  { name: TOOL_NAMES.literatureExportBib, kind: "host_research", notes: "bibliography export" },
+  { name: TOOL_NAMES.latexRoot, kind: "host_research", notes: "latex-service root resolve" },
+  { name: TOOL_NAMES.latexCompile, kind: "host_research", notes: "compiler.ts under .prismnext/compile" },
+  { name: TOOL_NAMES.researchBriefRead, kind: "host_research", notes: "research-brief-service.read" },
+  { name: TOOL_NAMES.researchBriefUpdate, kind: "host_research", notes: "research-brief-service.update" },
+  { name: TOOL_NAMES.projectRuleWrite, kind: "host_research", notes: "project-rules writer" },
+  { name: TOOL_NAMES.experimentLog, kind: "host_research", notes: "experiment-log-service" },
+  { name: TOOL_NAMES.experimentRun, kind: "host_research", notes: "experiment-run-executor + PTY" },
+  { name: TOOL_NAMES.resultsSnapshot, kind: "host_research", notes: "experiment-results-snapshot" },
+  { name: TOOL_NAMES.provenanceQuery, kind: "host_research", notes: "provenance-service" },
+  { name: TOOL_NAMES.interactionList, kind: "host_research", notes: "interaction store" },
+  { name: TOOL_NAMES.interactionRead, kind: "host_research", notes: "interaction store" },
+  { name: TOOL_NAMES.interactionWrite, kind: "host_research", notes: "interaction store" },
+  { name: TOOL_NAMES.interactionOpen, kind: "host_research", notes: "interaction UI focus" },
+  { name: TOOL_NAMES.imageDescribe, kind: "host_research", notes: "vision helper model" },
+  { name: TOOL_NAMES.delete, kind: "host_research", notes: "host fs delete after PermissionGate" },
+  { name: TOOL_NAMES.move, kind: "host_research", notes: "host fs move after PermissionGate" },
 ];
 
-/** Accurate BUILTIN_TOOLS matrix — must stay length 29. */
-export const BUILTIN_TOOL_CAPABILITIES: readonly ToolCapability[] = [
-  ...REIMPLEMENT_IN_TOOL_HOST,
-  ...REUSE_MAIN_SERVICE_TOOLS,
+export const HOST_INTERACTIVE_TOOLS: readonly ToolCapability[] = [
+  { name: TOOL_NAMES.question, kind: "host_interactive", notes: "InteractionBroker hang + question_requested" },
+  { name: TOOL_NAMES.suggestPlan, kind: "host_interactive", notes: "InteractionBroker hang + plan_suggested" },
 ];
 
-/**
- * OpenCode-hosted builtins that are not in BUILTIN_TOOLS.
- * Rebuild on ToolHost later; not a Spike target.
- */
-export const OPENCODE_BUILTIN_REBUILD: readonly ToolCapability[] = [
-  { name: "read", kind: "opencode_builtin_rebuild", notes: "project-scoped file read" },
-  { name: "write", kind: "opencode_builtin_rebuild", notes: "must go through PermissionGate" },
-  { name: "edit", kind: "opencode_builtin_rebuild", notes: "must go through PermissionGate" },
-  { name: "apply_patch", kind: "opencode_builtin_rebuild", notes: "must go through PermissionGate" },
-  { name: "grep", kind: "opencode_builtin_rebuild", notes: "in-project search" },
-  { name: "glob", kind: "opencode_builtin_rebuild", notes: "in-project glob" },
-  { name: "webfetch", kind: "opencode_builtin_rebuild", notes: "network fetch" },
-  { name: "websearch", kind: "opencode_builtin_rebuild", notes: "network search" },
-  { name: "task", kind: "opencode_builtin_rebuild", notes: "do not copy; Teams becomes SubagentRuntime" },
-  { name: "skill", kind: "opencode_builtin_rebuild", notes: "PrismNext skills under .prismnext/agent/skills" },
-  { name: "todowrite", kind: "opencode_builtin_rebuild", notes: "optional later" },
+export const HOST_CUSTOM_TOOL_CAPABILITIES: readonly ToolCapability[] = [
+  ...HOST_RESEARCH_TOOLS,
+  ...HOST_INTERACTIVE_TOOLS,
 ];
+
+/** @deprecated Use HOST_CUSTOM_TOOL_CAPABILITIES. Kept as an alias for existing imports. */
+export const BUILTIN_TOOL_CAPABILITIES = HOST_CUSTOM_TOOL_CAPABILITIES;
 
 export function capabilityForTool(name: string): ToolCapability | undefined {
   const key = name.toLowerCase();
   return (
-    BUILTIN_TOOL_CAPABILITIES.find((row) => row.name === key)
-    ?? OPENCODE_BUILTIN_REBUILD.find((row) => row.name === key)
+    PI_PRIMITIVE_TOOLS.find((row) => row.name === key)
+    ?? HOST_CUSTOM_TOOL_CAPABILITIES.find((row) => row.name === key)
   );
 }

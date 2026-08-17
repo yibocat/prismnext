@@ -1675,6 +1675,15 @@ export interface ElectronAPI {
   agentRenameSession: (
     args: import("../../shared/agent-api").AgentRenameSessionInput,
   ) => Promise<{ ok: boolean }>;
+  agentDeleteSession: (
+    args: import("../../shared/agent-api").AgentDeleteSessionInput,
+  ) => Promise<{ ok: boolean }>;
+  agentAnswerQuestion: (
+    args: import("../../shared/agent-api").AgentAnswerQuestionInput,
+  ) => Promise<{ ok: boolean }>;
+  agentResolvePlanSuggest: (
+    args: import("../../shared/agent-api").AgentResolvePlanSuggestInput,
+  ) => Promise<{ ok: boolean }>;
   onAgentEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
   chatSend: (args: {
     projectPath: string;

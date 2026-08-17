@@ -22,6 +22,7 @@ import {
   resolveRoster,
   resolveSkillsRoster,
 } from "../teams/resolver";
+import { PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
 
 export interface TeamPiBindingInput {
@@ -152,7 +153,10 @@ export function deriveExpertAllowedTools(
   def: SubagentDefV2,
   allTools: readonly NativeToolDefinition[] = ALL_NATIVE_TOOLS,
 ): DerivedExpertTools {
-  const allToolNames = allTools.map((t) => t.name.toLowerCase()).filter((t) => t !== "task");
+  const allToolNames = [
+    ...PI_PRIMITIVE_TOOL_NAMES,
+    ...allTools.map((t) => t.name.toLowerCase()),
+  ].filter((t) => t !== "task");
   const allToolsSet = new Set(allToolNames);
 
   // 1. Explicit tools list in permission

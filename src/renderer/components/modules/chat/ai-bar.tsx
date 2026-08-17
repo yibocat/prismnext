@@ -63,8 +63,12 @@ export function AiBar() {
   const composerShellRef = useRef<HTMLDivElement>(null);
   const morphRef = useRef<HTMLDivElement>(null);
 
-  const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const conversationPresent = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const conv = tab?.conversation;
+    return Boolean(conv && (conv.turns.length > 0 || conv.live));
+  });
   const openSubAgentId = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
   );
@@ -131,7 +135,7 @@ export function AiBar() {
   const queueLengthRef = useRef(queueLength);
   queueLengthRef.current = queueLength;
 
-  const hasConversation = messages.length > 0 || isStreaming;
+  const hasConversation = conversationPresent || isStreaming;
   const isInputting = phase === "input";
   const isComposerVisible = phase !== "idle";
   const composerHasContent = !draftEmpty || attachmentCount > 0 || queueLength > 0;

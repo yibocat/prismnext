@@ -61,7 +61,11 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
-  const hasMessages = useChatStore((s) => s.messages.length > 0);
+  const hasMessages = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const conv = tab?.conversation;
+    return Boolean(conv && (conv.turns.length > 0 || conv.live));
+  });
   const {
     worktrees,
     activeWorktree,

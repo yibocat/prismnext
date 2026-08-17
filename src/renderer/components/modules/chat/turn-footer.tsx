@@ -161,6 +161,17 @@ export const TurnFooter = memo(function TurnFooter({
 });
 
 /** Collect assistant text blocks from a turn for copy-to-clipboard. */
+export function extractTurnCopyTextFromBlocks(
+  blocks: Array<{ type?: string; text?: string }>,
+): string {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === "text" && block.text) parts.push(block.text);
+  }
+  return parts.join("\n\n");
+}
+
+/** @deprecated Prefer extractTurnCopyTextFromBlocks — ChatStream response list. */
 export function extractTurnCopyText(
   responses: { msg: { type?: string; message?: { content?: unknown } } }[],
 ): string {

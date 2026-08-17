@@ -18,11 +18,7 @@ export type {
 } from "../../shared/agent-conversation";
 export { emptyConversation, newConversationId } from "../../shared/agent-conversation";
 export {
-  toChatStreamEnvelope,
   mapPiSessionEvent,
-  mapChatStreamToAgentEvent,
-  broadcastChatStream,
-  ChatStreamDeltaTracker,
   assertAgentEvent,
 } from "./events";
 export { ToolHost } from "./tool-host";
@@ -47,11 +43,8 @@ export type {
   RestoreRegretResult,
 } from "./session-store";
 export {
-  hydrateSessionRecordToChatMessages,
   hydrateSessionRecordToConversation,
-  hydrateTurnToChatMessages,
 } from "./session-hydrator";
-export type { HydratedChatMessage, HydratedContentBlock } from "./session-hydrator";
 export { InProcessAgentRuntime, createInProcessSpike } from "./in-process-runtime";
 export type { ScriptedToolCall } from "./in-process-runtime";
 export {
@@ -89,4 +82,15 @@ export { createRepresentativeTools } from "./representative-tools";
 export * from "./team-binding";
 export * from "./pi-subsession-runtime";
 export * from "./tools/index";
-export { BUILTIN_TOOL_CAPABILITIES, OPENCODE_BUILTIN_REBUILD, capabilityForTool } from "./capability-matrix";
+export {
+  BUILTIN_TOOL_CAPABILITIES,
+  HOST_CUSTOM_TOOL_CAPABILITIES,
+  HOST_INTERACTIVE_TOOLS,
+  HOST_RESEARCH_TOOLS,
+  PI_PRIMITIVE_TOOLS,
+  PI_PRIMITIVE_TOOL_NAMES,
+  capabilityForTool,
+  isPiPrimitiveToolName,
+} from "./capability-matrix";
+export { InteractionBroker } from "./interaction-broker";
+export { wrapPiPrimitiveTools } from "./pi-primitive-tools";

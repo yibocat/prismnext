@@ -6,7 +6,6 @@ import { createInProcessSpike } from "../../src/main/agent/in-process-runtime";
 import { evaluateHardDeny, extractToolPathContext } from "../../src/main/agent/permission-gate";
 import { AgentSessionStore } from "../../src/main/agent/session-store";
 import { createRepresentativeTools } from "../../src/main/agent/representative-tools";
-import { toChatStreamEnvelope } from "../../src/main/agent/events";
 import type { PermissionGateRequest } from "../../src/main/agent/permission-gate";
 
 const ROOT = "/Users/me/paper";
@@ -146,27 +145,5 @@ describe("agent runtime invariants", () => {
     expect(spike.events.some((event) => (
       event.type === "turn_finished" && event.runtimeSessionId === b.runtimeSessionId
     ))).toBe(true);
-  });
-
-  it("keeps chat:stream envelopes on AgentEvent only", () => {
-    const envelope = toChatStreamEnvelope({
-      type: "text_delta",
-      runtimeSessionId: "rt-1",
-      tabId: "tab-1",
-      turnId: "turn-1",
-      text: "hello",
-    });
-    expect(envelope).toEqual({
-      tabId: "tab-1",
-      type: "text_delta",
-      data: {
-        type: "text_delta",
-        runtimeSessionId: "rt-1",
-        tabId: "tab-1",
-        turnId: "turn-1",
-        text: "hello",
-      },
-    });
-    expect(JSON.stringify(envelope)).not.toMatch(/"part"|session\/update|"Task"/);
   });
 });

@@ -109,8 +109,19 @@ export function ServerStatusDot() {
 
   const refresh = useCallback(async () => {
     try {
-      const snap = await window.electronAPI.chatStatus(projectRoot ?? undefined);
-      setAgent(normalizeSnapshot(snap));
+      const status = await window.electronAPI.agentStatus(
+        projectRoot ? { projectRoot } : undefined,
+      );
+      setAgent({
+        phase: status.ready && status.canEmbed ? "ready" : status.canEmbed ? "starting" : "error",
+        available: status.ready && status.canEmbed,
+        version: status.sdk,
+        error: status.reason ?? null,
+        binaryPresent: status.canEmbed,
+        projectWarm: null,
+        projectWarmPhase: null,
+        projectWarmError: null,
+      });
     } catch {
       setAgent((prev) => ({
         ...prev,
@@ -127,27 +138,8 @@ export function ServerStatusDot() {
 
   useEffect(() => {
     void refresh();
-    const unsub = window.electronAPI.onAgentStatusChanged((raw) => {
-      const snap = normalizeSnapshot(raw);
-      setAgent((prev) => ({
-        ...snap,
-        projectWarmPhase:
-          snap.projectWarmPhase
-          ?? (projectRoot ? prev.projectWarmPhase : null),
-        projectWarm:
-          snap.projectWarm
-          ?? (projectRoot ? prev.projectWarm : null),
-        projectWarmError:
-          snap.projectWarmError
-          ?? (projectRoot ? prev.projectWarmError : null),
-      }));
-      if (projectRoot && snap.projectWarmPhase == null) {
-        void refresh();
-      }
-    });
     const timer = setInterval(() => void refresh(), 8000);
     return () => {
-      unsub();
       clearInterval(timer);
     };
   }, [projectRoot, refresh]);
@@ -159,8 +151,7 @@ export function ServerStatusDot() {
   const onRetry = async () => {
     setRetrying(true);
     try {
-      const snap = await window.electronAPI.chatEnsureAgent(projectRoot ?? undefined);
-      setAgent(normalizeSnapshot(snap));
+      await refresh();
     } catch {
       await refresh();
     } finally {

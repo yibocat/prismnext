@@ -53,7 +53,7 @@ import {
   loadSessionContext,
   persistSessionContext,
 } from "../services/session-context-store";
-import { broadcastChatStream, ChatStreamDeltaTracker } from "../agent/events";
+import { broadcastChatStream, ChatStreamDeltaTracker } from "./chat-stream-map";
 const log = createLogger("event-mapper", "agent");
 
 /**

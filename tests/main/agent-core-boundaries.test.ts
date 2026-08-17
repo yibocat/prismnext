@@ -48,6 +48,14 @@ describe("Pi-first agent core boundaries", () => {
     expect(binding.runtimeSessionId).toBe(created.sessionId);
   });
 
+  it("keeps OpenCode ChatStream mapping out of the Pi agent core", () => {
+    const files = walkTsFiles(join(REPO, "src/main/agent"));
+    for (const file of files) {
+      const src = readFileSync(file, "utf-8");
+      expect(src, file).not.toMatch(/mapChatStreamToAgentEvent|broadcastChatStream|ChatStreamDeltaTracker|ChatStreamEnvelope|OPENCODE_BUILTIN_REBUILD|lab_busy|lab_session_missing/);
+    }
+  });
+
   it("forbids official agent core from importing ipc, renderer stores, or EventMapper", () => {
     const files = walkTsFiles(join(REPO, "src/main/agent"));
     expect(files.length).toBeGreaterThan(0);
@@ -94,9 +102,13 @@ describe("Pi-first agent core boundaries", () => {
     expect(ipc).toContain("\"agent:listSessions\"");
     expect(ipc).toContain("\"agent:loadSession\"");
     expect(ipc).toContain("\"agent:renameSession\"");
+    expect(ipc).toContain("\"agent:deleteSession\"");
+    expect(ipc).toContain("\"agent:answerQuestion\"");
+    expect(ipc).toContain("\"agent:resolvePlanSuggest\"");
     expect(preload).toContain("\"agent:event\"");
     expect(preload).toContain("\"agent:listSessions\"");
     expect(preload).toContain("\"agent:loadSession\"");
+    expect(preload).toContain("\"agent:deleteSession\"");
     expect(ipc).not.toContain("pi-lab:");
     expect(preload).not.toContain("pi-lab:");
   });

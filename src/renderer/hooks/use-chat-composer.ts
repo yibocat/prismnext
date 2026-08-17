@@ -324,10 +324,6 @@ export function useChatComposer() {
     let skipUserAppend = false;
     if (quickDisplay.length > 0) {
       flushSync(() => {
-        store._appendMessage(tabId, {
-          type: "user",
-          message: { content: quickDisplay },
-        });
         store._setStreaming(tabId, true);
         clearComposerUi();
       });

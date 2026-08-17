@@ -1010,6 +1010,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:loadSession", args),
 	agentRenameSession: (args: import("../shared/agent-api").AgentRenameSessionInput) =>
 		ipcRenderer.invoke("agent:renameSession", args),
+	agentDeleteSession: (args: import("../shared/agent-api").AgentDeleteSessionInput) =>
+		ipcRenderer.invoke("agent:deleteSession", args),
+	agentAnswerQuestion: (args: import("../shared/agent-api").AgentAnswerQuestionInput) =>
+		ipcRenderer.invoke("agent:answerQuestion", args),
+	agentResolvePlanSuggest: (args: import("../shared/agent-api").AgentResolvePlanSuggestInput) =>
+		ipcRenderer.invoke("agent:resolvePlanSuggest", args),
 	onAgentEvent: (callback: (event: import("../shared/agent-runtime").AgentEvent) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: import("../shared/agent-runtime").AgentEvent) => callback(data);
 		ipcRenderer.on("agent:event", handler);

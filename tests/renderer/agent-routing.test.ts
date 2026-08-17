@@ -152,13 +152,7 @@ describe("chat-store Agent routing", () => {
       "tool_result",
       "text",
     ]);
-    expect(tab.messages).toHaveLength(2);
-    expect(tab.messages[1].message.content.map((block: any) => block.type)).toEqual([
-      "text",
-      "tool_use",
-      "tool_result",
-      "text",
-    ]);
+    expect(tab.conversation.live).toBeNull();
   });
 
   it("loads history through the Agent API instead of OpenCode sessionLoad", async () => {

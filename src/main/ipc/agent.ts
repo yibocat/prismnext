@@ -4,8 +4,11 @@
 
 import { ipcMain } from "electron";
 import type {
+  AgentAnswerQuestionInput,
+  AgentDeleteSessionInput,
   AgentLoadSessionInput,
   AgentRenameSessionInput,
+  AgentResolvePlanSuggestInput,
   AgentSendInput,
 } from "../../shared/agent-api";
 import { getAgentService } from "../agent/agent-service";
@@ -59,5 +62,20 @@ export function registerAgentHandlers(): void {
   ipcMain.handle("agent:renameSession", async (_event, args: AgentRenameSessionInput) => {
     const agent = await getAgentService();
     return agent.renameSession(args);
+  });
+
+  ipcMain.handle("agent:deleteSession", async (_event, args: AgentDeleteSessionInput) => {
+    const agent = await getAgentService();
+    return agent.deleteSession(args);
+  });
+
+  ipcMain.handle("agent:answerQuestion", async (_event, args: AgentAnswerQuestionInput) => {
+    const agent = await getAgentService();
+    return { ok: agent.answerQuestion(args) };
+  });
+
+  ipcMain.handle("agent:resolvePlanSuggest", async (_event, args: AgentResolvePlanSuggestInput) => {
+    const agent = await getAgentService();
+    return { ok: agent.resolvePlanSuggest(args) };
   });
 }

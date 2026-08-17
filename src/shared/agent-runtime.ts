@@ -22,6 +22,7 @@ export const AGENT_EVENT_TYPES = [
   "tool_finished",
   "permission_requested",
   "question_requested",
+  "plan_suggested",
   "usage_updated",
   "turn_finished",
   "turn_failed",
@@ -112,6 +113,12 @@ export interface QuestionRequestedEvent extends AgentEventBase {
   options?: string[];
 }
 
+export interface PlanSuggestedEvent extends AgentEventBase {
+  type: "plan_suggested";
+  requestId: string;
+  reason: string;
+}
+
 export interface UsageUpdatedEvent extends AgentEventBase {
   type: "usage_updated";
   inputTokens?: number;
@@ -143,6 +150,7 @@ export type AgentEvent =
   | ToolFinishedEvent
   | PermissionRequestedEvent
   | QuestionRequestedEvent
+  | PlanSuggestedEvent
   | UsageUpdatedEvent
   | TurnFinishedEvent
   | TurnFailedEvent
@@ -177,12 +185,6 @@ export interface TurnInput {
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
   abortSignal?: AbortSignal;
-}
-
-export interface ChatStreamEnvelope {
-  tabId: AgentTabId;
-  type: AgentEventType;
-  data: AgentEvent;
 }
 
 export function isAgentEventType(value: string): value is AgentEventType {

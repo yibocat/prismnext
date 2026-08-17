@@ -28,17 +28,19 @@ describe("unified native tools catalog", () => {
     permissionMode: "auto",
   };
 
-  it("exports exactly 29 unique self-describing native tools", () => {
-    expect(ALL_NATIVE_TOOLS).toHaveLength(29);
+  it("exports unique host custom tools without Pi file/shell primitives", () => {
+    expect(ALL_NATIVE_TOOLS).toHaveLength(28);
     const names = new Set(ALL_NATIVE_TOOLS.map((t) => t.name));
-    expect(names.size).toBe(29);
+    expect(names.size).toBe(28);
+    expect(names.has("bash")).toBe(false);
+    expect(names.has("read")).toBe(false);
 
     expect(LITERATURE_TOOLS).toHaveLength(10);
     expect(LATEX_TOOLS).toHaveLength(2);
     expect(RESEARCH_BRIEF_TOOLS).toHaveLength(2);
     expect(EXPERIMENT_TOOLS).toHaveLength(4);
     expect(INTERACTION_TOOLS).toHaveLength(4);
-    expect(SYSTEM_TOOLS).toHaveLength(5);
+    expect(SYSTEM_TOOLS).toHaveLength(4);
     expect(INTERACTIVE_TOOLS).toHaveLength(2);
 
     for (const tool of ALL_NATIVE_TOOLS) {
@@ -53,20 +55,20 @@ describe("unified native tools catalog", () => {
 
   it("looks up native tools by name case-insensitively", () => {
     expect(getNativeToolByName("literature-search")?.name).toBe("literature-search");
-    expect(getNativeToolByName("BASH")?.name).toBe("bash");
+    expect(getNativeToolByName("BASH")).toBeUndefined();
     expect(getNativeToolByName("Latex-Compile")?.name).toBe("latex-compile");
     expect(getNativeToolByName("non-existent")).toBeUndefined();
   });
 
-  it("registers all 29 tools in ToolHost and generates dynamic Pi tools without hardcoding", () => {
+  it("registers host custom tools in ToolHost and generates dynamic Pi tools without hardcoding", () => {
     const gate = new PermissionGate();
     const toolHost = new ToolHost({ gate });
     toolHost.registerAll(ALL_NATIVE_TOOLS);
 
-    expect(toolHost.names()).toHaveLength(29);
+    expect(toolHost.names()).toHaveLength(28);
 
     const piTools = toolHost.toPiTools(() => ctx);
-    expect(piTools).toHaveLength(29);
+    expect(piTools).toHaveLength(28);
     for (const pt of piTools) {
       expect(pt.name).toBeTruthy();
       expect(pt.description).toBeTruthy();
@@ -75,13 +77,13 @@ describe("unified native tools catalog", () => {
     }
 
     const labTools = createPiLabNativeTools();
-    expect(labTools).toHaveLength(29);
+    expect(labTools).toHaveLength(28);
 
     const piNative = createPiNativeTools({
       toolHost,
       getContext: () => ctx,
     });
-    expect(piNative).toHaveLength(29);
+    expect(piNative).toHaveLength(28);
   });
 
   it("executes system and fs tools in-memory with real file operations", async () => {

@@ -78,7 +78,11 @@ export function LeftMainArea() {
     return unsub;
   }, []);
 
-  const messages = useChatStore((s) => s.messages);
+  const hasConversation = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const conv = tab?.conversation;
+    return Boolean(conv && (conv.turns.length > 0 || conv.live));
+  });
   const isStreaming = useChatStore((s) => s.isStreaming);
   const openSubAgentPanelToolUseId = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
@@ -110,7 +114,7 @@ export function LeftMainArea() {
   });
   const setSessionAgent = useChatStore((s) => s.setSessionAgent);
   const showHomepage =
-    messages.length === 0 && !isStreaming && !isLoadingSession;
+    !hasConversation && !isStreaming && !isLoadingSession;
   /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
   const showPlanNewIdea = showHomepage && sessionAgent !== "plan";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);

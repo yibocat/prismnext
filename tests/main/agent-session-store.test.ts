@@ -344,4 +344,17 @@ describe("AgentSessionStore v2 conversation identity", () => {
     expect(migrated?.eventJournal).toEqual([]);
     expect(store.getByConversationId("rt-old")?.title).toBe("Legacy Lab");
   });
+
+  it("deletes a session file by runtimeSessionId", () => {
+    store.createSession({
+      conversationId: "conv-del",
+      runtimeSessionId: "rt-del",
+      title: "Delete me",
+      projectRoot: "/repo",
+    });
+    expect(store.getByConversationId("conv-del")).toBeTruthy();
+    store.deleteSession("rt-del");
+    expect(store.getByConversationId("conv-del")).toBeNull();
+    expect(store.getSession("rt-del")).toBeNull();
+  });
 });

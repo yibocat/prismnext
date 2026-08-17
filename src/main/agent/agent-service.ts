@@ -1,6 +1,5 @@
 /**
- * Pi conversation host. New Agent send/cancel go through RuntimeRegistry.
- * `ipc/chat.ts` / AcpService stay only for old OpenCode history.
+ * Pi conversation host. Product send/cancel/history go through RuntimeRegistry.
  */
 
 import { join } from "node:path";
@@ -8,11 +7,14 @@ import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent-runtime";
 import type { PermissionMode } from "../../shared/session-agent";
 import {
+  type AgentAnswerQuestionInput,
   type AgentAuthInput,
   type AgentAuthResult,
+  type AgentDeleteSessionInput,
   type AgentLoadSessionInput,
   type AgentLoadSessionResult,
   type AgentRenameSessionInput,
+  type AgentResolvePlanSuggestInput,
   type AgentSendInput,
   type AgentSendResult,
   type AgentSessionSummary,
@@ -25,6 +27,8 @@ import { ToolHost } from "./tool-host";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
 import { RuntimeRegistry, type StartRuntimeInput } from "./runtime-registry";
 import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
+import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
+import { InteractionBroker } from "./interaction-broker";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
 import {
   resolveTeamPiBinding,
@@ -48,7 +52,10 @@ import type { ExperimentCtxResult } from "../services/experiment-log-service";
 import type { KickoffExperimentRunArgs } from "../services/experiment-run-executor";
 import { parseExperimentRunKind } from "../../shared/experiment-log";
 
-const AGENT_TOOLS = ALL_NATIVE_TOOLS.map((t) => t.name);
+const AGENT_TOOLS = [
+  ...PI_PRIMITIVE_TOOL_NAMES,
+  ...ALL_NATIVE_TOOLS.map((t) => t.name).filter((name) => !isPiPrimitiveToolName(name)),
+];
 const AGENT_FALLBACK_CONVERSATION_ID = "agent";
 
 /** Pi uses this sentence when ResourceLoader.getSystemPrompt() is empty. */
@@ -58,7 +65,7 @@ export const PI_DEFAULT_CODING_IDENTITY =
 export const HOST_SYSTEM_IDENTITY = [
   "You are the PrismNext research collaborator for this project.",
   "Do not claim to be Claude, GPT, Gemini, DeepSeek, or any other vendor model.",
-  "Use only the tools this host registered.",
+  "Use the file and shell tools registered from Pi, plus the host research tools.",
   "Prefer literature-search for local papers, literature-discover for catalogs,",
   "research-brief-update for the project brief, and experiment-run for island commands.",
 ].join(" ");
@@ -152,11 +159,12 @@ export function createAgentExperimentRunner(deps: {
 export function createAgentNativeTools(deps?: {
   runExperiment?: ExperimentRunFn;
 }): NativeToolDefinition[] {
+  const catalog = ALL_NATIVE_TOOLS.filter((tool) => !isPiPrimitiveToolName(tool.name));
   if (!deps?.runExperiment) {
-    return [...ALL_NATIVE_TOOLS];
+    return [...catalog];
   }
   const customRun = deps.runExperiment;
-  return ALL_NATIVE_TOOLS.map((tool) => {
+  return catalog.map((tool) => {
     if (tool.name === "experiment-run") {
       return {
         ...tool,
@@ -206,6 +214,7 @@ export interface AgentServiceDeps {
 export class AgentService {
   private runtime: PiSdkRuntime | null = null;
   private gate: PermissionGate | null = null;
+  private interactions: InteractionBroker | null = null;
   private sessionId: string | null = null;
   private projectRoot: string | null = null;
   private readonly sending = new Set<string>();
@@ -297,7 +306,7 @@ export class AgentService {
       || input.tabId?.trim()
       || AGENT_FALLBACK_CONVERSATION_ID
     );
-    if (this.sending.has(conversationId)) return { ok: false, error: "lab_busy" };
+    if (this.sending.has(conversationId)) return { ok: false, error: "turn_in_progress" };
 
     const resolverFn = this.deps.resolveTeamBinding ?? resolveTeamPiBinding;
     let teamBinding: TeamPiBindingResult | undefined;
@@ -330,7 +339,7 @@ export class AgentService {
     if (!text) return { ok: false, error: "missing_prompt" };
 
     this.sending.add(conversationId);
-    this.activeTabId = conversationId;
+    this.activeTabId = input.tabId?.trim() || conversationId;
     try {
       this.startContext = {
         provider: auth.provider,
@@ -362,7 +371,7 @@ export class AgentService {
       this.activeConversationId = conversationId;
       this.runtime = this.registry.getRuntime(conversationId) as PiSdkRuntime | null;
       if (!this.sessionId) {
-        return { ok: false, error: "lab_session_missing" };
+        return { ok: false, error: "session_missing" };
       }
 
       const userText = buildAgentUserText({
@@ -395,6 +404,10 @@ export class AgentService {
   async cancel(tabId?: string): Promise<void> {
     const conversationId = tabId?.trim() || this.activeConversationId;
     if (conversationId) {
+      const binding = this.registry.getBinding(conversationId);
+      if (binding?.runtimeSessionId) {
+        this.interactions?.cancelSession(binding.runtimeSessionId);
+      }
       await this.registry.cancelTurn(conversationId);
       return;
     }
@@ -408,6 +421,33 @@ export class AgentService {
 
   resolvePermission(requestId: string, decision: "allow" | "deny"): boolean {
     return this.gate?.resolve(requestId, decision) ?? false;
+  }
+
+  answerQuestion(input: AgentAnswerQuestionInput): boolean {
+    return this.interactions?.resolveQuestion(input.requestId, {
+      answer: input.answer,
+      selected: input.selected,
+    }) ?? false;
+  }
+
+  resolvePlanSuggest(input: AgentResolvePlanSuggestInput): boolean {
+    return this.interactions?.resolvePlanSuggest(input.requestId, input.decision) ?? false;
+  }
+
+  async deleteSession(input: AgentDeleteSessionInput): Promise<{ ok: boolean }> {
+    const conversationId = input.conversationId.trim();
+    if (!conversationId) return { ok: false };
+    const record = this.registry.store.getByConversationId(conversationId);
+    await this.registry.disposeConversation(conversationId);
+    if (record) this.registry.store.deleteSession(record.runtimeSessionId);
+    if (conversationId === this.activeConversationId) {
+      this.runtime = null;
+      this.gate = null;
+      this.interactions = null;
+      this.sessionId = null;
+      this.activeConversationId = null;
+    }
+    return { ok: true };
   }
 
   listSessions(projectRoot: string): AgentSessionSummary[] {
@@ -488,7 +528,7 @@ export class AgentService {
 
   private async startRuntime(input: StartRuntimeInput) {
     const ctx = this.startContext;
-    if (!ctx) throw new Error("lab_start_context_missing");
+    if (!ctx) throw new Error("start_context_missing");
     const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
     const store = this.registry.store;
     const gate = new PermissionGate({
@@ -505,6 +545,30 @@ export class AgentService {
           args: request.args,
         });
         this.permissionSink?.(request);
+      },
+    });
+    const interactions = new InteractionBroker({
+      timeoutMs: 120_000,
+      onQuestion: (request) => {
+        this.sink?.({
+          type: "question_requested",
+          runtimeSessionId: request.runtimeSessionId,
+          tabId: request.tabId,
+          turnId: request.turnId,
+          requestId: request.requestId,
+          prompt: request.prompt,
+          options: request.options,
+        });
+      },
+      onPlanSuggest: (request) => {
+        this.sink?.({
+          type: "plan_suggested",
+          runtimeSessionId: request.runtimeSessionId,
+          tabId: request.tabId,
+          turnId: request.turnId,
+          requestId: request.requestId,
+          reason: request.reason,
+        });
       },
     });
     const toolHost = new ToolHost({
@@ -539,11 +603,13 @@ export class AgentService {
         apiKey: ctx.apiKey,
         systemPrompt,
         toolHost,
+        gate,
+        interactions,
       }),
       store,
       toolHost,
       gate,
-      agentDir: join(agentRoot, "lab-runtime"),
+      agentDir: join(agentRoot, "runtime"),
       persistSessions: true,
       piSessionDir: resolvePiRuntimeSessionDir(this.deps.userDataDir),
     });
@@ -558,6 +624,7 @@ export class AgentService {
       sessionAgent: "build",
     });
     this.gate = gate;
+    this.interactions = interactions;
     return {
       runtime,
       runtimeSessionId: created.runtimeSessionId,
@@ -584,6 +651,7 @@ export class AgentService {
     if (!conversationId || conversationId === this.activeConversationId) {
       this.runtime = null;
       this.gate = null;
+      this.interactions = null;
       this.sessionId = null;
       this.projectRoot = null;
       this.activeConversationId = null;

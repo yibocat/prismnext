@@ -489,8 +489,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
-                    if (result.success) {
+                    const result = await window.electronAPI.agentDeleteSession({ conversationId: s.id });
+                    if (result.ok) {
                       clearSessionUiPrefs(s.id);
                       setSessions((prev) => prev.filter((x) => x.id !== s.id));
                       if (s.id === sessionId) clearCurrentTab();
@@ -500,8 +500,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                     if (e.key === "Enter" || e.key === " ") {
                       e.stopPropagation();
                       if (!projectRoot) return;
-                      const result = await window.electronAPI.sessionDelete(s.id, projectRoot);
-                      if (result.success) {
+                      const result = await window.electronAPI.agentDeleteSession({ conversationId: s.id });
+                      if (result.ok) {
                         clearSessionUiPrefs(s.id);
                         setSessions((prev) => prev.filter((x) => x.id !== s.id));
                         if (s.id === sessionId) clearCurrentTab();

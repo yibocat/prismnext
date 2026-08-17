@@ -229,14 +229,16 @@ describe("agent service status", () => {
       "interaction-write",
       "interaction-open",
       "image-describe",
+      "read",
       "bash",
+      "write",
       "delete",
       "move",
       "project-rule-write",
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(29);
+    expect(missingKey.tools).toHaveLength(35);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({

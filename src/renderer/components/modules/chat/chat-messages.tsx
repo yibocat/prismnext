@@ -1,13 +1,17 @@
-import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMemo, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
-import { useChatStore, type ChatStreamMessage, type ContentBlock } from "@/stores/chat-store";
-import { MarkdownRenderer } from "./markdown-renderer";
-import { AssistantBlockList } from "./assistant-block-list";
+import { useChatStore } from "@/stores/chat-store";
+import { emptyConversation } from "@shared/agent-conversation";
+import {
+  collectConversationAssistantBlocks,
+  conversationDisplayTurns,
+  conversationHasContent,
+} from "@/lib/chat/conversation-view";
 export { AssistantBlockList } from "./assistant-block-list";
 import { TurnAssistantContent } from "./turn-assistant-content";
 import "./tools/task-widget-register";
-import { TurnFooter, extractTurnCopyText } from "./turn-footer";
+import { TurnFooter, extractTurnCopyTextFromBlocks } from "./turn-footer";
 import {
   captureSentinelScrollAnchor,
   followActiveTurnTail,
@@ -27,23 +31,19 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { isToolResultUserMessage, extractTurnUserPreview, isHiddenToolResultCarrier, isHiddenBackgroundTaskInjectMessage } from "./chat-turns";
+import { extractTurnUserPreviewFromBlocks } from "./chat-turns";
 import { TurnRail } from "./turn-rail";
-import { buildToolResultMap, contentBlocks } from "./tools/tool-result-map";
+import { buildToolResultMapFromBlocks } from "./tools/tool-result-map";
 import { MessageTodoDrawer } from "./todo-plan-bar";
 import { UserMessageHeader } from "./user-message-header";
-import { selectMessageTodoAnchorUserIndex } from "@/lib/chat/composer-pending-tools";
+import { isTodoPlanDismissed } from "@/lib/chat/composer-pending-tools";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
   RotateCcwIcon,
-  ZapIcon,
   Loader2Icon,
-  CircleCheckIcon,
-  ChevronRightIcon,
-  SquareIcon,
 } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 
@@ -86,182 +86,17 @@ const TurnErrorRetry = memo(({ onRetry }: { onRetry: () => void }) => {
 });
 TurnErrorRetry.displayName = "TurnErrorRetry";
 
-// ─── Assistant Message ───
-
-const AssistantMessage = memo(function AssistantMessage({
-  msg,
-  toolResultMap,
-  msgIndex,
-  isStreamingMsg,
-  sessionId,
-}: {
-  msg: ChatStreamMessage;
-  toolResultMap: Map<string, ContentBlock>;
-  msgIndex: number;
-  isStreamingMsg?: boolean;
-  sessionId: string;
-}) {
-  const blocks = contentBlocks(msg.message?.content);
-
-  return (
-    <div className="group w-full min-w-0 max-w-full overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-200">
-      <div className="min-w-0 flex-1">
-        <AssistantBlockList
-          blocks={blocks}
-          toolResultMap={toolResultMap}
-          msgIndex={msgIndex}
-          isStreamingMsg={isStreamingMsg}
-          sessionId={sessionId}
-        />
-      </div>
-      {msg.stopped && (
-        <div className="mt-1 flex items-center gap-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-          <SquareIcon className="size-3 shrink-0 fill-current" />
-          <span>已停止</span>
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ─── Result Message ───
-
-function ResultMessage({ msg }: { msg: ChatStreamMessage }) {
-  if (msg.is_error) {
-    return (
-      <div className="flex items-center gap-2 rounded-lg bg-destructive/10 px-4 py-3 text-[length:var(--font-chat-message)] text-destructive mx-4 my-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
-        <AlertCircleIcon className="size-4 shrink-0" />
-        <span>{msg.result || "An error occurred"}</span>
-      </div>
-    );
-  }
-
-  if (msg.result) {
-    return (
-      <div className="px-4 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        <MarkdownRenderer content={msg.result} />
-      </div>
-    );
-  }
-
-  return null;
-}
-
-// ─── Action Status Message ───
-
-function ActionStatusCard({ msg }: { msg: ChatStreamMessage }) {
-  const { actionName, status, result, duration_ms } = msg;
-
-  return (
-    <div className="animate-in fade-in slide-in-from-bottom-1 duration-200">
-      <div className="flex items-start gap-2.5 rounded-lg border border-border bg-card px-3.5 py-2.5 shadow-sm">
-        <ZapIcon className="size-4 shrink-0 mt-0.5 text-primary" />
-        <div className="flex-1 min-w-0">
-          <span className="font-mono font-medium text-[length:var(--font-chat-meta)]">
-            /{actionName || "unknown"}
-          </span>
-          <div className="flex items-center gap-1.5 mt-1">
-            {status === "running" && (
-              <>
-                <Loader2Icon className="size-3 animate-spin text-muted-foreground" />
-                <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
-                  Executing...
-                </span>
-              </>
-            )}
-            {status === "success" && (
-              <>
-                <CircleCheckIcon className="size-3 text-success shrink-0" />
-                <span className="text-[length:var(--font-chat-meta)] text-foreground/80">
-                  {result || "Completed"}
-                </span>
-                {duration_ms != null && (
-                  <span className="text-muted-foreground/50 text-[length:var(--font-chat-meta)] tabular-nums">
-                    ({(duration_ms / 1000).toFixed(1)}s)
-                  </span>
-                )}
-              </>
-            )}
-            {status === "error" && (
-              <>
-                <AlertCircleIcon className="size-3 text-destructive shrink-0" />
-                <span className="text-destructive text-[length:var(--font-chat-meta)]">
-                  {result || "Failed"}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Inline Approve / Reject notice — flat card; approved+path is openable. */
-function PlanDecisionCard({ msg }: { msg: ChatStreamMessage }) {
-  const { t } = useTranslation();
-  const openPlanFileInEditor = useChatStore((s) => s.openPlanFileInEditor);
-  const approved = msg.planDecision === "approved";
-  const title = msg.planTitle?.trim();
-  const path = msg.planPath?.trim();
-  const openable = approved && !!path;
-
-  const body = (
-    <>
-      {approved ? (
-        <CircleCheckIcon className="size-3.5 shrink-0 text-success" />
-      ) : (
-        <AlertCircleIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
-          {approved
-            ? t("chat.planWorkflow.decisionApproved")
-            : t("chat.planWorkflow.decisionRejected")}
-        </p>
-        {(title || path || msg.result) && (
-          <p className="truncate text-[length:var(--font-chat-meta)] text-muted-foreground">
-            {title || path || msg.result}
-          </p>
-        )}
-      </div>
-      {openable ? (
-        <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      ) : null}
-    </>
-  );
-
-  return (
-    <div className="mb-2">
-      {openable ? (
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-left",
-            "transition-colors hover:bg-success/10",
-          )}
-          onClick={() => void openPlanFileInEditor(path)}
-        >
-          {body}
-        </button>
-      ) : (
-        <div className="flex w-full items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
-          {body}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Chat Messages ───
 
 const chatLiteratureWarmupRoots = new Set<string>();
 
 export const ChatMessages = memo(function ChatMessages() {
   const { t } = useTranslation();
-  const messages = useChatStore((s) => s.messages);
-  const streamingMessage = useChatStore((s) => s.streamingMessage);
-  const isStreaming = useChatStore((s) => s.isStreaming);
+  const conversation = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return tab?.conversation ?? emptyConversation({ conversationId: s.activeTabId });
+  });
+  const isStreaming = conversation.live !== null;
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
   const activeTabId = useChatStore((s) => s.activeTabId);
   const chatSessionId = useChatStore((s) => s.sessionId);
@@ -282,7 +117,6 @@ export const ChatMessages = memo(function ChatMessages() {
     return !!tab?.planConfirmSuppressed;
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
-  const todoAnchorUserIndex = useChatStore(selectMessageTodoAnchorUserIndex);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   // Wait copy while streaming has no assistant content yet — surface each
   // prepare phase so first-send cold start (sync / agent / session) is not a hang.
@@ -374,184 +208,79 @@ export const ChatMessages = memo(function ChatMessages() {
     setShowScrollButton(false);
   }, []);
 
-  // ── Stable computations (committed messages only) ──
-  // These O(n) scans only re-run when committed messages change,
-  // NOT on every stream delta.
+  const turns = useMemo(() => conversationDisplayTurns(conversation), [conversation]);
 
   const toolResultMap = useMemo(
-    () => buildToolResultMap(messages, { isStreaming }),
-    [messages, isStreaming],
+    () => buildToolResultMapFromBlocks(
+      collectConversationAssistantBlocks(conversation),
+      { isStreaming },
+    ),
+    [conversation, isStreaming],
   );
 
-  const committed = useMemo(() => {
-    const seenResultKeys = new Set<string>();
-    const idxMap = new Map<ChatStreamMessage, number>();
-    const filtered = messages.filter((msg, i) => {
-      if (msg.type === "system") return false;
-      if (msg.type === "user" && isToolResultUserMessage(msg)) {
-        return false;
-      }
-      if (isHiddenBackgroundTaskInjectMessage(msg)) {
-        return false;
-      }
-      if (msg.type === "result") {
-        if (msg.usage) {
-          const key = `${msg.usage.input_tokens}-${msg.usage.output_tokens}`;
-          if (seenResultKeys.has(key)) return false;
-          seenResultKeys.add(key);
-        }
-        if (msg.result && seenResultKeys.has(msg.result)) return false;
-        if (msg.result) seenResultKeys.add(msg.result);
-      }
-      idxMap.set(msg, i);
-      return true;
-    });
-    return { display: filtered, idxMap };
-  }, [messages]);
-
-  const metaMap = useMemo(() => {
-    const map = new Map<number, string>();
-    const disp = committed.display;
-    for (let i = 0; i < disp.length - 1; i++) {
-      const msg = disp[i];
-      const next = disp[i + 1];
-      if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
-        const parts: string[] = [];
-        if (next.duration_ms != null) {
-          parts.push(`Completed in ${(next.duration_ms / 1000).toFixed(1)}s`);
-        }
-        // usage may be at top level (live) or inside message (JSONL)
-        const u = next.usage || next.message?.usage;
-        if (u?.input_tokens || u?.output_tokens) {
-          const input = u.input_tokens >= 1000 ? `${(u.input_tokens / 1000).toFixed(1)}k` : `${u.input_tokens}`;
-          const output = u.output_tokens >= 1000 ? `${(u.output_tokens / 1000).toFixed(1)}k` : `${u.output_tokens}`;
-          parts.push(`↑${input} ↓${output}`);
-        }
-        if (parts.length > 0) map.set(i, parts.join(" · "));
-      }
+  const todoAnchorTurnIndex = useMemo(() => {
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const block = turns[i]!.assistantBlocks.find((b) => (
+        b.type === "tool_use" && (b.name || "").toLowerCase() === "todowrite" && b.id
+      ));
+      if (block?.id && !isTodoPlanDismissed(block.id)) return turns[i]!.turnIndex;
     }
-    return map;
-  }, [committed.display]);
+    return null;
+  }, [turns]);
 
-  const inlinedResults = useMemo(() => {
-    const set = new Set<number>();
-    const disp = committed.display;
-    for (let i = 0; i < disp.length - 1; i++) {
-      const msg = disp[i];
-      const next = disp[i + 1];
-      if (msg.type === "assistant" && next.type === "result" && !next.is_error) {
-        set.add(i + 1);
-      }
-    }
-    return set;
-  }, [committed.display]);
+  const usageHint = useMemo(() => {
+    const u = conversation.usage;
+    if (!u?.inputTokens && !u?.outputTokens) return null;
+    const input = (u.inputTokens ?? 0) >= 1000
+      ? `${((u.inputTokens ?? 0) / 1000).toFixed(1)}k`
+      : `${u.inputTokens ?? 0}`;
+    const output = (u.outputTokens ?? 0) >= 1000
+      ? `${((u.outputTokens ?? 0) / 1000).toFixed(1)}k`
+      : `${u.outputTokens ?? 0}`;
+    return `↑${input} ↓${output}`;
+  }, [conversation.usage]);
 
-  // ── Streaming-dependent: append streaming message to display ──
-  const displayMessages = useMemo(() => {
-    if (!streamingMessage) return committed.display;
-    return [...committed.display, streamingMessage];
-  }, [committed.display, streamingMessage]);
-
-  // ── Group messages into turns ──
-  // Each turn: a user message followed by its assistant/result responses.
-  // The user header becomes a sticky top-0 bar; responses render below.
-
-  interface Turn {
-    userMessage: ChatStreamMessage | null;
-    responses: { msg: ChatStreamMessage; displayIdx: number }[];
-  }
-
-  const turns = useMemo(() => {
-    const result: Turn[] = [];
-    let current: Turn = { userMessage: null, responses: [] };
-
-    for (let i = 0; i < displayMessages.length; i++) {
-      const msg = displayMessages[i];
-      if (msg.type === "user") {
-        if (current.userMessage || current.responses.length > 0) {
-          result.push(current);
-        }
-        current = { userMessage: msg, responses: [] };
-      } else {
-        current.responses.push({ msg, displayIdx: i });
-      }
-    }
-    if (current.userMessage || current.responses.length > 0) {
-      result.push(current);
-    }
-    return result;
-  }, [displayMessages]);
-
-  // Per-turn previews for the right-edge TurnRail (user message text + meta).
   const turnPreviews = useMemo(
     () =>
       turns.map((turn, idx) => {
-        const p = extractTurnUserPreview(turn.userMessage);
+        const p = extractTurnUserPreviewFromBlocks(turn.userBlocks);
         return { text: p.text, hasAttachments: p.hasAttachments, meta: turnMeta[idx] };
       }),
     [turns, turnMeta],
   );
 
-  // Whether the *current* turn (after the last user message) has assistant
-  // content yet. Must NOT scan the full message list — turn 1 replies would
-  // otherwise hide the wait indicator on turn 2+ immediately.
   const lastTurnForIndicator = turns[turns.length - 1];
   const hasCurrentTurnAssistantContent = useMemo(() => {
-    const scanBlocks = (msg: ChatStreamMessage | null | undefined) => {
-      if (!msg || msg.type !== "assistant") return false;
-      return (msg.message?.content ?? []).some((b: ContentBlock) => {
-        if (b.type === "text" && b.text?.trim()) return true;
-        if (
-          b.type === "thinking" &&
-          b.thinking?.trim() &&
-          !(b as { _progress?: boolean })._progress
-        ) {
-          return true;
-        }
-        if (b.type === "tool_use") return true;
-        return false;
-      });
-    };
-    if (scanBlocks(streamingMessage)) return true;
-    for (const r of lastTurnForIndicator?.responses ?? []) {
-      if (scanBlocks(r.msg)) return true;
-    }
-    return false;
-  }, [lastTurnForIndicator, streamingMessage]);
+    return (lastTurnForIndicator?.assistantBlocks ?? []).some((b) => {
+      if (b.type === "text" && b.text?.trim()) return true;
+      if (b.type === "thinking" && b.thinking?.trim() && !b._progress) return true;
+      if (b.type === "tool_use") return true;
+      return false;
+    });
+  }, [lastTurnForIndicator]);
 
-  // Show until THIS turn gets assistant content (then Activity fold takes over).
   const showStreamingIndicator = isStreaming && !hasCurrentTurnAssistantContent;
 
-  const lastTurnUserKey = turns[turns.length - 1]?.userMessage
-    ? committed.idxMap.get(turns[turns.length - 1].userMessage!) ?? turns.length
-    : turns.length;
+  const lastTurnUserKey = lastTurnForIndicator?.turnId ?? "";
 
-  // Text of the last user message — enables the error banner's retry action.
   const lastTurnRetryText = useMemo(() => {
-    const msg = turns[turns.length - 1]?.userMessage;
-    if (!msg) return "";
-    return contentBlocks(msg.message?.content)
+    return (lastTurnForIndicator?.userBlocks ?? [])
       .filter((b) => b.type === "text")
-      .map((b) => (b as { text?: string }).text || "")
+      .map((b) => b.text || "")
       .join("\n")
       .trim();
-  }, [turns]);
+  }, [lastTurnForIndicator]);
 
-  const lastTurnHasError = useMemo(() => {
-    const responses = turns[turns.length - 1]?.responses ?? [];
-    return responses.some((r) => r.msg?.turnError);
-  }, [turns]);
+  const lastTurnHasError = lastTurnForIndicator?.status === "failed"
+    || (lastTurnForIndicator?.assistantBlocks ?? []).some((b) => b.is_error);
 
   const handleRetryTurn = useCallback(() => {
     if (!lastTurnRetryText) return;
     void useChatStore.getState().sendPrompt(lastTurnRetryText);
   }, [lastTurnRetryText]);
 
-  // Track the last user message OBJECT so we can distinguish between:
-  //  - a genuinely new message appended at the tail (should reset auto-scroll)
-  //  - idxMap indices shifting due to history prepend (should NOT reset auto-scroll)
-  const lastTurnUserMsg = turns[turns.length - 1]?.userMessage ?? null;
-  const prevLastUserMsgRef = useRef<ChatStreamMessage | null>(null);
+  const lastTurnUserMsg = lastTurnForIndicator?.turnId ?? null;
+  const prevLastUserMsgRef = useRef<string | null>(null);
 
   const [windowStart, setWindowStartState] = useState(0);
 
@@ -962,7 +691,7 @@ export const ChatMessages = memo(function ChatMessages() {
         streamScrollRafRef.current = null;
       }
     };
-  }, [displayMessages, isStreaming, followStreamTail]);
+  }, [turns, isStreaming, followStreamTail]);
 
   // ── Loading / empty state ──
 
@@ -977,7 +706,7 @@ export const ChatMessages = memo(function ChatMessages() {
     );
   }
 
-  if (displayMessages.length === 0 && !isStreaming) {
+  if (!conversationHasContent(conversation) && !isStreaming) {
     return <div className="flex flex-1 min-h-0" aria-hidden />;
   }
 
@@ -1044,13 +773,14 @@ export const ChatMessages = memo(function ChatMessages() {
               && !planConfirmSuppressed
                 ? planDraftSummary
                 : null;
-            const lastAsst = [...turn.responses].reverse().find((r) => r.msg.type === "assistant");
-            const turnMetaText = lastAsst ? metaMap.get(lastAsst.displayIdx) : undefined;
             const turnStamp = turnMeta[turnIdx];
+            const userMsg = turn.userBlocks.length > 0
+              ? { type: "user" as const, message: { content: turn.userBlocks } }
+              : null;
 
             return (
             <section
-              key={turn.userMessage ? `turn-${committed.idxMap.get(turn.userMessage) ?? turnIdx}` : `turn-orphan-${turnIdx}`}
+              key={turn.turnId || `turn-${turnIdx}`}
               data-chat-turn-index={turnIdx}
               ref={attachTurnSectionRef(turnIdx, isLastTurn)}
               style={
@@ -1059,13 +789,12 @@ export const ChatMessages = memo(function ChatMessages() {
                   : undefined
               }
             >
-              {turn.userMessage && (
+              {userMsg && (
                 <UserMessageHeader
-                  msg={turn.userMessage}
+                  msg={userMsg}
                   turnIndex={turnIdx}
                   attachedBelow={
-                    todoAnchorUserIndex != null
-                    && committed.idxMap.get(turn.userMessage) === todoAnchorUserIndex
+                    todoAnchorTurnIndex != null && turn.turnIndex === todoAnchorTurnIndex
                       ? <MessageTodoDrawer />
                       : undefined
                   }
@@ -1075,66 +804,22 @@ export const ChatMessages = memo(function ChatMessages() {
                 {isLastTurn && showStreamingIndicator && (
                   <StreamingIndicator label={streamingLabel} />
                 )}
-                {(() => {
-                  const nodes: ReactNode[] = [];
-                  let assistantBatch: typeof turn.responses = [];
-
-                  const flushAssistant = () => {
-                    if (assistantBatch.length === 0) return;
-                    nodes.push(
-                      <TurnAssistantContent
-                        key={`turn-asst-${turnIdx}`}
-                        responses={assistantBatch}
-                        toolResultMap={toolResultMap}
-                        sessionId={chatSessionId ?? ""}
-                        turnIndex={turnIdx}
-                        streamingMessage={streamingMessage}
-                        turnLive={isLastTurn && isStreaming}
-                        planReplyFallbackSummary={planReplyFallbackSummary}
-                      />,
-                    );
-                    assistantBatch = [];
-                  };
-
-                  for (const item of turn.responses) {
-                    if (item.msg.type === "assistant") {
-                      assistantBatch.push(item);
-                      continue;
-                    }
-                    // Never split the assistant batch on result carriers — that
-                    // would remount ActivityFold and leave thought/tools unable
-                    // to share one collapsible row.
-                    if (isHiddenToolResultCarrier(item.msg)) {
-                      continue;
-                    }
-                    if (item.msg.type === "result" && !item.msg.is_error) {
-                      continue;
-                    }
-                    flushAssistant();
-                    const { msg, displayIdx } = item;
-                    const idx = committed.idxMap.get(msg) ?? messages.length;
-                    if (msg.type === "action-status") {
-                      nodes.push(
-                        <ActionStatusCard key={`action-${displayIdx}`} msg={msg} />,
-                      );
-                    } else if (msg.type === "plan-decision") {
-                      nodes.push(
-                        <PlanDecisionCard key={`plan-decision-${displayIdx}`} msg={msg} />,
-                      );
-                    } else if (msg.type === "result" && msg.is_error) {
-                      nodes.push(<ResultMessage key={`result-${idx}`} msg={msg} />);
-                    }
-                  }
-                  flushAssistant();
-                  return nodes;
-                })()}
+                <TurnAssistantContent
+                  blocks={turn.assistantBlocks}
+                  toolResultMap={toolResultMap}
+                  sessionId={chatSessionId ?? ""}
+                  turnIndex={turnIdx}
+                  isStreamingMsg={turn.live}
+                  planReplyFallbackSummary={planReplyFallbackSummary}
+                  stopped={turn.status === "cancelled"}
+                />
                 <TurnFooter
                   turnIndex={turnIdx}
-                  copyText={extractTurnCopyText(turn.responses)}
+                  copyText={extractTurnCopyTextFromBlocks(turn.assistantBlocks)}
                   isComplete={isTurnComplete}
                   completedAt={turnStamp?.completedAt}
                   modelLabel={turnStamp?.modelLabel}
-                  detailHint={turnStamp?.summary ?? turnMetaText}
+                  detailHint={turnStamp?.summary ?? (isLastTurn ? usageHint : null) ?? undefined}
                 />
               </div>
             </section>

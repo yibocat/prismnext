@@ -112,9 +112,11 @@ export function isDisposableEmptyChatTab(tab: {
   isLoadingSession?: boolean;
   messages: unknown[];
   streamingMessage: unknown;
+  conversation?: { turns: unknown[]; live: unknown };
   draft?: { input?: string; parts?: unknown[] };
 }): boolean {
   if (tab.sessionId || tab.isStreaming || tab.isLoadingSession) return false;
+  if (tab.conversation && (tab.conversation.turns.length > 0 || tab.conversation.live)) return false;
   if (tab.messages.length > 0 || tab.streamingMessage) return false;
   if ((tab.draft?.input ?? "").trim()) return false;
   if (tab.draft?.parts && tab.draft.parts.length > 0) return false;

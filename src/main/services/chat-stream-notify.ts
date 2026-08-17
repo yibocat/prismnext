@@ -2,7 +2,7 @@ import { BrowserWindow } from "electron";
 import {
   ChatStreamDeltaTracker,
   mapChatStreamToAgentEvent,
-} from "../agent/events";
+} from "../acp/chat-stream-map";
 import type { AgentEvent } from "../../shared/agent-runtime";
 
 const tracker = new ChatStreamDeltaTracker();

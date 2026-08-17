@@ -16,7 +16,19 @@ import {
   emptyPermissionRulesConfig,
   type PermissionRulesConfig,
 } from "../../shared/permission-rules";
+import { isPiPrimitiveToolName } from "./capability-matrix";
 import { getNativeToolByName } from "./tools/index";
+import type { ToolPermissionCategory } from "./tools/types";
+
+const PI_PRIMITIVE_CATEGORY: Record<string, ToolPermissionCategory> = {
+  read: "read_only",
+  grep: "read_only",
+  find: "read_only",
+  ls: "read_only",
+  write: "safe_write",
+  edit: "safe_write",
+  bash: "shell_exec",
+};
 
 export type GateDecision = "allow" | "deny";
 
@@ -218,9 +230,11 @@ export class PermissionGate {
 
     const rules = request.rules ?? this.opts.rules ?? emptyPermissionRulesConfig();
     const tool = getNativeToolByName(request.toolName);
-    const category = tool?.permission?.category ?? (
-      FALLBACK_MUTATING_TOOLS.has(request.toolName.toLowerCase()) ? "safe_write" : "read_only"
-    );
+    const category = tool?.permission?.category
+      ?? (isPiPrimitiveToolName(request.toolName)
+        ? PI_PRIMITIVE_CATEGORY[request.toolName]
+        : undefined)
+      ?? (FALLBACK_MUTATING_TOOLS.has(request.toolName.toLowerCase()) ? "safe_write" : "read_only");
 
     // 2. Always Allow / Explicit Rules overrides
     const normalizedName = request.toolName.toLowerCase();

@@ -219,9 +219,9 @@ function WelcomeRuntimeStatus() {
     const run = async () => {
       void detectCompilers();
 
-      const [versions, chat, cachedUpdate] = await Promise.all([
+      const [versions, agentStatus, cachedUpdate] = await Promise.all([
         window.electronAPI?.aboutGetVersions?.().catch(() => null),
-        window.electronAPI?.chatStatus?.().catch(() => null),
+        window.electronAPI?.agentStatus?.().catch(() => null),
         window.electronAPI?.updateStatus?.().catch(() => null),
       ]);
 
@@ -231,7 +231,7 @@ function WelcomeRuntimeStatus() {
       applyAppUpdate(appVersion, cachedUpdate);
       setUpdateUi(mapUpdaterStatus(cachedUpdate));
 
-      const agentAvailable = Boolean(chat?.available);
+      const agentAvailable = Boolean(agentStatus?.ready && agentStatus?.canEmbed);
 
       setItems((prev) =>
         prev.map((item) =>
@@ -240,17 +240,15 @@ function WelcomeRuntimeStatus() {
                 ...item,
                 label: t("welcome.status.agent"),
                 state:
-                  chat?.phase === "starting"
+                  agentStatus && !agentStatus.hasApiKey
                     ? "warn"
                     : agentAvailable
                       ? "ok"
                       : "error",
                 detail:
-                  chat?.phase === "starting"
-                    ? t("welcome.status.agentStarting")
-                    : agentAvailable
-                      ? t("welcome.status.agentReady")
-                      : chat?.error || t("welcome.status.agentMissing"),
+                  agentAvailable
+                    ? t("welcome.status.agentReady")
+                    : agentStatus?.reason || t("welcome.status.agentMissing"),
               }
             : item,
         ),

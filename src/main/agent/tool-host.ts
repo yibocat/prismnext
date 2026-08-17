@@ -27,6 +27,14 @@ export interface ToolExecuteContext {
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
   abortSignal?: AbortSignal;
+  askUser?: (input: {
+    prompt: string;
+    options?: string[];
+    multiSelect?: boolean;
+  }) => Promise<{ ok: boolean; answer?: string; selected?: string[]; cancelled?: boolean; reason?: string }>;
+  suggestPlan?: (input: {
+    reason: string;
+  }) => Promise<{ accepted: boolean; reason?: string }>;
 }
 
 export interface ToolExecuteResult {

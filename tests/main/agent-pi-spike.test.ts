@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { mapPiSessionEvent, toChatStreamEnvelope } from "../../src/main/agent/events";
+import { mapPiSessionEvent } from "../../src/main/agent/events";
+import { PermissionGate } from "../../src/main/agent/permission-gate";
 import {
   ClosedResourceLoader,
   closedPiSessionOptions,
@@ -17,7 +18,6 @@ import {
   tryLoadPiSdkModule,
 } from "../../src/main/agent/pi-sdk-runtime";
 import { AgentSessionStore, FORBIDDEN_PROJECT_RESOURCE_DIRS, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
-import { PermissionGate } from "../../src/main/agent/permission-gate";
 import { ToolHost } from "../../src/main/agent/tool-host";
 
 describe("pi sdk spike", () => {
@@ -85,7 +85,15 @@ describe("pi sdk spike", () => {
       agentDir: "/tmp/userData/pi-agent",
       systemPrompt: "direct prompt, no _prism-system.md",
     });
-    expect(opts.noTools).toBe("builtin");
+    expect(opts.primitiveTools).toEqual([
+      "read",
+      "bash",
+      "edit",
+      "write",
+      "grep",
+      "find",
+      "ls",
+    ]);
     expect(opts.settingsManagerMode).toBe("inMemory");
     expect(opts.sessionManagerMode).toBe("inMemory");
     expect(opts.forbiddenDiscovery).toEqual(FORBIDDEN_PROJECT_RESOURCE_DIRS);
@@ -203,10 +211,11 @@ describe("pi sdk spike", () => {
       modelId: "claude-sonnet-4-5",
       systemPrompt: "PrismNext system prompt",
       toolHost: {},
+      gate: new PermissionGate(),
     })).toThrow("missing_pi_api_key");
   });
 
-  it("creates a real in-memory Pi SDK session with no built-in tools", async () => {
+  it("creates a real in-memory Pi SDK session with wrapped Pi primitives", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-pi-sdk-"));
     dirs.push(root);
     const factory = createPiSdkSessionFactory({
@@ -219,6 +228,7 @@ describe("pi sdk spike", () => {
           return { ok: false, error: "test_tool_host" };
         },
       },
+      gate: new PermissionGate(),
     });
 
     const session = await factory({
@@ -253,18 +263,28 @@ describe("pi sdk spike", () => {
       type: "message_update",
       assistantMessageEvent: { type: "thinking_delta", delta: "hmm" },
     }, ctx);
-    const tool = mapPiSessionEvent({
+    const hostTool = mapPiSessionEvent({
       type: "tool_execution_start",
       toolName: "literature-search",
       toolCallId: "c1",
     }, ctx);
+    const primitive = mapPiSessionEvent({
+      type: "tool_execution_start",
+      toolName: "read",
+      toolCallId: "c2",
+      args: { path: "README.md" },
+    }, ctx);
     const end = mapPiSessionEvent({ type: "agent_end" }, ctx);
     expect(text[0]).toMatchObject({ type: "text_delta", text: "Hello", tabId: "tab-1" });
     expect(think[0]).toMatchObject({ type: "thinking_delta", text: "hmm" });
-    expect(tool).toEqual([]);
+    expect(hostTool).toEqual([]);
+    expect(primitive[0]).toMatchObject({
+      type: "tool_started",
+      toolName: "read",
+      toolCallId: "c2",
+    });
     expect(end[0]).toMatchObject({ type: "turn_finished" });
-    expect(JSON.stringify([text, think, tool, end])).not.toMatch(/assistantMessageEvent|tool_execution_start/);
-    expect(toChatStreamEnvelope(text[0]!).type).toBe("text_delta");
+    expect(JSON.stringify([text, think, hostTool, primitive, end])).not.toMatch(/assistantMessageEvent|tool_execution_start/);
   });
 
   it("isolates two Pi-backed tabs and does not write project .pi or .agents", async () => {

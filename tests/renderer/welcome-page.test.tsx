@@ -66,6 +66,7 @@ describe("WelcomePage", () => {
   beforeEach(() => {
     (window as any).electronAPI = {
       aboutGetVersions: vi.fn().mockResolvedValue({ appVersion: "0.7.0" }),
+      agentStatus: vi.fn().mockResolvedValue({ ready: true, canEmbed: true, hasApiKey: true, sdk: "pi" }),
       chatStatus: vi.fn().mockResolvedValue({ available: true, phase: "ready" }),
       updateStatus: vi.fn().mockResolvedValue({ status: "up-to-date" }),
       updateCheck: vi.fn().mockResolvedValue({ status: "up-to-date" }),

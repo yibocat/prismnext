@@ -139,6 +139,37 @@ describe("applyConversationEvent", () => {
     expect(conv.turns).toEqual(before.turns);
   });
 
+  it("keeps composer user blocks on the live turn instead of collapsing to a string", () => {
+    const conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userBlocks: [
+        { type: "text", text: "## Referenced files\n\nmanuscript/main.tex" },
+      ],
+    });
+    expect(conv.live?.user.blocks[0]?.text).toContain("Referenced files");
+    expect(conv.pendingPlanSuggest).toBeNull();
+  });
+
+  it("records plan_suggested on the conversation without inventing a tool card", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "write a plan",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "plan_suggested",
+      eventId: "e-p",
+      requestId: "p-1",
+      reason: "This looks like a multi-step change.",
+    }));
+
+    expect(conv.pendingPlanSuggest).toEqual({
+      requestId: "p-1",
+      reason: "This looks like a multi-step change.",
+    });
+    expect(conv.live?.assistant.blocks).toEqual([]);
+  });
+
   it("records question_requested without inventing a tool card", () => {
     let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
       turnId: "turn-1",

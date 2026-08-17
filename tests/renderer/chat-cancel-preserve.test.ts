@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { beginConversationTurn, applyConversationEvent } from "@/lib/chat/conversation-reducer";
 
 vi.mock("@/stores/document-store", () => ({
   useDocumentStore: { getState: () => ({ projectRoot: "" }) },
@@ -39,16 +40,26 @@ vi.stubGlobal("window", {
 });
 
 import { useChatStore } from "../../src/renderer/stores/chat-store";
-import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
+
+function livePartial(tabConversation: ReturnType<typeof useChatStore.getState>["tabs"][number]["conversation"]) {
+  let conv = beginConversationTurn(tabConversation, { turnId: "turn-1", userText: "go" });
+  conv = applyConversationEvent(conv, {
+    type: "text_delta",
+    runtimeSessionId: "rt",
+    tabId: "tab",
+    turnId: "turn-1",
+    text: "Partial reply that streamed so far",
+  });
+  return conv;
+}
 
 describe("cancelExecution preserves partial reply", () => {
   beforeEach(() => {
     useChatStore.getState().clearAllSessions();
-    (useChatStore as any)._msgCache?.clear();
     agentCancel.mockClear();
   });
 
-  it("commits the in-progress streamingMessage to messages with stopped=true instead of discarding it", async () => {
+  it("commits the live turn as cancelled instead of discarding streamed text", async () => {
     const tabId = useChatStore.getState().createTab();
     useChatStore.setState((s) => ({
       tabs: s.tabs.map((t) =>
@@ -56,12 +67,9 @@ describe("cancelExecution preserves partial reply", () => {
           ? {
               ...t,
               runtime: "pi" as const,
-              sessionId: "sess-1",
+              sessionId: tabId,
+              conversation: livePartial(t.conversation),
               isStreaming: true,
-              streamingMessage: {
-                type: "assistant" as const,
-                message: { content: [{ type: "text" as const, text: "Partial reply that streamed so far" }] },
-              },
             }
           : t,
       ),
@@ -72,18 +80,14 @@ describe("cancelExecution preserves partial reply", () => {
     const tab = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
     expect(agentCancel).toHaveBeenCalledWith({ conversationId: tabId });
     expect(tab.isStreaming).toBe(false);
-    expect(tab.streamingMessage).toBeNull();
-    // The partial reply is committed, not discarded.
-    expect(tab.messages).toHaveLength(1);
-    const committed = tab.messages[0] as ChatStreamMessage;
-    expect(committed.type).toBe("assistant");
-    expect(committed.stopped).toBe(true);
-    expect(committed.message?.content).toEqual([
+    expect(tab.conversation.live).toBeNull();
+    expect(tab.conversation.turns[0]?.status).toBe("cancelled");
+    expect(tab.conversation.turns[0]?.assistant.blocks).toEqual([
       { type: "text", text: "Partial reply that streamed so far" },
     ]);
   });
 
-  it("marks message counts so load-earlier offset math stays correct", async () => {
+  it("bumps streamGeneration on cancel so a later send is a new generation", async () => {
     const tabId = useChatStore.getState().createTab();
     useChatStore.setState((s) => ({
       tabs: s.tabs.map((t) =>
@@ -91,41 +95,10 @@ describe("cancelExecution preserves partial reply", () => {
           ? {
               ...t,
               runtime: "pi" as const,
-              sessionId: "sess-2",
-              isStreaming: true,
-              streamingMessage: {
-                type: "assistant" as const,
-                message: { content: [{ type: "text" as const, text: "hi" }] },
-              },
-            }
-          : t,
-      ),
-    }));
-
-    await useChatStore.getState().cancelExecution();
-
-    const tab = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
-    // Committed interrupted reply must stay in the in-memory transcript.
-    expect(tab.messages).toHaveLength(1);
-    expect(tab.messages[0]).toMatchObject({ type: "assistant", stopped: true });
-    expect(tab.streamingMessage).toBeNull();
-  });
-
-  it("bumps streamGeneration on cancel so stale chat:complete cannot clear the next turn", async () => {
-    const tabId = useChatStore.getState().createTab();
-    useChatStore.setState((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId
-          ? {
-              ...t,
-              runtime: "pi" as const,
-              sessionId: "sess-gen",
+              sessionId: tabId,
+              conversation: livePartial(t.conversation),
               isStreaming: true,
               streamGeneration: 2,
-              streamingMessage: {
-                type: "assistant" as const,
-                message: { content: [{ type: "text" as const, text: "partial" }] },
-              },
             }
           : t,
       ),
@@ -136,13 +109,11 @@ describe("cancelExecution preserves partial reply", () => {
     expect(afterCancel.isStreaming).toBe(false);
     expect(afterCancel.streamGeneration).toBe(3);
 
-    // Queue drain / re-send starts a new turn
     useChatStore.getState()._setStreaming(tabId, true);
     const afterResend = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
     expect(afterResend.isStreaming).toBe(true);
     expect(afterResend.streamGeneration).toBe(4);
 
-    // Stale complete captured generation 2 or 3 must not clear generation 4
     const { canClearStreamingForGeneration } = await import(
       "../../src/renderer/lib/chat/stream-generation"
     );
@@ -151,12 +122,12 @@ describe("cancelExecution preserves partial reply", () => {
     expect(canClearStreamingForGeneration(4, afterResend.streamGeneration)).toBe(true);
   });
 
-  it("does not throw when there is no streaming message to commit", async () => {
+  it("does not throw when there is no live turn to commit", async () => {
     const tabId = useChatStore.getState().createTab();
     useChatStore.setState((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === tabId
-          ? { ...t, sessionId: "sess-3", isStreaming: true, streamingMessage: null }
+          ? { ...t, sessionId: tabId, isStreaming: true }
           : t,
       ),
     }));
@@ -165,7 +136,7 @@ describe("cancelExecution preserves partial reply", () => {
 
     const tab = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
     expect(tab.isStreaming).toBe(false);
-    expect(tab.messages).toEqual([]);
-    expect(tab.streamingMessage).toBeNull();
+    expect(tab.conversation.live).toBeNull();
+    expect(tab.conversation.turns).toEqual([]);
   });
 });

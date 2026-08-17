@@ -27,8 +27,9 @@ import {
   planArtifactCardFromEvents,
 } from "@/lib/chat/plan-ui-events";
 import { clearTurnWindowState } from "@/lib/chat/turn-window";
-import { composerToolsSuppressedOnSessionHydrate, dismissTodoPlan as persistTodoPlanDismiss } from "@/lib/chat/composer-pending-tools";
+import { dismissTodoPlan as persistTodoPlanDismiss } from "@/lib/chat/composer-pending-tools";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
+import { conversationHasContent } from "@/lib/chat/conversation-view";
 import {
   deriveSessionTitleForSend,
   extractSessionTitle,
@@ -670,7 +671,7 @@ interface ChatState {
   resyncTabMessagesFromDisk: (tabId: string) => Promise<void>;
 
   // Internal (called by use-opencode-events)
-  _beginAgentTurn: (tabId: string, turnId: string, userText: string) => void;
+  _beginAgentTurn: (tabId: string, turnId: string, userText: string, userBlocks?: ContentBlock[]) => void;
   _applyAgentEvent: (tabId: string, event: AgentEvent) => void;
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage, messageId?: string) => void;
@@ -1027,40 +1028,10 @@ function finalizeStreamingForMutation(
   };
 }
 
-function projectConversationToChat(
-  conversation: Conversation,
-): Pick<TabState, "messages" | "streamingMessage" | "isStreaming"> {
-  const messages: ChatStreamMessage[] = [];
-  for (const turn of conversation.turns) {
-    if (turn.user.blocks.length > 0) {
-      messages.push({
-        type: "user",
-        message: { content: turn.user.blocks as ContentBlock[] },
-      });
-    }
-    if (turn.assistant.blocks.length > 0) {
-      messages.push({
-        type: "assistant",
-        message: { content: turn.assistant.blocks as ContentBlock[] },
-      });
-    }
-  }
-
-  if (conversation.live?.user.blocks.length) {
-    messages.push({
-      type: "user",
-      message: { content: conversation.live.user.blocks as ContentBlock[] },
-    });
-  }
-  const streamingMessage = conversation.live?.assistant.blocks.length
-    ? {
-        type: "assistant" as const,
-        message: { content: conversation.live.assistant.blocks as ContentBlock[] },
-      }
-    : null;
+function applyConversationToTab(tab: TabState, conversation: Conversation): TabState {
   return {
-    messages,
-    streamingMessage,
+    ...tab,
+    conversation,
     isStreaming: conversation.live !== null,
   };
 }
@@ -1406,13 +1377,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === resolvedTabId);
     if (!tab?.planSuggestVisible) return;
 
-    const consentSessionId = tab.planSuggestConsentSessionId ?? tab.sessionId;
+    const requestId = tab.conversation.pendingPlanSuggest?.requestId;
 
     set((s) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== resolvedTabId) return t;
         return {
           ...t,
+          conversation: {
+            ...t.conversation,
+            pendingPlanSuggest: null,
+          },
           planSuggestVisible: false,
           planSuggestReason: null,
           planSuggestDeadlineAt: null,
@@ -1425,15 +1400,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }),
     }));
 
-    if (consentSessionId) {
+    if (requestId) {
+      const mapped = decision === "accepted" ? "accept" : "dismiss";
       void window.electronAPI
-        .chatResolvePlanSuggest({ sessionId: consentSessionId, decision })
+        .agentResolvePlanSuggest({ requestId, decision: mapped })
         .catch(() => {});
-      if (decision === "dismissed" || decision === "timed_out") {
-        void window.electronAPI
-          .chatSetPlanSuggestDismissed({ sessionId: consentSessionId, dismissed: true })
-          .catch(() => {});
-      }
     }
 
     if (decision === "accepted") {
@@ -1841,33 +1812,20 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
       return;
     }
-    // First message on a tab (session is created on send when still unbound).
-    const isFirstTurn = (tabBeforePrompt?.messages.length ?? 0) === 0;
-
-    // ── 1. Add user message (unless skipped — caller already inserted it) ──
-    const userMessage: ChatStreamMessage | null = skipUserMessage
-      ? null
-      : {
-          type: "user",
-          message: { content: userContent || [{ type: "text", text: userPrompt }] },
-        };
-
-    // Plan suggest is AI-soft only: agent calls `suggest-plan` → consent strip.
-    // Never keyword-match user text here (that hardcodes soft judgment).
+    const userBlocks = userContent?.length
+      ? userContent
+      : [{ type: "text" as const, text: userPrompt }];
 
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        const finalized = finalizeStreamingForMutation(t);
-        const snapshot = { ...t, ...finalized };
         return {
-          ...snapshot,
-          title: deriveSessionTitleForSend(snapshot, userPrompt, userContent, userMessage),
-          messages: userMessage ? [...finalized.messages, userMessage] : finalized.messages,
+          ...t,
+          title: deriveSessionTitleForSend(t, userPrompt, userBlocks),
           isStreaming: true,
           streamGeneration: t.streamGeneration + 1,
           error: null,
-          composerToolsSuppressed: userMessage ? false : t.composerToolsSuppressed,
+          composerToolsSuppressed: skipUserMessage ? t.composerToolsSuppressed : false,
         };
       });
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
@@ -1876,7 +1834,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tabAfterUser = get().tabs.find((t) => t.id === tabId);
     if (isAgentRuntime(tabAfterUser?.runtime)) {
       const turnId = newClientTurnId();
-      get()._beginAgentTurn(tabId, turnId, userPrompt);
+      get()._beginAgentTurn(tabId, turnId, userPrompt, userBlocks);
       try {
         const persistedSettings = useSettingsStore.getState().settings;
         const provider = persistedSettings.aiProvider || "anthropic";
@@ -1899,12 +1857,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
         });
         if (!result.ok) {
-          get()._appendAssistantError(tabId, formatAgentSendError(result.error));
+          get()._applyAgentEvent(tabId, {
+            type: "turn_failed",
+            runtimeSessionId: tabId,
+            tabId,
+            turnId,
+            error: formatAgentSendError(result.error),
+          });
         } else {
           refreshAgentSessionList();
         }
       } catch (err: any) {
-        get()._appendAssistantError(tabId, err?.message || String(err));
+        get()._applyAgentEvent(tabId, {
+          type: "turn_failed",
+          runtimeSessionId: tabId,
+          tabId,
+          turnId,
+          error: err?.message || String(err),
+        });
       }
       return;
     }
@@ -1968,37 +1938,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   cancelExecution: async () => {
     const tabId = get().activeTabId;
     const tab = get().tabs.find((t) => t.id === tabId);
+    const turnId = tab?.conversation.live?.turnId;
     try {
-      if (isAgentRuntime(tab?.runtime)) {
-        await window.electronAPI.agentCancel({ conversationId: tabId });
-      }
+      await window.electronAPI.agentCancel({ conversationId: tabId });
     } catch (err: any) {
       console.error("[chat] Cancel failed:", err);
     }
-    // Commit any partial assistant reply BEFORE clearing isStreaming. Otherwise
-    // the later `chat:complete` → `_setStreaming(false)` call would treat the
-    // leftover `streamingMessage` as an orphan (isStreaming already false) and
-    // discard it — losing everything that streamed so far. Mark the committed
-    // message `stopped: true` so the UI can show it was interrupted.
+    if (turnId) {
+      get()._applyAgentEvent(tabId, {
+        type: "turn_cancelled",
+        runtimeSessionId: tabId,
+        tabId,
+        turnId,
+      });
+    }
     set((s) => {
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        if (t.streamingMessage) {
-          const committed: ChatStreamMessage = { ...t.streamingMessage, stopped: true };
-          return {
-            ...t,
-            isStreaming: false,
-            // Invalidate delayed chat:complete from this cancel (queue drain / re-send).
-            streamGeneration: t.streamGeneration + 1,
-            messages: [...t.messages, committed],
-            streamingMessage: null,
-            streamingPartMessageId: null,
-            settledStreamMessageIds: withSettledStreamMessageId(t, t.streamingPartMessageId),
-          };
-        }
         return {
           ...t,
-          isStreaming: false,
+          isStreaming: t.conversation.live !== null ? t.isStreaming : false,
           streamGeneration: t.streamGeneration + 1,
         };
       });
@@ -2247,14 +2206,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
     if (!result.ok || !result.conversation) return;
     const conversation = result.conversation;
-    const projected = projectConversationToChat(conversation);
     set((s) => {
       const tabs = s.tabs.map((t) =>
         t.id === tabId
           ? {
-              ...t,
-              conversation,
-              ...projected,
+              ...applyConversationToTab(t, conversation),
               title: result.title || t.title,
               error: null,
               isLoadingSession: false,
@@ -2325,15 +2281,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         await applyCheckoutTransition({ type: "local" });
       }
       const conversation = result.conversation;
-      const projected = projectConversationToChat(conversation);
       const hydratedTab: TabState = {
-        ...loadingTab,
-        conversation,
-        ...projected,
+        ...applyConversationToTab(loadingTab, conversation),
         title: result.title || conversation.title || "New Chat",
         sessionCwd: directory,
         isLoadingSession: false,
-        composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(projected.messages),
+        composerToolsSuppressed: true,
       };
       set((s) => {
         const tabs = s.tabs.map((t) => (t.id === tabId ? hydratedTab : t));
@@ -2359,15 +2312,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   // ─── Internal ───
 
-  _beginAgentTurn: (tabId, turnId, userText) => {
+  _beginAgentTurn: (tabId, turnId, userText, userBlocks) => {
     set((state) => {
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
-        const conversation = beginConversationTurn(tab.conversation, { turnId, userText });
+        const conversation = beginConversationTurn(tab.conversation, {
+          turnId,
+          userText,
+          userBlocks,
+        });
         return {
-          ...tab,
-          conversation,
-          ...projectConversationToChat(conversation),
+          ...applyConversationToTab(tab, conversation),
           error: null,
         };
       });
@@ -2380,11 +2335,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
         const conversation = applyConversationEvent(tab.conversation, event);
+        const suggest = conversation.pendingPlanSuggest;
         return {
-          ...tab,
-          conversation,
-          ...projectConversationToChat(conversation),
+          ...applyConversationToTab(tab, conversation),
           error: event.type === "turn_failed" ? event.error : tab.error,
+          planSuggestVisible:
+            !!suggest && tab.sessionAgent === "build" && !tab.planSuggestDismissed,
+          planSuggestReason: suggest?.reason ?? null,
         };
       });
       return {

@@ -41,7 +41,17 @@ function parseAnswer(content: unknown): string {
 
 async function writeQuestionAnswer(answer: string): Promise<boolean> {
   const tabId = useChatStore.getState().activeTabId;
-  const sessionId = useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId;
+  const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+  const requestId = tab?.conversation.pendingQuestion?.requestId;
+  if (requestId) {
+    try {
+      const result = await window.electronAPI.agentAnswerQuestion({ requestId, answer });
+      return result.ok;
+    } catch {
+      return false;
+    }
+  }
+  const sessionId = tab?.sessionId;
   if (!sessionId) return false;
   try {
     const result = await window.electronAPI.chatAnswerQuestion(sessionId, answer);

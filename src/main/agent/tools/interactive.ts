@@ -26,7 +26,7 @@ export const questionTool: NativeToolDefinition = {
   permission: {
     category: "read_only",
   },
-  async execute(args) {
+  async execute(args, ctx) {
     const question = str(args.question);
     if (!question) return { ok: false, error: "missing_question" };
 
@@ -35,12 +35,20 @@ export const questionTool: NativeToolDefinition = {
       : undefined;
     const multiSelect = args.multiSelect === true;
 
+    if (!ctx.askUser) {
+      return { ok: false, error: "question_broker_missing" };
+    }
+
+    const answered = await ctx.askUser({ prompt: question, options, multiSelect });
     return {
-      answered: true,
+      answered: answered.ok,
       question,
       options: options ?? [],
       multiSelect,
-      note: "Question acknowledged by host.",
+      answer: answered.answer,
+      selected: answered.selected,
+      cancelled: answered.cancelled,
+      reason: answered.reason,
     };
   },
 };
@@ -56,12 +64,16 @@ export const suggestPlanTool: NativeToolDefinition = {
   permission: {
     category: "read_only",
   },
-  async execute(args) {
-    const reason = str(args.reason);
+  async execute(args, ctx) {
+    const reason = str(args.reason) || "Plan mode suggested.";
+    if (!ctx.suggestPlan) {
+      return { ok: false, error: "plan_suggest_broker_missing" };
+    }
+    const result = await ctx.suggestPlan({ reason });
     return {
       suggested: true,
-      accepted: false,
-      reason: reason || "Plan mode suggested.",
+      accepted: result.accepted,
+      reason: result.reason || reason,
     };
   },
 };
