@@ -1,6 +1,8 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
+import { usePiChatEvents } from "@/hooks/use-pi-chat-events";
+import { isExperimentalPiRuntime } from "@shared/pi-lab";
 import { useTrayStatusSync } from "@/hooks/use-tray-status-sync";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -38,7 +40,6 @@ import {
   BrowserSettings,
   LiteratureSettings,
   AboutSettings,
-  PiLabSettings,
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { TeamsCenter } from "@/components/modules/teams/teams-center";
@@ -54,6 +55,7 @@ import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 export function LeftMainArea() {
   const { t } = useTranslation();
   useOpenCodeEvents();
+  usePiChatEvents();
   useTrayStatusSync();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
@@ -110,6 +112,10 @@ export function LeftMainArea() {
     return tab?.sessionAgent ?? "build";
   });
   const setSessionAgent = useChatStore((s) => s.setSessionAgent);
+  const isPiTab = useChatStore((s) => {
+    const tab = s.tabs.find((item) => item.id === s.activeTabId);
+    return isExperimentalPiRuntime(tab?.runtime);
+  });
   const showHomepage =
     messages.length === 0 && !isStreaming && !isLoadingSession;
   /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
@@ -238,7 +244,6 @@ export function LeftMainArea() {
       literature: LiteratureSettings,
       backups: BackupsSettings,
       about: AboutSettings,
-      lab: PiLabSettings,
     }[resolvedCategory];
     if (BuiltinSettings) {
       return (
@@ -268,6 +273,16 @@ export function LeftMainArea() {
       <ChatErrorBoundary>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm bg-background">
           <ChatHomeBackdrop />
+          {isPiTab ? (
+            <div className="relative z-10 shrink-0 border-b border-border bg-muted px-4 py-2">
+              <p className="text-[length:var(--font-size-12)] font-medium">
+                {t("agentLab.bannerTitle")}
+              </p>
+              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                {t("agentLab.limitChat")} {t("agentLab.limitSession")} {t("agentLab.limitTask")}
+              </p>
+            </div>
+          ) : null}
           {showHomepage ? (
           /* ── Homepage ── */
           <div

@@ -91,8 +91,7 @@
       "browser": "Browser",
       "literature": "Literature",
       "pro": "Pro",
-      "teams": "Teams & Agents",
-      "lab": "Agent Lab"
+      "teams": "Teams & Agents"
     },
     "agentAssets": {
       "title": "Teams & Agents",
@@ -122,43 +121,6 @@
       "applicationLogs": "Application logs",
       "applicationLogsDesc": "Browse, filter, search, and export app logs (main + UI).",
       "open": "Open"
-    },
-    "lab": {
-      "title": "Agent Lab",
-      "subtitle": "A separate Pi conversation for architecture experiments. Your normal chat is unchanged.",
-      "bannerTitle": "Experimental runtime",
-      "bannerBody": "Pi runs in the main process. This lab registers literature search, catalog discovery, brief updates, and experiment runs. In Ask mode, brief edits and experiment runs wait for your approval; a deny does not write or start a process.",
-      "permissionMode": "Permission {{mode}}",
-      "status": "Runtime",
-      "node": "Node {{version}}",
-      "ready": "Ready",
-      "empty": "Open a project, pick a BYOK model in Settings → Models, then send a short prompt here.",
-      "placeholder": "Ask the Pi lab…",
-      "send": "Send",
-      "cancel": "Stop",
-      "reset": "New conversation",
-      "sendFailed": "The lab could not start this turn.",
-      "allow": "Allow",
-      "deny": "Deny",
-      "permissionTitle": "Allow {{name}}?",
-      "toolStarted": "Running {{name}}",
-      "toolFinished": "{{name}} finished",
-      "toolDenied": "{{name}} was denied",
-      "toolFailed": "{{name}} failed: {{error}}",
-      "role": {
-        "user": "You",
-        "assistant": "Pi lab",
-        "tool": "Tool",
-        "system": "Lab"
-      },
-      "reason": {
-        "missing_project": "Open a project first",
-        "missing_pi_api_key": "Add an API key in Settings → Models",
-        "missing_pi_provider": "Choose a provider in Settings → Models",
-        "missing_pi_model": "Choose a model in Settings → Models",
-        "electron_node_incompatible": "This Electron build cannot embed Pi",
-        "unsupportedProvider": "OpenCode catalog providers (Zen / Go) are not available in the lab. Use a direct BYOK vendor such as DeepSeek, Anthropic, or OpenAI."
-      }
     },
     "slots": {
       "addFolder": "Add folder",
@@ -2035,6 +1997,7 @@
   },
   "nav": {
     "newAgent": "New Agent",
+    "newPiAgent": "New Pi Agent",
     "library": "Library",
     "experiments": "Experiments",
     "templates": "Templates",
@@ -3489,5 +3452,50 @@
     "sidebar": "Browse",
     "count": "{{count}} teams",
     "clearSearch": "Clear search"
+  },
+  "agentLab": {
+    "title": "Agent Foundation Lab",
+    "subtitle": "Experimental Pi host acceptance. This is not production chat.",
+    "bannerTitle": "Experimental foundation bench",
+    "bannerBody": "This tab talks to the in-process Pi host only. It is an acceptance tool for the unfinished agent foundation — not a second chat product.",
+    "limitChat": "Production Chat still uses OpenCode. This tab does not replace chat:send.",
+    "limitSession": "Turns may be written as JSON, but this tab does not restore previous sessions.",
+    "limitTask": "The task tool is still simulated. It is not a real sub-session.",
+    "noProject": "No project",
+    "noProjectTitle": "Open a project first",
+    "noProjectBody": "Open a project in PrismNext, then use New Pi Agent.",
+    "project": "Project",
+    "permissionMode": "Permission {{mode}}",
+    "node": "Node {{version}}",
+    "ready": "Ready",
+    "empty": "Pick a BYOK model in Settings → Models, then send a short prompt here.",
+    "placeholder": "Ask the Pi foundation lab…",
+    "send": "Send",
+    "cancel": "Stop",
+    "reset": "New conversation",
+    "sendFailed": "The experimental Pi tab could not start this turn.",
+    "allow": "Allow",
+    "deny": "Deny",
+    "permissionTitle": "Allow {{name}}?",
+    "toolStarted": "Running {{name}}",
+    "toolFinished": "{{name}} finished",
+    "toolDenied": "{{name}} was denied",
+    "toolFailed": "{{name}} failed: {{error}}",
+    "team": "Team",
+    "lead": "Lead",
+    "role": {
+      "user": "You",
+      "assistant": "Pi lab",
+      "tool": "Tool",
+      "system": "Lab"
+    },
+    "reason": {
+      "missing_project": "Open a project first",
+      "missing_pi_api_key": "Add an API key in Settings → Models",
+      "missing_pi_provider": "Choose a provider in Settings → Models",
+      "missing_pi_model": "Choose a model in Settings → Models",
+      "electron_node_incompatible": "This Electron build cannot embed Pi",
+      "unsupportedProvider": "OpenCode catalog providers (Zen / Go) are not available here. Use a direct BYOK vendor such as DeepSeek, Anthropic, or OpenAI."
+    }
   }
 }

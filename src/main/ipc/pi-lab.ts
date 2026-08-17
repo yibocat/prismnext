@@ -1,21 +1,21 @@
 /**
- * Isolated IPC for the Pi Agent Lab. Do not route production chat through here.
+ * Isolated IPC for the experimental Pi chat tab. Do not route default chat:send here.
  */
 
-import { BrowserWindow, ipcMain } from "electron";
+import { ipcMain } from "electron";
 import type { PiLabSendInput } from "../../shared/pi-lab";
 import { getPiLabService } from "../agent/pi-lab-service";
 
 export function registerPiLabHandlers(): void {
-  ipcMain.handle("pi-lab:status", async (_event, args?: { projectRoot?: string }) => {
+  ipcMain.handle("pi-lab:status", async (event, args?: { projectRoot?: string }) => {
     const lab = await getPiLabService();
+    lab.attachOwner(event.sender);
     return lab.status(args?.projectRoot);
   });
 
   ipcMain.handle("pi-lab:send", async (event, args: PiLabSendInput) => {
     const lab = await getPiLabService();
-    const win = BrowserWindow.fromWebContents(event.sender);
-    if (win) lab.attachWindow(win);
+    lab.attachOwner(event.sender);
     return lab.send(args);
   });
 

@@ -999,6 +999,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	piLabSend: (args: {
 		projectRoot: string;
 		text: string;
+		tabId?: string;
+		sessionTeamId?: string;
 		provider?: string;
 		modelId?: string;
 		apiKey?: string;

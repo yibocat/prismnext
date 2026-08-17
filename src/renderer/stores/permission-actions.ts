@@ -9,6 +9,31 @@ import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 import { createLogger } from "@/services/logger";
 import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
+import { isExperimentalPiRuntime } from "../../shared/pi-lab";
+
+async function answerPermission(
+  tabId: string,
+  permissionId: string,
+  allow: boolean,
+  toolCallId?: string,
+  always?: boolean,
+): Promise<void> {
+  const tab = useChatStore.getState().tabs.find((item) => item.id === tabId);
+  if (isExperimentalPiRuntime(tab?.runtime)) {
+    await window.electronAPI.piLabResolvePermission({
+      requestId: permissionId,
+      decision: allow ? "allow" : "deny",
+    });
+    return;
+  }
+  if (allow) {
+    await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId, {
+      always: Boolean(always),
+    });
+    return;
+  }
+  await window.electronAPI.chatAnswerPermission(permissionId, false, toolCallId);
+}
 
 const log = createLogger("permission-actions", "agent");
 
@@ -84,7 +109,7 @@ export async function finalizePermissionDeny(opts: {
 
   if (!skipApi) {
     log.debug("finalizePermissionDeny", { permissionId, toolCallId, toolName });
-    await window.electronAPI.chatAnswerPermission(permissionId, false, toolCallId);
+    await answerPermission(tabId, permissionId, false, toolCallId);
   }
 
   const permissionStore = usePermissionStore.getState();
@@ -163,9 +188,7 @@ export async function finalizePermissionAllow(opts: {
       }
     }
   }
-  await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId, {
-    always: Boolean(always),
-  });
+  await answerPermission(tabId, permissionId, true, toolCallId, always);
 
   const permissionStore = usePermissionStore.getState();
   if (toolCallId) {

@@ -8,6 +8,16 @@ import type { PermissionMode } from "./session-agent";
 
 export const PI_LAB_TAB_ID = "pi-lab";
 
+export type ChatRuntimeKind = "opencode" | "pi";
+
+export function isExperimentalPiRuntime(runtime?: string | null): boolean {
+  return runtime === "pi";
+}
+
+export function shouldShowExperimentalPiNav(input: { isDev: boolean }): boolean {
+  return input.isDev;
+}
+
 /** OpenCode catalog ids are blocked. Direct BYOK vendors (DeepSeek, Anthropic, …) are allowed. */
 export const PI_LAB_SUPPORTED_PROVIDERS = [
   "anthropic",
@@ -65,6 +75,7 @@ export interface PiLabStatus {
 export interface PiLabSendInput {
   projectRoot: string;
   text: string;
+  tabId?: string;
   sessionTeamId?: string;
   provider?: string;
   modelId?: string;

@@ -1,12 +1,12 @@
 /**
  * Isolated Pi Agent Lab — not the production chat backend.
  *
- * Settings → Agent Lab talks to this service only. `ipc/chat.ts` and
+ * Experimental Pi chat tabs talk to this service only. `ipc/chat.ts` and
  * AcpService stay on OpenCode.
  */
 
 import { join } from "node:path";
-import type { BrowserWindow } from "electron";
+import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent-runtime";
 import type { PermissionMode } from "../../shared/session-agent";
 import {
@@ -206,6 +206,8 @@ export class PiLabService {
   private sending = false;
   private sink: ((event: AgentEvent) => void) | null = null;
   private permissionSink: ((request: PermissionGateRequest) => void) | null = null;
+  private owner: WebContents | null = null;
+  private activeTabId: string = PI_LAB_TAB_ID;
 
   constructor(private readonly deps: PiLabServiceDeps) {}
 
@@ -303,6 +305,7 @@ export class PiLabService {
     if (!text) return { ok: false, error: "missing_prompt" };
 
     this.sending = true;
+    this.activeTabId = input.tabId?.trim() || PI_LAB_TAB_ID;
     try {
       if (!this.runtime || this.projectRoot !== projectRoot || !this.sessionId) {
         await this.resetSession();
@@ -328,7 +331,7 @@ export class PiLabService {
       });
       await this.runtime.sendTurn({
         runtimeSessionId: sessionId,
-        tabId: PI_LAB_TAB_ID,
+        tabId: this.activeTabId,
         text: userText,
         permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
       });
@@ -338,7 +341,7 @@ export class PiLabService {
       this.sink?.({
         type: "turn_failed",
         runtimeSessionId: this.sessionId ?? "none",
-        tabId: PI_LAB_TAB_ID,
+        tabId: this.activeTabId,
         turnId: "lab",
         error,
       });
@@ -361,13 +364,39 @@ export class PiLabService {
     return this.gate?.resolve(requestId, decision) ?? false;
   }
 
-  attachWindow(win: BrowserWindow): void {
+  attachOwner(contents: WebContents): void {
+    this.owner = contents;
     this.sink = (event) => {
-      if (!win.isDestroyed()) win.webContents.send("pi-lab:event", event);
+      if (this.owner && !this.owner.isDestroyed()) {
+        this.owner.send("pi-lab:event", event);
+      }
     };
     this.permissionSink = (request) => {
-      if (!win.isDestroyed()) win.webContents.send("pi-lab:permission", request);
+      if (this.owner && !this.owner.isDestroyed()) {
+        this.owner.send("pi-lab:permission", request);
+      }
     };
+  }
+
+  detachOwner(contents?: WebContents): void {
+    if (contents && this.owner !== contents) return;
+    this.owner = null;
+    this.sink = null;
+    this.permissionSink = null;
+  }
+
+  isOwnedBy(contents: WebContents): boolean {
+    return this.owner === contents;
+  }
+
+  /** Test helper: send through the current owner sink without starting a Pi turn. */
+  dispatchEvent(event: AgentEvent): void {
+    this.sink?.(event);
+  }
+
+  /** Test helper: send a permission prompt through the current owner sink. */
+  dispatchPermission(request: PermissionGateRequest): void {
+    this.permissionSink?.(request);
   }
 
   private async startSession(input: {
@@ -439,7 +468,7 @@ export class PiLabService {
     runtime.subscribe((event) => this.sink?.(event));
 
     const created = await runtime.createSession({
-      tabId: PI_LAB_TAB_ID,
+      tabId: this.activeTabId,
       projectRoot: input.projectRoot,
       permissionMode: input.permissionMode,
       sessionAgent: "build",

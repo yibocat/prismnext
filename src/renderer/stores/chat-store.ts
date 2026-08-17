@@ -40,6 +40,10 @@ import { scheduleCitationStagingBackfill } from "@/lib/literature/sync-citation-
 import { useCitationStagingStore } from "./citation-staging-store";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import type { SessionAgent } from "../../shared/session-agent";
+import {
+  isExperimentalPiRuntime,
+  type ChatRuntimeKind,
+} from "../../shared/pi-lab";
 import type { ResearchPlanStep } from "../../shared/research-plan";
 import { formatTaskError } from "../../shared/task-error-codes";
 import {
@@ -53,6 +57,16 @@ import {
   extractPlanFrontmatterDescription,
   sessionDraftPlanRel,
 } from "../../shared/research-plan";
+
+function formatPiLabSendError(reason?: string): string {
+  if (!reason) return i18n.t("agentLab.sendFailed");
+  if (reason.startsWith("unsupported_pi_provider")) {
+    return i18n.t("agentLab.reason.unsupportedProvider");
+  }
+  const key = `agentLab.reason.${reason}`;
+  const translated = i18n.t(key);
+  return translated === key ? reason : translated;
+}
 
 // ─── Types ───
 
@@ -187,6 +201,8 @@ interface TabState {
    *  in left-sidebar's fetchSessions sync so user-set titles stick. */
   userTitleSet: boolean;
   sessionId: string | null;
+  /** Default OpenCode. Experimental Pi tabs never use chat:send. */
+  runtime: ChatRuntimeKind;
   /** Committed messages — immutable once added. Never modified in-place. */
   messages: ChatStreamMessage[];
   /** In-progress streaming assistant message. Merged/updated on each delta.
@@ -332,6 +348,7 @@ function makeDefaultTab(id: string): TabState {
     title: "New Chat",
     userTitleSet: false,
     sessionId: null,
+    runtime: "opencode",
     messages: [],
     streamingMessage: null,
     streamingPartMessageId: null,
@@ -590,7 +607,7 @@ interface ChatState {
   preparePhase: ChatPreparePhase | null;
 
   // Tab management
-  createTab: () => string;
+  createTab: (opts?: { runtime?: ChatRuntimeKind }) => string;
   closeTab: (id: string) => void;
   setActiveTab: (id: string) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
@@ -698,6 +715,7 @@ interface ChatState {
   /** Stop a running subagent; abort its session and inject a Task tool_result for the main agent. */
   cancelSubAgentRun: (taskToolUseId: string) => Promise<void>;
   newSession: () => void;
+  newPiSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
   loadSession: (sessionId: string, sessionDirectory?: string) => Promise<void>;
@@ -1092,9 +1110,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   // ─── Tab Management ───
 
-  createTab: () => {
+  createTab: (opts) => {
     const id = nextTabId();
     const tab = makeDefaultTab(id);
+    if (opts?.runtime === "pi") {
+      tab.runtime = "pi";
+      tab.title = "Experimental Pi";
+    }
     set((s) => ({
       tabs: [...s.tabs, tab],
       activeTabId: id,
@@ -1134,7 +1156,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     clearTurnWindowState(id);
 
       // Clean up agent session for this tab — cancel any running prompt
-      if (closingTab.sessionId) {
+      if (isExperimentalPiRuntime(closingTab.runtime)) {
+        window.electronAPI.piLabCancel().catch(() => {});
+        window.electronAPI.piLabReset().catch(() => {});
+      } else if (closingTab.sessionId) {
         window.electronAPI.chatCancel(closingTab.sessionId).catch(() => {});
       }
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
@@ -1909,6 +1934,37 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
 
     const tabAfterUser = get().tabs.find((t) => t.id === tabId);
+    if (isExperimentalPiRuntime(tabAfterUser?.runtime)) {
+      try {
+        const persistedSettings = useSettingsStore.getState().settings;
+        const provider = persistedSettings.aiProvider || "anthropic";
+        const model = persistedSettings.aiModel ?? undefined;
+        const modelLabel = resolveTurnModelLabel(provider, model, persistedSettings);
+        set((s) => ({
+          tabs: s.tabs.map((t) =>
+            t.id === tabId ? { ...t, pendingTurnMeta: { modelLabel } } : t,
+          ),
+        }));
+        const result = await window.electronAPI.piLabSend({
+          projectRoot: projectPath,
+          text: userPrompt,
+          tabId,
+          sessionTeamId: composerExtras?.sessionTeamId ?? tabAfterUser?.sessionTeamId ?? undefined,
+          provider,
+          modelId: model,
+          apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
+        });
+        if (result.sessionId) {
+          get()._setSessionId(tabId, result.sessionId);
+        }
+        if (!result.ok) {
+          get()._appendAssistantError(tabId, formatPiLabSendError(result.error));
+        }
+      } catch (err: any) {
+        get()._appendAssistantError(tabId, err?.message || String(err));
+      }
+      return;
+    }
     if (tabAfterUser) {
       const { countUserTurns } = await import("@/components/modules/chat/chat-turns");
       const { useCheckpointStore } = await import("./checkpoint-store");
@@ -2232,9 +2288,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   cancelExecution: async () => {
     const tabId = get().activeTabId;
-    const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
+    const tab = get().tabs.find((t) => t.id === tabId);
+    const sessionId = tab?.sessionId;
     try {
-      if (sessionId) {
+      if (isExperimentalPiRuntime(tab?.runtime)) {
+        await window.electronAPI.piLabCancel();
+      } else if (sessionId) {
         await window.electronAPI.chatCancel(sessionId);
       }
     } catch (err: any) {
@@ -2407,6 +2466,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     syncCheckoutForTab(get().tabs.find((t) => t.id === id));
   },
 
+  newPiSession: () => {
+    const existing = get().tabs.find((t) => isExperimentalPiRuntime(t.runtime));
+    if (existing) {
+      get().setActiveTab(existing.id);
+      syncCheckoutForTab(existing);
+      return;
+    }
+    const id = get().createTab({ runtime: "pi" });
+    get().setActiveTab(id);
+    syncCheckoutForTab(get().tabs.find((t) => t.id === id));
+  },
+
   clearAllSessions: () => {
     // Full reset to initial state — new project = clean slate
     _nextTabId = 1;
@@ -2527,6 +2598,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   loadSession: async (sessionId: string, sessionDirectory?: string) => {
+    const active = get().tabs.find((t) => t.id === get().activeTabId);
+    if (isExperimentalPiRuntime(active?.runtime)) {
+      get().createTab();
+    }
     const projectPath = useDocumentStore.getState().projectRoot || "";
     let sessionCwd = sessionDirectory ?? projectPath;
     if (!sessionDirectory && projectPath) {

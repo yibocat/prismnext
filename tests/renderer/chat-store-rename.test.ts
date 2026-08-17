@@ -32,6 +32,8 @@ vi.stubGlobal("window", {
   electronAPI: {
     sessionRename: sessionRenameMock,
     chatCancel: vi.fn().mockResolvedValue(undefined),
+    piLabCancel: vi.fn().mockResolvedValue({ ok: true }),
+    piLabReset: vi.fn().mockResolvedValue({ ok: true }),
   },
 });
 
@@ -42,6 +44,7 @@ const stubTab = (id: string, sessionId: string | null, title: string) => ({
   title,
   userTitleSet: false,
   sessionId,
+  runtime: "opencode" as const,
   sessionCwd: null,
   isStreaming: false,
   isLoadingSession: false,
