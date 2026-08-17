@@ -97,6 +97,7 @@ describe("Pi-first agent core boundaries", () => {
 
     expect(ipc).toContain("\"agent:send\"");
     expect(ipc).toContain("\"agent:cancel\"");
+    expect(ipc).toContain("\"agent:cancelSubagent\"");
     expect(ipc).toContain("\"agent:dispose\"");
     expect(ipc).toContain("\"agent:resolvePermission\"");
     expect(ipc).toContain("\"agent:listSessions\"");
@@ -105,6 +106,20 @@ describe("Pi-first agent core boundaries", () => {
     expect(ipc).toContain("\"agent:deleteSession\"");
     expect(ipc).toContain("\"agent:answerQuestion\"");
     expect(ipc).toContain("\"agent:resolvePlanSuggest\"");
+    expect(ipc).toContain("\"agent:listModels\"");
+    expect(ipc).toContain("\"agent:listModelsCatalog\"");
+    expect(ipc).toContain("\"agent:testConnection\"");
+    expect(ipc).toContain("\"agent:getModelEffort\"");
+    expect(ipc).toContain("\"agent:getEffortCatalog\"");
+    expect(ipc).toContain("\"agent:compact\"");
+    expect(ipc).toContain("\"agent:describeImages\"");
+    expect(ipc).toContain("\"agent:truncateToTurn\"");
+    expect(ipc).toContain("\"agent:undoTruncate\"");
+    expect(ipc).toContain("\"agent:reassignDirectory\"");
+    expect(ipc).toContain("\"agent:syncIntensiveReading\"");
+    expect(ipc).toContain("\"agent:upsertPlanArtifact\"");
+    expect(ipc).toContain("\"agent:appendPlanDecision\"");
+    expect(ipc).toContain("\"agent:upsertTurnMeta\"");
     expect(preload).toContain("\"agent:event\"");
     expect(preload).toContain("\"agent:listSessions\"");
     expect(preload).toContain("\"agent:loadSession\"");
@@ -165,5 +180,121 @@ describe("Pi-first agent core boundaries", () => {
     expect(chatStore).not.toContain("electronAPI.sessionRename");
     expect(chatStore).not.toContain("electronAPI.sessionGetDirectory");
     expect(chatStore).not.toContain("electronAPI.sessionGetUserDisplays");
+  });
+
+  it("loads Settings model catalog and connection tests through the Agent API", () => {
+    const editor = sourceOf("src/renderer/components/modules/settings/provider-editor-panel.tsx");
+    const catalog = sourceOf("src/renderer/lib/providers/opencode-catalog-models.ts");
+    const providers = sourceOf("src/renderer/lib/providers/index.ts");
+    const settings = sourceOf("src/renderer/stores/settings-store.ts");
+    const catalogModule = sourceOf("src/main/agent/model-catalog.ts");
+
+    expect(editor).toContain("agentTestConnection");
+    expect(editor).toContain("agentListModels");
+    expect(editor).not.toContain("chatTestConnection");
+    expect(editor).not.toContain("chatFetchProviderModels");
+    expect(catalog).toContain("agentListModelsCatalog");
+    expect(catalog).not.toContain("chatGetOpenCodeModelsCatalog");
+    expect(providers).toContain("agentGetModelEffort");
+    expect(providers).toContain("agentGetEffortCatalog");
+    expect(providers).not.toContain("chatGetModelEffort");
+    expect(providers).not.toContain("chatGetEffortCatalog");
+    expect(settings).toContain("agentGetModelEffort");
+    expect(settings).not.toContain("chatGetModelEffort");
+    expect(catalogModule).not.toMatch(/from\s+["'][^"']*acp\//);
+    expect(catalogModule).not.toContain("cache/opencode");
+  });
+
+  it("injects project skills through Pi and does not write OpenCode config", () => {
+    const refresh = sourceOf("src/main/services/project-skills-refresh.ts");
+    const prewarm = sourceOf("src/main/services/project-chat-prewarm.ts");
+    const chatIpc = sourceOf("src/main/ipc/chat.ts");
+    const loader = sourceOf("src/main/agent/skill-loader.ts");
+    const runtime = sourceOf("src/main/agent/pi-sdk-runtime.ts");
+
+    expect(refresh).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(refresh).not.toContain("applyProjectSkillsIntegration");
+    expect(refresh).not.toContain("reloadAfterSkillsIntegration");
+    expect(prewarm).not.toContain("syncProjectPromptFile");
+    expect(prewarm).not.toContain("applyProjectPromptIntegration");
+    expect(chatIpc).not.toContain("syncProjectPromptFile");
+    expect(chatIpc).not.toContain("applyProjectPromptIntegration");
+    expect(loader).toContain("loadSkillsFromDir");
+    expect(runtime).toContain("loadPiSkillsFromDirs");
+  });
+
+  it("closes projects, checkpoints, plan cards, and intensive reading through the Agent API", () => {
+    const lifecycle = sourceOf("src/renderer/lib/workspace/project-lifecycle.ts");
+    const checkpoint = sourceOf("src/renderer/stores/checkpoint-store.ts");
+    const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const intensive = sourceOf("src/renderer/lib/literature/sync-intensive-reading.ts");
+    const worktree = sourceOf("src/renderer/lib/git/worktree-sessions.ts");
+    const question = sourceOf("src/renderer/hooks/use-question-prompt.ts");
+    const ask = sourceOf("src/renderer/components/modules/chat/tools/ask-question-widget.tsx");
+    const composer = sourceOf("src/renderer/hooks/use-chat-composer.ts");
+
+    expect(lifecycle).toContain("agentDispose");
+    expect(lifecycle).not.toContain("chatDispose");
+    expect(checkpoint).toContain("agentTruncateToTurn");
+    expect(checkpoint).toContain("agentUndoTruncate");
+    expect(checkpoint).not.toContain("sessionTruncateToTurn");
+    expect(checkpoint).not.toContain("sessionUndoTruncate");
+    expect(chatStore).toContain("agentUpsertPlanArtifact");
+    expect(chatStore).toContain("agentAppendPlanDecision");
+    expect(chatStore).toContain("agentUpsertTurnMeta");
+    expect(chatStore).not.toContain("sessionGetPlanEvents");
+    expect(chatStore).not.toContain("sessionUpsertPlanArtifact");
+    expect(chatStore).not.toContain("sessionUpsertTurnMeta");
+    expect(intensive).toContain("agentSyncIntensiveReading");
+    expect(intensive).not.toContain("chatSyncIntensiveReading");
+    expect(worktree).toContain("agentReassignDirectory");
+    expect(worktree).not.toContain("sessionReassignDirectory");
+    expect(question).not.toContain("chatReadPendingQuestion");
+    expect(ask).not.toContain("chatAnswerQuestion");
+    expect(composer).not.toContain("sessionAppendUserDisplay");
+  });
+
+  it("compacts and describes images through the Agent API", () => {
+    const compactAction = sourceOf("src/renderer/actions/builtin-actions.ts");
+    const indicator = sourceOf("src/renderer/components/modules/chat/context-window-indicator.tsx");
+    const vision = sourceOf("src/renderer/lib/chat/vision-fallback-send.ts");
+
+    expect(compactAction).toContain("agentCompact");
+    expect(compactAction).not.toContain("chatCompact");
+    expect(indicator).toContain("agentCompact");
+    expect(indicator).not.toContain("chatCompact");
+    expect(vision).toContain("agentDescribeImages");
+    expect(vision).not.toContain("chatDescribeImages");
+  });
+
+  it("hosts MCP on Pi and does not push mcp.json through AcpService", () => {
+    const mcpIpc = sourceOf("src/main/ipc/mcp.ts");
+    const host = sourceOf("src/main/agent/mcp-host.ts");
+    const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const experts = sourceOf("src/main/services/project-subagents-refresh.ts");
+
+    expect(mcpIpc).not.toMatch(/from\s+["'][^"']*acp\//);
+    expect(mcpIpc).not.toContain("AcpService");
+    expect(mcpIpc).not.toContain("prewarmProject");
+    expect(mcpIpc).not.toContain("applyProjectMcpConfig");
+    expect(host).not.toMatch(/from\s+["'][^"']*acp\//);
+    expect(host).toContain("selectMcpServers");
+    expect(chatStore).toContain("mcpServerAllowlist");
+    expect(experts).not.toContain("applyProjectMcpConfig");
+  });
+
+  it("stops a Pi subagent through the Agent API, not OpenCode Task", () => {
+    const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const runtime = sourceOf("src/main/agent/pi-subsession-runtime.ts");
+    const factory = sourceOf("src/main/agent/pi-sdk-runtime.ts");
+    const reducer = sourceOf("src/renderer/lib/chat/conversation-reducer.ts");
+
+    expect(chatStore).toContain("agentCancelSubagent");
+    expect(chatStore).not.toContain("chatStopSubAgent");
+    expect(chatStore).not.toContain("chatGetSubAgentActivity");
+    expect(runtime).toContain("cancelByParentToolCallId");
+    expect(factory).toContain("createPiSubagentRunnerFactory");
+    expect(reducer).toContain("applySubagentEvent");
+    expect(reducer).not.toMatch(/if \(event\.subagent\) \{\s*return marked;/);
   });
 });

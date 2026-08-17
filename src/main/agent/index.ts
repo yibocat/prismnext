@@ -14,6 +14,7 @@ export type {
   ContentBlock as ConversationContentBlock,
   LiveTurn,
   PendingQuestion,
+  ConversationSubagentRun,
   TurnMessageMeta,
 } from "../../shared/agent-conversation";
 export { emptyConversation, newConversationId } from "../../shared/agent-conversation";
@@ -52,8 +53,11 @@ export {
   ClosedResourceLoader,
   closedPiSessionOptions,
   createPiSessionManager,
+  truncatePersistedPiSession,
+  restorePersistedPiSessionLeaf,
   createPiNativeTools,
   createPiSdkSessionFactory,
+  createPiSubagentRunnerFactory,
   probePiEmbedCompatibility,
   isNodeCompatibleWithPi,
   tryLoadPiSdkModule,
@@ -94,3 +98,21 @@ export {
 } from "./capability-matrix";
 export { InteractionBroker } from "./interaction-broker";
 export { wrapPiPrimitiveTools } from "./pi-primitive-tools";
+export { loadPiSkillsFromDirs } from "./skill-loader";
+export type { HostSkillDir } from "./skill-loader";
+export {
+  AgentMcpHost,
+  isMcpToolName,
+  mcpDefsFromTeamAssets,
+  mcpToolName,
+  selectMcpServers,
+} from "./mcp-host";
+export {
+  listAgentModels,
+  listAgentModelsCatalog,
+  testAgentConnection,
+  getAgentModelEffort,
+  getAgentEffortCatalog,
+  mapProductProviderToPi,
+  mapPiProviderToProduct,
+} from "./model-catalog";

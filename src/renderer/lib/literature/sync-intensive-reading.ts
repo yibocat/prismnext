@@ -14,8 +14,8 @@ export function persistAndSyncIntensiveReading(
   const projectRoot = useDocumentStore.getState().projectRoot;
   if (!projectRoot) return;
 
-  void window.electronAPI.chatSyncIntensiveReading({
-    sessionId: id,
+  void window.electronAPI.agentSyncIntensiveReading({
+    conversationId: id,
     projectRoot,
     paperIds,
   });

@@ -467,4 +467,164 @@ describe("agent session history", () => {
       { conversationId: "conv-resume", piSessionFile: "/tmp/old-pi.jsonl" },
     ]);
   });
+
+  it("compacts only a live Pi session and fails closed when none is running", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-compact-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const compacted: string[] = [];
+    const registry = new RuntimeRegistry({
+      userDataDir: userData,
+      startRuntime: async (input) => ({
+        runtime: {
+          ...fakeRuntime(),
+          async compact(runtimeSessionId) {
+            compacted.push(runtimeSessionId);
+            return { ok: true, summary: "old turns summarized", tokensBefore: 12000 };
+          },
+        },
+        runtimeSessionId: "rt-compact",
+      }),
+    });
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    expect(await agent.compact({ conversationId: "conv-missing" })).toEqual({
+      ok: false,
+      error: "session_not_live",
+    });
+
+    const sent = await agent.send({
+      conversationId: "conv-compact",
+      tabId: "conv-compact",
+      turnId: "turn-1",
+      projectRoot: project,
+      text: "hello",
+    });
+    expect(sent.ok).toBe(true);
+    expect(await agent.compact({ conversationId: "conv-compact" })).toEqual({
+      ok: true,
+      summary: "old turns summarized",
+      tokensBefore: 12000,
+    });
+    expect(compacted).toEqual(["rt-compact"]);
+  });
+
+  it("truncates stored turns through the conversation id and can undo", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-trunc-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    store.createSession({
+      conversationId: "conv-cut",
+      runtimeSessionId: "rt-cut",
+      projectRoot: project,
+      title: "Cut me",
+    });
+    for (let i = 0; i < 3; i += 1) {
+      store.appendTurn("rt-cut", {
+        turnIndex: i,
+        turnId: `turn-${i}`,
+        createdAt: Date.now() + i,
+        user: { text: `u${i}` },
+        assistant: { text: `a${i}`, toolCalls: [] },
+        status: "completed",
+      });
+    }
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry: new RuntimeRegistry({
+        userDataDir: userData,
+        store,
+        startRuntime: async () => ({ runtime: fakeRuntime(), runtimeSessionId: "rt-cut" }),
+      }),
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    expect(await agent.truncateToTurn({ conversationId: "conv-cut", turnIndex: 0 })).toEqual({
+      ok: true,
+      keptCount: 1,
+    });
+    expect(agent.loadSession({ conversationId: "conv-cut", projectRoot: project }).conversation?.turns).toHaveLength(1);
+    expect(await agent.undoTruncate({ conversationId: "conv-cut" })).toEqual({
+      ok: true,
+      restoredCount: 3,
+    });
+    expect(agent.loadSession({ conversationId: "conv-cut", projectRoot: project }).conversation?.turns).toHaveLength(3);
+  });
+
+  it("stores plan artifacts and turn meta on the Pi session record", () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-plan-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    store.createSession({
+      conversationId: "conv-plan",
+      runtimeSessionId: "rt-plan",
+      projectRoot: project,
+      title: "Plan",
+    });
+    store.appendTurn("rt-plan", {
+      turnIndex: 0,
+      turnId: "turn-0",
+      createdAt: Date.now(),
+      user: { text: "plan" },
+      assistant: { text: "ok", toolCalls: [] },
+      status: "completed",
+    });
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry: new RuntimeRegistry({
+        userDataDir: userData,
+        store,
+        startRuntime: async () => ({ runtime: fakeRuntime(), runtimeSessionId: "rt-plan" }),
+      }),
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    expect(agent.upsertPlanArtifact({
+      conversationId: "conv-plan",
+      event: { kind: "plan-artifact", path: "plans/a.md", title: "A", afterIndex: 2 },
+    })).toEqual({ ok: true });
+    expect(agent.getPlanEvents("conv-plan")).toEqual([
+      { kind: "plan-artifact", path: "plans/a.md", title: "A", afterIndex: 2 },
+    ]);
+    expect(agent.upsertTurnMeta({
+      conversationId: "conv-plan",
+      turnIndex: 0,
+      meta: { modelLabel: "Sonnet", completedAt: 1 },
+    })).toEqual({ ok: true });
+    expect(agent.loadSession({ conversationId: "conv-plan", projectRoot: project }).conversation?.turns[0]?.meta).toEqual({
+      modelLabel: "Sonnet",
+      completedAt: 1,
+    });
+    expect(agent.reassignDirectory({
+      fromDirectory: project,
+      toDirectory: `${project}/wt`,
+    }).count).toBe(1);
+  });
 });

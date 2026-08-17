@@ -137,17 +137,6 @@ export function scheduleSubagentsRefresh(projectRoot: string): void {
           // The pending reload marker guarantees the next prewarm retries.
           console.warn("[experts-refresh] deferred (will retry):", err?.message ?? err);
         }
-        // session/load must not race the OpenCode restart above; otherwise an
-        // in-flight MCP push can observe ACP connection closed.
-        try {
-          const { AcpService } = await import("../acp/service");
-          await AcpService.getInstanceForProject(normalizeProjectRoot(projectRoot)).applyProjectMcpConfig(projectRoot);
-        } catch (err: unknown) {
-          console.warn(
-            "[experts-refresh] MCP push deferred:",
-            err instanceof Error ? err.message : String(err),
-          );
-        }
       })();
     }, EXPERTS_REFRESH_DEBOUNCE_MS),
   );

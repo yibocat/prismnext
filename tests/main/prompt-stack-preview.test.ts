@@ -84,7 +84,7 @@ Body B
     const preview = await buildPromptStackPreview({ projectRoot: root });
     const md = formatPromptStackPreviewMarkdown(preview);
     expect(md).toContain("# Prompt stack preview");
-    expect(md).toContain("_prism-system.md");
+    expect(md).toContain("Pi system prompt");
     expect(md).toContain("**Inject via:**");
     expect(md).toContain("Generated preview");
   });

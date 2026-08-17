@@ -5,7 +5,10 @@ export async function rehomeWorktreeSessions(
 ): Promise<number> {
   if (!projectRoot || !worktreePath || worktreePath === projectRoot) return 0;
   try {
-    const count = await window.electronAPI.sessionReassignDirectory(worktreePath, projectRoot);
+    const count = (await window.electronAPI.agentReassignDirectory({
+      fromDirectory: worktreePath,
+      toDirectory: projectRoot,
+    })).count;
     const { requestSessionListRefresh } = await import("@/lib/chat/session-list-refresh");
     requestSessionListRefresh();
     return count;

@@ -31,6 +31,18 @@ function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+function intensiveSessionIds(ctx: { runtimeSessionId: string; tabId: string }): string[] {
+  return [...new Set([ctx.runtimeSessionId, ctx.tabId].filter(Boolean))];
+}
+
+function listIntensiveBibkeys(ctx: { runtimeSessionId: string; tabId: string }): readonly string[] {
+  for (const id of intensiveSessionIds(ctx)) {
+    const keys = getSessionIntensiveBibkeys(id);
+    if (keys.length > 0) return keys;
+  }
+  return [];
+}
+
 export const literatureSearchTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureSearch,
   label: "Search Literature",
@@ -206,7 +218,7 @@ export const literatureIntensiveReadingTool: NativeToolDefinition = {
     const action = rawAction === "remove" || rawAction === "list" || rawAction === "add" ? rawAction : "add";
 
     if (action === "list") {
-      const bibkeys = getSessionIntensiveBibkeys(ctx.runtimeSessionId);
+      const bibkeys = listIntensiveBibkeys(ctx);
       return { ok: true, action: "list", bibkeys, count: bibkeys.length };
     }
 
@@ -222,7 +234,10 @@ export const literatureIntensiveReadingTool: NativeToolDefinition = {
     }
 
     if (action === "remove") {
-      const bibkeys = removeSessionIntensiveBibkey(ctx.runtimeSessionId, paper.bibkey);
+      let bibkeys: readonly string[] = [];
+      for (const id of intensiveSessionIds(ctx)) {
+        bibkeys = removeSessionIntensiveBibkey(id, paper.bibkey);
+      }
       return {
         ok: true,
         action: "remove",
@@ -233,7 +248,10 @@ export const literatureIntensiveReadingTool: NativeToolDefinition = {
       };
     }
 
-    const bibkeys = addSessionIntensiveBibkey(ctx.runtimeSessionId, paper.bibkey);
+    let bibkeys: readonly string[] = [];
+    for (const id of intensiveSessionIds(ctx)) {
+      bibkeys = addSessionIntensiveBibkey(id, paper.bibkey);
+    }
     return {
       ok: true,
       action: "add",

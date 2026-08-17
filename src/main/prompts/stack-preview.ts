@@ -90,10 +90,10 @@ export async function buildPromptStackPreview(
   sections.push(
     section(
       "prism-system",
-      "_prism-system.md (global baseline)",
-      "OpenCode `instructions` — written to `.prismnext/agent/_prism-system.md` on chat sync",
+      "Pi system prompt (global baseline)",
+      "Composed in memory and passed to ClosedResourceLoader — not written as OpenCode instructions",
       stable,
-      ".prismnext/agent/_prism-system.md",
+      "PromptManager.composeStableSystem",
     ),
   );
 
@@ -101,7 +101,7 @@ export async function buildPromptStackPreview(
     section(
       "agents-md",
       "AGENTS.md (project instructions)",
-      "OpenCode `instructions` — separate file from _prism-system",
+      "Read from `.prismnext/agent/AGENTS.md` and appended in AgentService",
       ctx.agentsMdContent ?? "",
       ".prismnext/agent/AGENTS.md",
     ),
@@ -129,9 +129,9 @@ export async function buildPromptStackPreview(
         section(
           "orchestrator-agent",
           `Lead agent (\`${orchestratorId}\`)`,
-          "OpenCode primary agent — instructions + roster permission.task",
+          "Pi lead instructions from the active team",
           agentMd,
-          `<userData>/opencode-server/config/opencode/agents/${opencodeOrchestratorId}.md`,
+          `teams/${opencodeOrchestratorId}/instructions.md`,
         ),
       );
     }

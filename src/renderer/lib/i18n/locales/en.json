@@ -1039,7 +1039,7 @@
         "fetchModelsHint": "No models selected yet. Click Fetch all models to load the catalog.",
         "fetchModelsDone": "Loaded {{count}} models",
         "fetchModelsCount": "{{count}} models loaded",
-        "fetchModelsEmpty": "No models returned. Check your API key, or start chat once so OpenCode can cache the catalog.",
+        "fetchModelsEmpty": "No models returned. Check your API key or base URL.",
         "fetchModelsFailed": "Failed to fetch models",
         "selectedOnlyHint": "Showing selected models only",
         "searchModels": "Search models…",

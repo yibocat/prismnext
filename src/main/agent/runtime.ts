@@ -2,6 +2,13 @@
  * AgentRuntime — lifecycle surface used by RuntimeRegistry / AgentService.
  */
 
+import type { AgentCompactResult } from "../../shared/agent-api";
+
+export interface AgentTruncateEngineResult {
+  ok: boolean;
+  previousLeafId?: string | null;
+  error?: string;
+}
 import type {
   AgentEvent,
   CreateSessionInput,
@@ -17,6 +24,15 @@ export interface AgentRuntime {
   sendTurn(input: TurnInput): Promise<void>;
   cancelTurn(runtimeSessionId: RuntimeSessionId): Promise<void>;
   disposeSession(runtimeSessionId: RuntimeSessionId): Promise<void>;
+  compact?(runtimeSessionId: RuntimeSessionId): Promise<AgentCompactResult>;
+  truncate?(
+    runtimeSessionId: RuntimeSessionId,
+    keepThroughTurnIndex: number,
+  ): Promise<AgentTruncateEngineResult>;
+  restoreLeaf?(
+    runtimeSessionId: RuntimeSessionId,
+    leafId: string,
+  ): Promise<{ ok: boolean; error?: string }>;
   subscribe(listener: AgentEventListener): () => void;
 }
 

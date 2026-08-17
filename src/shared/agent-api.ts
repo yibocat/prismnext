@@ -76,11 +76,18 @@ export interface AgentSendInput {
   modelId?: string;
   apiKey?: string;
   permissionMode?: PermissionMode;
+  /** Composer `/` MCP names for this turn. Empty / omitted = only autoStart servers. */
+  mcpServerAllowlist?: string[];
 }
 
 export interface AgentSendResult {
   ok: boolean;
   error?: string;
+}
+
+export interface AgentCancelSubagentInput {
+  conversationId: string;
+  toolCallId: string;
 }
 
 export interface AgentSessionSummary {
@@ -102,6 +109,7 @@ export interface AgentLoadSessionResult {
   title?: string;
   conversation?: Conversation;
   directory?: string;
+  planEvents?: AgentPlanEvent[];
   error?: string;
 }
 
@@ -123,6 +131,152 @@ export interface AgentAnswerQuestionInput {
 export interface AgentResolvePlanSuggestInput {
   requestId: string;
   decision: "accept" | "dismiss";
+}
+
+export interface AgentModelRow {
+  id: string;
+  name: string;
+  contextWindow: string;
+  capabilities?: { vision?: boolean };
+  description?: string;
+  efforts?: string[];
+}
+
+export interface AgentListModelsInput {
+  providerId: string;
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+export interface AgentListModelsResult {
+  models: AgentModelRow[];
+  source: "pi" | "api";
+}
+
+export interface AgentModelsCatalogSnapshot {
+  entries: Record<string, AgentModelRow[]>;
+  fetchedAt: number;
+}
+
+export interface AgentTestConnectionInput {
+  provider: string;
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface AgentTestConnectionResult {
+  success: boolean;
+  models?: string[];
+}
+
+export interface AgentModelEffortInput {
+  provider: string;
+  modelId: string;
+  fallback?: string[] | null;
+}
+
+export interface AgentModelEffortResult {
+  efforts: string[];
+  source: "pi" | "fallback" | "none";
+}
+
+export interface AgentEffortCatalogSnapshot {
+  entries: Record<string, string[]>;
+  fetchedAt: number;
+}
+
+export interface AgentCompactInput {
+  conversationId: string;
+}
+
+export interface AgentCompactResult {
+  ok: boolean;
+  summary?: string;
+  tokensBefore?: number;
+  error?: string;
+}
+
+export interface AgentDescribeImagesInput {
+  providerId: string;
+  modelId: string;
+  images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
+}
+
+export interface AgentDescribeImagesResult {
+  descriptions: Array<{ name: string; text: string; cached: boolean }>;
+}
+
+export interface AgentTruncateInput {
+  conversationId: string;
+  /** Inclusive keep-through turn index. `-1` clears every turn. */
+  turnIndex: number;
+}
+
+export interface AgentTruncateResult {
+  ok: boolean;
+  keptCount?: number;
+  error?: string;
+}
+
+export interface AgentUndoTruncateInput {
+  conversationId: string;
+}
+
+export interface AgentUndoTruncateResult {
+  ok: boolean;
+  restoredCount?: number;
+  error?: string;
+}
+
+export interface AgentReassignDirectoryInput {
+  fromDirectory: string;
+  toDirectory: string;
+}
+
+export interface AgentReassignDirectoryResult {
+  count: number;
+}
+
+export interface AgentSyncIntensiveReadingInput {
+  conversationId: string;
+  projectRoot: string;
+  paperIds?: string[];
+}
+
+export type AgentPlanEvent =
+  | {
+      kind: "plan-artifact";
+      path: string;
+      title?: string;
+      discarded?: boolean;
+      afterIndex: number;
+    }
+  | {
+      kind: "plan-decision";
+      decision: "approved" | "rejected";
+      path?: string;
+      title?: string;
+      afterIndex: number;
+    };
+
+export interface AgentPlanArtifactInput {
+  conversationId: string;
+  event: Extract<AgentPlanEvent, { kind: "plan-artifact" }>;
+}
+
+export interface AgentPlanDecisionInput {
+  conversationId: string;
+  event: Extract<AgentPlanEvent, { kind: "plan-decision" }>;
+}
+
+export interface AgentTurnMetaInput {
+  conversationId: string;
+  turnIndex: number;
+  meta: {
+    completedAt?: number;
+    modelLabel?: string;
+    summary?: string;
+  };
 }
 
 export type AgentRendererEvent = AgentEvent;

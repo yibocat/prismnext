@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import { ipcMain } from "electron";
-import { AcpService } from "../acp/service";
 import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
 import {
   readWritableTeamMcpJson,
@@ -10,14 +9,15 @@ import { invalidateCatalog } from "../teams/catalog";
 import { invalidateResolver } from "../teams/resolver";
 import { PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
 
+function refreshMcpCatalog(projectPath: string): void {
+  invalidateCatalog();
+  invalidateResolver(projectPath);
+}
+
 export function registerMcpHandlers(): void {
   /**
-   * Seed/repair mcp.json + refresh ACP cache. When ensure actually changed the file,
-   * also push into open sessions (Bug #25) — otherwise Settings→load would leave
-   * running chats on the old MCP set.
-   *
-   * MCP changes use session/load — do not invalidate project chat prewarm
-   * (that forced a full OpenCode reload on the next send).
+   * Seed/repair mcp.json. Pi connects selected servers on send;
+   * this no longer prewarms or reloads OpenCode.
    */
   ipcMain.handle(
     "mcp:ensure",
@@ -27,22 +27,18 @@ export function registerMcpHandlers(): void {
         return { ok: false as const };
       }
       const ensure = ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
-      const acp = AcpService.getInstanceForProject(projectPath);
-      acp.prewarmProject(projectPath);
-      let reloadedSessions = 0;
       if (ensure.added || ensure.migrated || ensure.reenabled || ensure.removed) {
-        const applied = await acp.applyProjectMcpConfig(projectPath);
-        reloadedSessions = applied.reloadedSessions;
+        refreshMcpCatalog(projectPath);
       }
       return {
         ok: true as const,
         ensure,
-        reloadedSessions,
+        reloadedSessions: 0,
       };
     },
   );
 
-  /** Ensure + push MCP set into open project sessions via session/load. */
+  /** Repair defaults and refresh the team catalog. Live Pi sessions pick this up on the next send / new chat. */
   ipcMain.handle(
     "mcp:apply",
     async (_e, args: { projectPath: string }) => {
@@ -50,8 +46,9 @@ export function registerMcpHandlers(): void {
       if (!projectPath) {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
       }
-      const result = await AcpService.getInstanceForProject(projectPath).applyProjectMcpConfig(projectPath);
-      return { ok: true as const, ...result };
+      ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
+      refreshMcpCatalog(projectPath);
+      return { ok: true as const, reloadedSessions: 0 };
     },
   );
 
@@ -69,7 +66,7 @@ export function registerMcpHandlers(): void {
     },
   );
 
-  /** Write a writable team's mcp.json and apply to open sessions. */
+  /** Write a writable team's mcp.json. Does not push into OpenCode. */
   ipcMain.handle(
     "mcp:writeTeamJson",
     async (_e, args: { projectPath: string; teamId?: string; content: string }) => {
@@ -79,14 +76,8 @@ export function registerMcpHandlers(): void {
       }
       const teamId = args.teamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
       writeWritableTeamMcpJson(projectPath, teamId, args.content ?? "[]\n");
-      // mcp.json is part of the catalog fingerprint, but projectViews stay stale
-      // until cleared — Settings → MCP list reads listAssets via that cache.
-      invalidateCatalog();
-      invalidateResolver(projectPath);
-      const applied = await AcpService.getInstanceForProject(projectPath).applyProjectMcpConfig(
-        projectPath,
-      );
-      return { ok: true as const, teamId, reloadedSessions: applied.reloadedSessions };
+      refreshMcpCatalog(projectPath);
+      return { ok: true as const, teamId, reloadedSessions: 0 };
     },
   );
 }

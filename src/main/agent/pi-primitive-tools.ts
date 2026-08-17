@@ -32,6 +32,7 @@ export function wrapPiPrimitiveTools(input: {
   cwd: string;
   gate: PermissionGate;
   getContext: () => PrimitiveTurnContext;
+  names?: readonly string[];
 }): ToolDefinition[] {
   const defs = {
     read: createReadToolDefinition(input.cwd),
@@ -42,7 +43,10 @@ export function wrapPiPrimitiveTools(input: {
     find: createFindToolDefinition(input.cwd),
     ls: createLsToolDefinition(input.cwd),
   };
-  return PI_PRIMITIVE_TOOL_NAMES.map((name: PiPrimitiveToolName) => {
+  const allow = input.names
+    ? new Set(input.names.map((name) => name.toLowerCase()))
+    : null;
+  return PI_PRIMITIVE_TOOL_NAMES.filter((name) => !allow || allow.has(name)).map((name: PiPrimitiveToolName) => {
     const original = defs[name];
     return defineTool({
       ...original,

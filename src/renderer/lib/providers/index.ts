@@ -419,7 +419,7 @@ export function getModelEffortFallbackIds(
 }
 
 /**
- * Per-model effort options — OpenCode ACP catalog when available, preset fallback offline.
+ * Per-model effort options — Pi thinking levels when available, preset fallback offline.
  */
 export async function getModelEffortLevelsAsync(
   providerId: string,
@@ -430,7 +430,7 @@ export async function getModelEffortLevelsAsync(
   const fallback = getModelEffortLevels(providerId, modelId, customModels, customProviders);
   const fallbackIds = fallback?.map((l) => l.value);
   try {
-    const result = await window.electronAPI.chatGetModelEffort({
+    const result = await window.electronAPI.agentGetModelEffort({
       provider: providerId,
       modelId,
       fallback: fallbackIds,
@@ -447,7 +447,7 @@ export async function prefetchEffortCatalog(): Promise<
   Record<string, string[]> | null
 > {
   try {
-    const snapshot = await window.electronAPI.chatGetEffortCatalog();
+    const snapshot = await window.electronAPI.agentGetEffortCatalog();
     return snapshot.entries;
   } catch {
     return null;

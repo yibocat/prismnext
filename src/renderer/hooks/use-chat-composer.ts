@@ -474,15 +474,6 @@ export function useChatComposer() {
         promptFiles,
       });
     } else if (displayBlocks.length > 0 || skipUserAppend) {
-      const projectPath = useDocumentStore.getState().projectRoot;
-      const sessionId = store.tabs.find((t) => t.id === tabId)?.sessionId;
-      if (projectPath && sessionId && displayBlocks.length > 0) {
-        void window.electronAPI.sessionAppendUserDisplay(
-          projectPath,
-          sessionId,
-          displayBlocks,
-        );
-      }
       store._setStreaming(tabId, false);
     }
 

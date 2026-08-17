@@ -1039,7 +1039,7 @@
         "fetchModelsHint": "尚未选择模型。点击「获取全部模型」加载目录。",
         "fetchModelsDone": "已加载 {{count}} 个模型",
         "fetchModelsCount": "已加载 {{count}} 个模型",
-        "fetchModelsEmpty": "未返回模型。请检查 API Key，或先启动一次聊天以便 OpenCode 缓存目录。",
+        "fetchModelsEmpty": "未返回模型。请检查 API Key 或接口地址。",
         "fetchModelsFailed": "获取模型失败",
         "selectedOnlyHint": "当前仅显示已选模型",
         "searchModels": "搜索模型…",

@@ -14,6 +14,32 @@ import { resolveTaskAgentMeta, taskActivityEmptyHint } from "./tools/task-widget
 /** Exit duration — keep in sync with `duration-150` classes; slightly past anim to avoid snap. */
 export const SUBAGENT_PANEL_EXIT_MS = 180;
 
+function promptFromConversation(
+  conversation:
+    | {
+        turns?: Array<{ assistant?: { blocks?: ContentBlock[] } }>;
+        live?: { assistant?: { blocks?: ContentBlock[] } } | null;
+      }
+    | undefined,
+  taskToolUseId: string,
+  fallback: string,
+): string {
+  if (!conversation) return fallback.trim();
+  const turns = [conversation.live, ...[...(conversation.turns ?? [])].reverse()];
+  for (const turn of turns) {
+    if (!turn) continue;
+    for (const block of turn.assistant?.blocks ?? []) {
+      if (block.type !== "tool_use" || block.id !== taskToolUseId) continue;
+      const fromInput =
+        param(block.input, "prompt")
+        || param(block.input, "description")
+        || "";
+      if (fromInput.trim()) return fromInput.trim();
+    }
+  }
+  return fallback.trim();
+}
+
 /** Prefer live tool_use.input.prompt (no staging preface) over tracked run.prompt. */
 function resolveDelegationPrompt(
   taskToolUseId: string,
@@ -154,8 +180,8 @@ export const SubAgentRunPanel = memo(function SubAgentRunPanel({
         taskToolUseId,
         [...(tab?.messages ?? []), tab?.streamingMessage],
         run?.prompt ?? "",
-      ),
-    [taskToolUseId, tab?.messages, tab?.streamingMessage, run?.prompt],
+      ) || promptFromConversation(tab?.conversation, taskToolUseId, run?.prompt ?? ""),
+    [taskToolUseId, tab?.messages, tab?.streamingMessage, tab?.conversation, run?.prompt],
   );
 
   const hasAssistantContent = blocks.some((b) => {

@@ -7,6 +7,7 @@ import {
   emptyConversation,
   type ContentBlock,
   type Conversation,
+  type ConversationSubagentRun,
   type ConversationTurn,
   type LiveTurn,
 } from "../../../shared/agent-conversation";
@@ -48,7 +49,7 @@ export function applyConversationEvent(
     : conv;
 
   if (event.subagent) {
-    return marked;
+    return applySubagentEvent(marked, event);
   }
 
   switch (event.type) {
@@ -87,21 +88,25 @@ export function applyConversationEvent(
       return appendAssistantBlock(ensureLive(marked, event), (blocks) => appendText(blocks, event.text));
     case "thinking_delta":
       return appendAssistantBlock(ensureLive(marked, event), (blocks) => appendThinking(blocks, event.text));
-    case "tool_started":
-      return appendAssistantBlock(ensureLive(marked, event), (blocks) => upsertToolUse(blocks, {
+    case "tool_started": {
+      const withTool = appendAssistantBlock(ensureLive(marked, event), (blocks) => upsertToolUse(blocks, {
         type: "tool_use",
         id: event.toolCallId,
         name: event.toolName,
         input: event.args,
         status: "running",
       }));
+      return event.toolName === "task" ? seedTaskRun(withTool, event) : withTool;
+    }
     case "tool_progress":
       return appendAssistantBlock(ensureLive(marked, event), (blocks) => updateToolUse(blocks, event.toolCallId, {
         title: event.text,
         status: "running",
       }));
-    case "tool_finished":
-      return appendAssistantBlock(ensureLive(marked, event), (blocks) => finishTool(blocks, event));
+    case "tool_finished": {
+      const withTool = appendAssistantBlock(ensureLive(marked, event), (blocks) => finishTool(blocks, event));
+      return event.toolName === "task" ? completeTaskRun(withTool, event) : withTool;
+    }
     case "turn_finished":
       return commitLive(marked, "completed");
     case "turn_cancelled":
@@ -205,6 +210,137 @@ function finishTool(
       status,
     },
   ];
+}
+
+function applySubagentEvent(conv: Conversation, event: AgentEvent): Conversation {
+  const ctx = event.subagent;
+  if (!ctx) return conv;
+  const id = ctx.parentToolCallId;
+  const existing = (conv.subagentRuns ?? {})[id];
+  let run: ConversationSubagentRun = existing ?? {
+    parentToolCallId: id,
+    expertFqid: ctx.expertFqid,
+    expertName: ctx.expertName,
+    status: "running",
+    blocks: [],
+  };
+  if (ctx.expertFqid) run = { ...run, expertFqid: ctx.expertFqid };
+  if (ctx.expertName) run = { ...run, expertName: ctx.expertName };
+
+  switch (event.type) {
+    case "text_delta":
+      run = { ...run, blocks: appendText(run.blocks, event.text) };
+      break;
+    case "thinking_delta":
+      run = { ...run, blocks: appendThinking(run.blocks, event.text) };
+      break;
+    case "tool_started":
+      run = {
+        ...run,
+        blocks: upsertToolUse(run.blocks, {
+          type: "tool_use",
+          id: event.toolCallId,
+          name: event.toolName,
+          input: event.args,
+          status: "running",
+        }),
+      };
+      break;
+    case "tool_progress":
+      run = {
+        ...run,
+        blocks: updateToolUse(run.blocks, event.toolCallId, {
+          title: event.text,
+          status: "running",
+        }),
+      };
+      break;
+    case "tool_finished":
+      run = { ...run, blocks: finishTool(run.blocks, event) };
+      break;
+    case "turn_finished":
+      if (run.status === "running" || run.status === "stopping") {
+        run = { ...run, status: run.status === "stopping" ? "error" : "done" };
+      }
+      break;
+    case "turn_cancelled":
+      run = { ...run, status: "error", error: run.error || "cancelled" };
+      break;
+    case "turn_failed":
+      run = { ...run, status: "error", error: event.error };
+      break;
+    case "question_requested":
+      return putSubagentRun({
+        ...conv,
+        pendingQuestion: {
+          requestId: event.requestId,
+          prompt: event.prompt,
+          options: event.options,
+        },
+      }, run);
+    case "plan_suggested":
+      return putSubagentRun({
+        ...conv,
+        pendingPlanSuggest: {
+          requestId: event.requestId,
+          reason: event.reason,
+        },
+      }, run);
+    default:
+      break;
+  }
+  return putSubagentRun(conv, run);
+}
+
+function seedTaskRun(
+  conv: Conversation,
+  event: Extract<AgentEvent, { type: "tool_started" }>,
+): Conversation {
+  const args = (event.args ?? {}) as Record<string, unknown>;
+  const expertId = typeof args.expertId === "string" ? args.expertId.trim() : "";
+  const prompt = typeof args.prompt === "string" ? args.prompt : "";
+  const existing = (conv.subagentRuns ?? {})[event.toolCallId];
+  const run: ConversationSubagentRun = {
+    parentToolCallId: event.toolCallId,
+    expertFqid: existing?.expertFqid || expertId,
+    expertName: existing?.expertName || expertId,
+    status: existing?.status === "done" || existing?.status === "error" ? existing.status : "running",
+    blocks: existing?.blocks ?? [],
+    prompt: existing?.prompt || prompt,
+    ...(existing?.error ? { error: existing.error } : {}),
+  };
+  return putSubagentRun(conv, run);
+}
+
+function completeTaskRun(
+  conv: Conversation,
+  event: Extract<AgentEvent, { type: "tool_finished" }>,
+): Conversation {
+  const existing = (conv.subagentRuns ?? {})[event.toolCallId];
+  if (!existing) return conv;
+  if (existing.status === "done" || existing.status === "error") return conv;
+  const failed = Boolean(event.error || event.denied || !event.ok);
+  return putSubagentRun(conv, {
+    ...existing,
+    status: failed ? "error" : "done",
+    ...(failed ? { error: event.error || existing.error || "subagent_failed" } : {}),
+  });
+}
+
+function putSubagentRun(conv: Conversation, run: ConversationSubagentRun): Conversation {
+  return {
+    ...conv,
+    subagentRuns: {
+      ...(conv.subagentRuns ?? {}),
+      [run.parentToolCallId]: run,
+    },
+  };
+}
+
+export function markSubagentStopping(conv: Conversation, toolCallId: string): Conversation {
+  const existing = conv.subagentRuns?.[toolCallId];
+  if (!existing || existing.status !== "running") return conv;
+  return putSubagentRun(conv, { ...existing, status: "stopping" });
 }
 
 function commitLive(

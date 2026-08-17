@@ -93,6 +93,16 @@ export interface PendingPlanSuggest {
   reason: string;
 }
 
+export interface ConversationSubagentRun {
+  parentToolCallId: string;
+  expertFqid: string;
+  expertName: string;
+  status: "running" | "stopping" | "done" | "error";
+  blocks: ContentBlock[];
+  error?: string;
+  prompt?: string;
+}
+
 export interface Conversation {
   conversationId: ConversationId;
   title: string;
@@ -101,6 +111,8 @@ export interface Conversation {
   usage: ConversationUsage | null;
   pendingQuestion: PendingQuestion | null;
   pendingPlanSuggest: PendingPlanSuggest | null;
+  /** Live child-agent activity keyed by the parent `task` toolCallId. */
+  subagentRuns: Record<string, ConversationSubagentRun>;
   appliedEventIds: string[];
 }
 
@@ -133,6 +145,7 @@ export function emptyConversation(input: {
     usage: null,
     pendingQuestion: null,
     pendingPlanSuggest: null,
+    subagentRuns: {},
     appliedEventIds: [],
   };
 }

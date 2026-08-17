@@ -244,7 +244,7 @@ export const ChatMessages = memo(function ChatMessages() {
     () =>
       turns.map((turn, idx) => {
         const p = extractTurnUserPreviewFromBlocks(turn.userBlocks);
-        return { text: p.text, hasAttachments: p.hasAttachments, meta: turnMeta[idx] };
+        return { text: p.text, hasAttachments: p.hasAttachments, meta: turn.meta ?? turnMeta[idx] };
       }),
     [turns, turnMeta],
   );
@@ -773,7 +773,7 @@ export const ChatMessages = memo(function ChatMessages() {
               && !planConfirmSuppressed
                 ? planDraftSummary
                 : null;
-            const turnStamp = turnMeta[turnIdx];
+            const turnStamp = turn.meta ?? turnMeta[turnIdx];
             const userMsg = turn.userBlocks.length > 0
               ? { type: "user" as const, message: { content: turn.userBlocks } }
               : null;

@@ -93,14 +93,17 @@ actionRegistry.register("compact-context", async () => {
   const { useDocumentStore } = await import("@/stores/document-store");
 
   const chatState = useChatStore.getState();
-  const sessionId = chatState.sessionId;
+  const conversationId = chatState.activeTabId || chatState.sessionId;
   const projectPath = useDocumentStore.getState().projectRoot;
 
-  if (!sessionId || !projectPath) {
+  if (!conversationId || !projectPath) {
     throw new Error("No active session — start a conversation first.");
   }
 
-  await window.electronAPI.chatCompact(sessionId, projectPath);
+  const result = await window.electronAPI.agentCompact({ conversationId });
+  if (!result.ok) {
+    throw new Error(result.error || "Failed to compact context.");
+  }
   return "Context compacted. Old messages have been summarized to free token space.";
 });
 

@@ -130,7 +130,8 @@ export const TaskWidget = memo(function TaskWidget({
     || subAgentRun?.prompt
     || "";
   const rawAgent = (
-    param(toolUse.input, "agent")
+    param(toolUse.input, "expertId")
+    || param(toolUse.input, "agent")
     || param(toolUse.input, "subagent_type")
     || (subAgentRun?.expertId && subAgentRun.expertId !== "expert" ? subAgentRun.expertId : "")
     || subAgentRun?.expertId

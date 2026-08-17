@@ -1,5 +1,5 @@
 /**
- * Runtime model list for opencode-go / opencode-zen from OpenCode models.dev cache.
+ * Runtime model list for opencode-go / opencode-zen from the Pi model catalog.
  */
 
 import type { CatalogModelRow } from "../../../shared/opencode-models-catalog";
@@ -70,7 +70,7 @@ export async function prefetchOpenCodeModelsCatalog(): Promise<
   if (prefetchPromise) return prefetchPromise;
   prefetchPromise = (async () => {
     try {
-      const snapshot = await window.electronAPI.chatGetOpenCodeModelsCatalog();
+      const snapshot = await window.electronAPI.agentListModelsCatalog();
       catalogEntries = snapshot.entries;
       catalogFetchedAt = snapshot.fetchedAt;
       notifyOpenCodeModelsCatalogListeners();

@@ -345,7 +345,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
     setTestResult("idle");
     try {
       const preset = getPreset(providerId) || ALL_PROVIDERS.find((p) => p.id === providerId);
-      const result = await window.electronAPI.chatTestConnection({
+      const result = await window.electronAPI.agentTestConnection({
         provider: providerId,
         apiKey: apiKey.trim(),
         baseUrl: preset?.defaultBaseUrl,
@@ -702,7 +702,7 @@ function CustomProviderEditorPanel({
     if (!isLazyCatalogProvider(lazyProviderId)) return;
     setLazyFetching(true);
     try {
-      const result = await window.electronAPI.chatFetchProviderModels({
+      const result = await window.electronAPI.agentListModels({
         providerId: lazyProviderId,
         apiKey: apiKey.trim() || undefined,
         baseUrl: baseUrl.trim() || currentPreset?.defaultBaseUrl,
@@ -718,7 +718,7 @@ function CustomProviderEditorPanel({
         toast.error(
           t("settings.editor.provider.fetchModelsEmpty", {
             defaultValue:
-              "No models returned. Check your API key, or start chat once so OpenCode can cache the catalog.",
+              "No models returned. Check your API key or base URL.",
           }),
         );
         return;
@@ -857,7 +857,7 @@ function CustomProviderEditorPanel({
     const effectiveBaseUrl = baseUrl || currentPreset?.defaultBaseUrl || "";
 
     try {
-      const result = await window.electronAPI.chatTestConnection({
+      const result = await window.electronAPI.agentTestConnection({
         provider: presetId === "__custom__" ? "custom" : presetId,
         apiKey: apiKey.trim(),
         baseUrl: effectiveBaseUrl || undefined,
@@ -911,7 +911,7 @@ function CustomProviderEditorPanel({
 
     setSaving(true);
     try {
-      const r = await window.electronAPI.chatTestConnection({
+      const r = await window.electronAPI.agentTestConnection({
         provider: presetId === "__custom__" ? "custom" : presetId,
         apiKey: apiKey.trim(),
         baseUrl: effectiveBaseUrl || undefined,

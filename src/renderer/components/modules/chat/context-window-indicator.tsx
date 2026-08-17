@@ -32,15 +32,19 @@ export function ContextWindowIndicator({
   const pct = hasUsed && total > 0 ? Math.round((usedN / total) * 100) : 0;
 
   const handleCompact = useCallback(async () => {
-    const sessionId = useChatStore.getState().sessionId;
+    const chatState = useChatStore.getState();
+    const conversationId = chatState.activeTabId || chatState.sessionId;
     const projectPath = useDocumentStore.getState().projectRoot;
-    if (!sessionId || !projectPath) {
+    if (!conversationId || !projectPath) {
       toast.error("Start a conversation before compressing context.");
       return;
     }
     setCompacting(true);
     try {
-      await window.electronAPI.chatCompact(sessionId, projectPath);
+      const result = await window.electronAPI.agentCompact({ conversationId });
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to compact context.");
+      }
       useChatStore.getState()._setContextTokens(
         useChatStore.getState().activeTabId,
         null,

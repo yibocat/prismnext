@@ -58,6 +58,7 @@ export function hydrateSessionRecordToConversation(
       },
       assistant: { blocks: assistantBlocksFromTurn(turn) },
       status: turn.status,
+      ...(turn.meta ? { meta: turn.meta } : {}),
       ...(turn.error ? { error: turn.error } : {}),
     }));
   return {

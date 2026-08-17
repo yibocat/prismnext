@@ -63,8 +63,8 @@ describe("checkpoint regret / surviveNextFinalize", () => {
       fsWrite: vi.fn(),
       fsMkdir: vi.fn(),
       fsDelete: vi.fn(),
-      sessionTruncateToTurn: vi.fn(),
-      sessionUndoTruncate: vi.fn(),
+      agentTruncateToTurn: vi.fn().mockResolvedValue({ ok: true, keptCount: 1 }),
+      agentUndoTruncate: vi.fn().mockResolvedValue({ ok: true, restoredCount: 2 }),
     });
   });
 
@@ -202,7 +202,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
   });
 
   it("restores UI/files when sessionUndoTruncate fails", async () => {
-    (window.electronAPI as any).sessionUndoTruncate = vi.fn().mockRejectedValue(
+    (window.electronAPI as any).agentUndoTruncate = vi.fn().mockRejectedValue(
       new Error("No session backup available for undo"),
     );
     (window.electronAPI as any).fsWrite = vi.fn().mockResolvedValue(undefined);

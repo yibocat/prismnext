@@ -12,7 +12,9 @@ import type { AgentEvent } from "../../shared/agent-runtime";
 import {
   applyConversationEvent,
   beginConversationTurn,
+  markSubagentStopping,
 } from "@/lib/chat/conversation-reducer";
+import type { ConversationSubagentRun } from "../../shared/agent-conversation";
 import {
   combineComposerQueueItems,
   type ComposerQueueItem,
@@ -50,7 +52,6 @@ import {
   type ChatRuntimeKind,
 } from "../../shared/agent-api";
 import type { ResearchPlanStep } from "../../shared/research-plan";
-import { formatTaskError } from "../../shared/task-error-codes";
 import {
   buildApprovedPlanExecuteDisplayText,
   buildApprovedPlanExecutePrompt,
@@ -358,21 +359,8 @@ function contentBlocksText(msg: ChatStreamMessage): string {
     .join("\n");
 }
 
-async function syncPlanArtifactCardForTab(
-  tabId: string,
-  projectPath: string,
-  sessionId: string,
-): Promise<void> {
-  if (!projectPath || !sessionId) return;
-  try {
-    const events = await window.electronAPI.sessionGetPlanEvents(projectPath, sessionId);
-    const card = planArtifactCardFromEvents(events);
-    useChatStore.setState((s) => ({
-      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, planArtifactCard: card } : t)),
-    }));
-  } catch {
-    /* best-effort */
-  }
+function conversationKey(tab: Pick<TabState, "id" | "sessionId" | "conversation">): string {
+  return tab.conversation.conversationId || tab.id || tab.sessionId || "";
 }
 
 /** Drop stale draft buffers/tabs after Approve (rename) or Deny (delete). */
@@ -803,36 +791,14 @@ function mergeTurnMeta(
 }
 
 function persistTurnMetaToDisk(
-  sessionId: string | null | undefined,
+  conversationId: string | null | undefined,
   turnIndex: number,
   meta: TurnMessageMeta,
 ): void {
-  const projectRoot = useDocumentStore.getState().projectRoot;
-  if (!projectRoot || !sessionId || turnIndex < 0) return;
+  if (!conversationId || turnIndex < 0) return;
   void window.electronAPI
-    .sessionUpsertTurnMeta(projectRoot, sessionId, turnIndex, meta)
+    .agentUpsertTurnMeta({ conversationId, turnIndex, meta })
     .catch(() => {});
-}
-
-async function hydrateTurnMetaForTab(
-  tabId: string,
-  projectPath: string,
-  sessionId: string,
-): Promise<void> {
-  if (!projectPath || !sessionId) return;
-  try {
-    const metas = await window.electronAPI.sessionGetTurnMetas(projectPath, sessionId);
-    useChatStore.setState((s) => {
-      const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, turnMeta: metas ?? {} } : t,
-      );
-      return s.activeTabId === tabId
-        ? { tabs, ...projectActiveTab(tabs, tabId) }
-        : { tabs };
-    });
-  } catch {
-    /* best-effort */
-  }
 }
 
 function projectActiveTab(tabs: TabState[], activeTabId: string) {
@@ -1028,12 +994,41 @@ function finalizeStreamingForMutation(
   };
 }
 
-function applyConversationToTab(tab: TabState, conversation: Conversation): TabState {
+function applyConversationToTab(
+  tab: TabState,
+  conversation: Conversation,
+  extras?: { planEvents?: import("../../../shared/agent-api").AgentPlanEvent[] },
+): TabState {
+  const turnMeta = { ...tab.turnMeta };
+  for (const turn of conversation.turns) {
+    if (turn.meta) turnMeta[turn.turnIndex] = turn.meta;
+  }
   return {
     ...tab,
     conversation,
     isStreaming: conversation.live !== null,
+    turnMeta,
+    subAgentRuns: projectConversationSubagentRuns(conversation.subagentRuns),
+    ...(extras?.planEvents
+      ? { planArtifactCard: planArtifactCardFromEvents(extras.planEvents) }
+      : {}),
   };
+}
+
+function projectConversationSubagentRuns(
+  runs: Record<string, ConversationSubagentRun> | undefined,
+): Record<string, SubAgentRun> {
+  const out: Record<string, SubAgentRun> = {};
+  for (const [id, run] of Object.entries(runs ?? {})) {
+    out[id] = {
+      expertId: run.expertName || run.expertFqid || "expert",
+      prompt: run.prompt ?? "",
+      status: run.status,
+      blocks: run.blocks,
+      ...(run.error ? { error: run.error } : {}),
+    };
+  }
+  return out;
 }
 
 // ─── Store ───
@@ -1525,12 +1520,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const path = args.path.replace(/\\/g, "/");
     const title = args.title?.trim() || undefined;
     let afterIndex = 0;
-    let sessionId: string | null = null;
+    let conversationId = "";
     set((s) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        sessionId = t.sessionId;
-        afterIndex = countOpenCodeMessages(t.messages);
+        conversationId = conversationKey(t);
+        afterIndex = t.conversation.turns.length * 2 + (t.conversation.live ? 1 : 0);
         return {
           ...t,
           planArtifactCard: {
@@ -1541,14 +1536,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         };
       }),
     }));
-    const projectRoot = useDocumentStore.getState().projectRoot;
-    if (projectRoot && sessionId) {
-      void window.electronAPI.sessionUpsertPlanArtifact(projectRoot, sessionId, {
-        kind: "plan-artifact",
-        path,
-        title,
-        discarded: false,
-        afterIndex,
+    if (conversationId) {
+      void window.electronAPI.agentUpsertPlanArtifact({
+        conversationId,
+        event: {
+          kind: "plan-artifact",
+          path,
+          title,
+          discarded: false,
+          afterIndex,
+        },
       });
     }
   },
@@ -1683,12 +1680,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     if (tab.sessionId) {
-      void window.electronAPI.sessionAppendPlanDecision(projectRoot, tab.sessionId, {
-        kind: "plan-decision",
-        decision: "approved",
-        path: promoted.relativePath,
-        title: promoted.title,
-        afterIndex: afterApprove,
+      void window.electronAPI.agentAppendPlanDecision({
+        conversationId: conversationKey(tab),
+        event: {
+          kind: "plan-decision",
+          decision: "approved",
+          path: promoted.relativePath,
+          title: promoted.title,
+          afterIndex: afterApprove,
+        },
       });
       const afterDecision = get().tabs.find((t) => t.id === resolvedTabId);
       cacheTabMessages(tab.sessionId, afterDecision?.messages ?? []);
@@ -1761,13 +1761,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       result: i18n.t("chat.planWorkflow.decisionRejected"),
     });
 
-    if (projectRoot && tab.sessionId) {
-      void window.electronAPI.sessionMarkPlanArtifactDiscarded(projectRoot, tab.sessionId);
-      void window.electronAPI.sessionAppendPlanDecision(projectRoot, tab.sessionId, {
-        kind: "plan-decision",
-        decision: "rejected",
-        title: draftTitle,
-        afterIndex: afterDeny,
+    if (tab.sessionId) {
+      const conversationId = conversationKey(tab);
+      void window.electronAPI.agentMarkPlanArtifactDiscarded(conversationId);
+      void window.electronAPI.agentAppendPlanDecision({
+        conversationId,
+        event: {
+          kind: "plan-decision",
+          decision: "rejected",
+          title: draftTitle,
+          afterIndex: afterDeny,
+        },
       });
       const afterDecision = get().tabs.find((t) => t.id === resolvedTabId);
       cacheTabMessages(tab.sessionId, afterDecision?.messages ?? []);
@@ -1855,6 +1859,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           provider,
           modelId: model,
           apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
+          mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
         });
         if (!result.ok) {
           get()._applyAgentEvent(tabId, {
@@ -1929,10 +1934,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     const run = tab?.subAgentRuns?.[taskToolUseId];
     if (!run || run.status !== "running") return;
-    const expert = (run.expertId || "expert").replace(/^@/, "");
-    const forAgent = formatTaskError("user_cancel", { subagentId: expert });
-    get()._injectToolResult(tabId, taskToolUseId, forAgent, true);
-    get()._completeSubAgentRun(tabId, taskToolUseId, "error", forAgent);
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        return applyConversationToTab(t, markSubagentStopping(t.conversation, taskToolUseId));
+      });
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+    try {
+      await window.electronAPI.agentCancelSubagent({
+        conversationId: tabId,
+        toolCallId: taskToolUseId,
+      });
+    } catch (err) {
+      console.error("[chat] Cancel subagent failed:", err);
+    }
   },
 
   cancelExecution: async () => {
@@ -2166,6 +2182,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         return {
           ...t,
           messages,
+          conversation: {
+            ...t.conversation,
+            turns: t.conversation.turns.filter((turn) => turn.turnIndex <= turnIndex),
+            live: null,
+          },
           streamingMessage: null,
           isStreaming: false,
           error: null,
@@ -2210,7 +2231,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const tabs = s.tabs.map((t) =>
         t.id === tabId
           ? {
-              ...applyConversationToTab(t, conversation),
+              ...applyConversationToTab(t, conversation, { planEvents: result.planEvents }),
               title: result.title || t.title,
               error: null,
               isLoadingSession: false,
@@ -2282,7 +2303,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }
       const conversation = result.conversation;
       const hydratedTab: TabState = {
-        ...applyConversationToTab(loadingTab, conversation),
+        ...applyConversationToTab(loadingTab, conversation, { planEvents: result.planEvents }),
         title: result.title || conversation.title || "New Chat",
         sessionCwd: directory,
         isLoadingSession: false,

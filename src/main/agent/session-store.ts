@@ -7,8 +7,10 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AgentPlanEvent } from "../../shared/agent-api";
 import type { RuntimeSessionId } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { TurnMessageMeta } from "../../shared/agent-conversation";
 
 export const PI_AGENT_DIR_NAME = "pi-agent";
 export const FORBIDDEN_PROJECT_RESOURCE_DIRS = [".pi", ".agents", ".opencode"] as const;
@@ -57,6 +59,7 @@ export interface AgentTurnRecord {
   };
   status: "completed" | "failed" | "cancelled";
   error?: string;
+  meta?: TurnMessageMeta;
 }
 
 /** Pruned turns backed up during a rollback for the "Regret / Undo" action */
@@ -64,6 +67,7 @@ export interface AgentSessionRegretState {
   prunedTurns: AgentTurnRecord[];
   rollbackAt: number;
   targetTurnIndex: number;
+  piLeafId?: string | null;
 }
 
 export interface AgentSessionRecord {
@@ -84,6 +88,7 @@ export interface AgentSessionRecord {
   piSessionFile?: string;
   eventJournal?: unknown[];
   turns: AgentTurnRecord[];
+  planEvents?: AgentPlanEvent[];
   regret?: AgentSessionRegretState | null;
   createdAt: string;
   updatedAt: string;
@@ -163,6 +168,7 @@ export class AgentSessionStore {
       ...(input.piSessionFile ? { piSessionFile: input.piSessionFile } : {}),
       eventJournal: [],
       turns: [],
+      planEvents: [],
       regret: null,
       createdAt: now,
       updatedAt: now,
@@ -234,6 +240,71 @@ export class AgentSessionStore {
     session.regret = null;
     this.put(session);
     return session;
+  }
+
+  attachRegretPiLeaf(id: RuntimeSessionId, piLeafId: string | null | undefined): void {
+    const session = this.getSession(id);
+    if (!session?.regret) return;
+    session.regret = { ...session.regret, piLeafId: piLeafId ?? null };
+    this.put(session);
+  }
+
+  upsertTurnMeta(id: RuntimeSessionId, turnIndex: number, meta: TurnMessageMeta): boolean {
+    const session = this.getSession(id);
+    if (!session || turnIndex < 0) return false;
+    const turn = session.turns.find((item) => item.turnIndex === turnIndex);
+    if (!turn) return false;
+    turn.meta = {
+      completedAt: meta.completedAt ?? turn.meta?.completedAt,
+      modelLabel: meta.modelLabel ?? turn.meta?.modelLabel,
+      summary: meta.summary ?? turn.meta?.summary,
+    };
+    this.put(session);
+    return true;
+  }
+
+  upsertPlanArtifact(
+    id: RuntimeSessionId,
+    event: Extract<AgentPlanEvent, { kind: "plan-artifact" }>,
+  ): void {
+    const session = this.getSession(id);
+    if (!session) return;
+    const events = [...(session.planEvents ?? [])];
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const cur = events[i];
+      if (cur?.kind !== "plan-artifact" || cur.discarded) continue;
+      events[i] = { ...cur, ...event, kind: "plan-artifact" };
+      session.planEvents = events;
+      this.put(session);
+      return;
+    }
+    events.push(event);
+    session.planEvents = events;
+    this.put(session);
+  }
+
+  appendPlanDecision(
+    id: RuntimeSessionId,
+    event: Extract<AgentPlanEvent, { kind: "plan-decision" }>,
+  ): void {
+    const session = this.getSession(id);
+    if (!session) return;
+    session.planEvents = [...(session.planEvents ?? []), event];
+    this.put(session);
+  }
+
+  markPlanArtifactDiscarded(id: RuntimeSessionId): void {
+    const session = this.getSession(id);
+    if (!session?.planEvents?.length) return;
+    const events = [...session.planEvents];
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const cur = events[i];
+      if (cur?.kind !== "plan-artifact" || cur.discarded) continue;
+      events[i] = { ...cur, discarded: true, path: "" };
+      session.planEvents = events;
+      this.put(session);
+      return;
+    }
   }
 
   rollbackSession(id: RuntimeSessionId, targetTurnIndex: number): RollbackSessionResult {

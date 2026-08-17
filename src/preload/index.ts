@@ -1000,6 +1000,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:send", args),
 	agentCancel: (args: { conversationId: string }) =>
 		ipcRenderer.invoke("agent:cancel", args),
+	agentCancelSubagent: (args: import("../shared/agent-api").AgentCancelSubagentInput) =>
+		ipcRenderer.invoke("agent:cancelSubagent", args),
 	agentDispose: (args?: { conversationId?: string }) =>
 		ipcRenderer.invoke("agent:dispose", args),
 	agentResolvePermission: (args: { requestId: string; decision: "allow" | "deny" }) =>
@@ -1016,6 +1018,38 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:answerQuestion", args),
 	agentResolvePlanSuggest: (args: import("../shared/agent-api").AgentResolvePlanSuggestInput) =>
 		ipcRenderer.invoke("agent:resolvePlanSuggest", args),
+	agentListModels: (args: import("../shared/agent-api").AgentListModelsInput) =>
+		ipcRenderer.invoke("agent:listModels", args),
+	agentListModelsCatalog: () =>
+		ipcRenderer.invoke("agent:listModelsCatalog"),
+	agentTestConnection: (args: import("../shared/agent-api").AgentTestConnectionInput) =>
+		ipcRenderer.invoke("agent:testConnection", args),
+	agentGetModelEffort: (args: import("../shared/agent-api").AgentModelEffortInput) =>
+		ipcRenderer.invoke("agent:getModelEffort", args),
+	agentGetEffortCatalog: () =>
+		ipcRenderer.invoke("agent:getEffortCatalog"),
+	agentCompact: (args: import("../shared/agent-api").AgentCompactInput) =>
+		ipcRenderer.invoke("agent:compact", args),
+	agentDescribeImages: (args: import("../shared/agent-api").AgentDescribeImagesInput) =>
+		ipcRenderer.invoke("agent:describeImages", args),
+	agentTruncateToTurn: (args: import("../shared/agent-api").AgentTruncateInput) =>
+		ipcRenderer.invoke("agent:truncateToTurn", args),
+	agentUndoTruncate: (args: import("../shared/agent-api").AgentUndoTruncateInput) =>
+		ipcRenderer.invoke("agent:undoTruncate", args),
+	agentReassignDirectory: (args: import("../shared/agent-api").AgentReassignDirectoryInput) =>
+		ipcRenderer.invoke("agent:reassignDirectory", args),
+	agentSyncIntensiveReading: (args: import("../shared/agent-api").AgentSyncIntensiveReadingInput) =>
+		ipcRenderer.invoke("agent:syncIntensiveReading", args),
+	agentGetPlanEvents: (conversationId: string) =>
+		ipcRenderer.invoke("agent:getPlanEvents", { conversationId }),
+	agentUpsertPlanArtifact: (args: import("../shared/agent-api").AgentPlanArtifactInput) =>
+		ipcRenderer.invoke("agent:upsertPlanArtifact", args),
+	agentAppendPlanDecision: (args: import("../shared/agent-api").AgentPlanDecisionInput) =>
+		ipcRenderer.invoke("agent:appendPlanDecision", args),
+	agentMarkPlanArtifactDiscarded: (conversationId: string) =>
+		ipcRenderer.invoke("agent:markPlanArtifactDiscarded", { conversationId }),
+	agentUpsertTurnMeta: (args: import("../shared/agent-api").AgentTurnMetaInput) =>
+		ipcRenderer.invoke("agent:upsertTurnMeta", args),
 	onAgentEvent: (callback: (event: import("../shared/agent-runtime").AgentEvent) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, data: import("../shared/agent-runtime").AgentEvent) => callback(data);
 		ipcRenderer.on("agent:event", handler);

@@ -552,8 +552,9 @@ export interface ProjectSkillsOpencodePatch {
  * place — bundled/store team skills stay in their team dirs (reference model,
  * no copying); user skills live under the Project Team hangar
  * (`.prismnext/agent/teams/project.local/skills/`).
- * OpenCode config is written to app userData
- * via `AcpService.applyProjectSkillsIntegration` — never project-root `.opencode/`.
+ * Pi sessions load these dirs through ClosedResourceLoader.
+ * This helper still cleans stray project `.opencode/` artifacts and keeps
+ * `.gitignore` entries; it does not write OpenCode config.
  *
  * skills.paths order = OpenCode same-name shadow priority (later wins):
  *   [other teams (id sort)…, core team, .prismnext/agent (hangar + legacy, highest)]

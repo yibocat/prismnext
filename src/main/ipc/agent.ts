@@ -5,11 +5,24 @@
 import { ipcMain } from "electron";
 import type {
   AgentAnswerQuestionInput,
+  AgentCompactInput,
   AgentDeleteSessionInput,
+  AgentDescribeImagesInput,
+  AgentListModelsInput,
+  AgentPlanArtifactInput,
+  AgentPlanDecisionInput,
+  AgentReassignDirectoryInput,
+  AgentSyncIntensiveReadingInput,
+  AgentTruncateInput,
+  AgentTurnMetaInput,
+  AgentUndoTruncateInput,
   AgentLoadSessionInput,
+  AgentModelEffortInput,
   AgentRenameSessionInput,
   AgentResolvePlanSuggestInput,
   AgentSendInput,
+  AgentCancelSubagentInput,
+  AgentTestConnectionInput,
 } from "../../shared/agent-api";
 import { getAgentService } from "../agent/agent-service";
 
@@ -33,6 +46,11 @@ export function registerAgentHandlers(): void {
     const agent = await getAgentService();
     await agent.cancel(args.conversationId);
     return { ok: true };
+  });
+
+  ipcMain.handle("agent:cancelSubagent", async (_event, args: AgentCancelSubagentInput) => {
+    const agent = await getAgentService();
+    return { ok: agent.cancelSubagent(args.conversationId, args.toolCallId) };
   });
 
   ipcMain.handle("agent:dispose", async (_event, args?: { conversationId?: string }) => {
@@ -77,5 +95,85 @@ export function registerAgentHandlers(): void {
   ipcMain.handle("agent:resolvePlanSuggest", async (_event, args: AgentResolvePlanSuggestInput) => {
     const agent = await getAgentService();
     return { ok: agent.resolvePlanSuggest(args) };
+  });
+
+  ipcMain.handle("agent:listModels", async (_event, args: AgentListModelsInput) => {
+    const agent = await getAgentService();
+    return agent.listModels(args);
+  });
+
+  ipcMain.handle("agent:listModelsCatalog", async () => {
+    const agent = await getAgentService();
+    return agent.listModelsCatalog();
+  });
+
+  ipcMain.handle("agent:testConnection", async (_event, args: AgentTestConnectionInput) => {
+    const agent = await getAgentService();
+    return agent.testConnection(args);
+  });
+
+  ipcMain.handle("agent:getModelEffort", async (_event, args: AgentModelEffortInput) => {
+    const agent = await getAgentService();
+    return agent.getModelEffort(args);
+  });
+
+  ipcMain.handle("agent:getEffortCatalog", async () => {
+    const agent = await getAgentService();
+    return agent.getEffortCatalog();
+  });
+
+  ipcMain.handle("agent:compact", async (_event, args: AgentCompactInput) => {
+    const agent = await getAgentService();
+    return agent.compact(args);
+  });
+
+  ipcMain.handle("agent:describeImages", async (_event, args: AgentDescribeImagesInput) => {
+    const agent = await getAgentService();
+    return agent.describeImages(args);
+  });
+
+  ipcMain.handle("agent:truncateToTurn", async (_event, args: AgentTruncateInput) => {
+    const agent = await getAgentService();
+    return agent.truncateToTurn(args);
+  });
+
+  ipcMain.handle("agent:undoTruncate", async (_event, args: AgentUndoTruncateInput) => {
+    const agent = await getAgentService();
+    return agent.undoTruncate(args);
+  });
+
+  ipcMain.handle("agent:reassignDirectory", async (_event, args: AgentReassignDirectoryInput) => {
+    const agent = await getAgentService();
+    return agent.reassignDirectory(args);
+  });
+
+  ipcMain.handle("agent:syncIntensiveReading", async (_event, args: AgentSyncIntensiveReadingInput) => {
+    const agent = await getAgentService();
+    return agent.syncIntensiveReading(args);
+  });
+
+  ipcMain.handle("agent:getPlanEvents", async (_event, args: { conversationId: string }) => {
+    const agent = await getAgentService();
+    return agent.getPlanEvents(args.conversationId);
+  });
+
+  ipcMain.handle("agent:upsertPlanArtifact", async (_event, args: AgentPlanArtifactInput) => {
+    const agent = await getAgentService();
+    return agent.upsertPlanArtifact(args);
+  });
+
+  ipcMain.handle("agent:appendPlanDecision", async (_event, args: AgentPlanDecisionInput) => {
+    const agent = await getAgentService();
+    return agent.appendPlanDecision(args);
+  });
+
+  ipcMain.handle("agent:markPlanArtifactDiscarded", async (_event, args: { conversationId: string }) => {
+    const agent = await getAgentService();
+    return agent.markPlanArtifactDiscarded(args.conversationId);
+  });
+
+  ipcMain.handle("agent:upsertTurnMeta", async (_event, args: AgentTurnMetaInput) => {
+    const agent = await getAgentService();
+    return agent.upsertTurnMeta(args);
   });
 }

@@ -1663,6 +1663,9 @@ export interface ElectronAPI {
   agentStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/agent-api").AgentStatus>;
   agentSend: (args: import("../../shared/agent-api").AgentSendInput) => Promise<import("../../shared/agent-api").AgentSendResult>;
   agentCancel: (args: { conversationId: string }) => Promise<{ ok: boolean }>;
+  agentCancelSubagent: (
+    args: import("../../shared/agent-api").AgentCancelSubagentInput,
+  ) => Promise<{ ok: boolean }>;
   agentDispose: (args?: { conversationId?: string }) => Promise<{ ok: boolean }>;
   agentResolvePermission: (args: {
     requestId: string;
@@ -1683,6 +1686,48 @@ export interface ElectronAPI {
   ) => Promise<{ ok: boolean }>;
   agentResolvePlanSuggest: (
     args: import("../../shared/agent-api").AgentResolvePlanSuggestInput,
+  ) => Promise<{ ok: boolean }>;
+  agentListModels: (
+    args: import("../../shared/agent-api").AgentListModelsInput,
+  ) => Promise<import("../../shared/agent-api").AgentListModelsResult>;
+  agentListModelsCatalog: () => Promise<import("../../shared/agent-api").AgentModelsCatalogSnapshot>;
+  agentTestConnection: (
+    args: import("../../shared/agent-api").AgentTestConnectionInput,
+  ) => Promise<import("../../shared/agent-api").AgentTestConnectionResult>;
+  agentGetModelEffort: (
+    args: import("../../shared/agent-api").AgentModelEffortInput,
+  ) => Promise<import("../../shared/agent-api").AgentModelEffortResult>;
+  agentGetEffortCatalog: () => Promise<import("../../shared/agent-api").AgentEffortCatalogSnapshot>;
+  agentCompact: (
+    args: import("../../shared/agent-api").AgentCompactInput,
+  ) => Promise<import("../../shared/agent-api").AgentCompactResult>;
+  agentDescribeImages: (
+    args: import("../../shared/agent-api").AgentDescribeImagesInput,
+  ) => Promise<import("../../shared/agent-api").AgentDescribeImagesResult>;
+  agentTruncateToTurn: (
+    args: import("../../shared/agent-api").AgentTruncateInput,
+  ) => Promise<import("../../shared/agent-api").AgentTruncateResult>;
+  agentUndoTruncate: (
+    args: import("../../shared/agent-api").AgentUndoTruncateInput,
+  ) => Promise<import("../../shared/agent-api").AgentUndoTruncateResult>;
+  agentReassignDirectory: (
+    args: import("../../shared/agent-api").AgentReassignDirectoryInput,
+  ) => Promise<import("../../shared/agent-api").AgentReassignDirectoryResult>;
+  agentSyncIntensiveReading: (
+    args: import("../../shared/agent-api").AgentSyncIntensiveReadingInput,
+  ) => Promise<{ ok: boolean }>;
+  agentGetPlanEvents: (
+    conversationId: string,
+  ) => Promise<import("../../shared/agent-api").AgentPlanEvent[]>;
+  agentUpsertPlanArtifact: (
+    args: import("../../shared/agent-api").AgentPlanArtifactInput,
+  ) => Promise<{ ok: boolean }>;
+  agentAppendPlanDecision: (
+    args: import("../../shared/agent-api").AgentPlanDecisionInput,
+  ) => Promise<{ ok: boolean }>;
+  agentMarkPlanArtifactDiscarded: (conversationId: string) => Promise<{ ok: boolean }>;
+  agentUpsertTurnMeta: (
+    args: import("../../shared/agent-api").AgentTurnMetaInput,
   ) => Promise<{ ok: boolean }>;
   onAgentEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
   chatSend: (args: {

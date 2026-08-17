@@ -13,8 +13,12 @@ import {
   type ResourceLoader,
   SessionManager,
   SettingsManager,
+  type Skill,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
+import type { AgentMcpHost } from "./mcp-host";
+import type { McpServerDef } from "../../shared/teams/types";
 import { InMemoryCredentialStore, Type } from "@earendil-works/pi-ai";
 import type {
   AgentEvent,
@@ -23,7 +27,8 @@ import type {
   RuntimeSessionId,
   TurnInput,
 } from "../../shared/agent-runtime";
-import type { AgentEventListener, AgentRuntime } from "./runtime";
+import type { AgentCompactResult } from "../../shared/agent-api";
+import type { AgentEventListener, AgentRuntime, AgentTruncateEngineResult } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import { mapPiSessionEvent, type PiLikeSessionEvent } from "./events";
 import type {
@@ -35,9 +40,10 @@ import { FORBIDDEN_PROJECT_RESOURCE_DIRS } from "./session-store";
 import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
 import type { PermissionGate } from "./permission-gate";
-import { isPiPrimitiveToolName } from "./capability-matrix";
+import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
+import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
 import { PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 
 export const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
@@ -94,14 +100,34 @@ export function probePiEmbedCompatibility(input: {
  * ResourceLoader that never walks the project or home directory.
  * DefaultResourceLoader would read `.pi/`, `.agents/`, parent AGENTS.md, and `~/.pi`.
  */
+export type ClosedResourceLoaderInput = {
+  systemPrompt?: string;
+  skills?: Skill[];
+};
+
+function normalizeClosedLoaderInput(
+  input?: string | ClosedResourceLoaderInput,
+): ClosedResourceLoaderInput {
+  if (typeof input === "string" || input === undefined) {
+    return { systemPrompt: input };
+  }
+  return input;
+}
+
 export class ClosedResourceLoader implements ResourceLoader {
   private readonly extensions = {
     extensions: [],
     errors: [],
     runtime: createExtensionRuntime(),
   };
+  private readonly systemPrompt?: string;
+  private readonly skills: Skill[];
 
-  constructor(private readonly systemPrompt?: string) {}
+  constructor(input?: string | ClosedResourceLoaderInput) {
+    const opts = normalizeClosedLoaderInput(input);
+    this.systemPrompt = opts.systemPrompt;
+    this.skills = opts.skills ?? [];
+  }
 
   async reload(): Promise<void> {}
 
@@ -110,7 +136,7 @@ export class ClosedResourceLoader implements ResourceLoader {
   }
 
   getSkills() {
-    return { skills: [], diagnostics: [] };
+    return { skills: this.skills, diagnostics: [] };
   }
 
   getPrompts() {
@@ -161,6 +187,54 @@ export function createPiSessionManager(
     return SessionManager.create(cwd, persist.sessionDir);
   }
   return SessionManager.inMemory(cwd);
+}
+
+function isUserSessionEntry(entry: { type: string; message?: { role?: string } }): boolean {
+  return entry.type === "message" && entry.message?.role === "user";
+}
+
+function currentPiLeafId(manager: SessionManager): string | null {
+  const branch = manager.getBranch();
+  return branch.at(-1)?.id ?? null;
+}
+
+export function truncatePersistedPiSession(
+  sessionFile: string,
+  keepThroughTurnIndex: number,
+): AgentTruncateEngineResult {
+  try {
+    const manager = SessionManager.open(sessionFile);
+    const previousLeafId = currentPiLeafId(manager);
+    if (keepThroughTurnIndex < 0) {
+      manager.resetLeaf();
+      return { ok: true, previousLeafId };
+    }
+    const users = manager.getEntries().filter(isUserSessionEntry);
+    const discarded = users[keepThroughTurnIndex + 1];
+    if (!discarded) return { ok: true, previousLeafId };
+    if (discarded.parentId) manager.branch(discarded.parentId);
+    else manager.resetLeaf();
+    return { ok: true, previousLeafId };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export function restorePersistedPiSessionLeaf(
+  sessionFile: string,
+  leafId: string,
+): { ok: boolean; error?: string } {
+  try {
+    SessionManager.open(sessionFile).branch(leafId);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function sessionManagerOf(session: object): SessionManager | null {
+  const manager = (session as { sessionManager?: SessionManager }).sessionManager;
+  return manager && typeof manager.getEntries === "function" ? manager : null;
 }
 
 export function closedPiSessionOptions(input: {
@@ -237,6 +311,11 @@ export interface PiSdkSessionFactoryInput {
   toolHost: Pick<ToolHost, "execute">;
   gate: PermissionGate;
   interactions?: InteractionBroker;
+  skills?: HostSkillDir[];
+  mcpHost?: AgentMcpHost;
+  mcpServers?: McpServerDef[];
+  /** Omit = all Pi primitives. `[]` = none (used by scoped subagent sessions). */
+  primitiveToolNames?: readonly string[];
 }
 
 interface PiSessionHandle {
@@ -245,9 +324,16 @@ interface PiSessionHandle {
   prompt: (text: string) => Promise<void>;
   abort: () => Promise<void>;
   dispose: () => void;
+  compact?: (customInstructions?: string) => Promise<{
+    summary: string;
+    tokensBefore: number;
+  }>;
+  truncateToKeepTurns?: (keepThroughTurnIndex: number) => Promise<AgentTruncateEngineResult>;
+  restoreLeaf?: (leafId: string) => Promise<{ ok: boolean; error?: string }>;
   subscribe: (listener: (event: PiLikeSessionEvent) => void) => () => void;
   setTurnContext?: (context: PiToolExecutionContext) => void;
   getSystemPrompt?: () => string | undefined;
+  attachCustomTools?: (tools: ToolDefinition[]) => number;
 }
 
 export type PiSessionFactory = (opts: {
@@ -269,6 +355,26 @@ export type PiSessionFactory = (opts: {
  * This deliberately takes an explicit BYOK value: it does not read Pi's
  * global auth file, shell expansions, or any project configuration.
  */
+function attachPiCustomTools(session: object, tools: ToolDefinition[]): number {
+  const raw = session as {
+    _customTools?: ToolDefinition[];
+    _refreshToolRegistry?: () => void;
+  };
+  if (!Array.isArray(raw._customTools) || typeof raw._refreshToolRegistry !== "function") {
+    return 0;
+  }
+  const have = new Set(raw._customTools.map((tool) => tool.name));
+  let added = 0;
+  for (const tool of tools) {
+    if (have.has(tool.name)) continue;
+    raw._customTools.push(tool);
+    have.add(tool.name);
+    added += 1;
+  }
+  if (added > 0) raw._refreshToolRegistry();
+  return added;
+}
+
 export function createPiSdkSessionFactory(
   input: PiSdkSessionFactoryInput,
 ): PiSessionFactory {
@@ -329,9 +435,18 @@ export function createPiSdkSessionFactory(
       cwd: opts.cwd,
       gate: input.gate,
       getContext,
+      names: input.primitiveToolNames,
     });
-    const customTools = [...primitiveTools, ...hostTools];
-    const resourceLoader = new ClosedResourceLoader(input.systemPrompt);
+    input.mcpHost?.bindToolEnv({ gate: input.gate, getContext });
+    const mcpTools = input.mcpHost
+      ? await input.mcpHost.ensure(input.mcpServers ?? [], { cwd: opts.cwd })
+      : [];
+    input.mcpHost?.markAttached(mcpTools.map((tool) => tool.name));
+    const customTools = [...primitiveTools, ...hostTools, ...mcpTools];
+    const resourceLoader = new ClosedResourceLoader({
+      systemPrompt: input.systemPrompt,
+      skills: loadPiSkillsFromDirs(input.skills ?? []),
+    });
     const sessionManager = createPiSessionManager(opts.cwd, opts.persist);
     const { session } = await createAgentSession({
       cwd: opts.cwd,
@@ -352,6 +467,30 @@ export function createPiSdkSessionFactory(
       prompt: (text: string) => session.prompt(text, { expandPromptTemplates: false }),
       abort: () => session.abort(),
       dispose: () => session.dispose(),
+      compact: (customInstructions?: string) => session.compact(customInstructions),
+      truncateToKeepTurns: async (keepThroughTurnIndex) => {
+        const manager = sessionManagerOf(session);
+        const previousLeafId = manager
+          ? currentPiLeafId(manager)
+          : session.getUserMessagesForForking().at(-1)?.entryId ?? null;
+        if (keepThroughTurnIndex < 0) {
+          if (manager) {
+            manager.resetLeaf();
+            return { ok: true, previousLeafId };
+          }
+          return { ok: false, previousLeafId, error: "truncate_empty_unavailable" };
+        }
+        const users = session.getUserMessagesForForking();
+        const discarded = users[keepThroughTurnIndex + 1];
+        if (!discarded) return { ok: true, previousLeafId };
+        const parentId = manager?.getEntries().find((entry) => entry.id === discarded.entryId)?.parentId;
+        await session.navigateTree(parentId || discarded.entryId, { summarize: false });
+        return { ok: true, previousLeafId };
+      },
+      restoreLeaf: async (leafId) => {
+        await session.navigateTree(leafId, { summarize: false });
+        return { ok: true };
+      },
       subscribe: (listener: (event: PiLikeSessionEvent) => void) => (
         session.subscribe((event) => listener(event as PiLikeSessionEvent))
       ),
@@ -365,6 +504,71 @@ export function createPiSdkSessionFactory(
       getSystemPrompt: () => {
         const agent = (session as { agent?: { state?: { systemPrompt?: string } } }).agent;
         return agent?.state?.systemPrompt;
+      },
+      attachCustomTools: (tools) => attachPiCustomTools(session, tools),
+    };
+  };
+}
+
+export function createPiSubagentRunnerFactory(input: {
+  fallbackProvider: string;
+  fallbackModelId: string;
+  resolveApiKey: (provider: string) => string | undefined;
+  gate: PermissionGate;
+  interactions?: InteractionBroker;
+  agentRoot: string;
+}): SubagentSessionRunnerFactory {
+  return async (opts) => {
+    const provider = opts.modelRef?.provider ?? input.fallbackProvider;
+    const modelId = opts.modelRef?.modelId ?? input.fallbackModelId;
+    const apiKey = input.resolveApiKey(provider)?.trim();
+    if (!apiKey) throw new Error("missing_pi_api_key");
+    const allowed = new Set((opts.allowedToolNames ?? []).map((name) => name.toLowerCase()));
+    const factory = createPiSdkSessionFactory({
+      providerId: provider,
+      modelId,
+      apiKey,
+      systemPrompt: opts.systemPrompt,
+      toolHost: opts.scopedToolHost,
+      gate: input.gate,
+      interactions: input.interactions,
+      primitiveToolNames: PI_PRIMITIVE_TOOL_NAMES.filter((name) => allowed.has(name)),
+    });
+    const handle = await factory({
+      runtimeSessionId: opts.runtimeSessionId,
+      tabId: opts.tabId,
+      cwd: opts.boundCheckoutPath,
+      agentDir: join(input.agentRoot, "sub", opts.runtimeSessionId),
+      projectRoot: opts.projectRoot,
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+      allowedPaths: undefined,
+      resourceLoader: new ClosedResourceLoader(opts.systemPrompt),
+      persist: { mode: "memory" },
+    });
+    const unsubscribe = handle.subscribe((piEvent) => {
+      for (const event of mapPiSessionEvent(piEvent, {
+        runtimeSessionId: opts.runtimeSessionId,
+        tabId: opts.tabId,
+        turnId: opts.turnId,
+      })) {
+        opts.emitEvent(event);
+      }
+    });
+    handle.setTurnContext?.({
+      runtimeSessionId: opts.runtimeSessionId,
+      tabId: opts.tabId,
+      turnId: opts.turnId,
+      projectRoot: opts.projectRoot,
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+    });
+    return {
+      prompt: (text) => handle.prompt(text),
+      abort: () => handle.abort(),
+      dispose: () => {
+        unsubscribe();
+        handle.dispose();
       },
     };
   };
@@ -648,6 +852,53 @@ export class PiSdkRuntime implements AgentRuntime {
     }
   }
 
+  async compact(runtimeSessionId: RuntimeSessionId): Promise<AgentCompactResult> {
+    const session = this.sessions.get(runtimeSessionId);
+    if (!session) return { ok: false, error: "session_not_live" };
+    if (!session.handle.compact) return { ok: false, error: "compact_unavailable" };
+    try {
+      const result = await session.handle.compact();
+      return {
+        ok: true,
+        summary: result.summary,
+        tokensBefore: result.tokensBefore,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  async truncate(
+    runtimeSessionId: RuntimeSessionId,
+    keepThroughTurnIndex: number,
+  ): Promise<AgentTruncateEngineResult> {
+    const session = this.sessions.get(runtimeSessionId);
+    if (!session) return { ok: false, error: "unknown_session" };
+    if (!session.handle.truncateToKeepTurns) return { ok: false, error: "truncate_unavailable" };
+    try {
+      return await session.handle.truncateToKeepTurns(keepThroughTurnIndex);
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async restoreLeaf(
+    runtimeSessionId: RuntimeSessionId,
+    leafId: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const session = this.sessions.get(runtimeSessionId);
+    if (!session) return { ok: false, error: "unknown_session" };
+    if (!session.handle.restoreLeaf) return { ok: false, error: "restore_unavailable" };
+    try {
+      return await session.handle.restoreLeaf(leafId);
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   async cancelTurn(runtimeSessionId: RuntimeSessionId): Promise<void> {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
@@ -659,6 +910,12 @@ export class PiSdkRuntime implements AgentRuntime {
       tabId: session.tabId,
       turnId: session.turnId,
     });
+  }
+
+  attachCustomTools(runtimeSessionId: RuntimeSessionId, tools: ToolDefinition[]): number {
+    const session = this.sessions.get(runtimeSessionId);
+    if (!session) return 0;
+    return session.handle.attachCustomTools?.(tools) ?? 0;
   }
 
   async disposeSession(runtimeSessionId: RuntimeSessionId): Promise<void> {

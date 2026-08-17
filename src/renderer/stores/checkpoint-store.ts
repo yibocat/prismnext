@@ -674,7 +674,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
     const messagesBefore = chatTab ? [...chatTab.messages] : [];
 
-    const { projectRoot, worktreePath } = sessionPaths(tabId);
+    const { projectRoot } = sessionPaths(tabId);
     if (!projectRoot) return 0;
 
     const fileTarget =
@@ -696,15 +696,20 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       surviveNextFinalize: opts?.preserveRegretAcrossNextFinalize === true,
     };
 
-    const sessionId = tab.sessionId ?? chatTab?.sessionId ?? null;
-    if (sessionId) {
-      await window.electronAPI.sessionTruncateToTurn({
-        sessionId,
-        projectPath: projectRoot,
-        worktreePath,
+    const conversationId = chatTab?.conversation?.conversationId
+      || tab.sessionId
+      || chatTab?.sessionId
+      || null;
+    if (conversationId) {
+      const truncated = await window.electronAPI.agentTruncateToTurn({
+        conversationId,
         turnIndex,
       });
-      await useChatStore.getState().resyncTabMessagesFromDisk(tabId);
+      if (!truncated.ok) {
+        useChatStore.getState().truncateToTurn(tabId, turnIndex);
+      } else {
+        await useChatStore.getState().resyncTabMessagesFromDisk(tabId);
+      }
     } else {
       useChatStore.getState().truncateToTurn(tabId, turnIndex);
     }
@@ -741,7 +746,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
         ...s.byTab,
         [tabId]: {
           ...tab,
-          sessionId: sessionId ?? tab.sessionId,
+          sessionId: conversationId ?? tab.sessionId,
           checkpoints: kept,
           pendingTurn: null,
           regret: regretSnapshot,
@@ -749,8 +754,8 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       },
     }));
 
-    if (sessionId) {
-      await persistCheckpoints(projectRoot, sessionId, kept);
+    if (conversationId) {
+      await persistCheckpoints(projectRoot, conversationId, kept);
     }
 
     return fileTarget?.files.length ?? 0;
@@ -777,28 +782,32 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     const undo = tab?.regret;
     if (!tab || !undo) return { ok: false, sessionRestored: false };
 
-    const { projectRoot, worktreePath } = sessionPaths(tabId);
-    const sessionId = tab.sessionId
-      ?? useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId
-      ?? null;
+    const { projectRoot } = sessionPaths(tabId);
+    const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+    const conversationId = chatTab?.conversation?.conversationId
+      || tab.sessionId
+      || chatTab?.sessionId
+      || null;
+    const sessionId = conversationId;
 
     let sessionRestored = false;
-    if (sessionId && projectRoot) {
+    if (conversationId) {
       try {
-        await window.electronAPI.sessionUndoTruncate({
-          sessionId,
-          projectPath: projectRoot,
-          worktreePath,
-        });
-        sessionRestored = true;
+        const undone = await window.electronAPI.agentUndoTruncate({ conversationId });
+        sessionRestored = undone.ok;
+        if (undone.ok) {
+          await useChatStore.getState().resyncTabMessagesFromDisk(tabId);
+        }
       } catch (err) {
-        log.warn("sessionUndoTruncate failed — restoring UI/files from in-memory regret", {
+        log.warn("agentUndoTruncate failed — restoring UI/files from in-memory regret", {
           error: (err as Error).message,
         });
       }
     }
 
-    useChatStore.getState().restoreMessages(tabId, undo.messages);
+    if (!sessionRestored) {
+      useChatStore.getState().restoreMessages(tabId, undo.messages);
+    }
 
     await applyCheckpointFiles(undo.files);
     useChangesStore.getState().clearAll();

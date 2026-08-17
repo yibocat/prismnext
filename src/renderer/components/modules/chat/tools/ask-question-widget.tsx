@@ -51,14 +51,7 @@ async function writeQuestionAnswer(answer: string): Promise<boolean> {
       return false;
     }
   }
-  const sessionId = tab?.sessionId;
-  if (!sessionId) return false;
-  try {
-    const result = await window.electronAPI.chatAnswerQuestion(sessionId, answer);
-    return !!result?.success;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({

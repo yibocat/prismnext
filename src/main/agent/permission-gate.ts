@@ -234,6 +234,7 @@ export class PermissionGate {
       ?? (isPiPrimitiveToolName(request.toolName)
         ? PI_PRIMITIVE_CATEGORY[request.toolName]
         : undefined)
+      ?? (request.toolName.startsWith("mcp__") ? "shell_exec" : undefined)
       ?? (FALLBACK_MUTATING_TOOLS.has(request.toolName.toLowerCase()) ? "safe_write" : "read_only");
 
     // 2. Always Allow / Explicit Rules overrides

@@ -6,6 +6,7 @@ import type {
   ContentBlock,
   Conversation,
   ConversationTurn,
+  TurnMessageMeta,
 } from "../../../shared/agent-conversation";
 
 export type ConversationDisplayTurn = {
@@ -16,6 +17,7 @@ export type ConversationDisplayTurn = {
   status: ConversationTurn["status"] | "streaming";
   error?: string;
   live: boolean;
+  meta?: TurnMessageMeta;
 };
 
 export function conversationHasContent(
@@ -35,6 +37,7 @@ export function conversationDisplayTurns(
     assistantBlocks: turn.assistant.blocks,
     status: turn.status,
     ...(turn.error ? { error: turn.error } : {}),
+    ...(turn.meta ? { meta: turn.meta } : {}),
     live: false,
   }));
   if (conv.live) {

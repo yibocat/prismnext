@@ -306,4 +306,40 @@ describe("PiSubsessionRuntime & Dynamic Task Tool (Phase 5B)", () => {
     expect(result.error).toMatch(/cancelled|aborted/i);
     expect(subsessionRuntime.activeSubsessionCount()).toBe(0);
   });
+
+  it("cancels a child by the parent task toolCallId", async () => {
+    let childAborted = false;
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+      createRunner: async () => ({
+        prompt: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        },
+        abort: async () => {
+          childAborted = true;
+        },
+        dispose: () => {},
+      }),
+    });
+
+    const taskPromise = subsessionRuntime.runSubagentTask({
+      parentSessionId: "parent-abort-one",
+      parentTabId: "tab-1",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-call-one",
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      permissionMode: "auto",
+      expert: sampleExpert,
+      prompt: "Long task",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(subsessionRuntime.cancelByParentToolCallId("task-call-one")).toBe(true);
+    expect(childAborted).toBe(true);
+    const result = await taskPromise;
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/cancelled|aborted/i);
+  });
 });

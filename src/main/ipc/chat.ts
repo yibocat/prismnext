@@ -638,24 +638,6 @@ export function registerChatHandlers(): void {
         && priorContext.promptFingerprint !== currentFingerprint,
       );
 
-      if (args.projectPath) {
-        const { syncProjectPromptFile } = await import("../services/prompt-sync");
-        const needsPromptSync = isFirstTurn || promptStale || !priorContext?.promptFingerprint;
-        if (needsPromptSync) {
-          syncProjectPromptFile(args.projectPath, promptCtx);
-        }
-        const { instructionsChanged } = service.applyProjectPromptIntegration(args.projectPath);
-        // Never reload OpenCode from the send path. instructions are read at
-        // process start; the current session already has the system prompt
-        // injected via prompt content. Reloading here (or after the turn via
-        // a deferred wait) only stalls the UI and tears down the session.
-        if (instructionsChanged) {
-          log.info("Prompt instructions updated (file written, no reload)", {
-            spawnAgeMs: Date.now() - service.getLastSpawnAtMs(),
-          });
-        }
-      }
-
       // Phase 1B: if the previous turn denied a builtin-Task delegation on the
       // orchestrator, prepend a one-shot redirect note so the LLM is nudged
       // toward platform tools instead of retrying Task. ACP permission

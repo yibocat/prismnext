@@ -74,7 +74,7 @@ async function sanitizePersistedModelThoughtLevels(
       customProviders,
     );
     try {
-      const result = await window.electronAPI.chatGetModelEffort({
+      const result = await window.electronAPI.agentGetModelEffort({
         provider: parsed.providerId,
         modelId: parsed.modelId,
         fallback,

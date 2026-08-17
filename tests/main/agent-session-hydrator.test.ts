@@ -36,6 +36,7 @@ describe("hydrateSessionRecordToConversation", () => {
         ],
       },
       status: "completed",
+      meta: { modelLabel: "Sonnet", completedAt: 2000 },
     };
     const session: AgentSessionRecord = {
       version: 2,
@@ -74,6 +75,7 @@ describe("hydrateSessionRecordToConversation", () => {
       type: "text",
       text: "Here is the summary of the paper.",
     });
+    expect(conv.turns[0]?.meta).toEqual({ modelLabel: "Sonnet", completedAt: 2000 });
   });
 
   it("handles empty sessions cleanly", () => {

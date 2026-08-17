@@ -255,6 +255,43 @@ describe("applyConversationEvent", () => {
 
     expect(conv.live?.assistant.blocks).toEqual([]);
     expect(conv.turns).toEqual([]);
+    expect(conv.subagentRuns["task-1"]).toMatchObject({
+      expertName: "Reviewer",
+      status: "running",
+      blocks: [{ type: "text", text: "child output" }],
+    });
+  });
+
+  it("seeds and completes a task run from the parent tool events", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "delegate",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-task-start",
+      toolCallId: "task-1",
+      toolName: "task",
+      args: { expertId: "peer-reviewer", prompt: "review methods" },
+    }));
+    expect(conv.live?.assistant.blocks.some((block) => block.name === "task")).toBe(true);
+    expect(conv.subagentRuns["task-1"]).toMatchObject({
+      expertName: "peer-reviewer",
+      prompt: "review methods",
+      status: "running",
+    });
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_finished",
+      eventId: "e-task-end",
+      toolCallId: "task-1",
+      toolName: "task",
+      ok: true,
+      result: "done",
+    }));
+    expect(conv.subagentRuns["task-1"]?.status).toBe("done");
   });
 
   it("replays the same eventId without duplicating tools or finishing the turn twice", () => {

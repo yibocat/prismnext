@@ -2,7 +2,7 @@
  * Composer → vision helper → text-only main model.
  *
  * When the chat model lacks native vision, describe attached images via
- * `aiVisionFallbackModel` before `chat:send` (strips ACP image blocks).
+ * `aiVisionFallbackModel` before `agent:send`.
  */
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -135,9 +135,9 @@ export async function applyVisionFallbackForSend(
 
   chatStore._setPreparePhase(tabId, "describing_images");
   try {
-    let result: Awaited<ReturnType<typeof window.electronAPI.chatDescribeImages>>;
+    let result: Awaited<ReturnType<typeof window.electronAPI.agentDescribeImages>>;
     try {
-      result = await window.electronAPI.chatDescribeImages({
+      result = await window.electronAPI.agentDescribeImages({
         providerId: helperProviderId,
         modelId: helperModelId,
         images: promptImages,

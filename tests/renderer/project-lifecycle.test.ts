@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const executionListRunning = vi.fn();
 const executionApplyProjectSwitch = vi.fn(async () => ({ ok: true }));
-const chatDispose = vi.fn(async () => undefined);
+const agentDispose = vi.fn(async () => undefined);
 const terminalDestroyAllAiPty = vi.fn(async () => undefined);
 
 vi.stubGlobal("window", {
   electronAPI: {
     executionListRunning,
     executionApplyProjectSwitch,
-    chatDispose,
+    agentDispose,
     terminalDestroyAllAiPty,
   },
 });
@@ -27,7 +27,7 @@ describe("project switch lifecycle", () => {
     executionListRunning.mockReset();
     executionApplyProjectSwitch.mockReset();
     executionApplyProjectSwitch.mockResolvedValue({ ok: true });
-    chatDispose.mockReset();
+    agentDispose.mockReset();
     terminalDestroyAllAiPty.mockReset();
     useExecutionStore.getState().reset();
     useTabCloseConfirmStore.setState({ pending: null });

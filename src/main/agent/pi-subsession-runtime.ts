@@ -26,6 +26,7 @@ export interface SubagentSessionRunnerInput {
   modelRef?: { provider: string; modelId: string };
   thoughtLevel?: string;
   temperature?: number;
+  allowedToolNames?: string[];
   emitEvent: (event: AgentEvent) => void;
   abortSignal: AbortSignal;
 }
@@ -71,6 +72,7 @@ export interface RunSubagentTaskResult {
 interface ActiveChildSession {
   taskId: string;
   parentSessionId: string;
+  parentToolCallId: string;
   abortController: AbortController;
   handle?: SubagentSessionRunnerHandle;
 }
@@ -92,12 +94,24 @@ export class PiSubsessionRuntime {
     for (const [taskId, child] of Array.from(this.activeSubsessions.entries())) {
       if (child.parentSessionId === parentSessionId) {
         child.abortController.abort();
-        child.handle?.abort();
+        void child.handle?.abort();
         this.activeSubsessions.delete(taskId);
         count += 1;
       }
     }
     return count;
+  }
+
+  cancelByParentToolCallId(parentToolCallId: string): boolean {
+    const id = parentToolCallId.trim();
+    if (!id) return false;
+    for (const child of this.activeSubsessions.values()) {
+      if (child.parentToolCallId !== id) continue;
+      child.abortController.abort();
+      void child.handle?.abort();
+      return true;
+    }
+    return false;
   }
 
   private emitTagged(event: AgentEvent, subagentContext: { parentToolCallId: string; expertFqid: string; expertName: string }): void {
@@ -121,6 +135,7 @@ export class PiSubsessionRuntime {
     const activeRecord: ActiveChildSession = {
       taskId,
       parentSessionId: input.parentSessionId,
+      parentToolCallId: input.parentToolCallId,
       abortController,
     };
     this.activeSubsessions.set(taskId, activeRecord);
@@ -169,6 +184,7 @@ export class PiSubsessionRuntime {
           modelRef: input.expert.modelRef,
           thoughtLevel: input.expert.thoughtLevel,
           temperature: input.expert.temperature,
+          allowedToolNames: input.expert.allowedTools,
           emitEvent: (ev) => {
             if (ev.type === "text_delta") {
               childText += ev.text;

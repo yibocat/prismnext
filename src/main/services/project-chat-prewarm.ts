@@ -14,7 +14,6 @@ import {
 import {
   refreshProjectSkillsIntegrationIfNeeded,
 } from "./project-skills-refresh";
-import { syncProjectPromptFile } from "./prompt-sync";
 import { getAgentsSyncState } from "../teams/agents-sync";
 import { normalizeProjectRoot } from "./skills-sync";
 import type { ProjectWarmPhase } from "../../shared/agent-status";
@@ -124,9 +123,6 @@ async function runProjectChatPrewarm(
   const expertsResult = await refreshProjectSubagentsIntegrationIfNeeded(projectRoot, { promptCtx });
   const skillsResult = await refreshProjectSkillsIntegrationIfNeeded(projectRoot);
 
-  syncProjectPromptFile(projectRoot, promptCtx);
-  const { instructionsChanged } = acp.applyProjectPromptIntegration(projectRoot);
-
   const expertsHashChanged =
     !expertsResult.skipped
     && (
@@ -141,8 +137,7 @@ async function runProjectChatPrewarm(
   const spawnedRecently = acp.wasSpawnedRecently();
   const credentialRestartPending =
     skipReload || acp.wouldRestartForCredentials();
-  const configDirty =
-    expertsHashChanged || skillsResult.configChanged || instructionsChanged;
+  const configDirty = expertsHashChanged || skillsResult.configChanged;
   const needsReload =
     acp.getConnection()
     && !credentialRestartPending
@@ -154,7 +149,6 @@ async function runProjectChatPrewarm(
       projectRoot,
       experts: expertsHashChanged,
       skills: skillsResult.configChanged,
-      instructions: instructionsChanged,
     });
     await acp.reloadAfterSkillsIntegration();
   } else if (configDirty && (credentialRestartPending || spawnedRecently)) {
@@ -165,7 +159,6 @@ async function runProjectChatPrewarm(
         : "deferred_to_credential_connect",
       experts: expertsHashChanged,
       skills: skillsResult.configChanged,
-      instructions: instructionsChanged,
       spawnAgeMs: Date.now() - acp.getLastSpawnAtMs(),
     });
   }

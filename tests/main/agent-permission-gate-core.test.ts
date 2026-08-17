@@ -234,6 +234,14 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
     }));
     expect(bashRes.decision).toBe("allow");
     expect(prompted).toHaveLength(2);
+
+    const mcpRes = await gate.decide(makeRequest({
+      requestId: "mcp-ask-req",
+      toolName: "mcp__papers__search",
+      permissionMode: "ask",
+    }));
+    expect(mcpRes.decision).toBe("allow");
+    expect(prompted).toHaveLength(3);
   });
 });
 
