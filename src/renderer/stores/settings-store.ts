@@ -12,12 +12,6 @@ import {
 } from "@/lib/browser/search-engines";
 import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
 import {
-  migrateOpenCodeEnabledModelIds,
-  normalizeOpenCodeModelId,
-  OPENCODE_GO_PROVIDER_ID,
-  OPENCODE_ZEN_PROVIDER_ID,
-} from "../../shared/opencode-provider";
-import {
   migrateOpenRouterEnabledModelIds,
   migrateOpenRouterPreferenceKey,
   normalizeOpenRouterModelId,
@@ -37,7 +31,7 @@ import {
 } from "../../shared/anthropic-models";
 import { migrateLegacyBuiltinProviders } from "../../shared/lazy-provider-catalog";
 import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
-import { prefetchOpenCodeModelsCatalog } from "@/lib/providers/opencode-catalog-models";
+import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
 import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
 import type { ModelConfig } from "@/lib/providers";
 
@@ -336,6 +330,144 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
       // Migrate: aiCustomModels (string[]) → aiCustomModelsData (structured)
       const r = remote as any;
+
+      // ── OpenCode → Pi provider id migration (one-shot) ────────────────────
+      // Legacy product provider ids (opencode-zen, zhipu, kimi, alibaba, minimax)
+      // become their Pi equivalents. Every settings key that names a provider
+      // (or a `provider/model` key) must be rebased.
+      {
+        const { LEGACY_PROVIDER_ID_MAP } = await import("../../shared/pi-provider-catalog");
+        const legacyIds = Object.keys(LEGACY_PROVIDER_ID_MAP);
+        if (legacyIds.length > 0) {
+          let changed = false;
+          const rebaseKey = (key: string, legacyId: string): string => {
+            const prefix = `${legacyId}/`;
+            if (!key.startsWith(prefix)) return key;
+            return `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${key.slice(prefix.length)}`;
+          };
+          const rebaseMapKeys = (
+            map: Record<string, unknown> | undefined,
+            rebase: (k: string) => string,
+          ): Record<string, unknown> | undefined => {
+            if (!map) return map;
+            let next = map;
+            for (const key of Object.keys(map)) {
+              const rebased = rebase(key);
+              if (rebased === key) continue;
+              if (!changed) changed = true;
+              next = { ...next };
+              next[rebased] = next[key];
+              delete next[key];
+            }
+            return next;
+          };
+
+          // aiProvider / aiModel — the active selection itself.
+          if (typeof r.aiProvider === "string" && legacyIds.includes(r.aiProvider)) {
+            r.aiProvider = LEGACY_PROVIDER_ID_MAP[r.aiProvider];
+            changed = true;
+          }
+
+          // aiCustomProviders (id) / aiApiKeys / aiBaseUrls / aiEnabledModels /
+          // aiCustomModelsData / aiCustomModels — keyed by provider id.
+          if (Array.isArray(r.aiCustomProviders)) {
+            for (const cp of r.aiCustomProviders) {
+              if (cp && typeof cp.id === "string" && legacyIds.includes(cp.id)) {
+                cp.id = LEGACY_PROVIDER_ID_MAP[cp.id];
+                changed = true;
+              }
+            }
+          }
+          r.aiApiKeys = rebaseMapKeys(r.aiApiKeys, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string> | undefined;
+          r.aiBaseUrls = rebaseMapKeys(r.aiBaseUrls, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string> | undefined;
+          r.aiEnabledModels = rebaseMapKeys(r.aiEnabledModels, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string[]> | undefined;
+          r.aiCustomModelsData = rebaseMapKeys(r.aiCustomModelsData, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, unknown[]> | undefined;
+          r.aiCustomModels = rebaseMapKeys(r.aiCustomModels, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string[]> | undefined;
+          if (Array.isArray(r.aiVerifiedProviders)) {
+            r.aiVerifiedProviders = r.aiVerifiedProviders.map((id: string) =>
+              legacyIds.includes(id) ? LEGACY_PROVIDER_ID_MAP[id] : id,
+            );
+          }
+
+          // Per-model preference keys `provider/modelId` and `provider/modelId/effort`.
+          if (r.aiPinnedModelKeys) {
+            let next = r.aiPinnedModelKeys;
+            for (const legacyId of legacyIds) {
+              next = next.map((k: string) => rebaseKey(k, legacyId));
+            }
+            r.aiPinnedModelKeys = next;
+            changed = true;
+          }
+          if (r.aiModelThoughtLevels) {
+            let next = r.aiModelThoughtLevels;
+            let levelsChanged = false;
+            for (const legacyId of legacyIds) {
+              for (const key of Object.keys(next)) {
+                const rebased = rebaseKey(key, legacyId);
+                if (rebased === key) continue;
+                levelsChanged = true;
+                next = { ...next, [rebased]: next[key] };
+                delete next[key];
+              }
+            }
+            if (levelsChanged) {
+              r.aiModelThoughtLevels = next;
+              changed = true;
+            }
+          }
+          // Vision / subagent helper refs `provider/modelId`.
+          if (typeof r.aiVisionFallbackModel === "string") {
+            for (const legacyId of legacyIds) {
+              const prefix = `${legacyId}/`;
+              if (r.aiVisionFallbackModel.startsWith(prefix)) {
+                r.aiVisionFallbackModel = `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${r.aiVisionFallbackModel.slice(prefix.length)}`;
+                changed = true;
+              }
+            }
+          }
+          if (typeof r.aiSubagentModel === "string") {
+            for (const legacyId of legacyIds) {
+              const prefix = `${legacyId}/`;
+              if (r.aiSubagentModel.startsWith(prefix)) {
+                r.aiSubagentModel = `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${r.aiSubagentModel.slice(prefix.length)}`;
+                changed = true;
+              }
+            }
+          }
+
+          if (changed) {
+            window.electronAPI
+              .settingsSet({
+                aiProvider: r.aiProvider,
+                aiApiKeys: r.aiApiKeys,
+                aiBaseUrls: r.aiBaseUrls,
+                aiEnabledModels: r.aiEnabledModels,
+                aiCustomModelsData: r.aiCustomModelsData,
+                aiCustomModels: r.aiCustomModels,
+                aiCustomProviders: r.aiCustomProviders,
+                aiVerifiedProviders: r.aiVerifiedProviders,
+                aiPinnedModelKeys: r.aiPinnedModelKeys,
+                aiModelThoughtLevels: r.aiModelThoughtLevels,
+                aiVisionFallbackModel: r.aiVisionFallbackModel,
+                aiSubagentModel: r.aiSubagentModel,
+              })
+              .catch(() => {});
+            log.info("Migrated legacy provider ids to Pi ids", {
+              map: LEGACY_PROVIDER_ID_MAP,
+            });
+          }
+        }
+      }
       if (
         r.aiCustomModels &&
         Object.keys(r.aiCustomModels).length > 0 &&
@@ -388,10 +520,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         }
       }
 
-      for (const catalogId of [OPENCODE_GO_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID] as const) {
+      for (const catalogId of ["opencode-go"] as const) {
         if (r.aiEnabledModels?.[catalogId]) {
           const raw = r.aiEnabledModels[catalogId] as string[];
-          const migrated = migrateOpenCodeEnabledModelIds(catalogId, raw);
+          const migrated = raw.map((id: string) => id.trim().toLowerCase());
           const changed =
             migrated.length !== raw.length || migrated.some((id, i) => id !== raw[i]);
           if (changed) {
@@ -403,7 +535,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           }
         }
         if (r.aiProvider === catalogId && typeof r.aiModel === "string") {
-          const normalized = normalizeOpenCodeModelId(catalogId, r.aiModel);
+          const normalized = r.aiModel.trim().toLowerCase();
           if (normalized !== r.aiModel) {
             const previous = r.aiModel;
             r.aiModel = normalized;
@@ -569,14 +701,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         void get().updateSettings({ aiModelThoughtLevels: sanitized });
       });
 
-      const hasOpenCodeCatalog =
-        Boolean(r.aiApiKeys?.[OPENCODE_GO_PROVIDER_ID]?.trim())
-        || Boolean(r.aiApiKeys?.[OPENCODE_ZEN_PROVIDER_ID]?.trim())
+      const hasPiCatalogProvider =
+        Boolean(r.aiApiKeys?.["opencode"]?.trim())
+        || Boolean(r.aiApiKeys?.["opencode-go"]?.trim())
         || remote.aiCustomProviders?.some(
-          (p) => p.id === OPENCODE_GO_PROVIDER_ID || p.id === OPENCODE_ZEN_PROVIDER_ID,
+          (p) => p.id === "opencode" || p.id === "opencode-go",
         );
-      if (hasOpenCodeCatalog) {
-        void prefetchOpenCodeModelsCatalog();
+      if (hasPiCatalogProvider) {
+        void prefetchPiModelsCatalog();
       }
     } catch (err) {
       console.log(`[settings] load failed: ${Math.round(performance.now() - t0)}ms`);

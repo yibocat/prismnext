@@ -1,5 +1,4 @@
 import { BrowserWindow } from "electron";
-import { AcpService } from "../acp/service";
 import type { PromptContext } from "../prompts/types";
 import {
   buildAgentsPlan,
@@ -16,7 +15,6 @@ import { normalizeProjectRoot } from "./skills-sync";
 
 const EXPERTS_REFRESH_DEBOUNCE_MS = 800;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const reloadPendingProjects = new Set<string>();
 
 export function notifyExpertsIntegrationChanged(projectPath: string): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -90,38 +88,6 @@ export async function refreshProjectSubagentsIntegrationIfNeeded(
   return refreshProjectSubagentsIntegration(projectRoot, options);
 }
 
-/** Sync experts then restart OpenCode when orchestrator agent.md content changed. */
-export async function refreshProjectExpertsIntegrationWithReload(
-  projectRoot: string,
-  options?: RefreshProjectExpertsOptions,
-): Promise<RefreshProjectExpertsResult> {
-  const root = normalizeProjectRoot(projectRoot);
-  const prev = getAgentsSyncState(root);
-  const result = await refreshProjectSubagentsIntegrationIfNeeded(root, options);
-  const hashChanged =
-    !result.skipped
-    && (
-      !prev?.orchestratorContentHash
-      || prev.orchestratorContentHash !== result.orchestratorContentHash
-    );
-  const acp = AcpService.getInstanceForProject(root);
-  const needsReload = hashChanged || reloadPendingProjects.has(root);
-  if (needsReload) {
-    if (!acp.getConnection()) {
-      reloadPendingProjects.add(root);
-      return result;
-    }
-    try {
-      await acp.reloadAfterExpertsIntegration();
-      reloadPendingProjects.delete(root);
-    } catch (err) {
-      reloadPendingProjects.add(root);
-      throw err;
-    }
-  }
-  return result;
-}
-
 export function scheduleSubagentsRefresh(projectRoot: string): void {
   invalidateProjectChatPrewarm(projectRoot);
   const existing = pendingTimers.get(projectRoot);
@@ -132,9 +98,8 @@ export function scheduleSubagentsRefresh(projectRoot: string): void {
       pendingTimers.delete(projectRoot);
       void (async () => {
         try {
-          await refreshProjectExpertsIntegrationWithReload(projectRoot);
+          await refreshProjectSubagentsIntegrationIfNeeded(projectRoot);
         } catch (err: any) {
-          // The pending reload marker guarantees the next prewarm retries.
           console.warn("[experts-refresh] deferred (will retry):", err?.message ?? err);
         }
       })();

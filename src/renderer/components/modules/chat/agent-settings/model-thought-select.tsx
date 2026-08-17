@@ -19,13 +19,13 @@ import {
   getModelEffortLevels,
   effortLevelsFromCatalogEntry,
   prefetchEffortCatalog,
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   modelSupportsVision,
   resolveProviderConfig,
   type ModelConfig,
   type ProviderConfig,
 } from "@/lib/providers";
-import { modelEffortKey } from "../../../../../shared/opencode-effort";
+import { modelEffortKey } from "../../../../../shared/pi-provider-catalog";
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon, Settings2Icon, SparklesIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
@@ -103,8 +103,8 @@ export function getModelThoughtLevels(
 /**
  * Hover blurb priority:
  * 1. Optional i18n `chat.model.desc.<provider>.<model>` (curated translations)
- * 2. OpenCode catalog `description` (usually English)
- * 3. Generic context fallback
+ * 2. Pi catalog `description` (rare — Pi catalog usually omits it)
+ * 3. Generic context / output-token fallback built from Pi metadata
  */
 function resolveModelDescription(entry: ModelEntry): string {
   const { model, provider } = entry;
@@ -118,12 +118,19 @@ function resolveModelDescription(entry: ModelEntry): string {
     context: model.contextWindow,
     defaultValue: `${provider.name} model with ${model.contextWindow} context.`,
   });
-  if (!modelSupportsVision(model)) return generic;
+  const suffix = modelSupportsVision(model)
+    ? i18n.t("chat.model.descVisionSuffix", {
+        defaultValue: " Supports image input.",
+      })
+    : "";
+  if (!model.maxTokens) return generic + suffix;
   return (
     generic
-    + i18n.t("chat.model.descVisionSuffix", {
-      defaultValue: " Supports image input.",
+    + i18n.t("chat.model.descMaxOutputSuffix", {
+      size: model.maxTokens,
+      defaultValue: ` Up to ${model.maxTokens} output tokens.`,
     })
+    + suffix
   );
 }
 
@@ -157,6 +164,12 @@ function groupByProvider(entries: ModelEntry[]): Array<{ provider: ProviderConfi
 }
 
 /** Hover-only info card — plain DOM portal (not MenuItem). */
+/** Format a per-1M-token USD price: "$0.15" / "$2.75" / "$1.05". */
+function formatModelPrice(value: number | undefined): string | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return `$${value.toFixed(2).replace(/\.?0+$/, "")}`;
+}
+
 function ModelInfoPanel({
   entry,
   anchor,
@@ -170,23 +183,39 @@ function ModelInfoPanel({
   thoughtLabel?: string | null;
 }) {
   const { t } = useTranslation();
+  const { model } = entry;
+  const cost = model.cost;
+  const hasCost = cost && (cost.input != null || cost.output != null);
+  const priceInput = hasCost ? formatModelPrice(cost.input) : null;
+  const priceOutput = hasCost ? formatModelPrice(cost.output) : null;
   return createPortal(
     <div
       style={placeModelHoverInfoStyle(anchor, avoidMenu)}
       className={cn(
-        "pointer-events-none box-border max-h-[min(10.5rem,40vh)] max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-md border border-border bg-popover p-3 shadow-md",
+        "pointer-events-none box-border max-h-[min(12rem,40vh)] max-w-[min(18rem,calc(100vw-1.5rem))] overflow-hidden rounded-md border border-border bg-popover p-3 shadow-md",
         appMenuFontClass,
       )}
     >
       <p className="min-w-0 break-words font-medium text-foreground [overflow-wrap:anywhere]">
-        {entry.model.name}
+        {model.name}
       </p>
-      <p className="mt-1.5 min-w-0 line-clamp-5 break-words text-[length:var(--font-size-11)] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
+      <p className="mt-1.5 min-w-0 line-clamp-4 break-words text-[length:var(--font-size-11)] leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
         {resolveModelDescription(entry)}
       </p>
       <p className="mt-2 min-w-0 break-words text-[length:var(--font-size-10)] text-muted-foreground/80 [overflow-wrap:anywhere]">
-        {t("chat.model.contextWindow", { size: entry.model.contextWindow })}
+        {t("chat.model.contextWindow", { size: model.contextWindow })}
+        {model.maxTokens
+          ? ` · ${t("chat.model.maxOutput", { size: model.maxTokens })}`
+          : ""}
       </p>
+      {hasCost ? (
+        <p className="mt-1 min-w-0 break-words text-[length:var(--font-size-10)] text-muted-foreground/80 [overflow-wrap:anywhere]">
+          {t("chat.model.pricePerM", {
+            input: priceInput ?? "—",
+            output: priceOutput ?? "—",
+          })}
+        </p>
+      ) : null}
       {thoughtLabel ? (
         <p className="mt-1 min-w-0 break-words text-[length:var(--font-size-10)] italic text-muted-foreground/70 [overflow-wrap:anywhere]">
           {t("chat.model.reasoningDepth")}: {thoughtLabel}
@@ -414,7 +443,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
 
   useEffect(() => {
     let cancelled = false;
-    void prefetchOpenCodeModelsCatalog().then((entries) => {
+    void prefetchPiModelsCatalog().then((entries) => {
       if (!cancelled && entries) setCatalogTick((t) => t + 1);
     });
     return () => {
@@ -428,7 +457,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
     void prefetchEffortCatalog().then((entries) => {
       if (!cancelled && entries) setEffortCatalogMap(entries);
     });
-    void prefetchOpenCodeModelsCatalog().then((entries) => {
+    void prefetchPiModelsCatalog().then((entries) => {
       if (!cancelled && entries) setCatalogTick((t) => t + 1);
     });
     return () => {

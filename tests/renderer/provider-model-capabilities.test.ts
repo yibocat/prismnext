@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildCustomModelEntry,
   getConfiguredVisionModels,
+  getPreset,
   modelSupportsVision,
 } from "../../src/renderer/lib/providers";
-import { opencodeGoPreset } from "../../src/renderer/lib/providers/presets/opencode-go";
 
 describe("provider model capabilities", () => {
   it("preserves vision capability on custom models", () => {
@@ -19,7 +19,7 @@ describe("provider model capabilities", () => {
       {
         id: "opencode-go",
         name: "OpenCode Go",
-        baseUrl: opencodeGoPreset.defaultBaseUrl,
+        baseUrl: getPreset("opencode-go")?.defaultBaseUrl ?? "",
       },
     ];
     const enabled = { "opencode-go": ["mimo-v2.5", "glm-5.1"] };
@@ -78,7 +78,8 @@ describe("provider model capabilities", () => {
   });
 
   it("reads vision from selection snapshots when presets have no models", () => {
-    expect(opencodeGoPreset.models).toEqual([]);
+    const goPreset = getPreset("opencode-go");
+    expect(goPreset?.models).toEqual([]);
     const mimo = {
       id: "mimo-v2.5",
       name: "MiMo V2.5",

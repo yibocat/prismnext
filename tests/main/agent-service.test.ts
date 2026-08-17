@@ -18,15 +18,20 @@ import type { AgentRuntime } from "../../src/main/agent/runtime";
 import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
 
 describe("agent auth and prompt assembly", () => {
-  it("rejects OpenCode catalog providers instead of remapping them to Pi", () => {
+  it("accepts opencode / opencode-go as first-class Pi providers", () => {
     const result = resolveAgentAuth({
       settings: {
-        aiProvider: "opencode-zen",
-        aiModel: "gpt-5.5",
-        aiApiKeys: { "opencode-zen": "sk-catalog" },
+        aiProvider: "opencode",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { opencode: "sk-catalog" },
       },
     });
-    expect(result).toEqual({ ok: false, reason: "unsupported_pi_provider:opencode-zen" });
+    expect(result).toEqual({
+      ok: true,
+      provider: "opencode",
+      modelId: "claude-sonnet-4-5",
+      apiKey: "sk-catalog",
+    });
   });
 
   it("reads the decrypted settings key when the send payload omits apiKey", () => {

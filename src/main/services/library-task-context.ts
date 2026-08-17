@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { AcpService } from "../acp/service";
 import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
+import { isSubAgentSession, resolveCitationStagingSessionId } from "./chat-session-registry";
 
 export interface LibraryTaskHitRecord {
   bibkey: string;
@@ -25,7 +25,7 @@ function oneLineSummary(text: string | null | undefined, max = 160): string {
 export function readLibraryTaskHitRecords(sessionId: string): LibraryTaskHitRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const parentId = AcpService.getInstanceForSession(id).resolveCitationStagingSessionId(id);
+  const parentId = resolveCitationStagingSessionId(id);
   try {
     const p = hitsPath(parentId);
     if (!existsSync(p)) return [];
@@ -77,8 +77,8 @@ export function recordLibraryTaskHitsFromToolSession(
   hits: LibraryTaskHitRecord[],
 ): void {
   if (!toolSessionId?.trim() || hits.length === 0) return;
-  if (!AcpService.getInstanceForSession(toolSessionId).isSubAgentSession(toolSessionId)) return;
-  const parentId = AcpService.getInstanceForSession(toolSessionId).resolveCitationStagingSessionId(toolSessionId);
+  if (!isSubAgentSession(toolSessionId)) return;
+  const parentId = resolveCitationStagingSessionId(toolSessionId);
   mergeLibraryTaskHits(parentId, hits);
 }
 

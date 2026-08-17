@@ -13,7 +13,7 @@ import {
   computePatchLineStats,
 } from "@/components/modules/chat/tools/shared";
 import { extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
-import { activitySpanSecFromBlocks } from "@shared/opencode-part-time";
+import { activitySpanSecFromBlocks } from "@shared/chat-block-time";
 
 export type TextSegment = {
   kind: "text";

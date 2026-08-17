@@ -12,10 +12,8 @@ import {
   getSessionProjectRoot,
   isSessionIntensiveBibkey,
   removeSessionIntensiveBibkey,
-  resolveChatTabId,
+  resolveCitationStagingSessionId,
 } from "./chat-session-registry";
-import { AcpService } from "../acp/service";
-import { emitChatStream } from "./chat-stream-notify";
 import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
 import { createPaperFromCatalog } from "./literature-enrich";
 import { getCitationHealth } from "./citation-health";
@@ -292,13 +290,6 @@ function handleExportBib(
   }
 }
 
-function notifyRendererCitationStaged(stagingSessionId: string, result: StageResult): void {
-  if (!result.staged || !result.verified || !result.citation) return;
-  const tabId = resolveChatTabId(stagingSessionId);
-  if (!tabId) return;
-  emitChatStream(tabId, "citation.staged", { sessionId: stagingSessionId, result });
-}
-
 /** Stage a citation with session-scoped refId (shared by bridge + IPC). */
 export async function stageLiteratureCitation(
   projectRoot: string,
@@ -310,7 +301,7 @@ export async function stageLiteratureCitation(
     discoveredFrom?: StagedCitationPayload["discoveredFrom"];
   },
 ): Promise<StageResult> {
-  const stagingSessionId = AcpService.getInstanceForSession(sessionId).resolveCitationStagingSessionId(sessionId);
+  const stagingSessionId = resolveCitationStagingSessionId(sessionId);
   const normDoi = payload.doi?.trim() ? normalizeDoi(payload.doi.trim()) : null;
   const normArxiv = payload.arxivId?.trim() ? normalizeArxivId(payload.arxivId.trim()) : null;
 
@@ -401,7 +392,6 @@ export async function stageLiteratureCitation(
         ? "Already in library. Cite as [n]."
         : "Cite as [n] in your reply. User will confirm before adding to library.",
     };
-    notifyRendererCitationStaged(stagingSessionId, stageResult);
     return stageResult;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -559,18 +549,8 @@ function handleIntensiveReading(req: LiteratureActionRequest): Record<string, un
     };
   }
 
-  const tabId = resolveChatTabId(sessionId);
   if (intensiveAction === "remove") {
     const bibkeys = removeSessionIntensiveBibkey(sessionId, paper.bibkey);
-    if (tabId) {
-      emitChatStream(tabId, "literature.intensive", {
-        action: "remove",
-        sessionId,
-        paperId: paper.id,
-        bibkey: paper.bibkey,
-        bibkeys,
-      });
-    }
     return {
       ok: true,
       action: "remove",
@@ -584,15 +564,6 @@ function handleIntensiveReading(req: LiteratureActionRequest): Record<string, un
 
   // default: add
   const bibkeys = addSessionIntensiveBibkey(sessionId, paper.bibkey);
-  if (tabId) {
-    emitChatStream(tabId, "literature.intensive", {
-      action: "add",
-      sessionId,
-      paperId: paper.id,
-      bibkey: paper.bibkey,
-      bibkeys,
-    });
-  }
   return {
     ok: true,
     action: "add",

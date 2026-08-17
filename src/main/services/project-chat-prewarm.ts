@@ -1,11 +1,7 @@
 /**
- * Project-scoped chat prewarm — syncs experts/skills/prompts and purges
- * leftover empty sessions.
- *
- * Industry model (ACP / Zed / Cline): warm the Agent process + project config
- * only. Conversations are created on first send via session/new.
+ * Project-scoped file prewarm — syncs experts/skills/prompts to disk.
+ * Does not spawn or reload OpenCode.
  */
-import { AcpService } from "../acp/service";
 import { buildPromptContext } from "../prompts/context";
 import { createLogger } from "./logger";
 import {
@@ -48,23 +44,8 @@ export function getProjectWarmError(projectRoot: string): string | null {
   return warmErrors.get(normalizeProjectRoot(projectRoot)) ?? null;
 }
 
-function emitWarmStatus(projectRoot: string): void {
-  try {
-    const { emitAgentStatusChanged } = require("./agent-status-notify") as {
-      emitAgentStatusChanged: (s: unknown) => void;
-    };
-    emitAgentStatusChanged(AcpService.getInstanceForProject(projectRoot).getStatusSnapshot(projectRoot));
-  } catch {
-    /* windows may not be ready */
-  }
-}
-
 export type ProjectChatPrewarmOptions = {
-  /**
-   * Sync experts/skills/prompts to disk but do not restart OpenCode.
-   * Use when the caller will `ensureConnected` next and may credential-restart
-   * — the new process already picks up files from disk.
-   */
+  /** @deprecated OpenCode reload is gone; kept so leftover callers still type-check. */
   skipOpenCodeReload?: boolean;
 };
 
@@ -74,7 +55,7 @@ export type ProjectChatPrewarmOptions = {
  */
 export async function ensureProjectChatPrewarm(
   projectRoot: string,
-  options?: ProjectChatPrewarmOptions,
+  _options?: ProjectChatPrewarmOptions,
 ): Promise<void> {
   const root = normalizeProjectRoot(projectRoot);
   if (readyProjects.has(root)) return;
@@ -82,39 +63,28 @@ export async function ensureProjectChatPrewarm(
   let pending = inflight.get(root);
   if (!pending) {
     warmErrors.delete(root);
-    pending = runProjectChatPrewarm(root, options)
+    pending = runProjectChatPrewarm(root)
       .then(() => {
         readyProjects.add(root);
         warmErrors.delete(root);
-        emitWarmStatus(root);
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         warmErrors.set(root, message);
         readyProjects.delete(root);
-        emitWarmStatus(root);
         throw err;
       })
       .finally(() => {
         inflight.delete(root);
-        emitWarmStatus(root);
       });
     inflight.set(root, pending);
-    emitWarmStatus(root);
   }
   await pending;
 }
 
-async function runProjectChatPrewarm(
-  projectRoot: string,
-  options?: ProjectChatPrewarmOptions,
-): Promise<void> {
+async function runProjectChatPrewarm(projectRoot: string): Promise<void> {
   const t0 = Date.now();
-  const acp = AcpService.getInstanceForProject(projectRoot);
-  const skipReload = options?.skipOpenCodeReload === true;
 
-  // Touch active-team resolution so teams.json migration/defaults are warm
-  // before agents-sync; chat send uses the same resolver path.
   const { resolveChatOrchestrator } = await import("../teams/resolver");
   resolveChatOrchestrator(projectRoot);
   const promptCtx = await buildPromptContext(projectRoot);
@@ -130,58 +100,12 @@ async function runProjectChatPrewarm(
       || prevExpertsState.orchestratorContentHash !== expertsResult.orchestratorContentHash
     );
 
-  // Fresh OpenCode children already read agent/skill files from disk on
-  // session/new. Reloading right after a credential/skills spawn doubles
-  // first-send latency (~1s+) for no benefit. Same when credentials are about
-  // to force a restart — let that single spawn pick up the synced files.
-  const spawnedRecently = acp.wasSpawnedRecently();
-  const credentialRestartPending =
-    skipReload || acp.wouldRestartForCredentials();
-  const configDirty = expertsHashChanged || skillsResult.configChanged;
-  const needsReload =
-    acp.getConnection()
-    && !credentialRestartPending
-    && !spawnedRecently
-    && configDirty;
-
-  if (needsReload) {
-    log.info("Project chat prewarm — reloading OpenCode", {
-      projectRoot,
-      experts: expertsHashChanged,
-      skills: skillsResult.configChanged,
-    });
-    await acp.reloadAfterSkillsIntegration();
-  } else if (configDirty && (credentialRestartPending || spawnedRecently)) {
-    log.info("Project chat prewarm — skip reload", {
-      projectRoot,
-      reason: spawnedRecently
-        ? "just_spawned"
-        : "deferred_to_credential_connect",
-      experts: expertsHashChanged,
-      skills: skillsResult.configChanged,
-      spawnAgeMs: Date.now() - acp.getLastSpawnAtMs(),
-    });
-  }
-
-  // Clear never-used empty sessions (no messages) for this project.
-  if (acp.getConnection()) {
-    try {
-      await acp.purgeEmptySessions(projectRoot);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.warn("purgeEmptySessions during prewarm failed", { error: message });
-    }
-    void acp.refreshEffortCatalog().catch((err: unknown) => {
-      const message = err instanceof Error ? err.message : String(err);
-      log.debug("refreshEffortCatalog during prewarm failed", { error: message });
-    });
-  }
-
   log.info("Project chat prewarm complete", {
     projectRoot,
     ms: Date.now() - t0,
     expertsSkipped: expertsResult.skipped,
     skillsSkipped: skillsResult.skipped,
-    opencodeReloaded: needsReload,
+    expertsHashChanged,
+    skillsChanged: skillsResult.configChanged,
   });
 }

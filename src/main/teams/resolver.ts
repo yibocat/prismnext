@@ -462,11 +462,6 @@ export function notifyTeamsChanged(projectRoot?: string): void {
     void import("../services/project-skills-refresh")
       .then((m) => m.scheduleSkillsRefresh(root))
       .catch(() => {});
-    void import("../acp/service")
-      .then((m) => {
-        m.AcpService.getInstanceForProject(root).invalidateAgentConfigCache(root);
-      })
-      .catch(() => {});
   }
 }
 

@@ -13,9 +13,9 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   resolveSelectedModelContextTokens,
-  subscribeOpenCodeModelsCatalog,
+  subscribePiModelsCatalog,
 } from "@/lib/providers";
 import { GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -105,6 +105,7 @@ export function LeftMainArea() {
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextWindowSize = useChatStore((s) => s.contextWindowSize);
   const contextUsageSource = useChatStore((s) => s.contextUsageSource);
+  const contextCostUsd = useChatStore((s) => s.contextCostUsd);
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
@@ -138,10 +139,10 @@ export function LeftMainArea() {
   const aiCustomProviders = useSettingsStore((s) => s.settings.aiCustomProviders);
   const [catalogTick, setCatalogTick] = useState(0);
   useEffect(() => {
-    void prefetchOpenCodeModelsCatalog().then(() => {
+    void prefetchPiModelsCatalog().then(() => {
       setCatalogTick((n) => n + 1);
     });
-    return subscribeOpenCodeModelsCatalog(() => {
+    return subscribePiModelsCatalog(() => {
       setCatalogTick((n) => n + 1);
     });
   }, []);
@@ -393,11 +394,12 @@ export function LeftMainArea() {
                   </>
                 )}
                 <span className="flex-1" />
-                {(contextTokens != null || contextWindowSize != null || sessionId) && (
+                {(contextTokens != null || contextWindowSize != null || contextCostUsd != null || sessionId) && (
                   <ContextWindowIndicator
                     used={contextTokens}
                     total={contextTotal}
                     source={contextUsageSource}
+                    costUsd={contextCostUsd}
                     promptStale={promptStale}
                     isStreaming={isStreaming}
                   />

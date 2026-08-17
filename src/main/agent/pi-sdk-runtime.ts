@@ -361,6 +361,14 @@ function attachPiCustomTools(session: object, tools: ToolDefinition[]): number {
     _refreshToolRegistry?: () => void;
   };
   if (!Array.isArray(raw._customTools) || typeof raw._refreshToolRegistry !== "function") {
+    // Upgrade guardrail: if the pinned SDK no longer exposes this private attach
+    // surface, fail loudly instead of silently dropping MCP tools on upgrade.
+    if (tools.length > 0) {
+      throw new Error(
+        `pi_sdk_incompatible: ${PI_SDK_PACKAGE}@${PI_SDK_PINNED_VERSION} ` +
+          "no longer exposes session._customTools/_refreshToolRegistry used by attachCustomTools",
+      );
+    }
     return 0;
   }
   const have = new Set(raw._customTools.map((tool) => tool.name));
@@ -599,6 +607,8 @@ interface LivePiSession {
   unsubscribe: () => void;
   turnId: string;
   activeTurn: LiveTurnAccumulator | null;
+  /** Set by cancelTurn so the terminal-event fallback never overrides a cancel. */
+  cancelled: boolean;
 }
 
 /**
@@ -792,6 +802,7 @@ export class PiSdkRuntime implements AgentRuntime {
       unsubscribe,
       turnId,
       activeTurn: null,
+      cancelled: false,
     });
     this.opts.store.createSession({
       conversationId,
@@ -849,7 +860,24 @@ export class PiSdkRuntime implements AgentRuntime {
         turnId: session.turnId,
         error: err instanceof Error ? err.message : String(err),
       });
+      return;
     }
+    // Pi may deliver terminal events (message_end / agent_end) asynchronously
+    // after prompt() resolves. Wait briefly before closing the live turn, so
+    // the terminal event's usage accumulation is not lost.
+    setTimeout(() => {
+      const live = this.sessions.get(session.runtimeSessionId);
+      if (!live || live.turnId !== session.turnId) return;
+      if (live.activeTurn && !live.cancelled) {
+        this.emit({
+          type: "turn_failed",
+          runtimeSessionId: session.runtimeSessionId,
+          tabId: session.tabId,
+          turnId: session.turnId,
+          error: "engine_ended_without_terminal_event",
+        });
+      }
+    }, 500);
   }
 
   async compact(runtimeSessionId: RuntimeSessionId): Promise<AgentCompactResult> {
@@ -902,6 +930,7 @@ export class PiSdkRuntime implements AgentRuntime {
   async cancelTurn(runtimeSessionId: RuntimeSessionId): Promise<void> {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
+    session.cancelled = true;
     this.opts.gate.cancelSession(runtimeSessionId);
     await session.handle.abort();
     this.emit({

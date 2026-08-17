@@ -133,6 +133,17 @@ export interface AgentResolvePlanSuggestInput {
   decision: "accept" | "dismiss";
 }
 
+export interface AgentModelCost {
+  /** USD per million input tokens. */
+  input?: number;
+  /** USD per million output tokens. */
+  output?: number;
+  /** USD per million cache-read tokens. */
+  cacheRead?: number;
+  /** USD per million cache-write tokens. */
+  cacheWrite?: number;
+}
+
 export interface AgentModelRow {
   id: string;
   name: string;
@@ -140,6 +151,12 @@ export interface AgentModelRow {
   capabilities?: { vision?: boolean };
   description?: string;
   efforts?: string[];
+  /** Max output tokens formatted for display, e.g. "128K". */
+  maxTokens?: string;
+  /** Max output tokens as a raw number (for tooltips / math). */
+  maxTokensNum?: number;
+  /** USD per million tokens, when the Pi catalog publishes it. */
+  cost?: AgentModelCost;
 }
 
 export interface AgentListModelsInput {

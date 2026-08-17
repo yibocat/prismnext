@@ -12,9 +12,8 @@ import {
   RESEARCH_PLAN_DRAFTS_DIR_REL,
   sessionDraftPlanRel,
 } from "../../src/shared/research-plan";
-import { ensurePlanAgentPermissionConfig } from "../../src/main/services/opencode-tools-config";
 
-describe("session-agent (OpenCode-aligned Plan)", () => {
+describe("session-agent (Plan / Build permission)", () => {
   it("defaults unknown to build", () => {
     expect(resolveSessionAgent(undefined)).toBe("build");
     expect(resolveSessionAgent("plan")).toBe("plan");
@@ -175,13 +174,3 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
   });
 });
 
-describe("ensurePlanAgentPermissionConfig", () => {
-  it("merges Prism plans dir into OpenCode plan agent edit allowlist", () => {
-    const next = ensurePlanAgentPermissionConfig({});
-    const plan = (next.agent as { plan: { permission: { edit: Record<string, string> } } }).plan;
-    expect(plan.permission.edit["*"]).toBe("deny");
-    expect(plan.permission.edit[DRAFT_PLAN_REL]).toBe("allow");
-    expect(plan.permission.edit[`${RESEARCH_PLAN_DRAFTS_DIR_REL}/**`]).toBe("allow");
-    expect(plan.permission.edit[".prismnext/research/plans/**"]).toBe("allow");
-  });
-});

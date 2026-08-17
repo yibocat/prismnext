@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ALL_NATIVE_TOOLS } from "../../src/main/agent/tools/index";
@@ -37,9 +37,8 @@ describe("agent capability baseline", () => {
     expect(AGENT_EVENT_TYPES).toContain("turn_cancelled");
   });
 
-  it("leaves production chat on the existing runtime", () => {
-    const chat = readFileSync(join(REPO, "src/main/ipc/chat.ts"), "utf-8");
-    expect(chat).not.toMatch(/from ["'].*main\/agent/);
-    expect(chat).toMatch(/AcpService|createSession/);
+  it("does not keep an OpenCode chat IPC next to the Pi host", () => {
+    expect(existsSync(join(REPO, "src/main/ipc/chat.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/acp"))).toBe(false);
   });
 });

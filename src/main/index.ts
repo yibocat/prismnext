@@ -10,7 +10,7 @@ import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
 import { ensureUserTeamsRegistered } from "./services/user-teams";
 import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
 import { ensureMyContentTeam } from "./teams/my-content";
-import { registerIpcHandlers } from "./ipc/index";
+import { disposeChat, registerIpcHandlers } from "./ipc/index";
 import {
   setMainWindow,
   getPrimaryWindow,
@@ -19,7 +19,6 @@ import {
   attachWindowStateEmitter,
 } from "./ipc/window";
 import { installApplicationMenu } from "./menu";
-import { disposeChat } from "./ipc/chat";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
 import { destroyAllAiPty } from "./services/ai-pty";
 import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
@@ -29,7 +28,6 @@ import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from
 import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
 import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
 import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/research-brief-bridge";
-import { startPlanSuggestBridge, stopPlanSuggestBridge } from "./services/plan-suggest-bridge";
 import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
 import { startInteractionBridge, stopInteractionBridge } from "./services/interaction-bridge";
 import { startImageDescribeBridge, stopImageDescribeBridge } from "./services/image-describe-bridge";
@@ -202,7 +200,6 @@ function disposeGlobalsWhenNoWindows(): void {
   stopLiteratureBridge();
   stopLatexBridge();
   stopResearchBriefBridge();
-  stopPlanSuggestBridge();
   stopExperimentLogBridge();
   stopInteractionBridge();
   stopImageDescribeBridge();
@@ -343,11 +340,6 @@ registerNewWindowHandler(createWindow);
 app.whenReady().then(async () => {
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
-  // Wire session→projectRoot so AcpService.getInstanceForSession can route to
-  // the correct per-project OpenCode runtime.
-  const { getSessionProjectRoot } = await import("./services/chat-session-registry");
-  const { AcpService } = await import("./acp/service");
-  AcpService.setSessionProjectRootResolver(getSessionProjectRoot);
   // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
   ensureUserTeamsMigrated();
   // Always-on My Content + chat lead (safety net so Core can be offloaded).
@@ -373,7 +365,6 @@ app.whenReady().then(async () => {
   startLiteratureBridge();
   startLatexBridge();
   startResearchBriefBridge();
-  startPlanSuggestBridge();
   startExperimentLogBridge();
   startInteractionBridge();
   startImageDescribeBridge();

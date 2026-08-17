@@ -6,6 +6,7 @@
 
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { migrateProviderIdToPi } from "../../shared/pi-provider-catalog";
 import type {
   AgentEffortCatalogSnapshot,
   AgentListModelsInput,
@@ -18,6 +19,13 @@ import type {
   AgentTestConnectionResult,
 } from "../../shared/agent-api";
 
+export interface AgentPiModelCostLike {
+  input?: number;
+  output?: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+}
+
 export interface AgentPiModelLike {
   id: string;
   name: string;
@@ -26,6 +34,8 @@ export interface AgentPiModelLike {
   thinkingLevelMap?: Partial<Record<string, string | null>>;
   input: readonly string[];
   contextWindow: number;
+  maxTokens?: number;
+  cost?: AgentPiModelCostLike;
 }
 
 export interface AgentModelRuntimeLike {
@@ -45,7 +55,32 @@ export interface AgentModelCatalogDeps {
   fetchImpl?: typeof fetch;
 }
 
-const CATALOG_PROVIDER_IDS = ["opencode-go", "opencode-zen"] as const;
+const CATALOG_PROVIDER_IDS = [
+  "anthropic",
+  "openai",
+  "google",
+  "deepseek",
+  "openrouter",
+  "zai",
+  "zai-coding-cn",
+  "moonshotai",
+  "moonshotai-cn",
+  "minimax",
+  "minimax-cn",
+  "kimi-coding",
+  "qwen-token-plan",
+  "qwen-token-plan-cn",
+  "mistral",
+  "groq",
+  "xai",
+  "nvidia",
+  "cerebras",
+  "together",
+  "baseten",
+  "fireworks",
+  "opencode",
+  "opencode-go",
+] as const;
 
 const PROVIDER_ENDPOINTS: Record<string, { url: string; header: string; prefix: string }> = {
   anthropic: {
@@ -83,13 +118,78 @@ const PROVIDER_ENDPOINTS: Record<string, { url: string; header: string; prefix: 
     header: "Authorization",
     prefix: "Bearer ",
   },
-  "opencode-go": {
-    url: "https://opencode.ai/zen/go/v1",
+  xai: {
+    url: "https://api.x.ai",
     header: "Authorization",
     prefix: "Bearer ",
   },
-  "opencode-zen": {
-    url: "https://opencode.ai/zen/v1",
+  nvidia: {
+    url: "https://integrate.api.nvidia.com",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  cerebras: {
+    url: "https://api.cerebras.ai",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  together: {
+    url: "https://api.together.ai",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  baseten: {
+    url: "https://inference.baseten.co",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  fireworks: {
+    url: "https://api.fireworks.ai",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  zai: {
+    url: "https://api.z.ai/api/coding/paas/v4",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "zai-coding-cn": {
+    url: "https://open.bigmodel.cn/api/coding/paas/v4",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  moonshotai: {
+    url: "https://api.moonshot.ai",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "moonshotai-cn": {
+    url: "https://api.moonshot.cn",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  minimax: {
+    url: "https://api.minimax.io",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "minimax-cn": {
+    url: "https://api.minimaxi.com",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "kimi-coding": {
+    url: "https://api.kimi.com/coding",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "qwen-token-plan": {
+    url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
+  "qwen-token-plan-cn": {
+    url: "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode",
     header: "Authorization",
     prefix: "Bearer ",
   },
@@ -98,19 +198,22 @@ const PROVIDER_ENDPOINTS: Record<string, { url: string; header: string; prefix: 
     header: "Authorization",
     prefix: "Bearer ",
   },
+  "opencode-go": {
+    url: "https://opencode.ai/zen/go/v1",
+    header: "Authorization",
+    prefix: "Bearer ",
+  },
 };
 
 let cachedRuntime: AgentModelRuntimeLike | null = null;
 
 export function mapProductProviderToPi(providerId: string): string | null {
-  const id = providerId.trim();
+  const id = migrateProviderIdToPi(providerId);
   if (!id || id === "custom" || id.startsWith("custom-")) return null;
-  if (id === "opencode-zen" || id === "opencode") return "opencode";
   return id;
 }
 
 export function mapPiProviderToProduct(piProviderId: string): string {
-  if (piProviderId === "opencode") return "opencode-zen";
   return piProviderId;
 }
 
@@ -138,13 +241,17 @@ export function validateApiKey(apiKey: string): { ok: true; key: string } | { ok
   return { ok: true, key };
 }
 
+/** Product effort levels a reasoning model exposes (Pi thinkingLevelMap keys, minus off). */
+const PRODUCT_EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
 export function effortsFromPiModel(model: AgentPiModelLike): string[] {
   if (!model.reasoning) return [];
   const map = model.thinkingLevelMap;
   if (!map) return ["low", "medium", "high"];
   const out: string[] = [];
-  for (const [level, value] of Object.entries(map)) {
-    if (value === null) continue;
+  for (const level of PRODUCT_EFFORT_LEVELS) {
+    if (!(level in map)) continue;
+    if (map[level] === null) continue;
     out.push(level);
   }
   return out;
@@ -152,12 +259,19 @@ export function effortsFromPiModel(model: AgentPiModelLike): string[] {
 
 export function toAgentModelRow(model: AgentPiModelLike): AgentModelRow {
   const efforts = effortsFromPiModel(model);
+  const cost = model.cost;
   return {
     id: model.id,
     name: model.name || model.id,
     contextWindow: formatAgentContextWindow(model.contextWindow),
     capabilities: model.input.includes("image") ? { vision: true } : undefined,
     efforts: efforts.length > 0 ? efforts : undefined,
+    ...(typeof model.maxTokens === "number" && model.maxTokens > 0
+      ? { maxTokens: formatAgentContextWindow(model.maxTokens), maxTokensNum: model.maxTokens }
+      : {}),
+    ...(cost && (cost.input != null || cost.output != null)
+      ? { cost: { input: cost.input, output: cost.output, cacheRead: cost.cacheRead, cacheWrite: cost.cacheWrite } }
+      : {}),
   };
 }
 
@@ -272,7 +386,6 @@ async function probeProviderHttp(
     }
     if (
       provider === "opencode-go"
-      || provider === "opencode-zen"
       || provider === "opencode"
     ) {
       headers["x-api-key"] = key;

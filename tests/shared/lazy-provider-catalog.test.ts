@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildModelsCatalogFromModelsDevCache,
-  PRISM_LAZY_FETCH_CATALOG_PROVIDERS,
-} from "../../src/shared/opencode-models-catalog";
-import {
   isLazyCatalogProvider,
   LAZY_CATALOG_PROVIDER_IDS,
   LEGACY_BUILTIN_PROVIDER_IDS,
@@ -12,62 +8,7 @@ import {
 import { PROVIDER_PRESETS, ALL_PROVIDERS } from "../../src/renderer/lib/providers/presets";
 import { getConfiguredProviderIds } from "../../src/renderer/lib/providers";
 
-const sampleModelsDevCache = {
-  openai: {
-    id: "openai",
-    models: {
-      "gpt-5.6": {
-        id: "gpt-5.6",
-        name: "GPT-5.6",
-        limit: { context: 400_000 },
-        modalities: { input: ["text", "image"] },
-        description: "Latest GPT flagship",
-      },
-      "old-gpt": {
-        id: "old-gpt",
-        name: "Old GPT",
-        status: "deprecated",
-        limit: { context: 128_000 },
-      },
-    },
-  },
-  anthropic: {
-    id: "anthropic",
-    models: {
-      "claude-sonnet-4-6": {
-        id: "claude-sonnet-4-6",
-        name: "Claude Sonnet 4.6",
-        limit: { context: 1_000_000 },
-        modalities: { input: ["text", "image"] },
-        description: "Balanced Claude",
-      },
-    },
-  },
-  google: {
-    id: "google",
-    models: {
-      "gemini-3.5-flash": {
-        id: "gemini-3.5-flash",
-        name: "Gemini 3.5 Flash",
-        limit: { context: 1_000_000 },
-        modalities: { input: ["text", "image"] },
-        description: "Fast Gemini",
-      },
-    },
-  },
-  deepseek: {
-    id: "deepseek",
-    models: {
-      "deepseek-chat": {
-        id: "deepseek-chat",
-        name: "DeepSeek Chat",
-        limit: { context: 128_000 },
-        modalities: { input: ["text"] },
-        description: "DeepSeek chat",
-      },
-    },
-  },
-};
+const sampleModelsDevCache = {};
 
 describe("lazy provider catalog", () => {
   it("marks openai/anthropic/google/deepseek/openrouter as lazy", () => {
@@ -82,34 +23,6 @@ describe("lazy provider catalog", () => {
       expect(isLazyCatalogProvider(id)).toBe(true);
     }
     expect(isLazyCatalogProvider("zhipu")).toBe(false);
-  });
-
-  it("parses openai/anthropic/google rows from models.json with context + description", () => {
-    const entries = buildModelsCatalogFromModelsDevCache(
-      sampleModelsDevCache,
-      PRISM_LAZY_FETCH_CATALOG_PROVIDERS,
-    );
-
-    const gpt = entries.openai?.find((m) => m.id === "gpt-5.6");
-    expect(gpt).toMatchObject({
-      name: "GPT-5.6",
-      contextWindow: "400K",
-      description: "Latest GPT flagship",
-      capabilities: { vision: true },
-    });
-    expect(entries.openai?.some((m) => m.id === "old-gpt")).toBe(false);
-
-    expect(entries.anthropic?.[0]).toMatchObject({
-      id: "claude-sonnet-4-6",
-      contextWindow: "1M",
-      description: "Balanced Claude",
-    });
-    expect(entries.google?.[0]).toMatchObject({
-      id: "gemini-3.5-flash",
-      contextWindow: "1M",
-      description: "Fast Gemini",
-    });
-    expect(entries.deepseek?.[0]?.id).toBe("deepseek-chat");
   });
 
   it("keeps ALL_PROVIDERS empty and lazy presets without hand-maintained models", () => {

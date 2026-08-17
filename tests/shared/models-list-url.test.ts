@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveModelsListUrl } from "../../src/shared/opencode-provider";
+import { resolveModelsListUrl } from "../../src/main/agent/model-catalog";
 
 describe("resolveModelsListUrl", () => {
   it("does not double /v1 for OpenCode Zen/Go bases", () => {

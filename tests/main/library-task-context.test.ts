@@ -1,28 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
-const PARENT = "parent-session";
-const SUB = "sub-task-session";
-
-vi.mock("../../src/main/acp/service", () => ({
-  AcpService: {
-    getInstance: () => ({
-      resolveCitationStagingSessionId: (id: string) =>
-        id === SUB ? PARENT : id,
-      isSubAgentSession: (id: string) => id === SUB,
-      clearSessionParentCacheForTests: () => {},
-    }),
-    getInstanceForSession: () => ({
-      resolveCitationStagingSessionId: (id: string) =>
-        id === SUB ? PARENT : id,
-      isSubAgentSession: (id: string) => id === SUB,
-      clearSessionParentCacheForTests: () => {},
-    }),
-  },
-}));
-
 import {
   mergeLibraryTaskHits,
   hitsFromLiteratureSearchResult,
@@ -32,6 +11,9 @@ import {
   formatLibraryTaskHitsMarkdown,
   LIBRARY_TASK_APPENDIX_MARKER,
 } from "../../src/main/services/library-task-context";
+
+const PARENT = "parent-session";
+const SUB = `sub-${PARENT}-1710000000000`;
 
 describe("library-task-context", () => {
   let bridgeRoot: string;

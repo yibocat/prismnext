@@ -1,7 +1,7 @@
 // src/renderer/lib/providers/types.ts
 
 export interface ModelConfig {
-  /** Model ID as passed to OpenCode, e.g. "claude-sonnet-4-5-20250929" */
+  /** Model ID as passed to the Pi runtime, e.g. "claude-sonnet-4-5-20250929" */
   id: string;
   /** Human-readable name, e.g. "Claude Sonnet 4.5" */
   name: string;
@@ -13,10 +13,21 @@ export interface ModelConfig {
     vision?: boolean;
   };
   /**
-   * Hover blurb from OpenCode catalog `description` when synced.
+   * Hover blurb from the Pi catalog when present.
    * Optional override: i18n `chat.model.desc.<providerId>.<modelId>`.
    */
   description?: string;
+  /** Max output tokens formatted for display, e.g. "128K". */
+  maxTokens?: string;
+  /** Max output tokens as a raw number (for tooltips / math). */
+  maxTokensNum?: number;
+  /** USD per million tokens, when the Pi catalog publishes it. */
+  cost?: {
+    input?: number;
+    output?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+  };
   /** Hide from Chat model dropdown (e.g. deprecated models still configurable in settings). */
   hidden?: boolean;
 }

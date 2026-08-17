@@ -1,33 +1,42 @@
 /**
- * Runtime model list for opencode-go / opencode-zen from the Pi model catalog.
+ * Runtime model list cache for Pi providers from the Pi model catalog.
+ * Prefetches `agent:listModelsCatalog` (main-side Pi ModelRuntime) so Settings
+ * and the model picker can show models without a round-trip.
  */
 
-import type { CatalogModelRow } from "../../../shared/opencode-models-catalog";
-import {
-  OPENCODE_GO_PROVIDER_ID,
-  OPENCODE_ZEN_PROVIDER_ID,
-} from "../../../shared/opencode-provider";
+import type { AgentModelRow } from "../../../shared/agent-api";
 import type { ModelConfig, ProviderConfig } from "./types";
 
-const CATALOG_PROVIDER_IDS = new Set([
-  OPENCODE_GO_PROVIDER_ID,
-  OPENCODE_ZEN_PROVIDER_ID,
-]);
+/** Providers whose model lists are prefetched into the shared catalog cache. */
+const CATALOG_PROVIDER_IDS = [
+  "opencode",
+  "opencode-go",
+  "openrouter",
+  "zai",
+  "zai-coding-cn",
+  "moonshotai",
+  "moonshotai-cn",
+  "minimax",
+  "minimax-cn",
+  "kimi-coding",
+  "qwen-token-plan",
+  "qwen-token-plan-cn",
+] as const;
 
-let catalogEntries: Record<string, CatalogModelRow[]> | null = null;
+let catalogEntries: Record<string, AgentModelRow[]> | null = null;
 let catalogFetchedAt = 0;
 let prefetchPromise: Promise<Record<string, CatalogModelRow[]> | null> | null = null;
 const catalogListeners = new Set<() => void>();
 
 /** Subscribe to cache fill / invalidate (e.g. context ring denominator). */
-export function subscribeOpenCodeModelsCatalog(listener: () => void): () => void {
+export function subscribePiModelsCatalog(listener: () => void): () => void {
   catalogListeners.add(listener);
   return () => {
     catalogListeners.delete(listener);
   };
 }
 
-function notifyOpenCodeModelsCatalogListeners(): void {
+function notifyPiModelsCatalogListeners(): void {
   for (const listener of catalogListeners) {
     try {
       listener();
@@ -38,20 +47,22 @@ function notifyOpenCodeModelsCatalogListeners(): void {
 }
 
 function isCatalogProvider(providerId: string): boolean {
-  return CATALOG_PROVIDER_IDS.has(providerId);
+  return (CATALOG_PROVIDER_IDS as readonly string[]).includes(providerId);
 }
 
-function rowToModelConfig(row: CatalogModelRow): ModelConfig {
+function rowToModelConfig(row: AgentModelRow): ModelConfig {
   return {
     id: row.id,
     name: row.name,
     contextWindow: row.contextWindow,
     capabilities: row.capabilities,
     description: row.description,
+    ...(row.maxTokens ? { maxTokens: row.maxTokens, maxTokensNum: row.maxTokensNum } : {}),
+    ...(row.cost ? { cost: row.cost } : {}),
   };
 }
 
-export function getCachedOpenCodeCatalogModels(
+export function getCachedPiCatalogModels(
   providerId: string,
 ): ModelConfig[] | null {
   if (!isCatalogProvider(providerId) || !catalogEntries) return null;
@@ -60,12 +71,12 @@ export function getCachedOpenCodeCatalogModels(
   return rows.map(rowToModelConfig);
 }
 
-export function getOpenCodeCatalogFetchedAt(): number {
+export function getPiCatalogFetchedAt(): number {
   return catalogFetchedAt;
 }
 
-export async function prefetchOpenCodeModelsCatalog(): Promise<
-  Record<string, CatalogModelRow[]> | null
+export async function prefetchPiModelsCatalog(): Promise<
+  Record<string, AgentModelRow[]> | null
 > {
   if (prefetchPromise) return prefetchPromise;
   prefetchPromise = (async () => {
@@ -73,7 +84,7 @@ export async function prefetchOpenCodeModelsCatalog(): Promise<
       const snapshot = await window.electronAPI.agentListModelsCatalog();
       catalogEntries = snapshot.entries;
       catalogFetchedAt = snapshot.fetchedAt;
-      notifyOpenCodeModelsCatalogListeners();
+      notifyPiModelsCatalogListeners();
       return catalogEntries;
     } catch {
       return null;
@@ -84,12 +95,12 @@ export async function prefetchOpenCodeModelsCatalog(): Promise<
   return prefetchPromise;
 }
 
-/** Merge catalog models into an opencode-go / opencode-zen provider config. */
-export function mergeProviderWithOpenCodeCatalog(
+/** Merge catalog models into a Pi provider config (no-op when cache is empty). */
+export function mergeProviderWithPiCatalog(
   provider: ProviderConfig,
 ): ProviderConfig {
   if (!isCatalogProvider(provider.id)) return provider;
-  const catalogModels = getCachedOpenCodeCatalogModels(provider.id);
+  const catalogModels = getCachedPiCatalogModels(provider.id);
   if (!catalogModels?.length) return provider;
   return {
     ...provider,
@@ -97,10 +108,10 @@ export function mergeProviderWithOpenCodeCatalog(
   };
 }
 
-export function invalidateOpenCodeModelsCatalogCache(): void {
+export function invalidatePiModelsCatalogCache(): void {
   catalogEntries = null;
   catalogFetchedAt = 0;
-  notifyOpenCodeModelsCatalogListeners();
+  notifyPiModelsCatalogListeners();
 }
 
 /** True when a contextWindow label is missing / placeholder (falls back to 128K). */

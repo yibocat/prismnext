@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { AcpService } from "../acp/service";
 import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
+import { resolveCitationStagingSessionId } from "./chat-session-registry";
 import { normalizeLibraryCiteMarkers } from "../../shared/normalize-library-cite-markers";
 import {
   buildLibraryTaskHitsAppendix,
@@ -31,7 +31,7 @@ function stagingPath(stagingSessionId: string): string {
 export function readSessionCitationRecords(sessionId: string): SessionCitationRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const stagingSessionId = AcpService.getInstanceForSession(id).resolveCitationStagingSessionId(id);
+  const stagingSessionId = resolveCitationStagingSessionId(id);
   try {
     const p = stagingPath(stagingSessionId);
     if (!existsSync(p)) return [];
@@ -121,12 +121,6 @@ export function buildTaskDelegationStagingPreface(sessionId: string): string {
   ].join("\n");
 }
 
-function normalizeToolResultBase(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (content == null) return "";
-  return JSON.stringify(content, null, 2);
-}
-
 /** Read OpenCode tool part `state.output` as plain text for comparison. */
 export function readToolPartOutputText(output: unknown): string {
   if (output == null) return "";
@@ -191,21 +185,13 @@ export function writeToolOutputIntoPartData(
 }
 
 /**
- * Persist enriched Task tool_result into OpenCode SQLite so the orchestrator
- * reads Session citations on the same turn (not only in prismnext UI transcript).
+ * Isolated OpenCode SQLite patch. Product conversations no longer write
+ * Task results back into an OpenCode session.
  */
 export async function syncEnrichedTaskToolResultToOpenCode(
-  sessionId: string,
-  toolCallId: string,
-  rawContent: unknown,
+  _sessionId: string,
+  _toolCallId: string,
+  _rawContent: unknown,
 ): Promise<boolean> {
-  const id = sessionId?.trim();
-  const callId = toolCallId?.trim();
-  if (!id || !callId) return false;
-
-  const enriched = enrichTaskToolResultContent(id, rawContent);
-  const base = normalizeToolResultBase(rawContent);
-  if (!enriched.trim() || enriched === base) return false;
-
-  return AcpService.getInstanceForSession(id).patchSessionToolOutput("id", callId, enriched);
+  return false;
 }

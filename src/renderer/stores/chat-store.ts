@@ -187,6 +187,8 @@ interface TabState {
   contextWindowSize: number | null;
   /** How contextTokens was derived. */
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
+  /** Cumulative session spend in USD from Pi usage totals. */
+  contextCostUsd: number | null;
   /** True when live prompt config differs from this session's injected fingerprint. */
   promptStale: boolean;
   /** Expert team orchestrator id (null → project default). */
@@ -306,6 +308,7 @@ function makeDefaultTab(id: string): TabState {
     contextTokens: null,
     contextWindowSize: null,
     contextUsageSource: null,
+    contextCostUsd: null,
     promptStale: false,
     orchestratorId: null,
     sessionTeamId: null,
@@ -523,6 +526,8 @@ interface ChatState {
   /** OpenCode-reported context window size; null → fall back to model metadata */
   contextWindowSize: number | null;
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
+  /** Cumulative session spend in USD from Pi usage totals. */
+  contextCostUsd: number | null;
   /** True when prompt/rules changed since this session's system prompt was set. */
   promptStale: boolean;
   /** True while the active tab is loading session history from disk. */
@@ -658,7 +663,7 @@ interface ChatState {
   /** Reload sanitized messages from disk after OpenCode session truncation. */
   resyncTabMessagesFromDisk: (tabId: string) => Promise<void>;
 
-  // Internal (called by use-opencode-events)
+  // Internal tab mutation helpers (Conversation / Agent events)
   _beginAgentTurn: (tabId: string, turnId: string, userText: string, userBlocks?: ContentBlock[]) => void;
   _applyAgentEvent: (tabId: string, event: AgentEvent) => void;
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
@@ -676,10 +681,12 @@ interface ChatState {
   _appendAssistantError: (tabId: string, text: string) => void;
   _setContextTokens: (
     tabId: string,
-    tokens: number | null,
+    tokens: number | null | undefined,
     opts?: {
       windowSize?: number | null;
       source?: "usage_update" | "prompt_usage" | "estimate" | null;
+      /** Cumulative session spend in USD (Pi usage totals). */
+      costUsd?: number | null;
       /** When true, clear used/size (e.g. after compact). */
       clear?: boolean;
     },
@@ -814,6 +821,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
       contextTokens: null as number | null,
       contextWindowSize: null as number | null,
       contextUsageSource: null as "usage_update" | "prompt_usage" | "estimate" | null,
+      contextCostUsd: null as number | null,
       promptStale: false,
       isLoadingSession: false,
       streamTick: 0,
@@ -845,6 +853,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     contextTokens,
     contextWindowSize: tab.contextWindowSize,
     contextUsageSource: tab.contextUsageSource,
+    contextCostUsd: tab.contextCostUsd,
     promptStale: tab.promptStale,
     isLoadingSession: tab.isLoadingSession,
     streamTick: (tab as any).streamTick || 0,
@@ -2809,20 +2818,23 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   _setContextTokens: (tabId, tokens, opts) => {
     set((s) => {
       const clear = opts?.clear === true;
-      const nextTokens = clear ? null : tokens;
+      // undefined tokens = don't touch contextTokens (e.g. usage without input).
+      const nextTokens = clear ? null : (tokens === undefined ? undefined : tokens);
       const nextSize =
         clear ? null : (opts && "windowSize" in opts ? opts.windowSize ?? null : undefined);
       const nextSource =
         clear ? null : (opts && "source" in opts ? opts.source ?? null : undefined);
+      const nextCost =
+        clear ? null : (opts && "costUsd" in opts ? opts.costUsd ?? null : undefined);
 
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
-        return {
-          ...t,
-          contextTokens: nextTokens,
-          ...(nextSize !== undefined ? { contextWindowSize: nextSize } : {}),
-          ...(nextSource !== undefined ? { contextUsageSource: nextSource } : {}),
-        };
+        const next: typeof t = { ...t };
+        if (nextTokens !== undefined) next.contextTokens = nextTokens;
+        if (nextSize !== undefined) next.contextWindowSize = nextSize;
+        if (nextSource !== undefined) next.contextUsageSource = nextSource;
+        if (nextCost !== undefined) next.contextCostUsd = nextCost;
+        return next;
       });
       const isActive = s.activeTabId === tabId;
       if (isActive) {
@@ -2832,6 +2844,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           contextTokens: active?.contextTokens ?? null,
           contextWindowSize: active?.contextWindowSize ?? null,
           contextUsageSource: active?.contextUsageSource ?? null,
+          contextCostUsd: active?.contextCostUsd ?? null,
         };
       }
       return { tabs };

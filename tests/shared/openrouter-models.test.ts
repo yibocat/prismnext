@@ -5,11 +5,6 @@ import {
   normalizeOpenRouterModelId,
   parseOpenRouterApiModels,
 } from "../../src/shared/openrouter-models";
-import { normalizeOpenCodeModelId } from "../../src/shared/opencode-provider";
-import {
-  buildModelsCatalogFromModelsDevCache,
-  PRISM_CATALOG_PROVIDERS_WITH_OPENROUTER,
-} from "../../src/shared/opencode-models-catalog";
 
 describe("openrouter-models", () => {
   it("normalizes legacy hyphen Anthropic / gemini IDs", () => {
@@ -73,32 +68,5 @@ describe("openrouter-models", () => {
     expect(rows[0]?.capabilities?.vision).toBe(true);
     expect(rows[0]?.description).toContain("Sonnet 4.6");
     expect(rows[1]?.capabilities?.vision).toBe(false);
-  });
-
-  it("normalizeOpenCodeModelId routes openrouter aliases", () => {
-    expect(
-      normalizeOpenCodeModelId("openrouter", "anthropic/claude-sonnet-4-6"),
-    ).toBe("anthropic/claude-sonnet-4.6");
-  });
-
-  it("models.dev cache can include openrouter when requested", () => {
-    const entries = buildModelsCatalogFromModelsDevCache(
-      {
-        openrouter: {
-          id: "openrouter",
-          models: {
-            "openai/gpt-5.5": {
-              id: "openai/gpt-5.5",
-              name: "GPT-5.5",
-              limit: { context: 1_050_000 },
-              modalities: { input: ["text", "image"] },
-            },
-          },
-        },
-      },
-      PRISM_CATALOG_PROVIDERS_WITH_OPENROUTER,
-    );
-    expect(entries.openrouter?.[0]?.id).toBe("openai/gpt-5.5");
-    expect(entries.openrouter?.[0]?.contextWindow).toBe("1.1M");
   });
 });

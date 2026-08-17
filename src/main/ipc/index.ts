@@ -1,6 +1,5 @@
 import { registerFsHandlers } from "./fs";
 import { registerCompileHandlers } from "./compile";
-import { registerChatHandlers, disposeChat } from "./chat";
 import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
@@ -36,7 +35,6 @@ export function registerIpcHandlers(): void {
   registerProjectLifecycleHandlers();
   registerFsHandlers();
   registerCompileHandlers();
-  registerChatHandlers();
   registerAgentHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();
@@ -68,4 +66,5 @@ export function registerIpcHandlers(): void {
   registerUserPacksHandlers();
 }
 
-export { disposeChat };
+/** Isolated OpenCode chat IPC is no longer registered. Window teardown is a no-op. */
+export function disposeChat(): void {}

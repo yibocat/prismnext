@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/renderer/lib/providers/opencode-catalog-models", async () => {
+vi.mock("../../src/renderer/lib/providers/pi-model-catalog", async () => {
   const actual = await vi.importActual<
-    typeof import("../../src/renderer/lib/providers/opencode-catalog-models")
-  >("../../src/renderer/lib/providers/opencode-catalog-models");
+    typeof import("../../src/renderer/lib/providers/pi-model-catalog")
+  >("../../src/renderer/lib/providers/pi-model-catalog");
   return {
     ...actual,
-    getCachedOpenCodeCatalogModels: vi.fn(),
+    getCachedPiCatalogModels: vi.fn(),
   };
 });
 
 import {
-  getCachedOpenCodeCatalogModels,
+  getCachedPiCatalogModels,
   isUnknownContextWindowLabel,
-} from "../../src/renderer/lib/providers/opencode-catalog-models";
+} from "../../src/renderer/lib/providers/pi-model-catalog";
 import { resolveSelectedModelContextTokens } from "../../src/renderer/lib/providers/index";
 
 describe("isUnknownContextWindowLabel", () => {
@@ -26,11 +26,11 @@ describe("isUnknownContextWindowLabel", () => {
 
 describe("resolveSelectedModelContextTokens", () => {
   beforeEach(() => {
-    vi.mocked(getCachedOpenCodeCatalogModels).mockReset();
+    vi.mocked(getCachedPiCatalogModels).mockReset();
   });
 
-  it("falls back to OpenCode catalog when enabled model has Unknown context", () => {
-    vi.mocked(getCachedOpenCodeCatalogModels).mockReturnValue([
+  it("falls back to Pi catalog when enabled model has Unknown context", () => {
+    vi.mocked(getCachedPiCatalogModels).mockReturnValue([
       {
         id: "gpt-5.4",
         name: "GPT 5.4",

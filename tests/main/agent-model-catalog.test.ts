@@ -46,15 +46,18 @@ function fakeRuntime(models: ReturnType<typeof fakeModel>[]): AgentModelRuntimeL
 }
 
 describe("agent model catalog mapping", () => {
-  it("maps product OpenCode Zen/Go ids onto Pi provider ids without remapping send auth", () => {
+  it("maps legacy and Pi provider ids onto Pi provider ids", () => {
     expect(mapProductProviderToPi("opencode-zen")).toBe("opencode");
+    expect(mapProductProviderToPi("zhipu")).toBe("zai-coding-cn");
+    expect(mapProductProviderToPi("kimi")).toBe("moonshotai");
     expect(mapProductProviderToPi("opencode")).toBe("opencode");
     expect(mapProductProviderToPi("opencode-go")).toBe("opencode-go");
     expect(mapProductProviderToPi("anthropic")).toBe("anthropic");
     expect(mapProductProviderToPi("custom")).toBeNull();
     expect(mapProductProviderToPi("custom-123")).toBeNull();
-    expect(mapPiProviderToProduct("opencode")).toBe("opencode-zen");
+    expect(mapPiProviderToProduct("opencode")).toBe("opencode");
     expect(mapPiProviderToProduct("opencode-go")).toBe("opencode-go");
+    expect(mapPiProviderToProduct("zai-coding-cn")).toBe("zai-coding-cn");
   });
 
   it("formats context windows and vision/effort from a Pi model", () => {
@@ -72,7 +75,7 @@ describe("agent model catalog mapping", () => {
     }));
     expect(row.contextWindow).toBe("200K");
     expect(row.capabilities?.vision).toBe(true);
-    expect(row.efforts).toEqual(["off", "low", "high"]);
+    expect(row.efforts).toEqual(["low", "high"]);
   });
 
   it("returns no effort ids when the model has no reasoning surface", () => {

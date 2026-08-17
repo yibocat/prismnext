@@ -184,7 +184,7 @@ describe("Pi-first agent core boundaries", () => {
 
   it("loads Settings model catalog and connection tests through the Agent API", () => {
     const editor = sourceOf("src/renderer/components/modules/settings/provider-editor-panel.tsx");
-    const catalog = sourceOf("src/renderer/lib/providers/opencode-catalog-models.ts");
+    const catalog = sourceOf("src/renderer/lib/providers/pi-model-catalog.ts");
     const providers = sourceOf("src/renderer/lib/providers/index.ts");
     const settings = sourceOf("src/renderer/stores/settings-store.ts");
     const catalogModule = sourceOf("src/main/agent/model-catalog.ts");
@@ -194,7 +194,9 @@ describe("Pi-first agent core boundaries", () => {
     expect(editor).not.toContain("chatTestConnection");
     expect(editor).not.toContain("chatFetchProviderModels");
     expect(catalog).toContain("agentListModelsCatalog");
+    expect(catalog).toContain("prefetchPiModelsCatalog");
     expect(catalog).not.toContain("chatGetOpenCodeModelsCatalog");
+    expect(catalog).not.toContain("OpenCode");
     expect(providers).toContain("agentGetModelEffort");
     expect(providers).toContain("agentGetEffortCatalog");
     expect(providers).not.toContain("chatGetModelEffort");
@@ -208,7 +210,6 @@ describe("Pi-first agent core boundaries", () => {
   it("injects project skills through Pi and does not write OpenCode config", () => {
     const refresh = sourceOf("src/main/services/project-skills-refresh.ts");
     const prewarm = sourceOf("src/main/services/project-chat-prewarm.ts");
-    const chatIpc = sourceOf("src/main/ipc/chat.ts");
     const loader = sourceOf("src/main/agent/skill-loader.ts");
     const runtime = sourceOf("src/main/agent/pi-sdk-runtime.ts");
 
@@ -217,8 +218,8 @@ describe("Pi-first agent core boundaries", () => {
     expect(refresh).not.toContain("reloadAfterSkillsIntegration");
     expect(prewarm).not.toContain("syncProjectPromptFile");
     expect(prewarm).not.toContain("applyProjectPromptIntegration");
-    expect(chatIpc).not.toContain("syncProjectPromptFile");
-    expect(chatIpc).not.toContain("applyProjectPromptIntegration");
+    expect(prewarm).not.toContain("reloadAfterSkillsIntegration");
+    expect(existsSync(join(REPO, "src/main/ipc/chat.ts"))).toBe(false);
     expect(loader).toContain("loadSkillsFromDir");
     expect(runtime).toContain("loadPiSkillsFromDirs");
   });
@@ -296,5 +297,48 @@ describe("Pi-first agent core boundaries", () => {
     expect(factory).toContain("createPiSubagentRunnerFactory");
     expect(reducer).toContain("applySubagentEvent");
     expect(reducer).not.toMatch(/if \(event\.subagent\) \{\s*return marked;/);
+  });
+
+  it("does not start OpenCode on the product boot or conversation path", () => {
+    const ipcIndex = sourceOf("src/main/ipc/index.ts");
+    const main = sourceOf("src/main/index.ts");
+    const settings = sourceOf("src/main/ipc/settings.ts");
+    const prewarm = sourceOf("src/main/services/project-chat-prewarm.ts");
+    const experts = sourceOf("src/main/services/project-subagents-refresh.ts");
+    const resolver = sourceOf("src/main/teams/resolver.ts");
+    const experiment = sourceOf("src/main/ipc/experiment.ts");
+    const registry = sourceOf("src/main/services/chat-session-registry.ts");
+    const literature = sourceOf("src/main/services/literature-bridge.ts");
+    const citations = sourceOf("src/main/services/session-citations-context.ts");
+    const libraryTask = sourceOf("src/main/services/library-task-context.ts");
+
+    expect(ipcIndex).not.toContain("registerChatHandlers");
+    expect(ipcIndex).not.toMatch(/from\s+["']\.\/chat["']/);
+    expect(main).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(main).not.toContain("AcpService");
+    expect(main).not.toMatch(/from\s+["']\.\/ipc\/chat["']/);
+    expect(main).not.toContain("startPlanSuggestBridge");
+    expect(settings).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(settings).not.toContain("reloadAfter");
+    expect(prewarm).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(prewarm).not.toContain("reloadAfterSkillsIntegration");
+    expect(experts).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(experts).not.toContain("reloadAfterExpertsIntegration");
+    expect(resolver).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(experiment).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(registry).not.toMatch(/from\s+["'][^"']*acp\//);
+    expect(literature).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(citations).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(libraryTask).not.toMatch(/from\s+["'][^"']*acp\/service/);
+    expect(existsSync(join(REPO, "src/main/acp"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/ipc/chat.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/tools/index.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/renderer/hooks/use-opencode-events.ts"))).toBe(false);
+
+    const agentFiles = walkTsFiles(join(REPO, "src/main/agent"));
+    for (const file of agentFiles) {
+      const src = readFileSync(file, "utf-8");
+      expect(src, file).not.toMatch(/from\s+["'][^"']*acp\//);
+    }
   });
 });

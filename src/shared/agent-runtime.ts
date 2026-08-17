@@ -125,6 +125,8 @@ export interface UsageUpdatedEvent extends AgentEventBase {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  /** Session spend in USD from Pi usage cost (cumulative across the session). */
+  costUsd?: number;
 }
 
 export interface TurnFinishedEvent extends AgentEventBase {

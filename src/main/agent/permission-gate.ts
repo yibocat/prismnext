@@ -11,6 +11,12 @@ import {
   wholeDiskSearchBlockMessage,
 } from "../../shared/project-escape-guard";
 import { bashCommandMatchesAnyPattern } from "../../shared/bash-allow-always";
+import {
+  isPathUnderAllowedPaths,
+  matchAllowRules,
+  matchDenyRules,
+  type PermissionRuleContext,
+} from "../../shared/permission-rules";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import {
   emptyPermissionRulesConfig,
@@ -222,13 +228,18 @@ export class PermissionGate {
   }
 
   async decide(request: PermissionGateRequest): Promise<PermissionGateResult> {
+    const rules = request.rules ?? this.opts.rules ?? emptyPermissionRulesConfig();
+    // Session-level allowed paths (worktree) plus user Allowed Paths settings.
+    const allowedPaths = request.allowedPaths?.length
+      ? [...request.allowedPaths, ...rules.allowedPaths]
+      : rules.allowedPaths;
+
     // 1. Hard Deny invariants: whole-disk search, raw latex compilation, project escaping
-    const hard = evaluateHardDeny(request);
+    const hard = evaluateHardDeny({ ...request, allowedPaths });
     if (hard.deny) {
       return { decision: "deny", reason: hard.reason, requestId: request.requestId };
     }
 
-    const rules = request.rules ?? this.opts.rules ?? emptyPermissionRulesConfig();
     const tool = getNativeToolByName(request.toolName);
     const category = tool?.permission?.category
       ?? (isPiPrimitiveToolName(request.toolName)
@@ -237,15 +248,18 @@ export class PermissionGate {
       ?? (request.toolName.startsWith("mcp__") ? "shell_exec" : undefined)
       ?? (FALLBACK_MUTATING_TOOLS.has(request.toolName.toLowerCase()) ? "safe_write" : "read_only");
 
-    // 2. Always Allow / Explicit Rules overrides
-    const normalizedName = request.toolName.toLowerCase();
-    if (rules.toolAllowAlways.includes(normalizedName)) {
-      return { decision: "allow", reason: "tool_always_allow", requestId: request.requestId };
-    }
-    if (request.bashCommand && rules.bashAllowAlwaysPatterns.length > 0) {
-      if (bashCommandMatchesAnyPattern(request.bashCommand, rules.bashAllowAlwaysPatterns)) {
-        return { decision: "allow", reason: "bash_always_allow", requestId: request.requestId };
-      }
+    // 2. User-defined deny rules — explicit refusal, overrides every mode.
+    const ruleCtx: PermissionRuleContext = {
+      toolName: request.toolName,
+      projectRoot: request.projectRoot,
+      filePath: request.filePath,
+      sourcePath: request.sourcePath,
+      destinationPath: request.destinationPath,
+      bashCommand: request.bashCommand,
+      bashCwd: request.bashCwd,
+    };
+    if (matchDenyRules(rules.denyRules, ruleCtx)) {
+      return { decision: "deny", reason: "user_deny_rule", requestId: request.requestId };
     }
 
     // 3. PermissionMode evaluation
@@ -256,6 +270,22 @@ export class PermissionGate {
         return { decision: "allow", reason: "readonly_allowed", requestId: request.requestId };
       }
       return { decision: "deny", reason: "readonly_mode", requestId: request.requestId };
+    }
+
+    // 4. User-defined allow rules / allowed paths / Always lists — before the mode matrix.
+    if (matchAllowRules(rules.allowRules, ruleCtx)) {
+      return { decision: "allow", reason: "user_allow_rule", requestId: request.requestId };
+    }
+    if (isPathUnderAllowedPaths(request.filePath, request.projectRoot, rules.allowedPaths)) {
+      return { decision: "allow", reason: "allowed_path", requestId: request.requestId };
+    }
+    if (rules.toolAllowAlways.includes(request.toolName.toLowerCase())) {
+      return { decision: "allow", reason: "tool_always_allow", requestId: request.requestId };
+    }
+    if (request.bashCommand && rules.bashAllowAlwaysPatterns.length > 0) {
+      if (bashCommandMatchesAnyPattern(request.bashCommand, rules.bashAllowAlwaysPatterns)) {
+        return { decision: "allow", reason: "bash_always_allow", requestId: request.requestId };
+      }
     }
 
     if (mode === "auto") {
@@ -276,7 +306,7 @@ export class PermissionGate {
       // safe_write, destructive, shell_exec require user prompt
     }
 
-    // 4. Suspend for UI prompt
+    // 5. Suspend for UI prompt
     return await new Promise<PermissionGateResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.requestId);

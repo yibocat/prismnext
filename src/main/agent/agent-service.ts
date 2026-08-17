@@ -5,7 +5,7 @@
 import { join } from "node:path";
 import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent-runtime";
-import type { PermissionMode } from "../../shared/session-agent";
+import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import {
   type AgentAnswerQuestionInput,
   type AgentAuthInput,
@@ -51,7 +51,6 @@ import {
   testAgentConnection,
 } from "./model-catalog";
 import { hydrateSessionRecordToConversation } from "./session-hydrator";
-import { isOpenCodeCatalogProvider } from "../../shared/opencode-provider";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
@@ -60,13 +59,8 @@ import { createRepresentativeTools, type ExperimentRunFn } from "./representativ
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { InteractionBroker } from "./interaction-broker";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
-import {
-  resolveTeamPiBinding,
-  type ResolvedPiLeadConfig,
-  type ResolvedPiRosterEntry,
-  type TeamPiBindingInput,
-  type TeamPiBindingResult,
-} from "./team-binding";
+import { resolveTeamPiBinding, type ResolvedPiLeadConfig, type ResolvedPiRosterEntry, type TeamPiBindingInput, type TeamPiBindingResult } from "./team-binding";
+import { buildPermissionRulesFromSettings } from "../services/permission-modes";
 import {
   createTaskDelegationTool,
   PiSubsessionRuntime,
@@ -119,9 +113,6 @@ export function resolveAgentAuth(input: AgentAuthInput): AgentAuthResult {
   ).trim();
 
   if (!provider) return { ok: false, reason: "missing_pi_provider" };
-  if (isOpenCodeCatalogProvider(provider) || provider === "opencode") {
-    return { ok: false, reason: `unsupported_pi_provider:${provider}` };
-  }
   if (!modelId) return { ok: false, reason: "missing_pi_model" };
   if (!apiKey) return { ok: false, reason: "missing_pi_api_key" };
 
@@ -263,7 +254,8 @@ export class AgentService {
   private activeTabId: string = AGENT_FALLBACK_CONVERSATION_ID;
   private activeConversationId: string | null = null;
   private readonly registry: RuntimeRegistry;
-  private startContext: {
+  /** Per-conversation start context. Consumed (and deleted) by startRuntime. */
+  private readonly startContexts = new Map<string, {
     provider: string;
     modelId: string;
     apiKey: string;
@@ -273,7 +265,7 @@ export class AgentService {
     skills?: Array<{ dir: string; fqid: string }>;
     mcpAllowlist?: string[];
     mcpServers?: McpServerDef[];
-  } | null = null;
+  }>();
   private readonly mcpHosts = new Map<string, AgentMcpHost>();
   private readonly subsessionRuntimes = new Map<string, PiSubsessionRuntime>();
 
@@ -385,7 +377,7 @@ export class AgentService {
     this.sending.add(conversationId);
     this.activeTabId = input.tabId?.trim() || conversationId;
     try {
-      this.startContext = {
+      this.startContexts.set(conversationId, {
         provider: auth.provider,
         modelId: auth.modelId,
         apiKey: auth.apiKey,
@@ -398,7 +390,7 @@ export class AgentService {
         })),
         mcpAllowlist: input.mcpServerAllowlist?.filter(Boolean),
         mcpServers: mcpDefsFromTeamAssets(teamBinding?.mcps),
-      };
+      });
       let binding = this.registry.getBinding(conversationId);
       if (!binding) {
         const existing = this.registry.store.getByConversationId(conversationId);
@@ -613,16 +605,33 @@ export class AgentService {
     const record = this.registry.store.getByConversationId(conversationId);
     if (!record?.regret) return { ok: false, error: "no_regret" };
     const leafId = record.regret.piLeafId;
-    const restored = this.registry.store.restoreRegret(record.runtimeSessionId);
-    if (!restored.ok) return { ok: false, error: "undo_failed" };
+
+    // Engine branch first: if restoring the Pi leaf fails, leave the store untouched
+    // so the store and engine branches cannot diverge.
     if (leafId) {
       const runtime = this.registry.getRuntime(conversationId);
+      let engineOk = true;
       if (runtime?.restoreLeaf) {
-        await runtime.restoreLeaf(record.runtimeSessionId, leafId).catch(() => {});
+        try {
+          const restoredLeaf = await runtime.restoreLeaf(record.runtimeSessionId, leafId);
+          engineOk = restoredLeaf?.ok === true;
+        } catch {
+          engineOk = false;
+        }
       } else if (record.piSessionFile) {
-        restorePersistedPiSessionLeaf(record.piSessionFile, leafId);
+        try {
+          restorePersistedPiSessionLeaf(record.piSessionFile, leafId);
+        } catch {
+          engineOk = false;
+        }
+      }
+      if (!engineOk) {
+        return { ok: false, error: "restore_engine_failed" };
       }
     }
+
+    const restored = this.registry.store.restoreRegret(record.runtimeSessionId);
+    if (!restored.ok) return { ok: false, error: "undo_failed" };
     return { ok: true, restoredCount: restored.restoredCount };
   }
 
@@ -648,6 +657,13 @@ export class AgentService {
     const runtimeSessionId = this.registry.getBinding(conversationId)?.runtimeSessionId;
     if (runtimeSessionId) setSessionIntensiveBibkeys(runtimeSessionId, bibkeys);
     return { ok: true };
+  }
+
+  lookupSessionAgent(id: string): SessionAgent | undefined {
+    const key = id.trim();
+    if (!key) return undefined;
+    const record = this.registry.store.getByConversationId(key) ?? this.registry.store.get(key);
+    return record?.sessionAgent;
   }
 
   getPlanEvents(conversationId: string): AgentPlanEvent[] {
@@ -727,14 +743,16 @@ export class AgentService {
   }
 
   private async startRuntime(input: StartRuntimeInput) {
-    const ctx = this.startContext;
+    const ctx = this.startContexts.get(input.conversationId);
     if (!ctx) throw new Error("start_context_missing");
+    this.startContexts.delete(input.conversationId);
     const mcpHost = this.mcpHosts.get(input.conversationId) ?? new AgentMcpHost();
     this.mcpHosts.set(input.conversationId, mcpHost);
     const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
     const store = this.registry.store;
     const gate = new PermissionGate({
       timeoutMs: 120_000,
+      rules: buildPermissionRulesFromSettings(this.deps.getSettings()),
       onPrompt: (request) => {
         this.sink?.({
           type: "permission_requested",
@@ -914,7 +932,7 @@ export class AgentService {
       this.sessionId = null;
       this.projectRoot = null;
       this.activeConversationId = null;
-      this.startContext = null;
+      this.startContexts.clear();
     }
   }
 }

@@ -40,12 +40,8 @@ import {
   buildRemoveCustomProviderPatch,
   modelIdTaken,
   modelSupportsVision,
-  prefetchOpenCodeModelsCatalog,
-  getCachedOpenCodeCatalogModels,
 } from "@/lib/providers";
 import type { ModelConfig } from "@/lib/providers";
-import { isOpenCodeCatalogProvider, normalizeOpenCodeModelId } from "../../../../shared/opencode-provider";
-import { isLazyCatalogProvider } from "../../../../shared/lazy-provider-catalog";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
   SETTINGS_DETAIL_ACTIONS,
@@ -259,7 +255,6 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
   const verifiedProviders = settings.aiVerifiedProviders || [];
   const apiKey = aiApiKeys[providerId] || "";
   const isVerified = verifiedProviders.includes(providerId);
-  const usesCatalog = isOpenCodeCatalogProvider(providerId);
 
   const [showKey, setShowKey] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -268,33 +263,10 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
   );
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const [modelSearch, setModelSearch] = useState("");
-  const [catalogTick, setCatalogTick] = useState(0);
-  const [catalogLoading, setCatalogLoading] = useState(false);
 
-  useEffect(() => {
-    if (!usesCatalog) return;
-    let cancelled = false;
-    setCatalogLoading(true);
-    void prefetchOpenCodeModelsCatalog().then((entries) => {
-      if (cancelled) return;
-      if (entries) setCatalogTick((n) => n + 1);
-      setCatalogLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [usesCatalog, providerId]);
-
-  void catalogTick;
-  const catalogModels = usesCatalog
-    ? getCachedOpenCodeCatalogModels(providerId) ?? []
-    : null;
   const provider =
     ALL_PROVIDERS.find((p) => p.id === providerId) || getPreset(providerId);
-  const registryModels =
-    catalogModels && catalogModels.length > 0
-      ? catalogModels
-      : provider?.models || [];
+  const registryModels = provider?.models || [];
 
   useEffect(() => {
     setShowKey(false);
@@ -306,15 +278,9 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
       setSelectedModels(new Set(enabled));
       return;
     }
-    // Static presets: legacy default = all on. Catalog providers: start empty until user picks.
-    if (!usesCatalog && registryModels.length > 0) {
-      setSelectedModels(new Set(registryModels.map((m) => m.id)));
-    } else {
-      setSelectedModels(new Set());
-    }
-    // registryModels.length: re-seed when catalog first populates for non-catalog? only static
+    setSelectedModels(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [providerId, isVerified, usesCatalog, registryModels.length]);
+  }, [providerId, isVerified, registryModels.length]);
 
   const filteredModels = useMemo(() => {
     const q = modelSearch.trim().toLowerCase();
@@ -426,7 +392,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
                 <ModelListHeader
                   selectedCount={selectedModels.size}
                   totalCount={registryModels.length}
-                  disabled={catalogLoading && registryModels.length === 0}
+                  disabled={registryModels.length === 0}
                   showSearch={registryModels.length > 6}
                   search={modelSearch}
                   onSearchChange={setModelSearch}
@@ -439,12 +405,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
                   }
                 />
                 <div className={MODEL_LIST_BODY}>
-                  {catalogLoading && registryModels.length === 0 ? (
-                    <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
-                      {t("settings.editor.provider.loadingCatalog")}
-                    </p>
-                  ) : null}
-                  {!catalogLoading && usesCatalog && registryModels.length === 0 ? (
+                  {registryModels.length === 0 ? (
                     <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
                       {t("settings.editor.provider.catalogEmpty")}
                     </p>
@@ -532,9 +493,7 @@ function CustomProviderEditorPanel({
   const [testResult, setTestResult] = useState<"idle" | "pass" | "fail">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState(false);
-  const [catalogTick, setCatalogTick] = useState(0);
   const [modelSearch, setModelSearch] = useState("");
-  const [catalogLoading, setCatalogLoading] = useState(false);
   /** Lazy catalog: null until user clicks Fetch — then full remote/cache list. */
   const [lazyCatalog, setLazyCatalog] = useState<ModelConfig[] | null>(null);
   const [lazyFetching, setLazyFetching] = useState(false);
@@ -544,37 +503,12 @@ function CustomProviderEditorPanel({
     : presetId === "__custom__"
       ? ""
       : presetId;
-  const usesCatalog = isOpenCodeCatalogProvider(catalogProviderId);
-  const lazyProviderId = isEditing
-    ? (existing?.id ?? "")
-    : presetId === "__custom__"
-      ? ""
-      : presetId;
-  const usesLazyCatalog = isLazyCatalogProvider(lazyProviderId);
-
-  useEffect(() => {
-    if (!usesCatalog) return;
-    let cancelled = false;
-    setCatalogLoading(true);
-    void prefetchOpenCodeModelsCatalog().then((entries) => {
-      if (cancelled) return;
-      if (entries) setCatalogTick((t) => t + 1);
-      setCatalogLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [usesCatalog, catalogProviderId]);
+  const usesLazyCatalog = catalogProviderId.length > 0;
 
   useEffect(() => {
     const initialPresetId = pickInitialPresetId(existing);
     const preset = getPreset(initialPresetId);
-    const catalogModels = isOpenCodeCatalogProvider(initialPresetId)
-      ? getCachedOpenCodeCatalogModels(initialPresetId) ?? []
-      : null;
-    const registryModels = catalogModels?.length
-      ? catalogModels
-      : (preset?.models || []);
+    const registryModels = preset?.models || [];
     const existingCustomModels = (settings.aiCustomModelsData?.[editProviderId || ""] ||
       []) as ModelConfig[];
 
@@ -611,30 +545,12 @@ function CustomProviderEditorPanel({
 
     if (existing) {
       const enabledRaw = settings.aiEnabledModels?.[existing.id];
-      const enabled =
-        isLazyCatalogProvider(existing.id) && enabledRaw
-          ? enabledRaw.map((id) => normalizeOpenCodeModelId(existing.id, id))
-          : enabledRaw;
-      setSelectedModels(
-        new Set(
-          enabled
-            ?? (isLazyCatalogProvider(existing.id)
-              ? []
-              : registryModels.map((m) => m.id)),
+      setSelectedModels(new Set(enabledRaw ?? []));
+      setCustomModels(
+        (existingCustomModels as ModelConfig[]).filter(
+          (m) => !registryModels.find((p) => p.id === m.id),
         ),
       );
-      if (isLazyCatalogProvider(existing.id)) {
-        setCustomModels(
-          (existingCustomModels as ModelConfig[]).map((m) => ({
-            ...m,
-            id: normalizeOpenCodeModelId(existing.id, m.id),
-          })),
-        );
-      } else {
-        setCustomModels(
-          existingCustomModels.filter((m) => !registryModels.find((p) => p.id === m.id)),
-        );
-      }
     } else {
       // New add: start with nothing selected — user picks in this panel.
       setSelectedModels(new Set());
@@ -643,14 +559,7 @@ function CustomProviderEditorPanel({
   }, [slot.mode, editProviderId, existing?.name, existing?.id, pickInitialPresetId]);
 
   const currentPreset = getPreset(presetId);
-  // catalogTick forces re-read after async models.json prefetch fills the cache
-  void catalogTick;
-  const catalogModels = usesCatalog
-    ? getCachedOpenCodeCatalogModels(catalogProviderId) ?? []
-    : null;
-  const seedPresetModels = catalogModels?.length
-    ? catalogModels
-    : (currentPreset?.models || []);
+  const seedPresetModels = currentPreset?.models || [];
 
   /** Lazy catalog without fetch: last-saved snapshots; after fetch: full catalog. */
   const lazyBrowseList = useMemo(() => {
@@ -699,11 +608,11 @@ function CustomProviderEditorPanel({
       : presetId;
 
   const handleFetchLazyCatalog = useCallback(async () => {
-    if (!isLazyCatalogProvider(lazyProviderId)) return;
+    if (!catalogProviderId) return;
     setLazyFetching(true);
     try {
       const result = await window.electronAPI.agentListModels({
-        providerId: lazyProviderId,
+        providerId: catalogProviderId,
         apiKey: apiKey.trim() || undefined,
         baseUrl: baseUrl.trim() || currentPreset?.defaultBaseUrl,
       });
@@ -713,6 +622,8 @@ function CustomProviderEditorPanel({
         contextWindow: m.contextWindow,
         capabilities: m.capabilities,
         description: m.description,
+        ...(m.maxTokens ? { maxTokens: m.maxTokens, maxTokensNum: m.maxTokensNum } : {}),
+        ...(m.cost ? { cost: m.cost } : {}),
       }));
       if (rows.length === 0) {
         toast.error(
@@ -739,7 +650,7 @@ function CustomProviderEditorPanel({
     } finally {
       setLazyFetching(false);
     }
-  }, [lazyProviderId, apiKey, baseUrl, currentPreset?.defaultBaseUrl, t]);
+  }, [catalogProviderId, apiKey, baseUrl, currentPreset?.defaultBaseUrl, t]);
 
   const handlePresetChange = (newPresetId: string) => {
     if (isPresetAlreadyAdded(newPresetId)) return;
@@ -750,15 +661,8 @@ function CustomProviderEditorPanel({
     if (preset && preset.id !== "__custom__") {
       setName(preset.name);
       setBaseUrl(preset.defaultBaseUrl);
-      // Catalog providers load async — selection starts empty until user picks.
-      if (isOpenCodeCatalogProvider(newPresetId)) {
-        setSelectedModels(new Set());
-        void prefetchOpenCodeModelsCatalog().then((entries) => {
-          if (entries) setCatalogTick((t) => t + 1);
-        });
-      } else {
-        setSelectedModels(new Set());
-      }
+      // All Pi providers load models via Fetch — selection starts empty.
+      setSelectedModels(new Set());
       setCustomModels([]);
     } else if (newPresetId === "__custom__") {
       setName("");
@@ -778,9 +682,7 @@ function CustomProviderEditorPanel({
   };
 
   const handleAddCustomModel = () => {
-    const mid = usesLazyCatalog && lazyProviderId
-      ? normalizeOpenCodeModelId(lazyProviderId, newModelId.trim())
-      : newModelId.trim();
+    const mid = newModelId.trim();
     if (!mid) {
       setAddModelError(t("settings.editor.provider.modelIdRequired"));
       return;
@@ -927,9 +829,7 @@ function CustomProviderEditorPanel({
       return;
     }
 
-    const enabledModelIds = usesLazyCatalog && lazyProviderId
-      ? [...selectedModels].map((id) => normalizeOpenCodeModelId(lazyProviderId, id))
-      : [...selectedModels];
+    const enabledModelIds = [...selectedModels];
 
     const lazySnapshots: ModelConfig[] | null = usesLazyCatalog
       ? enabledModelIds.map((id) =>
@@ -993,7 +893,7 @@ function CustomProviderEditorPanel({
     t,
     isPresetAlreadyAdded,
     usesLazyCatalog,
-    lazyProviderId,
+    catalogProviderId,
     lazyCatalog,
     seedPresetModels,
   ]);
@@ -1181,14 +1081,13 @@ function CustomProviderEditorPanel({
                       : presetModels.length + customModels.length
                   }
                   disabled={
-                    (catalogLoading && usesCatalog && !usesLazyCatalog && presetModels.length === 0)
-                    || lazyFetching
+                    lazyFetching
                     || (usesLazyCatalog
                       ? presetModels.length + lazyExtraCustoms.length === 0
                       : presetModels.length + customModels.length === 0)
                   }
                   showSearch={
-                    presetModels.length > 6 || (usesCatalog && !usesLazyCatalog) || Boolean(lazyCatalog)
+                    presetModels.length > 6 || Boolean(lazyCatalog)
                   }
                   search={modelSearch}
                   onSearchChange={setModelSearch}
@@ -1206,14 +1105,6 @@ function CustomProviderEditorPanel({
                   }
                 />
                 <div className={MODEL_LIST_BODY}>
-              {catalogLoading && usesCatalog && !usesLazyCatalog && presetModels.length === 0 ? (
-                <div className="flex items-center gap-2 px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
-                  <Loader2Icon className="size-3.5 animate-spin" />
-                  {t("settings.editor.provider.loadingCatalog", {
-                    defaultValue: "Loading models from OpenCode catalog…",
-                  })}
-                </div>
-              ) : null}
               {lazyFetching && usesLazyCatalog && !lazyCatalog ? (
                 <div className="flex items-center gap-2 px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
                   <Loader2Icon className="size-3.5 animate-spin" />
@@ -1323,22 +1214,17 @@ function CustomProviderEditorPanel({
               && allSelectedModels.length === 0
               && !addingModel
               && presetModels.length === 0
-              && customModels.length === 0
-              && !catalogLoading ? (
+              && customModels.length === 0 ? (
                 <p className="px-1.5 py-2 text-[length:var(--font-size-12)] text-muted-foreground">
-                  {usesCatalog
-                    ? t("settings.editor.provider.catalogEmpty", {
-                        defaultValue: "Catalog not loaded yet. Start Prism chat once, then reopen this panel.",
-                      })
-                    : t("settings.editor.provider.noModelsHint", {
-                        defaultValue: "No preset models — add a custom model ID below.",
-                      })}
+                  {t("settings.editor.provider.noModelsHint", {
+                    defaultValue: "No preset models — add a custom model ID below.",
+                  })}
                 </p>
               ) : null}
                 </div>
               </div>
 
-              {!isOpenCodeCatalogProvider(presetId) ? (
+              {!usesLazyCatalog ? (
                 !addingModel ? (
                   <button
                     type="button"

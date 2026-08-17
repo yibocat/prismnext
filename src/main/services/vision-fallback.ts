@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createLogger } from "./logger";
 import { getSettings } from "./settings";
-import { normalizeOpenCodeModelId } from "../../shared/opencode-provider";
+import { piProviderBaseUrl } from "../../shared/pi-provider-catalog";
 
 const log = createLogger("vision-fallback", "agent");
 
@@ -36,37 +36,12 @@ export interface VisionFallbackDescription {
 }
 
 function getDefaultBaseUrl(providerId: string): string | null {
-  switch (providerId) {
-    case "openai":
-      return "https://api.openai.com/v1";
-    case "openrouter":
-      return "https://openrouter.ai/api/v1";
-    case "google":
-      return "https://generativelanguage.googleapis.com";
-    case "anthropic":
-      return "https://api.anthropic.com";
-    case "deepseek":
-      return "https://api.deepseek.com/v1";
-    case "kimi":
-      return "https://api.moonshot.ai/v1";
-    case "zhipu":
-      return "https://open.bigmodel.cn/api/paas/v4";
-    case "minimax":
-      return "https://api.minimax.io/v1";
-    case "alibaba":
-      return "https://dashscope.aliyuncs.com/compatible-mode/v1";
-    case "opencode-go":
-      return "https://opencode.ai/zen/go/v1";
-    case "opencode-zen":
-      return "https://opencode.ai/zen/v1";
-    default:
-      return null;
-  }
+  return piProviderBaseUrl(providerId) ?? null;
 }
 
 /**
- * OpenCode Go/Zen route some models through Anthropic-style `/messages`
- * (not OpenAI `/chat/completions`). See https://opencode.ai/docs/go/
+ * Pi providers that route models through Anthropic-style `/messages`
+ * (not OpenAI `/chat/completions`).
  */
 const OPENCODE_ANTHROPIC_STYLE_MODELS = new Set([
   "minimax-m3",
@@ -81,7 +56,7 @@ const OPENCODE_ANTHROPIC_STYLE_MODELS = new Set([
 export function usesAnthropicMessagesApi(providerId: string, modelId: string): boolean {
   if (providerId === "anthropic") return true;
   if (
-    (providerId === "opencode-go" || providerId === "opencode-zen") &&
+    (providerId === "opencode-go" || providerId === "opencode") &&
     OPENCODE_ANTHROPIC_STYLE_MODELS.has(modelId)
   ) {
     return true;
@@ -99,11 +74,11 @@ export function resolveAnthropicMessagesUrl(baseUrl: string): string {
   return `${root}/v1/messages`;
 }
 
-/** Ensure OpenCode catalog base URLs end with `/v1`. */
+/** Ensure Pi catalog base URLs end with `/v1`. */
 export function normalizeVisionBaseUrl(providerId: string, baseUrl: string): string {
   let url = baseUrl.trim().replace(/\/+$/, "");
   if (!url) return url;
-  if (providerId === "opencode-go" || providerId === "opencode-zen") {
+  if (providerId === "opencode-go" || providerId === "opencode") {
     if (!/\/v\d+$/i.test(url)) url = `${url}/v1`;
   }
   return url;
@@ -228,8 +203,8 @@ async function describeViaAnthropic(
     "anthropic-version": "2023-06-01",
     "x-api-key": apiKey,
   };
-  // OpenCode catalog accepts x-api-key; keep Bearer as well for compatible proxies.
-  if (providerId === "opencode-go" || providerId === "opencode-zen") {
+  // Pi catalog accepts x-api-key; keep Bearer as well for compatible proxies.
+  if (providerId === "opencode-go" || providerId === "opencode") {
     headers.Authorization = `Bearer ${apiKey}`;
   }
   const response = await fetch(url, {
@@ -304,9 +279,6 @@ async function describeViaGoogle(
 }
 
 function resolveHelperModelId(providerId: string, modelId: string): string {
-  if (providerId === "opencode-go" || providerId === "opencode-zen") {
-    return normalizeOpenCodeModelId(providerId, modelId);
-  }
   return modelId.trim();
 }
 

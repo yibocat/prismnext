@@ -13,15 +13,18 @@ interface ContextWindowIndicatorProps {
   /** Token limit — prefer OpenCode usage_update.size */
   total?: number;
   source?: "usage_update" | "prompt_usage" | "estimate" | null;
+  /** Cumulative session spend in USD (Pi usage totals). */
+  costUsd?: number | null;
   promptStale?: boolean;
   isStreaming?: boolean;
 }
 
-/** Context ring: OpenCode used / size only — no local category estimates. */
+/** Context ring: Pi used / size only — no local category estimates. */
 export function ContextWindowIndicator({
   used = null,
   total = 128_000,
   source = null,
+  costUsd = null,
   promptStale = false,
   isStreaming = false,
 }: ContextWindowIndicatorProps) {
@@ -58,6 +61,12 @@ export function ContextWindowIndicator({
     }
   }, [t]);
 
+  const costLabel = typeof costUsd === "number" && Number.isFinite(costUsd)
+    ? costUsd < 0.005
+      ? "<$0.01"
+      : `$${costUsd.toFixed(2)}`
+    : null;
+
   return (
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -79,6 +88,13 @@ export function ContextWindowIndicator({
               {hasUsed ? usedN.toLocaleString() : "—"} / {total.toLocaleString()}
             </span>
           </div>
+
+          {costLabel ? (
+            <div className="flex items-center justify-between text-[length:var(--font-chat-meta)]">
+              <span className="text-muted-foreground">{t("chat.context.spent")}</span>
+              <span className="font-medium text-foreground tabular-nums">{costLabel}</span>
+            </div>
+          ) : null}
 
           <div className="h-1.5 rounded-full bg-muted overflow-hidden">
             <div

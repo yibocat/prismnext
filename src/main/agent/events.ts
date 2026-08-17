@@ -26,12 +26,22 @@ export interface PiLikeSessionEvent {
   assistantMessageEvent?: {
     type?: string;
     delta?: string;
+    partial?: {
+      usage?: {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        cost?: { total?: number };
+      };
+    };
   };
   usage?: {
     input?: number;
     output?: number;
     cacheRead?: number;
     cacheWrite?: number;
+    cost?: { total?: number };
   };
   error?: string;
   message?: string;
@@ -45,6 +55,24 @@ export interface PiEventMapContext {
 
 function asArgs(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function usageToEvent(
+  base: { runtimeSessionId: string; tabId: string; turnId: string },
+  u: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } },
+): AgentEvent | null {
+  if (!u.input && !u.output && !u.cacheRead && !u.cacheWrite && !u.cost?.total) {
+    return null;
+  }
+  return {
+    ...base,
+    type: "usage_updated",
+    inputTokens: u.input,
+    outputTokens: u.output,
+    cacheReadTokens: u.cacheRead,
+    cacheWriteTokens: u.cacheWrite,
+    ...(typeof u.cost?.total === "number" ? { costUsd: u.cost.total } : {}),
+  };
 }
 
 /**
@@ -70,7 +98,11 @@ export function mapPiSessionEvent(
       if (inner?.type === "thinking_delta" && inner.delta) {
         return [{ ...base, type: "thinking_delta", text: inner.delta }];
       }
-      return [];
+      // Pi reports usage on the assistant message snapshot; surface it so the
+      // context ring can show occupancy / spend while streaming.
+      const u = inner?.partial?.usage ?? event.usage;
+      const usageEvent = u ? usageToEvent(base, u) : null;
+      return usageEvent ? [usageEvent] : [];
     }
     case "tool_execution_start": {
       if (!event.toolCallId || !event.toolName || !isPiPrimitiveToolName(event.toolName)) {
@@ -120,14 +152,8 @@ export function mapPiSessionEvent(
       return [{ ...base, type: "turn_finished" }];
     default:
       if (event.usage) {
-        return [{
-          ...base,
-          type: "usage_updated",
-          inputTokens: event.usage.input,
-          outputTokens: event.usage.output,
-          cacheReadTokens: event.usage.cacheRead,
-          cacheWriteTokens: event.usage.cacheWrite,
-        }];
+        const usageEvent = usageToEvent(base, event.usage);
+        return usageEvent ? [usageEvent] : [];
       }
       return [];
   }

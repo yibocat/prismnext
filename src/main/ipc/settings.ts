@@ -5,9 +5,6 @@ import { buildPromptContext } from "../prompts/context";
 import { countPromptTokens } from "../lib/token-estimate";
 import { PROMPT_TOKEN_ENCODING } from "../../shared/token-estimate";
 import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
-import { AcpService } from "../acp/service";
-import { resolvePermissionMode } from "../services/permission-modes";
-import { resolveEffectiveAgentTerminalMode } from "../services/permission-modes";
 import { refreshApplicationMenu } from "../menu";
 import { syncTrayFromSettings } from "../services/tray";
 
@@ -30,46 +27,17 @@ export function registerSettingsHandlers(): void {
       if ("trayIconEnabled" in patch) {
         syncTrayFromSettings();
       }
-      if ("permissionMode" in patch) {
-        const service = AcpService.getInstance();
-        const mode = resolvePermissionMode(patch.permissionMode as string | undefined);
-        service.applyPermissionMode(mode);
-        service.applyBuiltinToolsConfig();
-        const terminalMode = resolveEffectiveAgentTerminalMode(
-          mode,
-          getSettings().agentTerminalMode as string | undefined,
-        );
-        await service.applyAgentTerminalMode(terminalMode);
-        await service.syncBuiltinTools();
-        // OpenCode reads opencode.json at process start — restart to apply new rules.
-        // Active chat sessions may need a new tab after this.
-        await service.reloadAfterPermissionModeChange();
-      }
-      if ("agentTerminalMode" in patch) {
-        const service = AcpService.getInstance();
-        const mode = (patch.agentTerminalMode as string) || "mirror";
-        await service.applyAgentTerminalMode(mode);
-        await service.syncBuiltinTools();
-        await service.reloadAfterToolsChange();
-      }
       if ("aiSubagentModel" in patch) {
         const lastProjectPath =
           typeof getSettings().lastProjectPath === "string"
             ? getSettings().lastProjectPath!.trim()
             : "";
-        const service = lastProjectPath
-          ? AcpService.getInstanceForProject(lastProjectPath)
-          : AcpService.getInstance();
-        // Pin built-in explore/general/… in opencode.json + rewrite expert agent.md.
-        service.applyBuiltinToolsConfig();
         if (lastProjectPath) {
           const { refreshProjectSubagentsIntegration } = await import(
             "../services/project-subagents-refresh"
           );
           await refreshProjectSubagentsIntegration(lastProjectPath);
         }
-        // OpenCode reads agent model at process start — restart to apply.
-        await service.reloadAfterExpertsIntegration();
       }
     },
   );
@@ -219,14 +187,28 @@ export function registerSettingsHandlers(): void {
   );
 
   ipcMain.handle("settings:getBuiltinTools", async () => {
-    const { BUILTIN_TOOLS } = await import("../tools/index");
-    const { buildOpencodeToolDescription } = await import("../tools/tool-description");
-    return BUILTIN_TOOLS.map((meta) => ({
-      name: meta.name,
-      label: meta.label,
-      description: meta.description,
-      category: meta.category,
-      schemaDescription: buildOpencodeToolDescription(meta),
+    const { ALL_NATIVE_TOOLS } = await import("../agent/tools/index");
+    const { PI_PRIMITIVE_TOOLS, isPiPrimitiveToolName } = await import("../agent/capability-matrix");
+    const categoryFor = (name: string): string => {
+      if (name.startsWith("literature") || name.startsWith("citation")) return "reference";
+      if (name.startsWith("latex")) return "compile";
+      if (name === "question" || name === "suggest-plan" || isPiPrimitiveToolName(name)) return "utility";
+      return "project";
+    };
+    const primitives = PI_PRIMITIVE_TOOLS.map((tool) => ({
+      name: tool.name,
+      label: tool.name,
+      description: tool.notes,
+      category: "utility",
+      schemaDescription: tool.notes,
     }));
+    const host = ALL_NATIVE_TOOLS.map((tool) => ({
+      name: tool.name,
+      label: tool.label,
+      description: tool.description,
+      category: categoryFor(tool.name),
+      schemaDescription: tool.description,
+    }));
+    return [...primitives, ...host];
   });
 }

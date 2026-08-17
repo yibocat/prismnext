@@ -1,34 +1,21 @@
 // Re-export from presets/
 export { type ProviderConfig, type ModelConfig } from "./types";
 export {
-  prefetchOpenCodeModelsCatalog,
-  getCachedOpenCodeCatalogModels,
-  mergeProviderWithOpenCodeCatalog,
-  subscribeOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
+  getCachedPiCatalogModels,
+  mergeProviderWithPiCatalog,
+  subscribePiModelsCatalog,
   isUnknownContextWindowLabel,
-} from "./opencode-catalog-models";
+} from "./pi-model-catalog";
 export { ALL_PROVIDERS, PROVIDER_PRESETS, CUSTOM_PRESET, getPreset } from "./presets";
-export {
-  openaiProvider,
-  googleProvider,
-  deepseekProvider,
-  openrouterPreset,
-  anthropicPreset,
-  zhipuPreset,
-  minimaxPreset,
-  kimiPreset,
-  alibabaPreset,
-  opencodeZenPreset,
-  opencodeGoPreset,
-} from "./presets";
 
 import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
 import {
-  getCachedOpenCodeCatalogModels,
+  getCachedPiCatalogModels,
   isUnknownContextWindowLabel,
-  mergeProviderWithOpenCodeCatalog,
-} from "./opencode-catalog-models";
+  mergeProviderWithPiCatalog,
+} from "./pi-model-catalog";
 import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
@@ -147,7 +134,7 @@ export function resolveProviderConfig(
           name: custom.name || preset.name,
           defaultBaseUrl: custom.baseUrl || preset.defaultBaseUrl,
         };
-    return mergeProviderWithOpenCodeCatalog(base);
+    return mergeProviderWithPiCatalog(base);
   }
 
   if (custom) {
@@ -157,7 +144,7 @@ export function resolveProviderConfig(
       defaultBaseUrl: custom.baseUrl,
       models: [],
     };
-    return mergeProviderWithOpenCodeCatalog(config);
+    return mergeProviderWithPiCatalog(config);
   }
 
   return undefined;
@@ -191,6 +178,31 @@ export function getProviderModels(
         vision: Boolean(prev.capabilities?.vision || m.capabilities?.vision),
       },
     });
+  }
+  // Backfill maxTokens / cost from the Pi catalog when the saved snapshot omits them.
+  const catalogRows = getCachedPiCatalogModels(providerId);
+  if (catalogRows?.length) {
+    const catalogById = new Map(catalogRows.map((m) => [m.id, m]));
+    for (const [id, config] of byId) {
+      const row = catalogById.get(id);
+      if (!row) continue;
+      const next: ModelConfig = { ...config };
+      let patched = false;
+      if (!next.maxTokens && row.maxTokens) {
+        next.maxTokens = row.maxTokens;
+        next.maxTokensNum = row.maxTokensNum;
+        patched = true;
+      }
+      if (!next.cost && row.cost) {
+        next.cost = row.cost;
+        patched = true;
+      }
+      if (!next.description && row.description) {
+        next.description = row.description;
+        patched = true;
+      }
+      if (patched) byId.set(id, next);
+    }
   }
   return Array.from(byId.values());
 }
@@ -508,7 +520,7 @@ export function resolveSelectedModelContextTokens(
   );
   let label = found?.model.contextWindow;
   if (isUnknownContextWindowLabel(label)) {
-    const catalogRow = getCachedOpenCodeCatalogModels(providerId)?.find(
+    const catalogRow = getCachedPiCatalogModels(providerId)?.find(
       (m) => m.id === modelId,
     );
     if (catalogRow && !isUnknownContextWindowLabel(catalogRow.contextWindow)) {

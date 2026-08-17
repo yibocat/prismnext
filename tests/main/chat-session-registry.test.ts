@@ -5,6 +5,8 @@ import {
   resolveChatSessionId,
   getSessionProjectRoot,
   unregisterChatSession,
+  resolveCitationStagingSessionId,
+  isSubAgentSession,
   _resetChatSessionRegistryForTests,
 } from "../../src/main/services/chat-session-registry";
 
@@ -32,5 +34,14 @@ describe("chat-session-registry", () => {
     unregisterChatSession("sess-1");
     expect(resolveChatTabId("sess-1")).toBeUndefined();
     expect(resolveChatSessionId("chat-tab-a")).toBeUndefined();
+  });
+
+  it("maps Pi child session ids back to the parent for citation staging", () => {
+    expect(resolveCitationStagingSessionId("rt-parent")).toBe("rt-parent");
+    expect(isSubAgentSession("rt-parent")).toBe(false);
+    expect(resolveCitationStagingSessionId("sub-rt-parent-1710000000000")).toBe("rt-parent");
+    expect(isSubAgentSession("sub-rt-parent-1710000000000")).toBe(true);
+    expect(resolveCitationStagingSessionId("sub-task-session")).toBe("sub-task-session");
+    expect(isSubAgentSession("sub-task-session")).toBe(false);
   });
 });

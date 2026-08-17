@@ -2204,7 +2204,10 @@
       "pinModel": "固定模型",
       "unpinModel": "取消固定",
       "contextWindow": "{{size}} 上下文窗口",
+      "maxOutput": "{{size}} 最大输出",
+      "pricePerM": "每 1M tokens：输入 ${{input}} / 输出 ${{output}}",
       "descFallback": "{{provider}} 模型，上下文 {{context}}。",
+      "descMaxOutputSuffix": " 最大输出 {{size}} tokens。",
       "descVisionSuffix": " 支持图像输入。",
       "desc": {
         "opencode-go": {
@@ -2275,6 +2278,7 @@
     },
     "context": {
       "window": "上下文窗口",
+      "spent": "已花费",
       "compress": "压缩上下文",
       "compressing": "压缩中…",
       "compressDone": "已压缩上下文。用量将在下一次回复后刷新。",

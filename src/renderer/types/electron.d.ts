@@ -1878,35 +1878,8 @@ export interface ElectronAPI {
     projectPath: string,
     sessionId: string,
   ) => Promise<{ success: boolean }>;
-  chatGetProviders: () => Promise<any[]>;
-  chatGetEffortCatalog: () => Promise<import("../../shared/opencode-effort").EffortCatalogSnapshot>;
-  chatGetOpenCodeModelsCatalog: () => Promise<
-    import("../../shared/opencode-models-catalog").OpenCodeModelsCatalogSnapshot
-  >;
-  chatFetchProviderModels: (args: {
-    providerId: string;
-    apiKey?: string;
-    baseUrl?: string;
-  }) => Promise<{
-    models: import("../../shared/openrouter-models").OpenRouterModelRow[];
-    source: "api" | "cache";
-  }>;
-  chatFetchOpenRouterModels: (args?: {
-    apiKey?: string;
-    baseUrl?: string;
-  }) => Promise<{
-    models: import("../../shared/openrouter-models").OpenRouterModelRow[];
-    source: "api" | "cache";
-  }>;
-  chatGetModelEffort: (args: {
-    provider: string;
-    modelId: string;
-    fallback?: string[];
-  }) => Promise<import("../../shared/opencode-effort").ModelEffortResult>;
-  chatSetAuth: (provider: string, credentials: Record<string, string>) => Promise<{ success: boolean }>;
-  chatTestConnection(args: { provider: string; apiKey: string; baseUrl?: string }): Promise<{ success: boolean; models?: string[] }>;
 
-  // Chat events (Main → Renderer)
+  // Settings operations
   onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
   onChatAgentEvent: (callback: (data: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
   onChatComplete: (callback: (data: {

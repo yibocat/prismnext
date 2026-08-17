@@ -10,7 +10,7 @@ import type { PromptImageAttachment } from "@/lib/chat/composer-attach-file";
 import {
   getModel,
   modelSupportsVision,
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   resolveProviderConfig,
 } from "@/lib/providers";
 import type { AppSettings } from "@/stores/settings-store";
@@ -72,10 +72,10 @@ export async function applyVisionFallbackForSend(
     return { promptText, promptImages, displayBlocks, note: null };
   }
 
-  // OpenCode Go/Zen model rows (incl. vision flags) live in an async catalog.
-  // Settings may have selected a helper while the catalog was warm; chat send
-  // must not race an empty cache and reject a valid helper.
-  await prefetchOpenCodeModelsCatalog();
+  // Pi model rows (incl. vision flags) live in an async catalog. Settings may
+  // have selected a helper while the catalog was warm; chat send must not race
+  // an empty cache and reject a valid helper.
+  await prefetchPiModelsCatalog();
 
   const currentProviderId = settings.aiProvider?.trim() || "";
   const currentProvider = currentProviderId

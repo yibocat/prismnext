@@ -2204,7 +2204,10 @@
       "pinModel": "Pin model",
       "unpinModel": "Unpin model",
       "contextWindow": "{{size}} context window",
+      "maxOutput": "{{size}} max output",
+      "pricePerM": "${{input}} in / ${{output}} out per 1M tokens",
       "descFallback": "{{provider}} model with {{context}} context.",
+      "descMaxOutputSuffix": " Up to {{size}} output tokens.",
       "descVisionSuffix": " Supports image input."
     },
     "sessionAgent": {
@@ -2249,6 +2252,7 @@
     },
     "context": {
       "window": "Context window",
+      "spent": "Spent",
       "compress": "Compress context",
       "compressing": "Compressing…",
       "compressDone": "Context compacted. Usage will refresh on the next reply.",

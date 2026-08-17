@@ -1,9 +1,8 @@
-/** Maps OpenCode ACP sessionId ↔ renderer chat tabId + project root (shared across main services). */
+/** Maps chat sessionId ↔ renderer tabId + project root (shared across main services). */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getTerminalBridgeRoot } from "./prism-bridge-paths";
-import { formatTaskError } from "../../shared/task-error-codes";
 import { createLogger } from "./logger";
 
 const log = createLogger("chat-session-registry", "agent");
@@ -30,6 +29,27 @@ export interface DeferredTaskAllowlistFollowUp {
   effort?: string;
 }
 const sessionDeferredTaskAllowlistFollowUp = new Map<string, DeferredTaskAllowlistFollowUp>();
+
+/**
+ * Pi child sessions are `sub-${parentRuntimeSessionId}-${timestamp}`.
+ * Staging / intensive-reading keys stay on the parent conversation.
+ */
+export function resolveCitationStagingSessionId(sessionId: string): string {
+  const id = sessionId.trim();
+  if (!id) return id;
+  if (!id.startsWith("sub-")) return id;
+  const lastDash = id.lastIndexOf("-");
+  const suffix = lastDash > 3 ? id.slice(lastDash + 1) : "";
+  if (!/^\d{10,}$/.test(suffix)) return id;
+  return id.slice(4, lastDash);
+}
+
+export function isSubAgentSession(sessionId: string): boolean {
+  const id = sessionId.trim();
+  if (!id.startsWith("sub-")) return false;
+  const lastDash = id.lastIndexOf("-");
+  return lastDash > 3 && /^\d{10,}$/.test(id.slice(lastDash + 1));
+}
 
 function getBridgeRoot(): string {
   return getTerminalBridgeRoot();
@@ -220,42 +240,9 @@ export async function flushDeferredTaskAllowlistFollowUp(
   const missing = claimTaskAllowlistFollowUp(sessionId);
   if (missing.length === 0) return;
 
-  const followUp = formatTaskError("task_allowlist_not_invoked", {
-    allowlist: missing,
-  });
   log.info(
-    `task-allowlist-follow-up(deferred): sessionId=${sessionId} missing=${missing.join(",")}`,
+    `task-allowlist-follow-up(deferred): skipped OpenCode nudge sessionId=${sessionId} missing=${missing.join(",")}`,
   );
-
-  try {
-    const { AcpService } = await import("../acp/service");
-    const service = AcpService.getInstanceForSession(sessionId);
-    await service.sendPrompt(sessionId, followUp, {
-      model: deferred.model,
-      provider: deferred.provider,
-      cwd: deferred.cwd,
-      projectRoot: deferred.projectRoot,
-      effort: deferred.effort,
-    });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    log.warn(`task-allowlist-follow-up(deferred) failed: ${message}`);
-  }
-
-  const stillMissing = getSessionMissingTaskAllowlist(sessionId);
-  if (stillMissing.length > 0) {
-    try {
-      const { AcpService } = await import("../acp/service");
-      AcpService.getInstanceForSession(sessionId).setPendingTaskDenial(
-        sessionId,
-        formatTaskError("task_allowlist_not_invoked", {
-          allowlist: stillMissing,
-        }),
-      );
-    } catch {
-      // ignore
-    }
-  }
 }
 
 /** Record a successful Task completion for an allowlisted @ id. */

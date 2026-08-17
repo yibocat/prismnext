@@ -20,6 +20,19 @@ export function useAgentEvents(): void {
       if (!tabId) return;
       useChatStore.getState()._applyAgentEvent(tabId, event);
 
+      if (event.type === "usage_updated") {
+        // Live context ring: Pi reports input tokens (context occupancy) and
+        // session spend. Store them so the indicator updates per turn. Missing
+        // input tokens must not clear the previously known occupancy.
+        if (typeof event.inputTokens === "number" || typeof event.costUsd === "number") {
+          useChatStore.getState()._setContextTokens(tabId, event.inputTokens, {
+            source: "usage_update",
+            ...(typeof event.costUsd === "number" ? { costUsd: event.costUsd } : {}),
+          });
+        }
+        return;
+      }
+
       if (event.type === "permission_requested") {
         usePermissionStore.getState().addPermission({
           id: event.requestId,

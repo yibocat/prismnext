@@ -30,12 +30,12 @@ import {
 } from "../services/experiment-run-executor";
 import { snapshotExperiment } from "../services/experiment-results-snapshot";
 import { broadcastExperimentChanged } from "../services/experiment-ui-events";
-import { AcpService } from "../acp/service";
 import {
   buildPermissionRulesFromSettings,
   resolvePermissionAction,
   resolvePermissionMode,
 } from "../services/permission-modes";
+import type { SessionAgent } from "../../shared/session-agent";
 import {
   EXPERIMENT_REGISTRY_REL,
   parseExperimentRunKind,
@@ -94,6 +94,16 @@ interface ExperimentSnapshotArgs {
   metricsFiles?: string[];
   maxFiles?: number;
   maxDepth?: number;
+}
+
+async function lookupPiSessionAgent(id: string): Promise<SessionAgent | undefined> {
+  try {
+    const { getAgentService } = await import("../agent/agent-service");
+    const service = await getAgentService();
+    return service.lookupSessionAgent(id);
+  } catch {
+    return undefined;
+  }
 }
 
 export function registerExperimentHandlers(): void {
@@ -303,7 +313,7 @@ export function registerExperimentHandlers(): void {
     const mode = resolvePermissionMode(settings.permissionMode as string | undefined);
     const permRules = buildPermissionRulesFromSettings(settings);
     const sessionAgent = chatSessionId
-      ? AcpService.getInstanceForSession(chatSessionId).getSessionAgent(chatSessionId)
+      ? await lookupPiSessionAgent(chatSessionId)
       : undefined;
     const action = resolvePermissionAction(mode, "experiment-run", sessionAgent, {
       projectRoot: args.projectRoot,

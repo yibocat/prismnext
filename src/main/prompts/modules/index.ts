@@ -22,7 +22,7 @@ import { buildWorkspacePrompt } from "./workspace-folders";
  * Shared profile modules auto-attach to orchestrator + experts; orchestratorOnly /
  * expertOnly modules attach only to that role — no per-agent UI selection.
  *
- * Per-tool how-to → `BUILTIN_TOOLS` / `tools/<name>.ts` only (not modules).
+ * Per-tool how-to → `src/main/agent/tools/` descriptions only (not modules).
  * Hard/Soft homes: `docs-private/superpowers/specs/2026-07-21-prompt-hard-soft-architecture-design.md`.
  */
 export const ALL_MODULES: PromptModule[] = [
