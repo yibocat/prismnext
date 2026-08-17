@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -38,7 +38,9 @@ describe("AgentSessionStore Core & Atomic Operations", () => {
     const session = store.createSession(input);
     expect(session.version).toBe(SESSION_SCHEMA_VERSION);
     expect(session.runtimeSessionId).toBe("ses-1");
+    expect(session.conversationId).toBe("ses-1");
     expect(session.turns).toEqual([]);
+    expect(session.eventJournal).toEqual([]);
     expect(session.createdAt).toBeTruthy();
 
     const retrieved = store.getSession("ses-1");
@@ -286,5 +288,60 @@ describe("AgentSessionStore Checkpoint Rollback & Regret Synchronization", () =>
 
     const sessionRestored = store.getSession("ses-rollback");
     expect(sessionRestored?.turns).toHaveLength(5);
+  });
+});
+
+describe("AgentSessionStore v2 conversation identity", () => {
+  let tempDir: string;
+  let store: AgentSessionStore;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "prism-session-v2-"));
+    store = new AgentSessionStore(tempDir);
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("stores conversationId and piSessionFile without using tabId as identity", () => {
+    const session = store.createSession({
+      conversationId: "conv-paper",
+      runtimeSessionId: "rt-live",
+      tabId: "tab-temp",
+      title: "Paper",
+      projectRoot: "/repo",
+      piSessionFile: "/userData/pi-agent/runtime-sessions/conv-paper.jsonl",
+    });
+    expect(session.version).toBe(2);
+    expect(session.conversationId).toBe("conv-paper");
+    expect(store.getByConversationId("conv-paper")?.runtimeSessionId).toBe("rt-live");
+    expect(store.getByConversationId("tab-temp")).toBeNull();
+  });
+
+  it("migrates a v1 record on read without treating tabId as conversationId", () => {
+    const v1 = {
+      version: 1,
+      runtimeSessionId: "rt-old",
+      tabId: "pi-lab",
+      title: "Legacy Lab",
+      projectRoot: "/repo",
+      boundCheckoutPath: "/repo",
+      backend: "pi-sdk",
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+      turns: [],
+      createdAt: "2026-08-16T00:00:00Z",
+      updatedAt: "2026-08-16T00:00:00Z",
+    };
+    mkdirSync(store.sessionsDir(), { recursive: true });
+    writeFileSync(join(store.sessionsDir(), "rt-old.json"), JSON.stringify(v1), "utf-8");
+
+    const migrated = store.getSession("rt-old");
+    expect(migrated?.version).toBe(2);
+    expect(migrated?.conversationId).toBe("rt-old");
+    expect(migrated?.conversationId).not.toBe("pi-lab");
+    expect(migrated?.eventJournal).toEqual([]);
+    expect(store.getByConversationId("rt-old")?.title).toBe("Legacy Lab");
   });
 });

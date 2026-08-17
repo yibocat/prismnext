@@ -278,9 +278,17 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     setSessionsReady(false);
     let cancelled = false;
     window.electronAPI
-      .sessionList(projectRoot)
+      .agentListSessions(projectRoot)
       .then((list) => {
-        if (!cancelled) setSessions(list ?? []);
+        if (!cancelled) {
+          setSessions((list ?? []).map((s) => ({
+            id: s.conversationId,
+            title: s.title,
+            lastModified: s.updatedAt,
+            createdAt: s.createdAt,
+            directory: s.directory,
+          })));
+        }
       })
       .catch(() => {
         if (!cancelled) setSessions([]);
@@ -295,7 +303,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   const sessionsSorted = useMemo(() => {
     const enriched = sessions.map((s) => {
-      const tab = chatTabs.find((t) => t.sessionId === s.id);
+      const tab = chatTabs.find((t) => t.id === s.id || t.sessionId === s.id);
       if (tab?.userTitleSet && tab.title) {
         return { ...s, title: tab.title };
       }

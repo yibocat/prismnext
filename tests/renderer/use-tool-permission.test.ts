@@ -10,10 +10,10 @@ describe("useToolPermission", () => {
     usePermissionStore.getState().clearAllPermissions();
     useChangesStore.setState({ changes: [] });
     useChatStore.setState({ activeTabId: "tab-1" } as any);
-    vi.stubGlobal("electronAPI", undefined);
-    (window as any).electronAPI = {
-      chatAnswerPermission: vi.fn().mockResolvedValue(undefined),
-    };
+    vi.stubGlobal("electronAPI", {
+      agentResolvePermission: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    (window as any).electronAPI = globalThis.electronAPI;
   });
 
   it("allows permission and clears store for edit tools", async () => {
@@ -42,8 +42,9 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", true, "call-1", {
-      always: false,
+    expect(window.electronAPI.agentResolvePermission).toHaveBeenCalledWith({
+      requestId: "perm-1",
+      decision: "allow",
     });
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
     // Scheme A: edit uses permission gate only — proposed changes are not auto-cleared on allow
@@ -74,7 +75,10 @@ describe("useToolPermission", () => {
       await result.current.deny();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-1", false, "call-1");
+    expect(window.electronAPI.agentResolvePermission).toHaveBeenCalledWith({
+      requestId: "perm-1",
+      decision: "deny",
+    });
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
     expect(usePermissionStore.getState().isToolDenied("tab-1", "call-1")).toBe(true);
     // Scheme A: deny does not revert disk via changes-store for edit tools
@@ -97,8 +101,9 @@ describe("useToolPermission", () => {
       await result.current.allow();
     });
 
-    expect(window.electronAPI.chatAnswerPermission).toHaveBeenCalledWith("perm-2", true, "call-2", {
-      always: false,
+    expect(window.electronAPI.agentResolvePermission).toHaveBeenCalledWith({
+      requestId: "perm-2",
+      decision: "allow",
     });
     expect(useChangesStore.getState().changes).toHaveLength(0);
   });

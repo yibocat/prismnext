@@ -6,6 +6,7 @@ import { mapPiSessionEvent, toChatStreamEnvelope } from "../../src/main/agent/ev
 import {
   ClosedResourceLoader,
   closedPiSessionOptions,
+  createPiSessionManager,
   createPiSdkSessionFactory,
   isNodeCompatibleWithPi,
   PI_MIN_NODE,
@@ -15,7 +16,7 @@ import {
   probePiEmbedCompatibility,
   tryLoadPiSdkModule,
 } from "../../src/main/agent/pi-sdk-runtime";
-import { AgentSessionStore, FORBIDDEN_PROJECT_RESOURCE_DIRS } from "../../src/main/agent/session-store";
+import { AgentSessionStore, FORBIDDEN_PROJECT_RESOURCE_DIRS, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 import { ToolHost } from "../../src/main/agent/tool-host";
 
@@ -47,6 +48,30 @@ describe("pi sdk spike", () => {
     expect(isNodeCompatibleWithPi("22.16.0")).toBe(false);
     expect(isNodeCompatibleWithPi("22.19.0")).toBe(true);
     expect(isNodeCompatibleWithPi("24.18.1")).toBe(true);
+  });
+
+  it("creates and reopens a Pi SessionManager under userData, not the project", () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-pi-persist-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-pi-persist-proj-"));
+    dirs.push(userData, project);
+    writeFileSync(join(project, "README.md"), "keep", "utf-8");
+    const sessionDir = resolvePiRuntimeSessionDir(userData);
+    const created = createPiSessionManager(project, { mode: "create", sessionDir });
+    const file = created.getSessionFile();
+    expect(file).toBeTruthy();
+    expect(file!.startsWith(sessionDir)).toBe(true);
+    expect(existsSync(join(project, ".pi"))).toBe(false);
+    expect(existsSync(join(project, ".agents"))).toBe(false);
+    // Pi defers writing the JSONL until the first assistant turn; seed the header so open is real.
+    writeFileSync(file!, `${JSON.stringify({
+      type: "session",
+      version: 3,
+      id: created.getSessionId(),
+      timestamp: new Date().toISOString(),
+      cwd: project,
+    })}\n`);
+    const opened = createPiSessionManager(project, { mode: "open", sessionFile: file!, sessionDir });
+    expect(opened.getSessionId()).toBe(created.getSessionId());
   });
 
   it("uses a closed resource loader that never lists project or home skills", () => {

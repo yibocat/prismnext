@@ -1,8 +1,6 @@
 /**
- * Isolated Pi Agent Lab — not the production chat backend.
- *
- * Experimental Pi chat tabs talk to this service only. `ipc/chat.ts` and
- * AcpService stay on OpenCode.
+ * Pi conversation host. New Agent send/cancel go through RuntimeRegistry.
+ * `ipc/chat.ts` / AcpService stay only for old OpenCode history.
  */
 
 import { join } from "node:path";
@@ -10,17 +8,22 @@ import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent-runtime";
 import type { PermissionMode } from "../../shared/session-agent";
 import {
-  PI_LAB_TAB_ID,
-  type PiLabAuthInput,
-  type PiLabAuthResult,
-  type PiLabSendInput,
-  type PiLabSendResult,
-  type PiLabStatus,
-} from "../../shared/pi-lab";
+  type AgentAuthInput,
+  type AgentAuthResult,
+  type AgentLoadSessionInput,
+  type AgentLoadSessionResult,
+  type AgentRenameSessionInput,
+  type AgentSendInput,
+  type AgentSendResult,
+  type AgentSessionSummary,
+  type AgentStatus,
+} from "../../shared/agent-api";
+import { hydrateSessionRecordToConversation } from "./session-hydrator";
 import { isOpenCodeCatalogProvider } from "../../shared/opencode-provider";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
-import { AgentSessionStore, resolvePiAgentRoot } from "./session-store";
+import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
+import { RuntimeRegistry, type StartRuntimeInput } from "./runtime-registry";
 import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
 import {
@@ -45,7 +48,8 @@ import type { ExperimentCtxResult } from "../services/experiment-log-service";
 import type { KickoffExperimentRunArgs } from "../services/experiment-run-executor";
 import { parseExperimentRunKind } from "../../shared/experiment-log";
 
-const LAB_TOOLS = ALL_NATIVE_TOOLS.map((t) => t.name);
+const AGENT_TOOLS = ALL_NATIVE_TOOLS.map((t) => t.name);
+const AGENT_FALLBACK_CONVERSATION_ID = "agent";
 
 /** Pi uses this sentence when ResourceLoader.getSystemPrompt() is empty. */
 export const PI_DEFAULT_CODING_IDENTITY =
@@ -59,7 +63,7 @@ export const HOST_SYSTEM_IDENTITY = [
   "research-brief-update for the project brief, and experiment-run for island commands.",
 ].join(" ");
 
-export function resolvePiLabAuth(input: PiLabAuthInput): PiLabAuthResult {
+export function resolveAgentAuth(input: AgentAuthInput): AgentAuthResult {
   const provider = (input.provider ?? input.settings.aiProvider ?? "").trim();
   const modelId = (input.modelId ?? input.settings.aiModel ?? "").trim();
   const apiKey = (
@@ -83,7 +87,7 @@ export function resolvePiLabAuth(input: PiLabAuthInput): PiLabAuthResult {
   };
 }
 
-export function buildPiLabSystemPrompt(input: {
+export function buildAgentSystemPrompt(input: {
   stableSystem: string;
   agentsMd?: string;
   leadInstructions?: string;
@@ -102,7 +106,7 @@ export function buildPiLabSystemPrompt(input: {
     .join("\n\n");
 }
 
-export function buildPiLabUserText(input: {
+export function buildAgentUserText(input: {
   text: string;
   projectRules?: string;
 }): string {
@@ -111,7 +115,7 @@ export function buildPiLabUserText(input: {
   return rules ? `${rules}\n\n${text}` : text;
 }
 
-export function createPiLabExperimentRunner(deps: {
+export function createAgentExperimentRunner(deps: {
   resolveCtx: (projectRoot: string) => ExperimentCtxResult;
   isCtxError: (ctx: ExperimentCtxResult) => boolean;
   kickoff: (args: KickoffExperimentRunArgs) => Promise<{ runId: string; executionId: string } | undefined>;
@@ -145,7 +149,7 @@ export function createPiLabExperimentRunner(deps: {
   };
 }
 
-export function createPiLabNativeTools(deps?: {
+export function createAgentNativeTools(deps?: {
   runExperiment?: ExperimentRunFn;
 }): NativeToolDefinition[] {
   if (!deps?.runExperiment) {
@@ -189,31 +193,47 @@ function permissionModeFromSettings(settings: Record<string, unknown>): Permissi
   return "edit_auto";
 }
 
-export interface PiLabServiceDeps {
+export interface AgentServiceDeps {
   userDataDir: string;
   getSettings: () => Record<string, unknown>;
   composeStableSystem: (projectRoot: string) => Promise<string>;
   composeProjectRules: (projectRoot: string) => Promise<string>;
   composeAgentsMd: (projectRoot: string) => Promise<string>;
   resolveTeamBinding?: (input: TeamPiBindingInput) => TeamPiBindingResult;
+  registry?: RuntimeRegistry;
 }
 
-export class PiLabService {
+export class AgentService {
   private runtime: PiSdkRuntime | null = null;
   private gate: PermissionGate | null = null;
   private sessionId: string | null = null;
   private projectRoot: string | null = null;
-  private sending = false;
+  private readonly sending = new Set<string>();
   private sink: ((event: AgentEvent) => void) | null = null;
   private permissionSink: ((request: PermissionGateRequest) => void) | null = null;
   private owner: WebContents | null = null;
-  private activeTabId: string = PI_LAB_TAB_ID;
+  private activeTabId: string = AGENT_FALLBACK_CONVERSATION_ID;
+  private activeConversationId: string | null = null;
+  private readonly registry: RuntimeRegistry;
+  private startContext: {
+    provider: string;
+    modelId: string;
+    apiKey: string;
+    permissionMode: PermissionMode;
+    lead?: ResolvedPiLeadConfig;
+    roster?: ResolvedPiRosterEntry[];
+  } | null = null;
 
-  constructor(private readonly deps: PiLabServiceDeps) {}
+  constructor(private readonly deps: AgentServiceDeps) {
+    this.registry = deps.registry ?? new RuntimeRegistry({
+      userDataDir: deps.userDataDir,
+      startRuntime: (input) => this.startRuntime(input),
+    });
+  }
 
-  status(projectRoot?: string | null, sessionTeamId?: string | null): PiLabStatus {
+  status(projectRoot?: string | null, sessionTeamId?: string | null): AgentStatus {
     const settings = this.deps.getSettings();
-    const auth = resolvePiLabAuth({ settings: settings as PiLabAuthInput["settings"] });
+    const auth = resolveAgentAuth({ settings: settings as AgentAuthInput["settings"] });
     const probe = probePiEmbedCompatibility({
       hostNode: process.versions.node,
       electronNode: process.versions.node,
@@ -264,15 +284,20 @@ export class PiLabService {
         available: r.available,
         unavailableReason: r.unavailableReason,
       })),
-      tools: [...LAB_TOOLS],
+      tools: [...AGENT_TOOLS],
       permissionMode: permissionModeFromSettings(settings),
     };
   }
 
-  async send(input: PiLabSendInput): Promise<PiLabSendResult> {
+  async send(input: AgentSendInput): Promise<AgentSendResult> {
     const projectRoot = input.projectRoot.trim();
     if (!projectRoot) return { ok: false, error: "missing_project" };
-    if (this.sending) return { ok: false, error: "lab_busy" };
+    const conversationId = (
+      input.conversationId?.trim()
+      || input.tabId?.trim()
+      || AGENT_FALLBACK_CONVERSATION_ID
+    );
+    if (this.sending.has(conversationId)) return { ok: false, error: "lab_busy" };
 
     const resolverFn = this.deps.resolveTeamBinding ?? resolveTeamPiBinding;
     let teamBinding: TeamPiBindingResult | undefined;
@@ -293,87 +318,149 @@ export class PiLabService {
     const effectiveProvider = input.provider ?? teamBinding?.lead?.modelRef?.provider;
     const effectiveModelId = input.modelId ?? teamBinding?.lead?.modelRef?.modelId;
 
-    const auth = resolvePiLabAuth({
+    const auth = resolveAgentAuth({
       provider: effectiveProvider,
       modelId: effectiveModelId,
       apiKey: input.apiKey,
-      settings: settings as PiLabAuthInput["settings"],
+      settings: settings as AgentAuthInput["settings"],
     });
     if (!auth.ok) return { ok: false, error: auth.reason };
 
     const text = input.text.trim();
     if (!text) return { ok: false, error: "missing_prompt" };
 
-    this.sending = true;
-    this.activeTabId = input.tabId?.trim() || PI_LAB_TAB_ID;
+    this.sending.add(conversationId);
+    this.activeTabId = conversationId;
     try {
-      if (!this.runtime || this.projectRoot !== projectRoot || !this.sessionId) {
-        await this.resetSession();
-        await this.startSession({
-          projectRoot,
-          provider: auth.provider,
-          modelId: auth.modelId,
-          apiKey: auth.apiKey,
-          permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
-          lead: teamBinding?.lead,
-          roster: teamBinding?.availableRoster,
-        });
+      this.startContext = {
+        provider: auth.provider,
+        modelId: auth.modelId,
+        apiKey: auth.apiKey,
+        permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
+        lead: teamBinding?.lead,
+        roster: teamBinding?.availableRoster,
+      };
+      let binding = this.registry.getBinding(conversationId);
+      if (!binding) {
+        const existing = this.registry.store.getByConversationId(conversationId);
+        binding = existing
+          ? await this.registry.openConversation({
+              conversationId,
+              tabId: this.activeTabId,
+              projectRoot,
+            })
+          : await this.registry.createConversation({
+              conversationId,
+              tabId: this.activeTabId,
+              projectRoot,
+            });
       }
+      this.updateDefaultTitle(conversationId, text);
 
-      const sessionId = this.sessionId;
-      if (!sessionId || !this.runtime) {
+      this.sessionId = binding.runtimeSessionId ?? null;
+      this.projectRoot = projectRoot;
+      this.activeConversationId = conversationId;
+      this.runtime = this.registry.getRuntime(conversationId) as PiSdkRuntime | null;
+      if (!this.sessionId) {
         return { ok: false, error: "lab_session_missing" };
       }
 
-      const userText = buildPiLabUserText({
+      const userText = buildAgentUserText({
         text,
         projectRules: await this.deps.composeProjectRules(projectRoot),
       });
-      await this.runtime.sendTurn({
-        runtimeSessionId: sessionId,
+      await this.registry.sendTurn({
+        conversationId,
         tabId: this.activeTabId,
+        turnId: input.turnId,
         text: userText,
         permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
       });
-      return { ok: true, sessionId };
+      return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       this.sink?.({
         type: "turn_failed",
         runtimeSessionId: this.sessionId ?? "none",
         tabId: this.activeTabId,
-        turnId: "lab",
+        turnId: input.turnId || "agent",
         error,
       });
       return { ok: false, error };
     } finally {
-      this.sending = false;
+      this.sending.delete(conversationId);
     }
   }
 
-  async cancel(): Promise<void> {
+  async cancel(tabId?: string): Promise<void> {
+    const conversationId = tabId?.trim() || this.activeConversationId;
+    if (conversationId) {
+      await this.registry.cancelTurn(conversationId);
+      return;
+    }
     if (!this.runtime || !this.sessionId) return;
     await this.runtime.cancelTurn(this.sessionId);
   }
 
-  async reset(): Promise<void> {
-    await this.resetSession();
+  async reset(tabId?: string): Promise<void> {
+    await this.resetSession(tabId?.trim() || undefined);
   }
 
   resolvePermission(requestId: string, decision: "allow" | "deny"): boolean {
     return this.gate?.resolve(requestId, decision) ?? false;
   }
 
+  listSessions(projectRoot: string): AgentSessionSummary[] {
+    const root = projectRoot.trim();
+    if (!root) return [];
+    return this.registry.store.listSessionsByProject(root).map((record) => ({
+      conversationId: record.conversationId || record.runtimeSessionId,
+      title: record.title,
+      updatedAt: Date.parse(record.updatedAt) || 0,
+      createdAt: Date.parse(record.createdAt) || 0,
+      directory: record.boundCheckoutPath,
+    }));
+  }
+
+  loadSession(input: AgentLoadSessionInput): AgentLoadSessionResult {
+    const conversationId = input.conversationId.trim();
+    const projectRoot = input.projectRoot.trim();
+    if (!conversationId) return { ok: false, error: "missing_conversation" };
+    if (!projectRoot) return { ok: false, error: "missing_project" };
+    const record = this.registry.store.getByConversationId(conversationId);
+    if (!record) return { ok: false, error: "unknown_conversation" };
+    const recordProject = record.projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    const want = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (recordProject !== want) return { ok: false, error: "conversation_project_mismatch" };
+    return {
+      ok: true,
+      conversationId: record.conversationId || record.runtimeSessionId,
+      title: record.title,
+      conversation: hydrateSessionRecordToConversation(record),
+      directory: record.boundCheckoutPath,
+    };
+  }
+
+  renameSession(input: AgentRenameSessionInput): { ok: boolean } {
+    const conversationId = input.conversationId.trim();
+    const title = input.title.trim();
+    if (!conversationId || !title) return { ok: false };
+    const record = this.registry.store.getByConversationId(conversationId);
+    if (!record) return { ok: true };
+    this.registry.store.put({ ...record, title });
+    return { ok: true };
+  }
+
   attachOwner(contents: WebContents): void {
     this.owner = contents;
     this.sink = (event) => {
       if (this.owner && !this.owner.isDestroyed()) {
-        this.owner.send("pi-lab:event", event);
+        this.owner.send("agent:event", event);
       }
     };
     this.permissionSink = (request) => {
       if (this.owner && !this.owner.isDestroyed()) {
-        this.owner.send("pi-lab:permission", request);
+        this.owner.send("agent:permission", request);
       }
     };
   }
@@ -399,17 +486,11 @@ export class PiLabService {
     this.permissionSink?.(request);
   }
 
-  private async startSession(input: {
-    projectRoot: string;
-    provider: string;
-    modelId: string;
-    apiKey: string;
-    permissionMode: PermissionMode;
-    lead?: ResolvedPiLeadConfig;
-    roster?: ResolvedPiRosterEntry[];
-  }): Promise<void> {
+  private async startRuntime(input: StartRuntimeInput) {
+    const ctx = this.startContext;
+    if (!ctx) throw new Error("lab_start_context_missing");
     const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
-    const store = new AgentSessionStore(agentRoot);
+    const store = this.registry.store;
     const gate = new PermissionGate({
       timeoutMs: 120_000,
       onPrompt: (request) => {
@@ -430,10 +511,9 @@ export class PiLabService {
       gate,
       onEvent: (event) => this.sink?.(event),
     });
-    toolHost.registerAll(createPiLabNativeTools());
+    toolHost.registerAll(createAgentNativeTools());
 
-    // Register dynamic task tool if team has a valid roster
-    if (input.roster && input.roster.length > 0) {
+    if (ctx.roster && ctx.roster.length > 0) {
       const subsessionRuntime = new PiSubsessionRuntime({
         allTools: ALL_NATIVE_TOOLS,
         gate,
@@ -441,22 +521,22 @@ export class PiLabService {
       });
       const taskTool = createTaskDelegationTool({
         subsessionRuntime,
-        roster: input.roster,
+        roster: ctx.roster,
       });
       toolHost.register(taskTool);
     }
 
-    const systemPrompt = buildPiLabSystemPrompt({
+    const systemPrompt = buildAgentSystemPrompt({
       stableSystem: await this.deps.composeStableSystem(input.projectRoot),
       agentsMd: await this.deps.composeAgentsMd(input.projectRoot),
-      leadInstructions: input.lead?.instructions,
-      leadName: input.lead?.name,
+      leadInstructions: ctx.lead?.instructions,
+      leadName: ctx.lead?.name,
     });
     const runtime = new PiSdkRuntime({
       createPiSession: createPiSdkSessionFactory({
-        providerId: input.provider,
-        modelId: input.modelId,
-        apiKey: input.apiKey,
+        providerId: ctx.provider,
+        modelId: ctx.modelId,
+        apiKey: ctx.apiKey,
         systemPrompt,
         toolHost,
       }),
@@ -464,48 +544,68 @@ export class PiLabService {
       toolHost,
       gate,
       agentDir: join(agentRoot, "lab-runtime"),
+      persistSessions: true,
+      piSessionDir: resolvePiRuntimeSessionDir(this.deps.userDataDir),
     });
     runtime.subscribe((event) => this.sink?.(event));
 
     const created = await runtime.createSession({
-      tabId: this.activeTabId,
+      tabId: input.tabId,
       projectRoot: input.projectRoot,
-      permissionMode: input.permissionMode,
+      conversationId: input.conversationId,
+      piSessionFile: input.piSessionFile,
+      permissionMode: ctx.permissionMode,
       sessionAgent: "build",
     });
-    this.runtime = runtime;
     this.gate = gate;
-    this.sessionId = created.runtimeSessionId;
-    this.projectRoot = input.projectRoot;
+    return {
+      runtime,
+      runtimeSessionId: created.runtimeSessionId,
+      piSessionFile: created.piSessionFile,
+    };
   }
 
-  private async resetSession(): Promise<void> {
-    const runtime = this.runtime;
-    const sessionId = this.sessionId;
-    this.runtime = null;
-    this.gate = null;
-    this.sessionId = null;
-    this.projectRoot = null;
-    if (runtime && sessionId) {
-      await runtime.disposeSession(sessionId).catch(() => {});
+  private updateDefaultTitle(conversationId: string, text: string): void {
+    const title = text.trim().slice(0, 80);
+    if (!title) return;
+    const record = this.registry.store.getByConversationId(conversationId);
+    if (!record || (record.title && record.title !== "New Chat")) return;
+    this.registry.store.put({ ...record, title });
+  }
+
+  private async resetSession(conversationId?: string): Promise<void> {
+    const ids = conversationId
+      ? [conversationId]
+      : this.registry.liveConversationIds();
+    for (const id of ids) {
+      this.sending.delete(id);
+      await this.registry.disposeConversation(id).catch(() => {});
+    }
+    if (!conversationId || conversationId === this.activeConversationId) {
+      this.runtime = null;
+      this.gate = null;
+      this.sessionId = null;
+      this.projectRoot = null;
+      this.activeConversationId = null;
+      this.startContext = null;
     }
   }
 }
 
-let singleton: PiLabService | null = null;
+let singleton: AgentService | null = null;
 
-export function createPiLabService(deps: PiLabServiceDeps): PiLabService {
-  return new PiLabService(deps);
+export function createAgentService(deps: AgentServiceDeps): AgentService {
+  return new AgentService(deps);
 }
 
-export async function getPiLabService(): Promise<PiLabService> {
+export async function getAgentService(): Promise<AgentService> {
   if (singleton) return singleton;
   const { app } = await import("electron");
   const { getSettings } = await import("../services/settings");
   const { promptManager } = await import("../prompts");
   const { buildPromptContext } = await import("../prompts/context");
 
-  singleton = createPiLabService({
+  singleton = createAgentService({
     userDataDir: app.getPath("userData"),
     getSettings: () => getSettings() as Record<string, unknown>,
     composeStableSystem: async (projectRoot) => {
@@ -524,7 +624,7 @@ export async function getPiLabService(): Promise<PiLabService> {
   return singleton;
 }
 
-export async function disposePiLabService(): Promise<void> {
+export async function disposeAgentService(): Promise<void> {
   const current = singleton;
   singleton = null;
   await current?.reset();

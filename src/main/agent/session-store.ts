@@ -12,7 +12,7 @@ import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 
 export const PI_AGENT_DIR_NAME = "pi-agent";
 export const FORBIDDEN_PROJECT_RESOURCE_DIRS = [".pi", ".agents", ".opencode"] as const;
-export const SESSION_SCHEMA_VERSION = 1;
+export const SESSION_SCHEMA_VERSION = 2;
 
 /** Snapshot of a single tool execution within an assistant turn */
 export interface AgentToolCallSnapshot {
@@ -67,9 +67,10 @@ export interface AgentSessionRegretState {
 }
 
 export interface AgentSessionRecord {
-  version: typeof SESSION_SCHEMA_VERSION;
+  version: number;
+  conversationId?: string;
   runtimeSessionId: RuntimeSessionId;
-  tabId: string;
+  tabId?: string;
   title: string;
   projectRoot: string;
   boundCheckoutPath: string;
@@ -80,6 +81,8 @@ export interface AgentSessionRecord {
     provider: string;
     modelId: string;
   };
+  piSessionFile?: string;
+  eventJournal?: unknown[];
   turns: AgentTurnRecord[];
   regret?: AgentSessionRegretState | null;
   createdAt: string;
@@ -88,8 +91,9 @@ export interface AgentSessionRecord {
 }
 
 export interface CreateSessionRecordInput {
+  conversationId?: string;
   runtimeSessionId: RuntimeSessionId;
-  tabId: string;
+  tabId?: string;
   title?: string;
   projectRoot: string;
   boundCheckoutPath?: string;
@@ -100,6 +104,7 @@ export interface CreateSessionRecordInput {
     provider: string;
     modelId: string;
   };
+  piSessionFile?: string;
 }
 
 export interface RollbackSessionResult {
@@ -142,8 +147,10 @@ export class AgentSessionStore {
 
   createSession(input: CreateSessionRecordInput): AgentSessionRecord {
     const now = new Date().toISOString();
+    const conversationId = input.conversationId || input.runtimeSessionId;
     const record: AgentSessionRecord = {
       version: SESSION_SCHEMA_VERSION,
+      conversationId,
       runtimeSessionId: input.runtimeSessionId,
       tabId: input.tabId,
       title: input.title || "New Chat",
@@ -153,6 +160,8 @@ export class AgentSessionStore {
       permissionMode: input.permissionMode || "edit_auto",
       sessionAgent: input.sessionAgent || "build",
       ...(input.modelRef ? { modelRef: input.modelRef } : {}),
+      ...(input.piSessionFile ? { piSessionFile: input.piSessionFile } : {}),
+      eventJournal: [],
       turns: [],
       regret: null,
       createdAt: now,
@@ -163,11 +172,10 @@ export class AgentSessionStore {
   }
 
   put(record: AgentSessionRecord): void {
-    const next: AgentSessionRecord = {
+    const next = migrateSessionRecord({
       ...record,
-      version: SESSION_SCHEMA_VERSION,
       updatedAt: new Date().toISOString(),
-    };
+    });
     atomicWriteJsonSync(this.fileFor(record.runtimeSessionId), next);
   }
 
@@ -176,7 +184,7 @@ export class AgentSessionStore {
     if (!existsSync(path)) return null;
     try {
       const raw = readFileSync(path, "utf-8");
-      return JSON.parse(raw) as AgentSessionRecord;
+      return migrateSessionRecord(JSON.parse(raw));
     } catch {
       // Self-healing: move corrupted file to backup rather than crashing host
       try {
@@ -191,6 +199,25 @@ export class AgentSessionStore {
 
   get(id: RuntimeSessionId): AgentSessionRecord | null {
     return this.getSession(id);
+  }
+
+  getByConversationId(conversationId: string): AgentSessionRecord | null {
+    const direct = this.getSession(conversationId);
+    if (direct?.conversationId === conversationId) return direct;
+    const dir = this.sessionsDir();
+    if (!existsSync(dir)) return null;
+    try {
+      for (const entry of readdirSync(dir)) {
+        if (!entry.endsWith(".json") || entry.includes(".corrupted.") || entry.includes(".tmp.")) {
+          continue;
+        }
+        const session = this.getSession(entry.replace(/\.json$/, ""));
+        if (session?.conversationId === conversationId) return session;
+      }
+    } catch {
+      return null;
+    }
+    return null;
   }
 
   appendTurn(id: RuntimeSessionId, turn: AgentTurnRecord): AgentSessionRecord | null {
@@ -347,6 +374,21 @@ export class AgentSessionStore {
 
 export function resolvePiAgentRoot(userDataDir: string): string {
   return join(userDataDir, PI_AGENT_DIR_NAME);
+}
+
+export function resolvePiRuntimeSessionDir(userDataDir: string): string {
+  return join(userDataDir, PI_AGENT_DIR_NAME, "runtime-sessions");
+}
+
+function migrateSessionRecord(raw: unknown): AgentSessionRecord {
+  const record = raw as AgentSessionRecord & { conversationId?: string; eventJournal?: unknown[] };
+  const conversationId = record.conversationId || record.runtimeSessionId;
+  return {
+    ...record,
+    version: SESSION_SCHEMA_VERSION,
+    conversationId,
+    eventJournal: record.eventJournal ?? [],
+  };
 }
 
 export function isForbiddenProjectResourceDir(name: string): boolean {

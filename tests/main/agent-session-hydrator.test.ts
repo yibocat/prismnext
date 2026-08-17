@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { AgentSessionRecord, AgentTurnRecord } from "../../src/main/agent/session-store";
-import { hydrateSessionRecordToChatMessages } from "../../src/main/agent/session-hydrator";
+import {
+  hydrateSessionRecordToChatMessages,
+  hydrateSessionRecordToConversation,
+} from "../../src/main/agent/session-hydrator";
 
 describe("hydrateSessionRecordToChatMessages", () => {
   it("converts user and assistant turns with thinking, tool calls and results to ChatStreamMessage array", () => {
@@ -146,5 +149,55 @@ describe("hydrateSessionRecordToChatMessages", () => {
     };
 
     expect(hydrateSessionRecordToChatMessages(emptySession)).toEqual([]);
+  });
+
+  it("hydrates a Conversation document instead of OpenCode message rows", () => {
+    const turn: AgentTurnRecord = {
+      turnIndex: 0,
+      turnId: "turn-0",
+      createdAt: 1000,
+      user: { text: "查阅文献" },
+      assistant: {
+        thinking: "先检索",
+        text: "正式总结",
+        toolCalls: [{
+          toolCallId: "c1",
+          toolName: "literature-search",
+          args: { query: "x" },
+          result: { hits: 1 },
+          startedAt: 1100,
+          finishedAt: 1200,
+        }],
+      },
+      status: "completed",
+    };
+    const session: AgentSessionRecord = {
+      version: 2,
+      conversationId: "conv-1",
+      runtimeSessionId: "rt-1",
+      tabId: "tab-1",
+      title: "Literature",
+      projectRoot: "/project",
+      boundCheckoutPath: "/project",
+      backend: "pi-sdk",
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+      turns: [turn],
+      createdAt: "2026-08-17T00:00:00Z",
+      updatedAt: "2026-08-17T00:01:00Z",
+    };
+
+    const conv = hydrateSessionRecordToConversation(session);
+    expect(conv.conversationId).toBe("conv-1");
+    expect(conv.title).toBe("Literature");
+    expect(conv.live).toBeNull();
+    expect(conv.turns).toHaveLength(1);
+    expect(conv.turns[0].assistant.blocks.map((block) => block.type)).toEqual([
+      "thinking",
+      "tool_use",
+      "tool_result",
+      "text",
+    ]);
+    expect(conv.turns[0].assistant.blocks.at(-1)).toEqual({ type: "text", text: "正式总结" });
   });
 });

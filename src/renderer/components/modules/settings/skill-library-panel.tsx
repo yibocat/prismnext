@@ -187,7 +187,6 @@ export function SkillLibraryPanel() {
     setSaving(true);
     try {
       const result = await window.electronAPI.agentInstallLibraryCatalogItem(projectRoot, item);
-      await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(t("settings.editor.skills.toast.installed", { name: item.name }));
@@ -208,7 +207,6 @@ export function SkillLibraryPanel() {
         projectRoot,
         source.id,
       );
-      await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(
@@ -234,7 +232,6 @@ export function SkillLibraryPanel() {
       const result = await window.electronAPI.agentAddSkillLibrarySource(projectRoot, input);
       setLibrarySources(result.sources);
       setAddSourceUrl("");
-      await window.electronAPI.chatPrewarm(projectRoot);
       toast.success(
         t("settings.editor.skills.toast.githubAdded", { count: result.skillCount }),
       );
@@ -262,7 +259,6 @@ export function SkillLibraryPanel() {
         loadedSourceIdsRef.current.delete(source.id);
         setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
       }
-      await window.electronAPI.chatPrewarm(projectRoot);
     } finally {
       setSaving(false);
     }
@@ -280,7 +276,6 @@ export function SkillLibraryPanel() {
       setLibrarySources(result.sources);
       loadedSourceIdsRef.current.delete(source.id);
       setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
-      await window.electronAPI.chatPrewarm(projectRoot);
       toast.success(t("settings.editor.skills.toast.sourceRemoved", { name: source.name }));
     } catch (err) {
       toast.error(

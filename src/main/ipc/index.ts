@@ -1,7 +1,7 @@
 import { registerFsHandlers } from "./fs";
 import { registerCompileHandlers } from "./compile";
 import { registerChatHandlers, disposeChat } from "./chat";
-import { registerPiLabHandlers } from "./pi-lab";
+import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
@@ -37,7 +37,7 @@ export function registerIpcHandlers(): void {
   registerFsHandlers();
   registerCompileHandlers();
   registerChatHandlers();
-  registerPiLabHandlers();
+  registerAgentHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();
   registerProLicenseHandlers();

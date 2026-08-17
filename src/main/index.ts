@@ -395,11 +395,9 @@ app.whenReady().then(async () => {
 
   createWindow();
 
-  // App-level ACP warm-up — sync last-project config, then spawn OpenCode once.
-  // Same process serves all projects; first session/new should not restart it.
+  // Initialize settings and prompt infrastructure. Agent runtimes stay lazy:
+  // opening the app or a project must not spawn OpenCode.
   try {
-    const { AcpService } = await import("./acp/service");
-    const { buildOpenCodeCredentialEnv } = await import("./acp/credential-env");
     const { getSettings, pruneOrphanProviderSettings } = await import("./services/settings");
 
     // GC leftovers from pre-v0.6.8 provider removals (orphan API keys etc.)
@@ -416,13 +414,6 @@ app.whenReady().then(async () => {
     }
 
     const settings = getSettings() as Record<string, unknown>;
-    const aiApiKeys = (settings.aiApiKeys as Record<string, string>) || {};
-    const aiBaseUrls = (settings.aiBaseUrls as Record<string, string>) || {};
-    const listedProviderIds = new Set(
-      ((settings.aiCustomProviders as Array<{ id?: unknown }> | undefined) ?? [])
-        .map((p) => (typeof p?.id === "string" ? p.id : ""))
-        .filter(Boolean),
-    );
 
     // ── Initialize Prompt System ──
     try {
@@ -453,73 +444,10 @@ app.whenReady().then(async () => {
       log.warn("Prompt system init failed", { error: (err as Error).message });
     }
 
-    const lastProjectPath =
-      typeof (settings as { lastProjectPath?: unknown }).lastProjectPath === "string"
-        ? (settings as { lastProjectPath: string }).lastProjectPath.trim()
-        : "";
-
-    // Sync experts/skills/instructions to disk BEFORE the first spawn so the
-    // child reads the final config — avoids spawn → prewarm → reload churn.
-    if (lastProjectPath) {
-      try {
-        const { ensureProjectChatPrewarm } = await import("./services/project-chat-prewarm");
-        await ensureProjectChatPrewarm(lastProjectPath, { skipOpenCodeReload: true });
-        log.info("Last-project config synced before OpenCode spawn", { path: lastProjectPath });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        log.warn("Last-project config sync before spawn failed", { error: message });
-      }
-    }
-
-    const extraEnv = buildOpenCodeCredentialEnv();
-    const service = AcpService.getInstance();
-    await service.initialize(extraEnv);
-    console.log("[prismnext] OpenCode ACP ready");
-    log.info("OpenCode ACP server ready");
-
-    // Post-connect housekeeping for the last project (prewarm ran without a conn).
-    if (lastProjectPath && service.getConnection()) {
-      try {
-        await service.purgeEmptySessions(lastProjectPath);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        log.warn("purgeEmptySessions after startup spawn failed", { error: message });
-      }
-      void service.refreshEffortCatalog().catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        log.debug("refreshEffortCatalog after startup spawn failed", { error: message });
-      });
-    }
-
-    // Register non-bundled providers (DeepSeek, OpenRouter, custom) via ACP
-    // Built-in providers (anthropic, openai, google) are already recognized.
-    // Only providers still listed in aiCustomProviders — a key whose provider
-    // was removed is an orphan the Settings UI can no longer clear.
-    for (const [provider] of Object.entries(aiApiKeys)) {
-      if (!aiApiKeys[provider]?.trim()) continue;
-      if (!listedProviderIds.has(provider)) continue;
-      try {
-        const result = await service.setAuth(provider, {
-          apiKey: aiApiKeys[provider].trim(),
-          baseUrl: (aiBaseUrls[provider] || "").trim(),
-        });
-        if (result.success) {
-          console.log(`[prismnext] Provider registered: ${provider}`);
-          log.info(`Provider registered: ${provider}`);
-        }
-        // Non-builtin providers may not support ACP providers/set —
-        // they still work via env vars passed to the process.
-      } catch (err: any) {
-        console.warn(`[prismnext] Failed to register ${provider}: ${err.message}`);
-        log.warn(`Failed to register provider ${provider}`, { error: err.message });
-      }
-    }
   } catch (err: unknown) {
-    // Pre-warm is best-effort — app still works; initialize already marks
-    // lifecycle error so the status dot can show Retry.
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[prismnext] OpenCode ACP warm-up failed: ${message}`);
-    log.warn("OpenCode ACP warm-up failed", { error: message });
+    console.warn(`[prismnext] Agent infrastructure init failed: ${message}`);
+    log.warn("Agent infrastructure init failed", { error: message });
   }
 });
 

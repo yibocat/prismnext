@@ -724,12 +724,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
             if (closingTab.linkedExecutionId) {
               void window.electronAPI.executionCancel(closingTab.linkedExecutionId);
             } else if (closingTab.linkedChatTabId) {
-              const sessionId = useChatStore
-                .getState()
-                .tabs.find((t) => t.id === closingTab.linkedChatTabId)?.sessionId;
-              if (sessionId) {
-                void window.electronAPI.chatCancel(sessionId);
-              }
+              void window.electronAPI.agentCancel({
+                conversationId: closingTab.linkedChatTabId,
+              });
             }
           }
           finish();

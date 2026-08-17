@@ -1,6 +1,5 @@
 /**
- * AgentRuntime — lifecycle surface used by ChatGateway / IPC later.
- * Production chat still goes through AcpService; this is the future contract.
+ * AgentRuntime — lifecycle surface used by RuntimeRegistry / AgentService.
  */
 
 import type {

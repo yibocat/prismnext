@@ -298,15 +298,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Ensure .prismnext/ data hub exists before any agent operations.
       window.electronAPI.projectEnsure(canonicalRoot).catch(() => {});
 
-      // Warm Agent process + project config in parallel with fs scan. Do NOT
-      // commit projectRoot until warm finishes — keeps the startup splash up
-      // instead of flashing the shell with a thin top loading bar.
-      const warmPromise = window.electronAPI.chatPrewarm(canonicalRoot).then((result) => {
-        if (generation !== openProjectGeneration) return result;
-        import("./command-store").then(({ useCommandStore }) => {
-          useCommandStore.getState().reloadCommands();
-        });
-        return result;
+      void import("./command-store").then(({ useCommandStore }) => {
+        useCommandStore.getState().reloadCommands();
       });
 
       const result = await window.electronAPI.fsScanMetadata(canonicalRoot);
@@ -359,24 +352,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         useGitStore.getState().clearAll();
         useGitStore.getState().selectUnit(canonicalRoot);
       });
-
-      // Block until Agent + project config (skills/experts/prompts) are warm.
-      const warm = await warmPromise.catch((err: unknown) => ({
-        ok: false as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-      if (generation !== openProjectGeneration) return;
-      console.log(
-        `[openProject] chatPrewarm: ${Math.round(performance.now() - t2)}ms` +
-          (warm && "ok" in warm && warm.ok === false ? ` (failed: ${warm.error ?? "?"})` : ""),
-      );
-      if (warm && "ok" in warm && warm.ok === false) {
-        toast.error(
-          warm.error
-            ? `Agent project warm-up failed: ${warm.error}`
-            : "Agent project warm-up failed",
-        );
-      }
 
       if (generation !== openProjectGeneration) return;
       await window.electronAPI.projectActivate(canonicalRoot);

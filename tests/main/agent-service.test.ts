@@ -1,22 +1,25 @@
-import { describe, expect, it } from "vitest";
-import {
-  PI_LAB_SUPPORTED_PROVIDERS,
-  PI_LAB_TAB_ID,
-} from "../../src/shared/pi-lab";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   HOST_SYSTEM_IDENTITY,
   PI_DEFAULT_CODING_IDENTITY,
-  buildPiLabSystemPrompt,
-  buildPiLabUserText,
-  createPiLabExperimentRunner,
-  createPiLabNativeTools,
-  createPiLabService,
-  resolvePiLabAuth,
-} from "../../src/main/agent/pi-lab-service";
+  buildAgentSystemPrompt,
+  buildAgentUserText,
+  createAgentExperimentRunner,
+  createAgentNativeTools,
+  createAgentService,
+  resolveAgentAuth,
+} from "../../src/main/agent/agent-service";
+import { RuntimeRegistry } from "../../src/main/agent/runtime-registry";
+import { AgentSessionStore } from "../../src/main/agent/session-store";
+import type { AgentRuntime } from "../../src/main/agent/runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
 
-describe("pi lab auth and prompt assembly", () => {
+describe("agent auth and prompt assembly", () => {
   it("rejects OpenCode catalog providers instead of remapping them to Pi", () => {
-    const result = resolvePiLabAuth({
+    const result = resolveAgentAuth({
       settings: {
         aiProvider: "opencode-zen",
         aiModel: "gpt-5.5",
@@ -27,7 +30,7 @@ describe("pi lab auth and prompt assembly", () => {
   });
 
   it("reads the decrypted settings key when the send payload omits apiKey", () => {
-    const result = resolvePiLabAuth({
+    const result = resolveAgentAuth({
       settings: {
         aiProvider: "anthropic",
         aiModel: "claude-sonnet-4-5",
@@ -43,7 +46,7 @@ describe("pi lab auth and prompt assembly", () => {
   });
 
   it("fails closed when the selected provider has no API key", () => {
-    const result = resolvePiLabAuth({
+    const result = resolveAgentAuth({
       provider: "openai",
       modelId: "gpt-5",
       settings: { aiApiKeys: { anthropic: "sk-other" } },
@@ -52,9 +55,7 @@ describe("pi lab auth and prompt assembly", () => {
   });
 
   it("accepts DeepSeek BYOK and only blocks OpenCode catalog providers", () => {
-    expect(PI_LAB_TAB_ID).toBe("pi-lab");
-    expect(PI_LAB_SUPPORTED_PROVIDERS).toContain("deepseek");
-    expect(resolvePiLabAuth({
+    expect(resolveAgentAuth({
       settings: {
         aiProvider: "deepseek",
         aiModel: "deepseek-v4-flash",
@@ -69,23 +70,23 @@ describe("pi lab auth and prompt assembly", () => {
   });
 
   it("injects the composed PrismNext prompt and keeps project rules on the user turn", () => {
-    expect(buildPiLabSystemPrompt({
+    expect(buildAgentSystemPrompt({
       stableSystem: "Stable system from PromptManager.",
       agentsMd: "# Project agents",
     })).toContain("Stable system from PromptManager.");
-    expect(buildPiLabSystemPrompt({
+    expect(buildAgentSystemPrompt({
       stableSystem: "Stable system from PromptManager.",
       agentsMd: "# Project agents",
     })).toContain("# Project agents");
 
-    expect(buildPiLabUserText({
+    expect(buildAgentUserText({
       text: "Search local papers about transformers.",
       projectRules: "Always cite bibkeys.",
     })).toBe("Always cite bibkeys.\n\nSearch local papers about transformers.");
   });
 
   it("never hands Pi an empty prompt that would restore the coding-agent template", () => {
-    const empty = buildPiLabSystemPrompt({ stableSystem: "  ", agentsMd: "" });
+    const empty = buildAgentSystemPrompt({ stableSystem: "  ", agentsMd: "" });
     expect(empty.trim().length).toBeGreaterThan(0);
     expect(empty).toContain(HOST_SYSTEM_IDENTITY);
     expect(empty).not.toContain(PI_DEFAULT_CODING_IDENTITY);
@@ -98,7 +99,7 @@ describe("pi lab auth and prompt assembly", () => {
 describe("pi lab native tools", () => {
   it("runs experiment-run through the injected executor instead of a lab stub", async () => {
     const calls: Array<Record<string, unknown>> = [];
-    const tools = createPiLabNativeTools({
+    const tools = createAgentNativeTools({
       runExperiment: async (input) => {
         calls.push(input);
         return { ok: true, started: true };
@@ -136,7 +137,7 @@ describe("pi lab native tools", () => {
 
   it("maps a missing experiment folder to a structured error and does not kick off", async () => {
     const kickoffs: unknown[] = [];
-    const run = createPiLabExperimentRunner({
+    const run = createAgentExperimentRunner({
       resolveCtx: () => ({ ok: false, error: "no_experiment_folder", hint: "create one" }),
       isCtxError: (ctx) => "ok" in ctx && ctx.ok === false,
       kickoff: async (args) => {
@@ -158,7 +159,7 @@ describe("pi lab native tools", () => {
   });
 
   it("kicks off an existing island with the tool args", async () => {
-    const run = createPiLabExperimentRunner({
+    const run = createAgentExperimentRunner({
       resolveCtx: (projectRoot) => ({
         projectRoot,
         registryRoot: `${projectRoot}/.prismnext/experiments`,
@@ -193,9 +194,9 @@ describe("pi lab native tools", () => {
   });
 });
 
-describe("pi lab service status", () => {
+describe("agent service status", () => {
   it("is not ready without a project or API key and never claims OpenCode chat", async () => {
-    const lab = createPiLabService({
+    const lab = createAgentService({
       userDataDir: "/tmp/prism-pi-lab-test",
       getSettings: () => ({
         aiProvider: "anthropic",
@@ -238,7 +239,7 @@ describe("pi lab service status", () => {
     expect(missingKey.tools).toHaveLength(29);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
-    const missingProject = createPiLabService({
+    const missingProject = createAgentService({
       userDataDir: "/tmp/prism-pi-lab-test",
       getSettings: () => ({
         aiProvider: "anthropic",
@@ -257,7 +258,7 @@ describe("pi lab service status", () => {
   });
 
   it("reflects team binding in status and system prompt", async () => {
-    const lab = createPiLabService({
+    const lab = createAgentService({
       userDataDir: "/tmp/prism-pi-lab-test",
       getSettings: () => ({
         aiProvider: "anthropic",
@@ -326,15 +327,142 @@ describe("pi lab service status", () => {
     expect(disabledStatus.ready).toBe(false);
     expect(disabledStatus.reason).toBe("team_disabled:disabled-team");
 
-    expect(buildPiLabSystemPrompt({
+    expect(buildAgentSystemPrompt({
       stableSystem: "stable prompt",
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
     })).toContain("Active Team Lead: Academic Lead");
-    expect(buildPiLabSystemPrompt({
+    expect(buildAgentSystemPrompt({
       stableSystem: "stable prompt",
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
     })).toContain("Focus on formal academic tone.");
+  });
+});
+
+function fakeRuntime(): AgentRuntime {
+  return {
+    async createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
+      return { runtimeSessionId: "rt-live", tabId: input.tabId };
+    },
+    async sendTurn(_input: TurnInput): Promise<void> {},
+    async cancelTurn(_id: RuntimeSessionId): Promise<void> {},
+    async disposeSession(_id: RuntimeSessionId): Promise<void> {},
+    subscribe() {
+      return () => {};
+    },
+  };
+}
+
+describe("agent session history", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+    dirs.length = 0;
+  });
+
+  it("lists and loads persisted Pi conversations without OpenCode", () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-hist-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    store.createSession({
+      conversationId: "conv-1",
+      runtimeSessionId: "rt-1",
+      projectRoot: project,
+      title: "Search papers",
+    });
+    store.appendTurn("rt-1", {
+      turnIndex: 0,
+      turnId: "turn-1",
+      createdAt: Date.now(),
+      user: { text: "hello" },
+      assistant: { text: "hi", toolCalls: [] },
+      status: "completed",
+    });
+
+    const agent = createAgentService({
+      userDataDir: userData,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    const listed = agent.listSessions(project);
+    expect(listed).toEqual([
+      expect.objectContaining({
+        conversationId: "conv-1",
+        title: "Search papers",
+      }),
+    ]);
+
+    const loaded = agent.loadSession({ conversationId: "conv-1", projectRoot: project });
+    expect(loaded.ok).toBe(true);
+    expect(loaded.conversationId).toBe("conv-1");
+    expect(loaded.conversation?.turns[0]?.user.blocks[0]).toMatchObject({ type: "text", text: "hello" });
+    expect(agent.renameSession({ conversationId: "conv-1", title: "Renamed" })).toEqual({ ok: true });
+    expect(agent.listSessions(project)[0]?.title).toBe("Renamed");
+  });
+
+  it("resumes a stored conversation instead of creating a second runtime", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-resume-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    store.createSession({
+      conversationId: "conv-resume",
+      runtimeSessionId: "rt-old",
+      projectRoot: project,
+      title: "Continue me",
+      piSessionFile: "/tmp/old-pi.jsonl",
+    });
+
+    const started: Array<{ conversationId: string; piSessionFile?: string }> = [];
+    const registry = new RuntimeRegistry({
+      userDataDir: userData,
+      store,
+      startRuntime: async (input) => {
+        started.push({
+          conversationId: input.conversationId,
+          piSessionFile: input.piSessionFile,
+        });
+        return {
+          runtime: fakeRuntime(),
+          runtimeSessionId: "rt-old",
+          piSessionFile: input.piSessionFile,
+        };
+      },
+    });
+
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    const result = await agent.send({
+      conversationId: "conv-resume",
+      tabId: "conv-resume",
+      turnId: "turn-2",
+      projectRoot: project,
+      text: "continue",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(started).toEqual([
+      { conversationId: "conv-resume", piSessionFile: "/tmp/old-pi.jsonl" },
+    ]);
   });
 });

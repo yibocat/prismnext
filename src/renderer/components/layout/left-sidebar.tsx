@@ -249,33 +249,30 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     const silent = options?.silent ?? sessionsRef.current.length > 0;
     if (!silent) setLoading(true);
     try {
-      const result = await window.electronAPI.sessionList(projectRoot);
+      const listed = await window.electronAPI.agentListSessions(projectRoot);
+      const result = listed.map((s) => ({
+        id: s.conversationId,
+        title: s.title,
+        lastModified: s.updatedAt,
+        createdAt: s.createdAt,
+        directory: s.directory,
+      }));
       const chatStore = useChatStore.getState();
       const tabs = chatStore.tabs;
       const merged = result.map((s) => {
-        const tab = tabs.find((t) => t.sessionId === s.id);
-        // Always honor the user's explicit rename for an open tab, even if
-        // the DB has since been overwritten by OpenCode's auto-derived title.
+        const tab = tabs.find((t) => t.id === s.id || t.conversation?.conversationId === s.id);
         if (tab?.userTitleSet && tab.title) {
           return { ...s, title: tab.title };
         }
-        // Otherwise, only inject the local tab title when the DB still has
-        // a generic OpenCode default — that's the "first send" race window
-        // where listSessions fires before OpenCode finalizes a derived title.
-        if (s.title.startsWith("New Chat") || s.title.startsWith("New session")) {
-          if (tab?.title && tab.title !== "New Chat") {
-            return { ...s, title: tab.title };
-          }
+        if (s.title.startsWith("New Chat") && tab?.title && tab.title !== "New Chat") {
+          return { ...s, title: tab.title };
         }
         return s;
       });
 
-      // Sync OpenCode-generated titles back to open tabs.
-      // Skip tabs the user has explicitly renamed (userTitleSet=true) so the
-      // user-set title sticks even if OpenCode later generates a different one.
       for (const s of result) {
-        if (!(s.title.startsWith("New Chat") || s.title.startsWith("New session"))) {
-          const tab = tabs.find((t) => t.sessionId === s.id);
+        if (!s.title.startsWith("New Chat")) {
+          const tab = tabs.find((t) => t.id === s.id || t.conversation?.conversationId === s.id);
           if (tab && !tab.userTitleSet && tab.title !== s.title) {
             chatStore._setTitle(tab.id, s.title);
           }
@@ -306,9 +303,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const prevAnyStreaming = useRef(hasAnyStreaming);
   const prevStreamingSessionIds = useRef<Set<string>>(new Set());
 
-  // Delayed title refresh: OpenCode generates conversation titles
-  // asynchronously after session completion (≈2-3 second delay).
-  // Only scheduled when a tab still has a generic title.
+  // Refresh titles after a turn ends so the first-send default title
+  // can pick up the persisted Agent session title.
   const titleRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -397,15 +393,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
 
-  // Derive enriched sessions: inject tab titles into sessions with generic
-  // OpenCode defaults. Because this is a useMemo on both sessions AND tab titles,
-  // titles update instantly when the tab's sessionId + title are set —
-  // no need to wait for the next fetchSessions round-trip.
-  //
-  // Also honor userTitleSet unconditionally: when the user has explicitly
-  // renamed a tab, prefer the local title over whatever the DB now holds
-  // (OpenCode may have written its own auto-derived title back into the
-  // session row after our rename).
+  // Prefer an open tab's explicit rename, then the live tab title, over
+  // a generic persisted "New Chat" until the Agent store title lands.
   const enrichedSessions = useMemo(() => {
     return sessions.map((s) => {
       const userTitle = tabUserTitlesBySession.get(s.id);

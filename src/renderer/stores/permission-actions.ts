@@ -1,38 +1,24 @@
 import {
-  handleBashPermissionDenied,
   isBashToolName,
-  tryExecutePtyBashAfterPermission,
 } from "@/lib/terminal/ai-bridge";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
-import { useChatStore, type ContentBlock } from "@/stores/chat-store";
+import { useChatStore } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 import { createLogger } from "@/services/logger";
 import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
-import { isExperimentalPiRuntime } from "../../shared/pi-lab";
 
 async function answerPermission(
-  tabId: string,
+  _tabId: string,
   permissionId: string,
   allow: boolean,
-  toolCallId?: string,
-  always?: boolean,
+  _toolCallId?: string,
+  _always?: boolean,
 ): Promise<void> {
-  const tab = useChatStore.getState().tabs.find((item) => item.id === tabId);
-  if (isExperimentalPiRuntime(tab?.runtime)) {
-    await window.electronAPI.piLabResolvePermission({
-      requestId: permissionId,
-      decision: allow ? "allow" : "deny",
-    });
-    return;
-  }
-  if (allow) {
-    await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId, {
-      always: Boolean(always),
-    });
-    return;
-  }
-  await window.electronAPI.chatAnswerPermission(permissionId, false, toolCallId);
+  await window.electronAPI.agentResolvePermission({
+    requestId: permissionId,
+    decision: allow ? "allow" : "deny",
+  });
 }
 
 const log = createLogger("permission-actions", "agent");
@@ -40,19 +26,6 @@ const log = createLogger("permission-actions", "agent");
 export { PERMISSION_UI_TIMEOUT_MS };
 
 const permissionTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function hasToolResult(tabId: string, toolUseId: string): boolean {
-  const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-  if (!tab) return false;
-
-  const scan = (blocks: ContentBlock[] | undefined) =>
-    blocks?.some((b) => b.type === "tool_result" && b.tool_use_id === toolUseId);
-
-  for (const msg of tab.messages) {
-    if (scan(msg.message?.content)) return true;
-  }
-  return scan(tab.streamingMessage?.message?.content) ?? false;
-}
 
 export function clearPermissionTimer(permissionId: string) {
   const timer = permissionTimers.get(permissionId);
@@ -101,7 +74,6 @@ export async function finalizePermissionDeny(opts: {
     permissionId,
     toolCallId,
     toolName,
-    reason = "Permission denied",
     skipApi = false,
   } = opts;
 
@@ -116,22 +88,6 @@ export async function finalizePermissionDeny(opts: {
   if (toolCallId) {
     permissionStore.markToolDenied(tabId, toolCallId);
     permissionStore.markToolResolved(tabId, toolCallId);
-    if (!hasToolResult(tabId, toolCallId)) {
-      useChatStore.getState()._injectToolResult(tabId, toolCallId, reason, true);
-    }
-    const tn = (toolName || "").toLowerCase();
-    if (isBashToolName(tn) && toolCallId) {
-      const tabTools = useChatStore.getState().tabs.find((t) => t.id === tabId);
-      const toolUseMsg = tabTools?.messages
-        .flatMap((m) => m.message?.content ?? [])
-        .find((b) => b.type === "tool_use" && b.id === toolCallId);
-      handleBashPermissionDenied(
-        tabId,
-        toolCallId,
-        tn,
-        toolUseMsg?.input as Record<string, unknown> | undefined,
-      );
-    }
     if (usesProposedChange(toolName || "")) {
       await useChangesStore.getState().rejectChange(toolCallId);
     }
@@ -201,17 +157,4 @@ export async function finalizePermissionAllow(opts: {
     useChangesStore.getState().removeChange(toolCallId);
   }
 
-  if (toolCallId && isBashToolName(toolName || "")) {
-    const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-    const toolUseMsg = [
-      ...(tab?.streamingMessage?.message?.content ?? []),
-      ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
-    ].find((b) => b.type === "tool_use" && b.id === toolCallId);
-    tryExecutePtyBashAfterPermission(
-      tabId,
-      toolCallId,
-      toolName || "bash",
-      toolUseMsg?.input as Record<string, unknown> | undefined,
-    );
-  }
 }

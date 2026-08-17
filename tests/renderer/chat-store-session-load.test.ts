@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { emptyConversation, type Conversation } from "../../src/shared/agent-conversation";
 
-const sessionLoad = vi.fn();
+const agentLoadSession = vi.fn();
 
 vi.mock("@/stores/document-store", () => ({
-  useDocumentStore: { getState: () => ({ projectRoot: "" }) },
+  useDocumentStore: { getState: () => ({ projectRoot: "/tmp/project" }) },
 }));
 
 vi.mock("@/lib/git/checkout-context", () => ({
@@ -29,151 +30,145 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
 
 vi.stubGlobal("window", {
   electronAPI: {
-    sessionLoad,
-    sessionGetDirectory: vi.fn().mockResolvedValue(null),
-    sessionGetContext: vi.fn().mockResolvedValue(null),
-    sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
-    chatRegisterTab: vi.fn().mockResolvedValue({ success: true }),
+    agentLoadSession,
+    agentRenameSession: vi.fn().mockResolvedValue({ ok: true }),
+    agentDispose: vi.fn().mockResolvedValue({ ok: true }),
+    agentCancel: vi.fn().mockResolvedValue({ ok: true }),
   },
 });
 
 import { useChatStore } from "../../src/renderer/stores/chat-store";
 
+function sampleConversation(conversationId: string): Conversation {
+  return {
+    ...emptyConversation({ conversationId, title: "Hello" }),
+    turns: [
+      {
+        turnId: "t1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text", text: "Hello" }] },
+        assistant: {
+          blocks: [
+            {
+              type: "tool_use",
+              id: "call-1",
+              name: "read",
+              input: { file_path: "paper/main.tex" },
+              status: "completed",
+            },
+            {
+              type: "tool_result",
+              tool_use_id: "call-1",
+              name: "read",
+              content: "",
+              is_error: false,
+              status: "completed",
+            },
+          ],
+        },
+        status: "completed",
+      },
+    ],
+  };
+}
+
 describe("chat-store session loading", () => {
   beforeEach(() => {
     useChatStore.getState().clearAllSessions();
-    (useChatStore as any)._msgCache.clear();
-    sessionLoad.mockReset();
+    agentLoadSession.mockReset();
   });
 
-  it("creates a tool_result for completed tools with empty output", async () => {
-    sessionLoad.mockResolvedValue([
+  it("loads a Pi conversation as a writable Agent tab", async () => {
+    agentLoadSession.mockResolvedValue({
+      ok: true,
+      conversationId: "conv-1",
+      title: "Hello",
+      conversation: sampleConversation("conv-1"),
+    });
+
+    await useChatStore.getState().loadSession("conv-1");
+
+    expect(agentLoadSession).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      projectRoot: "/tmp/project",
+    });
+    const loaded = useChatStore.getState().tabs.find((tab) => tab.id === "conv-1");
+    expect(loaded?.runtime).toBe("pi");
+    expect(loaded?.legacyReadOnly).toBe(false);
+    expect(loaded?.conversation.conversationId).toBe("conv-1");
+    expect(loaded?.title).toBe("Hello");
+    expect(useChatStore.getState().messages).toEqual([
+      { type: "user", message: { content: [{ type: "text", text: "Hello" }] } },
       {
-        info: { role: "assistant" },
-        parts: [
-          {
-            type: "tool",
-            tool: "read",
-            callID: "call-1",
-            state: {
-              status: "completed",
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "call-1",
+              name: "read",
               input: { file_path: "paper/main.tex" },
+              status: "completed",
             },
-          },
-        ],
-      },
-    ]);
-
-    await useChatStore.getState().loadSession("session-1");
-
-    const content = useChatStore.getState().messages[0].message?.content || [];
-    expect(content).toEqual([
-      { type: "tool_use", id: "call-1", name: "read", input: { file_path: "paper/main.tex" } },
-      { type: "tool_result", tool_use_id: "call-1", content: "", is_error: false },
-    ]);
-  });
-
-  it("creates an error tool_result for cancelled tools on session load", async () => {
-    sessionLoad.mockResolvedValue([
-      {
-        info: { role: "assistant" },
-        parts: [
-          {
-            type: "tool",
-            tool: "bash",
-            callID: "call-denied",
-            state: {
-              status: "cancelled",
-              input: { command: "rm -rf /" },
+            {
+              type: "tool_result",
+              tool_use_id: "call-1",
+              name: "read",
+              content: "",
+              is_error: false,
+              status: "completed",
             },
-          },
-        ],
-      },
-    ]);
-
-    await useChatStore.getState().loadSession("session-2");
-
-    const content = useChatStore.getState().messages[0].message?.content || [];
-    expect(content).toEqual([
-      { type: "tool_use", id: "call-denied", name: "bash", input: { command: "rm -rf /" } },
-      {
-        type: "tool_result",
-        tool_use_id: "call-denied",
-        content: "Cancelled",
-        is_error: true,
+          ],
+        },
       },
     ]);
   });
 
-  it("sets isLoadingSession while session history loads from disk", async () => {
-    let resolveLoad!: (value: unknown[]) => void;
-    sessionLoad.mockImplementation(
+  it("sets isLoadingSession while Agent history loads", async () => {
+    let resolveLoad!: (value: unknown) => void;
+    agentLoadSession.mockImplementation(
       () => new Promise((resolve) => { resolveLoad = resolve; }),
     );
 
-    const loadPromise = useChatStore.getState().loadSession("session-loading");
+    const loadPromise = useChatStore.getState().loadSession("conv-loading");
     await Promise.resolve();
     expect(useChatStore.getState().isLoadingSession).toBe(true);
     expect(useChatStore.getState().messages).toEqual([]);
 
-    resolveLoad([
-      {
-        info: { role: "user" },
-        parts: [{ type: "text", text: "Hello" }],
+    resolveLoad({
+      ok: true,
+      conversationId: "conv-loading",
+      title: "Hello",
+      conversation: {
+        ...emptyConversation({ conversationId: "conv-loading", title: "Hello" }),
+        turns: [{
+          turnId: "t1",
+          turnIndex: 0,
+          user: { blocks: [{ type: "text", text: "Hello" }] },
+          assistant: { blocks: [] },
+          status: "completed",
+        }],
       },
-    ]);
+    });
     await loadPromise;
 
     expect(useChatStore.getState().isLoadingSession).toBe(false);
     expect(useChatStore.getState().messages.length).toBeGreaterThan(0);
   });
 
-  it("hydrates cached sessions without entering loading state", async () => {
-    const cached = [
-      {
-        type: "user" as const,
-        message: { content: [{ type: "text" as const, text: "Cached hello" }] },
-      },
-    ];
-    (useChatStore as any)._msgCache.set("session-cached", cached);
+  it("activates an already-open conversation without reloading it", async () => {
+    agentLoadSession.mockResolvedValue({
+      ok: true,
+      conversationId: "conv-open",
+      title: "Open",
+      conversation: sampleConversation("conv-open"),
+    });
+    await useChatStore.getState().loadSession("conv-open");
+    agentLoadSession.mockClear();
 
-    await useChatStore.getState().loadSession("session-cached");
+    await useChatStore.getState().loadSession("conv-open");
 
-    expect(useChatStore.getState().isLoadingSession).toBe(false);
-    expect(useChatStore.getState().messages).toEqual(cached);
-  });
-
-  it("drops internal patch metadata parts on session load", async () => {
-    sessionLoad.mockResolvedValue([
-      {
-        info: { role: "assistant" },
-        parts: [
-          {
-            type: "tool",
-            tool: "apply_patch",
-            callID: "call-patch",
-            state: {
-              status: "completed",
-              input: { patch: "diff" },
-              output: "ok",
-            },
-          },
-          {
-            type: "patch",
-            hash: "df7612e3",
-            files: ["/proj/.prismnext/worktrees/wt/main.tex"],
-          },
-        ],
-      },
-    ]);
-
-    await useChatStore.getState().loadSession("session-patch");
-
-    const content = useChatStore.getState().messages[0].message?.content || [];
-    expect(content.some((b) => b.type === "text" && String(b.text).includes('"type":"patch"'))).toBe(false);
-    expect(content).toEqual([
-      { type: "tool_use", id: "call-patch", name: "apply_patch", input: { patch: "diff" } },
-      { type: "tool_result", tool_use_id: "call-patch", content: "ok", is_error: false },
-    ]);
+    expect(agentLoadSession).not.toHaveBeenCalled();
+    expect(useChatStore.getState().activeTabId).toBe("conv-open");
   });
 });

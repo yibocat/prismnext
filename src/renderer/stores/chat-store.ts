@@ -2,21 +2,25 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { i18n } from "@/lib/i18n";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
+import type {
+  ContentBlock as ConversationContentBlock,
+  Conversation,
+  TurnMessageMeta,
+} from "../../shared/agent-conversation";
+import { emptyConversation, newConversationId } from "../../shared/agent-conversation";
+import type { AgentEvent } from "../../shared/agent-runtime";
+import {
+  applyConversationEvent,
+  beginConversationTurn,
+} from "@/lib/chat/conversation-reducer";
 import {
   combineComposerQueueItems,
   type ComposerQueueItem,
 } from "@/lib/chat/composer-send-queue";
 import { useDocumentStore } from "./document-store";
-import { useWorktreeStore } from "./worktree-store";
-import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, resolveWorktreeAtCheckout, resolveWorktreePathForSend, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
-import { isWorktreeDirectoryActive } from "@/lib/git/worktree-path";
-import { isWorktreeCheckoutOnDisk } from "@/lib/git/worktree-present";
-import { rehomeWorktreeSessions } from "@/lib/git/worktree-sessions";
-import { useGitStore } from "./git-store";
+import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 import { useSettingsStore } from "./settings-store";
-import { truncateChatMessagesToTurn, applyUserDisplaySnapshots, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
-import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
-import { hydrateSessionMessages } from "@/lib/chat/session-message-hydrate";
+import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
 import { reconcileBackgroundSubAgentRunsFromMessages } from "@/lib/chat/reconcile-background-tasks";
 import {
   countOpenCodeMessages,
@@ -41,9 +45,9 @@ import { useCitationStagingStore } from "./citation-staging-store";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import type { SessionAgent } from "../../shared/session-agent";
 import {
-  isExperimentalPiRuntime,
+  isAgentRuntime,
   type ChatRuntimeKind,
-} from "../../shared/pi-lab";
+} from "../../shared/agent-api";
 import type { ResearchPlanStep } from "../../shared/research-plan";
 import { formatTaskError } from "../../shared/task-error-codes";
 import {
@@ -58,7 +62,7 @@ import {
   sessionDraftPlanRel,
 } from "../../shared/research-plan";
 
-function formatPiLabSendError(reason?: string): string {
+function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
   if (reason.startsWith("unsupported_pi_provider")) {
     return i18n.t("agentLab.reason.unsupportedProvider");
@@ -68,82 +72,18 @@ function formatPiLabSendError(reason?: string): string {
   return translated === key ? reason : translated;
 }
 
+function newClientTurnId(): string {
+  return `turn-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 // ─── Types ───
 
-export interface ContentBlock {
-  type: "text" | "tool_use" | "tool_result" | "thinking" | "command" | "profile";
-  text?: string;
+export type { TurnMessageMeta };
+
+/** Chat UI block: shared Conversation timeline plus composer inline tokens. */
+export interface ContentBlock extends ConversationContentBlock {
   /** Inline @file / @profile / /command tokens in user message order */
   inlineParts?: ComposerPart[];
-  /** External attach / paste / drop strip (not inline tokens). */
-  attachments?: Array<{
-    name: string;
-    kind: "image" | "file";
-    path: string;
-    previewUrl?: string;
-    note?: string;
-  }>;
-  id?: string;
-  name?: string;
-  /** For "profile" blocks: agent profile id */
-  profileId?: string;
-  input?: any;
-  tool_use_id?: string;
-  content?: any;
-  is_error?: boolean;
-  /** For "command" blocks: the action key if this is an action command */
-  action?: string;
-  thinking?: string;
-  /** Duration in seconds (thinking / tool) from OpenCode time or sealed live clock. */
-  duration?: number;
-  /** OpenCode time.start (ms epoch), when available. */
-  timeStart?: number;
-  /** OpenCode time.end (ms epoch), when available. */
-  timeEnd?: number;
-  signature?: string;
-  /** true = init progress, not real AI thinking. Rendered as collapsible
-   *  "Initialization" block with no copy button. Committed to history on
-   *  first turn only; excluded from streaming indicator logic. */
-  _progress?: boolean;
-  /** OpenCode tool_call: human-readable description of what the tool is doing */
-  title?: string;
-  /** OpenCode tool_call: tool category (fs, terminal, search, network, workflow) */
-  kind?: string;
-  /** OpenCode tool_call / tool_call_update: execution status */
-  status?: string;
-  /** OpenCode tool_call: affected file locations */
-  locations?: Array<{ file: string; line?: number }>;
-  /** Internal: backfilled tool_call input received in the tool_call_update
-   *  (OpenCode sends empty rawInput on the initial tool_call, real params
-   *  arrive later in tool_call_update). Set by event-mapper, consumed by
-   *  use-opencode-events to patch the tool_use block. */
-  _backfillInput?: Record<string, unknown> | null;
-  /** Internal: backfilled tool name (matches _backfillInput). */
-  _backfillName?: string | null;
-}
-
-const CONTENT_BLOCK_TYPES = new Set<ContentBlock["type"]>([
-  "text",
-  "tool_use",
-  "tool_result",
-  "thinking",
-  "command",
-  "profile",
-]);
-
-function isContentBlock(value: unknown): value is ContentBlock {
-  if (!value || typeof value !== "object") return false;
-  const type = (value as { type?: unknown }).type;
-  return typeof type === "string" && CONTENT_BLOCK_TYPES.has(type as ContentBlock["type"]);
-}
-
-export interface TurnMessageMeta {
-  /** Wall-clock when the assistant turn finished (ms). */
-  completedAt?: number;
-  /** Display name for the model used on this turn. */
-  modelLabel?: string;
-  /** Optional duration / token summary (hint only). */
-  summary?: string;
 }
 
 export interface ChatStreamMessage {
@@ -201,8 +141,12 @@ interface TabState {
    *  in left-sidebar's fetchSessions sync so user-set titles stick. */
   userTitleSet: boolean;
   sessionId: string | null;
-  /** Default OpenCode. Experimental Pi tabs never use chat:send. */
+  /** Default Pi. OpenCode only when opening an old history session. */
   runtime: ChatRuntimeKind;
+  /** Imported OpenCode sessions are view-only and can never resume that backend. */
+  legacyReadOnly: boolean;
+  /** Runtime-agnostic source of truth for Pi conversation turns. */
+  conversation: Conversation;
   /** Committed messages — immutable once added. Never modified in-place. */
   messages: ChatStreamMessage[];
   /** In-progress streaming assistant message. Merged/updated on each delta.
@@ -337,18 +281,15 @@ export interface SubAgentRun {
   linkDegraded?: boolean;
 }
 
-let _nextTabId = 1;
-function nextTabId(): string {
-  return `tab-${_nextTabId++}`;
-}
-
 function makeDefaultTab(id: string): TabState {
   return {
     id,
     title: "New Chat",
     userTitleSet: false,
-    sessionId: null,
-    runtime: "opencode",
+    sessionId: id,
+    runtime: "pi",
+    legacyReadOnly: false,
+    conversation: emptyConversation({ conversationId: id }),
     messages: [],
     streamingMessage: null,
     streamingPartMessageId: null,
@@ -729,6 +670,8 @@ interface ChatState {
   resyncTabMessagesFromDisk: (tabId: string) => Promise<void>;
 
   // Internal (called by use-opencode-events)
+  _beginAgentTurn: (tabId: string, turnId: string, userText: string) => void;
+  _applyAgentEvent: (tabId: string, event: AgentEvent) => void;
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage, messageId?: string) => void;
   _setSessionId: (tabId: string, id: string) => void;
@@ -1049,10 +992,8 @@ function extractTaskMetaFromMessages(
   return { expertId: "general", prompt: "" };
 }
 
-/** Tell main process which chat tab owns an OpenCode session (stream routing). */
-function syncTabSessionMapping(tabId: string, sessionId: string): void {
-  const projectPath = useDocumentStore.getState().projectRoot || undefined;
-  void window.electronAPI.chatRegisterTab({ tabId, sessionId, projectPath });
+function refreshAgentSessionList(): void {
+  window.dispatchEvent?.(new Event("prism:session-list-refresh"));
 }
 
 /** Commit in-flight streaming only during an active turn; discard stale orphans. */
@@ -1086,9 +1027,47 @@ function finalizeStreamingForMutation(
   };
 }
 
+function projectConversationToChat(
+  conversation: Conversation,
+): Pick<TabState, "messages" | "streamingMessage" | "isStreaming"> {
+  const messages: ChatStreamMessage[] = [];
+  for (const turn of conversation.turns) {
+    if (turn.user.blocks.length > 0) {
+      messages.push({
+        type: "user",
+        message: { content: turn.user.blocks as ContentBlock[] },
+      });
+    }
+    if (turn.assistant.blocks.length > 0) {
+      messages.push({
+        type: "assistant",
+        message: { content: turn.assistant.blocks as ContentBlock[] },
+      });
+    }
+  }
+
+  if (conversation.live?.user.blocks.length) {
+    messages.push({
+      type: "user",
+      message: { content: conversation.live.user.blocks as ContentBlock[] },
+    });
+  }
+  const streamingMessage = conversation.live?.assistant.blocks.length
+    ? {
+        type: "assistant" as const,
+        message: { content: conversation.live.assistant.blocks as ContentBlock[] },
+      }
+    : null;
+  return {
+    messages,
+    streamingMessage,
+    isStreaming: conversation.live !== null,
+  };
+}
+
 // ─── Store ───
 
-const initialTabId = nextTabId();
+const initialTabId = newConversationId();
 const initialTab = makeDefaultTab(initialTabId);
 
 export const useChatStore = create<ChatState>()((set, get) => ({
@@ -1111,11 +1090,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   // ─── Tab Management ───
 
   createTab: (opts) => {
-    const id = nextTabId();
+    const id = newConversationId();
     const tab = makeDefaultTab(id);
-    if (opts?.runtime === "pi") {
-      tab.runtime = "pi";
-      tab.title = "Experimental Pi";
+    if (opts?.runtime) {
+      tab.runtime = opts.runtime;
     }
     set((s) => ({
       tabs: [...s.tabs, tab],
@@ -1156,11 +1134,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     clearTurnWindowState(id);
 
       // Clean up agent session for this tab — cancel any running prompt
-      if (isExperimentalPiRuntime(closingTab.runtime)) {
-        window.electronAPI.piLabCancel().catch(() => {});
-        window.electronAPI.piLabReset().catch(() => {});
-      } else if (closingTab.sessionId) {
-        window.electronAPI.chatCancel(closingTab.sessionId).catch(() => {});
+      if (isAgentRuntime(closingTab.runtime)) {
+        window.electronAPI.agentCancel({ conversationId: id }).catch(() => {});
+        window.electronAPI.agentDispose({ conversationId: id }).catch(() => {});
       }
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().clearTab(id);
@@ -1177,13 +1153,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
     const nextTitle = title.trim();
-    if (tab.sessionId) {
-      await window.electronAPI.sessionRename({
-        tabId,
-        title: nextTitle,
-        sessionId: tab.sessionId,
-      });
-    }
+    await window.electronAPI.agentRenameSession({
+      conversationId: tabId,
+      title: nextTitle,
+    });
+    refreshAgentSessionList();
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === tabId ? { ...t, title: nextTitle, userTitleSet: true } : t,
@@ -1197,13 +1171,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (previous === undefined) return;
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    if (tab.sessionId) {
-      await window.electronAPI.sessionRename({
-        tabId,
-        title: previous,
-        sessionId: tab.sessionId,
-      });
-    }
+    await window.electronAPI.agentRenameSession({
+      conversationId: tabId,
+      title: previous,
+    });
+    refreshAgentSessionList();
     set((s) => {
       const updated = s.tabs.map((t) =>
         t.id === tabId ? { ...t, title: previous, userTitleSet: true } : t,
@@ -1245,37 +1217,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
       useTerminalAiStore.getState().touchSessionViewed(id);
     });
-
-    // Hydrate context ring from disk when switching tabs
-    if (targetTab && targetTab.contextTokens === null && targetTab.sessionId) {
-      const projectPath = useDocumentStore.getState().projectRoot || "";
-      const sessionId = targetTab.sessionId;
-      window.electronAPI.sessionGetContext(projectPath, sessionId).then((ctxData) => {
-        if (ctxData) {
-          useChatStore.setState((s) => {
-            const tabs = s.tabs.map((t) =>
-              t.id === id
-                ? {
-                    ...t,
-                    contextTokens: ctxData.tokens,
-                    contextWindowSize: ctxData.windowSize ?? null,
-                    contextUsageSource: ctxData.source ?? null,
-                  }
-                : t,
-            );
-            if (s.activeTabId === id) {
-              return {
-                tabs,
-                contextTokens: ctxData.tokens,
-                contextWindowSize: ctxData.windowSize ?? null,
-                contextUsageSource: ctxData.source ?? null,
-              };
-            }
-            return { tabs };
-          });
-        }
-      }).catch(() => {});
-    }
   },
 
   saveDraft: (tabId: string, draft: TabDraft) => {
@@ -1321,12 +1262,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setSessionAgent: (agent: SessionAgent, tabId?: string) => {
     const resolvedTabId = tabId ?? get().activeTabId;
-    let sessionId: string | null = null;
     let clearedOrchestrator = false;
     set((s) => ({
       tabs: s.tabs.map((t) => {
         if (t.id !== resolvedTabId) return t;
-        sessionId = t.sessionId;
         if (agent === "plan" && t.orchestratorId) clearedOrchestrator = true;
         return {
           ...t,
@@ -1345,9 +1284,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }));
     if (clearedOrchestrator) {
       toast.message(i18n.t("chat.sessionAgent.orchestratorCleared"));
-    }
-    if (sessionId) {
-      void window.electronAPI.chatSetSessionAgent({ sessionId, agent }).catch(() => {});
     }
     if (agent === "plan") {
       // Interactive enter Plan — allow composer confirm when draft becomes ready.
@@ -1425,7 +1361,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         };
       }),
     }));
-    void window.electronAPI.chatSetSessionAgent({ sessionId, agent: "plan" }).catch(() => {});
     await get().refreshPlanDraftFromDisk(resolvedTabId);
     return true;
   },
@@ -1734,12 +1669,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         t.id === resolvedTabId ? { ...t, composerToolsSuppressed: false } : t,
       ),
     }));
-    // Ensure OpenCode agent switch finishes before the silent execute turn.
-    if (tab.sessionId) {
-      await window.electronAPI
-        .chatSetSessionAgent({ sessionId: tab.sessionId, agent: "build" })
-        .catch(() => {});
-    }
     get().clearPlanDraft(resolvedTabId);
     get().closePlanExitDialog(resolvedTabId);
 
@@ -1901,6 +1830,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tabId = get().activeTabId;
 
     const tabBeforePrompt = get().tabs.find((t) => t.id === tabId);
+    if (tabBeforePrompt?.legacyReadOnly) {
+      set((state) => {
+        const tabs = state.tabs.map((tab) => (
+          tab.id === tabId
+            ? { ...tab, error: "This imported OpenCode conversation is read-only." }
+            : tab
+        ));
+        return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
+      });
+      return;
+    }
     // First message on a tab (session is created on send when still unbound).
     const isFirstTurn = (tabBeforePrompt?.messages.length ?? 0) === 0;
 
@@ -1934,7 +1874,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
 
     const tabAfterUser = get().tabs.find((t) => t.id === tabId);
-    if (isExperimentalPiRuntime(tabAfterUser?.runtime)) {
+    if (isAgentRuntime(tabAfterUser?.runtime)) {
+      const turnId = newClientTurnId();
+      get()._beginAgentTurn(tabId, turnId, userPrompt);
       try {
         const persistedSettings = useSettingsStore.getState().settings;
         const provider = persistedSettings.aiProvider || "anthropic";
@@ -1945,7 +1887,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             t.id === tabId ? { ...t, pendingTurnMeta: { modelLabel } } : t,
           ),
         }));
-        const result = await window.electronAPI.piLabSend({
+        const result = await window.electronAPI.agentSend({
+          conversationId: tabId,
+          turnId,
           projectRoot: projectPath,
           text: userPrompt,
           tabId,
@@ -1954,147 +1898,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           modelId: model,
           apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
         });
-        if (result.sessionId) {
-          get()._setSessionId(tabId, result.sessionId);
-        }
         if (!result.ok) {
-          get()._appendAssistantError(tabId, formatPiLabSendError(result.error));
+          get()._appendAssistantError(tabId, formatAgentSendError(result.error));
+        } else {
+          refreshAgentSessionList();
         }
       } catch (err: any) {
         get()._appendAssistantError(tabId, err?.message || String(err));
       }
       return;
     }
-    if (tabAfterUser) {
-      const { countUserTurns } = await import("@/components/modules/chat/chat-turns");
-      const { useCheckpointStore } = await import("./checkpoint-store");
-      const turnIndex = countUserTurns(tabAfterUser.messages) - 1;
-      if (turnIndex >= 0) {
-        useCheckpointStore.getState().beginTurn(tabId, turnIndex);
-      }
-    }
-
-    const resolveWorktree = async (): Promise<string | null> => {
-      const worktreeStore = useWorktreeStore.getState();
-      if (worktreeStore.mode !== "worktree") return null;
-      try {
-        let wt = worktreeStore.activeWorktree;
-        if (!wt && worktreeStore.pendingBranch && projectPath) {
-          wt = await worktreeStore.initializeWorktree(projectPath);
-          await worktreeStore.preScanWorktree(wt.path).catch(() => {});
-        }
-        if (wt) {
-          await applyCheckoutTransition({ type: "checkout-at", root: wt.path, worktree: wt });
-        }
-        return wt?.path ?? null;
-      } catch {
-        throw new Error("Worktree initialization failed");
-      }
-    };
-
-    // ── 2. Collect agent settings from persisted settings ──
-    let worktreePath: string | null = null;
-
-    const tabForSend = get().tabs.find((t) => t.id === tabId);
-
-    if (isFirstTurn) {
-      // First turn: save files, handle branch switch, resolve worktree.
-      // Pre-warm already spawned OpenCode — no progress UI needed.
-      await docState.saveAllFiles();
-
-      const gitStore = useGitStore.getState();
-      const worktreeStore = useWorktreeStore.getState();
-      if (gitStore.pendingBranch && gitStore.pendingBranch !== gitStore.branch) {
-        if (worktreeStore.mode === "worktree" && !worktreeStore.activeWorktree) {
-          applyCheckoutTransition({
-            type: "worktree-intent",
-            baseBranch: gitStore.pendingBranch,
-          });
-        } else if (worktreeStore.mode !== "worktree") {
-          await gitStore.switchBranch(projectPath, gitStore.pendingBranch);
-        }
-        gitStore.setPendingBranch(null);
-      }
-
-      worktreePath = await resolveWorktree();
-    } else {
-      // Subsequent turns: process already warm, save files fire-and-forget
-      docState.saveAllFiles().catch(() => {});
-      worktreePath = resolveWorktreePathForSend(tabForSend, projectPath) ?? null;
-    }
-
-    // ── 4. Send the actual prompt — chat responses follow naturally ──
-    try {
-      const sessionId = get().tabs.find((t) => t.id === tabId)?.sessionId;
-      const activeTab = get().tabs.find((t) => t.id === tabId);
-      const persistedSettings = useSettingsStore.getState().settings;
-      let provider = persistedSettings.aiProvider || "anthropic";
-      let model = persistedSettings.aiModel ?? undefined;
-      const modelKey =
-        model && provider ? `${provider}/${model}` : "";
-      let thoughtLevel =
-        (modelKey && persistedSettings.aiModelThoughtLevels?.[modelKey]) ||
-        persistedSettings.thoughtLevel ||
-        undefined;
-
-      const sessionAgent = activeTab?.sessionAgent ?? "build";
-      const modelLabel = resolveTurnModelLabel(provider, model, persistedSettings);
-      set((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === tabId ? { ...t, pendingTurnMeta: { modelLabel } } : t,
-        ),
-      }));
-      await window.electronAPI.chatSend({
-        projectPath,
-        worktreePath: worktreePath || undefined,
-        prompt: userPrompt,
-        tabId,
-        sessionId,
-        apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
-        baseUrl: persistedSettings.aiBaseUrls?.[provider] || undefined,
-        model,
-        provider,
-        thoughtLevel,
-        sessionAgent,
-        orchestratorId:
-          sessionAgent === "plan"
-            ? undefined
-            : composerExtras?.orchestratorId ?? activeTab?.orchestratorId ?? undefined,
-        sessionTeamId:
-          sessionAgent === "plan"
-            ? undefined
-            : composerExtras?.sessionTeamId ?? activeTab?.sessionTeamId ?? undefined,
-        selectedExpertIds: composerExtras?.selectedExpertIds,
-        mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
-        skillIds: composerExtras?.skillIds,
-        userDisplayContent: userContent?.length
-          ? (userContent as unknown as Record<string, unknown>[])
-          : undefined,
-        intensivePaperIds: tabBeforePrompt?.intensivePaperIds?.length
-          ? tabBeforePrompt.intensivePaperIds
-          : undefined,
-        hasPaperSnippets: composerExtras?.hasPaperSnippets,
-        promptImages: composerExtras?.promptImages?.length
-          ? composerExtras.promptImages
-          : undefined,
-        promptFiles: composerExtras?.promptFiles?.length
-          ? composerExtras.promptFiles
-          : undefined,
-      });
-    } catch (err: any) {
-      // Keep the user bubble so attachments/text aren't silently erased on failure.
-      set((s) => {
-        const tabs = s.tabs.map((t) => {
-          if (t.id !== tabId) return t;
-          return {
-            ...t,
-            isStreaming: false,
-            error: err?.message || String(err),
-          };
-        });
-        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
-      });
-    }
+    set((state) => {
+      const tabs = state.tabs.map((tab) => (
+        tab.id === tabId
+          ? { ...tab, isStreaming: false, error: "Only the Pi Agent runtime can send messages." }
+          : tab
+      ));
+      return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
+    });
   },
 
   openSubAgentPanel: (taskToolUseId) => {
@@ -2107,7 +1928,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       ),
     }));
 
-    // History / reload: subAgentRuns are memory-only — hydrate from OpenCode SQLite.
+    // History / reload: subAgentRuns are memory-only — seed from the current turn.
     const tab = get().tabs.find((t) => t.id === tabId);
     const run = tab?.subAgentRuns?.[id];
     if (!run && tab) {
@@ -2122,41 +1943,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         blocks: [],
       });
     }
-    const needsHydrate = !run || run.blocks.length === 0;
-    if (!needsHydrate || !tab?.sessionId) return;
-
-    void (async () => {
-      try {
-        const result = await window.electronAPI.chatGetSubAgentActivity({
-          parentSessionId: tab.sessionId!,
-          taskToolUseId: id,
-          subSessionId: run?.subSessionId,
-        });
-        const stillOpen =
-          get().tabs.find((t) => t.id === tabId)?.openSubAgentPanelToolUseId === id;
-        if (!stillOpen) return;
-        const latest = get().tabs.find((t) => t.id === tabId);
-        const live = latest?.subAgentRuns?.[id];
-        // Live stream may have filled blocks while we awaited — don't clobber.
-        if (live?.blocks.length && live.status === "running") return;
-        if (live?.blocks.length && result.blocks.length === 0) return;
-        if (!result.blocks?.length && result.status === "running") return;
-        const meta = extractTaskMetaFromMessages(
-          [...(latest?.messages ?? []), latest?.streamingMessage],
-          id,
-        );
-        get()._hydrateSubAgentRun(tabId, id, {
-          expertId: meta.expertId || live?.expertId || "general",
-          prompt: meta.prompt || live?.prompt || "",
-          subSessionId: result.subSessionId ?? live?.subSessionId,
-          status: result.status,
-          blocks: (result.blocks ?? []).filter(isContentBlock),
-          error: result.error,
-        });
-      } catch (err: unknown) {
-        console.error("[chat] Subagent activity hydrate failed:", err);
-      }
-    })();
   },
 
   closeSubAgentPanel: () => {
@@ -2175,126 +1961,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (!run || run.status !== "running") return;
     const expert = (run.expertId || "expert").replace(/^@/, "");
     const forAgent = formatTaskError("user_cancel", { subagentId: expert });
-
-    // Phase 1: freeze UI immediately — do not claim Stopped until OpenCode settles.
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId) return t;
-        const prev = t.subAgentRuns[taskToolUseId];
-        if (!prev || prev.status !== "running") return t;
-        return {
-          ...t,
-          subAgentRuns: {
-            ...t.subAgentRuns,
-            [taskToolUseId]: { ...prev, status: "stopping" as const },
-          },
-        };
-      }),
-    }));
-
-    try {
-      if (tab?.sessionId) {
-        const excludeSessionIds = Object.entries(tab.subAgentRuns ?? {})
-          .filter(
-            ([id, r]) =>
-              id !== taskToolUseId
-              && (r.status === "running" || r.status === "stopping")
-              && r.subSessionId,
-          )
-          .map(([, r]) => r.subSessionId!)
-          .filter(Boolean);
-        const result = await window.electronAPI.chatStopSubAgent({
-          parentSessionId: tab.sessionId,
-          taskToolUseId,
-          subSessionId: run.subSessionId,
-          message: forAgent,
-          excludeSessionIds,
-        });
-        if (result?.ok && result.settled) {
-          // Settlement UI comes from subAgent.completed / message.updated.
-          return;
-        }
-        // Abort or settlement failed — be honest; keep Task open so Stop can retry.
-        const failMsg = formatTaskError("abort_failed", {
-          subagentId: expert,
-          detail: result?.error ? String(result.error) : undefined,
-        });
-        set((s) => ({
-          tabs: s.tabs.map((t) => {
-            if (t.id !== tabId) return t;
-            const prev = t.subAgentRuns[taskToolUseId];
-            if (!prev || prev.status !== "stopping") return t;
-            return {
-              ...t,
-              subAgentRuns: {
-                ...t.subAgentRuns,
-                [taskToolUseId]: {
-                  ...prev,
-                  status: "running" as const,
-                  error: failMsg,
-                },
-              },
-            };
-          }),
-        }));
-        return;
-      }
-      if (run.subSessionId) {
-        // No parent session — best-effort child cancel only (legacy path).
-        await window.electronAPI.chatCancel(run.subSessionId, { childrenOnly: false });
-        get()._injectToolResult(tabId, taskToolUseId, forAgent, true);
-        get()._completeSubAgentRun(tabId, taskToolUseId, "error", forAgent);
-        return;
-      }
-    } catch (err: unknown) {
-      console.error("[chat] Subagent cancel failed:", err);
-      const failMsg = formatTaskError("abort_failed", { subagentId: expert });
-      set((s) => ({
-        tabs: s.tabs.map((t) => {
-          if (t.id !== tabId) return t;
-          const prev = t.subAgentRuns[taskToolUseId];
-          if (!prev || prev.status !== "stopping") return t;
-          return {
-            ...t,
-            subAgentRuns: {
-              ...t.subAgentRuns,
-              [taskToolUseId]: {
-                ...prev,
-                status: "running" as const,
-                error: failMsg,
-              },
-            },
-          };
-        }),
-      }));
-      return;
-    }
-    // No session to abort — revert stopping.
-    set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId) return t;
-        const prev = t.subAgentRuns[taskToolUseId];
-        if (!prev || prev.status !== "stopping") return t;
-        return {
-          ...t,
-          subAgentRuns: {
-            ...t.subAgentRuns,
-            [taskToolUseId]: { ...prev, status: "running" as const },
-          },
-        };
-      }),
-    }));
+    get()._injectToolResult(tabId, taskToolUseId, forAgent, true);
+    get()._completeSubAgentRun(tabId, taskToolUseId, "error", forAgent);
   },
 
   cancelExecution: async () => {
     const tabId = get().activeTabId;
     const tab = get().tabs.find((t) => t.id === tabId);
-    const sessionId = tab?.sessionId;
     try {
-      if (isExperimentalPiRuntime(tab?.runtime)) {
-        await window.electronAPI.piLabCancel();
-      } else if (sessionId) {
-        await window.electronAPI.chatCancel(sessionId);
+      if (isAgentRuntime(tab?.runtime)) {
+        await window.electronAPI.agentCancel({ conversationId: tabId });
       }
     } catch (err: any) {
       console.error("[chat] Cancel failed:", err);
@@ -2467,21 +2143,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   newPiSession: () => {
-    const existing = get().tabs.find((t) => isExperimentalPiRuntime(t.runtime));
-    if (existing) {
-      get().setActiveTab(existing.id);
-      syncCheckoutForTab(existing);
-      return;
-    }
-    const id = get().createTab({ runtime: "pi" });
-    get().setActiveTab(id);
-    syncCheckoutForTab(get().tabs.find((t) => t.id === id));
+    get().newSession();
   },
 
   clearAllSessions: () => {
-    // Full reset to initial state — new project = clean slate
-    _nextTabId = 1;
-    const id = nextTabId();
+    void window.electronAPI?.agentDispose?.()?.catch(() => {});
+    const id = newConversationId();
     const tab = makeDefaultTab(id);
     set({
       tabs: [tab],
@@ -2494,9 +2161,27 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tabId = get().activeTabId;
     const tab = get().tabs.find((t) => t.id === tabId);
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
+    if (isAgentRuntime(tab?.runtime)) {
+      window.electronAPI.agentDispose({ conversationId: tabId }).catch(() => {});
+    }
     set((s) => {
       const tabs = s.tabs.map((t) =>
-        t.id === tabId ? { ...t, messages: [], streamingMessage: null, sessionId: null, sessionCwd: null, title: "New Chat", userTitleSet: false, error: null, isStreaming: false, promptStale: false, isLoadingSession: false } : t,
+        t.id === tabId
+          ? {
+              ...t,
+              messages: [],
+              streamingMessage: null,
+              conversation: emptyConversation({ conversationId: tabId }),
+              sessionId: tabId,
+              sessionCwd: null,
+              title: "New Chat",
+              userTitleSet: false,
+              error: null,
+              isStreaming: false,
+              promptStale: false,
+              isLoadingSession: false,
+            }
+          : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
@@ -2507,23 +2192,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   checkPromptStale: async (tabId?: string) => {
     const id = tabId ?? get().activeTabId;
-    const tab = get().tabs.find((t) => t.id === id);
-    const { useDocumentStore } = await import("./document-store");
-    const projectPath = useDocumentStore.getState().projectRoot;
-    if (!tab?.sessionId || !projectPath) {
-      get()._setPromptStale(id, false);
-      return;
-    }
-    try {
-      const [ctx, currentFp] = await Promise.all([
-        window.electronAPI.sessionGetContext(projectPath, tab.sessionId),
-        window.electronAPI.settingsComputePromptFingerprint(projectPath),
-      ]);
-      const stale = Boolean(ctx?.promptFingerprint && ctx.promptFingerprint !== currentFp);
-      get()._setPromptStale(id, stale);
-    } catch {
-      get()._setPromptStale(id, false);
-    }
+    get()._setPromptStale(id, false);
   },
 
   truncateToTurn: (tabId, turnIndex) => {
@@ -2570,85 +2239,46 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   resyncTabMessagesFromDisk: async (tabId) => {
     const tab = get().tabs.find((t) => t.id === tabId);
     const projectPath = useDocumentStore.getState().projectRoot || "";
-    if (!tab?.sessionId || !projectPath) return;
-    const sessionCwd = tab.sessionCwd ?? projectPath;
-    const raw = await window.electronAPI.sessionLoad(tab.sessionId, projectPath, sessionCwd);
-    const filtered = await hydrateSessionMessages(raw, projectPath, tab.sessionId);
-    msgCacheSet(tab.sessionId, filtered);
+    const conversationId = tab?.conversation.conversationId || tab?.id;
+    if (!tab || !conversationId || !projectPath) return;
+    const result = await window.electronAPI.agentLoadSession({
+      conversationId,
+      projectRoot: projectPath,
+    });
+    if (!result.ok || !result.conversation) return;
+    const conversation = result.conversation;
+    const projected = projectConversationToChat(conversation);
     set((s) => {
       const tabs = s.tabs.map((t) =>
         t.id === tabId
           ? {
               ...t,
-              messages: filtered,
-              streamingMessage: null,
-              isStreaming: false,
+              conversation,
+              ...projected,
+              title: result.title || t.title,
               error: null,
-              subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
-                filtered,
-                t.subAgentRuns,
-              ),
-              composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
+              isLoadingSession: false,
             }
           : t,
       );
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
-    await syncPlanArtifactCardForTab(tabId, projectPath, tab.sessionId);
   },
 
-  loadSession: async (sessionId: string, sessionDirectory?: string) => {
-    const active = get().tabs.find((t) => t.id === get().activeTabId);
-    if (isExperimentalPiRuntime(active?.runtime)) {
-      get().createTab();
-    }
+  loadSession: async (conversationId: string, sessionDirectory?: string) => {
     const projectPath = useDocumentStore.getState().projectRoot || "";
-    let sessionCwd = sessionDirectory ?? projectPath;
-    if (!sessionDirectory && projectPath) {
-      try {
-        const dir = await window.electronAPI.sessionGetDirectory(sessionId);
-        if (dir) sessionCwd = dir;
-      } catch {
-        // fall back to project root
-      }
-    }
+    if (!projectPath || !conversationId.trim()) return;
 
-    if (
-      projectPath &&
-      sessionCwd !== projectPath &&
-      isWorktreeCheckoutPath(sessionCwd, projectPath)
-    ) {
-      const wtStore = useWorktreeStore.getState();
-      if (!isWorktreeDirectoryActive(sessionCwd, wtStore.worktrees, projectPath)) {
-        await wtStore.refreshWorktrees(projectPath);
-      }
-      const stillMissing = !isWorktreeDirectoryActive(
-        sessionCwd,
-        useWorktreeStore.getState().worktrees,
-        projectPath,
-      );
-      if (stillMissing) {
-        const onDisk = await isWorktreeCheckoutOnDisk(sessionCwd);
-        if (onDisk) {
-          await wtStore.refreshWorktrees(projectPath);
-        } else {
-          await rehomeWorktreeSessions(projectPath, sessionCwd);
-          sessionCwd = projectPath;
-        }
-      }
-    }
-
-    const existingTab = get().tabs.find((t) => t.sessionId === sessionId);
+    const existingTab = get().tabs.find((t) => (
+      t.id === conversationId
+      || t.conversation.conversationId === conversationId
+      || t.sessionId === conversationId
+    ));
     if (existingTab) {
-      // Opening history from a blank New Chat should not leave that empty tab around.
-      let nextTabs = pruneDisposableEmptyChatTabs(get().tabs, existingTab.id);
-      if (sessionCwd && sessionCwd !== existingTab.sessionCwd) {
-        nextTabs = nextTabs.map((t) =>
-          t.id === existingTab.id ? { ...t, sessionCwd } : t,
-        );
-      }
-      if (sessionCwd && sessionCwd !== projectPath) {
-        await attachWorktreeForSessionDirectory(sessionCwd);
+      const nextTabs = pruneDisposableEmptyChatTabs(get().tabs, existingTab.id);
+      const directory = sessionDirectory ?? existingTab.sessionCwd ?? projectPath;
+      if (directory && directory !== projectPath) {
+        await attachWorktreeForSessionDirectory(directory);
       } else {
         await applyCheckoutTransition({ type: "local" });
       }
@@ -2657,124 +2287,17 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         activeTabId: existingTab.id,
         ...projectActiveTab(nextTabs, existingTab.id),
       });
-      syncTabSessionMapping(existingTab.id, sessionId);
-      persistAndSyncIntensiveReading(sessionId, existingTab.intensivePaperIds);
-      syncCitationStagingForTab(existingTab);
-      void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
-        useTerminalAiStore.getState().touchSessionViewed(existingTab.id);
-      });
-      if (existingTab.messages.length === 0 && projectPath) {
-        void get().resyncTabMessagesFromDisk(existingTab.id);
-      }
-      void hydrateTurnMetaForTab(existingTab.id, projectPath, sessionId);
-      void get().restorePendingPlanModeIfNeeded(existingTab.id);
       return;
     }
 
-    if (sessionCwd && sessionCwd !== projectPath) {
-      await attachWorktreeForSessionDirectory(sessionCwd);
-    } else {
-      await applyCheckoutTransition({ type: "local" });
-    }
-
-    const newId = nextTabId();
-    const tabId = newId;
-
-    const hydrateSessionContext = () => {
-      window.electronAPI.sessionGetContext(projectPath, sessionId).then((d) => {
-        if (!d) return;
-        useChatStore.setState((s) => {
-          const tabs = s.tabs.map((t) =>
-            t.id === tabId
-              ? {
-                  ...t,
-                  contextTokens: d.tokens,
-                  contextWindowSize: d.windowSize ?? null,
-                  contextUsageSource: d.source ?? null,
-                }
-              : t,
-          );
-          if (s.activeTabId === tabId) {
-            return {
-              tabs,
-              contextTokens: d.tokens,
-              contextWindowSize: d.windowSize ?? null,
-              contextUsageSource: d.source ?? null,
-            };
-          }
-          return { tabs };
-        });
-      }).catch(() => {});
-    };
-
-    const cached = msgCacheGet(sessionId);
-    const storedIntensiveIds = resolveIntensivePaperIdsForSession(sessionId, []);
-    if (cached) {
-      // Sync hydrate from cache — avoids empty-tab flash on repeat opens.
-      const title = extractSessionTitle(cached) || "New Chat";
-      const hydratedTab: TabState = {
-        ...makeDefaultTab(newId),
-        messages: cached,
-        sessionId,
-        sessionCwd,
-        title,
-        isLoadingSession: false,
-        intensivePaperIds: storedIntensiveIds,
-        composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(cached),
-      };
-      set((s) => {
-        const kept = pruneDisposableEmptyChatTabs(s.tabs);
-        const tabs = [...kept, hydratedTab];
-        return {
-          tabs,
-          activeTabId: tabId,
-          ...projectActiveTab(tabs, tabId),
-        };
-      });
-      syncTabSessionMapping(tabId, sessionId);
-      persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
-      void syncPlanArtifactCardForTab(tabId, projectPath, sessionId);
-      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
-        useCheckpointStore.getState().initSession(tabId, sessionId);
-      });
-      hydrateSessionContext();
-      void hydrateTurnMetaForTab(tabId, projectPath, sessionId);
-      syncCitationStagingForTab(hydratedTab);
-      void (async () => {
-        try {
-          const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
-          if (!displays?.length) return;
-          const enriched = applyUserDisplaySnapshots(cached, displays);
-          msgCacheSet(sessionId, enriched);
-          useChatStore.setState((s) => {
-            const tabs = s.tabs.map((t) =>
-              t.id === tabId ? { ...t, messages: enriched } : t,
-            );
-            return s.activeTabId === tabId
-              ? { tabs, ...projectActiveTab(tabs, tabId) }
-              : { tabs };
-          });
-        } catch { /* best-effort */ }
-      })();
-      // Cache is a flash only — always re-hydrate from OpenCode + plan events so
-      // Approve/Deny + Build execution after the first open are not lost.
-      void get()
-        .resyncTabMessagesFromDisk(tabId)
-        .catch(() => {})
-        .finally(() => {
-          void get().restorePendingPlanModeIfNeeded(tabId);
-        });
-      return;
-    }
-
-    // Always create a new tab — never overwrite an existing one.
-    // Show chat layout with loading state until history arrives from disk.
+    const tabId = conversationId;
     const loadingTab: TabState = {
-      ...makeDefaultTab(newId),
-      sessionId,
-      sessionCwd,
+      ...makeDefaultTab(tabId),
+      runtime: "pi",
+      legacyReadOnly: false,
+      sessionId: tabId,
+      sessionCwd: sessionDirectory ?? projectPath,
       isLoadingSession: true,
-      intensivePaperIds: storedIntensiveIds,
       composerToolsSuppressed: true,
     };
     set((s) => {
@@ -2786,87 +2309,38 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         ...projectActiveTab(tabs, tabId),
       };
     });
-    syncTabSessionMapping(tabId, sessionId);
-    persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
 
     try {
-      // Load all messages from the session.
-      const raw: any[] = await window.electronAPI.sessionLoad(
-        sessionId, projectPath, sessionCwd,
-      );
-      const filtered = await hydrateSessionMessages(raw, projectPath, sessionId);
-      msgCacheSet(sessionId, filtered);
-
-      // Prefer the title from the OpenCode session row — this preserves the
-      // user's rename (which we wrote via session:rename). Fall back to
-      // deriving from the first user message only when the row's title is
-      // still a generic OpenCode default.
-      let dbTitle: string | null = null;
-      try {
-        const all = await window.electronAPI.sessionList(projectPath);
-        dbTitle = all.find((s) => s.id === sessionId)?.title ?? null;
-      } catch {
-        /* best-effort — derive below */
+      const result = await window.electronAPI.agentLoadSession({
+        conversationId,
+        projectRoot: projectPath,
+      });
+      if (!result.ok || !result.conversation) {
+        throw new Error(result.error || "unknown_conversation");
       }
-      const title =
-        dbTitle && !isGenericSessionTitle(dbTitle)
-          ? dbTitle
-          : extractSessionTitle(filtered) || "New Chat";
-      // If the title came from the DB, treat it as user-set so future
-      // fetchSessions writes from OpenCode don't clobber it.
-      const userTitleSet = !!(dbTitle && !isGenericSessionTitle(dbTitle));
-
-      let ctxData: {
-        tokens: number;
-        windowSize?: number | null;
-        source?: "usage_update" | "prompt_usage" | "estimate";
-      } | null = null;
-      try {
-        ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
-      } catch { /* best-effort */ }
-
+      const directory = sessionDirectory ?? result.directory ?? projectPath;
+      if (directory && directory !== projectPath) {
+        await attachWorktreeForSessionDirectory(directory);
+      } else {
+        await applyCheckoutTransition({ type: "local" });
+      }
+      const conversation = result.conversation;
+      const projected = projectConversationToChat(conversation);
+      const hydratedTab: TabState = {
+        ...loadingTab,
+        conversation,
+        ...projected,
+        title: result.title || conversation.title || "New Chat",
+        sessionCwd: directory,
+        isLoadingSession: false,
+        composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(projected.messages),
+      };
       set((s) => {
-        const tabs = s.tabs.map((t) =>
-          t.id === tabId
-            ? {
-                ...t,
-                messages: filtered,
-                streamingMessage: null,
-                title,
-                userTitleSet,
-                sessionId,
-                sessionCwd,
-                error: null,
-                isStreaming: false,
-                isLoadingSession: false,
-                contextTokens: ctxData?.tokens ?? null,
-                contextWindowSize: ctxData?.windowSize ?? null,
-                contextUsageSource: ctxData?.source ?? null,
-                subAgentRuns: reconcileBackgroundSubAgentRunsFromMessages(
-                  filtered,
-                  t.subAgentRuns,
-                ),
-                composerToolsSuppressed: composerToolsSuppressedOnSessionHydrate(filtered),
-              }
-            : t,
-        );
+        const tabs = s.tabs.map((t) => (t.id === tabId ? hydratedTab : t));
         return { tabs, activeTabId: tabId, ...projectActiveTab(tabs, tabId) };
       });
-      await syncPlanArtifactCardForTab(tabId, projectPath, sessionId);
-      syncTabSessionMapping(tabId, sessionId);
-      persistAndSyncIntensiveReading(sessionId, storedIntensiveIds);
-      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
-        useCheckpointStore.getState().initSession(tabId, sessionId);
-      });
-      syncCitationStagingForTab({
-        ...makeDefaultTab(tabId),
-        messages: filtered,
-        sessionId,
-        sessionCwd,
-        intensivePaperIds: storedIntensiveIds,
-      });
-      await hydrateTurnMetaForTab(tabId, projectPath, sessionId);
-      void get().restorePendingPlanModeIfNeeded(tabId);
+      persistAndSyncIntensiveReading(tabId, hydratedTab.intensivePaperIds);
+      syncCitationStagingForTab(hydratedTab);
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) =>
@@ -2884,6 +2358,42 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   // ─── Internal ───
+
+  _beginAgentTurn: (tabId, turnId, userText) => {
+    set((state) => {
+      const tabs = state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const conversation = beginConversationTurn(tab.conversation, { turnId, userText });
+        return {
+          ...tab,
+          conversation,
+          ...projectConversationToChat(conversation),
+          error: null,
+        };
+      });
+      return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
+    });
+  },
+
+  _applyAgentEvent: (tabId, event) => {
+    set((state) => {
+      const tabs = state.tabs.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const conversation = applyConversationEvent(tab.conversation, event);
+        return {
+          ...tab,
+          conversation,
+          ...projectConversationToChat(conversation),
+          error: event.type === "turn_failed" ? event.error : tab.error,
+        };
+      });
+      return {
+        tabs,
+        ...projectActiveTab(tabs, state.activeTabId),
+        streamTick: state.streamTick + 1,
+      };
+    });
+  },
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
     const stampedBox: {
@@ -3127,7 +2637,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const activeTab = tabs.find((t) => t.id === s.activeTabId);
       return { tabs, sessionId: activeTab?.sessionId ?? null };
     });
-    syncTabSessionMapping(tabId, sessionId);
     persistAndSyncIntensiveReading(sessionId, intensivePaperIds);
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
       useTerminalAiStore.getState().migrateSessionMirrorLog(tabId, sessionId);

@@ -1660,20 +1660,22 @@ export interface ElectronAPI {
     projectPath: string,
     orchestratorId: string,
   ) => Promise<{ orchestrators: import("@shared/agent-subagents").OrchestratorInfo[] }>;
-  piLabStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/pi-lab").PiLabStatus>;
-  piLabSend: (args: import("../../shared/pi-lab").PiLabSendInput) => Promise<import("../../shared/pi-lab").PiLabSendResult>;
-  piLabCancel: () => Promise<{ ok: boolean }>;
-  piLabReset: () => Promise<{ ok: boolean }>;
-  piLabResolvePermission: (args: {
+  agentStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/agent-api").AgentStatus>;
+  agentSend: (args: import("../../shared/agent-api").AgentSendInput) => Promise<import("../../shared/agent-api").AgentSendResult>;
+  agentCancel: (args: { conversationId: string }) => Promise<{ ok: boolean }>;
+  agentDispose: (args?: { conversationId?: string }) => Promise<{ ok: boolean }>;
+  agentResolvePermission: (args: {
     requestId: string;
     decision: "allow" | "deny";
   }) => Promise<{ ok: boolean }>;
-  onPiLabEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
-  onPiLabPermission: (callback: (request: {
-    requestId: string;
-    toolName: string;
-    args: Record<string, unknown>;
-  }) => void) => () => void;
+  agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent-api").AgentSessionSummary[]>;
+  agentLoadSession: (
+    args: import("../../shared/agent-api").AgentLoadSessionInput,
+  ) => Promise<import("../../shared/agent-api").AgentLoadSessionResult>;
+  agentRenameSession: (
+    args: import("../../shared/agent-api").AgentRenameSessionInput,
+  ) => Promise<{ ok: boolean }>;
+  onAgentEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
   chatSend: (args: {
     projectPath: string;
     worktreePath?: string;

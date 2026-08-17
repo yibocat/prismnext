@@ -25,11 +25,12 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
   rehomeWorktreeSessions: vi.fn().mockResolvedValue(undefined),
 }));
 
-const chatCancel = vi.fn().mockResolvedValue(undefined);
+const agentCancel = vi.fn().mockResolvedValue({ ok: true });
 
 vi.stubGlobal("window", {
   electronAPI: {
-    chatCancel,
+    agentCancel,
+    agentDispose: vi.fn().mockResolvedValue({ ok: true }),
     sessionGetDirectory: vi.fn().mockResolvedValue(null),
     sessionGetContext: vi.fn().mockResolvedValue(null),
     sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
@@ -44,7 +45,7 @@ describe("cancelExecution preserves partial reply", () => {
   beforeEach(() => {
     useChatStore.getState().clearAllSessions();
     (useChatStore as any)._msgCache?.clear();
-    chatCancel.mockClear();
+    agentCancel.mockClear();
   });
 
   it("commits the in-progress streamingMessage to messages with stopped=true instead of discarding it", async () => {
@@ -54,6 +55,7 @@ describe("cancelExecution preserves partial reply", () => {
         t.id === tabId
           ? {
               ...t,
+              runtime: "pi" as const,
               sessionId: "sess-1",
               isStreaming: true,
               streamingMessage: {
@@ -68,7 +70,7 @@ describe("cancelExecution preserves partial reply", () => {
     await useChatStore.getState().cancelExecution();
 
     const tab = useChatStore.getState().tabs.find((t) => t.id === tabId)!;
-    expect(chatCancel).toHaveBeenCalledWith("sess-1");
+    expect(agentCancel).toHaveBeenCalledWith({ conversationId: tabId });
     expect(tab.isStreaming).toBe(false);
     expect(tab.streamingMessage).toBeNull();
     // The partial reply is committed, not discarded.
@@ -88,6 +90,7 @@ describe("cancelExecution preserves partial reply", () => {
         t.id === tabId
           ? {
               ...t,
+              runtime: "pi" as const,
               sessionId: "sess-2",
               isStreaming: true,
               streamingMessage: {
@@ -115,6 +118,7 @@ describe("cancelExecution preserves partial reply", () => {
         t.id === tabId
           ? {
               ...t,
+              runtime: "pi" as const,
               sessionId: "sess-gen",
               isStreaming: true,
               streamGeneration: 2,

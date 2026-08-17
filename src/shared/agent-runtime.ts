@@ -44,11 +44,17 @@ export interface AgentEventBase {
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
   turnId: AgentTurnId;
+  /** Stable timeline id for idempotent Conversation projection. */
+  eventId?: string;
   subagent?: SubagentEventContext;
 }
 
 export interface SessionCreatedEvent extends AgentEventBase {
   type: "session_created";
+  /**
+   * Runtime / engine binding only.
+   * Never use as Conversation.conversationId or a history list key.
+   */
   sessionId: string;
 }
 
@@ -145,20 +151,26 @@ export type AgentEvent =
 export interface CreateSessionInput {
   tabId: AgentTabId;
   projectRoot: string;
+  conversationId?: string;
   boundCheckoutPath?: string;
   permissionMode?: PermissionMode;
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
+  /** Existing Pi SessionManager file to reopen. */
+  piSessionFile?: string;
 }
 
 export interface CreateSessionResult {
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
+  conversationId?: string;
+  piSessionFile?: string;
 }
 
 export interface TurnInput {
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
+  turnId?: AgentTurnId;
   text: string;
   systemPrompt?: string;
   permissionMode: PermissionMode;

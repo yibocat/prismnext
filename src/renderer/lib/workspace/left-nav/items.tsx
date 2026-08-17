@@ -1,5 +1,4 @@
-import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, Package, SettingsIcon, Sparkles } from "lucide-react";
-import { shouldShowExperimentalPiNav } from "@shared/pi-lab";
+import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, Package, SettingsIcon } from "lucide-react";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -69,23 +68,6 @@ const newAgentNav: LeftNavDefinition = {
     closeTexWorkspace(ctx);
   },
   trailing: <ShortcutKbdChips id="product.newChat" />,
-};
-
-const newPiAgentNav: LeftNavDefinition = {
-  id: "new-pi-agent",
-  section: "primary",
-  label: "New Pi Agent",
-  labelKey: "nav.newPiAgent",
-  icon: Sparkles,
-  order: 1,
-  isActive: () => false,
-  activate: (ctx) => {
-    useChatStore.getState().newPiSession();
-    const st = useLayoutStore.getState();
-    st.setLeftSidebarView("sessions");
-    st.clearPendingRightAreaRestore();
-    closeTexWorkspace(ctx);
-  },
 };
 
 const literatureNav: LeftNavDefinition = {
@@ -221,9 +203,6 @@ const settingsNav: LeftNavDefinition = {
 /** 应用启动时注册所有左侧栏入口（在 App.tsx 与 registerAllModes 一并调用） */
 export function registerLeftNavItems(): void {
   leftNavRegistry.register(newAgentNav);
-  if (shouldShowExperimentalPiNav({ isDev: import.meta.env.DEV })) {
-    leftNavRegistry.register(newPiAgentNav);
-  }
   leftNavRegistry.register(texWorkspaceNav);
   leftNavRegistry.register(literatureNav);
   leftNavRegistry.register(experimentsNav);

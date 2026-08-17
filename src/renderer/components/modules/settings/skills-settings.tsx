@@ -157,7 +157,6 @@ export function SkillsSettings({
     setSaving(true);
     try {
       await window.electronAPI.agentReinstallSkill(projectRoot, skill.id);
-      await window.electronAPI.chatPrewarm(projectRoot);
       await loadAll();
       setUpdatesBySkillId((prev) => {
         const next = { ...prev };
@@ -198,7 +197,6 @@ export function SkillsSettings({
     setSaving(true);
     try {
       await window.electronAPI.agentDeleteSkill(projectRoot, fqid);
-      await window.electronAPI.chatPrewarm(projectRoot);
       await loadAll();
       toast.success(t("settings.skillsPage.toast.removed", { name: fqid.split(":").pop() }));
     } finally {

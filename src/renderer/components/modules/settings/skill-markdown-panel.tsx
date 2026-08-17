@@ -182,14 +182,12 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     try {
       if (resetSource === "bundled") {
         await window.electronAPI.agentDeleteSkill(projectRoot, `${targetTeamId}:${slot.skillId}`);
-        await window.electronAPI.chatPrewarm(projectRoot);
         bumpSkillsRefresh();
         toast.success(t("settings.editor.skillMd.toast.restored"));
         closePanel();
         return;
       }
       await window.electronAPI.agentReinstallSkill(projectRoot, slot.skillId);
-      await window.electronAPI.chatPrewarm(projectRoot);
       bumpSkillsRefresh();
       toast.success(t("settings.editor.skillMd.toast.restored"));
       await loadContent({ silent: true });

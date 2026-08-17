@@ -55,9 +55,16 @@ async function buildRecentItems(
 
   if (projectRoot) {
     try {
-      const sessions = await window.electronAPI.sessionList(projectRoot);
+      const listed = await window.electronAPI.agentListSessions(projectRoot);
+      const sessions = listed.map((s) => ({
+        id: s.conversationId,
+        title: s.title,
+        lastModified: s.updatedAt,
+        createdAt: s.createdAt,
+        directory: s.directory,
+      }));
       return pickRecentSessionsForTray(sessions, 3).map((s) => {
-        const tab = tabs.find((tab) => tab.sessionId === s.id);
+        const tab = tabs.find((tab) => tab.id === s.id || tab.sessionId === s.id);
         const title =
           displayChatTitle(tab?.title && tab.title !== "New Chat" ? tab.title : s.title, t) ||
           s.title ||

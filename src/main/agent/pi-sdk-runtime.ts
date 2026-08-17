@@ -5,6 +5,7 @@
  * Electron 43 embeds Node 24.18, which meets Pi's Node >= 22.19.0 requirement.
  */
 
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   createAgentSession,
@@ -141,6 +142,25 @@ export class ClosedResourceLoader implements ResourceLoader {
   extendResources(): void {}
 }
 
+export type PiSessionPersist =
+  | { mode: "memory" }
+  | { mode: "create"; sessionDir: string }
+  | { mode: "open"; sessionFile: string; sessionDir?: string };
+
+export function createPiSessionManager(
+  cwd: string,
+  persist: PiSessionPersist = { mode: "memory" },
+): SessionManager {
+  if (persist.mode === "open") {
+    return SessionManager.open(persist.sessionFile, persist.sessionDir, cwd);
+  }
+  if (persist.mode === "create") {
+    mkdirSync(persist.sessionDir, { recursive: true });
+    return SessionManager.create(cwd, persist.sessionDir);
+  }
+  return SessionManager.inMemory(cwd);
+}
+
 export function closedPiSessionOptions(input: {
   cwd: string;
   agentDir: string;
@@ -216,6 +236,7 @@ export interface PiSdkSessionFactoryInput {
 
 interface PiSessionHandle {
   sessionId: string;
+  sessionFile?: string;
   prompt: (text: string) => Promise<void>;
   abort: () => Promise<void>;
   dispose: () => void;
@@ -235,6 +256,7 @@ export type PiSessionFactory = (opts: {
   allowedPaths: string[] | undefined;
   systemPrompt?: string;
   resourceLoader: ClosedResourceLoader;
+  persist?: PiSessionPersist;
 }) => Promise<PiSessionHandle>;
 
 /**
@@ -278,13 +300,14 @@ export function createPiSdkSessionFactory(
       getContext: () => turnContext,
     });
     const resourceLoader = new ClosedResourceLoader(input.systemPrompt);
+    const sessionManager = createPiSessionManager(opts.cwd, opts.persist);
     const { session } = await createAgentSession({
       cwd: opts.cwd,
       agentDir: opts.agentDir,
       model,
       modelRuntime,
       resourceLoader,
-      sessionManager: SessionManager.inMemory(opts.cwd),
+      sessionManager,
       settingsManager: SettingsManager.inMemory(),
       noTools: "builtin",
       tools: customTools.map((tool) => tool.name),
@@ -293,6 +316,7 @@ export function createPiSdkSessionFactory(
 
     return {
       sessionId: session.sessionId,
+      sessionFile: sessionManager.getSessionFile(),
       prompt: (text: string) => session.prompt(text, { expandPromptTemplates: false }),
       abort: () => session.abort(),
       dispose: () => session.dispose(),
@@ -353,6 +377,8 @@ export class PiSdkRuntime implements AgentRuntime {
       toolHost: ToolHost;
       gate: PermissionGate;
       agentDir: string;
+      persistSessions?: boolean;
+      piSessionDir?: string;
     },
   ) {
     if (typeof this.opts.toolHost?.addEventSink === "function") {
@@ -485,8 +511,14 @@ export class PiSdkRuntime implements AgentRuntime {
 
   async createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
     const runtimeSessionId = newRuntimeSessionId();
+    const conversationId = input.conversationId || runtimeSessionId;
     const agentDir = join(this.opts.agentDir, runtimeSessionId);
     const boundCheckoutPath = input.boundCheckoutPath || input.projectRoot;
+    const persist = input.piSessionFile
+      ? { mode: "open" as const, sessionFile: input.piSessionFile, sessionDir: this.opts.piSessionDir }
+      : this.opts.persistSessions && this.opts.piSessionDir
+        ? { mode: "create" as const, sessionDir: this.opts.piSessionDir }
+        : { mode: "memory" as const };
     const handle = await this.opts.createPiSession({
       runtimeSessionId,
       tabId: input.tabId,
@@ -497,6 +529,7 @@ export class PiSdkRuntime implements AgentRuntime {
       sessionAgent: input.sessionAgent,
       allowedPaths: input.allowedPaths,
       resourceLoader: new ClosedResourceLoader(),
+      persist,
     });
     const turnId = newTurnId();
     const unsubscribe = handle.subscribe((piEvent) => {
@@ -521,6 +554,7 @@ export class PiSdkRuntime implements AgentRuntime {
       activeTurn: null,
     });
     this.opts.store.createSession({
+      conversationId,
       runtimeSessionId,
       tabId: input.tabId,
       projectRoot: input.projectRoot,
@@ -528,8 +562,14 @@ export class PiSdkRuntime implements AgentRuntime {
       backend: "pi-sdk",
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
+      piSessionFile: handle.sessionFile,
     });
-    return { runtimeSessionId, tabId: input.tabId };
+    return {
+      runtimeSessionId,
+      tabId: input.tabId,
+      conversationId,
+      piSessionFile: handle.sessionFile,
+    };
   }
 
   async sendTurn(input: TurnInput): Promise<void> {
@@ -539,7 +579,7 @@ export class PiSdkRuntime implements AgentRuntime {
 
     const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
     const turnIndex = existingRecord?.turns.length ?? 0;
-    session.turnId = newTurnId();
+    session.turnId = input.turnId || newTurnId();
     session.activeTurn = {
       turnIndex,
       turnId: session.turnId,

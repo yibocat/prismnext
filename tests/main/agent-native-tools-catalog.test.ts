@@ -13,7 +13,7 @@ import {
   SYSTEM_TOOLS,
   INTERACTIVE_TOOLS,
 } from "../../src/main/agent/tools/index";
-import { createPiLabNativeTools } from "../../src/main/agent/pi-lab-service";
+import { createAgentNativeTools as createPiLabNativeTools } from "../../src/main/agent/agent-service";
 import { createPiNativeTools } from "../../src/main/agent/pi-sdk-runtime";
 import { ToolHost, type ToolExecuteContext } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
