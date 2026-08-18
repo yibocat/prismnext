@@ -10,7 +10,6 @@ import { dirname, isAbsolute, join, relative, extname } from "node:path";
 import { execSync } from "node:child_process";
 import { Type } from "@earendil-works/pi-ai";
 import { TOOL_NAMES } from "../../../shared/tool-names";
-import { runAiBashJob } from "../../services/ai-bash-runner";
 import { resolveFigureAbsPath } from "../../../shared/interaction-figure-fs";
 import {
   resolveProjectRuleWrite,
@@ -109,6 +108,12 @@ export const imageDescribeTool: NativeToolDefinition = {
   name: TOOL_NAMES.imageDescribe,
   label: "Describe Image",
   description: "Describe an image file with the configured multimodal vision helper model.",
+  promptGuidelines: [
+    "Use when you need the CONTENTS of an image (axes, values, visible text) and your current model cannot view images directly.",
+    "The helper model is configured in Settings → Models → Multimodal helper; without one this tool fails with a clear error.",
+    "Use `question` to focus the description (e.g. \"what is the y-axis unit?\") instead of a generic describe.",
+    "Requires an image inside the project; files outside the project root are rejected.",
+  ],
   parameters: Type.Object({
     path: Type.Optional(Type.String({ description: "Project-relative or absolute path to the image file" })),
     imagePath: Type.Optional(Type.String({ description: "Alternative alias for path" })),
@@ -179,42 +184,15 @@ export const imageDescribeTool: NativeToolDefinition = {
   },
 };
 
-export const bashTool: NativeToolDefinition = {
-  name: TOOL_NAMES.bash,
-  label: "Shell Command",
-  description: "Execute shell commands in the project directory via ai-pty.",
-  parameters: Type.Object({
-    command: Type.String({ minLength: 1, description: "Shell command to execute" }),
-    cwd: Type.Optional(Type.String({ description: "Working directory (defaults to projectRoot)" })),
-    description: Type.Optional(Type.String({ description: "Short description of what the command does" })),
-  }),
-  permission: {
-    category: "shell_exec",
-    extractBash: (args, projectRoot) => ({
-      command: str(args.command),
-      cwd: str(args.cwd) || projectRoot,
-    }),
-  },
-  async execute(args, ctx) {
-    const command = str(args.command);
-    if (!command) return { ok: false, error: "missing_command" };
-
-    const cwd = str(args.cwd) || ctx.projectRoot;
-    return runAiBashJob({
-      sessionId: ctx.runtimeSessionId,
-      chatTabId: ctx.tabId,
-      toolCallId: ctx.toolCallId,
-      command,
-      cwd,
-      projectRoot: ctx.projectRoot,
-    });
-  },
-};
-
 export const deleteTool: NativeToolDefinition = {
   name: TOOL_NAMES.delete,
   label: "Delete File",
   description: "Delete a single file by path in the project (uses git rm for tracked files).",
+  promptGuidelines: [
+    "Destructive and irreversible — confirm the exact path and the user's intent first.",
+    "Tracked files are removed via `git rm`, so the change stays recoverable in git history; untracked files are gone permanently.",
+    "Only files inside the project may be deleted; paths outside the project are denied.",
+  ],
   parameters: Type.Object({
     path: Type.Optional(Type.String({ description: "Relative or absolute file path to delete" })),
     filePath: Type.Optional(Type.String({ description: "Alternative alias for path" })),
@@ -247,6 +225,11 @@ export const moveTool: NativeToolDefinition = {
   name: TOOL_NAMES.move,
   label: "Move File",
   description: "Move or rename a file in the project (uses git mv for tracked files).",
+  promptGuidelines: [
+    "Tracked files are moved via `git mv`; other files use a plain rename. Creating intermediate directories is handled automatically.",
+    "Both source and destination must stay inside the project — cross-project moves are denied.",
+    "Update any references (imports, \u0022\\input\u0022, citations, links) that pointed at the old path after moving.",
+  ],
   parameters: Type.Object({
     source: Type.Optional(Type.String({ description: "Source file path" })),
     from: Type.Optional(Type.String({ description: "Alternative alias for source" })),
@@ -287,6 +270,11 @@ export const projectRuleWriteTool: NativeToolDefinition = {
   name: TOOL_NAMES.projectRuleWrite,
   label: "Write Project Rule",
   description: "Create or update a persistent project rule (.prismnext/agent/rules/<name>/RULE.md).",
+  promptGuidelines: [
+    "Use for conventions the agent must follow every turn in this project (citation style, naming, workflow) — not for one-off instructions.",
+    "Default mode is `create`; use `replace` to overwrite or `append` to extend an existing rule body.",
+    "Keep rules concise and behavioral; they are injected into every conversation for this project.",
+  ],
   parameters: Type.Object({
     name: Type.String({ minLength: 1, description: "Rule name slug (kebab-case)" }),
     description: Type.String({ minLength: 1, description: "Short description of what the rule enforces" }),

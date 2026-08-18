@@ -356,6 +356,61 @@ describe("pi sdk spike", () => {
     await runtime.disposeSession(b.runtimeSessionId);
   });
 
+  it("forwards inline images to the Pi session prompt for vision models", async () => {
+    const project = mkdtempSync(join(tmpdir(), "prism-pi-img-"));
+    const storeRoot = mkdtempSync(join(tmpdir(), "prism-pi-store-img-"));
+    dirs.push(project, storeRoot);
+    writeFileSync(join(project, "README.md"), "keep", "utf-8");
+
+    let seenImages: Array<{ mimeType: string; data: string }> | null = null;
+    let seenText = "";
+    const runtime = new PiSdkRuntime({
+      store: new AgentSessionStore(storeRoot),
+      toolHost: new ToolHost({ gate: new PermissionGate() }),
+      gate: new PermissionGate(),
+      agentDir: join(storeRoot, "pi-agent"),
+      createPiSession: async () => {
+        let listener: ((event: { type: string; assistantMessageEvent?: { type: string; delta: string } }) => void) | null = null;
+        return {
+          sessionId: "pi-img-session",
+          subscribe(next) {
+            listener = next;
+            return () => {
+              listener = null;
+            };
+          },
+          async prompt(text, images) {
+            seenText = text;
+            seenImages = images ?? null;
+            listener?.({ type: "agent_end" });
+          },
+          async abort() {},
+          dispose() {},
+        };
+      },
+    });
+    runtime.subscribe(() => {});
+
+    const session = await runtime.createSession({ tabId: "tab-img", projectRoot: project });
+    await runtime.sendTurn({
+      runtimeSessionId: session.runtimeSessionId,
+      tabId: "tab-img",
+      text: "what is in this image?",
+      images: [
+        { mimeType: "image/png", data: "aGVsbG8=" },
+        { mimeType: "image/jpeg", data: "d29ybGQ=" },
+      ],
+      permissionMode: "edit_auto",
+    });
+
+    expect(seenText).toBe("what is in this image?");
+    expect(seenImages).toEqual([
+      { mimeType: "image/png", data: "aGVsbG8=" },
+      { mimeType: "image/jpeg", data: "d29ybGQ=" },
+    ]);
+    await runtime.disposeSession(session.runtimeSessionId);
+  });
+
   it("does not load the real Pi package into the Electron-incompatible host path", async () => {
     const loaded = await tryLoadPiSdkModule();
     if (!isNodeCompatibleWithPi(process.versions.node)) {

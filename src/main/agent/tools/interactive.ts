@@ -18,6 +18,11 @@ export const questionTool: NativeToolDefinition = {
   description:
     "Ask the user a question and wait for their answer before continuing. " +
     "Use when you need clarification, a decision between discrete choices, or confirmation.",
+  promptGuidelines: [
+    "The turn is paused while the user answers — this is for REAL clarification, not a formality. Do not ask when you can decide from context; do not ask multiple trivial questions.",
+    "Prefer discrete `options` when there is a small set of choices; `multiSelect: true` for choosing several of them.",
+    "Handle `cancelled: true` in the result gracefully and continue with a reasonable default.",
+  ],
   parameters: Type.Object({
     question: Type.String({ minLength: 1, description: "The question prompt to present to the user" }),
     options: Type.Optional(Type.Array(Type.String(), { description: "List of discrete choice options (if applicable)" })),
@@ -58,6 +63,11 @@ export const suggestPlanTool: NativeToolDefinition = {
   label: "Suggest Plan Mode",
   description:
     "Suggest entering Plan mode for complex multi-phase research tasks (hypotheses, factor matrix, protocol design).",
+  promptGuidelines: [
+    "Use when the task benefits from a written, approved plan before execution — multi-step research, experimental design, manuscript restructure.",
+    "Do not use for simple or single-step tasks; do not call it repeatedly in one turn.",
+    "If the suggestion is not accepted, continue working directly without re-proposing.",
+  ],
   parameters: Type.Object({
     reason: Type.Optional(Type.String({ description: "One-sentence reason shown on the suggest strip" })),
   }),

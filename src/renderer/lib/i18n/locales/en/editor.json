@@ -1,0 +1,14 @@
+{
+  "findPanel": {
+    "find": "Find",
+    "replace": "Replace",
+    "replaceAll": "All",
+    "matchCase": "Match case",
+    "wholeWord": "Match whole word",
+    "regexp": "Use regular expression",
+    "previous": "Previous match",
+    "next": "Next match",
+    "close": "Close",
+    "toggleReplace": "Toggle replace"
+  }
+}

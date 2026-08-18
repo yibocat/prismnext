@@ -1926,6 +1926,7 @@ export interface ElectronAPI {
     description: string;
     category: string;
     schemaDescription: string;
+    promptGuidelines: string[];
   }>>;
   settingsGetLayers: () => Promise<Array<{ id: string; priority: number; source: string; userToggleable: boolean; enabled: boolean }>>;
   settingsSetLayer: (id: string, enabled: boolean) => Promise<void>;

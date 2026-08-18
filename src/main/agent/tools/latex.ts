@@ -18,6 +18,10 @@ export const latexRootTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexRoot,
   label: "Resolve LaTeX Root",
   description: "Find the active root document, engine, and build directory for the manuscript.",
+  promptGuidelines: [
+    "Call this before compiling or before reasoning about build paths; `mainFile` is optional and auto-detected when omitted.",
+    "The returned `buildDir` is where latex-compile keeps its artifacts — use it when you need to find compiled output.",
+  ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),
   }),
@@ -46,6 +50,10 @@ export const latexCompileTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompile,
   label: "Compile LaTeX",
   description: "Compile the manuscript using the bundled Tectonic engine or system TeX Live.",
+  promptGuidelines: [
+    "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool — use this tool so builds stay under .prismnext/compile/ and the manuscript folder stays clean.",
+    "Check the build output for errors, undefined citations, and missing references, then fix the source and recompile.",
+  ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),
     useTexlive: Type.Optional(Type.Boolean({ description: "Force use of system TeX Live if available" })),

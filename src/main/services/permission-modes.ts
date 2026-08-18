@@ -7,7 +7,7 @@ import {
   getToolPermissionEntry,
 } from "./tool-permission-registry";
 import {
-  buildSmartOpenCodePermissionRules,
+  buildSmartPermissionRules,
   resolveSmartPermissionAction,
   type SmartPermissionContext,
   type PermissionRulesConfig,
@@ -24,7 +24,7 @@ import {
  */
 export type PermissionMode = "ask" | "edit_auto" | "auto" | "readonly";
 
-export type OpenCodePermissionRule = "allow" | "ask" | "deny";
+export type PermissionRule = "allow" | "ask" | "deny";
 
 export const DEFAULT_PERMISSION_MODE: PermissionMode = "edit_auto";
 
@@ -76,18 +76,18 @@ export function resolveEffectiveAgentTerminalMode(
 /** OpenCode `permission` block for each chat permission mode. */
 export function getPermissionRulesForMode(
   mode: PermissionMode,
-): Record<string, OpenCodePermissionRule> {
+): Record<string, PermissionRule> {
   if (resolvePermissionMode(mode) === "readonly") {
     return buildLegacyPermissionRulesForMode("readonly");
   }
-  return buildSmartOpenCodePermissionRules();
+  return buildSmartPermissionRules();
 }
 
 /** Resolve the effective permission rule for a tool under the given mode. */
 export function getPermissionRuleForTool(
   mode: PermissionMode,
   toolName: string,
-): OpenCodePermissionRule | undefined {
+): PermissionRule | undefined {
   const entry = getToolPermissionEntry(toolName);
   if (entry) return entry.rules[mode];
   const key = toolName.toLowerCase();
@@ -142,7 +142,7 @@ export function extractPermissionToolName(params: Record<string, unknown>): stri
 
 export type PermissionAction = "prompt" | "allow" | "deny";
 
-function ruleToPermissionAction(rule: OpenCodePermissionRule): PermissionAction {
+function ruleToPermissionAction(rule: PermissionRule): PermissionAction {
   if (rule === "allow") return "allow";
   if (rule === "deny") return "deny";
   return "prompt";

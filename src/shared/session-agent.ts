@@ -16,7 +16,7 @@ export type SessionAgent = "build" | "plan";
 /** Chat permission modes (mirrors permission-modes.ts). */
 export type PermissionMode = "ask" | "edit_auto" | "auto" | "readonly";
 
-export type OpenCodePermissionRule = "allow" | "ask" | "deny";
+export type PermissionRule = "allow" | "ask" | "deny";
 
 export function resolveSessionAgent(value?: string | null): SessionAgent {
   return value === "plan" ? "plan" : "build";
@@ -143,7 +143,7 @@ function planDraftAwaitingApproval(ctx?: PlanPermissionContext): boolean {
 export function getPlanPermissionOverride(
   toolName: string,
   ctx?: PlanPermissionContext,
-): OpenCodePermissionRule | undefined {
+): PermissionRule | undefined {
   const key = toolName.toLowerCase();
   const draftAwaiting = planDraftAwaitingApproval(ctx);
 
@@ -210,7 +210,7 @@ export function isResearchPlansDirPath(
 function getPermissionRuleForTool(
   mode: PermissionMode,
   toolName: string,
-): OpenCodePermissionRule | undefined {
+): PermissionRule | undefined {
   const entry = getToolPermissionEntry(toolName);
   if (entry) return entry.rules[mode];
   const key = toolName.toLowerCase();
@@ -224,7 +224,7 @@ export function resolveEffectivePermissionRule(
   agent: SessionAgent,
   toolName: string,
   ctx?: PlanPermissionContext,
-): OpenCodePermissionRule {
+): PermissionRule {
   const key = toolName.toLowerCase();
   // HARD: brief.md is tool-owned for Build and Plan — never generic edit/write.
   if (

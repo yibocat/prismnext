@@ -14,6 +14,7 @@ import { ToolHost } from "./tool-host";
 import type { NativeToolDefinition } from "./tools/types";
 import type { ResolvedPiRosterEntry } from "./team-binding";
 import { ALL_NATIVE_TOOLS } from "./tools/index";
+import type { HostSkillDir } from "./skill-loader";
 
 export interface SubagentSessionRunnerInput {
   runtimeSessionId: string;
@@ -27,6 +28,7 @@ export interface SubagentSessionRunnerInput {
   thoughtLevel?: string;
   temperature?: number;
   allowedToolNames?: string[];
+  skills?: HostSkillDir[];
   emitEvent: (event: AgentEvent) => void;
   abortSignal: AbortSignal;
 }
@@ -45,6 +47,10 @@ export interface PiSubsessionRuntimeOpts {
   allTools?: readonly NativeToolDefinition[];
   gate: PermissionGate;
   createRunner?: SubagentSessionRunnerFactory;
+  /** Team skills shared with every expert sub-session (loaded into the child loader). */
+  skills?: HostSkillDir[];
+  /** Pre-rendered subagent profile module prompts appended to each expert system prompt. */
+  profileModules?: string;
   onEvent?: (event: AgentEvent) => void;
 }
 
@@ -173,18 +179,22 @@ export class PiSubsessionRuntime {
         }
 
         const childSessionId = `sub-${input.parentSessionId}-${Date.now()}`;
+        const profilePart = this.opts.profileModules?.trim()
+          ? `\n\n${this.opts.profileModules.trim()}`
+          : "";
         const runner = await this.opts.createRunner({
           runtimeSessionId: childSessionId,
           tabId: input.parentTabId,
           turnId: input.parentTurnId,
           projectRoot: input.projectRoot,
           boundCheckoutPath: input.boundCheckoutPath,
-          systemPrompt: input.expert.instructions,
+          systemPrompt: `${input.expert.instructions}${profilePart}`,
           scopedToolHost,
           modelRef: input.expert.modelRef,
           thoughtLevel: input.expert.thoughtLevel,
           temperature: input.expert.temperature,
           allowedToolNames: input.expert.allowedTools,
+          skills: this.opts.skills,
           emitEvent: (ev) => {
             if (ev.type === "text_delta") {
               childText += ev.text;

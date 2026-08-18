@@ -29,6 +29,11 @@ export const experimentLogTool: NativeToolDefinition = {
   name: TOOL_NAMES.experimentLog,
   label: "Manage Experiment Log",
   description: "List, create, read, or append runs to experiment islands in the workspace registry.",
+  promptGuidelines: [
+    "This records and reads experiment provenance — use `detect_env` after creating an island to capture the environment, and `append_run` for each executed run.",
+    "Use `list` / `read` to inspect islands and their run windows before deciding what to analyze.",
+    "This tool does not execute commands; to run a command in an island use experiment-run.",
+  ],
   parameters: Type.Object({
     action: Type.String({ minLength: 1, description: "Operation: list | create | read | append_run | detect_env | open" }),
     title: Type.Optional(Type.String({ description: "create only — experiment title" })),
@@ -74,6 +79,11 @@ export const experimentRunTool: NativeToolDefinition = {
   name: TOOL_NAMES.experimentRun,
   label: "Run Experiment",
   description: "Run a shell command in an existing experiment island and record its execution in the Job Monitor.",
+  promptGuidelines: [
+    "Target an existing island slug (`id`) — create one with experiment-log first if needed.",
+    "The command runs under PermissionGate like bash; output is streamed live to the Job Monitor and recorded in the island's run log.",
+    "Declare `artifacts` (relative paths the command produces) and a `kind` (train/eval/plot/data/setup/other) so the run is properly catalogued.",
+  ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Target experiment slug (e.g. exp-20260707-...)" }),
     command: Type.String({ minLength: 1, description: "Shell command to run in the island" }),
@@ -131,6 +141,11 @@ export const resultsSnapshotTool: NativeToolDefinition = {
   name: TOOL_NAMES.resultsSnapshot,
   label: "Snapshot Experiment Results",
   description: "Scan an experiment island for output figures, tables, and metrics without writing to registry.",
+  promptGuidelines: [
+    "Use after a run to summarize what an experiment produced — figures, CSV tables, JSON metrics — for Methods or a reply.",
+    "Complements experiment-log (run history); this tool scans output files and does not modify the registry.",
+    "Files it cannot parse are still listed, so you can read them yourself.",
+  ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Experiment slug to inspect" }),
     scanDirs: Type.Optional(Type.Array(Type.String(), { description: "Optional subdirectories to scan" })),
@@ -168,6 +183,11 @@ export const provenanceQueryTool: NativeToolDefinition = {
   name: TOOL_NAMES.provenanceQuery,
   label: "Query Provenance",
   description: "Query provenance history (.prismnext/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
+  promptGuidelines: [
+    "Use `resolve_artifact` to answer \"which run produced this file\" (command/env/exit/chat), and `resolve_run` for a run by id.",
+    "An empty/null result is honest — nothing is recorded yet; report that rather than inventing a provenance.",
+    "Valuable when writing Methods (cite the real command that produced a figure) or reproducing a result.",
+  ],
   parameters: Type.Object({
     action: Type.String({ minLength: 1, description: "Operation: resolve_artifact | resolve_run | list_recent" }),
     artifactPath: Type.Optional(Type.String({ description: "Project-relative path of the artifact to resolve" })),

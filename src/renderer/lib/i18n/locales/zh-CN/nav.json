@@ -1,0 +1,41 @@
+{
+  "newAgent": "新建对话",
+  "newPiAgent": "新建 Pi 对话",
+  "library": "文献库",
+  "experiments": "实验",
+  "templates": "模板",
+  "texWorkspace": "TeX 工作区",
+  "settings": "设置",
+  "updateToVersion": "更新到 {{version}}",
+  "sessions": {
+    "pinned": "已固定",
+    "sessions": "会话",
+    "archived": "已归档",
+    "showArchived": "显示已归档",
+    "filter": "筛选",
+    "sort": "排序",
+    "lastUpdated": "最近更新",
+    "dateCreated": "创建时间",
+    "noSessions": "暂无会话",
+    "openProjectHint": "打开项目以开始",
+    "pin": "固定会话",
+    "unpin": "取消固定",
+    "archive": "归档",
+    "restore": "恢复",
+    "delete": "删除",
+    "justNow": "刚刚",
+    "minutesAgo": "{{n}} 分钟前",
+    "hoursAgo": "{{n}} 小时前",
+    "daysAgo": "{{n}} 天前",
+    "showActive": "显示进行中的会话",
+    "restoreFromArchive": "从归档恢复"
+  },
+  "project": {
+    "noProject": "未打开项目",
+    "noRecent": "暂无最近项目",
+    "newProject": "新建项目…",
+    "openProject": "打开项目…",
+    "closeProject": "关闭项目"
+  },
+  "teams": "团队"
+}

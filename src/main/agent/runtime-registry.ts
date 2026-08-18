@@ -8,6 +8,7 @@ import {
   type ConversationBinding,
 } from "../../shared/agent-conversation";
 import type { PermissionMode } from "../../shared/session-agent";
+import type { AgentTurnImage } from "../../shared/agent-runtime";
 import type { AgentRuntime } from "./runtime";
 import {
   AgentSessionStore,
@@ -151,6 +152,7 @@ export class RuntimeRegistry {
     tabId: string;
     turnId?: string;
     text: string;
+    images?: AgentTurnImage[];
     permissionMode: PermissionMode;
   }): Promise<void> {
     const live = this.live.get(input.conversationId);
@@ -160,6 +162,7 @@ export class RuntimeRegistry {
       tabId: input.tabId,
       turnId: input.turnId,
       text: input.text,
+      images: input.images,
       permissionMode: input.permissionMode,
     });
   }

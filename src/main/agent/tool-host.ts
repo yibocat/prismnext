@@ -106,6 +106,10 @@ export class ToolHost {
         name: tool.name,
         label: tool.label,
         description: tool.description,
+        ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+        ...(tool.promptGuidelines?.length
+          ? { promptGuidelines: tool.promptGuidelines }
+          : {}),
         parameters: tool.parameters,
         execute: async (toolCallId, args, signal) => {
           const result = await this.execute(tool.name, args as Record<string, unknown>, {

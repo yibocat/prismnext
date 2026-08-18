@@ -1,0 +1,14 @@
+{
+  "quickCommand": {
+    "add": "Add Quick Command",
+    "edit": "Edit Command",
+    "desc": "Save a frequently-used shell command for quick access.",
+    "label": "Label",
+    "labelPlaceholder": "e.g. Git Status",
+    "command": "Command",
+    "commandPlaceholder": "e.g. git status",
+    "description": "Description",
+    "optional": "(optional)",
+    "descPlaceholder": "Brief description of what this command does"
+  }
+}

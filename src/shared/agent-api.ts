@@ -63,6 +63,14 @@ export interface AgentSendAttachment {
   path: string;
 }
 
+/** Inline image for a multimodal agent turn (base64, no data: prefix). */
+export interface AgentSendImage {
+  mimeType: string;
+  /** Raw base64 image bytes (no data: prefix). */
+  data: string;
+  name?: string;
+}
+
 export interface AgentSendInput {
   conversationId: string;
   /** UI window id. Defaults to conversationId. Not a product primary key. */
@@ -71,6 +79,8 @@ export interface AgentSendInput {
   projectRoot: string;
   text: string;
   attachments?: AgentSendAttachment[];
+  /** Inline images passed straight to the Pi session for vision-capable models. */
+  images?: AgentSendImage[];
   sessionTeamId?: string;
   provider?: string;
   modelId?: string;
@@ -78,6 +88,8 @@ export interface AgentSendInput {
   permissionMode?: PermissionMode;
   /** Composer `/` MCP names for this turn. Empty / omitted = only autoStart servers. */
   mcpServerAllowlist?: string[];
+  /** Composer `/` skills for this turn. Loaded via team binding extraSkillIds. */
+  skillIds?: string[];
 }
 
 export interface AgentSendResult {

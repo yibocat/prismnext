@@ -177,11 +177,20 @@ export interface CreateSessionResult {
   piSessionFile?: string;
 }
 
+export interface AgentTurnImage {
+  mimeType: string;
+  /** Raw base64 image bytes (no data: prefix). */
+  data: string;
+  name?: string;
+}
+
 export interface TurnInput {
   runtimeSessionId: RuntimeSessionId;
   tabId: AgentTabId;
   turnId?: AgentTurnId;
   text: string;
+  /** Inline images for vision-capable models. */
+  images?: AgentTurnImage[];
   systemPrompt?: string;
   permissionMode: PermissionMode;
   sessionAgent?: SessionAgent;

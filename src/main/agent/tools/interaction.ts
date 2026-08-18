@@ -39,6 +39,10 @@ export const interactionListTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionList,
   label: "List Interactions",
   description: "List saved figure and plot Interaction objects in .prismnext/interactions/.",
+  promptGuidelines: [
+    "Use before updating an object or when the user asks what figures/plots already exist.",
+    "`kindPrefix` narrows to e.g. `plot.` or `figure.`; ids returned here feed interaction-read / interaction-open.",
+  ],
   parameters: Type.Object({
     kindPrefix: Type.Optional(Type.String({ description: "Optional kind prefix filter (e.g. plot. or figure.)" })),
   }),
@@ -56,6 +60,10 @@ export const interactionReadTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionRead,
   label: "Read Interaction",
   description: "Read one Interaction spec from .prismnext/interactions/<id>/spec.json (returns full JSON + fenceMarkdown for chat embed).",
+  promptGuidelines: [
+    "Use interaction-list to discover ids first; ids are the directory names under .prismnext/interactions/.",
+    "The returned `fenceMarkdown` is what you embed in your reply to give the user a clickable card.",
+  ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Exact interaction ID slug" }),
   }),
@@ -77,6 +85,11 @@ export const interactionWriteTool: NativeToolDefinition = {
   description:
     "Create or update an Interaction spec (.prismnext/interactions/<id>/spec.json). " +
     "Embed the returned fenceMarkdown in your assistant reply after success.",
+  promptGuidelines: [
+    "An Interaction is for figures/plots the user will REVISIT — not a one-shot peek (use an `artifact` fence for that).",
+    "After a successful write, embed the returned `fenceMarkdown` in your reply so the user gets a clickable card.",
+    "Prefer updating an existing interaction (interaction-read first) over creating duplicates.",
+  ],
   parameters: Type.Object({
     spec: Type.Any({ description: "Full InteractionSpec object (figure.static or plot.*)" }),
   }),
@@ -115,6 +128,10 @@ export const interactionOpenTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionOpen,
   label: "Open Interaction",
   description: "Open an Interaction object in the RightArea panel (focus tab).",
+  promptGuidelines: [
+    "Read-only — does not mutate the spec. Use when the user explicitly asks to open the panel view.",
+    "Still prefer embedding the `fenceMarkdown` from interaction-read/write in your reply so the user also has a chat card.",
+  ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Interaction ID to open" }),
     focus: Type.Optional(Type.Boolean({ description: "Whether to focus the RightArea tab (default true)" })),

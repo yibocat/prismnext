@@ -1,0 +1,41 @@
+{
+  "newAgent": "New Agent",
+  "newPiAgent": "New Agent",
+  "library": "Library",
+  "experiments": "Experiments",
+  "templates": "Templates",
+  "texWorkspace": "TeX Workspace",
+  "settings": "Settings",
+  "updateToVersion": "Update to {{version}}",
+  "sessions": {
+    "pinned": "Pinned",
+    "sessions": "Sessions",
+    "archived": "Archived",
+    "showArchived": "Show archived",
+    "filter": "Filter",
+    "sort": "Sort",
+    "lastUpdated": "Last updated",
+    "dateCreated": "Date created",
+    "noSessions": "No sessions yet",
+    "openProjectHint": "Open a project to start",
+    "pin": "Pin session",
+    "unpin": "Unpin session",
+    "archive": "Archive",
+    "restore": "Restore",
+    "delete": "Delete",
+    "justNow": "just now",
+    "minutesAgo": "{{n}}m ago",
+    "hoursAgo": "{{n}}h ago",
+    "daysAgo": "{{n}}d ago",
+    "showActive": "Show active sessions",
+    "restoreFromArchive": "Restore from archive"
+  },
+  "project": {
+    "noProject": "No Project Open",
+    "noRecent": "No recent projects",
+    "newProject": "New Project...",
+    "openProject": "Open Project...",
+    "closeProject": "Close Project"
+  },
+  "teams": "Teams"
+}

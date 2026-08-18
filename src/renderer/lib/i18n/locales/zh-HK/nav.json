@@ -1,0 +1,41 @@
+{
+  "newAgent": "新建對話",
+  "newPiAgent": "新建 Pi 對話",
+  "library": "文獻庫",
+  "experiments": "實驗",
+  "templates": "模板",
+  "texWorkspace": "TeX 工作區",
+  "settings": "設定",
+  "updateToVersion": "更新到 {{version}}",
+  "sessions": {
+    "pinned": "已固定",
+    "sessions": "會話",
+    "archived": "已歸檔",
+    "showArchived": "顯示已歸檔",
+    "filter": "篩選",
+    "sort": "排序",
+    "lastUpdated": "最近更新",
+    "dateCreated": "建立時間",
+    "noSessions": "暫無會話",
+    "openProjectHint": "開啟專案以開始",
+    "pin": "固定會話",
+    "unpin": "取消固定",
+    "archive": "歸檔",
+    "restore": "恢復",
+    "delete": "刪除",
+    "justNow": "剛剛",
+    "minutesAgo": "{{n}} 分鐘前",
+    "hoursAgo": "{{n}} 小時前",
+    "daysAgo": "{{n}} 天前",
+    "showActive": "顯示進行中的會話",
+    "restoreFromArchive": "從歸檔恢復"
+  },
+  "project": {
+    "noProject": "未開啟專案",
+    "noRecent": "暫無最近專案",
+    "newProject": "新建專案…",
+    "openProject": "開啟專案…",
+    "closeProject": "關閉專案"
+  },
+  "teams": "團隊"
+}

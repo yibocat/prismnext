@@ -1,6 +1,6 @@
 /**
- * Canonical OpenCode tool names for prismnext built-in tools.
- * Single source for prompt strings — do not hardcode tool names elsewhere.
+ * Canonical tool names for prismnext built-in tools.
+ * Single source for prompt strings and widget dispatch — do not hardcode tool names elsewhere.
  */
 export const TOOL_NAMES = {
   question: "question",

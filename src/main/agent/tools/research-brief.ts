@@ -33,6 +33,11 @@ export const researchBriefUpdateTool: NativeToolDefinition = {
   name: TOOL_NAMES.researchBriefUpdate,
   label: "Update Research Brief",
   description: "Update one section of the project research brief (.brief.md).",
+  promptGuidelines: [
+    "This is the ONLY sanctioned way to write .brief.md — never edit it with generic edit/write.",
+    "Read the brief first to match an existing section header; use `append: true` to add to a section instead of replacing it.",
+    "Update the brief whenever the research question, design, or hypotheses change so the living document stays current.",
+  ],
   parameters: Type.Object({
     section: Type.String({ minLength: 1, description: "Section header name to update" }),
     content: Type.String({ minLength: 1, description: "Markdown body content for this section" }),

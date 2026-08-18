@@ -7,7 +7,6 @@ import {
   PI_DEFAULT_CODING_IDENTITY,
   buildAgentSystemPrompt,
   buildAgentUserText,
-  createAgentExperimentRunner,
   createAgentNativeTools,
   createAgentService,
   resolveAgentAuth,
@@ -138,64 +137,6 @@ describe("pi lab native tools", () => {
       interpreter: undefined,
       pythonPath: undefined,
     }]);
-  });
-
-  it("maps a missing experiment folder to a structured error and does not kick off", async () => {
-    const kickoffs: unknown[] = [];
-    const run = createAgentExperimentRunner({
-      resolveCtx: () => ({ ok: false, error: "no_experiment_folder", hint: "create one" }),
-      isCtxError: (ctx) => "ok" in ctx && ctx.ok === false,
-      kickoff: async (args) => {
-        kickoffs.push(args);
-        return { runId: "r1", executionId: "e1" };
-      },
-    });
-    await expect(run({
-      experimentId: "exp-1",
-      command: "echo hi",
-      toolCallId: "call-1",
-      projectRoot: "/tmp/project",
-    })).resolves.toEqual({
-      ok: false,
-      error: "no_experiment_folder",
-      hint: "create one",
-    });
-    expect(kickoffs).toEqual([]);
-  });
-
-  it("kicks off an existing island with the tool args", async () => {
-    const run = createAgentExperimentRunner({
-      resolveCtx: (projectRoot) => ({
-        projectRoot,
-        registryRoot: `${projectRoot}/.prismnext/experiments`,
-        workspaceRel: "experiment",
-        workspaceAbs: `${projectRoot}/experiment`,
-      }),
-      isCtxError: (ctx) => "ok" in ctx && ctx.ok === false,
-      kickoff: async (args) => {
-        expect(args.id).toBe("exp-1");
-        expect(args.command).toBe("python train.py");
-        expect(args.artifacts).toEqual(["metrics.json"]);
-        expect(args.notes).toBe("from lab");
-        expect(args.kind).toBe("train");
-        expect(args.chatSessionId).toBe("call-1");
-        return { runId: "run-1", executionId: "exec-1" };
-      },
-    });
-    await expect(run({
-      experimentId: "exp-1",
-      command: "python train.py",
-      toolCallId: "call-1",
-      projectRoot: "/tmp/project",
-      artifacts: ["metrics.json"],
-      notes: "from lab",
-      kind: "train",
-    })).resolves.toEqual({
-      ok: true,
-      started: true,
-      runId: "run-1",
-      executionId: "exec-1",
-    });
   });
 });
 

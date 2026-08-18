@@ -1,4 +1,4 @@
-import type { OpenCodePermissionRule, PermissionMode } from "./permission-modes";
+import type { PermissionRule, PermissionMode } from "./permission-modes";
 
 export type PermissionConfirmUx = "diff" | "command" | "patch" | "inline" | "none";
 
@@ -15,11 +15,11 @@ export interface ToolPermissionEntry {
   confirmUx: PermissionConfirmUx;
   usesProposedChange?: boolean;
   diskMutation?: boolean;
-  rules: Record<PermissionMode, OpenCodePermissionRule>;
+  rules: Record<PermissionMode, PermissionRule>;
 }
 
 /** Ask + Edit auto ask; Auto allow; Read-only deny. */
-const FILE_MUTATION: Record<PermissionMode, OpenCodePermissionRule> = {
+const FILE_MUTATION: Record<PermissionMode, PermissionRule> = {
   ask: "ask",
   edit_auto: "allow",
   auto: "allow",
@@ -27,7 +27,7 @@ const FILE_MUTATION: Record<PermissionMode, OpenCodePermissionRule> = {
 };
 
 /** Ask + Edit auto ask; Auto allow (OpenCode --auto); Read-only deny. */
-const SHELL: Record<PermissionMode, OpenCodePermissionRule> = {
+const SHELL: Record<PermissionMode, PermissionRule> = {
   ask: "ask",
   edit_auto: "ask",
   auto: "allow",
@@ -35,14 +35,14 @@ const SHELL: Record<PermissionMode, OpenCodePermissionRule> = {
 };
 
 /** Destructive: still ask in Edit auto; allow in full Auto. */
-const DESTRUCTIVE: Record<PermissionMode, OpenCodePermissionRule> = {
+const DESTRUCTIVE: Record<PermissionMode, PermissionRule> = {
   ask: "ask",
   edit_auto: "ask",
   auto: "allow",
   readonly: "deny",
 };
 
-const READ_ONLY: Record<PermissionMode, OpenCodePermissionRule> = {
+const READ_ONLY: Record<PermissionMode, PermissionRule> = {
   ask: "allow",
   edit_auto: "allow",
   auto: "allow",
@@ -52,13 +52,12 @@ const READ_ONLY: Record<PermissionMode, OpenCodePermissionRule> = {
 /**
  * Single source of truth for tool permission rules + UI metadata.
  *
- * Only tools that actually exist in OpenCode (built-in or prismnext custom) are
- * listed here.  See https://opencode.ai/docs/tools/ and
- * https://opencode.ai/docs/permissions/ for the authoritative list.
+ * Lists every prismnext host tool and the Pi primitives that need a rule row
+ * (built-in or prismnext custom). Rules drive readonly-mode mapping and renderer
+ * widget metadata; runtime gate decisions happen in PermissionGate + the shared
+ * smart permission policy.
  *
- * prismnext custom tools (`delete`, `move`) use destructive rules. Like custom
- * `bash`, OpenCode may invoke `execute()` before ACP `requestPermission`;
- * tools poll the file bridge and main process syncs the gate from tool_call.
+ * prismnext custom tools (`delete`, `move`) use destructive rules.
  */
 export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   edit: { permissionGroup: "file_write", confirmUx: "diff", diskMutation: true, rules: FILE_MUTATION },
@@ -121,8 +120,8 @@ export function getToolPermissionEntry(toolName: string): ToolPermissionEntry | 
 
 export function buildPermissionRulesForMode(
   mode: PermissionMode,
-): Record<string, OpenCodePermissionRule> {
-  const out: Record<string, OpenCodePermissionRule> = {};
+): Record<string, PermissionRule> {
+  const out: Record<string, PermissionRule> = {};
   for (const [name, entry] of Object.entries(TOOL_PERMISSION_REGISTRY)) {
     out[name] = entry.rules[mode];
   }

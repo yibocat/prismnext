@@ -55,10 +55,9 @@ import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
 import { RuntimeRegistry, type StartRuntimeInput } from "./runtime-registry";
-import { createRepresentativeTools, type ExperimentRunFn } from "./representative-tools";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { InteractionBroker } from "./interaction-broker";
-import { ALL_NATIVE_TOOLS, type NativeToolDefinition } from "./tools/index";
+import { ALL_NATIVE_TOOLS, type NativeToolDefinition, type ExperimentRunFn } from "./tools/index";
 import { resolveTeamPiBinding, type ResolvedPiLeadConfig, type ResolvedPiRosterEntry, type TeamPiBindingInput, type TeamPiBindingResult } from "./team-binding";
 import { buildPermissionRulesFromSettings } from "../services/permission-modes";
 import {
@@ -81,9 +80,6 @@ import {
   selectMcpServers,
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
-import type { ExperimentCtxResult } from "../services/experiment-log-service";
-import type { KickoffExperimentRunArgs } from "../services/experiment-run-executor";
-import { parseExperimentRunKind } from "../../shared/experiment-log";
 
 const AGENT_TOOLS = [
   ...PI_PRIMITIVE_TOOL_NAMES,
@@ -150,40 +146,6 @@ export function buildAgentUserText(input: {
   const rules = input.projectRules?.trim();
   const text = input.text.trim();
   return rules ? `${rules}\n\n${text}` : text;
-}
-
-export function createAgentExperimentRunner(deps: {
-  resolveCtx: (projectRoot: string) => ExperimentCtxResult;
-  isCtxError: (ctx: ExperimentCtxResult) => boolean;
-  kickoff: (args: KickoffExperimentRunArgs) => Promise<{ runId: string; executionId: string } | undefined>;
-}): ExperimentRunFn {
-  return async (input) => {
-    const ctx = deps.resolveCtx(input.projectRoot);
-    if (deps.isCtxError(ctx)) {
-      const err = ctx as Extract<ExperimentCtxResult, { ok: false }>;
-      return { ok: false, error: err.error, hint: err.hint };
-    }
-    const started = await deps.kickoff({
-      ctx: ctx as Exclude<ExperimentCtxResult, { ok: false }>,
-      id: input.experimentId,
-      command: input.command,
-      artifacts: input.artifacts,
-      notes: input.notes,
-      kind: parseExperimentRunKind(input.kind),
-      interpreter: input.interpreter === "external" ? "external" : undefined,
-      pythonPath: input.pythonPath,
-      chatSessionId: input.toolCallId,
-    });
-    if (!started) {
-      return { ok: false, error: "experiment_not_found" };
-    }
-    return {
-      ok: true,
-      started: true,
-      runId: started.runId,
-      executionId: started.executionId,
-    };
-  };
 }
 
 export function createAgentNativeTools(deps?: {
@@ -350,6 +312,7 @@ export class AgentService {
       teamBinding = resolverFn({
         projectRoot,
         sessionTeamId: input.sessionTeamId,
+        extraSkillIds: input.skillIds,
       });
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -426,6 +389,7 @@ export class AgentService {
         tabId: this.activeTabId,
         turnId: input.turnId,
         text: userText,
+        images: input.images,
         permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
       });
       return { ok: true };
@@ -798,6 +762,13 @@ export class AgentService {
     toolHost.registerAll(createAgentNativeTools());
 
     if (ctx.roster && ctx.roster.length > 0) {
+      const { buildPromptContext } = await import("../prompts/context");
+      const { composeSubagentProfileModulePrompts } = await import(
+        "../prompts/resolve-active-modules"
+      );
+      const profileModules = await composeSubagentProfileModulePrompts(
+        await buildPromptContext(input.projectRoot),
+      );
       const subsessionRuntime = new PiSubsessionRuntime({
         allTools: ALL_NATIVE_TOOLS,
         gate,
@@ -813,6 +784,8 @@ export class AgentService {
           interactions,
           agentRoot,
         }),
+        skills: ctx.skills?.map((skill) => ({ dir: skill.dir, source: skill.fqid })),
+        profileModules,
         onEvent: (event) => this.sink?.(event),
       });
       this.subsessionRuntimes.set(input.conversationId, subsessionRuntime);

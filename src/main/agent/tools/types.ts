@@ -40,7 +40,28 @@ export interface NativeToolDefinition<TParams extends TSchema = TSchema> {
   name: string;
   label: string;
   description: string;
+  /** Short one-line hint shown in the Pi tool list next to the name. */
+  promptSnippet?: string;
+  /**
+   * Detailed usage guidelines injected into the Pi system prompt as bullets.
+   * Carry the "how/when/boundaries" that would bloat `description`.
+   */
+  promptGuidelines?: string[];
   parameters: TParams;
   permission: ToolPermissionDeclaration;
   execute: (args: Record<string, any>, ctx: ToolExecuteContext) => Promise<unknown>;
 }
+
+/** Executor adapter signature for the `experiment-run` native tool. */
+export type ExperimentRunFn = (input: {
+  experimentId: string;
+  command: string;
+  toolCallId: string;
+  projectRoot: string;
+  abortSignal?: AbortSignal;
+  artifacts?: string[];
+  notes?: string;
+  kind?: string;
+  interpreter?: string;
+  pythonPath?: string;
+}) => Promise<unknown>;

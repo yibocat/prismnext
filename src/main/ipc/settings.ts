@@ -201,6 +201,7 @@ export function registerSettingsHandlers(): void {
       description: tool.notes,
       category: "utility",
       schemaDescription: tool.notes,
+      promptGuidelines: [] as string[],
     }));
     const host = ALL_NATIVE_TOOLS.map((tool) => ({
       name: tool.name,
@@ -208,6 +209,7 @@ export function registerSettingsHandlers(): void {
       description: tool.description,
       category: categoryFor(tool.name),
       schemaDescription: tool.description,
+      promptGuidelines: tool.promptGuidelines ?? [],
     }));
     return [...primitives, ...host];
   });

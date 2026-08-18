@@ -1,0 +1,61 @@
+{
+  "title": "團隊",
+  "searchPlaceholder": "搜尋團隊…",
+  "tabs": {
+    "all": "全部",
+    "installed": "已安裝"
+  },
+  "noProject": "開啟一個項目後即可瀏覽和安裝團隊。",
+  "empty": "沒有匹配的團隊。",
+  "categories": {
+    "general": "通用",
+    "research": "研究"
+  },
+  "card": {
+    "install": "安裝",
+    "uninstall": "卸載",
+    "manage": "管理",
+    "moreActions": "更多操作",
+    "added": "已安裝",
+    "disabled": "已停用",
+    "proLocked": "Pro",
+    "incompatible": "不兼容",
+    "notInstalled": "未安裝",
+    "installedActive": "已安裝·啟用中",
+    "installedDisabled": "已安裝·已停用",
+    "installedProLocked": "已安裝·Pro 鎖定",
+    "goActivate": "前往啟用"
+  },
+  "kinds": {
+    "orchestrator": "主 Agent",
+    "expert": "專家",
+    "skill": "技能",
+    "command": "命令",
+    "mcp": "MCP 服務"
+  },
+  "meta": {
+    "title": "資訊",
+    "status": "狀態",
+    "publisher": "發佈者",
+    "version": "版本",
+    "tier": "層級",
+    "category": "分類",
+    "tags": "標籤",
+    "minHostVersion": "需要應用版本"
+  },
+  "toast": {
+    "installed": "團隊已安裝。",
+    "uninstalled": "團隊已卸載。"
+  },
+  "suggestion": {
+    "text": "將「{{pack}}」的主 Agent 設為預設？",
+    "accept": "設為預設",
+    "done": "預設主 Agent 已更新。"
+  },
+  "subtitle": "安裝由主 Agent、專家、技能和命令組成的團隊。",
+  "backToList": "返回團隊列表",
+  "manage": "在設定中管理",
+  "sidebar": "瀏覽",
+  "count": "{{count}} 個團隊",
+  "clearSearch": "清除搜尋"
+}

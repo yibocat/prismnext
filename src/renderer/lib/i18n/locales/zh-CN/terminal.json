@@ -1,0 +1,14 @@
+{
+  "quickCommand": {
+    "add": "添加快捷命令",
+    "edit": "编辑命令",
+    "desc": "保存常用 Shell 命令以便快速访问。",
+    "label": "名称",
+    "labelPlaceholder": "例如 Git Status",
+    "command": "命令",
+    "commandPlaceholder": "例如 git status",
+    "description": "说明",
+    "optional": "（可选）",
+    "descPlaceholder": "简要说明此命令的作用"
+  }
+}

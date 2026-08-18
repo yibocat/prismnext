@@ -224,12 +224,12 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
     expect(writeRes.decision).toBe("allow");
     expect(prompted).toHaveLength(1);
 
-    // 3. shell_exec: prompts
+    // 3. shell_exec: prompts for commands the smart policy does not auto-allow
     const bashRes = await gate.decide(makeRequest({
       requestId: "bash-ask-req",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "python train.py",
+      bashCommand: "make build",
       bashCwd: ROOT,
     }));
     expect(bashRes.decision).toBe("allow");
@@ -242,6 +242,95 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
     }));
     expect(mcpRes.decision).toBe("allow");
     expect(prompted).toHaveLength(3);
+  });
+});
+
+describe("PermissionGate Shell Smart Convergence", () => {
+  it("auto-allows safe bash commands in ask mode without suspending", async () => {
+    const prompted: PermissionGateRequest[] = [];
+    const gate = new PermissionGate({
+      onPrompt: (req) => prompted.push(req),
+    });
+
+    const res = await gate.decide(makeRequest({
+      toolName: "bash",
+      permissionMode: "ask",
+      bashCommand: "git status --short",
+      bashCwd: ROOT,
+    }));
+
+    expect(res.decision).toBe("allow");
+    expect(res.reason).toBe("smart_bash_allow");
+    expect(prompted).toHaveLength(0);
+  });
+
+  it("denies bash commands on the smart deny list without suspending", async () => {
+    const prompted: PermissionGateRequest[] = [];
+    const gate = new PermissionGate({
+      onPrompt: (req) => prompted.push(req),
+    });
+
+    const res = await gate.decide(makeRequest({
+      toolName: "bash",
+      permissionMode: "ask",
+      bashCommand: "sudo rm -rf /tmp/x",
+      bashCwd: ROOT,
+    }));
+
+    expect(res.decision).toBe("deny");
+    expect(res.reason).toBe("smart_bash_deny");
+    expect(prompted).toHaveLength(0);
+  });
+
+  it("suspends for prompt on bash commands the smart policy flags", async () => {
+    const prompted: PermissionGateRequest[] = [];
+    const gate = new PermissionGate({
+      onPrompt: (req) => prompted.push(req),
+    });
+
+    const promise = gate.decide(makeRequest({
+      requestId: "pending-shell",
+      toolName: "bash",
+      permissionMode: "ask",
+      bashCommand: "make build",
+      bashCwd: ROOT,
+    }));
+    await expect(gate.cancelRequest("pending-shell")).toBe(true);
+
+    const res = await promise;
+    expect(res.decision).toBe("deny");
+    expect(res.reason).toBe("cancelled");
+    expect(prompted.map((p) => p.requestId)).toContain("pending-shell");
+  });
+
+  it("keeps edit_auto behavior aligned with the renderer pre-judge", async () => {
+    const prompted: PermissionGateRequest[] = [];
+    const gate = new PermissionGate({
+      onPrompt: (req) => prompted.push(req),
+    });
+
+    // Safe python run inside project: smart allow → no prompt under edit_auto.
+    const pyRes = await gate.decide(makeRequest({
+      toolName: "bash",
+      permissionMode: "edit_auto",
+      bashCommand: "python train.py",
+      bashCwd: ROOT,
+    }));
+    expect(pyRes.decision).toBe("allow");
+    expect(prompted).toHaveLength(0);
+
+    // Generic command still suspends under edit_auto.
+    const buildPromise = gate.decide(makeRequest({
+      requestId: "editauto-shell",
+      toolName: "bash",
+      permissionMode: "edit_auto",
+      bashCommand: "make build",
+      bashCwd: ROOT,
+    }));
+    await expect(gate.cancelRequest("editauto-shell")).toBe(true);
+    const buildRes = await buildPromise;
+    expect(buildRes.decision).toBe("deny");
+    expect(buildRes.reason).toBe("cancelled");
   });
 });
 
@@ -325,7 +414,7 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
       requestId: "cancel-me",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "echo hi",
+      bashCommand: "make build",
       bashCwd: ROOT,
     }));
 

@@ -186,6 +186,58 @@ describe("PiSubsessionRuntime & Dynamic Task Tool (Phase 5B)", () => {
     expect(existsSync(join(tempDir, ".pi"))).toBe(false);
   });
 
+  it("injects team skills and profile module prompts into the child session", async () => {
+    let childSystemPrompt: string | null = null;
+    let childSkills: Array<{ dir: string; source: string }> | null = null;
+
+    const fakeRunnerFactory: SubagentSessionRunnerFactory = async (input) => {
+      childSystemPrompt = input.systemPrompt;
+      childSkills = input.skills ?? null;
+      return {
+        prompt: async () => {
+          input.emitEvent({
+            type: "text_delta",
+            runtimeSessionId: input.runtimeSessionId,
+            tabId: input.tabId,
+            turnId: input.turnId,
+            text: "done",
+          });
+        },
+        abort: async () => {},
+        dispose: () => {},
+      };
+    };
+
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+      createRunner: fakeRunnerFactory,
+      skills: [{ dir: join(tempDir, "skills", "cite-check"), source: "academic-team:cite-check" }],
+      profileModules: "## Expert Profile\nVerify every citation before accepting it.",
+      onEvent: (ev) => emittedEvents.push(ev),
+    });
+
+    const result = await subsessionRuntime.runSubagentTask({
+      parentSessionId: "parent-ses-2",
+      parentTabId: "tab-main",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-call-2",
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      permissionMode: "auto",
+      expert: sampleExpert,
+      prompt: "Audit refs",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(childSystemPrompt).toContain("You are a citation auditor. Always verify references.");
+    expect(childSystemPrompt).toContain("## Expert Profile");
+    expect(childSystemPrompt).toContain("Verify every citation before accepting it.");
+    expect(childSkills).toEqual([
+      { dir: join(tempDir, "skills", "cite-check"), source: "academic-team:cite-check" },
+    ]);
+  });
+
   it("task tool resolves expert by FQID, runtimeName, or name, and handles unavailable experts", async () => {
     const subsessionRuntime = new PiSubsessionRuntime({
       allTools: [toolA, toolB],

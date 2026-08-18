@@ -2,11 +2,13 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { Type } from "@earendil-works/pi-ai";
 import { createInProcessSpike } from "../../src/main/agent/in-process-runtime";
 import { AgentSessionStore } from "../../src/main/agent/session-store";
-import { createRepresentativeTools } from "../../src/main/agent/representative-tools";
 import { ensureResearchBrief, updateResearchBriefSection } from "../../src/main/services/research-brief-service";
-import type { DiscoverLiteratureResult } from "../../src/shared/literature-discovery";
+import { TOOL_NAMES } from "../../src/shared/tool-names";
+import type { NativeToolDefinition } from "../../src/main/agent/tools/types";
+import type { DiscoverLiteratureInput, DiscoverLiteratureResult } from "../../src/shared/literature-discovery";
 
 function discovery(query: string): DiscoverLiteratureResult {
   return {
@@ -24,6 +26,118 @@ function discovery(query: string): DiscoverLiteratureResult {
   };
 }
 
+function str(args: Record<string, unknown>, key: string): string {
+  const v = args[key];
+  return typeof v === "string" ? v : "";
+}
+
+/**
+ * Injected fake native tools for the spike: proves ToolHost + PermissionGate
+ * without touching real literature / experiment services.
+ */
+function createFakeNativeTools(deps: {
+  searchPapers: (input: { projectRoot: string; query: string; limit?: number; tag?: string; collection?: string }) => Array<{
+    id: string;
+    bibkey?: string;
+    title: string;
+    authors?: string | null;
+    year?: number | null;
+    doi?: string | null;
+  }> | Promise<Array<{ id: string; bibkey?: string; title: string; authors?: string | null; year?: number | null; doi?: string | null }>>;
+  discoverLiterature: (input: DiscoverLiteratureInput) => Promise<DiscoverLiteratureResult>;
+  runExperiment: (input: { experimentId: string; command: string; toolCallId: string; projectRoot: string; abortSignal?: AbortSignal }) => Promise<unknown>;
+}): NativeToolDefinition[] {
+  return [
+    {
+      name: TOOL_NAMES.literatureSearch,
+      label: "Search Literature",
+      description: "Search papers in the project literature library (local only).",
+      parameters: Type.Object({
+        query: Type.Optional(Type.String()),
+        limit: Type.Optional(Type.Number()),
+        tag: Type.Optional(Type.String()),
+        collection: Type.Optional(Type.String()),
+      }),
+      permission: { category: "read_only" },
+      async execute(args, ctx) {
+        const query = str(args, "query");
+        const limit = typeof args.limit === "number" ? args.limit : 20;
+        const hits = await deps.searchPapers({
+          projectRoot: ctx.projectRoot,
+          query,
+          limit,
+          tag: str(args, "tag") || undefined,
+          collection: str(args, "collection") || undefined,
+        });
+        return { query, count: hits.length, papers: hits };
+      },
+    },
+    {
+      name: TOOL_NAMES.literatureDiscover,
+      label: "Discover Literature",
+      description: "Search external academic catalogs by topic.",
+      parameters: Type.Object({
+        query: Type.String({ minLength: 1 }),
+        sources: Type.Optional(Type.Array(Type.String())),
+        limit: Type.Optional(Type.Number()),
+        year: Type.Optional(Type.String()),
+        author: Type.Optional(Type.String()),
+      }),
+      permission: { category: "read_only" },
+      async execute(args) {
+        const query = str(args, "query");
+        if (!query.trim()) return { ok: false, error: "missing_query" };
+        return deps.discoverLiterature({ query });
+      },
+    },
+    {
+      name: TOOL_NAMES.researchBriefUpdate,
+      label: "Update Research Brief",
+      description: "Update one section of the project research brief.",
+      parameters: Type.Object({
+        section: Type.String({ minLength: 1 }),
+        content: Type.String({ minLength: 1 }),
+        append: Type.Optional(Type.Boolean()),
+      }),
+      permission: { category: "safe_write", extractPath: () => ".brief.md" },
+      async execute(args, ctx) {
+        const section = str(args, "section");
+        const content = str(args, "content");
+        if (!section.trim() || !content.trim()) return { ok: false, error: "missing_section_or_content" };
+        return updateResearchBriefSection(ctx.projectRoot, section, content, {
+          append: args.append === true,
+        });
+      },
+    },
+    {
+      name: TOOL_NAMES.experimentRun,
+      label: "Run Experiment",
+      description: "Run a shell command in an experiment island after PermissionGate.",
+      parameters: Type.Object({
+        id: Type.String({ minLength: 1 }),
+        command: Type.String({ minLength: 1 }),
+        artifacts: Type.Optional(Type.Array(Type.String())),
+      }),
+      permission: {
+        category: "shell_exec",
+        extractBash: (args, projectRoot) => ({ command: str(args, "command"), cwd: projectRoot }),
+      },
+      async execute(args, ctx) {
+        const experimentId = str(args, "id");
+        const command = str(args, "command");
+        if (!experimentId.trim() || !command.trim()) return { ok: false, error: "missing_id_or_command" };
+        return deps.runExperiment({
+          experimentId,
+          command,
+          toolCallId: ctx.toolCallId,
+          projectRoot: ctx.projectRoot,
+          abortSignal: ctx.abortSignal,
+        });
+      },
+    },
+  ];
+}
+
 describe("agent vertical slice", () => {
   const dirs: string[] = [];
   afterEach(() => {
@@ -38,12 +152,11 @@ describe("agent vertical slice", () => {
     const spike = createInProcessSpike({
       store: new AgentSessionStore(storeRoot),
       timeoutMs: 40,
-      tools: createRepresentativeTools({
+      tools: createFakeNativeTools({
         searchPapers: ({ query }) => [
           { id: "p1", bibkey: "Ada24", title: `Local ${query}`, year: 2024, doi: "10.1/ada" },
         ],
         discoverLiterature: async ({ query }) => discovery(query),
-        updateBrief: updateResearchBriefSection,
         runExperiment: async (input) => {
           runs.push({ toolCallId: input.toolCallId, command: input.command });
           return runExperiment?.(input) ?? { ok: true, started: true };

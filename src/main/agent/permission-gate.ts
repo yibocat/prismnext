@@ -4,7 +4,7 @@
  */
 
 import { isDirectLatexCompileBashCommand, latexCompileBashBlockMessage } from "../../shared/latex-compile-bash";
-import { isPathInsideProject } from "../../shared/smart-permission-policy";
+import { isPathInsideProject, resolveSmartBashAction } from "../../shared/smart-permission-policy";
 import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
@@ -290,6 +290,30 @@ export class PermissionGate {
 
     if (mode === "auto") {
       return { decision: "allow", reason: "auto_allowed", requestId: request.requestId };
+    }
+
+    // Shell smart convergence: for command-bearing shell tools (Pi bash primitive,
+    // experiment-run) decide by the shared bash policy that the renderer uses to
+    // pre-judge permission cards. This keeps "will the UI prompt?" and the actual
+    // gate decision on the same single source of truth.
+    if (
+      (mode === "edit_auto" || mode === "ask")
+      && category === "shell_exec"
+      && request.bashCommand
+    ) {
+      const smart = resolveSmartBashAction(
+        request.bashCommand,
+        request.projectRoot,
+        request.bashCwd,
+        allowedPaths,
+      );
+      if (smart === "deny") {
+        return { decision: "deny", reason: "smart_bash_deny", requestId: request.requestId };
+      }
+      if (smart === "allow") {
+        return { decision: "allow", reason: "smart_bash_allow", requestId: request.requestId };
+      }
+      // "prompt" falls through to the mode matrix → suspends for UI.
     }
 
     if (mode === "edit_auto") {

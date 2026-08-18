@@ -44,7 +44,7 @@ export type SmartPermissionContext = PlanPermissionContext & {
 };
 
 /** OpenCode rules: reads allow; gated tools ask so requestPermission can run smart policy. */
-export function buildSmartOpenCodePermissionRules(): Record<string, "allow" | "ask" | "deny"> {
+export function buildSmartPermissionRules(): Record<string, "allow" | "ask" | "deny"> {
   return {
     read: "allow",
     grep: "allow",

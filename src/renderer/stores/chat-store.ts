@@ -1869,6 +1869,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           modelId: model,
           apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
           mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
+          skillIds: composerExtras?.skillIds,
+          images: composerExtras?.promptImages,
         });
         if (!result.ok) {
           get()._applyAgentEvent(tabId, {

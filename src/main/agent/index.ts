@@ -75,14 +75,12 @@ export {
   buildAgentSystemPrompt,
   buildAgentUserText,
   createAgentNativeTools,
-  createAgentExperimentRunner,
   createAgentService,
   getAgentService,
   disposeAgentService,
   HOST_SYSTEM_IDENTITY,
   PI_DEFAULT_CODING_IDENTITY,
 } from "./agent-service";
-export { createRepresentativeTools } from "./representative-tools";
 export * from "./team-binding";
 export * from "./pi-subsession-runtime";
 export * from "./tools/index";

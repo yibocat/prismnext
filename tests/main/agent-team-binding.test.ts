@@ -355,6 +355,41 @@ describe("agent-team-binding (TeamResolver → Pi Adapter)", () => {
     expect(binding.selectedRoster?.[0].fqid).toBe("multi-expert-team:exp-b");
   });
 
+  it("loads extra skills via extraSkillIds even when outside the skills roster", () => {
+    const root = useExternalRoot();
+    writeTeam(root, "skills-team", {
+      orchestrator: {
+        id: "lead-1",
+        allowedSkills: ["skills-team:roster-skill"],
+      },
+      skills: ["roster-skill", "extra-skill"],
+    });
+
+    setProjectDefaultTeam(projectRoot, "skills-team");
+
+    // Roster-only binding: extra skill is not loaded.
+    const baseline = resolveTeamPiBinding({ projectRoot });
+    expect(baseline.ok).toBe(true);
+    expect(baseline.skills?.map((s) => s.id)).toEqual(["roster-skill"]);
+
+    // Extra skill ids are appended when enabled.
+    const withExtra = resolveTeamPiBinding({
+      projectRoot,
+      extraSkillIds: ["skills-team:extra-skill"],
+    });
+    expect(withExtra.ok).toBe(true);
+    expect(withExtra.skills?.map((s) => s.id)).toEqual(["roster-skill", "extra-skill"]);
+
+    // Disabled assets never load even when requested explicitly.
+    setAppAssetEnabled("skills-team:extra-skill", false);
+    const disabled = resolveTeamPiBinding({
+      projectRoot,
+      extraSkillIds: ["skills-team:extra-skill"],
+    });
+    expect(disabled.ok).toBe(true);
+    expect(disabled.skills?.map((s) => s.id)).toEqual(["roster-skill"]);
+  });
+
   describe("deriveExpertAllowedTools", () => {
     it("never allows task tool to prevent nested delegation", () => {
       const tools = deriveExpertAllowedTools({

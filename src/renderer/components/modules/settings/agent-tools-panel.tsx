@@ -85,6 +85,13 @@ export function AgentToolsPanel() {
                 {tool.schemaDescription.trim() ? (
                   <SettingsModulePromptPreview content={tool.schemaDescription} />
                 ) : null}
+                {tool.promptGuidelines?.length ? (
+                  <ul className="space-y-1 text-[length:var(--font-size-12)] text-muted-foreground list-disc pl-4">
+                    {tool.promptGuidelines.map((g) => (
+                      <li key={g}>{g}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </article>
             ))}
           </div>

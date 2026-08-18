@@ -1,0 +1,57 @@
+{
+  "shell": {
+    "newWindow": "New window",
+    "close": "Close: RightArea tab → chat tab → fresh chat → window",
+    "closeWindow": "Close window",
+    "saveFile": "Save active workspace file",
+    "toggleLeftSidebar": "Toggle left sidebar",
+    "toggleRightArea": "Toggle RightArea",
+    "toggleRightAreaMaximize": "Maximize RightArea (or restore / close)",
+    "openSettings": "Open Settings",
+    "commandPalette": "Open command palette"
+  },
+  "editor": {
+    "find": "Find in file",
+    "bold": "Bold (\\textbf{})",
+    "italic": "Italic (\\textit{})",
+    "comment": "Toggle comment",
+    "closeSearch": "Close search panel"
+  },
+  "workspace": {
+    "nextTab": "Next workspace tab",
+    "prevTab": "Previous workspace tab",
+    "gitRefresh": "Refresh Git status or history",
+    "insertToChat": "Insert selection into chat",
+    "openTexWorkspace": "Open TeX Workspace (split)",
+    "openTexWorkspaceMaximize": "Open TeX Workspace (maximize)",
+    "openLiterature": "Open Library (split)",
+    "openLiteratureMaximize": "Open Library (maximize)",
+    "openExperiments": "Open Experiments (split)",
+    "openExperimentsMaximize": "Open Experiments (maximize)",
+    "openFiles": "Open Files (split)",
+    "openFilesMaximize": "Open Files (maximize)",
+    "openGit": "Open Git (split)",
+    "openGitMaximize": "Open Git (maximize)",
+    "openBrowser": "Open Browser (split)",
+    "openBrowserMaximize": "Open Browser (maximize)",
+    "openTerminal": "Open Terminal (split)",
+    "openTerminalMaximize": "Open Terminal (maximize)"
+  },
+  "product": {
+    "focusAiBar": "Focus chat composer",
+    "newChat": "New chat tab",
+    "nextChat": "Next chat tab",
+    "prevChat": "Previous chat tab",
+    "compile": "Compile document",
+    "acceptChange": "Accept current change",
+    "rejectChange": "Reject current change",
+    "acceptAll": "Accept all changes",
+    "rejectAll": "Reject all changes",
+    "togglePlanMode": "Toggle Plan mode",
+    "openModelPicker": "Open model picker",
+    "cycleMessageWidth": "Cycle message width",
+    "undoRename": "Undo session rename",
+    "cycleThemePack": "Cycle theme pack",
+    "cycleChatBackdrop": "Cycle chat background"
+  }
+}

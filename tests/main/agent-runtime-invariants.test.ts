@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createInProcessSpike } from "../../src/main/agent/in-process-runtime";
 import { evaluateHardDeny, extractToolPathContext } from "../../src/main/agent/permission-gate";
 import { AgentSessionStore } from "../../src/main/agent/session-store";
-import { createRepresentativeTools } from "../../src/main/agent/representative-tools";
+import { createAgentNativeTools } from "../../src/main/agent/agent-service";
 import type { PermissionGateRequest } from "../../src/main/agent/permission-gate";
 
 const ROOT = "/Users/me/paper";
@@ -78,16 +78,7 @@ describe("agent runtime invariants", () => {
       store: new AgentSessionStore(storeRoot),
       timeoutMs: 5_000,
       tools: [
-        ...createRepresentativeTools({
-          searchPapers: () => [],
-          discoverLiterature: async () => ({
-            query: "",
-            sourcesQueried: [],
-            sourcesFailed: [],
-            hits: [],
-          }),
-          runExperiment: async () => ({ ok: true }),
-        }),
+        ...createAgentNativeTools(),
         {
           name: "delete",
           description: "delete a file after permission",

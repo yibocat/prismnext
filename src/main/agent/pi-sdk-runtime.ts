@@ -321,7 +321,7 @@ export interface PiSdkSessionFactoryInput {
 interface PiSessionHandle {
   sessionId: string;
   sessionFile?: string;
-  prompt: (text: string) => Promise<void>;
+  prompt: (text: string, images?: Array<{ mimeType: string; data: string }>) => Promise<void>;
   abort: () => Promise<void>;
   dispose: () => void;
   compact?: (customInstructions?: string) => Promise<{
@@ -472,7 +472,19 @@ export function createPiSdkSessionFactory(
     return {
       sessionId: session.sessionId,
       sessionFile: sessionManager.getSessionFile(),
-      prompt: (text: string) => session.prompt(text, { expandPromptTemplates: false }),
+      prompt: (text, images) =>
+        session.prompt(text, {
+          expandPromptTemplates: false,
+          ...(images?.length
+            ? {
+                images: images.map((img) => ({
+                  type: "image" as const,
+                  data: img.data,
+                  mimeType: img.mimeType,
+                })),
+              }
+            : {}),
+        }),
       abort: () => session.abort(),
       dispose: () => session.dispose(),
       compact: (customInstructions?: string) => session.compact(customInstructions),
@@ -551,7 +563,10 @@ export function createPiSubagentRunnerFactory(input: {
       permissionMode: "edit_auto",
       sessionAgent: "build",
       allowedPaths: undefined,
-      resourceLoader: new ClosedResourceLoader(opts.systemPrompt),
+      resourceLoader: new ClosedResourceLoader({
+        systemPrompt: opts.systemPrompt,
+        skills: loadPiSkillsFromDirs(opts.skills ?? []),
+      }),
       persist: { mode: "memory" },
     });
     const unsubscribe = handle.subscribe((piEvent) => {
@@ -851,7 +866,13 @@ export class PiSdkRuntime implements AgentRuntime {
       allowedPaths: input.allowedPaths,
     });
     try {
-      await session.handle.prompt(input.text);
+      await session.handle.prompt(
+        input.text,
+        input.images?.map((img) => ({
+          mimeType: img.mimeType,
+          data: img.data,
+        })),
+      );
     } catch (err) {
       this.emit({
         type: "turn_failed",

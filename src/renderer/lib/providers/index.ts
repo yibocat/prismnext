@@ -332,6 +332,10 @@ function collectEnabledModelsForProvider(
   }
 
   for (const cm of customs) {
+    // Pi catalog + saved selection snapshots can carry the same model id.
+    // Skip snapshot entries already covered by the catalog so the model
+    // picker and the multimodal-helper dropdown never list a model twice.
+    if (knownIds.has(cm.id)) continue;
     knownIds.add(cm.id);
     if (!enabled || enabled.includes(cm.id)) {
       result.push({ provider, model: cm });
@@ -353,6 +357,8 @@ function collectEnabledModelsForProvider(
 
 /**
  * Returns all enabled models across user-added providers, ready for Chat model dropdown.
+ * Models are deduplicated by `providerId::modelId` so the Pi catalog, saved selection
+ * snapshots, and enabled-model orphans never list the same model twice.
  */
 export function getAllEnabledModels(
   enabledIds: Record<string, string[]> | undefined,
@@ -360,14 +366,20 @@ export function getAllEnabledModels(
   customProviders?: CustomProviderEntry[],
 ): Array<{ provider: ProviderConfig; model: ModelConfig }> {
   const result: Array<{ provider: ProviderConfig; model: ModelConfig }> = [];
-  const seen = new Set<string>();
+  const seenProviders = new Set<string>();
+  const seenModels = new Set<string>();
 
   for (const cp of customProviders ?? []) {
-    if (seen.has(cp.id)) continue;
+    if (seenProviders.has(cp.id)) continue;
     const provider = resolveProviderConfig(cp.id, customProviders);
     if (!provider) continue;
-    seen.add(cp.id);
-    result.push(...collectEnabledModelsForProvider(provider, enabledIds, customModels));
+    seenProviders.add(cp.id);
+    for (const entry of collectEnabledModelsForProvider(provider, enabledIds, customModels)) {
+      const key = `${entry.provider.id}::${entry.model.id}`;
+      if (seenModels.has(key)) continue;
+      seenModels.add(key);
+      result.push(entry);
+    }
   }
 
   return result;

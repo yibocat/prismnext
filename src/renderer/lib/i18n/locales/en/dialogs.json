@@ -1,0 +1,85 @@
+{
+  "tabClose": {
+    "closeTab": "Close Tab",
+    "closeAiTerminal": "Close AI Terminal",
+    "closeJobMonitor": "Close Job Monitor",
+    "closeTerminal": "Close Terminal",
+    "closeTerminals": "Close Terminals",
+    "closeFile": "Close File",
+    "closeWithoutSaving": "Close Without Saving",
+    "closeAll": "Close All",
+    "aiRunningKill": "A command is still running. Closing will cancel it.",
+    "aiRunningKeep": "A command is still running. The tab will close but the command continues in the background.",
+    "aiDetailKill": "You can reopen the terminal from the session panel or bash widget.",
+    "aiDetailKeep": "Use the session title menu to watch progress or reopen the terminal.",
+    "jobRunningKill": "This job is still running. Closing will cancel it.",
+    "jobRunningKeep": "This job is still running. The monitor will close but the job continues.",
+    "jobDetailKill": "You can reopen the monitor from Chat or Experiments.",
+    "jobDetailKeep": "Reopen the monitor from Chat or Experiments to watch progress.",
+    "terminalRunning": "A command is still running in this terminal.",
+    "terminalDetail": "Closing will interrupt the running process.",
+    "terminalsRunning": "{{count}} terminals still have running commands.",
+    "terminalsDetail": "Closing will interrupt the running processes.",
+    "fileUnsaved": "\"{{label}}\" has unsaved changes.",
+    "fileDetail": "Your edits will be lost unless you save first."
+  },
+  "projectSwitch": {
+    "title": "Leave this project?",
+    "description": "An experiment is still running. You can keep it in the background or stop it before switching.",
+    "detail": "Chat bash jobs for this project will stop. Background experiments stay attached to Job Monitor.",
+    "continue": "Keep running",
+    "stop": "Stop experiments"
+  },
+  "permission": {
+    "shellCommand": "Shell command",
+    "applyPatch": "Apply patch",
+    "deleteFile": "Delete file",
+    "moveFile": "Move file",
+    "actionDelete": "Delete",
+    "actionMove": "Move",
+    "writeFile": "Write file",
+    "editFile": "Edit file",
+    "required": "Permission required",
+    "awaiting": "Awaiting approval",
+    "filesCount": "{{count}} files",
+    "deny": "Deny",
+    "skip": "Skip",
+    "always": "Always",
+    "allow": "Allow",
+    "alwaysBash": "Always allow similar commands (prefix match)",
+    "alwaysTool": "Always allow {{tool}} without asking again",
+    "alwaysGeneric": "Always allow this tool"
+  },
+  "worktree": {
+    "discardTitle": "Discard unmerged work?",
+    "discardBody": "This worktree has {{count}} unmerged commit(s) that will be permanently deleted.",
+    "discardHint": "Merge to Branch first to integrate changes into {{branch}}, or discard them if you no longer need this work.",
+    "discardConfirm": "Discard & Close",
+    "mergeTitle": "Merge Worktree: {{name}}",
+    "mergeBody": "Merge branch \"{{branch}}\" into {{target}}. The worktree will be removed after a successful merge.",
+    "mergeSuccess": "Merged successfully! Worktree removed.",
+    "mergeFailed": "Merge failed: {{error}}",
+    "mergeInto": "Merge into {{branch}}"
+  },
+  "git": {
+    "revertTitle": "Revert commit",
+    "resetTitle": "Reset to commit",
+    "mergeWorktreeTitle": "Merge Worktree into Branch",
+    "confirmMerge": "Confirm merge",
+    "mergeBranch": "Merge branch",
+    "commitChanges": "Commit changes",
+    "createBranch": "Create new branch"
+  },
+  "files": {
+    "deleteFolder": "Delete Folder",
+    "renameFolder": "Rename Folder",
+    "rename": "Rename",
+    "deleteBody": "Are you sure you want to permanently delete “{{name}}”?",
+    "deleteFolderBody": "Are you sure you want to permanently delete the folder “{{name}}” and all its contents?",
+    "workspaceWarn": "This folder is configured as {{function}} in Workspace settings.",
+    "manuscriptWarn": "This is the only manuscript folder — TeX workspace features may stop working until another is configured."
+  },
+  "experiments": {
+    "deleteTitle": "Delete experiment?"
+  }
+}
