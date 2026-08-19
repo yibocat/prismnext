@@ -49,10 +49,10 @@ export const latexRootTool: NativeToolDefinition = {
 export const latexCompileTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompile,
   label: "Compile LaTeX",
-  description: "Compile the manuscript using the bundled Tectonic engine or system TeX Live.",
+  description: "Compile the TeX workspace manuscript into `.prismnext/compile/`.",
   promptGuidelines: [
-    "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool — use this tool so builds stay under .prismnext/compile/ and the manuscript folder stays clean.",
-    "Check the build output for errors, undefined citations, and missing references, then fix the source and recompile.",
+    "This compiles the paper — the workspace manuscript root — not other `.tex` files.",
+    "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool — use this tool so builds stay under `.prismnext/compile/` and the manuscript folder stays clean.",
   ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),

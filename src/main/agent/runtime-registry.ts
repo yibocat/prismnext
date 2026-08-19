@@ -7,8 +7,8 @@ import {
   newConversationId,
   type ConversationBinding,
 } from "../../shared/agent-conversation";
-import type { PermissionMode } from "../../shared/session-agent";
-import type { AgentTurnImage } from "../../shared/agent-runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { AgentTurnImage, TurnInput } from "../../shared/agent-runtime";
 import type { AgentRuntime } from "./runtime";
 import {
   AgentSessionStore,
@@ -153,7 +153,12 @@ export class RuntimeRegistry {
     turnId?: string;
     text: string;
     images?: AgentTurnImage[];
+    attachments?: TurnInput["attachments"];
+    sessionAgent?: SessionAgent;
     permissionMode: PermissionMode;
+    provider?: string;
+    modelId?: string;
+    apiKey?: string;
   }): Promise<void> {
     const live = this.live.get(input.conversationId);
     if (!live) throw new Error(`unknown_conversation:${input.conversationId}`);
@@ -163,7 +168,12 @@ export class RuntimeRegistry {
       turnId: input.turnId,
       text: input.text,
       images: input.images,
+      attachments: input.attachments,
+      sessionAgent: input.sessionAgent,
       permissionMode: input.permissionMode,
+      provider: input.provider,
+      modelId: input.modelId,
+      apiKey: input.apiKey,
     });
   }
 

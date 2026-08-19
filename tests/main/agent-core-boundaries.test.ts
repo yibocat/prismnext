@@ -124,8 +124,35 @@ describe("Pi-first agent core boundaries", () => {
     expect(preload).toContain("\"agent:listSessions\"");
     expect(preload).toContain("\"agent:loadSession\"");
     expect(preload).toContain("\"agent:deleteSession\"");
+    expect(preload).not.toContain("\"chat:send\"");
+    expect(preload).not.toContain("\"session:load\"");
     expect(ipc).not.toContain("pi-lab:");
     expect(preload).not.toContain("pi-lab:");
+  });
+
+  it("does not start OpenCode file-bridge pollers or expose dead chat/session APIs", () => {
+    const main = sourceOf("src/main/index.ts");
+    const preload = sourceOf("src/preload/index.ts");
+    const types = sourceOf("src/renderer/types/electron.d.ts");
+    const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
+
+    expect(main).not.toContain("startTerminalBridge");
+    expect(main).toContain("stopTerminalBridge");
+    expect(main).not.toContain("startLiteratureBridge");
+    expect(main).not.toContain("startLatexBridge");
+    expect(main).not.toContain("startResearchBriefBridge");
+    expect(main).not.toContain("startExperimentLogBridge");
+    expect(main).not.toContain("startInteractionBridge");
+    expect(main).not.toContain("startImageDescribeBridge");
+    expect(preload).not.toContain("chatSend");
+    expect(preload).not.toContain("sessionLoad");
+    expect(preload).not.toContain("onChatSessionCreated");
+    expect(preload).not.toContain("onAgentStatusChanged");
+    expect(preload).not.toContain("removeChatListeners");
+    expect(types).not.toContain("chatSend");
+    expect(types).not.toContain("sessionLoad");
+    expect(types).not.toContain("onChatSessionCreated");
+    expect(sidebar).not.toContain("onChatSessionCreated");
   });
 
   it("does not subscribe to or prewarm the OpenCode runtime for the product shell", () => {
@@ -334,6 +361,14 @@ describe("Pi-first agent core boundaries", () => {
     expect(existsSync(join(REPO, "src/main/ipc/chat.ts"))).toBe(false);
     expect(existsSync(join(REPO, "src/main/tools/index.ts"))).toBe(false);
     expect(existsSync(join(REPO, "src/renderer/hooks/use-opencode-events.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/services/opencode-binary.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/shared/opencode-version.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "scripts/download-opencode.sh"))).toBe(false);
+    expect(existsSync(join(REPO, "scripts/opencode-version.txt"))).toBe(false);
+
+    const builder = sourceOf("electron-builder.yml");
+    expect(builder).not.toMatch(/bin\/opencode/);
+    expect(builder).toMatch(/bin\/tectonic/);
 
     const agentFiles = walkTsFiles(join(REPO, "src/main/agent"));
     for (const file of agentFiles) {

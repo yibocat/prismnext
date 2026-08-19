@@ -164,6 +164,94 @@ export function basenamePath(p: string): string {
   return p.split(/[/\\]/).pop() || p;
 }
 
+function clipLabel(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
+}
+
+/**
+ * One-line target for a tool_use block, from args — Pi has no ACP `title`.
+ * Used by activity-fold tails and GenericWidget fallback.
+ */
+export function toolUseActivityLabel(block: {
+  name?: string;
+  title?: string;
+  input?: unknown;
+  _backfillName?: string | null;
+  _backfillInput?: Record<string, unknown> | null;
+}): string | null {
+  const name = (block.name || block._backfillName || "tool").toLowerCase();
+  const input = (block.input ?? block._backfillInput) as Record<string, unknown> | undefined;
+
+  switch (name) {
+    case "read":
+    case "write":
+    case "edit": {
+      const p = param(input, "file_path", "filePath") || param(input, "path") || "";
+      return p ? basenamePath(p) : "file";
+    }
+    case "grep": {
+      const pat = param(input, "pattern") || param(input, "query") || "";
+      return pat ? `"${clipLabel(pat, 40)}"` : "search";
+    }
+    case "glob":
+    case "find": {
+      const g = param(input, "glob_pattern", "globPattern") || param(input, "pattern") || "";
+      return g || name;
+    }
+    case "ls":
+    case "list": {
+      const p = param(input, "path") || param(input, "directory") || "";
+      return p ? basenamePath(p) : ".";
+    }
+    case "bash": {
+      const cmd = param(input, "command") || (typeof block.title === "string" ? block.title : "") || "";
+      const line = cmd.split("\n")[0]?.trim() || "shell";
+      return clipLabel(line, 48) || "shell";
+    }
+    case "task": {
+      const agent =
+        param(input, "expertId")
+        || param(input, "agent")
+        || param(input, "subagent_type")
+        || "task";
+      return `@${agent.replace(/^@/, "")}`;
+    }
+    default: {
+      const title = typeof block.title === "string" ? block.title.trim() : "";
+      if (title) return clipLabel(title, 48);
+      const pathHint = param(input, "file_path", "filePath") || param(input, "path") || "";
+      if (pathHint) return basenamePath(pathHint);
+      const pat = param(input, "pattern") || param(input, "query") || param(input, "command") || "";
+      if (pat) return clipLabel(pat, 48);
+      const idHint = param(input, "id") || param(input, "experiment_id", "experimentId") || "";
+      if (idHint) return basenamePath(String(idHint));
+      return name;
+    }
+  }
+}
+
+/** Subtitle distinct from the tool name — empty when args add nothing. */
+export function toolUseContextTitle(block: {
+  name?: string;
+  title?: string;
+  input?: unknown;
+  _backfillName?: string | null;
+  _backfillInput?: Record<string, unknown> | null;
+}): string {
+  const explicit =
+    (typeof block.title === "string" && block.title.trim())
+    || (typeof (block.input as { _title?: unknown } | undefined)?._title === "string"
+      ? String((block.input as { _title: string })._title).trim()
+      : "");
+  if (explicit) return clipLabel(explicit, 80);
+  const label = toolUseActivityLabel(block);
+  const name = (block.name || block._backfillName || "").toLowerCase();
+  if (!label || label === name || label === "tool") return "";
+  return label;
+}
+
 /**
  * Extract a parameter value from a tool input object, trying both snake_case
  * and camelCase key variants.  OpenCode built-in tools use snake_case
@@ -191,8 +279,8 @@ export function param(
  *  an input object (`param(input, key)`); `Field` DISPLAYS a label+value row.
  *  Don't confuse them - several widgets once called `param(label, value)` and
  *  rendered nothing because `param` returns undefined for non-object input. */
-export function Field({ label, value }: { label: string; value: string }): ReactNode {
-  if (!value) return null;
+export function Field({ label, value }: { label: string; value: ReactNode }): ReactNode {
+  if (value == null || value === false || value === "") return null;
   return (
     <div className="flex min-w-0 gap-1.5">
       <span className="shrink-0 opacity-70">{label}</span>

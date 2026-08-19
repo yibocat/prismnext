@@ -43,18 +43,6 @@ const LEGAL_PAGES = [
 
 type Status = UpdateUiStatus;
 
-type OpencodeInfo = {
-  available: boolean;
-  version: string | null;
-  error?: string;
-};
-
-function formatOpencodeVersion(info: OpencodeInfo, t: TFunction): string {
-  if (!info.available) return t("settings.about.notFound");
-  if (info.version) return info.version;
-  return info.error ? t("common.unavailable") : "—";
-}
-
 function installErrorMessage(error: string, t: TFunction): string {
   if (error === "install-did-not-restart") {
     return t("settings.about.installDidNotRestart");
@@ -66,7 +54,6 @@ export function AboutSettings() {
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [appVersion, setAppVersion] = useState<string>("—");
-  const [opencodeInfo, setOpencodeInfo] = useState<OpencodeInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [licenseKeyDraft, setLicenseKeyDraft] = useState("");
   const [licenseBusy, setLicenseBusy] = useState(false);
@@ -91,11 +78,9 @@ export function AboutSettings() {
       .aboutGetVersions()
       .then((info) => {
         setAppVersion(info.appVersion || "—");
-        setOpencodeInfo(info.opencode);
       })
       .catch(() => {
         setAppVersion("—");
-        setOpencodeInfo(null);
       });
   }, []);
 
@@ -194,7 +179,6 @@ export function AboutSettings() {
         ? status.currentVersion
         : "—";
 
-  const opencodeVersion = opencodeInfo ? formatOpencodeVersion(opencodeInfo, t) : "—";
   const latestVersion =
     status.kind === "available" ||
     status.kind === "downloading" ||
@@ -460,15 +444,6 @@ export function AboutSettings() {
               </div>
               <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
                 {displayAppVersion}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3 py-2.5 border-t border-border/60">
-              <div className="min-w-0 flex-1 pr-4">
-                <p className={ROW_LABEL}>{t("settings.about.opencode")}</p>
-                <p className={ROW_DESC}>{t("settings.about.opencodeDesc")}</p>
-              </div>
-              <span className="font-mono text-[length:var(--font-size-13)] text-muted-foreground shrink-0">
-                {opencodeVersion}
               </span>
             </div>
           </div>

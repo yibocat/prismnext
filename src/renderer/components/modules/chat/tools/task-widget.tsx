@@ -86,7 +86,7 @@ export function taskActivityEmptyHint(run: {
 }
 
 /**
- * Task / subagent row — two lines, opens the composer-above run panel (not an
+ * Task / subagent row — two lines, opens the overlay run panel (not an
  * inline ToolCard expand). Stop aborts the child session for the main agent.
  */
 export const TaskWidget = memo(function TaskWidget({
@@ -142,8 +142,11 @@ export const TaskWidget = memo(function TaskWidget({
   const agentType = rawAgent || "expert";
   const meta = resolveTaskAgentMeta(agentType);
   const activityHintKey = taskActivityEmptyHint(subAgentRun);
+  const isPreparing = toolUse.status === "preparing";
   const statusLine = isStopping
     ? t("chat.subagent.stopping")
+    : isPreparing
+      ? t("chat.subagent.preparing")
     : isLoading
       ? (isBackground
         ? t("chat.subagent.backgroundRunning")

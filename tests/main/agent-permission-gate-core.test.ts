@@ -474,3 +474,73 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
     expect(gate.pendingCount()).toBe(0);
   });
 });
+
+describe("PermissionGate Plan Mode Overrides", () => {
+  const SESSION = "tab-plan-abc";
+
+  it("allows write to the canonical session draft under plan mode", async () => {
+    const gate = new PermissionGate();
+    const res = await gate.decide(makeRequest({
+      toolName: "write",
+      permissionMode: "edit_auto",
+      sessionAgent: "plan",
+      sessionId: SESSION,
+      filePath: `.prismnext/research/plans/drafts/${SESSION}.md`,
+    }));
+    expect(res.decision).toBe("allow");
+    expect(res.reason).toBe("plan_override_allow");
+  });
+
+  it("denies write to a non-canonical draft path under plan mode", async () => {
+    const gate = new PermissionGate();
+    const res = await gate.decide(makeRequest({
+      toolName: "write",
+      permissionMode: "edit_auto",
+      sessionAgent: "plan",
+      sessionId: SESSION,
+      filePath: ".prismnext/research/plans/drafts/other-file.md",
+    }));
+    expect(res.decision).toBe("deny");
+    expect(res.reason).toBe("plan_override_deny");
+  });
+
+  it("denies execution tools under plan mode even in edit_auto", async () => {
+    const gate = new PermissionGate();
+    const res = await gate.decide(makeRequest({
+      toolName: "experiment-run",
+      permissionMode: "edit_auto",
+      sessionAgent: "plan",
+      sessionId: SESSION,
+      bashCommand: "python train.py",
+      bashCwd: ROOT,
+    }));
+    expect(res.decision).toBe("deny");
+    expect(res.reason).toBe("plan_override_deny");
+  });
+
+  it("leaves bash allowed under plan mode (plan needs shell for research)", async () => {
+    const gate = new PermissionGate();
+    const res = await gate.decide(makeRequest({
+      toolName: "bash",
+      permissionMode: "auto",
+      sessionAgent: "plan",
+      sessionId: SESSION,
+      bashCommand: "git status",
+      bashCwd: ROOT,
+    }));
+    expect(res.decision).toBe("allow");
+  });
+
+  it("does not apply plan overrides in build mode", async () => {
+    const gate = new PermissionGate();
+    const res = await gate.decide(makeRequest({
+      toolName: "experiment-run",
+      permissionMode: "auto",
+      sessionAgent: "build",
+      sessionId: SESSION,
+      bashCommand: "python train.py",
+      bashCwd: ROOT,
+    }));
+    expect(res.decision).toBe("allow");
+  });
+});

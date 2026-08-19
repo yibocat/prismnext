@@ -9,9 +9,13 @@ import type {
 } from "../../shared/agent-conversation";
 import { emptyConversation, newConversationId } from "../../shared/agent-conversation";
 import type { AgentEvent } from "../../shared/agent-runtime";
+import type { ContextUsageBreakdown } from "../../shared/agent-context-usage";
 import {
+  acknowledgeQuestionAnswer as applyQuestionAnswerToConversation,
+  appendAssistantBlocksToLastTurn,
   applyConversationEvent,
   beginConversationTurn,
+  ensureTaskRunFromTranscript,
   markSubagentStopping,
 } from "@/lib/chat/conversation-reducer";
 import type { ConversationSubagentRun } from "../../shared/agent-conversation";
@@ -25,12 +29,10 @@ import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
 import { reconcileBackgroundSubAgentRunsFromMessages } from "@/lib/chat/reconcile-background-tasks";
 import {
-  countOpenCodeMessages,
   planArtifactCardFromEvents,
 } from "@/lib/chat/plan-ui-events";
 import { clearTurnWindowState } from "@/lib/chat/turn-window";
 import { dismissTodoPlan as persistTodoPlanDismiss } from "@/lib/chat/composer-pending-tools";
-import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import { conversationHasContent } from "@/lib/chat/conversation-view";
 import {
   deriveSessionTitleForSend,
@@ -43,7 +45,10 @@ import {
   persistAndSyncIntensiveReading,
   resolveIntensivePaperIdsForSession,
 } from "@/lib/literature/sync-intensive-reading";
-import { scheduleCitationStagingBackfill } from "@/lib/literature/sync-citation-staging-from-messages";
+import {
+  captureLiteratureStageFromToolResult,
+  scheduleCitationStagingBackfillFromConversation,
+} from "@/lib/literature/sync-citation-staging-from-messages";
 import { useCitationStagingStore } from "./citation-staging-store";
 import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
 import type { SessionAgent } from "../../shared/session-agent";
@@ -53,7 +58,6 @@ import {
 } from "../../shared/agent-api";
 import type { ResearchPlanStep } from "../../shared/research-plan";
 import {
-  buildApprovedPlanExecuteDisplayText,
   buildApprovedPlanExecutePrompt,
   checklistToTodoSeeds,
   parsePlanChecklist,
@@ -149,12 +153,14 @@ interface TabState {
   legacyReadOnly: boolean;
   /** Runtime-agnostic source of truth for Pi conversation turns. */
   conversation: Conversation;
-  /** Committed messages — immutable once added. Never modified in-place. */
+  /**
+   * @deprecated OpenCode stream rows. Formal chat reads `conversation` only.
+   * Kept for leftover tests / checkpoint undo. Do not write on the Pi send path.
+   */
   messages: ChatStreamMessage[];
-  /** In-progress streaming assistant message. Merged/updated on each delta.
-   *  Committed to `messages` when a non-assistant event arrives or streaming ends. */
+  /** @deprecated See `messages`. Formal streaming state is `conversation.live`. */
   streamingMessage: ChatStreamMessage | null;
-  /** OpenCode assistant message id for the active streaming turn (blocks isolation). */
+  /** @deprecated OpenCode assistant message id. Unused on the Pi path. */
   streamingPartMessageId: string | null;
   /**
    * OpenCode messageIds already committed for this tab. Late ACP replays of
@@ -180,15 +186,16 @@ interface TabState {
   /** Model label for the in-flight turn — stamped onto turnMeta on complete. */
   pendingTurnMeta: { modelLabel: string } | null;
   /** Per-tab context token total. Source of truth for the context ring.
-   *  Set by _setContextTokens (live) or restored from sessions-context.json.
-   *  Prefer OpenCode usage_update.used. */
+   *  Set by _setContextTokens (live) or restored from the Pi session record. */
   contextTokens: number | null;
-  /** OpenCode usage_update.size when known; else null (UI falls back to model metadata). */
+  /** Pi model context window when known; else null (UI falls back to catalog). */
   contextWindowSize: number | null;
   /** How contextTokens was derived. */
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
   /** Cumulative session spend in USD from Pi usage totals. */
   contextCostUsd: number | null;
+  /** Estimated prompt buckets fitted to occupancy (Cursor-style legend). */
+  contextBreakdown: ContextUsageBreakdown | null;
   /** True when live prompt config differs from this session's injected fingerprint. */
   promptStale: boolean;
   /** Expert team orchestrator id (null → project default). */
@@ -309,6 +316,7 @@ function makeDefaultTab(id: string): TabState {
     contextWindowSize: null,
     contextUsageSource: null,
     contextCostUsd: null,
+    contextBreakdown: null,
     promptStale: false,
     orchestratorId: null,
     sessionTeamId: null,
@@ -521,13 +529,14 @@ interface ChatState {
   sessionId: string | null;
   isStreaming: boolean;
   error: string | null;
-  /** Current context window tokens used (OpenCode usage_update / prompt usage) — null = unknown */
+  /** Current context window occupancy from Pi — null = unknown */
   contextTokens: number | null;
-  /** OpenCode-reported context window size; null → fall back to model metadata */
+  /** Pi-reported context window size; null → fall back to model catalog */
   contextWindowSize: number | null;
   contextUsageSource: "usage_update" | "prompt_usage" | "estimate" | null;
   /** Cumulative session spend in USD from Pi usage totals. */
   contextCostUsd: number | null;
+  contextBreakdown: ContextUsageBreakdown | null;
   /** True when prompt/rules changed since this session's system prompt was set. */
   promptStale: boolean;
   /** True while the active tab is loading session history from disk. */
@@ -644,9 +653,11 @@ interface ChatState {
   takeComposerSendQueueHead: (tabId: string) => ComposerQueueItem | null;
   takeComposerSendQueueCombined: (tabId: string) => ComposerQueueItem | null;
   takeComposerQueuePendingFlush: (tabId: string) => ComposerQueueItem | null;
-  /** Open the composer-above subagent run panel for a Task tool_use. */
+  /** Open the overlay subagent run panel for a Task tool_use. */
   openSubAgentPanel: (taskToolUseId: string) => void;
   closeSubAgentPanel: () => void;
+  /** User submitted a question answer — drop chrome immediately. */
+  acknowledgeQuestionAnswer: (requestId: string, answer: string) => void;
   /** Stop a running subagent; abort its session and inject a Task tool_result for the main agent. */
   cancelSubAgentRun: (taskToolUseId: string) => Promise<void>;
   newSession: () => void;
@@ -656,9 +667,15 @@ interface ChatState {
   loadSession: (sessionId: string, sessionDirectory?: string) => Promise<void>;
   /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
   checkPromptStale: (tabId?: string) => Promise<void>;
-  /** Truncate in-memory messages (and OpenCode session via checkpoint-store) to a turn. */
+  /** Truncate in-memory Conversation (and leftover messages) to a turn. */
   truncateToTurn: (tabId: string, turnIndex: number) => void;
-  /** Restore full message list after undoing a file restore. */
+  /** Restore Conversation after undoing a rollback when the engine leaf is gone. */
+  restoreConversation: (tabId: string, conversation: Conversation) => void;
+  applyConversationCompact: (
+    tabId: string,
+    compacted: { throughTurnIndex: number; summary?: string },
+  ) => void;
+  /** @deprecated Prefer restoreConversation. Kept for leftover regret snapshots. */
   restoreMessages: (tabId: string, messages: ChatStreamMessage[]) => void;
   /** Reload sanitized messages from disk after OpenCode session truncation. */
   resyncTabMessagesFromDisk: (tabId: string) => Promise<void>;
@@ -687,8 +704,11 @@ interface ChatState {
       source?: "usage_update" | "prompt_usage" | "estimate" | null;
       /** Cumulative session spend in USD (Pi usage totals). */
       costUsd?: number | null;
-      /** When true, clear used/size (e.g. after compact). */
+      breakdown?: ContextUsageBreakdown | null;
+      /** When true, clear used/size/spend (legacy). */
       clear?: boolean;
+      /** Drop occupancy after compact; keep cumulative spend. */
+      clearOccupancy?: boolean;
     },
   ) => void;
   _setPromptStale: (tabId: string, stale: boolean) => void;
@@ -822,6 +842,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
       contextWindowSize: null as number | null,
       contextUsageSource: null as "usage_update" | "prompt_usage" | "estimate" | null,
       contextCostUsd: null as number | null,
+      contextBreakdown: null as ContextUsageBreakdown | null,
       promptStale: false,
       isLoadingSession: false,
       streamTick: 0,
@@ -854,6 +875,7 @@ function projectActiveTab(tabs: TabState[], activeTabId: string) {
     contextWindowSize: tab.contextWindowSize,
     contextUsageSource: tab.contextUsageSource,
     contextCostUsd: tab.contextCostUsd,
+    contextBreakdown: tab.contextBreakdown,
     promptStale: tab.promptStale,
     isLoadingSession: tab.isLoadingSession,
     streamTick: (tab as any).streamTick || 0,
@@ -868,8 +890,8 @@ function syncCitationStagingForTab(tab: TabState | undefined): void {
   }
   useCitationStagingStore.getState().setActiveSession(tab.sessionId);
   const hasSubAgentBlocks = Object.values(tab.subAgentRuns ?? {}).some((r) => r.blocks.length > 0);
-  if (tab.messages.length > 0 || hasSubAgentBlocks) {
-    scheduleCitationStagingBackfill(tab.sessionId, tab.messages, tab.subAgentRuns);
+  if (conversationHasContent(tab.conversation) || hasSubAgentBlocks) {
+    scheduleCitationStagingBackfillFromConversation(tab.sessionId, tab.conversation, tab.subAgentRuns);
   }
 }
 
@@ -941,33 +963,6 @@ function mergeSubAgentSnapshotBlocks(
   return result;
 }
 
-function extractTaskMetaFromMessages(
-  messages: Array<{ message?: { content?: ContentBlock[] | string } } | null | undefined>,
-  taskToolUseId: string,
-): { expertId: string; prompt: string } {
-  for (const msg of messages) {
-    if (!msg) continue;
-    for (const block of contentBlocks(msg.message?.content)) {
-      if (block.type !== "tool_use" || block.id !== taskToolUseId) continue;
-      const input = (block.input && typeof block.input === "object"
-        ? block.input
-        : {}) as Record<string, unknown>;
-      const expertRaw =
-        input.subagent_type ?? input.subagentType ?? input.agent ?? "";
-      const expertId =
-        typeof expertRaw === "string" && expertRaw.trim()
-          ? expertRaw.trim().replace(/^@/, "").toLowerCase()
-          : "general";
-      const prompt =
-        (typeof input.prompt === "string" && input.prompt.trim())
-        || (typeof input.description === "string" && input.description.trim())
-        || "";
-      return { expertId, prompt };
-    }
-  }
-  return { expertId: "general", prompt: "" };
-}
-
 function refreshAgentSessionList(): void {
   window.dispatchEvent?.(new Event("prism:session-list-refresh"));
 }
@@ -1003,6 +998,31 @@ function finalizeStreamingForMutation(
   };
 }
 
+function conversationDisplayIndex(conv: Conversation | undefined): number {
+  if (!conv) return 0;
+  return conv.turns.length * 2 + (conv.live ? 1 : 0);
+}
+
+function persistableAttachmentsFromUserBlocks(
+  blocks: ContentBlock[] | undefined,
+): Array<{ name: string; kind: "image" | "file"; path: string }> {
+  const out: Array<{ name: string; kind: "image" | "file"; path: string }> = [];
+  const seen = new Set<string>();
+  for (const block of blocks ?? []) {
+    for (const att of block.attachments ?? []) {
+      const path = (att.path || "").trim();
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
+      out.push({
+        name: att.name || path.split(/[/\\]/).pop() || "file",
+        kind: att.kind === "image" ? "image" : "file",
+        path,
+      });
+    }
+  }
+  return out;
+}
+
 function applyConversationToTab(
   tab: TabState,
   conversation: Conversation,
@@ -1012,12 +1032,21 @@ function applyConversationToTab(
   for (const turn of conversation.turns) {
     if (turn.meta) turnMeta[turn.turnIndex] = turn.meta;
   }
+  const usage = conversation.usage;
   return {
     ...tab,
     conversation,
     isStreaming: conversation.live !== null,
     turnMeta,
     subAgentRuns: projectConversationSubagentRuns(conversation.subagentRuns),
+    ...(typeof usage?.inputTokens === "number" && usage.inputTokens > 0
+      ? { contextTokens: usage.inputTokens, contextUsageSource: "usage_update" as const }
+      : {}),
+    ...(typeof usage?.windowSize === "number" && usage.windowSize > 0
+      ? { contextWindowSize: usage.windowSize }
+      : {}),
+    ...(typeof usage?.costUsd === "number" ? { contextCostUsd: usage.costUsd } : {}),
+    ...(usage?.breakdown ? { contextBreakdown: usage.breakdown } : {}),
     ...(extras?.planEvents
       ? { planArtifactCard: planArtifactCardFromEvents(extras.planEvents) }
       : {}),
@@ -1657,34 +1686,24 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       title: promoted.title,
       path: promoted.relativePath,
     });
-    // Anchor after the plan-writing assistant turn (before silent Approve kick).
-    const afterApprove = countOpenCodeMessages(
-      get().tabs.find((t) => t.id === resolvedTabId)?.messages ?? [],
+    const afterApprove = conversationDisplayIndex(
+      get().tabs.find((t) => t.id === resolvedTabId)?.conversation,
     );
-    get()._appendMessage(resolvedTabId, {
-      type: "plan-decision",
-      planDecision: "approved",
-      planTitle: promoted.title,
-      planPath: promoted.relativePath,
-      result: buildApprovedPlanExecuteDisplayText({
-        relativePath: promoted.relativePath,
-        title: promoted.title,
-      }),
-    });
 
     // Seed Task Plan UI immediately from Checklist — do not wait for the model.
     const todoSeeds = checklistToTodoSeeds(parsePlanChecklist(promoted.markdown));
     if (todoSeeds.length > 0) {
-      get()._appendMessage(resolvedTabId, {
-        type: "assistant",
-        message: {
-          content: [{
+      set((s) => {
+        const tabs = s.tabs.map((t) => {
+          if (t.id !== resolvedTabId) return t;
+          return applyConversationToTab(t, appendAssistantBlocksToLastTurn(t.conversation, [{
             type: "tool_use",
             name: "todowrite",
             id: `todo-approve-${Date.now()}`,
             input: { todos: todoSeeds },
-          }],
-        },
+          }]));
+        });
+        return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
       });
     }
 
@@ -1699,8 +1718,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           afterIndex: afterApprove,
         },
       });
-      const afterDecision = get().tabs.find((t) => t.id === resolvedTabId);
-      cacheTabMessages(tab.sessionId, afterDecision?.messages ?? []);
     }
 
     await get().sendPrompt(
@@ -1760,15 +1777,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }),
     }));
 
-    const afterDeny = countOpenCodeMessages(
-      get().tabs.find((t) => t.id === resolvedTabId)?.messages ?? [],
+    const afterDeny = conversationDisplayIndex(
+      get().tabs.find((t) => t.id === resolvedTabId)?.conversation,
     );
-    get()._appendMessage(resolvedTabId, {
-      type: "plan-decision",
-      planDecision: "rejected",
-      planTitle: draftTitle,
-      result: i18n.t("chat.planWorkflow.decisionRejected"),
-    });
 
     if (tab.sessionId) {
       const conversationId = conversationKey(tab);
@@ -1782,8 +1793,6 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           afterIndex: afterDeny,
         },
       });
-      const afterDecision = get().tabs.find((t) => t.id === resolvedTabId);
-      cacheTabMessages(tab.sessionId, afterDecision?.messages ?? []);
     }
 
     // Brief agent acknowledgment — no user bubble; stripped again on hydrate.
@@ -1868,9 +1877,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           provider,
           modelId: model,
           apiKey: persistedSettings.aiApiKeys?.[provider] || undefined,
+          sessionAgent: tabAfterUser?.sessionAgent,
           mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
           skillIds: composerExtras?.skillIds,
           images: composerExtras?.promptImages,
+          attachments: persistableAttachmentsFromUserBlocks(userBlocks),
         });
         if (!result.ok) {
           get()._applyAgentEvent(tabId, {
@@ -1909,26 +1920,15 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (!id) return;
     const tabId = get().activeTabId;
     set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, openSubAgentPanelToolUseId: id } : t,
-      ),
+      tabs: s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        const conversation = ensureTaskRunFromTranscript(t.conversation, id);
+        return {
+          ...applyConversationToTab(t, conversation),
+          openSubAgentPanelToolUseId: id,
+        };
+      }),
     }));
-
-    // History / reload: subAgentRuns are memory-only — seed from the current turn.
-    const tab = get().tabs.find((t) => t.id === tabId);
-    const run = tab?.subAgentRuns?.[id];
-    if (!run && tab) {
-      const meta = extractTaskMetaFromMessages(
-        [...(tab.messages ?? []), tab.streamingMessage],
-        id,
-      );
-      get()._hydrateSubAgentRun(tabId, id, {
-        expertId: meta.expertId,
-        prompt: meta.prompt,
-        status: "done",
-        blocks: [],
-      });
-    }
   },
 
   closeSubAgentPanel: () => {
@@ -1938,6 +1938,26 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         t.id === tabId ? { ...t, openSubAgentPanelToolUseId: null } : t,
       ),
     }));
+  },
+
+  acknowledgeQuestionAnswer: (requestId, answer) => {
+    const id = requestId.trim();
+    if (!id) return;
+    const tabId = get().activeTabId;
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        return applyConversationToTab(
+          t,
+          applyQuestionAnswerToConversation(t.conversation, id, answer),
+        );
+      });
+      return {
+        tabs,
+        ...projectActiveTab(tabs, s.activeTabId),
+        streamTick: s.streamTick + 1,
+      };
+    });
   },
 
   cancelSubAgentRun: async (taskToolUseId) => {
@@ -2207,6 +2227,45 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
+  restoreConversation: (tabId, conversation) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        return {
+          ...applyConversationToTab(t, { ...conversation, live: null }),
+          streamingMessage: null,
+          isStreaming: false,
+          error: null,
+        };
+      });
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
+  applyConversationCompact: (tabId, compacted) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) => {
+        if (t.id !== tabId) return t;
+        return applyConversationToTab(t, {
+          ...t.conversation,
+          compacted: {
+            throughTurnIndex: compacted.throughTurnIndex,
+            ...(compacted.summary ? { summary: compacted.summary } : {}),
+            at: Date.now(),
+          },
+          usage: t.conversation.usage
+            ? {
+                ...t.conversation.usage,
+                inputTokens: undefined,
+                breakdown: undefined,
+              }
+            : t.conversation.usage,
+        });
+      });
+      return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
+    });
+  },
+
   restoreMessages: (tabId, messages) => {
     set((s) => {
       const tabs = s.tabs.map((t) => {
@@ -2360,17 +2419,33 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
       return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
     });
+    const started = get().tabs.find((tab) => tab.id === tabId);
+    const turnIndex = started?.conversation.live?.turnIndex ?? 0;
+    const sessionId = started?.conversation.conversationId || started?.sessionId || tabId;
+    void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+      const checkpoints = useCheckpointStore.getState();
+      if (sessionId && checkpoints.byTab[tabId]?.sessionId !== sessionId) {
+        checkpoints.setSessionId(tabId, sessionId);
+      }
+      checkpoints.beginTurn(tabId, turnIndex);
+    });
   },
 
   _applyAgentEvent: (tabId, event) => {
     set((state) => {
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
-        const conversation = applyConversationEvent(tab.conversation, event);
+        // Map the main-process idle-timeout error code to a readable message
+        // before it lands in the turn error block / tab error.
+        const mapped =
+          event.type === "turn_failed" && event.error === "turn_idle_timeout"
+            ? { ...event, error: i18n.t("chat.turn_timeout") }
+            : event;
+        const conversation = applyConversationEvent(tab.conversation, mapped);
         const suggest = conversation.pendingPlanSuggest;
         return {
           ...applyConversationToTab(tab, conversation),
-          error: event.type === "turn_failed" ? event.error : tab.error,
+          error: mapped.type === "turn_failed" ? mapped.error : tab.error,
           planSuggestVisible:
             !!suggest && tab.sessionAgent === "build" && !tab.planSuggestDismissed,
           planSuggestReason: suggest?.reason ?? null,
@@ -2382,6 +2457,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         streamTick: state.streamTick + 1,
       };
     });
+    if (event.type === "tool_finished" && event.ok) {
+      const tab = get().tabs.find((item) => item.id === tabId);
+      if (event.toolName === "literature-stage") {
+        const sessionId = tab?.sessionId || tabId;
+        captureLiteratureStageFromToolResult(sessionId, event.result);
+      }
+    }
+    if (
+      event.type === "turn_finished"
+      || event.type === "turn_cancelled"
+      || event.type === "turn_failed"
+    ) {
+      void import("./checkpoint-store").then(({ useCheckpointStore }) => {
+        void useCheckpointStore.getState().finalizeTurn(tabId, event.type === "turn_finished");
+      });
+    }
   },
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
@@ -2819,15 +2910,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   _setContextTokens: (tabId, tokens, opts) => {
     set((s) => {
-      const clear = opts?.clear === true;
-      // undefined tokens = don't touch contextTokens (e.g. usage without input).
-      const nextTokens = clear ? null : (tokens === undefined ? undefined : tokens);
+      const clearAll = opts?.clear === true;
+      const clearOccupancy = clearAll || opts?.clearOccupancy === true;
+      // undefined / 0 tokens = don't clobber a known occupancy (e.g. usage without input).
+      const nextTokens = clearOccupancy
+        ? null
+        : (tokens === undefined || tokens === 0 ? undefined : tokens);
       const nextSize =
-        clear ? null : (opts && "windowSize" in opts ? opts.windowSize ?? null : undefined);
+        clearAll ? null : (opts && "windowSize" in opts ? opts.windowSize ?? null : undefined);
       const nextSource =
-        clear ? null : (opts && "source" in opts ? opts.source ?? null : undefined);
+        clearOccupancy ? null : (opts && "source" in opts ? opts.source ?? null : undefined);
       const nextCost =
-        clear ? null : (opts && "costUsd" in opts ? opts.costUsd ?? null : undefined);
+        clearAll ? null : (opts && "costUsd" in opts ? opts.costUsd ?? null : undefined);
+      const nextBreakdown =
+        clearOccupancy && !("breakdown" in (opts ?? {}))
+          ? null
+          : (opts && "breakdown" in opts ? opts.breakdown ?? null : undefined);
 
       const tabs = s.tabs.map((t) => {
         if (t.id !== tabId) return t;
@@ -2836,6 +2934,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         if (nextSize !== undefined) next.contextWindowSize = nextSize;
         if (nextSource !== undefined) next.contextUsageSource = nextSource;
         if (nextCost !== undefined) next.contextCostUsd = nextCost;
+        if (nextBreakdown !== undefined) next.contextBreakdown = nextBreakdown;
         return next;
       });
       const isActive = s.activeTabId === tabId;
@@ -2847,6 +2946,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           contextWindowSize: active?.contextWindowSize ?? null,
           contextUsageSource: active?.contextUsageSource ?? null,
           contextCostUsd: active?.contextCostUsd ?? null,
+          contextBreakdown: active?.contextBreakdown ?? null,
         };
       }
       return { tabs };

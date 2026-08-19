@@ -51,6 +51,10 @@ export interface PiSubsessionRuntimeOpts {
   skills?: HostSkillDir[];
   /** Pre-rendered subagent profile module prompts appended to each expert system prompt. */
   profileModules?: string;
+  /** Live team roster — used to prewarm a child session while Task args are still streaming. */
+  roster?: readonly ResolvedPiRosterEntry[];
+  projectRoot?: string;
+  boundCheckoutPath?: string;
   onEvent?: (event: AgentEvent) => void;
 }
 
@@ -69,6 +73,9 @@ export interface RunSubagentTaskInput {
   timeoutMs?: number;
 }
 
+/** Default child budget — literature / review Tasks routinely run well past a few minutes. */
+export const DEFAULT_SUBAGENT_TIMEOUT_MS = 3_600_000;
+
 export interface RunSubagentTaskResult {
   ok: boolean;
   text?: string;
@@ -83,9 +90,34 @@ interface ActiveChildSession {
   handle?: SubagentSessionRunnerHandle;
 }
 
+interface PrewarmedChild {
+  expertFqid: string;
+  parentSessionId: string;
+  abortController: AbortController;
+  scopedToolHost: ToolHost;
+  childText: { current: string };
+  runnerPromise: Promise<SubagentSessionRunnerHandle>;
+}
+
+export function findRosterExpert(
+  roster: readonly ResolvedPiRosterEntry[],
+  expertId: string,
+): ResolvedPiRosterEntry | undefined {
+  const raw = expertId.trim().toLowerCase();
+  if (!raw) return undefined;
+  return roster.find(
+    (entry) =>
+      entry.fqid.toLowerCase() === raw
+      || entry.runtimeName.toLowerCase() === raw
+      || entry.name.toLowerCase() === raw,
+  );
+}
+
 export class PiSubsessionRuntime {
   private readonly allTools: readonly NativeToolDefinition[];
   private readonly activeSubsessions = new Map<string, ActiveChildSession>();
+  private readonly prewarms = new Map<string, PrewarmedChild>();
+  private readonly cancelledParentToolCalls = new Set<string>();
 
   constructor(private readonly opts: PiSubsessionRuntimeOpts) {
     this.allTools = opts.allTools ?? ALL_NATIVE_TOOLS;
@@ -98,10 +130,16 @@ export class PiSubsessionRuntime {
   cancelAllForParentSession(parentSessionId: string): number {
     let count = 0;
     for (const [taskId, child] of Array.from(this.activeSubsessions.entries())) {
-      if (child.parentSessionId === parentSessionId) {
+      if (!parentSessionId || child.parentSessionId === parentSessionId) {
         child.abortController.abort();
         void child.handle?.abort();
         this.activeSubsessions.delete(taskId);
+        count += 1;
+      }
+    }
+    for (const [id, slot] of Array.from(this.prewarms.entries())) {
+      if (!parentSessionId || slot.parentSessionId === parentSessionId) {
+        this.abortPrewarm(id);
         count += 1;
       }
     }
@@ -111,13 +149,56 @@ export class PiSubsessionRuntime {
   cancelByParentToolCallId(parentToolCallId: string): boolean {
     const id = parentToolCallId.trim();
     if (!id) return false;
+    this.cancelledParentToolCalls.add(id);
+    let hit = this.abortPrewarm(id);
     for (const child of this.activeSubsessions.values()) {
       if (child.parentToolCallId !== id) continue;
       child.abortController.abort();
       void child.handle?.abort();
       return true;
     }
-    return false;
+    return hit || true;
+  }
+
+  /**
+   * Start the child Pi session as soon as the parent Task streams an expertId,
+   * so execute() can prompt() without waiting on session + skills setup.
+   */
+  prewarmFromParentTool(input: {
+    parentSessionId: string;
+    parentTabId: string;
+    parentTurnId: string;
+    parentToolCallId: string;
+    expertId: string;
+  }): void {
+    const id = input.parentToolCallId.trim();
+    if (!id || !this.opts.createRunner) return;
+    if (this.cancelledParentToolCalls.has(id) || this.prewarms.has(id)) return;
+    if ([...this.activeSubsessions.values()].some((child) => child.parentToolCallId === id)) {
+      return;
+    }
+    const projectRoot = this.opts.projectRoot?.trim();
+    if (!projectRoot) return;
+    const expert = findRosterExpert(this.opts.roster ?? [], input.expertId);
+    if (!expert?.available || !expert.isDelegatable) return;
+
+    const abortController = new AbortController();
+    const built = this.beginChildSession({
+      parentSessionId: input.parentSessionId,
+      parentTabId: input.parentTabId,
+      parentTurnId: input.parentTurnId,
+      parentToolCallId: id,
+      expert,
+      projectRoot,
+      boundCheckoutPath: this.opts.boundCheckoutPath || projectRoot,
+      abortController,
+    });
+    this.prewarms.set(id, {
+      expertFqid: expert.fqid,
+      parentSessionId: input.parentSessionId,
+      abortController,
+      ...built,
+    });
   }
 
   private emitTagged(event: AgentEvent, subagentContext: { parentToolCallId: string; expertFqid: string; expertName: string }): void {
@@ -128,8 +209,98 @@ export class PiSubsessionRuntime {
     this.opts.onEvent?.(tagged);
   }
 
+  private abortPrewarm(parentToolCallId: string): boolean {
+    const slot = this.prewarms.get(parentToolCallId);
+    if (!slot) return false;
+    this.prewarms.delete(parentToolCallId);
+    slot.abortController.abort();
+    void slot.runnerPromise.then((handle) => {
+      void handle.abort();
+      handle.dispose();
+    }).catch(() => {});
+    return true;
+  }
+
+  private takePrewarm(parentToolCallId: string, expertFqid: string): PrewarmedChild | null {
+    const slot = this.prewarms.get(parentToolCallId);
+    if (!slot) return null;
+    this.prewarms.delete(parentToolCallId);
+    if (slot.expertFqid !== expertFqid) {
+      slot.abortController.abort();
+      void slot.runnerPromise.then((handle) => {
+        void handle.abort();
+        handle.dispose();
+      }).catch(() => {});
+      return null;
+    }
+    return slot;
+  }
+
+  private beginChildSession(input: {
+    parentSessionId: string;
+    parentTabId: string;
+    parentTurnId: string;
+    parentToolCallId: string;
+    expert: ResolvedPiRosterEntry;
+    projectRoot: string;
+    boundCheckoutPath: string;
+    abortController: AbortController;
+  }): {
+    scopedToolHost: ToolHost;
+    childText: { current: string };
+    runnerPromise: Promise<SubagentSessionRunnerHandle>;
+  } {
+    const subagentCtx = {
+      parentToolCallId: input.parentToolCallId,
+      expertFqid: input.expert.fqid,
+      expertName: input.expert.name,
+    };
+    const allowedSet = new Set(input.expert.allowedTools.map((t) => t.toLowerCase()));
+    const scopedTools = this.allTools.filter((t) => allowedSet.has(t.name.toLowerCase()));
+    const scopedToolHost = new ToolHost({
+      gate: this.opts.gate,
+      onEvent: (ev) => this.emitTagged(ev, subagentCtx),
+    });
+    scopedToolHost.registerAll(scopedTools);
+    const childText = { current: "" };
+    const profilePart = this.opts.profileModules?.trim()
+      ? `\n\n${this.opts.profileModules.trim()}`
+      : "";
+    if (!this.opts.createRunner) {
+      return {
+        scopedToolHost,
+        childText,
+        runnerPromise: Promise.reject(new Error("no_create_runner")),
+      };
+    }
+    const runnerPromise = this.opts.createRunner({
+      runtimeSessionId: `sub-${input.parentSessionId}-${Date.now()}`,
+      tabId: input.parentTabId,
+      turnId: input.parentTurnId,
+      projectRoot: input.projectRoot,
+      boundCheckoutPath: input.boundCheckoutPath,
+      systemPrompt: `${input.expert.instructions}${profilePart}`,
+      scopedToolHost,
+      modelRef: input.expert.modelRef,
+      thoughtLevel: input.expert.thoughtLevel,
+      temperature: input.expert.temperature,
+      allowedToolNames: input.expert.allowedTools,
+      skills: this.opts.skills,
+      emitEvent: (ev) => {
+        if (ev.type === "text_delta") childText.current += ev.text;
+        this.emitTagged(ev, subagentCtx);
+      },
+      abortSignal: input.abortController.signal,
+    });
+    return { scopedToolHost, childText, runnerPromise };
+  }
+
   async runSubagentTask(input: RunSubagentTaskInput): Promise<RunSubagentTaskResult> {
-    if (input.abortSignal?.aborted) {
+    if (
+      input.abortSignal?.aborted
+      || this.cancelledParentToolCalls.has(input.parentToolCallId)
+    ) {
+      this.cancelledParentToolCalls.delete(input.parentToolCallId);
       return { ok: false, error: "cancelled" };
     }
 
@@ -146,31 +317,23 @@ export class PiSubsessionRuntime {
     };
     this.activeSubsessions.set(taskId, activeRecord);
 
-    const subagentCtx = {
-      parentToolCallId: input.parentToolCallId,
-      expertFqid: input.expert.fqid,
-      expertName: input.expert.name,
-    };
+    const warmed = this.takePrewarm(input.parentToolCallId, input.expert.fqid);
+    if (warmed) {
+      const onRunAbort = () => warmed.abortController.abort();
+      abortController.signal.addEventListener("abort", onRunAbort, { once: true });
+    }
 
-    const allowedSet = new Set(input.expert.allowedTools.map((t) => t.toLowerCase()));
-    const scopedTools = this.allTools.filter((t) => allowedSet.has(t.name.toLowerCase()));
-
-    const scopedToolHost = new ToolHost({
-      gate: this.opts.gate,
-      onEvent: (ev) => this.emitTagged(ev, subagentCtx),
-    });
-    scopedToolHost.registerAll(scopedTools);
-
-    let childText = "";
-    let timeoutId: NodeJS.Timeout | null = null;
-    const timeoutMs = input.timeoutMs ?? 120_000;
-
-    const timeoutPromise = new Promise<RunSubagentTaskResult>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        abortController.abort();
-        reject(new Error(`subagent_timeout:${input.expert.name} after ${timeoutMs}ms`));
-      }, timeoutMs);
-    });
+    let timedOut = false;
+    const timeoutMs = input.timeoutMs ?? DEFAULT_SUBAGENT_TIMEOUT_MS;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      abortController.abort();
+      void activeRecord.handle?.abort();
+    }, timeoutMs);
+    const abortError = () =>
+      timedOut
+        ? `subagent_timeout:${input.expert.name} after ${timeoutMs}ms`
+        : "cancelled";
 
     const executionPromise = (async (): Promise<RunSubagentTaskResult> => {
       try {
@@ -178,33 +341,46 @@ export class PiSubsessionRuntime {
           return { ok: true, text: `[Simulated output from ${input.expert.name}]: task completed.` };
         }
 
-        const childSessionId = `sub-${input.parentSessionId}-${Date.now()}`;
-        const profilePart = this.opts.profileModules?.trim()
-          ? `\n\n${this.opts.profileModules.trim()}`
-          : "";
-        const runner = await this.opts.createRunner({
-          runtimeSessionId: childSessionId,
-          tabId: input.parentTabId,
-          turnId: input.parentTurnId,
-          projectRoot: input.projectRoot,
-          boundCheckoutPath: input.boundCheckoutPath,
-          systemPrompt: `${input.expert.instructions}${profilePart}`,
-          scopedToolHost,
-          modelRef: input.expert.modelRef,
-          thoughtLevel: input.expert.thoughtLevel,
-          temperature: input.expert.temperature,
-          allowedToolNames: input.expert.allowedTools,
-          skills: this.opts.skills,
-          emitEvent: (ev) => {
-            if (ev.type === "text_delta") {
-              childText += ev.text;
-            }
-            this.emitTagged(ev, subagentCtx);
-          },
-          abortSignal: abortController.signal,
-        });
+        let childText = warmed?.childText ?? { current: "" };
+        let runner: SubagentSessionRunnerHandle;
+        if (warmed && !warmed.abortController.signal.aborted) {
+          try {
+            runner = await warmed.runnerPromise;
+          } catch {
+            const built = this.beginChildSession({
+              parentSessionId: input.parentSessionId,
+              parentTabId: input.parentTabId,
+              parentTurnId: input.parentTurnId,
+              parentToolCallId: input.parentToolCallId,
+              expert: input.expert,
+              projectRoot: input.projectRoot,
+              boundCheckoutPath: input.boundCheckoutPath,
+              abortController,
+            });
+            childText = built.childText;
+            runner = await built.runnerPromise;
+          }
+        } else {
+          const built = this.beginChildSession({
+            parentSessionId: input.parentSessionId,
+            parentTabId: input.parentTabId,
+            parentTurnId: input.parentTurnId,
+            parentToolCallId: input.parentToolCallId,
+            expert: input.expert,
+            projectRoot: input.projectRoot,
+            boundCheckoutPath: input.boundCheckoutPath,
+            abortController,
+          });
+          childText = built.childText;
+          runner = await built.runnerPromise;
+        }
 
         activeRecord.handle = runner;
+        if (abortController.signal.aborted) {
+          void runner.abort();
+          runner.dispose();
+          return { ok: false, error: abortError() };
+        }
 
         const fullUserPrompt = input.context?.trim()
           ? `Context:\n${input.context.trim()}\n\nTask:\n${input.prompt.trim()}`
@@ -213,10 +389,10 @@ export class PiSubsessionRuntime {
         await runner.prompt(fullUserPrompt);
         runner.dispose();
 
-        return { ok: true, text: childText };
+        return { ok: true, text: childText.current };
       } catch (err) {
         if (abortController.signal.aborted) {
-          return { ok: false, error: "cancelled" };
+          return { ok: false, error: abortError() };
         }
         return {
           ok: false,
@@ -226,47 +402,52 @@ export class PiSubsessionRuntime {
     })();
 
     const abortPromise = new Promise<RunSubagentTaskResult>((resolve) => {
+      const finish = () => resolve({ ok: false, error: abortError() });
       if (abortController.signal.aborted) {
-        resolve({ ok: false, error: "cancelled" });
-      } else {
-        abortController.signal.addEventListener(
-          "abort",
-          () => resolve({ ok: false, error: "cancelled" }),
-          { once: true },
-        );
+        finish();
+        return;
       }
+      abortController.signal.addEventListener("abort", finish, { once: true });
     });
 
     try {
-      const result = await Promise.race([executionPromise, timeoutPromise, abortPromise]);
-      return result;
-    } catch (err) {
-      return {
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return await Promise.race([executionPromise, abortPromise]);
     } finally {
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
       input.abortSignal?.removeEventListener("abort", onParentAbort);
       this.activeSubsessions.delete(taskId);
     }
   }
 }
 
+function taskRosterIds(roster: readonly ResolvedPiRosterEntry[]): string[] {
+  return roster
+    .filter((entry) => entry.available && entry.isDelegatable)
+    .map((entry) => entry.runtimeName);
+}
+
 export function createTaskDelegationTool(opts: {
   subsessionRuntime: PiSubsessionRuntime;
   roster: readonly ResolvedPiRosterEntry[];
 }): NativeToolDefinition {
+  const ids = taskRosterIds(opts.roster);
+  const idList = ids.length > 0 ? ids.join(", ") : "(none enabled)";
   return {
     name: "task",
     label: "Delegate Sub-task",
     description:
-      "Delegate a specialized academic sub-task to an expert agent (e.g. citation-auditor, experiment-analyst). " +
-      "The expert runs in an isolated sub-session with scoped tools and returns its findings.",
+      `Delegate a scoped sub-problem to a team expert. Call this tool directly — do not search the project for team.json or subagents folders. This session's experts: ${idList}.`,
+    promptSnippet: `Delegate to a listed expert: ${idList}`,
+    promptGuidelines: [
+      "When the user asks for a subagent or team expert, call this tool immediately with expertId from this session's roster.",
+      "Do not ls, find, grep, or read team.json, teams.json, or subagents/ folders to discover experts.",
+      `expertId must be one of: ${idList}`,
+      "Write one scoped prompt: question, materials, and constraints.",
+    ],
     parameters: Type.Object({
       expertId: Type.String({
         minLength: 1,
-        description: "ID or FQID of the expert agent to delegate to",
+        description: `ID of a listed expert (${idList}). Also accepts that expert's FQID or display name.`,
       }),
       prompt: Type.String({
         minLength: 1,
@@ -292,15 +473,13 @@ export function createTaskDelegationTool(opts: {
         return { ok: false, error: "missing_prompt" };
       }
 
-      const target = opts.roster.find(
-        (r) =>
-          r.fqid.toLowerCase() === expertIdRaw ||
-          r.runtimeName.toLowerCase() === expertIdRaw ||
-          r.name.toLowerCase() === expertIdRaw,
-      );
+      const target = findRosterExpert(opts.roster, expertIdRaw);
 
       if (!target) {
-        return { ok: false, error: `unknown_expert:${args.expertId}` };
+        return {
+          ok: false,
+          error: `unknown_expert:${args.expertId}. Available: ${idList}`,
+        };
       }
 
       if (!target.available || !target.isDelegatable) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   captureSentinelScrollAnchor,
+  isFollowingStreamTurn,
+  pinOrFollowActiveTurn,
   restoreSentinelScrollAnchor,
 } from "../../src/renderer/lib/chat/active-turn-scroll";
 
@@ -102,5 +104,91 @@ describe("sentinel scroll anchor (contentRoot)", () => {
     expect(scroll.scrollTop).toBe(10 + (100 - 20));
 
     document.body.removeChild(scroll);
+  });
+
+  it("skips the shrinking turn runway when capturing a sentinel", () => {
+    const scroll = document.createElement("div");
+    const content = document.createElement("div");
+    scroll.appendChild(content);
+    document.body.appendChild(scroll);
+
+    const section = document.createElement("section");
+    section.setAttribute("data-chat-turn-index", "1");
+    const runway = document.createElement("div");
+    runway.setAttribute("data-chat-turn-runway", "");
+    const stubRect = (
+      el: Element,
+      rect: () => { top: number; bottom: number; left: number; right: number; width: number; height: number },
+    ) => {
+      Object.defineProperty(el, "getBoundingClientRect", { configurable: true, value: rect });
+    };
+    stubRect(scroll, () => ({ top: 0, bottom: 200, left: 0, right: 100, width: 100, height: 200 }));
+    stubRect(section, () => ({ top: -20, bottom: 80, left: 0, right: 100, width: 100, height: 100 }));
+    stubRect(runway, () => ({ top: 80, bottom: 200, left: 0, right: 100, width: 100, height: 120 }));
+    content.append(section, runway);
+
+    const anchor = captureSentinelScrollAnchor(scroll, content);
+    expect(anchor.sentinel).toBe(section);
+    expect(anchor.turnIndex).toBe(1);
+
+    document.body.removeChild(scroll);
+  });
+});
+
+describe("isFollowingStreamTurn", () => {
+  const stubRect = (
+    el: Element,
+    rect: () => { top: number; bottom: number; left: number; right: number; width: number; height: number },
+  ) => {
+    Object.defineProperty(el, "getBoundingClientRect", { configurable: true, value: rect });
+  };
+
+  it("treats a turn pinned to the viewport top as following", () => {
+    const container = document.createElement("div");
+    const turn = document.createElement("section");
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    Object.defineProperty(container, "scrollHeight", { value: 2000 });
+    Object.defineProperty(turn, "offsetHeight", { value: 180 });
+    container.scrollTop = 500;
+    stubRect(container, () => ({ top: 0, bottom: 400, left: 0, right: 100, width: 100, height: 400 }));
+    stubRect(turn, () => ({ top: 0, bottom: 180, left: 0, right: 100, width: 100, height: 180 }));
+    expect(isFollowingStreamTurn(container, turn)).toBe(true);
+  });
+
+  it("does not treat a turn far below the viewport as following", () => {
+    const container = document.createElement("div");
+    const turn = document.createElement("section");
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    Object.defineProperty(container, "scrollHeight", { value: 2000 });
+    Object.defineProperty(turn, "offsetHeight", { value: 180 });
+    container.scrollTop = 80;
+    stubRect(container, () => ({ top: 0, bottom: 400, left: 0, right: 100, width: 100, height: 400 }));
+    stubRect(turn, () => ({ top: 420, bottom: 600, left: 0, right: 100, width: 100, height: 180 }));
+    expect(isFollowingStreamTurn(container, turn)).toBe(false);
+  });
+});
+
+describe("pinOrFollowActiveTurn", () => {
+  it("pins a short turn to the top instead of following a missing tail", () => {
+    const container = document.createElement("div");
+    const turn = document.createElement("section");
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    Object.defineProperty(container, "scrollHeight", { value: 900 });
+    Object.defineProperty(turn, "offsetHeight", { value: 180 });
+    container.scrollTop = 0;
+    const stubRect = (
+      el: Element,
+      rect: () => { top: number; bottom: number; left: number; right: number; width: number; height: number },
+    ) => {
+      Object.defineProperty(el, "getBoundingClientRect", { configurable: true, value: rect });
+    };
+    stubRect(container, () => ({ top: 0, bottom: 400, left: 0, right: 100, width: 100, height: 400 }));
+    stubRect(turn, () => ({ top: 200, bottom: 380, left: 0, right: 100, width: 100, height: 180 }));
+    const scrolled: number[] = [];
+    container.scrollTo = ((opts: ScrollToOptions | number) => {
+      scrolled.push(typeof opts === "number" ? opts : opts.top ?? 0);
+    }) as typeof container.scrollTo;
+    pinOrFollowActiveTurn(container, turn, false);
+    expect(scrolled[0]).toBe(200);
   });
 });

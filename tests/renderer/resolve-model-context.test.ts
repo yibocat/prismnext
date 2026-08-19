@@ -14,7 +14,10 @@ import {
   getCachedPiCatalogModels,
   isUnknownContextWindowLabel,
 } from "../../src/renderer/lib/providers/pi-model-catalog";
-import { resolveSelectedModelContextTokens } from "../../src/renderer/lib/providers/index";
+import {
+  resolveSelectedModelContextTokens,
+  resolveSelectedModelContextTokensIfKnown,
+} from "../../src/renderer/lib/providers/index";
 
 describe("isUnknownContextWindowLabel", () => {
   it("treats Unknown / em dash as unknown", () => {
@@ -47,5 +50,18 @@ describe("resolveSelectedModelContextTokens", () => {
       [{ id: "opencode-go", name: "OpenCode Go", baseUrl: "" }],
     );
     expect(tokens).toBe(1_000_000);
+  });
+
+  it("returns null when the picker has no known window size", () => {
+    vi.mocked(getCachedPiCatalogModels).mockReturnValue([]);
+    expect(
+      resolveSelectedModelContextTokensIfKnown(
+        "opencode-go",
+        "mystery-model",
+        { "opencode-go": ["mystery-model"] },
+        { "opencode-go": [{ id: "mystery-model", name: "Mystery", contextWindow: "Unknown" }] },
+        [{ id: "opencode-go", name: "OpenCode Go", baseUrl: "" }],
+      ),
+    ).toBeNull();
   });
 });

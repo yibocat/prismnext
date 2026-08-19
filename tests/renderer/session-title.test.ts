@@ -3,10 +3,12 @@ import {
   cleanSessionTitleText,
   deriveSessionTitleForSend,
   extractSessionTitle,
+  extractSessionTitleFromConversation,
   extractTitleFromContentBlocks,
   isGenericSessionTitle,
   resolveSessionTitle,
 } from "../../src/renderer/lib/chat/session-title";
+import { emptyConversation } from "../../src/shared/agent-conversation";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("session-title", () => {
@@ -150,5 +152,21 @@ describe("session-title", () => {
       },
     ];
     expect(extractSessionTitle(messages)).toBe("hello");
+  });
+
+  it("extracts a title from Conversation user blocks", () => {
+    const conv = {
+      ...emptyConversation({ conversationId: "c1", title: "New Chat" }),
+      turns: [{
+        turnId: "t1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text" as const, text: "review the abstract" }] },
+        assistant: { blocks: [] },
+        status: "completed" as const,
+      }],
+    };
+    expect(extractSessionTitleFromConversation(conv)).toBe("review the abstract");
+    expect(resolveSessionTitle({ title: "New Chat", conversation: conv, messages: [] }))
+      .toBe("review the abstract");
   });
 });

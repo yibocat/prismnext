@@ -7,7 +7,7 @@
 
 import type { Conversation } from "./agent-conversation";
 import type { AgentEvent } from "./agent-runtime";
-import type { PermissionMode } from "./session-agent";
+import type { PermissionMode, SessionAgent } from "./session-agent";
 
 export type ChatRuntimeKind = "pi" | "opencode";
 
@@ -86,6 +86,8 @@ export interface AgentSendInput {
   modelId?: string;
   apiKey?: string;
   permissionMode?: PermissionMode;
+  /** Current session agent (build | plan) — Pi runtime uses it for plan-mode prompts. */
+  sessionAgent?: SessionAgent;
   /** Composer `/` MCP names for this turn. Empty / omitted = only autoStart servers. */
   mcpServerAllowlist?: string[];
   /** Composer `/` skills for this turn. Loaded via team binding extraSkillIds. */
@@ -222,6 +224,8 @@ export interface AgentCompactResult {
   ok: boolean;
   summary?: string;
   tokensBefore?: number;
+  /** Exclusive: product turns below this index stay expanded. */
+  throughTurnIndex?: number;
   error?: string;
 }
 

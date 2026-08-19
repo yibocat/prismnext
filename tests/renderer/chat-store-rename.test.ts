@@ -31,7 +31,6 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
 vi.stubGlobal("window", {
   electronAPI: {
     agentRenameSession,
-    chatCancel: vi.fn().mockResolvedValue(undefined),
     agentCancel: vi.fn().mockResolvedValue({ ok: true }),
     agentDispose: vi.fn().mockResolvedValue({ ok: true }),
   },

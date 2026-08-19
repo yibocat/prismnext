@@ -285,6 +285,10 @@ describe("agent service status", () => {
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
     })).toContain("Focus on formal academic tone.");
+    expect(buildAgentSystemPrompt({
+      stableSystem: "stable prompt",
+      taskRoster: "## Available subagents (via Task)\n\n- `literature-synthesizer`",
+    })).toContain("`literature-synthesizer`");
   });
 });
 
@@ -458,12 +462,112 @@ describe("agent session history", () => {
       text: "hello",
     });
     expect(sent.ok).toBe(true);
+    registry.store.appendTurn("rt-compact", {
+      turnIndex: 0,
+      turnId: "turn-0",
+      createdAt: Date.now(),
+      user: { text: "hello" },
+      assistant: { text: "hi", toolCalls: [] },
+      status: "completed",
+    });
+    registry.store.appendTurn("rt-compact", {
+      turnIndex: 1,
+      turnId: "turn-1",
+      createdAt: Date.now() + 1,
+      user: { text: "again" },
+      assistant: { text: "ok", toolCalls: [] },
+      status: "completed",
+    });
     expect(await agent.compact({ conversationId: "conv-compact" })).toEqual({
       ok: true,
       summary: "old turns summarized",
       tokensBefore: 12000,
+      throughTurnIndex: 2,
     });
     expect(compacted).toEqual(["rt-compact"]);
+    expect(registry.store.getSession("rt-compact")?.compacted).toMatchObject({
+      throughTurnIndex: 2,
+      summary: "old turns summarized",
+    });
+  });
+
+  it("persists subagent process blocks on the parent session when the child turn ends", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-subruns-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
+    dirs.push(userData, project);
+    const registry = new RuntimeRegistry({
+      userDataDir: userData,
+      startRuntime: async () => ({
+        runtime: fakeRuntime(),
+        runtimeSessionId: "rt-sub",
+      }),
+    });
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    const sent = await agent.send({
+      conversationId: "conv-sub",
+      tabId: "conv-sub",
+      turnId: "turn-1",
+      projectRoot: project,
+      text: "delegate",
+    });
+    expect(sent.ok).toBe(true);
+
+    agent.attachOwner({
+      isDestroyed: () => false,
+      send() {},
+    } as never);
+
+    const subagent = {
+      parentToolCallId: "task-1",
+      expertFqid: "literature-synthesizer",
+      expertName: "literature-synthesizer",
+    };
+    agent.dispatchEvent({
+      type: "thinking_delta",
+      runtimeSessionId: "rt-sub",
+      tabId: "conv-sub",
+      turnId: "child-1",
+      text: "先读摘要",
+      subagent,
+    });
+    expect(registry.store.getSession("rt-sub")?.subagentRuns).toBeUndefined();
+
+    agent.dispatchEvent({
+      type: "text_delta",
+      runtimeSessionId: "rt-sub",
+      tabId: "conv-sub",
+      turnId: "child-1",
+      text: "三个方向仍开放",
+      subagent,
+    });
+    agent.dispatchEvent({
+      type: "turn_finished",
+      runtimeSessionId: "rt-sub",
+      tabId: "conv-sub",
+      turnId: "child-1",
+      subagent,
+    });
+
+    expect(registry.store.getSession("rt-sub")?.subagentRuns?.["task-1"]).toMatchObject({
+      expertName: "literature-synthesizer",
+      status: "done",
+      blocks: [
+        { type: "thinking", thinking: "先读摘要" },
+        { type: "text", text: "三个方向仍开放" },
+      ],
+    });
   });
 
   it("truncates stored turns through the conversation id and can undo", async () => {

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
 import {
   type AgentAnswerQuestionInput,
   type AgentAuthInput,
@@ -51,6 +52,8 @@ import {
   testAgentConnection,
 } from "./model-catalog";
 import { hydrateSessionRecordToConversation } from "./session-hydrator";
+import { applySubagentEventToRuns } from "../../shared/conversation-blocks";
+import type { ConversationSubagentRun } from "../../shared/agent-conversation";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
@@ -80,6 +83,7 @@ import {
   selectMcpServers,
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
+import { buildLiveTaskRosterMarkdown } from "../../shared/subagent-roster";
 
 const AGENT_TOOLS = [
   ...PI_PRIMITIVE_TOOL_NAMES,
@@ -97,6 +101,7 @@ export const HOST_SYSTEM_IDENTITY = [
   "Use the file and shell tools registered from Pi, plus the host research tools.",
   "Prefer literature-search for local papers, literature-discover for catalogs,",
   "research-brief-update for the project brief, and experiment-run for island commands.",
+  "When a team expert is needed, call the task tool using the session roster — do not search the disk for subagents.",
 ].join(" ");
 
 export function resolveAgentAuth(input: AgentAuthInput): AgentAuthResult {
@@ -125,6 +130,7 @@ export function buildAgentSystemPrompt(input: {
   agentsMd?: string;
   leadInstructions?: string;
   leadName?: string;
+  taskRoster?: string;
 }): string {
   const leadSection = input.leadInstructions?.trim()
     ? `## Active Team Lead: ${input.leadName || "Lead"}\n\n${input.leadInstructions.trim()}`
@@ -134,6 +140,7 @@ export function buildAgentSystemPrompt(input: {
     input.stableSystem.trim(),
     input.agentsMd?.trim(),
     leadSection,
+    input.taskRoster?.trim(),
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -230,6 +237,7 @@ export class AgentService {
   }>();
   private readonly mcpHosts = new Map<string, AgentMcpHost>();
   private readonly subsessionRuntimes = new Map<string, PiSubsessionRuntime>();
+  private readonly subagentRunsByRuntime = new Map<string, Record<string, ConversationSubagentRun>>();
 
   constructor(private readonly deps: AgentServiceDeps) {
     this.registry = deps.registry ?? new RuntimeRegistry({
@@ -381,7 +389,9 @@ export class AgentService {
       await this.attachLiveMcpTools(conversationId, projectRoot);
 
       const userText = buildAgentUserText({
-        text,
+        text: input.sessionAgent === "plan"
+          ? `${text}\n\n${buildPlanModeTurnAppendix(conversationId)}`
+          : text,
         projectRules: await this.deps.composeProjectRules(projectRoot),
       });
       await this.registry.sendTurn({
@@ -390,7 +400,12 @@ export class AgentService {
         turnId: input.turnId,
         text: userText,
         images: input.images,
+        attachments: input.attachments,
+        sessionAgent: input.sessionAgent,
         permissionMode: input.permissionMode ?? permissionModeFromSettings(settings),
+        provider: auth.provider,
+        modelId: auth.modelId,
+        apiKey: auth.apiKey,
       });
       return { ok: true };
     } catch (err) {
@@ -449,9 +464,8 @@ export class AgentService {
   async deleteSession(input: AgentDeleteSessionInput): Promise<{ ok: boolean }> {
     const conversationId = input.conversationId.trim();
     if (!conversationId) return { ok: false };
-    const record = this.registry.store.getByConversationId(conversationId);
     await this.registry.disposeConversation(conversationId);
-    if (record) this.registry.store.deleteSession(record.runtimeSessionId);
+    this.registry.store.deleteByConversationId(conversationId);
     if (conversationId === this.activeConversationId) {
       this.runtime = null;
       this.gate = null;
@@ -521,7 +535,23 @@ export class AgentService {
     if (!binding?.runtimeSessionId) return { ok: false, error: "session_not_live" };
     const runtime = this.registry.getRuntime(conversationId);
     if (!runtime?.compact) return { ok: false, error: "compact_unavailable" };
-    return runtime.compact(binding.runtimeSessionId);
+    const result = await runtime.compact(binding.runtimeSessionId);
+    if (!result.ok) return result;
+    const record = this.registry.store.getSession(binding.runtimeSessionId)
+      ?? this.registry.store.getByConversationId(conversationId);
+    const throughTurnIndex = record?.turns.length ?? 0;
+    if (record) {
+      this.registry.store.put({
+        ...record,
+        compacted: {
+          throughTurnIndex,
+          ...(result.summary ? { summary: result.summary } : {}),
+          at: Date.now(),
+        },
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    return { ...result, throughTurnIndex };
   }
 
   async describeImages(input: AgentDescribeImagesInput): Promise<AgentDescribeImagesResult> {
@@ -674,6 +704,51 @@ export class AgentService {
   attachOwner(contents: WebContents): void {
     this.owner = contents;
     this.sink = (event) => {
+      if (event.subagent) {
+        const parentRt =
+          this.registry.getBinding(event.tabId)?.runtimeSessionId
+          ?? this.sessionId;
+        if (parentRt) this.runtime?.touchTurnWatchdog?.(parentRt);
+        if (parentRt) {
+          const next = applySubagentEventToRuns(
+            this.subagentRunsByRuntime.get(parentRt) ?? {},
+            event,
+          );
+          this.subagentRunsByRuntime.set(parentRt, next);
+          if (
+            event.type === "turn_finished"
+            || event.type === "turn_failed"
+            || event.type === "turn_cancelled"
+          ) {
+            this.persistSubagentRuns(parentRt);
+          }
+        }
+      } else if (
+        event.type === "turn_finished"
+        || event.type === "turn_failed"
+        || event.type === "turn_cancelled"
+      ) {
+        this.persistSubagentRuns(event.runtimeSessionId);
+      }
+      if (
+        event.type === "tool_started"
+        && event.toolName === "task"
+        && !event.subagent
+        && typeof event.args?.expertId === "string"
+      ) {
+        (
+          this.subsessionRuntimes.get(event.tabId)
+          ?? (this.activeConversationId
+            ? this.subsessionRuntimes.get(this.activeConversationId)
+            : undefined)
+        )?.prewarmFromParentTool({
+          parentSessionId: event.runtimeSessionId,
+          parentTabId: event.tabId,
+          parentTurnId: event.turnId,
+          parentToolCallId: event.toolCallId,
+          expertId: event.args.expertId,
+        });
+      }
       if (this.owner && !this.owner.isDestroyed()) {
         this.owner.send("agent:event", event);
       }
@@ -690,6 +765,18 @@ export class AgentService {
     this.owner = null;
     this.sink = null;
     this.permissionSink = null;
+  }
+
+  private persistSubagentRuns(runtimeSessionId: string): void {
+    const live = this.subagentRunsByRuntime.get(runtimeSessionId);
+    if (!live || Object.keys(live).length === 0) return;
+    const record = this.registry.store.getSession(runtimeSessionId);
+    if (!record) return;
+    this.registry.store.put({
+      ...record,
+      subagentRuns: { ...(record.subagentRuns ?? {}), ...live },
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   isOwnedBy(contents: WebContents): boolean {
@@ -786,6 +873,9 @@ export class AgentService {
         }),
         skills: ctx.skills?.map((skill) => ({ dir: skill.dir, source: skill.fqid })),
         profileModules,
+        roster: ctx.roster,
+        projectRoot: input.projectRoot,
+        boundCheckoutPath: input.boundCheckoutPath,
         onEvent: (event) => this.sink?.(event),
       });
       this.subsessionRuntimes.set(input.conversationId, subsessionRuntime);
@@ -801,6 +891,14 @@ export class AgentService {
       agentsMd: await this.deps.composeAgentsMd(input.projectRoot),
       leadInstructions: ctx.lead?.instructions,
       leadName: ctx.lead?.name,
+      taskRoster: buildLiveTaskRosterMarkdown(
+        (ctx.roster ?? []).map((entry) => ({
+          id: entry.runtimeName,
+          name: entry.name,
+          description: entry.description,
+          fqid: entry.fqid,
+        })),
+      ),
     });
     const runtime = new PiSdkRuntime({
       createPiSession: createPiSdkSessionFactory({

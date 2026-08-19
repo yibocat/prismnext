@@ -70,6 +70,7 @@
     "placeholder": "向 AI 询问你的研究…"
   },
   "subagent": {
+    "preparing": "正在准备…",
     "running": "运行中",
     "backgroundRunning": "后台运行",
     "stopping": "正在停止…",
@@ -239,26 +240,28 @@
     "saveFailed": "保存研究计划失败"
   },
   "context": {
+    "title": "上下文用量",
     "window": "上下文窗口",
     "spent": "已花费",
+    "pctUsed": "已占用 {{pct}}%",
     "compress": "压缩上下文",
     "compressing": "压缩中…",
     "compressDone": "已压缩上下文。用量将在下一次回复后刷新。",
-    "breakdownHint": "分类为本地 o200k 估计；总量由 OpenCode 上报。",
-    "fromOpenCode": "占用由 OpenCode 按本会话上报。",
-    "fromPromptUsage": "占用来自上一轮 prompt usage（未收到 OpenCode usage_update）。",
-    "waitingUsage": "压缩后或下一轮回复前，等待 OpenCode 用量。",
+    "breakdownHint": "色条按整个上下文窗口比例绘制，不是已消耗 tokens 的内部占比。分类用内置 js-tiktoken o200k_base 估算；占用总量和花费来自本对话的 Pi 会话（花费为累计）。",
+    "fromSession": "占用是本对话当前送进模型的窗口（会随对话变长）。花费为整段对话累计。",
+    "fromPromptUsage": "占用来自上一轮 prompt usage（尚未收到实时用量更新）。",
+    "waitingUsage": "压缩后或下一轮回复前，等待会话用量。",
+    "windowExceeds": "当前占用已超过这档模型的上下文窗口，发送前建议先压缩。",
     "promptStale": "基础提示已更新——将在你发送下一条消息时刷新。",
     "categories": {
-      "messages": "消息",
-      "userInstructions": "Agent 指令",
-      "projectInstructions": "项目指令",
-      "projectRules": "项目规则",
+      "systemPrompt": "系统提示",
+      "tools": "工具定义",
+      "rules": "规则",
       "skills": "技能",
-      "modules": "提示模块",
-      "mcpTools": "MCP 工具",
-      "corePersona": "核心人格",
-      "agentBase": "Agent 基础"
+      "mcp": "MCP 与动态工具",
+      "subagents": "子代理定义",
+      "summarized": "已摘要对话",
+      "conversation": "对话"
     }
   },
   "intensive": {
@@ -280,6 +283,9 @@
     "loadMoreArmed": "停稳后再向上滑加载",
     "loadMorePulling": "继续向上滑…",
     "loadingOlder": "加载中…",
+    "compactedBanner": "已压缩 {{count}} 个较早回合",
+    "compactedShow": "展开较早内容",
+    "compactedHide": "收起较早内容",
     "expand": "点击展开",
     "collapse": "收起",
     "editHint": "点击气泡外取消 · Enter 重新发送",

@@ -1,10 +1,11 @@
 /**
  * Pi session events → product AgentEvent.
- * OpenCode chat:stream mapping lives in acp/chat-stream-map.ts, not here.
+ * Product turns settle only on `agent_end` — Pi `turn_end` is an agent-loop boundary.
  */
 
 import type { AgentEvent } from "../../shared/agent-runtime";
-import { isAgentEventType } from "../../shared/agent-runtime";
+import { isAgentEventType, toolArgsHaveContent } from "../../shared/agent-runtime";
+import { costFromPiUsage, occupancyFromPiUsage } from "../../shared/agent-context-usage";
 import { isPiPrimitiveToolName } from "./capability-matrix";
 
 export function assertAgentEvent(event: AgentEvent): AgentEvent {
@@ -26,6 +27,13 @@ export interface PiLikeSessionEvent {
   assistantMessageEvent?: {
     type?: string;
     delta?: string;
+    contentIndex?: number;
+    toolCall?: {
+      id?: string;
+      name?: string;
+      arguments?: unknown;
+      args?: unknown;
+    };
     partial?: {
       usage?: {
         input?: number;
@@ -34,6 +42,13 @@ export interface PiLikeSessionEvent {
         cacheWrite?: number;
         cost?: { total?: number };
       };
+      content?: Array<{
+        type?: string;
+        id?: string;
+        name?: string;
+        arguments?: unknown;
+        args?: unknown;
+      }>;
     };
   };
   usage?: {
@@ -54,24 +69,48 @@ export interface PiEventMapContext {
 }
 
 function asArgs(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function asStreamingToolCall(value: unknown): { id: string; name: string; args: Record<string, unknown> } | null {
+  if (!value || typeof value !== "object") return null;
+  const rec = value as Record<string, unknown>;
+  const id = typeof rec.id === "string" ? rec.id.trim() : "";
+  const name = typeof rec.name === "string" ? rec.name.trim() : "";
+  if (!id || !name) return null;
+  return { id, name, args: asArgs(rec.arguments ?? rec.args) };
+}
+
+function streamingToolFromAssistantEvent(
+  inner: NonNullable<PiLikeSessionEvent["assistantMessageEvent"]>,
+): { id: string; name: string; args: Record<string, unknown> } | null {
+  const fromEnd = asStreamingToolCall(inner.toolCall);
+  if (fromEnd) return fromEnd;
+  const index = typeof inner.contentIndex === "number" ? inner.contentIndex : -1;
+  const content = inner.partial?.content;
+  if (!Array.isArray(content) || index < 0) return null;
+  return asStreamingToolCall(content[index]);
 }
 
 function usageToEvent(
   base: { runtimeSessionId: string; tabId: string; turnId: string },
   u: { input?: number; output?: number; cacheRead?: number; cacheWrite?: number; cost?: { total?: number } },
 ): AgentEvent | null {
-  if (!u.input && !u.output && !u.cacheRead && !u.cacheWrite && !u.cost?.total) {
+  const occupancy = occupancyFromPiUsage(u);
+  const costUsd = costFromPiUsage(u);
+  if (occupancy == null && !u.output && !u.cacheRead && !u.cacheWrite && costUsd == null) {
     return null;
   }
   return {
     ...base,
     type: "usage_updated",
-    inputTokens: u.input,
+    ...(occupancy != null ? { inputTokens: occupancy } : {}),
     outputTokens: u.output,
     cacheReadTokens: u.cacheRead,
     cacheWriteTokens: u.cacheWrite,
-    ...(typeof u.cost?.total === "number" ? { costUsd: u.cost.total } : {}),
+    ...(costUsd != null ? { costUsd } : {}),
   };
 }
 
@@ -97,6 +136,23 @@ export function mapPiSessionEvent(
       }
       if (inner?.type === "thinking_delta" && inner.delta) {
         return [{ ...base, type: "thinking_delta", text: inner.delta }];
+      }
+      if (
+        inner?.type === "toolcall_start"
+        || inner?.type === "toolcall_delta"
+        || inner?.type === "toolcall_end"
+      ) {
+        const call = streamingToolFromAssistantEvent(inner);
+        if (call) {
+          return [{
+            ...base,
+            type: "tool_started",
+            toolCallId: call.id,
+            toolName: call.name,
+            args: call.args,
+            preparing: inner.type !== "toolcall_end" && !toolArgsHaveContent(call.args),
+          }];
+        }
       }
       // Pi reports usage on the assistant message snapshot; surface it so the
       // context ring can show occupancy / spend while streaming.
@@ -147,8 +203,12 @@ export function mapPiSessionEvent(
         result: event.result,
       }];
     }
+    // Pi emits `turn_end` after EVERY agent loop turn — including the
+    // tool-call round(s) that precede the final reply. Mapping every `turn_end`
+    // to `turn_finished` prematurely commits the live turn (before the final
+    // text arrives) and later text_deltas get dropped as "late". Only
+    // `agent_end` marks the real end of the whole prompt.
     case "agent_end":
-    case "turn_end":
       return [{ ...base, type: "turn_finished" }];
     default:
       if (event.usage) {

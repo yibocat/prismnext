@@ -10,7 +10,8 @@ import { join } from "node:path";
 import type { AgentPlanEvent } from "../../shared/agent-api";
 import type { RuntimeSessionId } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import type { TurnMessageMeta } from "../../shared/agent-conversation";
+import type { ContentBlock, ConversationSubagentRun, TurnMessageMeta } from "../../shared/agent-conversation";
+import type { SessionUsageTotals } from "../../shared/agent-context-usage";
 
 export const PI_AGENT_DIR_NAME = "pi-agent";
 export const FORBIDDEN_PROJECT_RESOURCE_DIRS = [".pi", ".agents", ".opencode"] as const;
@@ -50,12 +51,16 @@ export interface AgentTurnRecord {
     text: string;
     thinking?: string;
     toolCalls: AgentToolCallSnapshot[];
+    /** Event-order timeline. Present on turns persisted after P9; older records omit it. */
+    blocks?: ContentBlock[];
   };
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
+    /** This turn's billed USD (not session cumulative). */
+    costUsd?: number;
   };
   status: "completed" | "failed" | "cancelled";
   error?: string;
@@ -90,6 +95,14 @@ export interface AgentSessionRecord {
   turns: AgentTurnRecord[];
   planEvents?: AgentPlanEvent[];
   regret?: AgentSessionRegretState | null;
+  subagentRuns?: Record<string, ConversationSubagentRun>;
+  compacted?: {
+    throughTurnIndex: number;
+    summary?: string;
+    at?: number;
+  };
+  /** Latest Pi occupancy / cumulative spend / category estimate. */
+  usageTotals?: SessionUsageTotals;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -153,6 +166,22 @@ export class AgentSessionStore {
   createSession(input: CreateSessionRecordInput): AgentSessionRecord {
     const now = new Date().toISOString();
     const conversationId = input.conversationId || input.runtimeSessionId;
+    const existing = this.getByConversationId(conversationId);
+    if (existing) {
+      const next: AgentSessionRecord = {
+        ...existing,
+        runtimeSessionId: input.runtimeSessionId,
+        tabId: input.tabId ?? existing.tabId,
+        projectRoot: input.projectRoot || existing.projectRoot,
+        boundCheckoutPath: input.boundCheckoutPath || existing.boundCheckoutPath,
+        ...(input.modelRef ? { modelRef: input.modelRef } : {}),
+        ...(input.piSessionFile ? { piSessionFile: input.piSessionFile } : {}),
+        ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
+        ...(input.sessionAgent ? { sessionAgent: input.sessionAgent } : {}),
+        ...(input.title && input.title !== "New Chat" ? { title: input.title } : {}),
+      };
+      return this.writeExclusive(next);
+    }
     const record: AgentSessionRecord = {
       version: SESSION_SCHEMA_VERSION,
       conversationId,
@@ -173,16 +202,11 @@ export class AgentSessionStore {
       createdAt: now,
       updatedAt: now,
     };
-    atomicWriteJsonSync(this.fileFor(record.runtimeSessionId), record);
-    return record;
+    return this.writeExclusive(record);
   }
 
   put(record: AgentSessionRecord): void {
-    const next = migrateSessionRecord({
-      ...record,
-      updatedAt: new Date().toISOString(),
-    });
-    atomicWriteJsonSync(this.fileFor(record.runtimeSessionId), next);
+    this.writeExclusive(record);
   }
 
   getSession(id: RuntimeSessionId): AgentSessionRecord | null {
@@ -208,22 +232,9 @@ export class AgentSessionStore {
   }
 
   getByConversationId(conversationId: string): AgentSessionRecord | null {
-    const direct = this.getSession(conversationId);
-    if (direct?.conversationId === conversationId) return direct;
-    const dir = this.sessionsDir();
-    if (!existsSync(dir)) return null;
-    try {
-      for (const entry of readdirSync(dir)) {
-        if (!entry.endsWith(".json") || entry.includes(".corrupted.") || entry.includes(".tmp.")) {
-          continue;
-        }
-        const session = this.getSession(entry.replace(/\.json$/, ""));
-        if (session?.conversationId === conversationId) return session;
-      }
-    } catch {
-      return null;
-    }
-    return null;
+    const matches = this.recordsForConversation(conversationId);
+    if (matches.length === 0) return null;
+    return newestSessionRecord(matches);
   }
 
   appendTurn(id: RuntimeSessionId, turn: AgentTurnRecord): AgentSessionRecord | null {
@@ -238,6 +249,25 @@ export class AgentSessionStore {
     }
     // Clear outdated regret on forward turn mutation
     session.regret = null;
+    this.put(session);
+    return session;
+  }
+
+  setUsageTotals(id: RuntimeSessionId, totals: SessionUsageTotals): AgentSessionRecord | null {
+    const session = this.getSession(id);
+    if (!session) return null;
+    session.usageTotals = totals;
+    this.put(session);
+    return session;
+  }
+
+  setModelRef(
+    id: RuntimeSessionId,
+    modelRef: { provider: string; modelId: string },
+  ): AgentSessionRecord | null {
+    const session = this.getSession(id);
+    if (!session) return null;
+    session.modelRef = modelRef;
     this.put(session);
     return session;
   }
@@ -376,7 +406,7 @@ export class AgentSessionStore {
       return [];
     }
 
-    return results.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return this.collapseConversationDuplicates(results);
   }
 
   listSessionsByProject(projectRoot: string): AgentSessionRecord[] {
@@ -405,7 +435,7 @@ export class AgentSessionStore {
       return [];
     }
 
-    return results.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return this.collapseConversationDuplicates(results);
   }
 
   rebindCheckout(fromPath: string, toPath: string): number {
@@ -438,8 +468,87 @@ export class AgentSessionStore {
     if (existsSync(path)) rmSync(path, { force: true });
   }
 
+  deleteByConversationId(conversationId: string): void {
+    for (const id of this.sessionFileIds()) {
+      const session = this.getSession(id);
+      if ((session?.conversationId || session?.runtimeSessionId) === conversationId) {
+        this.deleteSession(id);
+      }
+    }
+  }
+
   delete(id: RuntimeSessionId): void {
     this.deleteSession(id);
+  }
+
+  /** One conversationId = one JSON file. Reopen must not leave the previous runtime file behind. */
+  private writeExclusive(record: AgentSessionRecord): AgentSessionRecord {
+    const next = migrateSessionRecord({
+      ...record,
+      updatedAt: new Date().toISOString(),
+    });
+    atomicWriteJsonSync(this.fileFor(next.runtimeSessionId), next);
+    this.removeSiblingConversationFiles(
+      next.conversationId || next.runtimeSessionId,
+      next.runtimeSessionId,
+    );
+    return next;
+  }
+
+  private sessionFileIds(): string[] {
+    const dir = this.sessionsDir();
+    if (!existsSync(dir)) return [];
+    try {
+      return readdirSync(dir)
+        .filter((entry) => (
+          entry.endsWith(".json")
+          && !entry.includes(".corrupted.")
+          && !entry.includes(".tmp.")
+        ))
+        .map((entry) => entry.replace(/\.json$/, ""));
+    } catch {
+      return [];
+    }
+  }
+
+  private recordsForConversation(conversationId: string): AgentSessionRecord[] {
+    const matches: AgentSessionRecord[] = [];
+    for (const id of this.sessionFileIds()) {
+      const session = this.getSession(id);
+      if ((session?.conversationId || session?.runtimeSessionId) === conversationId) {
+        matches.push(session);
+      }
+    }
+    return matches;
+  }
+
+  private removeSiblingConversationFiles(conversationId: string, keepRuntimeSessionId: string): void {
+    for (const id of this.sessionFileIds()) {
+      if (id === keepRuntimeSessionId) continue;
+      const session = this.getSession(id);
+      if ((session?.conversationId || session?.runtimeSessionId) === conversationId) {
+        this.deleteSession(id);
+      }
+    }
+  }
+
+  private collapseConversationDuplicates(records: AgentSessionRecord[]): AgentSessionRecord[] {
+    const best = new Map<string, AgentSessionRecord>();
+    for (const record of records) {
+      const id = record.conversationId || record.runtimeSessionId;
+      const prev = best.get(id);
+      if (!prev || sessionUpdatedAt(record) >= sessionUpdatedAt(prev)) {
+        best.set(id, record);
+      }
+    }
+    const winners = [...best.values()];
+    for (const winner of winners) {
+      this.removeSiblingConversationFiles(
+        winner.conversationId || winner.runtimeSessionId,
+        winner.runtimeSessionId,
+      );
+    }
+    return winners.sort((a, b) => sessionUpdatedAt(b) - sessionUpdatedAt(a));
   }
 }
 
@@ -449,6 +558,16 @@ export function resolvePiAgentRoot(userDataDir: string): string {
 
 export function resolvePiRuntimeSessionDir(userDataDir: string): string {
   return join(userDataDir, PI_AGENT_DIR_NAME, "runtime-sessions");
+}
+
+function sessionUpdatedAt(record: AgentSessionRecord): number {
+  return Date.parse(record.updatedAt) || 0;
+}
+
+function newestSessionRecord(records: AgentSessionRecord[]): AgentSessionRecord {
+  return records.reduce((best, current) => (
+    sessionUpdatedAt(current) >= sessionUpdatedAt(best) ? current : best
+  ));
 }
 
 function migrateSessionRecord(raw: unknown): AgentSessionRecord {

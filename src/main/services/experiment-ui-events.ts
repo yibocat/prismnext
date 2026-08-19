@@ -14,6 +14,7 @@ export type ExperimentChangedReason =
   | "create"
   | "update"
   | "append_run"
+  | "run_start"
   | "run_complete"
   | "open"
   | "refresh"

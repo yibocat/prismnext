@@ -32,6 +32,8 @@ export interface PlanSuggestInput {
 export interface PlanSuggestResult {
   accepted: boolean;
   reason?: string;
+  /** Runtime session id so the suggest-plan tool can compute the canonical draft path. */
+  runtimeSessionId?: string;
 }
 
 type Pending =
@@ -125,6 +127,7 @@ export class InteractionBroker {
     waiter.resolve({
       accepted: decision === "accept",
       reason: decision === "accept" ? "user_accept" : "user_dismiss",
+      ...(decision === "accept" ? { runtimeSessionId: waiter.runtimeSessionId } : {}),
     });
     return true;
   }

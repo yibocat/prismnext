@@ -9,9 +9,10 @@ __pycache__/
 *.pyc
 src/renderer/public/pdfjs-dist/
 
-# OpenCode / Tectonic binaries (downloaded or manually placed)
-bin/opencode/
+# Tectonic binaries (downloaded or manually placed)
 bin/tectonic/
+# Leftover local OpenCode agent binary — unused; do not commit if still present
+bin/opencode/
 .cursor/
 
 # Copilot local instructions (mirror of .cursor/rules/ — machine-local, not committed)

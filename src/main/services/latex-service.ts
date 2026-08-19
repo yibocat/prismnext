@@ -6,7 +6,6 @@ import { parseBibTeX } from "../lib/bibtex-parse";
 import {
   resolveBibliographyFromMain,
   resolveBibliographyPath,
-  resolveMainTexRelativePath,
 } from "../lib/bib-path-resolve";
 import { isStandaloneTexDocument, resolveLatexRoot, walkTexFiles } from "../lib/latex-root";
 import { citeCheckLiterature } from "./literature-service";
@@ -206,6 +205,24 @@ export function checkBibConsistency(
   return result;
 }
 
+function agentStandaloneCompileResult(
+  mainFile: string,
+  res: Awaited<ReturnType<typeof compileStandaloneTexInPlace>>,
+): AgentCompileResult {
+  const logContent = res.logContent ?? "";
+  const relDir = path.dirname(mainFile).replace(/\\/g, "/");
+  return {
+    success: res.success,
+    mainFile,
+    buildDir: relDir === "." ? "" : relDir,
+    pdfPath: res.success ? res.pdfPath : undefined,
+    errors: parseStructuredCompileErrors(logContent),
+    errorSummary: res.error?.trim() ||
+      (res.success ? "" : "Compilation failed"),
+    logTail: logContent.slice(-2000),
+  };
+}
+
 /** Compile for agent tools — no pdf bytes in output. */
 export async function compileForAgent(
   projectRoot: string,
@@ -217,32 +234,19 @@ export async function compileForAgent(
     return { error: "Could not resolve LaTeX main file for this project." };
   }
 
-  // Standalone graphics (e.g. TikZ figures from figure-tikz) compile
-  // IN PLACE in their own folder — never synced into the shared manuscript
-  // build dir, never pushed to the manuscript preview (a figure build must
-  // not clobber the paper PDF in `.prismnext/compile/`).
-  if (mainFileHint?.trim() && root.mainFile !== resolveMainTexRelativePath(projectRoot)) {
-    let standaloneContent: string | null = null;
-    try {
-      standaloneContent = fs.readFileSync(path.join(projectRoot, root.mainFile), "utf-8");
-    } catch {
-      standaloneContent = null;
-    }
-    if (standaloneContent && isStandaloneTexDocument(standaloneContent)) {
-      const res = await compileStandaloneTexInPlace(projectRoot, root.mainFile);
-      const logContent = res.logContent ?? "";
-      const relDir = path.dirname(root.mainFile).replace(/\\/g, "/");
-      return {
-        success: res.success,
-        mainFile: root.mainFile,
-        buildDir: relDir === "." ? "" : relDir,
-        pdfPath: res.success ? res.pdfPath : undefined,
-        errors: parseStructuredCompileErrors(logContent),
-        errorSummary: res.error?.trim() ||
-          (res.success ? "" : "Compilation failed"),
-        logTail: logContent.slice(-2000),
-      };
-    }
+  // Route by document class, not by "is this the workspace main file".
+  // A `\documentclass{standalone}` figure must compile in its own folder.
+  // Never sync `figures/` into `.prismnext/compile/` or push the result
+  // into the TeX workspace paper preview.
+  let resolvedContent: string | null = null;
+  try {
+    resolvedContent = fs.readFileSync(path.join(projectRoot, root.mainFile), "utf-8");
+  } catch {
+    resolvedContent = null;
+  }
+  if (resolvedContent && isStandaloneTexDocument(resolvedContent)) {
+    const res = await compileStandaloneTexInPlace(projectRoot, root.mainFile);
+    return agentStandaloneCompileResult(root.mainFile, res);
   }
 
   const result = await compileLatex(projectRoot, root.mainFile, useTexlive);

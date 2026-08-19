@@ -45,15 +45,9 @@ export type UpdateCheckResult =
   | { status: "ignored"; currentVersion: string; latest: UpdateVersionInfo }
   | { status: "error"; currentVersion: string; error: string }
   | { status: "no-source"; currentVersion: string };
-/** App + bundled OpenCode agent versions for Settings → About. */
+/** Installed app version for Settings → About. */
 export interface AboutVersions {
   appVersion: string;
-  opencode: {
-    available: boolean;
-    version: string | null;
-    path: string;
-    error?: string;
-  };
 }
 
 export interface CompilerStatus {
@@ -621,7 +615,7 @@ export interface ElectronAPI {
   onUpdateProgress: (callback: (data: { percent: number }) => void) => () => void;
   /** Full updater status pushes from main (`update:changed`). */
   onUpdateChanged: (callback: (status: UpdaterStatus) => void) => () => void;
-  /** prismnext app version + bundled OpenCode agent binary version. */
+  /** Installed PrismNext app version. */
   aboutGetVersions: () => Promise<AboutVersions>;
   /** Open-core Pro license (activation key). Null when Free / inactive. */
   proGetLicense: () => Promise<import("../../shared/pro").LicenseSnapshot | null>;
@@ -1305,18 +1299,6 @@ export interface ElectronAPI {
     sourcesAttempted: string[];
   }>;
 
-  // OpenCode chat operations
-  chatDispose: (opts?: { keepProjectPath?: string }) => Promise<{ success: boolean }>;
-  chatPrewarm: (projectPath: string) => Promise<{
-    ok: boolean;
-    error?: string;
-  }>;
-  /** Retry ACP spawn + optional project prewarm after failure. */
-  chatEnsureAgent: (projectPath?: string) => Promise<import("../../shared/agent-status").AgentStatusSnapshot>;
-  /** ACP lifecycle pushes (`chat:agentStatus`). */
-  onAgentStatusChanged: (
-    callback: (status: import("../../shared/agent-status").AgentStatusSnapshot) => void,
-  ) => () => void;
   mcpEnsure: (projectPath: string) => Promise<{
     ok: boolean;
     ensure?: {
@@ -1730,176 +1712,6 @@ export interface ElectronAPI {
     args: import("../../shared/agent-api").AgentTurnMetaInput,
   ) => Promise<{ ok: boolean }>;
   onAgentEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
-  chatSend: (args: {
-    projectPath: string;
-    worktreePath?: string;
-    prompt: string;
-    tabId?: string;
-    sessionId?: string | null;
-    apiKey?: string;
-    baseUrl?: string;
-    model?: string;
-    provider?: string;
-    thoughtLevel?: string;
-    mcpServerAllowlist?: string[];
-    skillIds?: string[];
-    userDisplayContent?: Record<string, unknown>[];
-    intensivePaperIds?: string[];
-    hasPaperSnippets?: boolean;
-    orchestratorId?: string | null;
-    sessionTeamId?: string | null;
-    sessionAgent?: "build" | "plan";
-    selectedExpertIds?: string[];
-    promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
-    promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
-  }) => Promise<void>;
-  chatDescribeImages: (args: {
-    providerId: string;
-    modelId: string;
-    images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
-  }) => Promise<{ descriptions: Array<{ name: string; text: string; cached: boolean }> }>;
-  chatCancel: (
-    sessionId: string,
-    opts?: { childrenOnly?: boolean; excludeSessionIds?: string[] },
-  ) => Promise<{ aborted?: string[] } | void>;
-  chatStopSubAgent: (args: {
-    parentSessionId: string;
-    taskToolUseId: string;
-    subSessionId?: string;
-    message: string;
-    excludeSessionIds?: string[];
-  }) => Promise<{
-    ok: boolean;
-    settled?: boolean;
-    aborted?: string[];
-    error?: string;
-  }>;
-  chatGetSubAgentActivity: (args: {
-    parentSessionId: string;
-    taskToolUseId: string;
-    subSessionId?: string;
-  }) => Promise<{
-    subSessionId: string | null;
-    blocks: unknown[];
-    status: "done" | "error" | "running";
-    error?: string;
-  }>;
-  chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) => Promise<{ success: boolean }>;
-  chatSyncIntensiveReading: (args: {
-    sessionId: string;
-    projectRoot: string;
-    paperIds?: string[];
-  }) => Promise<{ success: boolean }>;
-  chatSetSessionAgent: (args: {
-    sessionId: string;
-    agent: "build" | "plan";
-  }) => Promise<{ success: boolean; error?: string }>;
-  chatSetPlanSuggestDismissed: (args: {
-    sessionId: string;
-    dismissed: boolean;
-  }) => Promise<{ success: boolean; error?: string }>;
-  chatResolvePlanSuggest: (args: {
-    sessionId: string;
-    decision: "accepted" | "dismissed" | "timed_out";
-  }) => Promise<{ success: boolean; error?: string }>;
-  chatCompact: (sessionId: string, projectPath: string) => Promise<{ ok: boolean } | void>;
-  chatAnswer: (sessionId: string, answer: string) => Promise<void>;
-  chatAnswerQuestion: (questionId: string, answer: string) => Promise<{ success: boolean; error?: string }>;
-  chatReadPendingQuestion: (sessionId: string) => Promise<{
-    ok: boolean;
-    question?: string;
-    options?: unknown[];
-    multiSelect?: boolean;
-  }>;
-  chatAnswerPermission: (
-    permissionId: string,
-    approved: boolean,
-    toolCallId?: string,
-    opts?: { always?: boolean },
-  ) => Promise<void>;
-  chatStatus: (projectPath?: string) => Promise<import("../../shared/agent-status").AgentStatusSnapshot>;
-  sessionList: (projectPath?: string) => Promise<Array<{ id: string; title: string; lastModified: number; createdAt: number; directory?: string }>>;
-  sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) => Promise<any[]>;
-  sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) => Promise<{ messages: any[]; totalMessages: number }>;
-  sessionGetDirectory: (sessionId: string) => Promise<string | null>;
-  sessionRename: (args: { tabId: string; title: string; sessionId: string }) => Promise<void>;
-  sessionReassignDirectory: (fromDirectory: string, toDirectory: string) => Promise<number>;
-  sessionDelete: (sessionId: string, projectPath?: string) => Promise<{ success: boolean; error?: string }>;
-  sessionTruncateToTurn: (args: {
-    sessionId: string;
-    projectPath: string;
-    worktreePath?: string;
-    turnIndex: number;
-  }) => Promise<{ removedCount: number }>;
-  sessionUndoTruncate: (args: {
-    sessionId: string;
-    projectPath: string;
-    worktreePath?: string;
-  }) => Promise<{ success: boolean }>;
-  sessionGetContext: (projectPath: string, sessionId: string) => Promise<{
-    tokens: number;
-    updatedAt: number;
-    windowSize?: number | null;
-    source?: "usage_update" | "prompt_usage" | "estimate";
-    hasSystemPromptBlock?: boolean;
-    promptFingerprint?: string;
-  } | null>;
-  sessionGetUserDisplays: (projectPath: string, sessionId: string) => Promise<import("@/stores/chat-store").ContentBlock[][]>;
-  sessionAppendUserDisplay: (
-    projectPath: string,
-    sessionId: string,
-    content: import("@/stores/chat-store").ContentBlock[],
-  ) => Promise<{ success: boolean }>;
-  sessionGetPlanEvents: (
-    projectPath: string,
-    sessionId: string,
-  ) => Promise<import("@/lib/chat/plan-ui-events").PlanUiEvent[]>;
-  sessionGetTurnMetas: (
-    projectPath: string,
-    sessionId: string,
-  ) => Promise<Record<number, import("@/stores/chat-store").TurnMessageMeta>>;
-  sessionUpsertTurnMeta: (
-    projectPath: string,
-    sessionId: string,
-    turnIndex: number,
-    meta: import("@/stores/chat-store").TurnMessageMeta,
-  ) => Promise<{ success: boolean }>;
-  sessionUpsertPlanArtifact: (
-    projectPath: string,
-    sessionId: string,
-    event: Extract<import("@/lib/chat/plan-ui-events").PlanUiEvent, { kind: "plan-artifact" }>,
-  ) => Promise<{ success: boolean }>;
-  sessionAppendPlanDecision: (
-    projectPath: string,
-    sessionId: string,
-    event: Extract<import("@/lib/chat/plan-ui-events").PlanUiEvent, { kind: "plan-decision" }>,
-  ) => Promise<{ success: boolean }>;
-  sessionMarkPlanArtifactDiscarded: (
-    projectPath: string,
-    sessionId: string,
-  ) => Promise<{ success: boolean }>;
-
-  // Settings operations
-  onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => () => void;
-  onChatAgentEvent: (callback: (data: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
-  onChatComplete: (callback: (data: {
-    tabId: string;
-    sessionId: string;
-    success: boolean;
-    error?: string;
-    errorCode?: string;
-    emptyTurn?: boolean;
-    tokenUsage?: any;
-    contextUsed?: number | null;
-    contextWindowSize?: number | null;
-    contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
-    promptStale?: boolean;
-    planDraftMissing?: boolean;
-  }) => void) => () => void;
-  onChatPermission: (callback: (data: { tabId: string; permissionId: string; message: string; options: any; toolCallId?: string; toolName?: string; raw?: any }) => void) => () => void;
-  onChatSessionCreated: (callback: (data: { tabId: string; sessionId: string }) => void) => () => void;
-  removeChatListeners: () => void;
-
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
   onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;

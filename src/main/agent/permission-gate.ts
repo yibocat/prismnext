@@ -18,6 +18,7 @@ import {
   type PermissionRuleContext,
 } from "../../shared/permission-rules";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import { getPlanPermissionOverride } from "../../shared/session-agent";
 import {
   emptyPermissionRulesConfig,
   type PermissionRulesConfig,
@@ -49,6 +50,8 @@ export interface PermissionGateRequest {
   projectRoot: string;
   permissionMode: PermissionMode;
   sessionAgent?: SessionAgent;
+  /** Chat conversation id — Plan mode uses it to compute the canonical draft path. */
+  sessionId?: string;
   allowedPaths?: string[];
   filePath?: string | null;
   bashCommand?: string | null;
@@ -262,7 +265,25 @@ export class PermissionGate {
       return { decision: "deny", reason: "user_deny_rule", requestId: request.requestId };
     }
 
-    // 3. PermissionMode evaluation
+    // 3. Plan-agent override: when the tab is in Plan mode, apply the hard
+    //    binding BEFORE the mode matrix so execution/editing constraints hold
+    //    regardless of permissionMode (except explicit user deny/allow above).
+    if (request.sessionAgent === "plan") {
+      const override = getPlanPermissionOverride(request.toolName, {
+        filePath: request.filePath,
+        projectRoot: request.projectRoot,
+        sessionId: request.sessionId,
+      });
+      if (override === "allow") {
+        return { decision: "allow", reason: "plan_override_allow", requestId: request.requestId };
+      }
+      if (override === "deny") {
+        return { decision: "deny", reason: "plan_override_deny", requestId: request.requestId };
+      }
+      // "ask" → fall through to mode matrix (will suspend for UI prompt).
+    }
+
+    // 4. PermissionMode evaluation
     const mode = request.permissionMode;
 
     if (mode === "readonly") {

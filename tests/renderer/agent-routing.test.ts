@@ -4,9 +4,6 @@ const agentSend = vi.fn().mockResolvedValue({ ok: false, error: "missing_project
 const agentCancel = vi.fn().mockResolvedValue({ ok: true });
 const agentDispose = vi.fn().mockResolvedValue({ ok: true });
 const agentLoadSession = vi.fn().mockResolvedValue({ ok: false, error: "unknown_conversation" });
-const chatSend = vi.fn();
-const chatCancel = vi.fn().mockResolvedValue(undefined);
-const sessionLoad = vi.fn();
 
 vi.mock("@/stores/document-store", () => ({
   useDocumentStore: { getState: () => ({ projectRoot: "/tmp/project" }) },
@@ -51,10 +48,6 @@ vi.stubGlobal("window", {
     agentCancel,
     agentDispose,
     agentLoadSession,
-    chatSend,
-    chatCancel,
-    sessionLoad,
-    sessionRename: vi.fn(),
   },
 });
 
@@ -67,9 +60,6 @@ describe("chat-store Agent routing", () => {
     agentCancel.mockClear();
     agentDispose.mockClear();
     agentLoadSession.mockClear();
-    chatSend.mockClear();
-    chatCancel.mockClear();
-    sessionLoad.mockClear();
   });
 
   it("makes New Agent a Pi conversation titled New Chat", () => {
@@ -86,7 +76,7 @@ describe("chat-store Agent routing", () => {
     expect(useChatStore.getState().tabs.filter((tab) => tab.runtime === "pi").length).toBeGreaterThan(1);
   });
 
-  it("sends New Agent prompts through the Agent API, not chat:send", async () => {
+  it("sends New Agent prompts through the Agent API", async () => {
     const tabId = useChatStore.getState().activeTabId;
     await useChatStore.getState().sendPrompt("hello from pi");
     expect(agentSend).toHaveBeenCalledWith(expect.objectContaining({
@@ -94,7 +84,6 @@ describe("chat-store Agent routing", () => {
       tabId,
       projectRoot: "/tmp/project",
     }));
-    expect(chatSend).not.toHaveBeenCalled();
   });
 
   it("keeps imported OpenCode history read-only instead of using its backend", async () => {
@@ -111,7 +100,6 @@ describe("chat-store Agent routing", () => {
     await useChatStore.getState().sendPrompt("do not continue in OpenCode");
 
     expect(agentSend).not.toHaveBeenCalled();
-    expect(chatSend).not.toHaveBeenCalled();
     const tab = useChatStore.getState().tabs.find((item) => item.id === tabId);
     expect(tab?.messages).toEqual([]);
     expect(tab?.error).toMatch(/read-only/i);
@@ -155,7 +143,7 @@ describe("chat-store Agent routing", () => {
     expect(tab.conversation.live).toBeNull();
   });
 
-  it("loads history through the Agent API instead of OpenCode sessionLoad", async () => {
+  it("loads history through the Agent API", async () => {
     const { emptyConversation } = await import("../../src/shared/agent-conversation");
     agentLoadSession.mockResolvedValue({
       ok: true,
@@ -170,7 +158,6 @@ describe("chat-store Agent routing", () => {
       conversationId: "conv-hist",
       projectRoot: "/tmp/project",
     });
-    expect(sessionLoad).not.toHaveBeenCalled();
     const loaded = useChatStore.getState().tabs.find((tab) => tab.id === "conv-hist");
     expect(loaded?.runtime).toBe("pi");
     expect(loaded?.legacyReadOnly).toBe(false);
@@ -182,7 +169,6 @@ describe("chat-store Agent routing", () => {
     useChatStore.getState().closeTab(firstId);
     expect(agentCancel).toHaveBeenCalledWith({ conversationId: firstId });
     expect(agentDispose).toHaveBeenCalledWith({ conversationId: firstId });
-    expect(chatCancel).not.toHaveBeenCalled();
     expect(useChatStore.getState().tabs.some((tab) => tab.id === firstId)).toBe(false);
   });
 });

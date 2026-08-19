@@ -61,4 +61,19 @@ Hello \cite{foo}.
     expect(resolved?.mainFile).toBe("manuscript/main.tex");
     expect(resolved?.resolution).toBe("magic-root");
   });
+
+  it("reports the figure folder as buildDir for standalone documents", () => {
+    mkdirSync(join(root, "figures"), { recursive: true });
+    writeFileSync(
+      join(root, "figures", "lstm-cell.tex"),
+      String.raw`\documentclass[tikz,border=8pt]{standalone}
+\begin{document}
+\begin{tikzpicture}\node {x};\end{tikzpicture}
+\end{document}`,
+      "utf-8",
+    );
+    const resolved = resolveLatexRoot(root, "figures/lstm-cell.tex");
+    expect(resolved?.mainFile).toBe("figures/lstm-cell.tex");
+    expect(resolved?.buildDir).toBe("figures");
+  });
 });

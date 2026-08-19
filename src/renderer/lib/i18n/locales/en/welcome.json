@@ -29,7 +29,7 @@
   "status": {
     "cardTitle": "System & Runtime Engines",
     "app": "PrismNext",
-    "agent": "OpenCode",
+    "agent": "Agent",
     "compiler": "TeX Compiler",
     "updateAvailable": "Update {{version}} available",
     "updateDownloading": "Downloading {{version}}… {{percent}}%",

@@ -2,6 +2,7 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { CheckCircle2Icon, FileTextIcon, XCircleIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
 
 const LABELS: Record<string, string> = {
   "latex-root": "LaTeX root",
@@ -89,7 +90,9 @@ function LatexResultSummary({
           </span>
         </p>
         {typeof data.mainFile === "string" ? (
-          <p className="text-muted-foreground truncate">{data.mainFile}</p>
+          <p className="text-muted-foreground truncate">
+            <ChatFileLink path={data.mainFile} className="font-normal" />
+          </p>
         ) : null}
         {typeof data.pdfPath === "string" && ok ? (
           <p className="text-muted-foreground">PDF: {data.pdfPath}</p>
@@ -135,7 +138,9 @@ export const LatexToolWidget = memo(function LatexToolWidget({
       toolName={toolName}
       icon={<FileTextIcon className="size-3.5 text-info" />}
       label={<span className="truncate font-medium">{LABELS[toolName] ?? toolName}</span>}
-      meta={detail ? (
+      meta={mainFile ? (
+        <ChatFileLink path={mainFile} className="font-normal" />
+      ) : detail ? (
         <span
           className="text-muted-foreground/70 min-w-0 truncate text-[length:var(--font-chat-meta)]"
           title={detail}

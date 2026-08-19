@@ -4,7 +4,7 @@
   "bannerTitle": "Agent",
   "bannerBody": "This conversation runs on the embedded Pi runtime.",
   "limitChat": "All new conversations use the Agent runtime.",
-  "limitSession": "Imported OpenCode conversations are read-only.",
+  "limitSession": "Imported conversations are read-only.",
   "limitTask": "The task tool is still simulated. It is not a real sub-session.",
   "noProject": "No project",
   "noProjectTitle": "Open a project first",

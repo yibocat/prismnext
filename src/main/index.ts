@@ -24,13 +24,13 @@ import { destroyAllAiPty } from "./services/ai-pty";
 import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
 import { startExecutionEventBroadcast } from "./ipc/execution";
 import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
-import { startTerminalBridge, stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
-import { startLiteratureBridge, stopLiteratureBridge } from "./services/literature-bridge";
-import { startLatexBridge, stopLatexBridge } from "./services/latex-bridge";
-import { startResearchBriefBridge, stopResearchBriefBridge } from "./services/research-brief-bridge";
-import { startExperimentLogBridge, stopExperimentLogBridge } from "./services/experiment-log-bridge";
-import { startInteractionBridge, stopInteractionBridge } from "./services/interaction-bridge";
-import { startImageDescribeBridge, stopImageDescribeBridge } from "./services/image-describe-bridge";
+import { stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
+import { stopLiteratureBridge } from "./services/literature-bridge";
+import { stopLatexBridge } from "./services/latex-bridge";
+import { stopResearchBriefBridge } from "./services/research-brief-bridge";
+import { stopExperimentLogBridge } from "./services/experiment-log-bridge";
+import { stopInteractionBridge } from "./services/interaction-bridge";
+import { stopImageDescribeBridge } from "./services/image-describe-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
@@ -359,15 +359,11 @@ app.whenReady().then(async () => {
     ...(existsSync(aboutIcon) ? { iconPath: aboutIcon } : {}),
   });
 
-  startTerminalBridge();
   initExecutionRegistry(join(app.getPath("userData"), "execution-history"));
   startExecutionEventBroadcast();
-  startLiteratureBridge();
-  startLatexBridge();
-  startResearchBriefBridge();
-  startExperimentLogBridge();
-  startInteractionBridge();
-  startImageDescribeBridge();
+  // File-bridge pollers are not started, including the leftover terminal
+  // request.json watcher (Pi bash goes through execution-registry). stop*()
+  // on quit stays a no-op if never started.
 
   try {
     const { initAppUpdater } = await import("./services/update-checker");

@@ -25,11 +25,12 @@ export function useQuestionPromptView(
 
   const fromPending = useMemo(() => {
     if (!enabled || !pendingQuestion) return null;
+    if (toolUse.id && pendingQuestion.requestId !== toolUse.id) return null;
     return extractQuestionPrompt({
       question: pendingQuestion.prompt,
       options: pendingQuestion.options,
     });
-  }, [enabled, pendingQuestion]);
+  }, [enabled, pendingQuestion, toolUse.id]);
 
   return useMemo(
     () => mergeQuestionPromptViews(fromTool, fromPending),

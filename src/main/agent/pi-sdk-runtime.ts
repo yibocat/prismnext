@@ -17,6 +17,9 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
+import { createLogger } from "../services/logger";
+
+const piRuntimeLog = createLogger("pi-runtime", "agent");
 import type { AgentMcpHost } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
 import { InMemoryCredentialStore, Type } from "@earendil-works/pi-ai";
@@ -27,11 +30,18 @@ import type {
   RuntimeSessionId,
   TurnInput,
 } from "../../shared/agent-runtime";
+import type { ContentBlock } from "../../shared/agent-conversation";
+import {
+  applyAssistantEventToBlocks,
+  deriveFlattenedAssistant,
+  sealTurnBlockTimings,
+} from "../../shared/conversation-blocks";
 import type { AgentCompactResult } from "../../shared/agent-api";
 import type { AgentEventListener, AgentRuntime, AgentTruncateEngineResult } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import { mapPiSessionEvent, type PiLikeSessionEvent } from "./events";
 import type {
+  AgentMessageAttachment,
   AgentSessionStore,
   AgentToolCallSnapshot,
   AgentTurnRecord,
@@ -44,7 +54,7 @@ import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-mat
 import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
-import { PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
+import { snapshotPiSessionUsage, type PiUsageSnapshot } from "./context-usage";
 
 export const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
 export const PI_AI_PACKAGE = "@earendil-works/pi-ai";
@@ -334,6 +344,17 @@ interface PiSessionHandle {
   setTurnContext?: (context: PiToolExecutionContext) => void;
   getSystemPrompt?: () => string | undefined;
   attachCustomTools?: (tools: ToolDefinition[]) => number;
+  getUsageSnapshot?: (opts?: {
+    occupancy?: number | null;
+    includeBreakdown?: boolean;
+    previousCostUsd?: number;
+  }) => PiUsageSnapshot | null;
+  getModelRef?: () => { provider: string; modelId: string } | null;
+  setModel?: (input: {
+    provider: string;
+    modelId: string;
+    apiKey?: string;
+  }) => Promise<void>;
 }
 
 export type PiSessionFactory = (opts: {
@@ -416,7 +437,8 @@ export function createPiSdkSessionFactory(
       allowedPaths: opts.allowedPaths,
       askUser: input.interactions
         ? (question) => input.interactions!.askQuestion({
-            requestId: `q-${turnContext.turnId}-${Date.now().toString(36)}`,
+            requestId: question.requestId?.trim()
+              || `q-${turnContext.turnId}-${Date.now().toString(36)}`,
             runtimeSessionId: turnContext.runtimeSessionId,
             tabId: turnContext.tabId,
             turnId: turnContext.turnId,
@@ -519,6 +541,7 @@ export function createPiSdkSessionFactory(
           ...next,
           askUser: next.askUser ?? turnContext.askUser,
           suggestPlan: next.suggestPlan ?? turnContext.suggestPlan,
+          sessionAgent: next.sessionAgent ?? turnContext.sessionAgent,
         };
       },
       getSystemPrompt: () => {
@@ -526,6 +549,21 @@ export function createPiSdkSessionFactory(
         return agent?.state?.systemPrompt;
       },
       attachCustomTools: (tools) => attachPiCustomTools(session, tools),
+      getUsageSnapshot: (opts) => snapshotPiSessionUsage(session, opts),
+      getModelRef: () => {
+        const current = session.model;
+        if (!current?.provider || !current.id) return null;
+        return { provider: String(current.provider), modelId: current.id };
+      },
+      setModel: async (next) => {
+        const key = next.apiKey?.trim() || input.apiKey?.trim();
+        if (key) await modelRuntime.setRuntimeApiKey(next.provider, key);
+        const model = modelRuntime.getModel(next.provider, next.modelId);
+        if (!model) {
+          throw new Error(`unknown_pi_model:${next.provider}/${next.modelId}`);
+        }
+        await session.setModel(model);
+      },
     };
   };
 }
@@ -569,6 +607,10 @@ export function createPiSubagentRunnerFactory(input: {
       }),
       persist: { mode: "memory" },
     });
+    let settleTurn: (() => void) | undefined;
+    const turnSettled = new Promise<void>((resolve) => {
+      settleTurn = resolve;
+    });
     const unsubscribe = handle.subscribe((piEvent) => {
       for (const event of mapPiSessionEvent(piEvent, {
         runtimeSessionId: opts.runtimeSessionId,
@@ -576,6 +618,13 @@ export function createPiSubagentRunnerFactory(input: {
         turnId: opts.turnId,
       })) {
         opts.emitEvent(event);
+        if (
+          event.type === "turn_finished"
+          || event.type === "turn_failed"
+          || event.type === "turn_cancelled"
+        ) {
+          settleTurn?.();
+        }
       }
     });
     handle.setTurnContext?.({
@@ -587,7 +636,15 @@ export function createPiSubagentRunnerFactory(input: {
       sessionAgent: "build",
     });
     return {
-      prompt: (text) => handle.prompt(text),
+      prompt: async (text) => {
+        await handle.prompt(text);
+        await Promise.race([
+          turnSettled,
+          new Promise<void>((resolve) => {
+            setTimeout(resolve, 1500);
+          }),
+        ]);
+      },
       abort: () => handle.abort(),
       dispose: () => {
         unsubscribe();
@@ -602,8 +659,10 @@ interface LiveTurnAccumulator {
   turnId: string;
   createdAt: number;
   userText: string;
+  userAttachments?: AgentMessageAttachment[];
   assistantText: string;
   assistantThinking: string;
+  assistantBlocks: ContentBlock[];
   toolCalls: Map<string, AgentToolCallSnapshot>;
   usage?: {
     inputTokens?: number;
@@ -624,6 +683,8 @@ interface LivePiSession {
   activeTurn: LiveTurnAccumulator | null;
   /** Set by cancelTurn so the terminal-event fallback never overrides a cancel. */
   cancelled: boolean;
+  /** Idle watchdog for the active turn — fires when no Pi event arrives for a while. */
+  watchdog?: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -631,6 +692,13 @@ interface LivePiSession {
  * Tests inject a fake factory; production would dynamic-import the SDK
  * only after `canEmbedInElectronMain` is true.
  */
+/**
+ * Idle timeout for a streaming turn. If no Pi event arrives within this window
+ * (model stalled mid-thinking, provider rate-limited / network hung), force a
+ * turn_failed so the UI never sits on a frozen "Thinking…" forever.
+ */
+export const PI_TURN_IDLE_TIMEOUT_MS = 180_000;
+
 export class PiSdkRuntime implements AgentRuntime {
   private readonly sessions = new Map<RuntimeSessionId, LivePiSession>();
   private readonly listeners = new Set<AgentEventListener>();
@@ -659,8 +727,158 @@ export class PiSdkRuntime implements AgentRuntime {
   }
 
   private emit(event: AgentEvent): void {
-    this.processTurnAccumulation(event);
+    const enriched = this.enrichUsageEvent(event);
+    this.processTurnAccumulation(enriched);
+    this.armTurnWatchdog(enriched.runtimeSessionId);
+    for (const listener of this.listeners) listener(enriched);
+    if (
+      enriched.type === "turn_finished"
+      || enriched.type === "turn_failed"
+      || enriched.type === "turn_cancelled"
+    ) {
+      this.emitSessionUsageSnapshot(enriched.runtimeSessionId, enriched.tabId, enriched.turnId);
+    }
+  }
+
+  private enrichUsageEvent(event: AgentEvent): AgentEvent {
+    if (event.type !== "usage_updated") return event;
+    const live = this.sessions.get(event.runtimeSessionId);
+    const snap = live?.handle.getUsageSnapshot?.({
+      occupancy: typeof event.inputTokens === "number" ? event.inputTokens : null,
+      includeBreakdown: false,
+    });
+    if (!snap) return event;
+    return {
+      ...event,
+      ...(snap.occupancyTokens != null ? { inputTokens: snap.occupancyTokens } : {}),
+      ...(snap.windowSize != null ? { windowSize: snap.windowSize } : {}),
+      costUsd: snap.costUsd,
+    };
+  }
+
+  private emitSessionUsageSnapshot(
+    runtimeSessionId: RuntimeSessionId,
+    tabId: string,
+    turnId: string,
+    extra?: { occupancyReset?: boolean; preserveCost?: boolean },
+  ): void {
+    const live = this.sessions.get(runtimeSessionId);
+    const prevCost = extra?.preserveCost
+      ? (this.opts.store.getSession(runtimeSessionId)?.usageTotals?.costUsd ?? 0)
+      : undefined;
+    const snap = live?.handle.getUsageSnapshot?.({
+      includeBreakdown: true,
+      ...(prevCost != null ? { previousCostUsd: prevCost } : {}),
+    });
+    if (!snap) return;
+    const occupancy = extra?.occupancyReset ? null : snap.occupancyTokens;
+    this.opts.store.setUsageTotals(runtimeSessionId, {
+      ...snap,
+      occupancyTokens: occupancy,
+    });
+    const event: AgentEvent = {
+      type: "usage_updated",
+      runtimeSessionId,
+      tabId,
+      turnId,
+      ...(occupancy != null ? { inputTokens: occupancy } : {}),
+      outputTokens: snap.output,
+      cacheReadTokens: snap.cacheRead,
+      cacheWriteTokens: snap.cacheWrite,
+      costUsd: snap.costUsd,
+      ...(snap.windowSize != null ? { windowSize: snap.windowSize } : {}),
+      ...(!extra?.occupancyReset && snap.breakdown ? { breakdown: snap.breakdown } : {}),
+      ...(extra?.occupancyReset ? { occupancyReset: true } : {}),
+    };
     for (const listener of this.listeners) listener(event);
+  }
+
+  /** Public poke so a child subagent stream can keep the parent turn alive. */
+  touchTurnWatchdog(runtimeSessionId: string): void {
+    this.armTurnWatchdog(runtimeSessionId);
+  }
+
+  /** Reset the idle watchdog for a session whenever a turn event arrives. */
+  private armTurnWatchdog(runtimeSessionId: string): void {
+    const session = this.sessions.get(runtimeSessionId);
+    if (!session || !session.activeTurn) return;
+    if (session.watchdog) clearTimeout(session.watchdog);
+    session.watchdog = setTimeout(() => {
+      const live = this.sessions.get(runtimeSessionId);
+      if (!live || !live.activeTurn || live.cancelled) return;
+      if (live.activeTurn.turnId !== live.turnId) return;
+      this.emit({
+        type: "turn_failed",
+        runtimeSessionId: live.runtimeSessionId,
+        tabId: live.tabId,
+        turnId: live.activeTurn.turnId,
+        error: "turn_idle_timeout",
+      });
+      void live.handle.abort().catch(() => {});
+    }, PI_TURN_IDLE_TIMEOUT_MS);
+  }
+
+  private persistActiveTurn(
+    session: LivePiSession,
+    status: AgentTurnRecord["status"],
+    error?: string,
+  ): void {
+    const turn = session.activeTurn;
+    if (!turn) return;
+    const blocks = sealTurnBlockTimings(turn.assistantBlocks);
+    const flatten = deriveFlattenedAssistant(blocks);
+    const toolCalls = flatten.toolCalls.map((snapshot) => {
+      const live = turn.toolCalls.get(snapshot.toolCallId);
+      if (!live) return snapshot;
+      return {
+        ...snapshot,
+        startedAt: live.startedAt || snapshot.startedAt,
+        ...(live.finishedAt !== undefined ? { finishedAt: live.finishedAt } : {}),
+        ...(live.result !== undefined ? { result: live.result } : {}),
+        ...(live.error !== undefined ? { error: live.error } : {}),
+        ...(live.denied !== undefined ? { denied: live.denied } : {}),
+      };
+    });
+    const prevCost = this.opts.store.getSession(session.runtimeSessionId)?.usageTotals?.costUsd ?? 0;
+    const snap = session.handle.getUsageSnapshot?.({
+      occupancy: turn.usage?.inputTokens ?? null,
+      includeBreakdown: true,
+    });
+    const occupancy = snap?.occupancyTokens ?? turn.usage?.inputTokens;
+    const turnCost = snap ? Math.max(0, snap.costUsd - prevCost) : undefined;
+    const usage = turn.usage || snap
+      ? {
+          ...(turn.usage ?? {}),
+          ...(occupancy != null ? { inputTokens: occupancy } : {}),
+          ...(turnCost != null ? { costUsd: turnCost } : {}),
+        }
+      : undefined;
+    const record: AgentTurnRecord = {
+      turnIndex: turn.turnIndex,
+      turnId: turn.turnId,
+      createdAt: turn.createdAt,
+      finishedAt: Date.now(),
+      user: {
+        text: turn.userText,
+        ...(turn.userAttachments?.length ? { attachments: turn.userAttachments } : {}),
+      },
+      assistant: {
+        text: flatten.text || turn.assistantText,
+        ...(flatten.thinking || turn.assistantThinking
+          ? { thinking: flatten.thinking || turn.assistantThinking }
+          : {}),
+        toolCalls: toolCalls.length ? toolCalls : Array.from(turn.toolCalls.values()),
+        ...(blocks.length ? { blocks } : {}),
+      },
+      ...(usage && Object.keys(usage).length ? { usage } : {}),
+      status,
+      ...(error ? { error } : {}),
+    };
+    this.opts.store.appendTurn(session.runtimeSessionId, record);
+    if (snap) {
+      this.opts.store.setUsageTotals(session.runtimeSessionId, snap);
+    }
+    session.activeTurn = null;
   }
 
   private processTurnAccumulation(event: AgentEvent): void {
@@ -669,12 +887,29 @@ export class PiSdkRuntime implements AgentRuntime {
     const turn = session.activeTurn;
     if (turn.turnId !== event.turnId) return;
 
+    // Child-session events are tagged and must not land on the parent turn.
+    if (event.subagent) return;
+
+    // Terminal events end the turn — clear the idle watchdog.
+    if (
+      event.type === "turn_finished"
+      || event.type === "turn_failed"
+      || event.type === "turn_cancelled"
+    ) {
+      if (session.watchdog) {
+        clearTimeout(session.watchdog);
+        session.watchdog = undefined;
+      }
+    }
+
     switch (event.type) {
       case "text_delta":
         turn.assistantText += event.text;
+        turn.assistantBlocks = applyAssistantEventToBlocks(turn.assistantBlocks, event);
         break;
       case "thinking_delta":
         turn.assistantThinking += event.text;
+        turn.assistantBlocks = applyAssistantEventToBlocks(turn.assistantBlocks, event);
         break;
       case "tool_started":
         turn.toolCalls.set(event.toolCallId, {
@@ -683,6 +918,10 @@ export class PiSdkRuntime implements AgentRuntime {
           args: event.args,
           startedAt: Date.now(),
         });
+        turn.assistantBlocks = applyAssistantEventToBlocks(turn.assistantBlocks, event);
+        break;
+      case "tool_progress":
+        turn.assistantBlocks = applyAssistantEventToBlocks(turn.assistantBlocks, event);
         break;
       case "tool_finished": {
         const existing = turn.toolCalls.get(event.toolCallId);
@@ -703,6 +942,7 @@ export class PiSdkRuntime implements AgentRuntime {
             denied: event.denied,
           });
         }
+        turn.assistantBlocks = applyAssistantEventToBlocks(turn.assistantBlocks, event);
         break;
       }
       case "usage_updated":
@@ -713,64 +953,15 @@ export class PiSdkRuntime implements AgentRuntime {
           cacheWriteTokens: event.cacheWriteTokens,
         };
         break;
-      case "turn_finished": {
-        const record: AgentTurnRecord = {
-          turnIndex: turn.turnIndex,
-          turnId: turn.turnId,
-          createdAt: turn.createdAt,
-          finishedAt: Date.now(),
-          user: { text: turn.userText },
-          assistant: {
-            text: turn.assistantText,
-            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
-            toolCalls: Array.from(turn.toolCalls.values()),
-          },
-          ...(turn.usage ? { usage: turn.usage } : {}),
-          status: "completed",
-        };
-        this.opts.store.appendTurn(session.runtimeSessionId, record);
-        session.activeTurn = null;
+      case "turn_finished":
+        this.persistActiveTurn(session, "completed");
         break;
-      }
-      case "turn_failed": {
-        const record: AgentTurnRecord = {
-          turnIndex: turn.turnIndex,
-          turnId: turn.turnId,
-          createdAt: turn.createdAt,
-          finishedAt: Date.now(),
-          user: { text: turn.userText },
-          assistant: {
-            text: turn.assistantText,
-            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
-            toolCalls: Array.from(turn.toolCalls.values()),
-          },
-          ...(turn.usage ? { usage: turn.usage } : {}),
-          status: "failed",
-          error: event.error,
-        };
-        this.opts.store.appendTurn(session.runtimeSessionId, record);
-        session.activeTurn = null;
+      case "turn_failed":
+        this.persistActiveTurn(session, "failed", event.error);
         break;
-      }
-      case "turn_cancelled": {
-        const record: AgentTurnRecord = {
-          turnIndex: turn.turnIndex,
-          turnId: turn.turnId,
-          createdAt: turn.createdAt,
-          finishedAt: Date.now(),
-          user: { text: turn.userText },
-          assistant: {
-            text: turn.assistantText,
-            ...(turn.assistantThinking ? { thinking: turn.assistantThinking } : {}),
-            toolCalls: Array.from(turn.toolCalls.values()),
-          },
-          ...(turn.usage ? { usage: turn.usage } : {}),
-          status: "cancelled",
-        };
-        this.opts.store.appendTurn(session.runtimeSessionId, record);
-        session.activeTurn = null;
+      case "turn_cancelled":
+        this.persistActiveTurn(session, "cancelled");
         break;
-      }
     }
   }
 
@@ -829,6 +1020,7 @@ export class PiSdkRuntime implements AgentRuntime {
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
       piSessionFile: handle.sessionFile,
+      ...(handle.getModelRef?.() ? { modelRef: handle.getModelRef() } : {}),
     });
     return {
       runtimeSessionId,
@@ -842,6 +1034,14 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(input.runtimeSessionId);
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
+    piRuntimeLog.info("sendTurn", {
+      runtimeSessionId: input.runtimeSessionId,
+      tabId: input.tabId,
+      turnId: input.turnId,
+      textLen: input.text?.length,
+      sessionAgent: input.sessionAgent,
+      activeTurnBefore: !!session.activeTurn,
+    });
 
     const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
     const turnIndex = existingRecord?.turns.length ?? 0;
@@ -851,10 +1051,14 @@ export class PiSdkRuntime implements AgentRuntime {
       turnId: session.turnId,
       createdAt: Date.now(),
       userText: input.text,
+      ...(input.attachments?.length ? { userAttachments: input.attachments } : {}),
       assistantText: "",
       assistantThinking: "",
+      assistantBlocks: [],
       toolCalls: new Map(),
     };
+    // Initial idle watchdog — the first Pi event (or the terminal event) re-arms it.
+    this.armTurnWatchdog(session.runtimeSessionId);
 
     session.handle.setTurnContext?.({
       runtimeSessionId: session.runtimeSessionId,
@@ -866,6 +1070,7 @@ export class PiSdkRuntime implements AgentRuntime {
       allowedPaths: input.allowedPaths,
     });
     try {
+      await this.applyTurnModel(session, input);
       await session.handle.prompt(
         input.text,
         input.images?.map((img) => ({
@@ -886,19 +1091,41 @@ export class PiSdkRuntime implements AgentRuntime {
     // Pi may deliver terminal events (message_end / agent_end) asynchronously
     // after prompt() resolves. Wait briefly before closing the live turn, so
     // the terminal event's usage accumulation is not lost.
+    const turnIdAtPrompt = session.turnId;
     setTimeout(() => {
       const live = this.sessions.get(session.runtimeSessionId);
-      if (!live || live.turnId !== session.turnId) return;
-      if (live.activeTurn && !live.cancelled) {
+      if (!live) return;
+      const active = live.activeTurn;
+      // Only fail the turn we actually prompted — if a new turn already started
+      // within the window, its activeTurn belongs to that newer turn.
+      if (active && active.turnId === turnIdAtPrompt && !live.cancelled) {
         this.emit({
           type: "turn_failed",
           runtimeSessionId: session.runtimeSessionId,
           tabId: session.tabId,
-          turnId: session.turnId,
+          turnId: turnIdAtPrompt,
           error: "engine_ended_without_terminal_event",
         });
       }
     }, 500);
+  }
+
+  private async applyTurnModel(session: LivePiSession, input: TurnInput): Promise<void> {
+    const provider = input.provider?.trim();
+    const modelId = input.modelId?.trim();
+    if (!provider || !modelId || !session.handle.setModel) return;
+    const current = session.handle.getModelRef?.();
+    if (current?.provider === provider && current.modelId === modelId) return;
+    await session.handle.setModel({
+      provider,
+      modelId,
+      apiKey: input.apiKey,
+    });
+    const next = session.handle.getModelRef?.() ?? { provider, modelId };
+    this.opts.store.setModelRef(session.runtimeSessionId, next);
+    this.emitSessionUsageSnapshot(session.runtimeSessionId, session.tabId, session.turnId, {
+      preserveCost: true,
+    });
   }
 
   async compact(runtimeSessionId: RuntimeSessionId): Promise<AgentCompactResult> {
@@ -907,6 +1134,9 @@ export class PiSdkRuntime implements AgentRuntime {
     if (!session.handle.compact) return { ok: false, error: "compact_unavailable" };
     try {
       const result = await session.handle.compact();
+      this.emitSessionUsageSnapshot(runtimeSessionId, session.tabId, session.turnId, {
+        occupancyReset: true,
+      });
       return {
         ok: true,
         summary: result.summary,

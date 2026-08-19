@@ -996,3 +996,10 @@ if (typeof window !== "undefined" && window.electronAPI?.onLiteraturePdfDownload
     useLiteratureStore.getState().setPdfDownloadProgress(data);
   });
 }
+if (typeof window !== "undefined" && window.electronAPI?.onLiteraturePaperMaterialized) {
+  window.electronAPI.onLiteraturePaperMaterialized(({ projectRoot: root }) => {
+    const current = useDocumentStore.getState().projectRoot;
+    if (!current || current !== root) return;
+    void useLiteratureStore.getState().refresh(root);
+  });
+}

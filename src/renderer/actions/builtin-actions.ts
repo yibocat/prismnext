@@ -104,6 +104,14 @@ actionRegistry.register("compact-context", async () => {
   if (!result.ok) {
     throw new Error(result.error || "Failed to compact context.");
   }
+  const tabId = useChatStore.getState().activeTabId;
+  if (tabId && typeof result.throughTurnIndex === "number") {
+    useChatStore.getState().applyConversationCompact(tabId, {
+      throughTurnIndex: result.throughTurnIndex,
+      ...(result.summary ? { summary: result.summary } : {}),
+    });
+  }
+  useChatStore.getState()._setContextTokens(tabId, null, { clearOccupancy: true });
   return "Context compacted. Old messages have been summarized to free token space.";
 });
 

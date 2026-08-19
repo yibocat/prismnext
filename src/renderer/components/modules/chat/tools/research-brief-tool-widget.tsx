@@ -1,7 +1,9 @@
 import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileTextIcon } from "lucide-react";
+import { RESEARCH_BRIEF_REL } from "@shared/research-brief";
 import { ToolCard, Field } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
 
 const LABELS: Record<string, string> = {
   "research-brief-read": "Research brief",
@@ -66,7 +68,7 @@ function BriefSummary({
         : 0;
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        <Field label="path" value={String(data.path ?? ".brief.md")} />
+        <Field label="path" value={<ChatFileLink path={String(data.path ?? RESEARCH_BRIEF_REL)} />} />
         <Field label="sections filled" value={String(count)} />
       </div>
     );
@@ -83,6 +85,7 @@ function BriefSummary({
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)] text-muted-foreground">
         <Field label="section" value={String(data.section ?? "")} />
+        <Field label="path" value={<ChatFileLink path={RESEARCH_BRIEF_REL} />} />
         {data.append === true ? <Field label="mode" value="append" /> : <Field label="mode" value="replace" />}
       </div>
     );

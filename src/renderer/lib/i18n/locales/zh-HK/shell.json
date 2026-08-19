@@ -20,6 +20,7 @@
   "commandPalette": "命令面板",
   "commandPalettePlaceholder": "輸入命令或搜尋…",
   "commandPaletteEmpty": "未找到結果。",
+  "commandPaletteDescription": "搜尋命令、檔案和對話。",
   "command": {
     "actions": "操作",
     "panels": "面板",

@@ -366,6 +366,11 @@ async function kickoffWithEnv(
     { id, runId, command, executionId: created.executionId },
     origin,
   );
+  broadcastExperimentChanged({
+    projectRoot: ctx.projectRoot,
+    id,
+    reason: "run_start",
+  });
 
   const unsubscribe = registry.subscribe((event) => {
     if (event.executionId !== created.executionId || event.type !== "output" || !event.data) {

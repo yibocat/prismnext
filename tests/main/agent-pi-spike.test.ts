@@ -282,9 +282,72 @@ describe("pi sdk spike", () => {
       type: "tool_started",
       toolName: "read",
       toolCallId: "c2",
+    });    expect(end[0]).toMatchObject({ type: "turn_finished" });
+    const preparingWrite = mapPiSessionEvent({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "toolcall_start",
+        contentIndex: 0,
+        partial: {
+          content: [{ type: "toolCall", id: "call-write", name: "write", arguments: {} }],
+        },
+      },
+    }, ctx);
+    const preparingTask = mapPiSessionEvent({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "toolcall_start",
+        contentIndex: 0,
+        partial: {
+          content: [{ type: "toolCall", id: "call-task", name: "task", arguments: {} }],
+        },
+      },
+    }, ctx);
+    expect(preparingWrite[0]).toMatchObject({
+      type: "tool_started",
+      toolCallId: "call-write",
+      toolName: "write",
+      preparing: true,
     });
-    expect(end[0]).toMatchObject({ type: "turn_finished" });
+    expect(preparingTask[0]).toMatchObject({
+      type: "tool_started",
+      toolCallId: "call-task",
+      toolName: "task",
+      preparing: true,
+    });
+    const streamingTask = mapPiSessionEvent({
+      type: "message_update",
+      assistantMessageEvent: {
+        type: "toolcall_delta",
+        contentIndex: 0,
+        partial: {
+          content: [{
+            type: "toolCall",
+            id: "call-task",
+            name: "task",
+            arguments: { expertId: "literature-synthesizer", prompt: "## 任务" },
+          }],
+        },
+      },
+    }, ctx);
+    expect(streamingTask[0]).toMatchObject({
+      type: "tool_started",
+      toolCallId: "call-task",
+      toolName: "task",
+      preparing: false,
+    });
     expect(JSON.stringify([text, think, hostTool, primitive, end])).not.toMatch(/assistantMessageEvent|tool_execution_start/);
+  });
+
+  it("does not finish the turn on intermediate turn_end — only agent_end commits it", () => {
+    const ctx = { runtimeSessionId: "rt-1", tabId: "tab-1", turnId: "turn-1" };
+    // Pi emits turn_end after every agent-loop turn (tool rounds included).
+    const toolTurnEnd = mapPiSessionEvent({ type: "turn_end" }, ctx);
+    // The final reply only arrives after the last tool round; agent_end marks it.
+    const finalEnd = mapPiSessionEvent({ type: "agent_end" }, ctx);
+
+    expect(toolTurnEnd).toEqual([]);
+    expect(finalEnd).toMatchObject([{ type: "turn_finished", turnId: "turn-1" }]);
   });
 
   it("isolates two Pi-backed tabs and does not write project .pi or .agents", async () => {

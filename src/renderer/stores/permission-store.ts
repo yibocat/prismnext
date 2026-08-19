@@ -13,6 +13,8 @@ export interface PendingPermission {
   toolName?: string;
   message: string;
   options: PermissionOption[] | Record<string, unknown>;
+  /** Tool args from `permission_requested` — used when the Conversation block is not found yet. */
+  args?: Record<string, unknown>;
 }
 
 interface PermissionState {

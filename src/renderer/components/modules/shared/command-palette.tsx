@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Command,
   CommandInput,
@@ -801,6 +801,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
           className="bg-transparent text-[length:var(--font-size-13)] [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:text-[length:var(--font-size-12)] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-4 [&_[cmdk-input-wrapper]_svg]:w-4 [&_[cmdk-input]]:h-11 [&_[cmdk-input]]:text-[length:var(--font-size-13)] [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[length:var(--font-size-13)] [&_[cmdk-item]_svg]:h-4 [&_[cmdk-item]_svg]:w-4"
         >
           <DialogTitle className="sr-only">{t("shell.commandPalette")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("shell.commandPaletteDescription")}</DialogDescription>
           <CommandInput
             ref={paletteInputRef}
             placeholder={t("shell.commandPalettePlaceholder")}

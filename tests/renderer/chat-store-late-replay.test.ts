@@ -26,9 +26,7 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
 }));
 
 vi.stubGlobal("window", {
-  electronAPI: {
-    chatRegisterTab: vi.fn().mockResolvedValue({ success: true }),
-  },
+  electronAPI: {},
 });
 
 import { useChatStore } from "../../src/renderer/stores/chat-store";

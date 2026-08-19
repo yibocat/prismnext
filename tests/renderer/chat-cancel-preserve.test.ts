@@ -32,10 +32,6 @@ vi.stubGlobal("window", {
   electronAPI: {
     agentCancel,
     agentDispose: vi.fn().mockResolvedValue({ ok: true }),
-    sessionGetDirectory: vi.fn().mockResolvedValue(null),
-    sessionGetContext: vi.fn().mockResolvedValue(null),
-    sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
-    chatRegisterTab: vi.fn().mockResolvedValue({ success: true }),
   },
 });
 

@@ -20,6 +20,7 @@
   "commandPalette": "Command palette",
   "commandPalettePlaceholder": "Type a command or search...",
   "commandPaletteEmpty": "No results found.",
+  "commandPaletteDescription": "Search commands, files, and conversations.",
   "command": {
     "actions": "Actions",
     "panels": "Panels",

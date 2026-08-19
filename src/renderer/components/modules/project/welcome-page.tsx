@@ -128,7 +128,7 @@ function WelcomeRuntimeStatus() {
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
   const [items, setItems] = useState<StatusItem[]>([
     { id: "app", label: "PrismNext", state: "loading" },
-    { id: "agent", label: "OpenCode Agent", state: "loading" },
+    { id: "agent", label: "Agent", state: "loading" },
     { id: "compiler", label: "TeX Compiler", state: "loading" },
   ]);
   const [updateUi, setUpdateUi] = useState<UpdateUiStatus>({ kind: "idle" });

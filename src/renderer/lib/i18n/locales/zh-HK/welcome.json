@@ -29,7 +29,7 @@
   "status": {
     "cardTitle": "系統環境與核心引擎",
     "app": "PrismNext",
-    "agent": "OpenCode",
+    "agent": "Agent",
     "compiler": "TeX 編譯器",
     "updateAvailable": "有可用更新 {{version}}",
     "updateDownloading": "正在下載 {{version}}… {{percent}}%",

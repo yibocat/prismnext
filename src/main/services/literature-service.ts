@@ -1259,6 +1259,7 @@ export function createPaper(projectRoot: string, meta: Partial<PaperRow>): Creat
       type: meta.type,
       csl_json: meta.csl_json,
     });
+    broadcastToRenderer("literature:paperMaterialized", { projectRoot, paperId: dup.id });
     return {
       paper: enriched,
       created: false,
@@ -1297,7 +1298,9 @@ export function createPaper(projectRoot: string, meta: Partial<PaperRow>): Creat
     tags: null,
     ai_summary: null,
   });
-  return { paper: getPaper(projectRoot, id)!, created: true };
+  const paper = getPaper(projectRoot, id)!;
+  broadcastToRenderer("literature:paperMaterialized", { projectRoot, paperId: id });
+  return { paper, created: true };
 }
 
 export function updatePaper(projectRoot: string, paperId: string, input: PaperUpdateInput): PaperRow {

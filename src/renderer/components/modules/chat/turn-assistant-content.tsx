@@ -8,6 +8,7 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
   toolResultMap,
   sessionId,
   turnIndex,
+  turnId,
   isStreamingMsg,
   planReplyFallbackSummary,
   stopped = false,
@@ -16,6 +17,7 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
   toolResultMap: Map<string, ContentBlock>;
   sessionId: string;
   turnIndex: number;
+  turnId?: string;
   isStreamingMsg: boolean;
   planReplyFallbackSummary?: string | null;
   stopped?: boolean;
@@ -32,7 +34,7 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
           isStreamingMsg={isStreamingMsg}
           sessionId={sessionId}
           foldActivity
-          turnKey={`${sessionId}:${turnIndex}`}
+          turnKey={turnId || `${sessionId}:${turnIndex}`}
           planReplyFallbackSummary={planReplyFallbackSummary}
         />
       </div>

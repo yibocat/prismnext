@@ -345,6 +345,68 @@ describe("AgentSessionStore v2 conversation identity", () => {
     expect(store.getByConversationId("rt-old")?.title).toBe("Legacy Lab");
   });
 
+  it("reopening the same conversation replaces the old runtime file", () => {
+    store.createSession({
+      conversationId: "conv-dup",
+      runtimeSessionId: "rt-old",
+      title: "Keep me",
+      projectRoot: "/repo",
+    });
+    store.appendTurn("rt-old", {
+      turnIndex: 0,
+      turnId: "turn-0",
+      createdAt: Date.now(),
+      user: { text: "hello" },
+      assistant: { text: "hi", toolCalls: [] },
+      status: "completed",
+    });
+
+    const reopened = store.createSession({
+      conversationId: "conv-dup",
+      runtimeSessionId: "rt-new",
+      title: "New Chat",
+      projectRoot: "/repo",
+    });
+
+    expect(reopened.runtimeSessionId).toBe("rt-new");
+    expect(reopened.turns).toHaveLength(1);
+    expect(reopened.turns[0]?.user.text).toBe("hello");
+    expect(store.getSession("rt-old")).toBeNull();
+    expect(store.getSession("rt-new")?.turns).toHaveLength(1);
+    expect(store.listSessionsByProject("/repo")).toHaveLength(1);
+    expect(store.listSessionsByProject("/repo")[0]?.conversationId).toBe("conv-dup");
+  });
+
+  it("lists a conversation once when leftover duplicate files exist", () => {
+    store.createSession({
+      conversationId: "conv-stale",
+      runtimeSessionId: "rt-keep",
+      title: "Current",
+      projectRoot: "/repo",
+    });
+    mkdirSync(store.sessionsDir(), { recursive: true });
+    const stale: AgentSessionRecord = {
+      version: SESSION_SCHEMA_VERSION,
+      conversationId: "conv-stale",
+      runtimeSessionId: "rt-stale",
+      title: "Stale copy",
+      projectRoot: "/repo",
+      boundCheckoutPath: "/repo",
+      backend: "pi-sdk",
+      permissionMode: "edit_auto",
+      sessionAgent: "build",
+      turns: [],
+      createdAt: "2026-08-01T00:00:00Z",
+      updatedAt: "2026-08-01T00:00:00Z",
+    };
+    writeFileSync(join(store.sessionsDir(), "rt-stale.json"), JSON.stringify(stale), "utf-8");
+
+    const listed = store.listSessionsByProject("/repo");
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.runtimeSessionId).toBe("rt-keep");
+    expect(store.getSession("rt-stale")).toBeNull();
+  });
+
   it("deletes a session file by runtimeSessionId", () => {
     store.createSession({
       conversationId: "conv-del",

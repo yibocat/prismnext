@@ -12,8 +12,26 @@ import {
   type LiveTurn,
 } from "../../../shared/agent-conversation";
 import type { AgentEvent } from "../../../shared/agent-runtime";
+import {
+  applyAssistantEventToBlocks,
+  applySubagentEventToRuns,
+  contentBlockPlainText,
+  collectTaskRunsFromBlocks,
+  sealTurnBlockTimings,
+  taskExpertIdFromInput,
+  taskPromptFromInput,
+} from "../../../shared/conversation-blocks";
 
 export { emptyConversation };
+
+/** Incremental turn events that must never create or replace a live turn on their own. */
+const LATE_DROPPABLE_EVENTS = new Set<AgentEvent["type"]>([
+  "text_delta",
+  "thinking_delta",
+  "tool_started",
+  "tool_progress",
+  "tool_finished",
+]);
 
 export function beginConversationTurn(
   conv: Conversation,
@@ -48,8 +66,35 @@ export function applyConversationEvent(
     ? { ...conv, appliedEventIds: [...conv.appliedEventIds, event.eventId] }
     : conv;
 
+  // Child streams outlive the parent live turn. Never drop them as "late".
   if (event.subagent) {
     return applySubagentEvent(marked, event);
+  }
+
+  // Late/stale-turn guards — a turn settles (live → null) the moment a terminal
+  // event lands, but Pi can deliver incremental deltas afterwards (text/thinking/
+  // tool events) or stale events from a previous turn while a newer one streams.
+  // Without these guards `ensureLive` would rebuild a ghost live turn (empty user
+  // bubble, isStreaming stuck true) or overwrite the newer turn.
+  if (LATE_DROPPABLE_EVENTS.has(event.type)) {
+    if (!conv.live) {
+      if (
+        (event.type === "tool_started" || event.type === "tool_finished")
+        && event.toolName === "task"
+      ) {
+        return event.type === "tool_started"
+          ? seedTaskRun(marked, event)
+          : completeTaskRun(marked, event);
+      }
+      return conv;
+    }
+    if (conv.live.turnId !== event.turnId) return conv;
+  }
+  if (
+    (event.type === "turn_finished" || event.type === "turn_cancelled" || event.type === "turn_failed")
+    && !conv.live
+  ) {
+    return conv;
   }
 
   switch (event.type) {
@@ -82,30 +127,32 @@ export function applyConversationEvent(
           outputTokens: event.outputTokens,
           cacheReadTokens: event.cacheReadTokens,
           cacheWriteTokens: event.cacheWriteTokens,
+          ...(typeof event.windowSize === "number" ? { windowSize: event.windowSize } : {}),
+          ...(typeof event.costUsd === "number" ? { costUsd: event.costUsd } : {}),
+          ...(event.breakdown ? { breakdown: event.breakdown } : {}),
         },
       };
     case "text_delta":
-      return appendAssistantBlock(ensureLive(marked, event), (blocks) => appendText(blocks, event.text));
     case "thinking_delta":
-      return appendAssistantBlock(ensureLive(marked, event), (blocks) => appendThinking(blocks, event.text));
+    case "tool_progress":
+      return appendAssistantBlock(ensureLive(marked, event), (blocks) => applyAssistantEventToBlocks(blocks, event));
     case "tool_started": {
-      const withTool = appendAssistantBlock(ensureLive(marked, event), (blocks) => upsertToolUse(blocks, {
-        type: "tool_use",
-        id: event.toolCallId,
-        name: event.toolName,
-        input: event.args,
-        status: "running",
-      }));
+      const withTool = appendAssistantBlock(
+        ensureLive(marked, event),
+        (blocks) => applyAssistantEventToBlocks(blocks, event),
+      );
       return event.toolName === "task" ? seedTaskRun(withTool, event) : withTool;
     }
-    case "tool_progress":
-      return appendAssistantBlock(ensureLive(marked, event), (blocks) => updateToolUse(blocks, event.toolCallId, {
-        title: event.text,
-        status: "running",
-      }));
     case "tool_finished": {
-      const withTool = appendAssistantBlock(ensureLive(marked, event), (blocks) => finishTool(blocks, event));
-      return event.toolName === "task" ? completeTaskRun(withTool, event) : withTool;
+      const withTool = appendAssistantBlock(
+        ensureLive(marked, event),
+        (blocks) => applyAssistantEventToBlocks(blocks, event),
+      );
+      const settled = event.toolName === "question"
+        && withTool.pendingQuestion?.requestId === event.toolCallId
+        ? { ...withTool, pendingQuestion: null }
+        : withTool;
+      return event.toolName === "task" ? completeTaskRun(settled, event) : settled;
     }
     case "turn_finished":
       return commitLive(marked, "completed");
@@ -151,154 +198,29 @@ function appendAssistantBlock(
   };
 }
 
-function appendText(blocks: ContentBlock[], text: string): ContentBlock[] {
-  const last = blocks.at(-1);
-  if (last?.type === "text" && !last.is_error) {
-    return [...blocks.slice(0, -1), { ...last, text: `${last.text ?? ""}${text}` }];
-  }
-  return [...blocks, { type: "text", text }];
-}
-
-function appendThinking(blocks: ContentBlock[], text: string): ContentBlock[] {
-  const last = blocks.at(-1);
-  if (last?.type === "thinking") {
-    return [...blocks.slice(0, -1), { ...last, thinking: `${last.thinking ?? ""}${text}` }];
-  }
-  return [...blocks, { type: "thinking", thinking: text }];
-}
-
-function upsertToolUse(blocks: ContentBlock[], block: ContentBlock): ContentBlock[] {
-  const idx = blocks.findIndex((item) => item.type === "tool_use" && item.id === block.id);
-  if (idx >= 0) {
-    const next = blocks.slice();
-    next[idx] = { ...next[idx], ...block };
-    return next;
-  }
-  return [...blocks, block];
-}
-
-function updateToolUse(
-  blocks: ContentBlock[],
-  toolCallId: string,
-  patch: Partial<ContentBlock>,
-): ContentBlock[] {
-  return blocks.map((block) => (
-    block.type === "tool_use" && block.id === toolCallId
-      ? { ...block, ...patch }
-      : block
-  ));
-}
-
-function finishTool(
-  blocks: ContentBlock[],
-  event: Extract<AgentEvent, { type: "tool_finished" }>,
-): ContentBlock[] {
-  const status = event.ok && !event.denied ? "completed" : "failed";
-  const withUse = updateToolUse(blocks, event.toolCallId, { status });
-  const hasResult = withUse.some((block) => (
-    block.type === "tool_result" && block.tool_use_id === event.toolCallId
-  ));
-  if (hasResult) return withUse;
-  return [
-    ...withUse,
-    {
-      type: "tool_result",
-      tool_use_id: event.toolCallId,
-      name: event.toolName,
-      content: event.error ?? event.result,
-      is_error: Boolean(event.error || event.denied || !event.ok),
-      status,
-    },
-  ];
-}
-
 function applySubagentEvent(conv: Conversation, event: AgentEvent): Conversation {
-  const ctx = event.subagent;
-  if (!ctx) return conv;
-  const id = ctx.parentToolCallId;
-  const existing = (conv.subagentRuns ?? {})[id];
-  let run: ConversationSubagentRun = existing ?? {
-    parentToolCallId: id,
-    expertFqid: ctx.expertFqid,
-    expertName: ctx.expertName,
-    status: "running",
-    blocks: [],
+  const next: Conversation = {
+    ...conv,
+    subagentRuns: applySubagentEventToRuns(conv.subagentRuns ?? {}, event),
   };
-  if (ctx.expertFqid) run = { ...run, expertFqid: ctx.expertFqid };
-  if (ctx.expertName) run = { ...run, expertName: ctx.expertName };
-
-  switch (event.type) {
-    case "text_delta":
-      run = { ...run, blocks: appendText(run.blocks, event.text) };
-      break;
-    case "thinking_delta":
-      run = { ...run, blocks: appendThinking(run.blocks, event.text) };
-      break;
-    case "tool_started":
-      run = {
-        ...run,
-        blocks: upsertToolUse(run.blocks, {
-          type: "tool_use",
-          id: event.toolCallId,
-          name: event.toolName,
-          input: event.args,
-          status: "running",
-        }),
-      };
-      break;
-    case "tool_progress":
-      run = {
-        ...run,
-        blocks: updateToolUse(run.blocks, event.toolCallId, {
-          title: event.text,
-          status: "running",
-        }),
-      };
-      break;
-    case "tool_finished":
-      run = { ...run, blocks: finishTool(run.blocks, event) };
-      break;
-    case "turn_finished":
-      if (run.status === "running" || run.status === "stopping") {
-        run = { ...run, status: run.status === "stopping" ? "error" : "done" };
-      }
-      break;
-    case "turn_cancelled":
-      run = { ...run, status: "error", error: run.error || "cancelled" };
-      break;
-    case "turn_failed":
-      run = { ...run, status: "error", error: event.error };
-      break;
-    case "question_requested":
-      return putSubagentRun({
-        ...conv,
-        pendingQuestion: {
-          requestId: event.requestId,
-          prompt: event.prompt,
-          options: event.options,
-        },
-      }, run);
-    case "plan_suggested":
-      return putSubagentRun({
-        ...conv,
-        pendingPlanSuggest: {
-          requestId: event.requestId,
-          reason: event.reason,
-        },
-      }, run);
-    default:
-      break;
+  if (event.type === "plan_suggested") {
+    return {
+      ...next,
+      pendingPlanSuggest: {
+        requestId: event.requestId,
+        reason: event.reason,
+      },
+    };
   }
-  return putSubagentRun(conv, run);
+  return next;
 }
 
 function seedTaskRun(
   conv: Conversation,
   event: Extract<AgentEvent, { type: "tool_started" }>,
 ): Conversation {
-  const args = (event.args ?? {}) as Record<string, unknown>;
-  const expertId = typeof args.expertId === "string" ? args.expertId.trim() : "";
-  const prompt = typeof args.prompt === "string" ? args.prompt : "";
+  const expertId = taskExpertIdFromInput(event.args);
+  const prompt = taskPromptFromInput(event.args);
   const existing = (conv.subagentRuns ?? {})[event.toolCallId];
   const run: ConversationSubagentRun = {
     parentToolCallId: event.toolCallId,
@@ -316,15 +238,54 @@ function completeTaskRun(
   conv: Conversation,
   event: Extract<AgentEvent, { type: "tool_finished" }>,
 ): Conversation {
-  const existing = (conv.subagentRuns ?? {})[event.toolCallId];
-  if (!existing) return conv;
-  if (existing.status === "done" || existing.status === "error") return conv;
+  const existing = (conv.subagentRuns ?? {})[event.toolCallId] ?? {
+    parentToolCallId: event.toolCallId,
+    expertFqid: "",
+    expertName: "",
+    status: "running" as const,
+    blocks: [] as ContentBlock[],
+  };
   const failed = Boolean(event.error || event.denied || !event.ok);
+  if (!failed && existing.status === "error") return conv;
+  const fallback = !failed && existing.blocks.length === 0
+    ? contentBlockPlainText(event.result)
+    : "";
   return putSubagentRun(conv, {
     ...existing,
     status: failed ? "error" : "done",
-    ...(failed ? { error: event.error || existing.error || "subagent_failed" } : {}),
+    ...(failed
+      ? { error: event.error || existing.error || "subagent_failed" }
+      : fallback
+        ? { blocks: [{ type: "text", text: fallback }] }
+        : {}),
   });
+}
+
+export function ensureTaskRunFromTranscript(
+  conv: Conversation,
+  toolUseId: string,
+): Conversation {
+  const existing = conv.subagentRuns?.[toolUseId];
+  if (existing && (existing.blocks.length > 0 || existing.error || existing.status === "running")) {
+    return conv;
+  }
+  const sources = [
+    conv.live?.assistant.blocks ?? [],
+    ...conv.turns.map((turn) => turn.assistant.blocks),
+  ];
+  for (const blocks of sources) {
+    const run = collectTaskRunsFromBlocks(blocks).find((item) => item.parentToolCallId === toolUseId);
+    if (!run) continue;
+    return putSubagentRun(conv, {
+      ...run,
+      ...(existing?.blocks.length ? { blocks: existing.blocks } : {}),
+      ...(existing?.error ? { error: existing.error } : {}),
+      expertFqid: existing?.expertFqid || run.expertFqid,
+      expertName: existing?.expertName || run.expertName,
+      prompt: existing?.prompt || run.prompt,
+    });
+  }
+  return conv;
 }
 
 function putSubagentRun(conv: Conversation, run: ConversationSubagentRun): Conversation {
@@ -334,6 +295,96 @@ function putSubagentRun(conv: Conversation, run: ConversationSubagentRun): Conve
       ...(conv.subagentRuns ?? {}),
       [run.parentToolCallId]: run,
     },
+  };
+}
+
+/** Host chrome (e.g. Plan-approve TodoWrite) lands on the current turn, not a ChatStream row. */
+export function appendAssistantBlocksToLastTurn(
+  conv: Conversation,
+  blocks: ContentBlock[],
+): Conversation {
+  if (blocks.length === 0) return conv;
+  if (conv.live) {
+    return {
+      ...conv,
+      live: {
+        ...conv.live,
+        assistant: { blocks: [...conv.live.assistant.blocks, ...blocks] },
+      },
+    };
+  }
+  const last = conv.turns.at(-1);
+  if (!last) return conv;
+  return {
+    ...conv,
+    turns: [
+      ...conv.turns.slice(0, -1),
+      { ...last, assistant: { blocks: [...last.assistant.blocks, ...blocks] } },
+    ],
+  };
+}
+
+function resolveAnsweredQuestionToolId(conv: Conversation, requestId: string): string | null {
+  const blocks = [
+    ...(conv.live?.assistant.blocks ?? []),
+    ...(conv.turns.at(-1)?.assistant.blocks ?? []),
+  ];
+  if (blocks.some((block) => block.type === "tool_use" && block.id === requestId)) {
+    return requestId;
+  }
+  return null;
+}
+
+function applyQuestionAnswerToBlocks(
+  blocks: ContentBlock[],
+  toolCallId: string,
+  answer: string,
+): ContentBlock[] {
+  return applyAssistantEventToBlocks(blocks, {
+    type: "tool_finished",
+    runtimeSessionId: "",
+    tabId: "",
+    turnId: "",
+    toolCallId,
+    toolName: "question",
+    ok: true,
+    result: answer,
+  });
+}
+
+/** User answered the hang — drop chrome immediately; later tool_finished is idempotent. */
+export function acknowledgeQuestionAnswer(
+  conv: Conversation,
+  requestId: string,
+  answer: string,
+): Conversation {
+  const cleared: Conversation = { ...conv, pendingQuestion: null };
+  const toolCallId = resolveAnsweredQuestionToolId(cleared, requestId);
+  if (!toolCallId) return cleared;
+  if (cleared.live) {
+    return {
+      ...cleared,
+      live: {
+        ...cleared.live,
+        assistant: {
+          blocks: applyQuestionAnswerToBlocks(cleared.live.assistant.blocks, toolCallId, answer),
+        },
+      },
+    };
+  }
+  const last = cleared.turns.at(-1);
+  if (!last) return cleared;
+  return {
+    ...cleared,
+    turns: [
+      ...cleared.turns.slice(0, -1),
+      {
+        ...last,
+        assistant: {
+          blocks: applyQuestionAnswerToBlocks(last.assistant.blocks, toolCallId, answer),
+        },
+      },
+    ],
   };
 }
 
@@ -353,7 +404,7 @@ function commitLive(
     turnId: conv.live.turnId,
     turnIndex: conv.live.turnIndex,
     user: conv.live.user,
-    assistant: conv.live.assistant,
+    assistant: { blocks: sealTurnBlockTimings(conv.live.assistant.blocks) },
     status,
     ...(error ? { error } : {}),
   };

@@ -100,5 +100,9 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
 export const ComposerChromeStack = memo(function ComposerChromeStack() {
   const items = useComposerChromeStackItems();
   if (items.length === 0) return null;
-  return <ComposerChromeStackBody items={items} />;
+  return (
+    <div data-composer-chrome>
+      <ComposerChromeStackBody items={items} />
+    </div>
+  );
 });

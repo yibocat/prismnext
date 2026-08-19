@@ -41,4 +41,21 @@ describe("InteractionBroker", () => {
       reason: "user_dismiss",
     });
   });
+
+  it("carries the runtime session id when a plan suggestion is accepted", async () => {
+    const broker = new InteractionBroker();
+    const pending = broker.suggestPlan({
+      requestId: "p-2",
+      runtimeSessionId: "rt-session-x",
+      tabId: "tab-1",
+      turnId: "turn-1",
+      reason: "Need a protocol",
+    });
+    expect(broker.resolvePlanSuggest("p-2", "accept")).toBe(true);
+    await expect(pending).resolves.toEqual({
+      accepted: true,
+      reason: "user_accept",
+      runtimeSessionId: "rt-session-x",
+    });
+  });
 });

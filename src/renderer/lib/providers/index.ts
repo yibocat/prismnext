@@ -514,18 +514,17 @@ export function buildCustomModelEntry(
 }
 
 /**
- * Context-ring denominator for the selected model.
- * Prefers settings/catalog `contextWindow`; if Unknown/—, consults OpenCode
- * Go/Zen memory catalog (after prefetch).
+ * Catalog context-window size for the selected model, or null when the
+ * picker/catalog has no known size (so the live Pi snapshot can win).
  */
-export function resolveSelectedModelContextTokens(
+export function resolveSelectedModelContextTokensIfKnown(
   providerId: string,
   modelId: string | undefined,
   enabledIds: Record<string, string[]> | undefined,
   customModels: Record<string, ModelConfig[]> | undefined,
   customProviders?: CustomProviderEntry[],
-): number {
-  if (!modelId) return DEFAULT_CONTEXT_WINDOW;
+): number | null {
+  if (!modelId) return null;
   const allModels = getAllEnabledModels(enabledIds, customModels, customProviders);
   const found = allModels.find(
     (m) => m.provider.id === providerId && m.model.id === modelId,
@@ -539,5 +538,28 @@ export function resolveSelectedModelContextTokens(
       label = catalogRow.contextWindow;
     }
   }
-  return parseContextWindow(label);
+  if (isUnknownContextWindowLabel(label)) return null;
+  const tokens = parseContextWindow(label);
+  return tokens > 0 ? tokens : null;
+}
+
+/**
+ * Context-ring denominator for the selected model.
+ * Prefers settings/catalog `contextWindow`; if Unknown/—, consults OpenCode
+ * Go/Zen memory catalog (after prefetch).
+ */
+export function resolveSelectedModelContextTokens(
+  providerId: string,
+  modelId: string | undefined,
+  enabledIds: Record<string, string[]> | undefined,
+  customModels: Record<string, ModelConfig[]> | undefined,
+  customProviders?: CustomProviderEntry[],
+): number {
+  return resolveSelectedModelContextTokensIfKnown(
+    providerId,
+    modelId,
+    enabledIds,
+    customModels,
+    customProviders,
+  ) ?? DEFAULT_CONTEXT_WINDOW;
 }

@@ -44,7 +44,7 @@ import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { InlineComposerEditor } from "./inline-composer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";
 import { COMPOSER_TOOLBAR_ICON_BUTTON } from "./worktree-selector";
-import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -75,11 +75,11 @@ const CopyButton = memo(({ text }: { text: string }) => {
 CopyButton.displayName = "CopyButton";
 
 export const UserMessageHeader = memo(function UserMessageHeader({
-  msg,
+  blocks,
   turnIndex,
   attachedBelow,
 }: {
-  msg: ChatStreamMessage;
+  blocks: ContentBlock[];
   turnIndex: number;
   attachedBelow?: ReactNode;
 }) {
@@ -91,11 +91,11 @@ export const UserMessageHeader = memo(function UserMessageHeader({
   const fileMetadata = useDocumentStore((s) => s.fileMetadata);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
-  const allBlocks = contentBlocks(msg.message?.content);
+  const allBlocks = contentBlocks(blocks);
   const commandBlocks = allBlocks.filter((b) => b.type === "command");
   const profileBlocks = allBlocks.filter((b) => b.type === "profile");
 
-  const initial = useMemo(() => extractUserMessageEditParts(msg), [msg]);
+  const initial = useMemo(() => extractUserMessageEditParts(allBlocks), [allBlocks]);
   const hasInlineParts = useMemo(
     () =>
       allBlocks.some((b) => b.type === "text" && Boolean(b.inlineParts?.length)),
@@ -145,19 +145,19 @@ export const UserMessageHeader = memo(function UserMessageHeader({
 
   const beginEdit = useCallback(() => {
     if (isStreaming || sending) return;
-    const next = extractUserMessageEditParts(msg);
+    const next = extractUserMessageEditParts(allBlocks);
     setEditParts(next.parts);
     setEditAttachments(next.attachments);
     setExpanded(true);
     setEditing(true);
-  }, [isStreaming, msg, sending]);
+  }, [allBlocks, isStreaming, sending]);
 
   const cancelEdit = useCallback(() => {
     setEditing(false);
-    const next = extractUserMessageEditParts(msg);
+    const next = extractUserMessageEditParts(allBlocks);
     setEditParts(next.parts);
     setEditAttachments(next.attachments);
-  }, [msg]);
+  }, [allBlocks]);
 
   useEffect(() => {
     if (!editing) return;

@@ -34,7 +34,6 @@ import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import { leftNavRegistry } from "@/lib/workspace/left-nav";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
-import { captureSessionCwd } from "@/lib/git/checkout-context";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import {
   toggleArchiveSessionForProject,
@@ -348,36 +347,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     return () => {
       if (titleRefreshTimerRef.current) clearTimeout(titleRefreshTimerRef.current);
     };
-  }, []);
-
-  // When a new session is created, insert it into the list immediately
-  // with the tab's title — no async SQLite round-trip needed.
-  // The next fetchSessions() call will refresh the list from disk.
-  useEffect(() => {
-    return window.electronAPI.onChatSessionCreated(({ tabId: eventTabId, sessionId }) => {
-      const chatState = useChatStore.getState();
-      const tab = chatState.tabs.find(
-        (t) => t.id === (eventTabId || chatState.activeTabId),
-      );
-      const title =
-        tab?.title && tab.title !== "New Chat"
-          ? tab.title
-          : "New Chat";
-      const directory = tab?.sessionCwd ?? captureSessionCwd() ?? undefined;
-      setSessions((prev) => {
-        if (prev.some((s) => s.id === sessionId)) return prev;
-        return [
-          {
-            id: sessionId,
-            title,
-            lastModified: Date.now(),
-            createdAt: Date.now(),
-            directory,
-          },
-          ...prev,
-        ];
-      });
-    });
   }, []);
 
   const primaryNavItems = useMemo(

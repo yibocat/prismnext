@@ -3,7 +3,12 @@ import { useDocumentStore } from "./document-store";
 import { resolveWorktreePathForSend, resolveWorktreeAtCheckout } from "@/lib/git/checkout-context";
 import { useChatStore, type ChatStreamMessage } from "./chat-store";
 import { useChangesStore } from "./changes-store";
-import { countUserTurns } from "@/components/modules/chat/chat-turns";
+import {
+  countConversationTurns,
+  conversationHasCommittedTurn,
+  snapshotConversation,
+} from "@/lib/chat/conversation-view";
+import type { Conversation } from "../../shared/agent-conversation";
 import { createLogger } from "@/services/logger";
 
 const log = createLogger("checkpoint-store", "agent");
@@ -38,7 +43,9 @@ interface PendingTurn {
 export interface RegretState {
   files: CheckpointFile[];
   checkpoints: TurnCheckpoint[];
+  /** @deprecated OpenCode stream snapshot. Formal undo restores `conversation`. */
   messages: ChatStreamMessage[];
+  conversation?: Conversation;
   /**
    * Edit-resend: keep regret across the immediate rebound turn's finalize.
    * Cleared after that finalize (or on dismiss / another rollback).
@@ -506,8 +513,8 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     if (!projectRoot || !tab.sessionId) return;
 
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-    const turnCount = countUserTurns(chatTab?.messages ?? []);
-    const turnIndex = Math.max(0, turnCount - 1);
+    const turnIndex = chatTab?.conversation.live?.turnIndex
+      ?? Math.max(0, countConversationTurns(chatTab?.conversation) - 1);
 
     let checkpoints = [...tab.checkpoints];
     let latest = checkpoints.find((c) => c.turnIndex === turnIndex)
@@ -652,9 +659,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
   canRollbackToTurn: (tabId, turnIndex) => {
     const tab = get().byTab[tabId];
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-    const turnCount = countUserTurns(chatTab?.messages ?? []);
-    if (turnIndex < 0 || turnCount === 0) return false;
-    if (turnIndex >= turnCount) return false;
+    if (!conversationHasCommittedTurn(chatTab?.conversation, turnIndex)) return false;
 
     const bound = tab?.boundCheckoutPath ?? currentBoundCheckoutPath(tabId);
     const cwd = currentBoundCheckoutPath(tabId);
@@ -673,6 +678,9 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     const tab = get().byTab[tabId] ?? emptyTabState();
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
     const messagesBefore = chatTab ? [...chatTab.messages] : [];
+    const conversationBefore = chatTab?.conversation
+      ? snapshotConversation(chatTab.conversation)
+      : undefined;
 
     const { projectRoot } = sessionPaths(tabId);
     if (!projectRoot) return 0;
@@ -693,6 +701,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       ),
       checkpoints: [...tab.checkpoints],
       messages: messagesBefore,
+      ...(conversationBefore ? { conversation: conversationBefore } : {}),
       surviveNextFinalize: opts?.preserveRegretAcrossNextFinalize === true,
     };
 
@@ -763,7 +772,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
 
   rollbackPreviousTurn: async (tabId) => {
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    const turnCount = countConversationTurns(chatTab?.conversation);
     if (turnCount <= 0) return null;
 
     const latest = get().getLatestCheckpoint(tabId);
@@ -806,7 +815,11 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     }
 
     if (!sessionRestored) {
-      useChatStore.getState().restoreMessages(tabId, undo.messages);
+      if (undo.conversation) {
+        useChatStore.getState().restoreConversation(tabId, undo.conversation);
+      } else {
+        useChatStore.getState().restoreMessages(tabId, undo.messages);
+      }
     }
 
     await applyCheckpointFiles(undo.files);

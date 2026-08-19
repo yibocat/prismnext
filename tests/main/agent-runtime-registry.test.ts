@@ -120,4 +120,54 @@ describe("RuntimeRegistry", () => {
     expect(reopened.piSessionFile).toBe(created.piSessionFile);
     expect(reopened.tabId).toBe("tab-2");
   });
+
+  it("openConversation does not leave a second JSON file for the same conversation", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-reg-dup-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-reg-dup-proj-"));
+    dirs.push(userData, project);
+    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    const sessionDir = resolvePiRuntimeSessionDir(userData);
+    mkdirSync(sessionDir, { recursive: true });
+
+    let opens = 0;
+    const registry = new RuntimeRegistry({
+      userDataDir: userData,
+      store,
+      startRuntime: async (input) => {
+        opens += 1;
+        const runtimeSessionId = `rt-open-${opens}`;
+        const piSessionFile = join(sessionDir, `${input.conversationId}.jsonl`);
+        writeFileSync(piSessionFile, '{"type":"session"}\n', "utf-8");
+        store.createSession({
+          conversationId: input.conversationId,
+          runtimeSessionId,
+          tabId: input.tabId,
+          projectRoot: input.projectRoot,
+          boundCheckoutPath: input.boundCheckoutPath,
+          piSessionFile,
+        });
+        return {
+          runtime: fakeRuntime(runtimeSessionId),
+          runtimeSessionId,
+          piSessionFile,
+        };
+      },
+    });
+
+    await registry.createConversation({
+      conversationId: "conv-once",
+      tabId: "tab-1",
+      projectRoot: project,
+    });
+    await registry.disposeConversation("conv-once");
+    await registry.openConversation({
+      conversationId: "conv-once",
+      tabId: "tab-1",
+      projectRoot: project,
+    });
+
+    expect(store.listSessionsByProject(project)).toHaveLength(1);
+    expect(store.getSession("rt-open-1")).toBeNull();
+    expect(store.getSession("rt-open-2")?.conversationId).toBe("conv-once");
+  });
 });

@@ -80,7 +80,36 @@ function byId<T extends { id: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function writeGolden(root: string, fixture: string): void {
+  const golden = loadGolden(fixture);
+  const plan = buildProjectSubagentsAgentPlan(root, { defaultSubagentModel: null });
+  const next: GoldenDump = {
+    ...golden,
+    orchestratorId: plan.orchestratorId,
+    agentFiles: plan.agentFiles,
+    orchestratorContentHash: plan.orchestratorContentHash,
+    syncContentHash: plan.syncContentHash,
+    entries: plan.agentEntries.map((entry) => ({
+      filename: entry.filename,
+      content: normalize(root, entry.content),
+    })),
+    views: {
+      experts: byId(listSubagents(root).map(expertView)),
+      orchestrators: byId(listOrchestrators(root).map(orchestratorView)),
+    },
+  };
+  writeFileSync(
+    join(GOLDEN_DIR, `agent-plan-${fixture}.json`),
+    `${JSON.stringify(next, null, 2)}\n`,
+    "utf-8",
+  );
+}
+
 function assertPlanMatchesGolden(root: string, fixture: string): void {
+  if (process.env.UPDATE_AGENT_PLAN_GOLDEN === "1") {
+    writeGolden(root, fixture);
+    return;
+  }
   const golden = loadGolden(fixture);
   const plan = buildProjectSubagentsAgentPlan(root, { defaultSubagentModel: null });
 

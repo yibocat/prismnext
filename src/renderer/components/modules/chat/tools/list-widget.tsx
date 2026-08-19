@@ -4,6 +4,7 @@ import { FolderIcon, FileIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { joinProjectPaths } from "@/lib/files/open-project-file";
+import { toolResultPlainText } from "@/lib/chat/unwrap-tool-result";
 
 interface DirEntry {
   name: string;
@@ -29,20 +30,19 @@ export const ListWidget = memo(function ListWidget({
 
   let entries: DirEntry[] = [];
   const raw = toolResult?.content;
-  if (raw) {
-    if (typeof raw === "object" && Array.isArray(raw)) {
-      entries = raw.map((e: any) => ({
-        name: e.name || e.file || String(e),
-        type: e.type === "directory" || e.is_dir ? "directory" : "file",
-        size: e.size,
-        mtime: e.mtime,
-      }));
-    } else if (typeof raw === "string") {
-      entries = raw.split("\n").filter((l: string) => l.trim()).map((l: string) => ({
-        name: l.trim(),
-        type: l.endsWith("/") ? "directory" : "file",
-      }));
-    }
+  const outputText = toolResultPlainText(raw);
+  if (outputText) {
+    entries = outputText.split("\n").filter((l) => l.trim()).map((l) => ({
+      name: l.trim(),
+      type: l.endsWith("/") ? "directory" : "file",
+    }));
+  } else if (Array.isArray(raw)) {
+    entries = raw.map((e: any) => ({
+      name: e.name || e.file || String(e),
+      type: e.type === "directory" || e.is_dir ? "directory" : "file",
+      size: e.size,
+      mtime: e.mtime,
+    }));
   }
 
   const dirName = dirPath.split("/").pop() || dirPath;

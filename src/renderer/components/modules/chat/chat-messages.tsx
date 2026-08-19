@@ -5,8 +5,9 @@ import { useChatStore } from "@/stores/chat-store";
 import { emptyConversation } from "@shared/agent-conversation";
 import {
   collectConversationAssistantBlocks,
-  conversationDisplayTurns,
+  conversationCompactedCount,
   conversationHasContent,
+  conversationVisibleTurns,
 } from "@/lib/chat/conversation-view";
 export { AssistantBlockList } from "./assistant-block-list";
 import { TurnAssistantContent } from "./turn-assistant-content";
@@ -14,12 +15,10 @@ import "./tools/task-widget-register";
 import { TurnFooter, extractTurnCopyTextFromBlocks } from "./turn-footer";
 import {
   captureSentinelScrollAnchor,
-  followActiveTurnTail,
-  getTurnScrollTop,
   isFollowingStreamTurn,
   pinActiveTurnTop,
+  pinOrFollowActiveTurn,
   restoreSentinelScrollAnchor,
-  scrollToTurnEnd,
   type SentinelsScrollAnchor,
 } from "@/lib/chat/active-turn-scroll";
 import {
@@ -156,6 +155,7 @@ export const ChatMessages = memo(function ChatMessages() {
   const contentRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
+  const lastTurnIndexRef = useRef<number | null>(null);
   const shouldAutoScrollRef = useRef(true);
   const wasStreamingRef = useRef(false);
   const isStreamingRef = useRef(isStreaming);
@@ -182,33 +182,26 @@ export const ChatMessages = memo(function ChatMessages() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [isActiveTurnMode, setIsActiveTurnMode] = useState(true);
+  const [expandCompacted, setExpandCompacted] = useState(false);
   const pendingJumpTurnRef = useRef<number | null>(null);
 
-  const pinToActiveTurn = useCallback((smooth = false) => {
-    const container = scrollRef.current;
-    const turn = lastTurnRef.current;
-    if (!container || !turn) return;
-    pinActiveTurnTop(container, turn, smooth);
-    setShowScrollButton(false);
-  }, []);
+  useEffect(() => {
+    setExpandCompacted(false);
+  }, [activeTabId, conversation.compacted?.throughTurnIndex]);
 
   const followStreamTail = useCallback((smooth = false) => {
     const container = scrollRef.current;
     const turn = lastTurnRef.current;
     if (!container || !turn) return;
-    followActiveTurnTail(container, turn, smooth);
+    pinOrFollowActiveTurn(container, turn, smooth);
     setShowScrollButton(false);
   }, []);
 
-  const scrollToLatest = useCallback((smooth = false) => {
-    const container = scrollRef.current;
-    const turn = lastTurnRef.current;
-    if (!container || !turn) return;
-    scrollToTurnEnd(container, turn, smooth);
-    setShowScrollButton(false);
-  }, []);
-
-  const turns = useMemo(() => conversationDisplayTurns(conversation), [conversation]);
+  const compactedCount = conversationCompactedCount(conversation);
+  const turns = useMemo(
+    () => conversationVisibleTurns(conversation, { expandCompacted }),
+    [conversation, expandCompacted],
+  );
 
   const toolResultMap = useMemo(
     () => buildToolResultMapFromBlocks(
@@ -286,7 +279,10 @@ export const ChatMessages = memo(function ChatMessages() {
 
   useLayoutEffect(() => {
     if (!activeTabId || isLoadingSession) return;
-    const start = resolveWindowStart(activeTabId, turns.length);
+    const start = expandCompacted
+      ? 0
+      : resolveWindowStart(activeTabId, turns.length);
+    if (expandCompacted) setTurnWindowStart(activeTabId, 0);
     windowStartRef.current = start;
     setWindowStartState(start);
     if (start <= 0) {
@@ -297,12 +293,19 @@ export const ChatMessages = memo(function ChatMessages() {
       setLoadMorePullProgress(0);
       setLoadMorePhase("idle");
     }
-  }, [activeTabId, turns.length, isLoadingSession]);
+  }, [activeTabId, turns.length, isLoadingSession, expandCompacted]);
 
   const attachTurnSectionRef = useCallback(
-    (_turnIndex: number, isLastTurn: boolean) => (el: HTMLElement | null) => {
-      if (isLastTurn) {
+    (turnIndex: number, isLastTurn: boolean) => (el: HTMLElement | null) => {
+      if (el && isLastTurn) {
         lastTurnRef.current = el;
+        lastTurnIndexRef.current = turnIndex;
+        return;
+      }
+      // A previous last-turn's ref cleanup must not wipe the new last turn.
+      if (!el && lastTurnIndexRef.current === turnIndex) {
+        lastTurnRef.current = null;
+        lastTurnIndexRef.current = null;
       }
     },
     [],
@@ -527,41 +530,37 @@ export const ChatMessages = memo(function ChatMessages() {
     (smooth = false) => {
       shouldAutoScrollRef.current = true;
       setIsActiveTurnMode(true);
-      if (isStreamingRef.current) {
-        followStreamTail(smooth);
-      } else {
-        scrollToLatest(smooth);
-      }
+      followStreamTail(smooth);
       requestAnimationFrame(() => {
         shouldAutoScrollRef.current = true;
         applySnapIfNeeded();
       });
     },
-    [followStreamTail, scrollToLatest, applySnapIfNeeded],
+    [followStreamTail, applySnapIfNeeded],
   );
 
-  /** Sync runway CSS var only — no scroll (avoids fighting stream tail follow). */
-  const syncRunwayMinHeight = useCallback(() => {
+  /** Track pane height so the last turn can fill the viewport and pin to the top. */
+  const syncViewportHeight = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return 0;
     const next = el.clientHeight;
-    if (next > 0) {
-      el.style.setProperty("--chat-runway-h", `${next}px`);
-    }
     setViewportHeight((prev) => (prev === next ? prev : next));
     return next;
   }, []);
 
+  const showTranscript = !isLoadingSession && (conversationHasContent(conversation) || isStreaming);
+
   useLayoutEffect(() => {
+    if (!showTranscript) return;
     const el = scrollRef.current;
     if (!el) return;
-    syncRunwayMinHeight();
+    syncViewportHeight();
     const ro = new ResizeObserver(() => {
-      syncRunwayMinHeight();
+      syncViewportHeight();
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [syncRunwayMinHeight]);
+  }, [syncViewportHeight, showTranscript, activeTabId]);
 
   const jumpToTurn = useCallback(
     (turnIndex: number) => {
@@ -609,20 +608,7 @@ export const ChatMessages = memo(function ChatMessages() {
       let following = true;
 
       if (turn) {
-        if (isStreaming) {
-          following = isFollowingStreamTurn(el, turn);
-        } else {
-          const turnTop = getTurnScrollTop(el, turn);
-          const turnHeight = turn.offsetHeight;
-          const viewH = el.clientHeight;
-          const tailScrollTop = turnTop + turnHeight - viewH;
-          const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
-          if (turnHeight <= viewH) {
-            following = el.scrollTop >= turnTop - 20 || maxScroll < turnTop - 20;
-          } else {
-            following = el.scrollTop >= tailScrollTop - 80;
-          }
-        }
+        following = isFollowingStreamTurn(el, turn);
       }
 
       shouldAutoScrollRef.current = following;
@@ -632,7 +618,7 @@ export const ChatMessages = memo(function ChatMessages() {
     handleScroll();
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
-  }, [isStreaming]);
+  }, [isStreaming, showTranscript]);
 
   useLayoutEffect(() => {
     const msg = lastTurnUserMsg;
@@ -642,41 +628,36 @@ export const ChatMessages = memo(function ChatMessages() {
     if (isNewUserMsg) {
       shouldAutoScrollRef.current = true;
       setIsActiveTurnMode(true);
-      syncRunwayMinHeight();
-      requestAnimationFrame(() => {
-        pinToActiveTurn(false);
-        applySnapIfNeeded();
-      });
+      const container = scrollRef.current;
+      const turn = lastTurnRef.current;
+      if (container && turn) pinActiveTurnTop(container, turn, false);
+      applySnapIfNeeded();
     }
-  }, [lastTurnUserMsg, lastTurnUserKey, pinToActiveTurn, syncRunwayMinHeight, applySnapIfNeeded]);
+  }, [lastTurnUserMsg, lastTurnUserKey, applySnapIfNeeded]);
 
   useLayoutEffect(() => {
     if (isLoadingSession || turns.length === 0) return;
-    syncRunwayMinHeight();
     requestAnimationFrame(() => {
-      if (shouldAutoScrollRef.current) {
-        if (isStreaming) followStreamTail(false);
-        else scrollToLatest(false);
-      }
+      if (shouldAutoScrollRef.current) followStreamTail(false);
     });
-  }, [isLoadingSession, turns.length, activeTabId, isStreaming, followStreamTail, scrollToLatest, syncRunwayMinHeight]);
+  }, [isLoadingSession, turns.length, activeTabId, followStreamTail]);
 
   useLayoutEffect(() => {
     const wasStreaming = wasStreamingRef.current;
     wasStreamingRef.current = isStreaming;
     if (wasStreaming && !isStreaming && shouldAutoScrollRef.current) {
-      syncRunwayMinHeight();
       requestAnimationFrame(() => {
-        scrollToLatest(false);
+        followStreamTail(false);
         applySnapIfNeeded();
       });
     }
-  }, [isStreaming, scrollToLatest, syncRunwayMinHeight, applySnapIfNeeded]);
+  }, [isStreaming, followStreamTail, applySnapIfNeeded]);
 
   useLayoutEffect(() => {
-    if (!isStreaming || !shouldAutoScrollRef.current) return;
+    if (!shouldAutoScrollRef.current) return;
+    if (viewportHeight <= 0) return;
     followStreamTail(false);
-  }, [viewportHeight, isStreaming, followStreamTail]);
+  }, [viewportHeight, lastTurnUserKey, followStreamTail]);
 
   useEffect(() => {
     if (!isStreaming || !shouldAutoScrollRef.current) return;
@@ -761,6 +742,22 @@ export const ChatMessages = memo(function ChatMessages() {
               </button>
             </div>
           )}
+          {compactedCount > 0 && (
+            <div className="flex justify-center px-6 py-2">
+              <button
+                type="button"
+                onClick={() => setExpandCompacted((open) => !open)}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <span>{t("chat.messages.compactedBanner", { count: compactedCount })}</span>
+                <span className="text-foreground">
+                  {expandCompacted
+                    ? t("chat.messages.compactedHide")
+                    : t("chat.messages.compactedShow")}
+                </span>
+              </button>
+            </div>
+          )}
           {visibleTurns.map((turn, localIdx) => {
             const turnIdx = windowStart + localIdx;
             const isLastTurn = localIdx === visibleTurns.length - 1;
@@ -774,24 +771,17 @@ export const ChatMessages = memo(function ChatMessages() {
                 ? planDraftSummary
                 : null;
             const turnStamp = turn.meta ?? turnMeta[turnIdx];
-            const userMsg = turn.userBlocks.length > 0
-              ? { type: "user" as const, message: { content: turn.userBlocks } }
-              : null;
 
             return (
             <section
               key={turn.turnId || `turn-${turnIdx}`}
               data-chat-turn-index={turnIdx}
               ref={attachTurnSectionRef(turnIdx, isLastTurn)}
-              style={
-                isLastTurn
-                  ? { minHeight: "var(--chat-runway-h, 100%)" }
-                  : undefined
-              }
+              style={isLastTurn && viewportHeight > 0 ? { minHeight: viewportHeight } : undefined}
             >
-              {userMsg && (
+              {turn.userBlocks.length > 0 && (
                 <UserMessageHeader
-                  msg={userMsg}
+                  blocks={turn.userBlocks}
                   turnIndex={turnIdx}
                   attachedBelow={
                     todoAnchorTurnIndex != null && turn.turnIndex === todoAnchorTurnIndex
@@ -809,6 +799,7 @@ export const ChatMessages = memo(function ChatMessages() {
                   toolResultMap={toolResultMap}
                   sessionId={chatSessionId ?? ""}
                   turnIndex={turnIdx}
+                  turnId={turn.turnId}
                   isStreamingMsg={turn.live}
                   planReplyFallbackSummary={planReplyFallbackSummary}
                   stopped={turn.status === "cancelled"}

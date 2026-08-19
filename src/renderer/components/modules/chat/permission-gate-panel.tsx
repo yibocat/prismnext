@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
+import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
 import { usePermissionStore, type PendingPermission } from "@/stores/permission-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -36,6 +37,9 @@ function findToolUseBlock(tabId: string, toolCallId?: string): ContentBlock | un
   if (!toolCallId) return undefined;
   const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
   if (!tab) return undefined;
+
+  const fromConversation = findConversationToolUse(tab.conversation, toolCallId);
+  if (fromConversation) return fromConversation;
 
   const scan = (blocks: ContentBlock[] | undefined) =>
     blocks?.find((b) => b.type === "tool_use" && b.id === toolCallId);
@@ -173,13 +177,23 @@ function pickActivePermission(
   return withToolId[0] ?? tabPerms[0];
 }
 
+function permissionInput(
+  permission: PendingPermission,
+  toolUse: ContentBlock | undefined,
+): Record<string, unknown> {
+  return {
+    ...(permission.args ?? {}),
+    ...(toolUse?.input && typeof toolUse.input === "object" ? toolUse.input : {}),
+  };
+}
+
 function permissionSummary(
   permission: PendingPermission,
   toolUse: ContentBlock | undefined,
   toolName: string,
 ): { label: string; detail: string } {
   const n = toolName.toLowerCase();
-  const input = toolUse?.input ?? {};
+  const input = permissionInput(permission, toolUse);
   const meta = getToolMeta(n);
   const awaiting = i18n.t("dialogs.permission.awaiting");
 
@@ -267,7 +281,7 @@ function permissionExpandPeek(
   toolName: string,
 ): { path: string; preview: string } {
   const n = toolName.toLowerCase();
-  const input = toolUse?.input ?? {};
+  const input = permissionInput(permission, toolUse);
   const meta = getToolMeta(n);
 
   if (n === "delete") {
@@ -402,8 +416,12 @@ export function usePermissionGateState(): PermissionGateState {
 
   const smartCtx = useMemo(() => {
     if (!permission) return null;
+    const input = {
+      ...(permission.args ?? {}),
+      ...(toolUse?.input && typeof toolUse.input === "object" ? toolUse.input : {}),
+    };
     const base = buildToolSmartPermissionContext(
-      toolUse ?? { type: "tool_use", input: {} },
+      { type: "tool_use", input, title: toolUse?.title },
       projectRoot,
     );
     return {

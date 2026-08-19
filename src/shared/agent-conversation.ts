@@ -5,6 +5,8 @@
  * persistable projection the UI and hydrator share.
  */
 
+import type { ContextUsageBreakdown } from "./agent-context-usage";
+
 export type ConversationId = string;
 export type ConversationBackend = "pi" | "opencode" | "in-process";
 
@@ -58,6 +60,9 @@ export interface ConversationUsage {
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
+  windowSize?: number;
+  costUsd?: number;
+  breakdown?: ContextUsageBreakdown;
 }
 
 export interface ConversationMessage {
@@ -114,6 +119,12 @@ export interface Conversation {
   /** Live child-agent activity keyed by the parent `task` toolCallId. */
   subagentRuns: Record<string, ConversationSubagentRun>;
   appliedEventIds: string[];
+  /** After Pi compact: turns with index < throughTurnIndex fold into a summary. */
+  compacted?: {
+    throughTurnIndex: number;
+    summary?: string;
+    at?: number;
+  };
 }
 
 /**

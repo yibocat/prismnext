@@ -61,6 +61,22 @@ describe("permission gate (smart policy)", () => {
     })).toBe(false);
   });
 
+  it("prompts for in-project mkdir so the composer gate can show Allow/Deny", () => {
+    expect(shouldShowPermissionGate(undefined, "bash", {
+      projectRoot: ROOT,
+      bashCommand: "mkdir -p notes",
+      bashCwd: ROOT,
+    })).toBe(true);
+  });
+
+  it("hides the composer gate when bash has no command (empty command is allow)", () => {
+    expect(shouldShowPermissionGate(undefined, "bash", {
+      projectRoot: ROOT,
+      bashCommand: null,
+      bashCwd: ROOT,
+    })).toBe(false);
+  });
+
   it("readonly still denies edit and bash", () => {
     expect(resolvePermissionAction("readonly", "edit")).toBe("deny");
     expect(resolvePermissionAction("readonly", "bash")).toBe("deny");

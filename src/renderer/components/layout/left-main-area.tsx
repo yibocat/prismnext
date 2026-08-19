@@ -15,6 +15,7 @@ import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
   prefetchPiModelsCatalog,
   resolveSelectedModelContextTokens,
+  resolveSelectedModelContextTokensIfKnown,
   subscribePiModelsCatalog,
 } from "@/lib/providers";
 import { GitBranchIcon } from "lucide-react";
@@ -46,7 +47,6 @@ import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
-import { SUBAGENT_PANEL_EXIT_MS } from "@/components/modules/chat/subagent-run-panel";
 import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
@@ -84,28 +84,11 @@ export function LeftMainArea() {
     return Boolean(conv && (conv.turns.length > 0 || conv.live));
   });
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const openSubAgentPanelToolUseId = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
-  );
-  /** Smooth scrim enter/exit — keep mounted through opacity transition. */
-  const [subAgentScrimMounted, setSubAgentScrimMounted] = useState(false);
-  const [subAgentScrimOn, setSubAgentScrimOn] = useState(false);
-  useEffect(() => {
-    if (openSubAgentPanelToolUseId) {
-      setSubAgentScrimMounted(true);
-      const raf = requestAnimationFrame(() => {
-        requestAnimationFrame(() => setSubAgentScrimOn(true));
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-    setSubAgentScrimOn(false);
-    const t = window.setTimeout(() => setSubAgentScrimMounted(false), SUBAGENT_PANEL_EXIT_MS);
-    return () => window.clearTimeout(t);
-  }, [openSubAgentPanelToolUseId]);
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextWindowSize = useChatStore((s) => s.contextWindowSize);
   const contextUsageSource = useChatStore((s) => s.contextUsageSource);
   const contextCostUsd = useChatStore((s) => s.contextCostUsd);
+  const contextBreakdown = useChatStore((s) => s.contextBreakdown);
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
@@ -148,14 +131,22 @@ export function LeftMainArea() {
   }, []);
   const contextTotal = useMemo(() => {
     void catalogTick;
-    if (typeof contextWindowSize === "number" && contextWindowSize > 0) {
-      return contextWindowSize;
-    }
     const custom = aiCustomModelsData
       ? Object.fromEntries(
           Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
         )
       : undefined;
+    const selected = resolveSelectedModelContextTokensIfKnown(
+      aiProvider,
+      aiModel ?? undefined,
+      aiEnabledModels,
+      custom,
+      aiCustomProviders,
+    );
+    if (typeof selected === "number" && selected > 0) return selected;
+    if (typeof contextWindowSize === "number" && contextWindowSize > 0) {
+      return contextWindowSize;
+    }
     return resolveSelectedModelContextTokens(
       aiProvider,
       aiModel ?? undefined,
@@ -346,29 +337,6 @@ export function LeftMainArea() {
               </div>
             )}
 
-            {/*
-              Full-bleed focus scrim over the chat column (covers sticky user
-              bubbles). Composer + Task panel sit above it — same layering as
-              Cursor: dim the transcript, keep the bottom shell crisp.
-              AiBar path never mounts this (editorMaximized).
-            */}
-            {subAgentScrimMounted ? (
-              <div
-                aria-hidden
-                className={cn(
-                  // Theme-aware scrim: light wash in light mode, soft dim in dark
-                  // (not a heavy always-black slab).
-                  "absolute inset-0 z-40 bg-background/55 backdrop-blur-[0.25px]",
-                  "transition-opacity ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  subAgentScrimOn
-                    ? "pointer-events-auto opacity-100"
-                    : "pointer-events-none opacity-0",
-                )}
-                style={{ transitionDuration: `${SUBAGENT_PANEL_EXIT_MS}ms` }}
-              />
-            ) : null}
-
-            {/* Above scrim: Task panel + composer + status chrome */}
             <div className="relative z-50 shrink-0">
               <div data-chat-width className="w-full">
                 {!editorMaximized && <ChatComposer />}
@@ -400,6 +368,7 @@ export function LeftMainArea() {
                     total={contextTotal}
                     source={contextUsageSource}
                     costUsd={contextCostUsd}
+                    breakdown={contextBreakdown}
                     promptStale={promptStale}
                     isStreaming={isStreaming}
                   />

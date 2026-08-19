@@ -325,7 +325,7 @@ export const literatureStageTool: NativeToolDefinition = {
       : "agent";
 
     const { stageLiteratureCitation } = await import("../../services/literature-bridge");
-    return stageLiteratureCitation(ctx.projectRoot, ctx.runtimeSessionId, {
+    return stageLiteratureCitation(ctx.projectRoot, ctx.tabId || ctx.runtimeSessionId, {
       doi: doi || undefined,
       arxivId: arxivId || undefined,
       sourceUrl: str(args.sourceUrl) || undefined,

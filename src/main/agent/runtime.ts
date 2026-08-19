@@ -34,6 +34,8 @@ export interface AgentRuntime {
     leafId: string,
   ): Promise<{ ok: boolean; error?: string }>;
   subscribe(listener: AgentEventListener): () => void;
+  /** Re-arm the silent-turn watchdog (e.g. while a child subagent is still emitting). */
+  touchTurnWatchdog?(runtimeSessionId: RuntimeSessionId): void;
 }
 
 export function newRuntimeSessionId(): RuntimeSessionId {

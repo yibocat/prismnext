@@ -6,6 +6,7 @@
  */
 
 import type { PermissionMode, SessionAgent } from "./session-agent";
+import type { ContextUsageBreakdown } from "./agent-context-usage";
 
 export type RuntimeSessionId = string;
 export type AgentTurnId = string;
@@ -79,6 +80,21 @@ export interface ToolStartedEvent extends AgentEventBase {
   toolCallId: AgentToolCallId;
   toolName: string;
   args: Record<string, unknown>;
+  /** True only while tool arguments are still empty. The card appears immediately. */
+  preparing?: boolean;
+}
+
+/** True once any streamed tool argument has real content. */
+export function toolArgsHaveContent(args: Record<string, unknown> | undefined): boolean {
+  if (!args) return false;
+  return Object.values(args).some((value) => {
+    if (value == null) return false;
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "number" || typeof value === "boolean") return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return false;
+  });
 }
 
 export interface ToolProgressEvent extends AgentEventBase {
@@ -121,12 +137,17 @@ export interface PlanSuggestedEvent extends AgentEventBase {
 
 export interface UsageUpdatedEvent extends AgentEventBase {
   type: "usage_updated";
+  /** Current context-window occupancy (not billed-input for this call). */
   inputTokens?: number;
   outputTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
-  /** Session spend in USD from Pi usage cost (cumulative across the session). */
+  /** Session spend in USD from Pi usage totals (cumulative across the session). */
   costUsd?: number;
+  windowSize?: number;
+  breakdown?: ContextUsageBreakdown;
+  /** After compact: drop occupancy until the next model reply. */
+  occupancyReset?: boolean;
 }
 
 export interface TurnFinishedEvent extends AgentEventBase {
@@ -191,11 +212,17 @@ export interface TurnInput {
   text: string;
   /** Inline images for vision-capable models. */
   images?: AgentTurnImage[];
+  /** Persistable user attachments (paths), independent of vision bytes. */
+  attachments?: Array<{ name: string; kind: "image" | "file"; path: string }>;
   systemPrompt?: string;
   permissionMode: PermissionMode;
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
   abortSignal?: AbortSignal;
+  /** Apply this model on the live Pi session before prompting, if it differs. */
+  provider?: string;
+  modelId?: string;
+  apiKey?: string;
 }
 
 export function isAgentEventType(value: string): value is AgentEventType {

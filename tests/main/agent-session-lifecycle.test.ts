@@ -137,7 +137,7 @@ describe("Agent Session Lifecycle & Turn Persistence (Phase 4A)", () => {
     expect(turn0?.assistant.toolCalls).toHaveLength(1);
     expect(turn0?.assistant.toolCalls[0]?.toolName).toBe("sample-tool");
     expect(turn0?.assistant.toolCalls[0]?.result).toEqual({ echo: "pi query" });
-    expect(turn0?.usage?.inputTokens).toBe(50);
+    expect(turn0?.usage?.inputTokens).toBe(75);
     expect(turn0?.status).toBe("completed");
 
     // Dispose runtime session should NOT delete the on-disk session

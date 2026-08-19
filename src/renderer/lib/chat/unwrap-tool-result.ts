@@ -36,3 +36,33 @@ export function unwrapToolResultPayload(content: unknown): Record<string, unknow
   }
   return outer;
 }
+
+function partText(part: unknown): string {
+  if (typeof part === "string") return part;
+  if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+    return (part as { text: string }).text;
+  }
+  return "";
+}
+
+/**
+ * Plain text from a tool_result payload.
+ * Pi primitives return `{ content: [{ type: "text", text }] }`, not a string.
+ */
+export function toolResultPlainText(content: unknown): string {
+  if (content == null) return "";
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map(partText).filter(Boolean).join("\n");
+  }
+  if (typeof content === "object") {
+    const rec = content as Record<string, unknown>;
+    if ("content" in rec) {
+      const inner = toolResultPlainText(rec.content);
+      if (inner) return inner;
+    }
+    if (typeof rec.text === "string" && rec.text) return rec.text;
+    if (typeof rec.output === "string" && rec.output) return rec.output;
+  }
+  return "";
+}

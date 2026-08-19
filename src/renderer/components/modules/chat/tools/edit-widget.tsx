@@ -61,7 +61,9 @@ export const EditWidget = memo(function EditWidget({
               : showPermissionGate
                 ? "Confirm above"
                 : isLoading
-                  ? (isWrite ? "Writing…" : "Editing…")
+                  ? toolUse.status === "preparing"
+                    ? (isWrite ? "Preparing write…" : "Preparing edit…")
+                    : (isWrite ? "Writing…" : "Editing…")
                   : "Failed"}
           </span>
         ) : toolResult && !isError ? (

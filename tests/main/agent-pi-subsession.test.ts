@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -292,9 +292,11 @@ describe("PiSubsessionRuntime & Dynamic Task Tool (Phase 5B)", () => {
         permissionMode: "auto",
       },
     );
+    expect(taskTool.description).toContain("citation-auditor");
+    expect(taskTool.description).toContain("do not search");
     expect(unknownResult).toEqual({
       ok: false,
-      error: "unknown_expert:nonexistent",
+      error: "unknown_expert:nonexistent. Available: citation-auditor",
     });
 
     // 3. Failure on unavailable expert
@@ -393,5 +395,179 @@ describe("PiSubsessionRuntime & Dynamic Task Tool (Phase 5B)", () => {
     const result = await taskPromise;
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/cancelled|aborted/i);
+  });
+
+  it("reports a child timeout as subagent_timeout, not cancelled", async () => {
+    vi.useFakeTimers();
+    try {
+      const subsessionRuntime = new PiSubsessionRuntime({
+        allTools: [toolA],
+        gate,
+        createRunner: async () => ({
+          prompt: () => new Promise(() => {}),
+          abort: async () => {},
+          dispose: () => {},
+        }),
+      });
+
+      const taskPromise = subsessionRuntime.runSubagentTask({
+        parentSessionId: "parent-timeout",
+        parentTabId: "tab-1",
+        parentTurnId: "turn-1",
+        parentToolCallId: "task-call-timeout",
+        projectRoot: tempDir,
+        boundCheckoutPath: tempDir,
+        permissionMode: "auto",
+        expert: sampleExpert,
+        prompt: "Think forever",
+        timeoutMs: 1_000,
+      });
+
+      await vi.advanceTimersByTimeAsync(1_050);
+      const result = await taskPromise;
+      expect(result.ok).toBe(false);
+      expect(result.error).toMatch(/^subagent_timeout:/);
+      expect(result.error).not.toBe("cancelled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("prewarms the child session once and reuses it when Task executes", async () => {
+    let createCount = 0;
+    let promptCount = 0;
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+      roster: [sampleExpert],
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      createRunner: async (input) => {
+        createCount += 1;
+        return {
+          prompt: async () => {
+            promptCount += 1;
+            input.emitEvent({
+              type: "text_delta",
+              runtimeSessionId: input.runtimeSessionId,
+              tabId: input.tabId,
+              turnId: input.turnId,
+              text: "prewarmed",
+            });
+          },
+          abort: async () => {},
+          dispose: () => {},
+        };
+      },
+      onEvent: (ev) => emittedEvents.push(ev),
+    });
+
+    subsessionRuntime.prewarmFromParentTool({
+      parentSessionId: "parent-pre",
+      parentTabId: "tab-1",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-pre-1",
+      expertId: "citation-auditor",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(createCount).toBe(1);
+
+    const result = await subsessionRuntime.runSubagentTask({
+      parentSessionId: "parent-pre",
+      parentTabId: "tab-1",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-pre-1",
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      permissionMode: "auto",
+      expert: sampleExpert,
+      prompt: "Go",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.text).toBe("prewarmed");
+    expect(createCount).toBe(1);
+    expect(promptCount).toBe(1);
+  });
+
+  it("stop during prepare cancels a prewarmed child and blocks later execute", async () => {
+    let aborted = false;
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+      roster: [sampleExpert],
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      createRunner: async () => ({
+        prompt: async () => {},
+        abort: async () => {
+          aborted = true;
+        },
+        dispose: () => {},
+      }),
+    });
+
+    subsessionRuntime.prewarmFromParentTool({
+      parentSessionId: "parent-pre-cancel",
+      parentTabId: "tab-1",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-pre-cancel",
+      expertId: "citation-auditor",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(subsessionRuntime.cancelByParentToolCallId("task-pre-cancel")).toBe(true);
+    await Promise.resolve();
+    expect(aborted).toBe(true);
+
+    const result = await subsessionRuntime.runSubagentTask({
+      parentSessionId: "parent-pre-cancel",
+      parentTabId: "tab-1",
+      parentTurnId: "turn-1",
+      parentToolCallId: "task-pre-cancel",
+      projectRoot: tempDir,
+      boundCheckoutPath: tempDir,
+      permissionMode: "auto",
+      expert: sampleExpert,
+      prompt: "Go",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("cancelled");
+  });
+
+  it("emits tool_finished as failed when Task execute returns ok: false", async () => {
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+    });
+    const taskTool = createTaskDelegationTool({
+      subsessionRuntime,
+      roster: [sampleExpert],
+    });
+    parentToolHost.register(taskTool);
+
+    const result = await parentToolHost.execute(
+      "task",
+      { expertId: "general", prompt: "check notes" },
+      {
+        runtimeSessionId: "ses-1",
+        tabId: "tab-1",
+        turnId: "t-1",
+        toolCallId: "call-general",
+        projectRoot: tempDir,
+        permissionMode: "auto",
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/unknown_expert:general/);
+    const finished = emittedEvents.find((event) => (
+      event.type === "tool_finished" && event.toolCallId === "call-general"
+    ));
+    expect(finished).toMatchObject({
+      type: "tool_finished",
+      toolName: "task",
+      ok: false,
+      error: expect.stringMatching(/unknown_expert:general/),
+    });
   });
 });

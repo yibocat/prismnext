@@ -122,11 +122,18 @@ export interface ResolvedLatexRoot {
 /**
  * Resolve the LaTeX main file on disk (main process — no renderer store).
  */
+function buildDirForDocument(relFile: string, content: string): string {
+  if (isStandaloneTexDocument(content)) {
+    const dir = normalizeRel(path.dirname(relFile));
+    return dir === "." ? "." : dir;
+  }
+  return ".prismnext/compile";
+}
+
 export function resolveLatexRoot(
   projectRoot: string,
   mainFileHint?: string | null,
 ): ResolvedLatexRoot | null {
-  const buildDir = ".prismnext/compile";
   let resolution: LatexRootResolution = "workspace-config";
   let startFile: string | null = null;
 
@@ -187,7 +194,7 @@ export function resolveLatexRoot(
           absolutePath: path.join(projectRoot, current),
           engine,
           bibTool,
-          buildDir,
+          buildDir: buildDirForDocument(current, content),
           manuscriptFolder: mainDir === "." ? null : mainDir,
           resolution,
         };
@@ -209,7 +216,7 @@ export function resolveLatexRoot(
     absolutePath: path.join(projectRoot, current),
     engine: detectTexEngine(content) || "xelatex",
     bibTool: detectBibTool(content),
-    buildDir,
+    buildDir: buildDirForDocument(current, content),
     manuscriptFolder: mainDir === "." ? null : mainDir,
     resolution,
   };

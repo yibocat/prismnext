@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  acknowledgeQuestionAnswer,
+  appendAssistantBlocksToLastTurn,
   applyConversationEvent,
   beginConversationTurn,
   emptyConversation,
@@ -52,7 +54,7 @@ describe("applyConversationEvent", () => {
     const live = blocksOf(conv);
     expect(live?.user.blocks).toEqual([{ type: "text", text: "review this paper" }]);
     expect(live?.assistant.blocks).toEqual([
-      { type: "thinking", thinking: "hmm..." },
+      { type: "thinking", thinking: "hmm...", timeStart: expect.any(Number) },
       { type: "text", text: "Hello world" },
     ]);
     expect(live?.status).toBe("streaming");
@@ -192,6 +194,149 @@ describe("applyConversationEvent", () => {
     expect(conv.live?.assistant.blocks.some((block) => block.type === "tool_use")).toBe(false);
   });
 
+  it("acknowledgeQuestionAnswer only attaches the answer to the matching tool id", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "ask me",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-qs",
+      toolCallId: "call-q",
+      toolName: "question",
+      args: { question: "Which paper?", options: ["A", "B"] },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-q",
+      requestId: "call-q",
+      prompt: "Which paper?",
+      options: ["A", "B"],
+    }));
+
+    conv = acknowledgeQuestionAnswer(conv, "call-q", "A");
+
+    expect(conv.pendingQuestion).toBeNull();
+    const result = conv.live?.assistant.blocks.find(
+      (block) => block.type === "tool_result" && block.tool_use_id === "call-q",
+    );
+    expect(result?.content).toBe("A");
+  });
+
+  it("acknowledgeQuestionAnswer does not stamp the answer onto a different question tool", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "ask me",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-qs",
+      toolCallId: "call-q",
+      toolName: "question",
+      args: { question: "Which paper?", options: ["A", "B"] },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-q",
+      requestId: "q-mismatch",
+      prompt: "A different question?",
+      options: ["A", "B"],
+    }));
+
+    conv = acknowledgeQuestionAnswer(conv, "q-mismatch", "A");
+
+    expect(conv.pendingQuestion).toBeNull();
+    const result = conv.live?.assistant.blocks.find(
+      (block) => block.type === "tool_result" && block.tool_use_id === "call-q",
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it("question tool_finished clears a matching hang", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "ask me",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-qs",
+      toolCallId: "call-q",
+      toolName: "question",
+      args: { question: "Which paper?" },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-q",
+      requestId: "call-q",
+      prompt: "Which paper?",
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_finished",
+      eventId: "e-qf",
+      toolCallId: "call-q",
+      toolName: "question",
+      ok: true,
+      result: "A",
+    }));
+    expect(conv.pendingQuestion).toBeNull();
+  });
+
+  it("subagent question_requested does not take over the parent hang", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "delegate",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-parent-q",
+      requestId: "parent-q",
+      prompt: "Parent question?",
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-child-q",
+      requestId: "child-q",
+      prompt: "Child question?",
+      subagent: {
+        parentToolCallId: "task-1",
+        expertFqid: "expert.reviewer",
+        expertName: "Reviewer",
+      },
+    }));
+    expect(conv.pendingQuestion).toEqual({
+      requestId: "parent-q",
+      prompt: "Parent question?",
+    });
+  });
+
+  it("acknowledgeQuestionAnswer with only a hang request just clears chrome", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "ask me",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "question_requested",
+      eventId: "e-q",
+      requestId: "q-hang",
+      prompt: "Which paper?",
+    }));
+
+    conv = acknowledgeQuestionAnswer(conv, "q-hang", "A");
+
+    expect(conv.pendingQuestion).toBeNull();
+    expect(conv.live?.assistant.blocks).toEqual([]);
+  });
+
   it("stores usage_updated on the conversation, not as a turn block", () => {
     let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
       turnId: "turn-1",
@@ -294,6 +439,120 @@ describe("applyConversationEvent", () => {
     expect(conv.subagentRuns["task-1"]?.status).toBe("done");
   });
 
+  it("marks a task run as error even if the child already reported turn_finished", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "delegate",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-task-start",
+      toolCallId: "task-1",
+      toolName: "task",
+      args: { expertId: "literature-synthesizer", prompt: "synthesize" },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "turn_finished",
+      eventId: "e-child-end",
+      subagent: {
+        parentToolCallId: "task-1",
+        expertFqid: "prismnext.core:literature-synthesizer",
+        expertName: "Literature Synthesizer",
+      },
+    }));
+    expect(conv.subagentRuns["task-1"]?.status).toBe("done");
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_finished",
+      eventId: "e-task-end",
+      toolCallId: "task-1",
+      toolName: "task",
+      ok: false,
+      error: "subagent_timeout:Literature Synthesizer after 600000ms",
+    }));
+    expect(conv.subagentRuns["task-1"]).toMatchObject({
+      status: "error",
+      error: "subagent_timeout:Literature Synthesizer after 600000ms",
+    });
+  });
+
+  it("keeps attaching child activity after the parent turn has settled", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "delegate",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-task-start",
+      toolCallId: "task-1",
+      toolName: "task",
+      args: { expertId: "literature-synthesizer", prompt: "synthesize" },
+    }));
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "turn_finished", eventId: "e-parent-end" }));
+    expect(conv.live).toBeNull();
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "text_delta",
+      eventId: "e-child-late",
+      text: "方向仍开放",
+      subagent: {
+        parentToolCallId: "task-1",
+        expertFqid: "prismnext.core:literature-synthesizer",
+        expertName: "Literature Synthesizer",
+      },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "turn_finished",
+      eventId: "e-child-end",
+      subagent: {
+        parentToolCallId: "task-1",
+        expertFqid: "prismnext.core:literature-synthesizer",
+        expertName: "Literature Synthesizer",
+      },
+    }));
+
+    expect(conv.live).toBeNull();
+    expect(conv.subagentRuns["task-1"]).toMatchObject({
+      status: "done",
+      expertName: "Literature Synthesizer",
+      blocks: [{ type: "text", text: "方向仍开放" }],
+    });
+  });
+
+  it("mounts Task result text when the child stream never arrived", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "delegate",
+    });
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-task-start",
+      toolCallId: "task-1",
+      toolName: "task",
+      args: { expertId: "literature-synthesizer", prompt: "synthesize" },
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_finished",
+      eventId: "e-task-end",
+      toolCallId: "task-1",
+      toolName: "task",
+      ok: true,
+      result: { ok: true, result: "三个方向的判断如下…" },
+    }));
+    expect(conv.subagentRuns["task-1"]).toMatchObject({
+      status: "done",
+      blocks: [{ type: "text", text: "三个方向的判断如下…" }],
+    });
+  });
+
   it("replays the same eventId without duplicating tools or finishing the turn twice", () => {
     const start = ev({
       ...ids,
@@ -318,5 +577,104 @@ describe("applyConversationEvent", () => {
     expect(conv.turns).toHaveLength(1);
     expect(conv.turns[0].status).toBe("completed");
     expect(conv.live).toBeNull();
+  });
+
+  it("ignores late incremental deltas after a turn settles instead of creating a ghost live turn", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "hi",
+    });
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "text_delta", eventId: "e-1", text: "reply" }));
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "turn_finished", eventId: "e-done" }));
+    expect(conv.live).toBeNull();
+    expect(conv.turns).toHaveLength(1);
+
+    // Late deltas for the settled turn must NOT rebuild a live turn.
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "text_delta", eventId: "e-late", text: "stale" }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-late-tool",
+      toolCallId: "c-stale",
+      toolName: "read",
+      args: {},
+    }));
+    expect(conv.live).toBeNull();
+    expect(conv.turns).toHaveLength(1);
+    expect(conv.turns[0].assistant.blocks).toEqual([{ type: "text", text: "reply" }]);
+  });
+
+  it("ignores stale-turn events while a newer turn is streaming", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "first",
+    });
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "turn_finished", eventId: "e-done-1" }));
+
+    conv = beginConversationTurn(conv, { turnId: "turn-2", userText: "second" });
+    // A late delta from turn-1 must not overwrite turn-2's live state.
+    conv = applyConversationEvent(conv, ev({ ...ids, turnId: "turn-1", type: "text_delta", eventId: "e-stale", text: "stale" }));
+    expect(conv.live?.turnId).toBe("turn-2");
+    expect(conv.live?.assistant.blocks).toEqual([]);
+  });
+
+  it("seals thinking/tool timings when the turn settles so folds show real durations", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "do it",
+    });
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "thinking_delta", eventId: "e-th", text: "think" }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_started",
+      eventId: "e-tool",
+      toolCallId: "c1",
+      toolName: "read",
+      args: {},
+    }));
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      type: "tool_finished",
+      eventId: "e-tool-end",
+      toolCallId: "c1",
+      toolName: "read",
+      ok: true,
+      result: {},
+    }));
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "turn_finished", eventId: "e-done" }));
+
+    const turn = conv.turns[0];
+    const thinking = turn.assistant.blocks.find((block) => block.type === "thinking");
+    const tool = turn.assistant.blocks.find((block) => block.type === "tool_use");
+    expect(typeof thinking?.timeStart).toBe("number");
+    expect(typeof thinking?.timeEnd).toBe("number");
+    expect(typeof thinking?.duration).toBe("number");
+    expect(typeof tool?.timeStart).toBe("number");
+    expect(typeof tool?.timeEnd).toBe("number");
+    expect(typeof tool?.duration).toBe("number");
+  });
+
+  it("appends host chrome blocks to the last turn without inventing ChatStreamMessage rows", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "draft a plan",
+    });
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "text_delta", eventId: "e-1", text: "done" }));
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "turn_finished", eventId: "e-done" }));
+
+    conv = appendAssistantBlocksToLastTurn(conv, [{
+      type: "tool_use",
+      id: "todo-approve-1",
+      name: "todowrite",
+      input: { todos: [{ content: "Write intro", status: "pending" }] },
+    }]);
+
+    expect(conv.live).toBeNull();
+    expect(conv.turns).toHaveLength(1);
+    expect(conv.turns[0].assistant.blocks.map((block) => block.type)).toEqual(["text", "tool_use"]);
+    expect(conv.turns[0].assistant.blocks.at(-1)).toMatchObject({
+      id: "todo-approve-1",
+      name: "todowrite",
+    });
   });
 });

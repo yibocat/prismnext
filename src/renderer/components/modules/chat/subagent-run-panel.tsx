@@ -368,8 +368,7 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
   const closeAnimated = useCallback(() => {
     if (closingRef.current || !displayedId) return;
     setClosing(true);
-    // Clear store id immediately so the panel-chat message scrim can fade
-    // in sync with this exit; keep `displayedId` until the anim finishes.
+    // Clear store id immediately; keep `displayedId` until the exit anim finishes.
     closeSubAgentPanel();
     blurKeyboardFocus();
     window.setTimeout(() => {
@@ -385,6 +384,9 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
       const target = e.target as HTMLElement;
       if (hostRef.current?.contains(target)) return;
       if (target.closest("[data-subagent-run-panel]")) return;
+      if (target.closest("[data-right-area]")) return;
+      if (target.closest("[data-ai-bar]")) return;
+      if (target.closest("[data-ai-bar-capsule]")) return;
       if (
         target.closest("[data-radix-menu-content]")
         || target.closest("[data-radix-popper-content-wrapper]")
@@ -423,8 +425,6 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
       ref={hostRef}
       className={cn(
         "mb-2 w-full min-w-0 pointer-events-auto",
-        // Prefer opacity/transform transitions over animate-in↔out class swaps
-        // (swapping classes mid-flight was a source of flicker).
         "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
         closing
           ? "opacity-0 translate-y-2"

@@ -14,8 +14,6 @@ import type {
 	ExecutionRerunResult,
 	TerminalExecutionEvent,
 } from "../shared/execution";
-import type { AgentEvent } from "../shared/agent-runtime";
-
 // Expose filesystem and dialog APIs to renderer
 contextBridge.exposeInMainWorld("electronAPI", {
 	// Platform info
@@ -843,18 +841,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	bibliographyResolve: (opts: { doi?: string; arxivId?: string }) =>
 		ipcRenderer.invoke("bibliography:resolve", opts),
 
-	// OpenCode agent operations
-	chatDispose: (opts?: { keepProjectPath?: string }) =>
-		ipcRenderer.invoke("chat:dispose", opts),
-	chatPrewarm: (projectPath: string) => ipcRenderer.invoke("chat:prewarm", { projectPath }),
-	chatEnsureAgent: (projectPath?: string) =>
-		ipcRenderer.invoke("chat:ensureAgent", { projectPath }),
-	onAgentStatusChanged: (callback: (status: unknown) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, status: unknown) =>
-			callback(status);
-		ipcRenderer.on("chat:agentStatus", handler);
-		return () => ipcRenderer.removeListener("chat:agentStatus", handler);
-	},
 	mcpEnsure: (projectPath: string) =>
 		ipcRenderer.invoke("mcp:ensure", { projectPath }) as Promise<{
 			ok: boolean;
@@ -1055,164 +1041,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("agent:event", handler);
 		return () => ipcRenderer.removeListener("agent:event", handler);
 	},
-	chatSend: (args: {
-		projectPath: string;
-		worktreePath?: string;
-		prompt: string;
-		tabId?: string;
-		sessionId?: string | null;
-		apiKey?: string;
-		baseUrl?: string;
-		model?: string;
-		provider?: string;
-		thoughtLevel?: string;
-		mcpServerAllowlist?: string[];
-		skillIds?: string[];
-		userDisplayContent?: Record<string, unknown>[];
-		intensivePaperIds?: string[];
-		hasPaperSnippets?: boolean;
-		orchestratorId?: string | null;
-		sessionTeamId?: string | null;
-		sessionAgent?: "build" | "plan";
-		selectedExpertIds?: string[];
-		promptImages?: Array<{ mimeType: string; data: string; name: string; uri?: string }>;
-		promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
-	}) =>
-		ipcRenderer.invoke("chat:send", args),
-	chatDescribeImages: (args: {
-		providerId: string;
-		modelId: string;
-		images: Array<{ name: string; mimeType: string; data: string; uri?: string }>;
-	}) =>
-		ipcRenderer.invoke("chat:describeImages", args),
-	chatCancel: (
-		sessionId: string,
-		opts?: { childrenOnly?: boolean; excludeSessionIds?: string[] },
-	) =>
-		ipcRenderer.invoke("chat:cancel", {
-			sessionId,
-			childrenOnly: opts?.childrenOnly,
-			excludeSessionIds: opts?.excludeSessionIds,
-		}),
-	chatStopSubAgent: (args: {
-		parentSessionId: string;
-		taskToolUseId: string;
-		subSessionId?: string;
-		message: string;
-		excludeSessionIds?: string[];
-	}) => ipcRenderer.invoke("chat:stopSubAgent", args),
-	chatGetSubAgentActivity: (args: {
-		parentSessionId: string;
-		taskToolUseId: string;
-		subSessionId?: string;
-	}) => ipcRenderer.invoke("chat:getSubAgentActivity", args),
-	chatRegisterTab: (args: { tabId: string; sessionId: string; projectPath?: string }) =>
-		ipcRenderer.invoke("chat:registerTab", args),
-	chatSyncIntensiveReading: (args: {
-		sessionId: string;
-		projectRoot: string;
-		paperIds?: string[];
-	}) => ipcRenderer.invoke("chat:syncIntensiveReading", args),
-	chatSetSessionAgent: (args: { sessionId: string; agent: "build" | "plan" }) =>
-		ipcRenderer.invoke("chat:setSessionAgent", args),
-	chatSetPlanSuggestDismissed: (args: { sessionId: string; dismissed: boolean }) =>
-		ipcRenderer.invoke("chat:setPlanSuggestDismissed", args),
-	chatResolvePlanSuggest: (args: {
-		sessionId: string;
-		decision: "accepted" | "dismissed" | "timed_out";
-	}) => ipcRenderer.invoke("chat:resolvePlanSuggest", args),
-	chatCompact: (sessionId: string, projectPath: string) =>
-		ipcRenderer.invoke("chat:compact", { sessionId, projectPath }),
-	chatAnswer: (sessionId: string, answer: string) =>
-		ipcRenderer.invoke("chat:answer", { sessionId, answer }),
-		chatAnswerQuestion: (questionId: string, answer: string) =>
-			ipcRenderer.invoke("chat:answerQuestion", { questionId, answer }),
-		chatReadPendingQuestion: (sessionId: string) =>
-			ipcRenderer.invoke("chat:readPendingQuestion", { sessionId }),
-		chatAnswerPermission: (
-			permissionId: string,
-			approved: boolean,
-			toolCallId?: string,
-			opts?: { always?: boolean },
-		) =>
-			ipcRenderer.invoke("chat:answerPermission", {
-				permissionId,
-				approved,
-				toolCallId,
-				always: opts?.always,
-			}),
-	chatStatus: (projectPath?: string) =>
-		ipcRenderer.invoke("chat:status", { projectPath }),
-	sessionList: (projectPath?: string) => ipcRenderer.invoke("session:list", { projectPath }),
-	sessionLoad: (sessionId: string, projectPath?: string, cwd?: string) =>
-		ipcRenderer.invoke("session:load", { sessionId, projectPath, cwd }),
-	sessionLoadWindow: (sessionId: string, projectPath: string | undefined, cwd: string | undefined, offset: number, limit: number) =>
-		ipcRenderer.invoke("session:loadWindow", { sessionId, projectPath, cwd, offset, limit }),
-	sessionGetDirectory: (sessionId: string) =>
-		ipcRenderer.invoke("session:getDirectory", { sessionId }),
-	sessionRename: (args: { tabId: string; title: string; sessionId: string }) =>
-		ipcRenderer.invoke("session:rename", args),
-	sessionReassignDirectory: (fromDirectory: string, toDirectory: string) =>
-		ipcRenderer.invoke("session:reassignDirectory", { fromDirectory, toDirectory }),
-	sessionDelete: (sessionId: string, projectPath?: string) =>
-		ipcRenderer.invoke("session:delete", { sessionId, projectPath }),
-	sessionTruncateToTurn: (args: {
-		sessionId: string;
-		projectPath: string;
-		worktreePath?: string;
-		turnIndex: number;
-	}) => ipcRenderer.invoke("session:truncateToTurn", args),
-	sessionUndoTruncate: (args: {
-		sessionId: string;
-		projectPath: string;
-		worktreePath?: string;
-	}) => ipcRenderer.invoke("session:undoTruncate", args),
-	sessionGetContext: (projectPath: string, sessionId: string) =>
-		ipcRenderer.invoke("session:getContext", { projectPath, sessionId }),
-	sessionGetUserDisplays: (projectPath: string, sessionId: string) =>
-		ipcRenderer.invoke("session:getUserDisplays", { projectPath, sessionId }),
-	sessionAppendUserDisplay: (
-		projectPath: string,
-		sessionId: string,
-		content: Record<string, unknown>[],
-	) => ipcRenderer.invoke("session:appendUserDisplay", { projectPath, sessionId, content }),
-	sessionGetPlanEvents: (projectPath: string, sessionId: string) =>
-		ipcRenderer.invoke("session:getPlanEvents", { projectPath, sessionId }),
-	sessionGetTurnMetas: (projectPath: string, sessionId: string) =>
-		ipcRenderer.invoke("session:getTurnMetas", { projectPath, sessionId }) as Promise<
-			Record<number, { completedAt?: number; modelLabel?: string; summary?: string }>
-		>,
-	sessionUpsertTurnMeta: (
-		projectPath: string,
-		sessionId: string,
-		turnIndex: number,
-		meta: { completedAt?: number; modelLabel?: string; summary?: string },
-	) => ipcRenderer.invoke("session:upsertTurnMeta", { projectPath, sessionId, turnIndex, meta }),
-	sessionUpsertPlanArtifact: (
-		projectPath: string,
-		sessionId: string,
-		event: {
-			kind: "plan-artifact";
-			path: string;
-			title?: string;
-			discarded?: boolean;
-			afterIndex: number;
-		},
-	) => ipcRenderer.invoke("session:upsertPlanArtifact", { projectPath, sessionId, event }),
-	sessionAppendPlanDecision: (
-		projectPath: string,
-		sessionId: string,
-		event: {
-			kind: "plan-decision";
-			decision: "approved" | "rejected";
-			path?: string;
-			title?: string;
-			afterIndex: number;
-		},
-	) => ipcRenderer.invoke("session:appendPlanDecision", { projectPath, sessionId, event }),
-	sessionMarkPlanArtifactDiscarded: (projectPath: string, sessionId: string) =>
-		ipcRenderer.invoke("session:markPlanArtifactDiscarded", { projectPath, sessionId }),
-
 	// Settings operations
 	settingsGet: () => ipcRenderer.invoke("settings:get"),
 	settingsSet: (patch: Record<string, unknown>) =>
@@ -1532,53 +1360,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("worktree:mergeStatus", { projectRoot, name }),
 	worktreeMoveSessions: (projectRoot: string, worktreeName: string) =>
 		ipcRenderer.invoke("worktree:moveSessions", { projectRoot, worktreeName }),
-
-	// Chat events (Main → Renderer)
-	onChatStream: (callback: (data: { tabId: string; type: string; data: any }) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: { tabId: string; type: string; data: any }) => callback(data);
-		ipcRenderer.on("chat:stream", handler);
-		return () => ipcRenderer.removeListener("chat:stream", handler);
-	},
-	onChatAgentEvent: (callback: (data: AgentEvent) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: AgentEvent) => callback(data);
-		ipcRenderer.on("chat:agent-event", handler);
-		return () => ipcRenderer.removeListener("chat:agent-event", handler);
-	},
-	onChatComplete: (callback: (data: {
-		tabId: string;
-		sessionId: string;
-		success: boolean;
-		error?: string;
-		errorCode?: string;
-		emptyTurn?: boolean;
-		tokenUsage?: any;
-		contextUsed?: number | null;
-		contextWindowSize?: number | null;
-		contextSource?: "usage_update" | "prompt_usage" | "estimate" | null;
-		promptStale?: boolean;
-		planDraftMissing?: boolean;
-	}) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
-		ipcRenderer.on("chat:complete", handler);
-		return () => ipcRenderer.removeListener("chat:complete", handler);
-	},
-	onChatPermission: (callback: (data: { tabId: string; permissionId: string; message: string; options: any; toolCallId?: string; toolName?: string; raw?: any }) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
-		ipcRenderer.on("chat:permission", handler);
-		return () => ipcRenderer.removeListener("chat:permission", handler);
-	},
-	onChatSessionCreated: (callback: (data: { tabId: string; sessionId: string }) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data);
-		ipcRenderer.on("chat:sessionCreated", handler);
-		return () => ipcRenderer.removeListener("chat:sessionCreated", handler);
-	},
-	removeChatListeners: () => {
-		ipcRenderer.removeAllListeners("chat:stream");
-		ipcRenderer.removeAllListeners("chat:agent-event");
-		ipcRenderer.removeAllListeners("chat:complete");
-		ipcRenderer.removeAllListeners("chat:permission");
-		ipcRenderer.removeAllListeners("chat:sessionCreated");
-	},
 
 	// File watcher events (Main → Renderer)
 	onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => {

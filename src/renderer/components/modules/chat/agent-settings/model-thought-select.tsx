@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
+import { occupancyExceedsWindow } from "@shared/agent-context-usage";
+import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   AppMenu,
@@ -22,6 +25,7 @@ import {
   prefetchPiModelsCatalog,
   modelSupportsVision,
   resolveProviderConfig,
+  resolveSelectedModelContextTokensIfKnown,
   type ModelConfig,
   type ProviderConfig,
 } from "@/lib/providers";
@@ -592,17 +596,37 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
   const useCapsuleTrigger = presentation === "capsule";
   const searching = searchQuery.trim().length > 0;
 
+  const warnIfOccupancyExceeds = useCallback(
+    (providerId: string, modelId: string) => {
+      const sameModel = providerId === aiProvider && modelId === currentModelId;
+      if (sameModel) return;
+      const windowSize = resolveSelectedModelContextTokensIfKnown(
+        providerId,
+        modelId,
+        enabledModels,
+        customModels,
+        customProviders,
+      );
+      if (windowSize == null) return;
+      const occupancy = useChatStore.getState().contextTokens;
+      if (!occupancyExceedsWindow(occupancy, windowSize)) return;
+      toast.warning(t("chat.context.windowExceeds"));
+    },
+    [aiProvider, currentModelId, enabledModels, customModels, customProviders, t],
+  );
+
   const handleSelectModel = useCallback(
     (providerId: string, modelId: string, levelValue?: string) => {
       const key = modelPreferenceKey(providerId, modelId);
       const activeLevel = levelValue ?? modelThoughtLevels[key];
+      warnIfOccupancyExceeds(providerId, modelId);
       updateSettings({
         aiProvider: providerId,
         aiModel: modelId,
         thoughtLevel: activeLevel,
       });
     },
-    [modelThoughtLevels, updateSettings],
+    [modelThoughtLevels, updateSettings, warnIfOccupancyExceeds],
   );
 
   const handleSelectModelWithThought = useCallback(
@@ -612,6 +636,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
       if (levelValue) next[key] = levelValue;
       else delete next[key];
 
+      warnIfOccupancyExceeds(providerId, modelId);
       updateSettings({
         aiProvider: providerId,
         aiModel: modelId,
@@ -619,7 +644,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
         thoughtLevel: levelValue,
       });
     },
-    [modelThoughtLevels, updateSettings],
+    [modelThoughtLevels, updateSettings, warnIfOccupancyExceeds],
   );
 
   const renderRow = (entry: ModelEntry) => {

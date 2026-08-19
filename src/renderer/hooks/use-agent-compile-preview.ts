@@ -6,7 +6,8 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 
 /**
  * When the agent calls `latex-compile`, main pushes PDF bytes (or errors) here
- * so Tex workspace preview stays in sync without Cmd+Enter.
+ * so an already-open TeX workspace preview stays in sync without Cmd+Enter.
+ * Does not steal RightArea — open TeX from the compile card if you want it.
  */
 export function useAgentCompilePreview(): void {
   useEffect(() => {

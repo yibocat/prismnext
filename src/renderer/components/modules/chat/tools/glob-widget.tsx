@@ -3,6 +3,7 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { FolderSearchIcon, FileIcon, FolderIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
+import { toolResultPlainText } from "@/lib/chat/unwrap-tool-result";
 
 export const GlobWidget = memo(function GlobWidget({
   toolUse,
@@ -20,10 +21,7 @@ export const GlobWidget = memo(function GlobWidget({
   const isError = toolResult?.is_error;
   const hasContent = toolResult?.content != null;
 
-  /** Parse file list from result */
-  const outputText = typeof toolResult?.content === "string"
-    ? toolResult.content
-    : "";
+  const outputText = toolResultPlainText(toolResult?.content);
   const files = outputText
     ? outputText.split("\n").filter((l: string) => l.trim()).slice(0, 100)
     : [];

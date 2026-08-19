@@ -74,3 +74,51 @@ export function buildSubagentRosterMarkdown(
 
   return lines.join("\n");
 }
+
+/** Expert the Pi `task` tool will accept this session (`expertId` = `id`). */
+export interface LiveTaskRosterExpert {
+  id: string;
+  name: string;
+  description: string;
+  fqid?: string;
+}
+
+/**
+ * Session-injected Task roster for the Pi host.
+ *
+ * Do not reuse {@link buildSubagentRosterMarkdown} here: that snapshot still
+ * lists OpenCode builtins (`general` / `explore` / `command` / `scout`) that
+ * the Pi `task` tool does not accept.
+ */
+export function buildLiveTaskRosterMarkdown(
+  experts: LiveTaskRosterExpert[],
+): string {
+  const lines: string[] = [
+    "## Available subagents (via Task)",
+    "",
+    "This list is injected for **this session** by PrismNext. It is the only authoritative roster.",
+    "",
+    "When the user asks to use a subagent, expert, or team specialist, call the **task** tool immediately with `expertId` from this list.",
+    "",
+    "**Do not** discover experts by searching the project. Do not `ls`, `find`, `grep`, or `read` `team.json`, `teams.json`, `subagents/`, or `.prismnext/agent/teams/` to decide who to call.",
+    "",
+  ];
+
+  if (experts.length === 0) {
+    lines.push(
+      "No project experts are enabled for this session. There is no `task` tool. Use your own tools, or ask the user to enable an expert in Settings → Teams.",
+    );
+    return lines.join("\n");
+  }
+
+  lines.push("### Project experts");
+  for (const expert of experts) {
+    const alias =
+      expert.fqid && expert.fqid !== expert.id
+        ? ` Also accepts \`${expert.fqid}\`.`
+        : "";
+    const description = expert.description.trim() || "Team expert.";
+    lines.push(`- \`${expert.id}\` — ${expert.name}. ${description}${alias}`);
+  }
+  return lines.join("\n");
+}

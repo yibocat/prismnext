@@ -1,6 +1,7 @@
 import {
   isBashToolName,
 } from "@/lib/terminal/ai-bridge";
+import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -116,11 +117,15 @@ export async function finalizePermissionAllow(opts: {
         isBashToolName(n) || n === "experiment-run" || /bash|shell|terminal|command/.test(n);
       if (isBash) {
         const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-        const toolUseMsg = [
+        const pending = usePermissionStore.getState().permissions.find((p) => p.id === permissionId);
+        const toolUseMsg = findConversationToolUse(tab?.conversation, toolCallId) ?? [
           ...(tab?.streamingMessage?.message?.content ?? []),
           ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
         ].find((b) => b.type === "tool_use" && b.id === toolCallId);
-        const input = (toolUseMsg?.input ?? {}) as Record<string, unknown>;
+        const input = {
+          ...(pending?.args ?? {}),
+          ...((toolUseMsg?.input ?? {}) as Record<string, unknown>),
+        };
         const command = String(input.command ?? input.cmd ?? "").trim();
         if (command) {
           const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");

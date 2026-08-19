@@ -70,6 +70,7 @@
     "placeholder": "Ask AI about your research..."
   },
   "subagent": {
+    "preparing": "Preparing…",
     "running": "Running",
     "backgroundRunning": "Background",
     "stopping": "Stopping…",
@@ -213,26 +214,28 @@
     "saveFailed": "Failed to save research plan"
   },
   "context": {
+    "title": "Context Usage",
     "window": "Context window",
     "spent": "Spent",
+    "pctUsed": "{{pct}}% used",
     "compress": "Compress context",
     "compressing": "Compressing…",
     "compressDone": "Context compacted. Usage will refresh on the next reply.",
-    "breakdownHint": "Categories are local o200k estimates; total is from OpenCode.",
-    "fromOpenCode": "Fill reported by OpenCode for this session.",
-    "fromPromptUsage": "Fill from the last turn’s prompt usage (OpenCode usage_update not seen).",
-    "waitingUsage": "Waiting for OpenCode usage after compact or the next turn.",
+    "breakdownHint": "Segment widths are of the full window, not of tokens already used. Category sizes are local js-tiktoken o200k_base estimates; occupancy and spend come from this chat’s Pi session (spend is cumulative).",
+    "fromSession": "Fill is the current model window for this chat (it grows as the conversation does). Spend is cumulative.",
+    "fromPromptUsage": "Fill from the last turn’s prompt usage (live usage update not seen yet).",
+    "waitingUsage": "Waiting for session usage after compact or the next turn.",
+    "windowExceeds": "Current occupancy exceeds this model’s context window. Compress before sending.",
     "promptStale": "Base prompt was updated — it will refresh on your next message.",
     "categories": {
-      "messages": "Messages",
-      "userInstructions": "Agent instructions",
-      "projectInstructions": "Project instructions",
-      "projectRules": "Project rules",
+      "systemPrompt": "System prompt",
+      "tools": "Tool definitions",
+      "rules": "Rules",
       "skills": "Skills",
-      "modules": "Prompt modules",
-      "mcpTools": "MCP tools",
-      "corePersona": "Core persona",
-      "agentBase": "Agent base"
+      "mcp": "MCP & dynamic tools",
+      "subagents": "Subagent definitions",
+      "summarized": "Summarized conversation",
+      "conversation": "Conversation"
     }
   },
   "intensive": {
@@ -254,6 +257,9 @@
     "loadMoreArmed": "Scroll up again to load",
     "loadMorePulling": "Keep scrolling up…",
     "loadingOlder": "Loading…",
+    "compactedBanner": "{{count}} earlier turns were compressed",
+    "compactedShow": "Show earlier",
+    "compactedHide": "Hide earlier",
     "expand": "Click to expand",
     "collapse": "Collapse",
     "editHint": "Click outside to cancel · Enter to resend",

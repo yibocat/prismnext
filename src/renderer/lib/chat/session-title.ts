@@ -1,6 +1,9 @@
 import { partsToPlainText } from "./composer-parts";
+import { conversationDisplayTurns } from "./conversation-view";
 import { isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import type { Conversation } from "@shared/agent-conversation";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+import { isPlanControlUserText } from "@shared/research-plan";
 
 export function isGenericSessionTitle(title: string): boolean {
   if (title === "") return true;
@@ -42,6 +45,17 @@ export function extractTitleFromContentBlocks(blocks: ContentBlock[]): string | 
   return null;
 }
 
+export function extractSessionTitleFromConversation(
+  conv: Conversation | null | undefined,
+): string | null {
+  if (!conv) return null;
+  for (const turn of conversationDisplayTurns(conv)) {
+    const fromBlocks = extractTitleFromContentBlocks(turn.userBlocks);
+    if (fromBlocks) return fromBlocks;
+  }
+  return null;
+}
+
 /** Extract session title from the first visible user message. */
 export function extractSessionTitle(messages: ChatStreamMessage[]): string | null {
   for (const msg of messages) {
@@ -66,25 +80,30 @@ export function extractSessionTitle(messages: ChatStreamMessage[]): string | nul
 /** Title for top bar / sidebar — prefers stored title, falls back to message content. */
 export function resolveSessionTitle(tab: {
   title: string;
-  messages: ChatStreamMessage[];
+  messages?: ChatStreamMessage[];
+  conversation?: Conversation;
 }): string | null {
   if (!isGenericSessionTitle(tab.title)) {
     return tab.title;
   }
-  const fromMessages = extractSessionTitle(tab.messages);
-  if (fromMessages) return fromMessages;
-  if (tab.messages.length === 0) return null;
+  const fromConversation = extractSessionTitleFromConversation(tab.conversation);
+  if (fromConversation) return fromConversation;
+  if (tab.messages?.length) {
+    const fromMessages = extractSessionTitle(tab.messages);
+    if (fromMessages) return fromMessages;
+  }
   return null;
 }
 
 /** Derive title when sending or appending the first user turn. */
 export function deriveSessionTitleForSend(
-  tab: { title: string; messages: ChatStreamMessage[] },
+  tab: { title: string; messages?: ChatStreamMessage[]; conversation?: Conversation },
   userPrompt: string,
   userContent?: ContentBlock[],
   userMessage?: ChatStreamMessage | null,
 ): string {
   if (!isGenericSessionTitle(tab.title)) return tab.title;
+  if (isPlanControlUserText(userPrompt)) return tab.title;
 
   if (userContent?.length) {
     const fromBlocks = extractTitleFromContentBlocks(userContent);
@@ -94,8 +113,12 @@ export function deriveSessionTitleForSend(
     const fromMsg = extractSessionTitle([userMessage]);
     if (fromMsg) return fromMsg;
   }
-  const fromTab = extractSessionTitle(tab.messages);
-  if (fromTab) return fromTab;
+  const fromConversation = extractSessionTitleFromConversation(tab.conversation);
+  if (fromConversation) return fromConversation;
+  if (tab.messages?.length) {
+    const fromTab = extractSessionTitle(tab.messages);
+    if (fromTab) return fromTab;
+  }
 
   const cleaned = cleanSessionTitleText(userPrompt);
   if (cleaned) return cleaned.slice(0, 40);

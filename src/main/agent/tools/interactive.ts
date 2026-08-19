@@ -6,6 +6,7 @@
 
 import { Type } from "@earendil-works/pi-ai";
 import { TOOL_NAMES } from "../../../shared/tool-names";
+import { buildPlanSuggestAcceptedResult } from "../../../shared/plan-suggest";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -44,7 +45,12 @@ export const questionTool: NativeToolDefinition = {
       return { ok: false, error: "question_broker_missing" };
     }
 
-    const answered = await ctx.askUser({ prompt: question, options, multiSelect });
+    const answered = await ctx.askUser({
+      prompt: question,
+      options,
+      multiSelect,
+      requestId: ctx.toolCallId,
+    });
     return {
       answered: answered.ok,
       question,
@@ -80,10 +86,23 @@ export const suggestPlanTool: NativeToolDefinition = {
       return { ok: false, error: "plan_suggest_broker_missing" };
     }
     const result = await ctx.suggestPlan({ reason });
+    if (!result.accepted) {
+      return {
+        suggested: true,
+        accepted: false,
+        reason: result.reason || reason,
+      };
+    }
+    // Accepted: hand the model the canonical draft path + write binding so this
+    // same turn can write the plan file (draftPath derives from runtimeSessionId).
+    const accepted = result.runtimeSessionId?.trim()
+      ? buildPlanSuggestAcceptedResult(result.runtimeSessionId)
+      : null;
     return {
       suggested: true,
-      accepted: result.accepted,
+      accepted: true,
       reason: result.reason || reason,
+      ...(accepted ? { planMode: true, draftPath: accepted.draftPath, instruction: accepted.instruction } : {}),
     };
   },
 };

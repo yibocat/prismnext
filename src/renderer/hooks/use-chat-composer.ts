@@ -383,67 +383,15 @@ export function useChatComposer() {
       );
       if (!cmd?.action) continue;
 
-      flushSync(() => {
-        store._appendMessage(tabId, {
-          type: "action-status",
-          action: cmd.action,
-          actionName: cmd.name,
-          status: "running",
-        });
-      });
-
-      const startTime = performance.now();
+      const toastId = `action-${cmd.action}-${Date.now()}`;
+      toast.loading(cmd.name, { id: toastId });
       try {
         const feedback = await actionRegistry.execute(cmd.action!);
-        await new Promise((r) => setTimeout(r, 300));
-
-        useChatStore.setState((s) => {
-          const tabs = s.tabs.map((t) => {
-            if (t.id !== tabId) return t;
-            const msgs = t.messages.map((m) => {
-              if (
-                m.type === "action-status" &&
-                m.action === cmd.action &&
-                m.status === "running"
-              ) {
-                return {
-                  ...m,
-                  status: "success" as const,
-                  result: feedback,
-                  duration_ms: performance.now() - startTime,
-                };
-              }
-              return m;
-            });
-            return { ...t, messages: msgs };
-          });
-          const activeTab = tabs.find((t) => t.id === s.activeTabId);
-          return { tabs, messages: activeTab?.messages ?? s.messages };
+        toast.success(typeof feedback === "string" && feedback.trim() ? feedback : cmd.name, {
+          id: toastId,
         });
       } catch (err: any) {
-        useChatStore.setState((s) => {
-          const tabs = s.tabs.map((t) => {
-            if (t.id !== tabId) return t;
-            const msgs = t.messages.map((m) => {
-              if (
-                m.type === "action-status" &&
-                m.action === cmd.action &&
-                m.status === "running"
-              ) {
-                return {
-                  ...m,
-                  status: "error" as const,
-                  result: err?.message || String(err),
-                  duration_ms: performance.now() - startTime,
-                };
-              }
-              return m;
-            });
-            return { ...t, messages: msgs };
-          });
-          const activeTab = tabs.find((t) => t.id === s.activeTabId);
-          return { tabs, messages: activeTab?.messages ?? s.messages };
-        });
+        toast.error(err?.message || String(err), { id: toastId });
       }
     }
 

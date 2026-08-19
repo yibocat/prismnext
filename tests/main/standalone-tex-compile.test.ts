@@ -107,6 +107,38 @@ describe("compileForAgent standalone routing", () => {
     });
   });
 
+  it("still compiles in place when the standalone figure is the workspace main tex", async () => {
+    writeFileSync(
+      join(root, ".prismnext", "settings.json"),
+      JSON.stringify({
+        workspaceDirs: [
+          { name: "figures", function: "manuscript", mainTex: "arch.tex" },
+        ],
+      }),
+      "utf-8",
+    );
+    const result = await compileForAgent(root, "figures/arch.tex");
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex");
+    expect(compileLatex).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      mainFile: "figures/arch.tex",
+      buildDir: "figures",
+    });
+  });
+
+  it("auto-detect of a standalone-only project compiles in place, not the article cache", async () => {
+    rmSync(join(root, "manuscript"), { recursive: true, force: true });
+    writeFileSync(
+      join(root, ".prismnext", "settings.json"),
+      JSON.stringify({ workspaceDirs: [] }),
+      "utf-8",
+    );
+    await compileForAgent(root);
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex");
+    expect(compileLatex).not.toHaveBeenCalled();
+  });
+
   it("keeps the manuscript on the shared build-dir pipeline", async () => {
     await compileForAgent(root, "manuscript/main.tex");
     expect(compileLatex).toHaveBeenCalled();

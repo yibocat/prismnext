@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { emptyConversation, type Conversation } from "../../src/shared/agent-conversation";
 import {
   collectConversationAssistantBlocks,
+  conversationCompactedCount,
   conversationDisplayTurns,
+  conversationHasCommittedTurn,
   conversationHasContent,
+  conversationVisibleTurns,
+  countConversationTurns,
+  findConversationToolUse,
 } from "@/lib/chat/conversation-view";
 import { buildToolResultMapFromBlocks } from "@/components/modules/chat/tools/tool-result-map";
 
@@ -78,6 +83,75 @@ describe("conversation-view", () => {
     expect(turns[1].assistantBlocks.some((b) => b.type === "tool_use" && b.id === "s1")).toBe(true);
   });
 
+  it("hides Approve / Deny control prompts as user bubbles", () => {
+    const conv = emptyConversation({ conversationId: "conv-plan" });
+    const hidden = conversationDisplayTurns({
+      ...conv,
+      live: {
+        turnId: "t-approve",
+        turnIndex: 0,
+        user: {
+          blocks: [{
+            type: "text",
+            text: "The user approved the research plan. Continue execution in Build mode.",
+          }],
+        },
+        assistant: { blocks: [{ type: "thinking", thinking: "ok" }] },
+        status: "streaming",
+      },
+    });
+    expect(hidden[0]?.userBlocks).toEqual([]);
+    expect(hidden[0]?.assistantBlocks).toHaveLength(1);
+  });
+
+  it("counts committed turns and ignores the live turn", () => {
+    expect(countConversationTurns(null)).toBe(0);
+    expect(countConversationTurns(emptyConversation({ conversationId: "c" }))).toBe(0);
+    const conv = convWithLiveTool();
+    expect(countConversationTurns(conv)).toBe(1);
+    expect(conversationHasCommittedTurn(conv, 0)).toBe(true);
+    expect(conversationHasCommittedTurn(conv, 1)).toBe(false);
+  });
+
+  it("finds a live bash tool_use that the old message list no longer carries", () => {
+    const conv = convWithLiveTool();
+    expect(findConversationToolUse(conv, "s1")).toMatchObject({
+      type: "tool_use",
+      id: "s1",
+      name: "ls",
+      input: { path: "manuscript" },
+    });
+    expect(findConversationToolUse(conv, "missing")).toBeUndefined();
+    expect(findConversationToolUse(null, "s1")).toBeUndefined();
+  });
+
+  it("finds a committed tool_use after the live turn is gone", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "conv-1" }),
+      turns: [{
+        turnId: "t0",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text", text: "make notes" }] },
+        assistant: {
+          blocks: [
+            {
+              type: "tool_use",
+              id: "bash-1",
+              name: "bash",
+              input: { command: "mkdir -p notes" },
+              status: "running",
+            },
+          ],
+        },
+        status: "streaming",
+      }],
+      live: null,
+    };
+    expect(findConversationToolUse(conv, "bash-1")?.input).toEqual({
+      command: "mkdir -p notes",
+    });
+  });
+
   it("builds a tool result map that includes live tool_result so cards are not empty while streaming", () => {
     const conv = convWithLiveTool();
     const map = buildToolResultMapFromBlocks(
@@ -87,5 +161,24 @@ describe("conversation-view", () => {
     expect(map.get("s1")?.content).toEqual({
       content: [{ type: "text", text: "main.tex" }],
     });
+  });
+
+  it("keeps compacted turns in the document view but hides them from the chat transcript", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c" }),
+      compacted: { throughTurnIndex: 2 },
+      turns: [0, 1, 2].map((i) => ({
+        turnId: `t${i}`,
+        turnIndex: i,
+        user: { blocks: [{ type: "text", text: `u${i}` }] },
+        assistant: { blocks: [{ type: "text", text: `a${i}` }] },
+        status: "completed" as const,
+      })),
+    };
+    expect(conversationDisplayTurns(conv).map((turn) => turn.turnId)).toEqual(["t0", "t1", "t2"]);
+    expect(conversationCompactedCount(conv)).toBe(2);
+    expect(conversationVisibleTurns(conv).map((turn) => turn.turnId)).toEqual(["t2"]);
+    expect(conversationVisibleTurns(conv, { expandCompacted: true }).map((turn) => turn.turnId))
+      .toEqual(["t0", "t1", "t2"]);
   });
 });

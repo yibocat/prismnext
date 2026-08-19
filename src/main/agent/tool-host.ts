@@ -31,10 +31,12 @@ export interface ToolExecuteContext {
     prompt: string;
     options?: string[];
     multiSelect?: boolean;
+    /** Prefer the parent toolCallId so chrome and the transcript share one id. */
+    requestId?: string;
   }) => Promise<{ ok: boolean; answer?: string; selected?: string[]; cancelled?: boolean; reason?: string }>;
   suggestPlan?: (input: {
     reason: string;
-  }) => Promise<{ accepted: boolean; reason?: string }>;
+  }) => Promise<{ accepted: boolean; reason?: string; runtimeSessionId?: string }>;
 }
 
 export interface ToolExecuteResult {
@@ -46,6 +48,28 @@ export interface ToolExecuteResult {
 }
 
 export type ToolHostEventSink = (event: AgentEvent) => void;
+
+function interpretExecuteResult(value: unknown): ToolExecuteResult {
+  if (value && typeof value === "object" && "ok" in value) {
+    const rec = value as {
+      ok?: unknown;
+      error?: unknown;
+      denied?: unknown;
+      result?: unknown;
+    };
+    if (rec.ok === false) {
+      return {
+        ok: false,
+        denied: rec.denied === true,
+        error: typeof rec.error === "string" && rec.error.trim()
+          ? rec.error
+          : "tool_failed",
+        result: rec.result ?? value,
+      };
+    }
+  }
+  return { ok: true, result: value };
+}
 
 export class ToolHost {
   private readonly tools = new Map<string, NativeToolDefinition>();
@@ -182,6 +206,7 @@ export class ToolHost {
       projectRoot: ctx.projectRoot,
       permissionMode: ctx.permissionMode,
       sessionAgent: ctx.sessionAgent,
+      sessionId: ctx.tabId,
       allowedPaths: ctx.allowedPaths,
       ...paths,
     };
@@ -205,7 +230,7 @@ export class ToolHost {
 
     try {
       const result = await tool.execute(args, ctx);
-      return this.finish(ctx, toolName, { ok: true, result });
+      return this.finish(ctx, toolName, interpretExecuteResult(result));
     } catch (err) {
       return this.finish(ctx, toolName, {
         ok: false,

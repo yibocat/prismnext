@@ -65,6 +65,7 @@ export function wrapPiPrimitiveTools(input: {
           projectRoot: turn.projectRoot,
           permissionMode: turn.permissionMode,
           sessionAgent: turn.sessionAgent,
+          sessionId: turn.tabId,
           allowedPaths: turn.allowedPaths,
           ...paths,
         });
