@@ -16,10 +16,7 @@ import {
 } from "./execution-registry";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../shared/execution";
 import { createLogger } from "./logger";
-import {
-  isDirectLatexCompileBashCommand,
-  latexCompileBashBlockMessage,
-} from "../../shared/latex-compile-bash";
+import { matchReservedBashOp } from "../../shared/reserved-ops";
 import {
   isWholeDiskSearchBashCommand,
   wholeDiskSearchBlockMessage,
@@ -204,8 +201,9 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     return blocked;
   };
 
-  if (isDirectLatexCompileBashCommand(args.command)) {
-    return failWithoutSpawn(latexCompileBashBlockMessage(), "AI bash blocked by LaTeX compile gate");
+  const reserved = matchReservedBashOp(args.command);
+  if (reserved) {
+    return failWithoutSpawn(reserved.message, `AI bash blocked by reserved op ${reserved.id}`);
   }
 
   if (isWholeDiskSearchBashCommand(args.command)) {

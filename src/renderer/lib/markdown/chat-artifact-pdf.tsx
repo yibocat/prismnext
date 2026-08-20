@@ -109,9 +109,12 @@ function ArtifactActionButton({
 export function ChatArtifactPdf({
   path,
   title,
+  embedded = false,
 }: {
   path: string;
   title?: string;
+  /** Peek only — no PDF header. Used inside an Interaction card. */
+  embedded?: boolean;
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -203,6 +206,18 @@ export function ChatArtifactPdf({
     : t("chat.artifact.copyPath", { defaultValue: "Copy path" });
 
   if (failed && !peekUrl) {
+    if (embedded) {
+      return (
+        <div
+          className={cn(
+            CHAT_ARTIFACT_PEEK_BODY_CLASS,
+            "flex w-full items-center justify-center py-6 text-[length:var(--font-size-11)] text-muted-foreground",
+          )}
+        >
+          {t("chat.artifact.pdfUnavailable", { defaultValue: "PDF unavailable" })}
+        </div>
+      );
+    }
     return (
       <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border-subtle bg-muted/20 p-1.5">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background/80 text-muted-foreground">
@@ -225,6 +240,29 @@ export function ChatArtifactPdf({
         </div>
       </div>
     );
+  }
+
+  const peekImage = peekUrl ? (
+    <img
+      src={peekUrl}
+      alt={label}
+      className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
+      loading="lazy"
+    />
+  ) : (
+    <div
+      className={cn(
+        CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+        embedded ? "" : "border-t border-border-subtle",
+        "text-[length:var(--font-size-11)] text-muted-foreground",
+      )}
+    >
+      {t("chat.artifact.pdfLoading", { defaultValue: "Loading PDF…" })}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className={CHAT_ARTIFACT_PEEK_BODY_CLASS}>{peekImage}</div>;
   }
 
   return (
@@ -265,22 +303,10 @@ export function ChatArtifactPdf({
               "block w-full cursor-zoom-in text-left transition-opacity hover:opacity-90",
             )}
           >
-            <img
-              src={peekUrl}
-              alt={label}
-              className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
-              loading="lazy"
-            />
+            {peekImage}
           </button>
         ) : (
-          <div
-            className={cn(
-              CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
-              "border-t border-border-subtle text-[length:var(--font-size-11)] text-muted-foreground",
-            )}
-          >
-            {t("chat.artifact.pdfLoading", { defaultValue: "Loading PDF…" })}
-          </div>
+          peekImage
         )}
       </div>
 

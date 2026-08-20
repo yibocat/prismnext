@@ -5,6 +5,7 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
+import { entityToolOutcome } from "../../../shared/agent-runtime";
 import { TOOL_NAMES } from "../../../shared/tool-names";
 import {
   listInteractionSummaries,
@@ -14,6 +15,8 @@ import {
 import {
   interactionFenceHint,
   interactionSpecRelativePath,
+  coerceInteractionSpecInput,
+  explainInteractionSpecFailure,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../../shared/interaction-spec";
@@ -86,27 +89,42 @@ export const interactionWriteTool: NativeToolDefinition = {
     "Create or update an Interaction spec (.prismnext/interactions/<id>/spec.json). " +
     "Embed the returned fenceMarkdown in your assistant reply after success.",
   promptGuidelines: [
-    "An Interaction is for figures/plots the user will REVISIT — not a one-shot peek (use an `artifact` fence for that).",
-    "After a successful write, embed the returned `fenceMarkdown` in your reply so the user gets a clickable card.",
-    "Prefer updating an existing interaction (interaction-read first) over creating duplicates.",
+    "An Interaction is for figures/plots the user will revisit — not a one-shot peek (`artifact` fence).",
+    "Pass a spec object: id, title, kind (`figure.static` or `plot.*`), compute, revision, resources[].path. After success, embed fenceMarkdown.",
+    "plot.* needs a real CSV in resources[] plus params.x / params.y.",
   ],
   parameters: Type.Object({
-    spec: Type.Any({ description: "Full InteractionSpec object (figure.static or plot.*)" }),
+    spec: Type.Any({
+      description:
+        "InteractionSpec object — not a JSON string. figure.static example: {\"id\":\"fig.demo\",\"title\":\"Demo\",\"kind\":\"figure.static\",\"compute\":\"local\",\"revision\":1,\"resources\":[{\"role\":\"figure\",\"path\":\"figures/demo.pdf\"}]}",
+    }),
   }),
   permission: {
     category: "safe_write",
     extractPath: (args) => {
-      const id = (args.spec as { id?: string })?.id;
-      return id ? `.prismnext/interactions/${id}/spec.json` : ".prismnext/interactions/";
+      const coerced = coerceInteractionSpecInput(args.spec);
+      const id =
+        coerced && typeof coerced === "object" && !Array.isArray(coerced)
+          ? (coerced as { id?: unknown }).id
+          : undefined;
+      return typeof id === "string" && id.trim()
+        ? `.prismnext/interactions/${id.trim()}/spec.json`
+        : ".prismnext/interactions/";
     },
   },
   async execute(args, ctx) {
-    const parsed = parseInteractionSpec(args.spec);
-    if (!parsed) return { ok: false, error: "invalid_spec" };
+    const parsed = parseInteractionSpec(coerceInteractionSpecInput(args.spec));
+    if (!parsed) {
+      return { ok: false, error: "invalid_spec", hint: explainInteractionSpecFailure(args.spec) };
+    }
 
     const result = upsertInteractionSpec(ctx.projectRoot, parsed);
     if (!result.ok || !result.spec) {
-      return { ok: false, error: result.error ?? "write_failed" };
+      return {
+        ok: false,
+        error: result.error ?? "write_failed",
+        hint: result.error ?? "write_failed",
+      };
     }
 
     broadcastInteractionChanged({
@@ -120,6 +138,7 @@ export const interactionWriteTool: NativeToolDefinition = {
     return {
       ...specResponse(result.spec),
       created: result.created === true,
+      outcome: entityToolOutcome("interaction", result.spec.id, result.spec.title),
     };
   },
 };

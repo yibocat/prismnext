@@ -47,6 +47,7 @@
     "reload": "重新加载",
     "stop": "停止加载",
     "urlPlaceholder": "搜索或输入网址",
+    "searchFor": "使用 {{engine}} 搜索 “{{query}}”",
     "bookmark": "书签",
     "newTab": "新建标签页",
     "clearHistory": "清除历史",

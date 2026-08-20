@@ -30,9 +30,11 @@ describe("isDirectLatexCompileBashCommand", () => {
 });
 
 describe("latex compile bash messages", () => {
-  it("point at latex-compile and build dir", () => {
+  it("point at paper vs standalone tools", () => {
     expect(latexCompileBashBlockMessage()).toContain("latex-compile");
+    expect(latexCompileBashBlockMessage()).toContain("latex-compile-standalone");
     expect(latexCompileBashBlockMessage()).toContain(".prismnext/compile/");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile");
+    expect(latexCompileBashRedirectNote()).toContain("latex-compile-standalone");
   });
 });

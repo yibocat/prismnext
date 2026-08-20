@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { modeRegistry } from "@/lib/workspace/mode-registry";
-import { openMode } from "@/lib/workspace/open-right-area-mode";
+import { openMode as openRightAreaMode } from "@/lib/workspace/open-right-area-mode";
 import { SETTINGS_GROUPS } from "@/components/modules/settings/settings-sidebar";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { openRightArea, toggleRightAreaMaximize } from "@/lib/workspace/right-area-layout";
@@ -224,8 +224,11 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
       addSearchHistory(projectRoot, query);
       setHistoryVersion((v) => v + 1);
     }
-    fn();
-    close();
+    try {
+      fn();
+    } finally {
+      close();
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -674,15 +677,16 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   };
   const openSession = (s: SessionListItem, _maximize = false) =>
     useChatStore.getState().loadSession(s.id);
-  const openMode = (modeId: string, maximize = false) => {
+  const openPaletteMode = (modeId: string, maximize = false) => {
     const def = modeRegistry.get(modeId);
     if (!def) return;
     ensureRightAreaOpen();
-    openMode(modeId);
+    openRightAreaMode(modeId);
     if (maximize) maximizeRightArea();
   };
   const openSetting = (categoryId: string, _maximize = false) => {
     useLayoutStore.getState().setSettingsCategory(categoryId);
+    if (useLayoutStore.getState().leftSidebarView === "settings") return;
     pressLeftNav("settings", { panelRefs: { centerRef, rightAreaRef } });
   };
   const openPaper = async (p: LiteraturePaper, maximize = false) => {
@@ -1074,7 +1078,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
                   <CommandItem
                     key={`mode-${m.id}`}
                     value={`mode ${m.id} ${m.label}`}
-                    onSelect={() => run(() => openMode(m.id, consumeMaximize()))}
+                    onSelect={() => run(() => openPaletteMode(m.id, consumeMaximize()))}
                   >
                     {m.icon}
                     <span className="flex-1 truncate">{m.label}</span>

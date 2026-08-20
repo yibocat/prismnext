@@ -18,7 +18,11 @@ vi.mock("../../src/main/services/compiler", async (importOriginal) => {
 });
 
 import { isStandaloneTexDocument } from "../../src/main/lib/latex-root";
-import { compileForAgent } from "../../src/main/services/latex-service";
+import {
+  compileForAgent,
+  compileManuscriptForAgent,
+  compileStandaloneForAgent,
+} from "../../src/main/services/latex-service";
 
 const STANDALONE_FIGURE = String.raw`\documentclass[tikz,border=2mm]{standalone}
 \usepackage{tikz}
@@ -173,5 +177,69 @@ describe("compileForAgent standalone routing", () => {
     expect((result as { errorSummary: string }).errorSummary).toContain(
       "Undefined control sequence",
     );
+  });
+});
+
+describe("agent compile tool split", () => {
+  let root: string;
+
+  beforeEach(() => {
+    compileLatex.mockReset();
+    compileStandaloneTexInPlace.mockReset();
+    compileLatex.mockResolvedValue({
+      success: true,
+      buildDir: ".prismnext/compile",
+      logContent: "",
+    });
+    compileStandaloneTexInPlace.mockResolvedValue({
+      success: true,
+      pdfPath: "figures/arch.pdf",
+      logContent: "",
+    });
+
+    root = mkdtempSync(join(tmpdir(), "prism-latex-tool-split-"));
+    mkdirSync(join(root, "manuscript"), { recursive: true });
+    mkdirSync(join(root, "figures"), { recursive: true });
+    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    writeFileSync(
+      join(root, ".prismnext", "settings.json"),
+      JSON.stringify({
+        workspaceDirs: [
+          { name: "manuscript", function: "manuscript", mainTex: "main.tex" },
+        ],
+      }),
+      "utf-8",
+    );
+    writeFileSync(join(root, "manuscript", "main.tex"), MANUSCRIPT_MAIN, "utf-8");
+    writeFileSync(join(root, "figures", "arch.tex"), STANDALONE_FIGURE, "utf-8");
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("latex-compile path refuses a standalone figure", async () => {
+    const result = await compileManuscriptForAgent(root, "figures/arch.tex");
+    expect(result).toMatchObject({ error: expect.stringContaining("latex-compile-standalone") });
+    expect(compileStandaloneTexInPlace).not.toHaveBeenCalled();
+    expect(compileLatex).not.toHaveBeenCalled();
+  });
+
+  it("standalone path compiles the figure in place", async () => {
+    const result = await compileStandaloneForAgent(root, "figures/arch.tex");
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex", { source: "agent" });
+    expect(compileLatex).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      mainFile: "figures/arch.tex",
+      pdfPath: "figures/arch.pdf",
+    });
+  });
+
+  it("standalone path refuses the paper", async () => {
+    const result = await compileStandaloneForAgent(root, "manuscript/main.tex");
+    expect(result).toMatchObject({ error: expect.stringContaining("latex-compile") });
+    expect(compileStandaloneTexInPlace).not.toHaveBeenCalled();
+    expect(compileLatex).not.toHaveBeenCalled();
   });
 });

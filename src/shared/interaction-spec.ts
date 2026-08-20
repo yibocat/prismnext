@@ -54,6 +54,117 @@ export function isValidInteractionId(id: string): boolean {
   return Boolean(s) && ID_RE.test(s) && !s.includes("..");
 }
 
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return "";
+}
+
+function asResourceList(raw: unknown): InteractionResource[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((r): r is InteractionResource => !!r && typeof r === "object");
+  }
+  if (raw && typeof raw === "object") return [{ ...(raw as InteractionResource) }];
+  return [];
+}
+
+function liftPathAliases(o: Record<string, unknown>): InteractionResource[] {
+  const resources = asResourceList(o.resources).map((r) => ({ ...r }));
+  const alias = firstNonEmptyString(o.path, o.source, o.imagePath, o.src, o.file);
+  if (alias) resources.push({ role: "figure", path: alias });
+  if (Array.isArray(o.files)) {
+    for (const f of o.files) {
+      if (typeof f === "string" && f.trim()) {
+        resources.push({ role: "figure", path: f.trim() });
+      } else if (f && typeof f === "object" && typeof (f as { path?: unknown }).path === "string") {
+        resources.push({ ...(f as InteractionResource) });
+      }
+    }
+  }
+  return resources;
+}
+
+/**
+ * Accept the shapes models actually send (JSON string, `figure:static`,
+ * top-level `path`/`source`/`files`, omitted compute/revision).
+ * Stored specs still go through {@link parseInteractionSpec}.
+ */
+export function coerceInteractionSpecInput(raw: unknown): unknown {
+  let value: unknown = raw;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return raw;
+    try {
+      value = JSON.parse(trimmed);
+    } catch {
+      return raw;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const o = { ...(value as Record<string, unknown>) };
+  if (
+    o.spec &&
+    typeof o.spec === "object" &&
+    !Array.isArray(o.spec) &&
+    typeof o.id !== "string"
+  ) {
+    return coerceInteractionSpecInput(o.spec);
+  }
+
+  if (typeof o.kind === "string") {
+    o.kind = o.kind.trim().replace(/:/g, ".");
+  }
+  if (o.compute == null || o.compute === "") {
+    o.compute = "local";
+  }
+  if (o.revision == null || o.revision === "") {
+    o.revision = 1;
+  } else if (typeof o.revision === "string" && /^\d+$/.test(o.revision.trim())) {
+    o.revision = Number.parseInt(o.revision.trim(), 10);
+  }
+
+  const resources = liftPathAliases(o);
+  if (resources.length > 0) o.resources = resources;
+  return o;
+}
+
+/** Human-readable reason after {@link coerceInteractionSpecInput} still fails parse. */
+export function explainInteractionSpecFailure(raw: unknown): string {
+  const coerced = coerceInteractionSpecInput(raw);
+  if (typeof raw === "string") {
+    try {
+      JSON.parse(raw);
+    } catch {
+      return "spec must be a JSON object, not a string. Example: {\"id\":\"fig.demo\",\"title\":\"Demo\",\"kind\":\"figure.static\",\"compute\":\"local\",\"revision\":1,\"resources\":[{\"role\":\"figure\",\"path\":\"figures/demo.pdf\"}]}";
+    }
+  }
+  if (!coerced || typeof coerced !== "object" || Array.isArray(coerced)) {
+    return "spec must be a JSON object with id, title, kind, compute, revision, and resources[].";
+  }
+  const o = coerced as Record<string, unknown>;
+  const missing: string[] = [];
+  const id = typeof o.id === "string" ? o.id.trim() : "";
+  if (!isValidInteractionId(id)) missing.push("id (slug like som-cell-diagram)");
+  if (typeof o.title !== "string" || !o.title.trim()) missing.push("title");
+  if (typeof o.kind !== "string" || !o.kind.trim()) {
+    missing.push("kind (figure.static or plot.* — use a dot, not a colon)");
+  }
+  if (o.compute !== "local" && o.compute !== "bound") missing.push("compute (local or bound)");
+  if (typeof o.revision !== "number" || !Number.isFinite(o.revision)) {
+    missing.push("revision (integer >= 1)");
+  }
+  const resources = asResourceList(o.resources);
+  const hasPath = resources.some((r) => typeof r.path === "string" && r.path.trim());
+  if (!hasPath) {
+    missing.push("resources[] with path (png/svg/jpg/webp/gif/pdf — not source/imagePath/files)");
+  }
+  if (missing.length) {
+    return `invalid_spec: missing ${missing.join("; ")}`;
+  }
+  return "invalid_spec: check id/title/kind/compute/revision and resources[].path";
+}
+
 export function parseInteractionSpec(raw: unknown): InteractionSpec | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;

@@ -86,14 +86,14 @@ export function isFollowingStreamTurn(
   const turnHeight = turn.offsetHeight;
   const viewH = container.clientHeight;
 
-  // Current turn is pinned to the top (new-send / short reply).
-  if (Math.abs(container.scrollTop - turnTop) <= 80) return true;
-
-  if (turnHeight <= viewH) {
-    return container.scrollHeight - container.scrollTop - viewH < 80;
+  // Overflowing reply: only the tail. Sitting on the figure at the top is reading, not following.
+  if (turnHeight > viewH) {
+    const tailScrollTop = turnTop + turnHeight - viewH;
+    return container.scrollTop >= tailScrollTop - 80;
   }
-  const tailScrollTop = turnTop + turnHeight - viewH;
-  return container.scrollTop >= tailScrollTop - 80;
+
+  if (Math.abs(container.scrollTop - turnTop) <= 80) return true;
+  return container.scrollHeight - container.scrollTop - viewH < 80;
 }
 
 /**

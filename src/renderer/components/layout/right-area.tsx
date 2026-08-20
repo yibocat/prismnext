@@ -17,6 +17,7 @@ import { ServerStatusDot } from "@/components/server-status-dot";
 import { TabToolbar } from "@/components/layout/tab-toolbar";
 
 import { useBrowserStore } from "@/stores/browser-store";
+import { openUrlInBrowser } from "@/lib/browser-link";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useGitStore } from "@/stores/git-store";
 import { scheduleGitStatusRefresh } from "@/lib/git/checkout-context";
@@ -231,6 +232,12 @@ function RightAreaWorkspace({
       useBrowserStore.getState().loadFromProject(projectRoot);
     }
   }, [projectRoot]);
+
+  useEffect(() => {
+    return window.electronAPI.onBrowserOpenInTab(({ url, newTab }) => {
+      openUrlInBrowser(url, { newTab });
+    });
+  }, []);
 
   // Initialize terminal store when project opens
   useEffect(() => {

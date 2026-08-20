@@ -47,6 +47,7 @@
     "reload": "Reload",
     "stop": "Stop loading",
     "urlPlaceholder": "Search or enter URL",
+    "searchFor": "Search {{engine}} for “{{query}}”",
     "bookmark": "Bookmark",
     "newTab": "New Tab",
     "clearHistory": "Clear History",

@@ -14,6 +14,8 @@ import {
 import {
   interactionFenceHint,
   interactionSpecRelativePath,
+  coerceInteractionSpecInput,
+  explainInteractionSpecFailure,
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../shared/interaction-spec";
@@ -82,8 +84,10 @@ function dispatch(req: InteractionActionRequest): Record<string, unknown> {
     }
     case "write": {
       const raw = req.spec;
-      const parsed = parseInteractionSpec(raw);
-      if (!parsed) return { ok: false, error: "invalid_spec" };
+      const parsed = parseInteractionSpec(coerceInteractionSpecInput(raw));
+      if (!parsed) {
+        return { ok: false, error: "invalid_spec", hint: explainInteractionSpecFailure(raw) };
+      }
       const result = upsertInteractionSpec(projectRoot, parsed);
       if (!result.ok || !result.spec) {
         return { ok: false, error: result.error ?? "write_failed" };

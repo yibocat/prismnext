@@ -6,7 +6,12 @@ import {
   deriveFlattenedAssistant,
   sealTurnBlockTimings,
 } from "../../src/shared/conversation-blocks";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import {
+  entityToolOutcome,
+  fileToolOutcome,
+  parseToolOutcome,
+  type AgentEvent,
+} from "../../src/shared/agent-runtime";
 import type { ContentBlock } from "../../src/shared/agent-conversation";
 
 const ids = {
@@ -74,6 +79,28 @@ describe("applyAssistantEventToBlocks", () => {
       args: { path: "." },
       result: "main.tex\n",
     });
+  });
+
+  it("copies tool_finished outcome onto the tool_result block", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-tex",
+      toolName: "latex-compile-standalone",
+      args: { mainFile: "fig.tex" },
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_finished",
+      toolCallId: "c-tex",
+      toolName: "latex-compile-standalone",
+      ok: true,
+      result: { success: true, pdfPath: "fig.pdf" },
+      outcome: { resources: [{ type: "file", path: "fig.pdf" }] },
+    }));
+    const result = blocks.find((block) => block.type === "tool_result");
+    expect(result?.outcome).toEqual({ resources: [{ type: "file", path: "fig.pdf" }] });
   });
 
   it("shows a preparing tool card, then keeps args and timeStart when execution starts", () => {
@@ -182,5 +209,31 @@ describe("applySubagentEventToRuns", () => {
         { type: "text", text: "三个方向仍开放" },
       ],
     });
+  });
+});
+
+describe("parseToolOutcome", () => {
+  it("keeps file and entity resources and drops junk", () => {
+    expect(fileToolOutcome("figures\\cell.pdf", " Cell ")).toEqual({
+      resources: [{ type: "file", path: "figures/cell.pdf", title: "Cell" }],
+    });
+    expect(entityToolOutcome("interaction", "loss-curve", "Loss")).toEqual({
+      resources: [{ type: "entity", system: "interaction", id: "loss-curve", title: "Loss" }],
+    });
+    expect(parseToolOutcome({
+      resources: [
+        { type: "file", path: "  a.pdf  " },
+        { type: "entity", system: "literature", id: "paper-1" },
+        { type: "entity", system: "unknown", id: "x" },
+        { type: "file", path: "" },
+        { media: "pdf" },
+      ],
+    })).toEqual({
+      resources: [
+        { type: "file", path: "a.pdf" },
+        { type: "entity", system: "literature", id: "paper-1" },
+      ],
+    });
+    expect(parseToolOutcome({ media: "pdf" })).toBeUndefined();
   });
 });

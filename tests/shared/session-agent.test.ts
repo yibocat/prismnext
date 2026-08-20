@@ -27,6 +27,7 @@ describe("session-agent (Plan / Build permission)", () => {
       }),
     ).toBe("deny");
     expect(resolveEffectivePermissionRule("auto", "plan", "latex-compile")).toBe("deny");
+    expect(resolveEffectivePermissionRule("auto", "plan", "latex-compile-standalone")).toBe("deny");
     expect(resolveEffectivePermissionRule("auto", "plan", "experiment-run")).toBe("deny");
   });
 

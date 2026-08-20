@@ -61,10 +61,15 @@ describe("permission gate (smart policy)", () => {
     })).toBe(false);
   });
 
-  it("prompts for in-project mkdir so the composer gate can show Allow/Deny", () => {
+  it("allows in-project mkdir without prompt; package installs still ask", () => {
     expect(shouldShowPermissionGate(undefined, "bash", {
       projectRoot: ROOT,
       bashCommand: "mkdir -p notes",
+      bashCwd: ROOT,
+    })).toBe(false);
+    expect(shouldShowPermissionGate(undefined, "bash", {
+      projectRoot: ROOT,
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     })).toBe(true);
   });

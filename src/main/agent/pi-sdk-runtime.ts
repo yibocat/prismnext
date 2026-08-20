@@ -51,6 +51,7 @@ import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
 import type { PermissionGate } from "./permission-gate";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
+import { TOOL_NAMES } from "../../shared/tool-names";
 import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
@@ -284,6 +285,48 @@ export type PiToolExecutionContext = Omit<
  * Maps host research / interactive tools into Pi ToolDefinition objects.
  * File and shell primitives are registered separately from Pi's own factories.
  */
+/** Pi catalog `input` includes `"image"` when the live model can see pixels. */
+export function piModelAcceptsImages(
+  model: { input?: readonly string[] } | null | undefined,
+): boolean {
+  return Boolean(model?.input?.includes("image"));
+}
+
+/**
+ * Vision chat models must `read` PNG/JPG themselves. `image-describe` is the
+ * text-only helper path and must not stay in the tool list.
+ */
+export function hostToolsForChatModel(
+  tools: ToolDefinition[],
+  model: { input?: readonly string[] } | null | undefined,
+): ToolDefinition[] {
+  if (!piModelAcceptsImages(model)) return tools;
+  return tools.filter((tool) => tool.name !== TOOL_NAMES.imageDescribe);
+}
+
+function syncImageDescribeTool(
+  session: object,
+  model: { input?: readonly string[] } | null | undefined,
+  describeTool: ToolDefinition | undefined,
+): void {
+  const raw = session as {
+    _customTools?: ToolDefinition[];
+    _refreshToolRegistry?: () => void;
+  };
+  if (!Array.isArray(raw._customTools) || typeof raw._refreshToolRegistry !== "function") {
+    return;
+  }
+  const has = raw._customTools.some((tool) => tool.name === TOOL_NAMES.imageDescribe);
+  const need = !piModelAcceptsImages(model);
+  if (need && !has && describeTool) {
+    raw._customTools.push(describeTool);
+    raw._refreshToolRegistry();
+  } else if (!need && has) {
+    raw._customTools = raw._customTools.filter((tool) => tool.name !== TOOL_NAMES.imageDescribe);
+    raw._refreshToolRegistry();
+  }
+}
+
 export function createPiNativeTools(input: {
   toolHost: Pick<ToolHost, "execute"> & { toPiTools?: (getContext: () => PiToolExecutionContext) => ToolDefinition[] };
   getContext: () => PiToolExecutionContext;
@@ -457,10 +500,12 @@ export function createPiSdkSessionFactory(
           })
         : undefined,
     };
-    const hostTools = createPiNativeTools({
+    const hostToolsAll = createPiNativeTools({
       toolHost: input.toolHost,
       getContext,
     });
+    const imageDescribeTool = hostToolsAll.find((tool) => tool.name === TOOL_NAMES.imageDescribe);
+    const hostTools = hostToolsForChatModel(hostToolsAll, model);
     const primitiveTools = wrapPiPrimitiveTools({
       cwd: opts.cwd,
       gate: input.gate,
@@ -563,6 +608,7 @@ export function createPiSdkSessionFactory(
           throw new Error(`unknown_pi_model:${next.provider}/${next.modelId}`);
         }
         await session.setModel(model);
+        syncImageDescribeTool(session, model, imageDescribeTool);
       },
     };
   };
@@ -685,6 +731,11 @@ interface LivePiSession {
   cancelled: boolean;
   /** Idle watchdog for the active turn — fires when no Pi event arrives for a while. */
   watchdog?: ReturnType<typeof setTimeout>;
+  /**
+   * `agent_end` (or a fallback fail) arrived while PermissionGate still has
+   * a waiter for this session. Do not commit the turn until that settles.
+   */
+  heldTerminal?: AgentEvent;
 }
 
 /**
@@ -728,6 +779,7 @@ export class PiSdkRuntime implements AgentRuntime {
 
   private emit(event: AgentEvent): void {
     const enriched = this.enrichUsageEvent(event);
+    if (this.holdTerminalWhilePermissionPending(enriched)) return;
     this.processTurnAccumulation(enriched);
     this.armTurnWatchdog(enriched.runtimeSessionId);
     for (const listener of this.listeners) listener(enriched);
@@ -738,6 +790,38 @@ export class PiSdkRuntime implements AgentRuntime {
     ) {
       this.emitSessionUsageSnapshot(enriched.runtimeSessionId, enriched.tabId, enriched.turnId);
     }
+    if (enriched.type === "tool_finished") {
+      this.releaseHeldTerminal(enriched.runtimeSessionId);
+    }
+  }
+
+  /** A permission waiter means the model is still in this prompt() — the turn is not over. */
+  private sessionHasPendingPermission(runtimeSessionId: string): boolean {
+    return this.opts.gate.hasPendingForSession(runtimeSessionId);
+  }
+
+  /**
+   * `agent_end` is not the end of the product turn while PermissionGate still
+   * has a waiter. Committing then makes the composer look idle while a
+   * destructive prompt is still in flight.
+   */
+  private holdTerminalWhilePermissionPending(event: AgentEvent): boolean {
+    if (event.type !== "turn_finished") return false;
+    const session = this.sessions.get(event.runtimeSessionId);
+    if (!session?.activeTurn || session.activeTurn.turnId !== event.turnId) return false;
+    if (!this.sessionHasPendingPermission(event.runtimeSessionId)) return false;
+    session.heldTerminal = event;
+    this.armTurnWatchdog(event.runtimeSessionId);
+    return true;
+  }
+
+  private releaseHeldTerminal(runtimeSessionId: string): void {
+    const session = this.sessions.get(runtimeSessionId);
+    const held = session?.heldTerminal;
+    if (!session || !held) return;
+    if (this.sessionHasPendingPermission(runtimeSessionId)) return;
+    session.heldTerminal = undefined;
+    this.emit(held);
   }
 
   private enrichUsageEvent(event: AgentEvent): AgentEvent {
@@ -798,6 +882,19 @@ export class PiSdkRuntime implements AgentRuntime {
     this.armTurnWatchdog(runtimeSessionId);
   }
 
+  isTurnLive(runtimeSessionId: string, turnId?: string): boolean {
+    const session = this.sessions.get(runtimeSessionId);
+    if (session?.activeTurn) {
+      if (turnId && session.activeTurn.turnId !== turnId) return false;
+      return true;
+    }
+    return this.sessionHasPendingPermission(runtimeSessionId);
+  }
+
+  cancelPendingPermissions(runtimeSessionId: string): number {
+    return this.opts.gate.cancelSession(runtimeSessionId);
+  }
+
   /** Reset the idle watchdog for a session whenever a turn event arrives. */
   private armTurnWatchdog(runtimeSessionId: string): void {
     const session = this.sessions.get(runtimeSessionId);
@@ -807,6 +904,11 @@ export class PiSdkRuntime implements AgentRuntime {
       const live = this.sessions.get(runtimeSessionId);
       if (!live || !live.activeTurn || live.cancelled) return;
       if (live.activeTurn.turnId !== live.turnId) return;
+      // Waiting on Allow/Deny is not a stalled model. Re-arm instead of failing.
+      if (this.sessionHasPendingPermission(runtimeSessionId)) {
+        this.armTurnWatchdog(runtimeSessionId);
+        return;
+      }
       piRuntimeLog.warn("turn.idle_timeout", {
         runtimeSessionId: live.runtimeSessionId,
         turnId: live.activeTurn.turnId,
@@ -1046,6 +1148,11 @@ export class PiSdkRuntime implements AgentRuntime {
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
 
+    if (session.cancelled || session.activeTurn) {
+      await session.handle.abort().catch(() => {});
+    }
+    session.cancelled = false;
+
     const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
     const turnIndex = existingRecord?.turns.length ?? 0;
     session.turnId = input.turnId || newTurnId();
@@ -1107,6 +1214,7 @@ export class PiSdkRuntime implements AgentRuntime {
       // Only fail the turn we actually prompted — if a new turn already started
       // within the window, its activeTurn belongs to that newer turn.
       if (active && active.turnId === turnIdAtPrompt && !live.cancelled) {
+        if (this.sessionHasPendingPermission(session.runtimeSessionId)) return;
         piRuntimeLog.warn("turn.fail", {
           runtimeSessionId: session.runtimeSessionId,
           turnId: turnIdAtPrompt,
@@ -1216,6 +1324,7 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
     session.cancelled = true;
+    session.heldTerminal = undefined;
     this.opts.gate.cancelSession(runtimeSessionId);
     await session.handle.abort();
     piRuntimeLog.debug("turn.cancelled", {

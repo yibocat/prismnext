@@ -3,8 +3,13 @@
  * ToolHost must call decide() before any mutating / shell service.
  */
 
-import { isDirectLatexCompileBashCommand, latexCompileBashBlockMessage } from "../../shared/latex-compile-bash";
-import { isPathInsideProject, resolveSmartBashAction } from "../../shared/smart-permission-policy";
+import { matchReservedGateOp } from "../../shared/reserved-ops";
+import {
+  isPathInsideProject,
+  resolveSmartBashAction,
+  resolveSmartPermissionAction,
+} from "../../shared/smart-permission-policy";
+import { isLatexCompileToolName } from "../../shared/tool-names";
 import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
@@ -30,7 +35,7 @@ import { createLogger } from "../services/logger";
 
 const log = createLogger("permission-gate", "security");
 
-export type HardDenyCode = "latex" | "whole_disk" | "outside_project";
+export type HardDenyCode = "latex" | "whole_disk" | "outside_project" | "file_rm" | "display_raster";
 
 export function classifyHardDeny(
   request: Pick<PermissionGateRequest, "toolName" | "bashCommand">,
@@ -40,7 +45,10 @@ export function classifyHardDeny(
   const command = request.bashCommand ?? "";
   if ((name === "bash" || name === "experiment-run") && command) {
     if (isWholeDiskSearchBashCommand(command)) return "whole_disk";
-    if (isDirectLatexCompileBashCommand(command)) return "latex";
+    const reserved = matchReservedGateOp(command, name);
+    if (reserved?.id === "latex_compile") return "latex";
+    if (reserved?.id === "file_delete") return "file_rm";
+    if (reserved?.id === "present_substitute") return "display_raster";
   }
   if (reason.startsWith("outside_project:")) return "outside_project";
   return "outside_project";
@@ -190,8 +198,9 @@ export function evaluateHardDeny(request: PermissionGateRequest): { deny: true; 
     if (isWholeDiskSearchBashCommand(command)) {
       return { deny: true, reason: wholeDiskSearchBlockMessage() };
     }
-    if (isDirectLatexCompileBashCommand(command)) {
-      return { deny: true, reason: latexCompileBashBlockMessage() };
+    const reserved = matchReservedGateOp(command, name);
+    if (reserved) {
+      return { deny: true, reason: reserved.message };
     }
     const outside = extractOutsideProjectPathArgs(
       command,
@@ -247,6 +256,13 @@ export class PermissionGate {
 
   pendingCount(): number {
     return this.pending.size;
+  }
+
+  hasPendingForSession(runtimeSessionId: string): boolean {
+    for (const waiter of this.pending.values()) {
+      if (waiter.runtimeSessionId === runtimeSessionId) return true;
+    }
+    return false;
   }
 
   async decide(request: PermissionGateRequest): Promise<PermissionGateResult> {
@@ -370,6 +386,31 @@ export class PermissionGate {
         return { decision: "allow", reason: "smart_bash_allow", requestId: request.requestId };
       }
       // "prompt" falls through to the mode matrix → suspends for UI.
+    }
+
+    // edit_auto: compile is safe_write → allow below. ask: renderer already
+    // pre-judges in-project compile as allow; match it or the gate hangs 120s.
+    if (mode === "ask" && isLatexCompileToolName(request.toolName)) {
+      const smart = resolveSmartPermissionAction(
+        {
+          toolName: request.toolName,
+          projectRoot: request.projectRoot,
+          filePath: request.filePath,
+          bashCommand: request.bashCommand,
+          bashCwd: request.bashCwd ?? request.projectRoot,
+          sourcePath: request.sourcePath,
+          destinationPath: request.destinationPath,
+          sessionId: request.sessionId,
+          sessionAgent: request.sessionAgent,
+        },
+        rules,
+      );
+      if (smart === "deny") {
+        return { decision: "deny", reason: "smart_latex_deny", requestId: request.requestId };
+      }
+      if (smart === "allow") {
+        return { decision: "allow", reason: "smart_latex_allow", requestId: request.requestId };
+      }
     }
 
     if (mode === "edit_auto") {

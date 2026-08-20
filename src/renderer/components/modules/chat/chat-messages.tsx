@@ -472,6 +472,11 @@ export const ChatMessages = memo(function ChatMessages() {
     const onWheel = (e: WheelEvent) => {
       if (loadingOlderRef.current) return;
       if (Date.now() < suppressSentinelUntilRef.current) return;
+      if (isStreamingRef.current && e.deltaY < 0 && shouldAutoScrollRef.current) {
+        shouldAutoScrollRef.current = false;
+        setIsActiveTurnMode(false);
+        setShowScrollButton(true);
+      }
       if (isStreamingRef.current && shouldAutoScrollRef.current) return;
 
       if (e.deltaY > 0) {

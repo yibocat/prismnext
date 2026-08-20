@@ -1,73 +1,67 @@
 ---
 name: figure-matplotlib
-description: Use when creating data-driven 2D figures — for analysis, notes, or publication — with matplotlib or seaborn. Chart selection, colorblind-safe palettes, a ready style file, and a plotting template that outputs into the project's figures folder. Not for structural diagrams (architecture, schematics → figure-tikz), not for the manuscript-wiring process (→ figure-pipeline), not for panel presentation standards (→ figure-interaction).
+description: Use when drawing a data figure with matplotlib/seaborn — copy the template and style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).
 license: MIT
 ---
 
 # Figure: Matplotlib & Seaborn
 
-Publication figures with real assets: a style file you can apply in one
-line, palette hexes that are actually colorblind-safe, and a template script
-that already writes to the right place.
+Start from the shipped template and style file. Run it. When the PDF is in
+the figures folder, the job is done.
 
-**Backends**: matplotlib first; seaborn welcome (it is matplotlib under the
-hood — same style file, same PDF/PNG pipeline). Other backends only when the
-user asks. 3D: prefer 2D projections or slices — they read better in print;
-if a true 3D view is needed, matplotlib's `mplot3d` works but say plainly
-that interactive/3D panel views are not currently supported.
+**Backends**: matplotlib first; seaborn is the same pipeline. Other
+backends or 3D only when the user asks.
 
-## When to use
+## Pick one lane
 
-- Plotting intermediate results to *understand* them — an exploratory figure
-  still earns the same legibility; you are its first reader
-- Choosing a chart type for data
-- Creating the figure files themselves (wiring them into the manuscript →
-  `figure-pipeline` if enabled; presenting them in the side panel →
-  `figure-interaction` if enabled)
-- Fixing unreadable figures
+| Ask | Start from | Then |
+|-----|------------|------|
+| One panel (loss curve, bar, scatter, …) | `scripts/plot_template.py` | Closed path below |
+| Multi-panel (2×2, shared colorbar) | `scripts/plot_multipanel.py` | Same four beats |
+| Architecture / schematic | — | **Stop.** `figure-tikz` |
+| Density / hexbin / facets / geo | — | **Stop.** `figure-observable-plot` |
 
-## Files in this skill
+Do not start from an empty `pyplot` script.
 
-- `assets/prism.mplstyle` — matplotlib style: column-width sizing, embeddable
-  fonts, spine/grid discipline, colorblind-safe default cycle.
-- `references/chart-selection.md` — data shape → chart mapping, log scales,
-  error-bar conventions. Read before picking a chart.
-- `references/colorblind-palettes.md` — Okabe-Ito / Tol hex values and usage
-  rules.
-- `references/journal-sizing.md` — column widths by venue (Nature/Science/
-  Cell/IEEE + LaTeX `\textwidth` measurement), type/line minimums at final
-  size, format & DPI rules, multi-panel mechanics.
-- `references/figure-qc.md` — pre-submission QC checklist: geometry, color,
-  honesty, cross-figure consistency, caption wiring.
-- `scripts/plot_template.py` — runnable template: loads the style, correct
-  figure size, saves PDF+PNG. Start single-panel plots from this file.
-- `scripts/plot_multipanel.py` — 2×2 multi-panel template: panel letters,
-  shared colorbar, exact column-width sizing. Start composed figures here.
+## Closed path
 
-## Workflow
+Four steps. No reconnaissance.
 
-1. **Read `references/chart-selection.md`** and justify the chart choice in
-   one sentence (what comparison should the reader's eye do?).
-2. **Copy both files** — `scripts/plot_template.py` **and**
-   `assets/prism.mplstyle` into the experiment island or scripts folder.
-   The template resolves the style next to itself by default; copying the
-   script alone silently drops the style. Keep data loading and plotting in
-   the same script so the figure regenerates end-to-end.
-3. **Run via `experiment-run`** (project venv injected); output lands in the
-   project's figures folder. If `import matplotlib` fails, install into the
-   project venv only: `uv pip install matplotlib numpy`
-   (`.prismnext/.venv`) — never the system Python.
-4. **Check against the standards** — axis labels with units, sample sizes,
-   legible at final column width, palette from
-   `references/colorblind-palettes.md`; width per
-   `references/journal-sizing.md`.
-5. **Wire & verify** — `\includegraphics` + caption + label; `latex-compile`;
-   `interaction-write` when the figure should be reopenable in chat.
-   Before submission or sharing, run the checklist in
-   `references/figure-qc.md`.
+1. **Copy both files** — this skill's `scripts/plot_template.py` (or
+   `plot_multipanel.py`) **and** `assets/prism.mplstyle` into the experiment
+   island or scripts folder. The template loads the style next to itself;
+   copying the script alone drops the style. Rename the script to the
+   figure.
+2. **Fill data in that script** — load from a run artifact or a real CSV
+   on disk. Keep loading and plotting in the same file. Axis labels include
+   units. Use the style file's cycle; do not invent a palette. Output
+   directory = the project's figures folder (Workspace Folder Descriptions
+   — do not guess `figures/` if the project uses another name).
+3. **Run** — `experiment-run` (project venv injected). If `import
+   matplotlib` fails: `uv pip install matplotlib numpy` into
+   `.prismnext/.venv` only — never the system Python, never `which python`.
+   On error: edit the script, run again.
+4. **Stop.** Chat already previews the PDF/PNG.
 
-## Rules
+**Done** = that PDF (and preview PNG) exist. One short sentence in chat
+(what the figure shows). Nothing else.
 
-- Figures regenerate from scripts — never edit output images by hand.
-- PDF (vector) for the manuscript; PNG only for preview/chat.
-- No chartjunk: default to the style file instead of ad-hoc colors and grids.
+**Do not** (unless the user named that next step):
+
+- Read `references/chart-selection.md` / `journal-sizing.md` /
+  `figure-qc.md` as a prelude — those are for a stuck chart-type or a
+  submission pass, not for drawing
+- `\includegraphics` into the manuscript, `latex-compile`, or
+  `interaction-write`
+- bash `which` / raster converters / deleting the output
+- Hand-edit the PNG/PDF
+
+Those are `figure-pipeline`, `figure-interaction`, or a later user ask.
+
+## Craft (on demand)
+
+- Figures regenerate from the script — never patch the output image.
+- PDF for print; PNG is the chat preview the template already writes.
+- `references/chart-selection.md` only when the chart type is actually
+  unclear. `references/colorblind-palettes.md` only when you must leave
+  the style cycle. `references/figure-qc.md` only before submission.

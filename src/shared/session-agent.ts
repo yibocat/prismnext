@@ -37,6 +37,7 @@ const PLAN_EXECUTION_DENY = new Set([
   "delete",
   "move",
   "latex-compile",
+  "latex-compile-standalone",
   "experiment-run",
   "experiment-log",
 ]);

@@ -36,6 +36,8 @@ export interface AgentRuntime {
   subscribe(listener: AgentEventListener): () => void;
   /** Re-arm the silent-turn watchdog (e.g. while a child subagent is still emitting). */
   touchTurnWatchdog?(runtimeSessionId: RuntimeSessionId): void;
+  isTurnLive?(runtimeSessionId: RuntimeSessionId, turnId?: string): boolean;
+  cancelPendingPermissions?(runtimeSessionId: RuntimeSessionId): number;
 }
 
 export function newRuntimeSessionId(): RuntimeSessionId {

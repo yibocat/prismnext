@@ -5,8 +5,9 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 
 /**
- * When the agent calls `latex-compile`, main pushes PDF bytes (or errors) here
- * so an already-open TeX workspace preview stays in sync without Cmd+Enter.
+ * When the agent compiles the paper (`latex-compile`), main pushes PDF bytes
+ * (or errors) here so an already-open TeX workspace preview stays in sync
+ * without Cmd+Enter. Standalone figures do not use this path.
  * Does not steal RightArea — open TeX from the compile card if you want it.
  */
 export function useAgentCompilePreview(): void {

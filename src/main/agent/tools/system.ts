@@ -109,7 +109,8 @@ export const imageDescribeTool: NativeToolDefinition = {
   label: "Describe Image",
   description: "Describe an image file with the configured multimodal vision helper model.",
   promptGuidelines: [
-    "Use when you need the CONTENTS of an image (axes, values, visible text) and your current model cannot view images directly.",
+    "Use when you need the CONTENTS of an image (axes, values, visible text) and the current chat model cannot view images directly.",
+    "Do not call this when the chat model already accepts images — `read` on a png/jpg/webp sends the pixels.",
     "The helper model is configured in Settings → Models → Multimodal helper; without one this tool fails with a clear error.",
     "Use `question` to focus the description (e.g. \"what is the y-axis unit?\") instead of a generic describe.",
     "Requires an image inside the project; files outside the project root are rejected.",
@@ -189,9 +190,9 @@ export const deleteTool: NativeToolDefinition = {
   label: "Delete File",
   description: "Delete a single file by path in the project (uses git rm for tracked files).",
   promptGuidelines: [
-    "Destructive and irreversible — confirm the exact path and the user's intent first.",
-    "Tracked files are removed via `git rm`, so the change stays recoverable in git history; untracked files are gone permanently.",
-    "Only files inside the project may be deleted; paths outside the project are denied.",
+    "Use this for a project file — not bash `rm`. Tracked files go through `git rm`; untracked files are unlinked.",
+    "Only files inside the project; paths outside are denied.",
+    "Do not delete compiled figures, conversion leftovers, or anything else unless the user asked to remove that file.",
   ],
   parameters: Type.Object({
     path: Type.Optional(Type.String({ description: "Relative or absolute file path to delete" })),

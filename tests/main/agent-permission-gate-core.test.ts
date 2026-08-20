@@ -50,6 +50,29 @@ describe("PermissionGate Hard Deny Security Invariants", () => {
     }
   });
 
+  it("hard denies file rm via bash (delete tool owns that)", () => {
+    const req = makeRequest({
+      toolName: "bash",
+      bashCommand: "rm figures/old.png",
+      bashCwd: ROOT,
+    });
+    const result = evaluateHardDeny(req);
+    expect(result.deny).toBe(true);
+    if (result.deny) expect(result.reason).toContain("delete");
+  });
+
+  it("hard denies PIL resize-for-chat via bash", () => {
+    const req = makeRequest({
+      toolName: "bash",
+      bashCommand:
+        `python3 -c "from PIL import Image; Image.open('a.png').resize((400,400)).save('a.jpg')"`,
+      bashCwd: ROOT,
+    });
+    const result = evaluateHardDeny(req);
+    expect(result.deny).toBe(true);
+    if (result.deny) expect(result.reason).toMatch(/preview/i);
+  });
+
   it("hard denies direct bare LaTeX compilation commands in bash", () => {
     const req = makeRequest({
       toolName: "bash",
@@ -185,7 +208,7 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
     expect(prompted).toHaveLength(1);
     expect(prompted[0]?.requestId).toBe("del-req");
 
-    // 4. shell tool (bash): prompts
+    // 4. in-project bash is not a named allowlist — it runs
     const bashRes = await gate.decide(makeRequest({
       requestId: "bash-req",
       toolName: "bash",
@@ -194,7 +217,19 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
       bashCwd: ROOT,
     }));
     expect(bashRes.decision).toBe("allow");
+    expect(prompted).toHaveLength(1);
+
+    // 5. package install still asks
+    const installRes = await gate.decide(makeRequest({
+      requestId: "install-req",
+      toolName: "bash",
+      permissionMode: "edit_auto",
+      bashCommand: "pip install requests",
+      bashCwd: ROOT,
+    }));
+    expect(installRes.decision).toBe("allow");
     expect(prompted).toHaveLength(2);
+    expect(prompted[1]?.requestId).toBe("install-req");
   });
 
   it("ask mode: allows read_only, prompts for safe_write, destructive, and shell", async () => {
@@ -224,7 +259,7 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
     expect(writeRes.decision).toBe("allow");
     expect(prompted).toHaveLength(1);
 
-    // 3. shell_exec: prompts for commands the smart policy does not auto-allow
+    // 3. shell_exec: in-project unlisted bash runs; install still asks
     const bashRes = await gate.decide(makeRequest({
       requestId: "bash-ask-req",
       toolName: "bash",
@@ -233,6 +268,16 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
       bashCwd: ROOT,
     }));
     expect(bashRes.decision).toBe("allow");
+    expect(prompted).toHaveLength(1);
+
+    const installRes = await gate.decide(makeRequest({
+      requestId: "install-ask-req",
+      toolName: "bash",
+      permissionMode: "ask",
+      bashCommand: "pip install requests",
+      bashCwd: ROOT,
+    }));
+    expect(installRes.decision).toBe("allow");
     expect(prompted).toHaveLength(2);
 
     const mcpRes = await gate.decide(makeRequest({
@@ -273,7 +318,7 @@ describe("PermissionGate Shell Smart Convergence", () => {
     const res = await gate.decide(makeRequest({
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "sudo rm -rf /tmp/x",
+      bashCommand: "sudo ls",
       bashCwd: ROOT,
     }));
 
@@ -292,7 +337,7 @@ describe("PermissionGate Shell Smart Convergence", () => {
       requestId: "pending-shell",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "make build",
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     }));
     await expect(gate.cancelRequest("pending-shell")).toBe(true);
@@ -319,18 +364,43 @@ describe("PermissionGate Shell Smart Convergence", () => {
     expect(pyRes.decision).toBe("allow");
     expect(prompted).toHaveLength(0);
 
-    // Generic command still suspends under edit_auto.
+    // Install still suspends under edit_auto — same as the renderer pre-judge.
     const buildPromise = gate.decide(makeRequest({
       requestId: "editauto-shell",
       toolName: "bash",
       permissionMode: "edit_auto",
-      bashCommand: "make build",
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     }));
     await expect(gate.cancelRequest("editauto-shell")).toBe(true);
     const buildRes = await buildPromise;
     expect(buildRes.decision).toBe("deny");
     expect(buildRes.reason).toBe("cancelled");
+  });
+
+  it("auto-allows in-project latex compile tools without suspending", async () => {
+    const prompted: PermissionGateRequest[] = [];
+    const gate = new PermissionGate({
+      onPrompt: (req) => prompted.push(req),
+    });
+
+    const paper = await gate.decide(makeRequest({
+      toolName: "latex-compile",
+      permissionMode: "edit_auto",
+      filePath: "manuscript/main.tex",
+    }));
+    expect(paper.decision).toBe("allow");
+    expect(paper.reason).toBe("edit_auto_allowed");
+
+    const figure = await gate.decide(makeRequest({
+      requestId: "fig-req",
+      toolName: "latex-compile-standalone",
+      permissionMode: "ask",
+      filePath: "figures/lstm-cell.tex",
+    }));
+    expect(figure.decision).toBe("allow");
+    expect(figure.reason).toBe("smart_latex_allow");
+    expect(prompted).toHaveLength(0);
   });
 });
 
@@ -392,7 +462,7 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
       requestId: "timeout-req",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "long_task",
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     }));
 
@@ -414,7 +484,7 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
       requestId: "cancel-me",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "make build",
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     }));
 
@@ -436,7 +506,7 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
       runtimeSessionId: "ses-A",
       toolName: "bash",
       permissionMode: "ask",
-      bashCommand: "cmd1",
+      bashCommand: "pip install requests",
       bashCwd: ROOT,
     }));
 
@@ -457,6 +527,8 @@ describe("PermissionGate Lifecycle & Timeout Recovery", () => {
     }));
 
     expect(gate.pendingCount()).toBe(3);
+    expect(gate.hasPendingForSession("ses-A")).toBe(true);
+    expect(gate.hasPendingForSession("ses-B")).toBe(true);
 
     const count = gate.cancelSession("ses-A");
     expect(count).toBe(2);

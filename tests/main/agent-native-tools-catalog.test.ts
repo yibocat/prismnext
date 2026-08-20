@@ -14,7 +14,7 @@ import {
   INTERACTIVE_TOOLS,
 } from "../../src/main/agent/tools/index";
 import { createAgentNativeTools as createPiLabNativeTools } from "../../src/main/agent/agent-service";
-import { createPiNativeTools } from "../../src/main/agent/pi-sdk-runtime";
+import { createPiNativeTools, hostToolsForChatModel } from "../../src/main/agent/pi-sdk-runtime";
 import { ToolHost, type ToolExecuteContext } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 
@@ -29,14 +29,14 @@ describe("unified native tools catalog", () => {
   };
 
   it("exports unique host custom tools without Pi file/shell primitives", () => {
-    expect(ALL_NATIVE_TOOLS).toHaveLength(28);
+    expect(ALL_NATIVE_TOOLS).toHaveLength(29);
     const names = new Set(ALL_NATIVE_TOOLS.map((t) => t.name));
-    expect(names.size).toBe(28);
+    expect(names.size).toBe(29);
     expect(names.has("bash")).toBe(false);
     expect(names.has("read")).toBe(false);
 
     expect(LITERATURE_TOOLS).toHaveLength(10);
-    expect(LATEX_TOOLS).toHaveLength(2);
+    expect(LATEX_TOOLS).toHaveLength(3);
     expect(RESEARCH_BRIEF_TOOLS).toHaveLength(2);
     expect(EXPERIMENT_TOOLS).toHaveLength(4);
     expect(INTERACTION_TOOLS).toHaveLength(4);
@@ -57,6 +57,7 @@ describe("unified native tools catalog", () => {
     expect(getNativeToolByName("literature-search")?.name).toBe("literature-search");
     expect(getNativeToolByName("BASH")).toBeUndefined();
     expect(getNativeToolByName("Latex-Compile")?.name).toBe("latex-compile");
+    expect(getNativeToolByName("Latex-Compile-Standalone")?.name).toBe("latex-compile-standalone");
     expect(getNativeToolByName("non-existent")).toBeUndefined();
   });
 
@@ -65,10 +66,10 @@ describe("unified native tools catalog", () => {
     const toolHost = new ToolHost({ gate });
     toolHost.registerAll(ALL_NATIVE_TOOLS);
 
-    expect(toolHost.names()).toHaveLength(28);
+    expect(toolHost.names()).toHaveLength(29);
 
     const piTools = toolHost.toPiTools(() => ctx);
-    expect(piTools).toHaveLength(28);
+    expect(piTools).toHaveLength(29);
     for (const pt of piTools) {
       expect(pt.name).toBeTruthy();
       expect(pt.description).toBeTruthy();
@@ -83,13 +84,13 @@ describe("unified native tools catalog", () => {
     expect(question?.promptGuidelines?.length).toBeGreaterThan(0);
 
     const labTools = createPiLabNativeTools();
-    expect(labTools).toHaveLength(28);
+    expect(labTools).toHaveLength(29);
 
     const piNative = createPiNativeTools({
       toolHost,
       getContext: () => ctx,
     });
-    expect(piNative).toHaveLength(28);
+    expect(piNative).toHaveLength(29);
   });
 
   it("executes system and fs tools in-memory with real file operations", async () => {
@@ -129,5 +130,22 @@ describe("unified native tools catalog", () => {
     } finally {
       rmSync(projectDir, { recursive: true, force: true });
     }
+  });
+
+  it("hides image-describe when the chat model already accepts images", () => {
+    const tools = [
+      { name: "literature-search" },
+      { name: "image-describe" },
+      { name: "delete" },
+    ];
+    expect(hostToolsForChatModel(tools as never, { input: ["text", "image"] }).map((t) => t.name)).toEqual([
+      "literature-search",
+      "delete",
+    ]);
+    expect(hostToolsForChatModel(tools as never, { input: ["text"] }).map((t) => t.name)).toEqual([
+      "literature-search",
+      "image-describe",
+      "delete",
+    ]);
   });
 });

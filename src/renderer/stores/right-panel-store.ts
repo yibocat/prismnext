@@ -104,6 +104,8 @@ interface RightPanelState {
   syncBrowserTabUrl: (id: string, url: string) => void;
   updateBrowserTabTitle: (id: string, title: string) => void;
   setBrowserTabLoading: (id: string, isLoading: boolean) => void;
+  /** Reload the guest even when the URL has not changed. */
+  reloadBrowserTab: (id: string) => void;
   setTabHibernated: (id: string, hibernated: boolean) => void;
   closeTab: (id: string) => void;
   /**
@@ -549,6 +551,21 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === id ? { ...t, isLoading } : t,
+      ),
+    }));
+  },
+
+  reloadBrowserTab: (id: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) =>
+        t.id === id
+          ? {
+              ...t,
+              isLoading: true,
+              hibernated: false,
+              reloadToken: (t.reloadToken ?? 0) + 1,
+            }
+          : t,
       ),
     }));
   },

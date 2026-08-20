@@ -9,14 +9,16 @@ import type {
   TurnMessageMeta,
 } from "../../../shared/agent-conversation";
 import { isPlanControlUserText } from "../../../shared/research-plan";
+import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-display";
 
 function visibleUserBlocks(blocks: ContentBlock[]): ContentBlock[] {
-  const text = blocks
+  const sanitized = sanitizeUserContentBlocksForDisplay(blocks);
+  const text = sanitized
     .filter((block) => block.type === "text" && block.text?.trim())
     .map((block) => block.text!.trim())
     .join("\n");
   if (isPlanControlUserText(text)) return [];
-  return blocks;
+  return sanitized;
 }
 
 export type ConversationDisplayTurn = {

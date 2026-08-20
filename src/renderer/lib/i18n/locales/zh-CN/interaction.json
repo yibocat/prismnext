@@ -20,7 +20,7 @@
     "placeholderBody": "类型「{{kind}}」将在后续版本中在此渲染。",
     "unsupportedTitle": "不支持该 Interaction 类型",
     "unsupportedBody": "类型「{{kind}}」不可写入。请使用 figure.static（图像）或 plot.* CSV 图类（plot.line / series / scatter / area / bar / histogram / box / density / heatmap）。",
-    "figureMissingPath": "resources[] 中没有图像路径。请添加 png/svg 路径后重新写入。",
+    "figureMissingPath": "resources[] 中没有图像或 PDF 路径。请添加 png/svg/pdf 路径后重新写入。",
     "figureLoadError": "无法加载图像：{{path}}",
     "plotErrorTitle": "无法渲染图表",
     "bindings": "绑定",

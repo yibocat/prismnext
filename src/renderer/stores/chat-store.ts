@@ -70,12 +70,16 @@ import {
 
 function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
+  if (reason === "turn_idle_timeout") return i18n.t("chat.turn_timeout");
   if (reason.startsWith("unsupported_pi_provider")) {
     return i18n.t("agentLab.reason.unsupportedProvider");
   }
   const key = `agentLab.reason.${reason}`;
   const translated = i18n.t(key);
-  return translated === key ? reason : translated;
+  if (translated !== key) return translated;
+  // Internal codes like turn_in_progress must not land in the transcript.
+  if (/^[a-z][a-z0-9_]*$/.test(reason)) return i18n.t("agentLab.sendFailed");
+  return reason;
 }
 
 function newClientTurnId(): string {
@@ -2438,8 +2442,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // Map the main-process idle-timeout error code to a readable message
         // before it lands in the turn error block / tab error.
         const mapped =
-          event.type === "turn_failed" && event.error === "turn_idle_timeout"
-            ? { ...event, error: i18n.t("chat.turn_timeout") }
+          event.type === "turn_failed" && event.error
+            ? { ...event, error: formatAgentSendError(event.error) }
             : event;
         const conversation = applyConversationEvent(tab.conversation, mapped);
         const suggest = conversation.pendingPlanSuggest;

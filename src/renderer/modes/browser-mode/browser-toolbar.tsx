@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
@@ -7,6 +7,13 @@ import { toUrlOrSearch } from "@/lib/browser/search-engines";
 import { getWebview } from "./webview-registry";
 import { setComposerDragData } from "@/lib/chat/composer-drag";
 import { linkLabelForUrl } from "@/lib/browser-link/normalize";
+import {
+  BROWSER_OMNIBOX_LIST_ID,
+  BrowserOmniboxPanel,
+  navigateOmniboxChoice,
+  suggestionOptionId,
+  useBrowserOmniboxSuggestions,
+} from "./browser-omnibox";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
@@ -59,10 +66,45 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
   const [inputValue, setInputValue] = useState(tabUrl);
   const [menuOpen, setMenuOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const blurTimerRef = useRef<number | null>(null);
+  const omniboxOpen = useBrowserStore((s) => s.omniboxOpen);
+  const omniboxActiveIndex = useBrowserStore((s) => s.omniboxActiveIndex);
+  const openOmnibox = useBrowserStore((s) => s.openOmnibox);
+  const setOmniboxQuery = useBrowserStore((s) => s.setOmniboxQuery);
+  const setOmniboxActiveIndex = useBrowserStore((s) => s.setOmniboxActiveIndex);
+  const setOmniboxAnchor = useBrowserStore((s) => s.setOmniboxAnchor);
+  const closeOmnibox = useBrowserStore((s) => s.closeOmnibox);
+  const suggestions = useBrowserOmniboxSuggestions();
 
   useEffect(() => {
     setInputValue(tabUrl);
   }, [tabUrl]);
+
+  const syncOmniboxAnchor = useCallback(() => {
+    const box = barRef.current?.getBoundingClientRect();
+    if (!box || box.width < 1) return;
+    setOmniboxAnchor({ left: box.left, bottom: box.bottom, width: box.width });
+  }, [setOmniboxAnchor]);
+
+  useEffect(() => {
+    if (!omniboxOpen) return;
+    syncOmniboxAnchor();
+    const onShift = () => syncOmniboxAnchor();
+    window.addEventListener("resize", onShift);
+    window.addEventListener("scroll", onShift, true);
+    return () => {
+      window.removeEventListener("resize", onShift);
+      window.removeEventListener("scroll", onShift, true);
+    };
+  }, [omniboxOpen, syncOmniboxAnchor]);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimerRef.current != null) window.clearTimeout(blurTimerRef.current);
+    };
+  }, []);
 
   const navigate = useCallback(
     (targetUrl: string) => {
@@ -71,19 +113,63 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       const { searchEngine } = useSettingsStore.getState().settings;
       const finalUrl = toUrlOrSearch(searchEngine, s);
       setInputValue(finalUrl);
+      closeOmnibox();
       navigateBrowserTab(tabId, finalUrl);
       // navigateBrowserTab already drives the webview via store; no second
       // loadURL() — that would cause a GUEST_VIEW_MANAGER_CALL ERR_ABORTED
       // race in the console when the second navigation cancels the first.
     },
-    [tabId, navigateBrowserTab],
+    [tabId, navigateBrowserTab, closeOmnibox],
   );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") navigate(inputValue);
+      if (e.nativeEvent.isComposing || e.key === "Process") return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (!omniboxOpen) {
+          openOmnibox(inputValue === tabUrl ? "" : inputValue);
+          return;
+        }
+        if (suggestions.length === 0) return;
+        setOmniboxActiveIndex(Math.min(omniboxActiveIndex + 1, suggestions.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (!omniboxOpen || suggestions.length === 0) return;
+        setOmniboxActiveIndex(Math.max(omniboxActiveIndex - 1, -1));
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeOmnibox();
+        setInputValue(tabUrl);
+        inputRef.current?.blur();
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (omniboxOpen && omniboxActiveIndex >= 0 && suggestions[omniboxActiveIndex]) {
+          navigateOmniboxChoice(tabId, inputValue, suggestions, omniboxActiveIndex);
+          setInputValue(suggestions[omniboxActiveIndex].url);
+          return;
+        }
+        navigate(inputValue);
+      }
     },
-    [inputValue, navigate],
+    [
+      closeOmnibox,
+      inputValue,
+      navigate,
+      omniboxActiveIndex,
+      omniboxOpen,
+      openOmnibox,
+      setOmniboxActiveIndex,
+      suggestions,
+      tabId,
+      tabUrl,
+    ],
   );
 
   const handleBack = () => {
@@ -97,8 +183,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
   };
 
   const handleReload = () => {
-    const wv = getWebview(tabId);
-    if (wv) (wv as any).reload();
+    useRightPanelStore.getState().reloadBrowserTab(tabId);
   };
 
   const handleStop = () => {
@@ -172,6 +257,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
 
       {/* URL bar */}
       <div
+        ref={barRef}
         className="flex-1 flex items-center gap-1.5 h-6 rounded bg-muted/50 px-2 min-w-0"
         draggable={Boolean(tabUrl?.trim())}
         onDragStart={(e) => {
@@ -187,9 +273,39 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
       >
         <GlobeIcon className="size-3 shrink-0 text-muted-foreground/60" />
         <input
+          ref={inputRef}
           type="text"
+          role="combobox"
+          aria-expanded={omniboxOpen}
+          aria-controls={BROWSER_OMNIBOX_LIST_ID}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            omniboxOpen && suggestions[omniboxActiveIndex]
+              ? suggestionOptionId(suggestions[omniboxActiveIndex].id)
+              : undefined
+          }
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setInputValue(next);
+            syncOmniboxAnchor();
+            setOmniboxQuery(next);
+          }}
+          onFocus={(e) => {
+            if (blurTimerRef.current != null) {
+              window.clearTimeout(blurTimerRef.current);
+              blurTimerRef.current = null;
+            }
+            e.currentTarget.select();
+            syncOmniboxAnchor();
+            openOmnibox("");
+          }}
+          onBlur={() => {
+            blurTimerRef.current = window.setTimeout(() => {
+              if (document.activeElement === inputRef.current) return;
+              closeOmnibox();
+            }, 120);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={t("modes.browser.urlPlaceholder")}
           className="flex-1 bg-transparent text-[length:var(--font-size-12)] text-foreground placeholder:text-muted-foreground/50 outline-none min-w-0"
@@ -227,6 +343,7 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
           <AppMenuItem onClick={handleClearCache}>{t("modes.browser.clearCache")}</AppMenuItem>
         </AppMenuContent>
       </AppMenu>
+      <BrowserOmniboxPanel tabId={tabId} />
     </>
   );
 }

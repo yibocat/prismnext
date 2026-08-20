@@ -1,4 +1,5 @@
-import { ipcMain, session } from "electron";
+import { BrowserWindow, app, ipcMain, session } from "electron";
+import type { WebContents } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { createLogger } from "../services/logger";
@@ -15,6 +16,42 @@ const BROWSER_DIR = ".prismnext/browser";
  * `persist:` keeps login state across restarts.
  */
 const BROWSER_PARTITION = "persist:browser";
+
+export function isBrowserGuestOpenUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "file:";
+  } catch {
+    return false;
+  }
+}
+
+function notifyRendererOpenInTab(guest: WebContents, url: string): void {
+  const payload = { url, newTab: true };
+  const embedder = guest.hostWebContents;
+  if (embedder && !embedder.isDestroyed()) {
+    embedder.send("browser:open-in-tab", payload);
+    return;
+  }
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send("browser:open-in-tab", payload);
+  }
+}
+
+function attachGuestWindowHandler(contents: WebContents): void {
+  if (contents.getType() !== "webview") return;
+  try {
+    if (contents.session !== session.fromPartition(BROWSER_PARTITION)) return;
+  } catch {
+    return;
+  }
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isBrowserGuestOpenUrl(url)) {
+      notifyRendererOpenInTab(contents, url);
+    }
+    return { action: "deny" };
+  });
+}
 
 interface Bookmark {
   id: string;
@@ -93,6 +130,10 @@ function initBrowserState(projectRoot: string): BrowserState {
 }
 
 export function registerBrowserHandlers(): void {
+  app.on("web-contents-created", (_event, contents) => {
+    attachGuestWindowHandler(contents);
+  });
+
   ipcMain.handle("browser:init", async (_event, { projectRoot }: { projectRoot: string }) => {
     return initBrowserState(projectRoot);
   });

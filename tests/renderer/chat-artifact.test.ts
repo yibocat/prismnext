@@ -5,6 +5,7 @@ import {
   buildArtifactFallbackMarkdown,
   buildArtifactFenceMarkdown,
   classifyArtifactKind,
+  presentOutcomeResource,
   collapseVisualArtifactPaths,
   parseArtifactFenceContent,
   resolveToolCardGalleryPaths,
@@ -40,6 +41,15 @@ describe("classifyArtifactKind", () => {
   });
 });
 
+describe("presentOutcomeResource", () => {
+  it("presents files by kind and Interaction as its own card", () => {
+    expect(presentOutcomeResource({ type: "file", path: "fig.pdf" })).toBe("preview");
+    expect(presentOutcomeResource({ type: "file", path: "out.csv" })).toBe("chip");
+    expect(presentOutcomeResource({ type: "entity", system: "interaction", id: "loss-curve" })).toBe("card");
+    expect(presentOutcomeResource({ type: "entity", system: "experiment", id: "exp-1" })).toBe("skip");
+  });
+});
+
 describe("assistantTextEmbedsArtifactPath", () => {
   it("detects fence and markdown image", () => {
     const path = "manuscript/fig.png";
@@ -51,6 +61,16 @@ describe("assistantTextEmbedsArtifactPath", () => {
     ).toBe(true);
     expect(assistantTextEmbedsArtifactPath(`![x](${path})`, path)).toBe(true);
     expect(assistantTextEmbedsArtifactPath("see manuscript/fig.png", path)).toBe(false);
+    expect(
+      assistantTextEmbedsArtifactPath("PNG: [lstm-cell.png](figures/lstm-cell.png)", path),
+    ).toBe(false);
+    expect(
+      assistantTextEmbedsArtifactPath(
+        "PNG: [lstm-cell.png](manuscript/fig.png)",
+        path,
+      ),
+    ).toBe(true);
+    expect(assistantTextEmbedsArtifactPath("见 `manuscript/fig.png`", path)).toBe(true);
   });
 
   it("treats same basename as embedded (working path vs snapshot)", () => {
@@ -72,6 +92,8 @@ describe("resolveToolCardGalleryPaths", () => {
     expect(visible).toEqual(["b.csv", "c.json", "d.pdf", "e.png", "f.csv"]);
     expect(overflow).toBe(0);
     expect(artifactPathMatchesAny("x/a.png", ["y/a.png"])).toBe(true);
+    expect(artifactPathMatchesAny("figures/cell.pdf", ["figures/cell.png"])).toBe(true);
+    expect(artifactPathMatchesAny("figures/cell.pdf", ["figures/other.png"])).toBe(false);
   });
 
   it("reports overflow past cap", () => {

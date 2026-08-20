@@ -19,6 +19,8 @@ import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
 } from "./project-escape-guard";
+import { matchBashException } from "./bash-intent";
+import { matchReservedBashOp } from "./reserved-ops";
 import {
   emptyPermissionRulesConfig,
   isLegacyBashAllowAlways,
@@ -63,6 +65,7 @@ export function buildSmartPermissionRules(): Record<string, "allow" | "ask" | "d
     "citation-health": "allow",
     "latex-root": "allow",
     "latex-compile": "ask",
+    "latex-compile-standalone": "ask",
     "research-brief-read": "allow",
     "suggest-plan": "allow",
     "results-snapshot": "allow",
@@ -136,144 +139,6 @@ const BASH_DENY_PATTERNS = [
   "reboot*",
 ];
 
-/** Safe inside project cwd — read, compile, git, package managers, common dev. */
-const BASH_IN_PROJECT_SAFE_PATTERNS = [
-  "pwd*",
-  "cd*",
-  "ls*",
-  "tree*",
-  "find *",
-  "cat *",
-  "head *",
-  "tail *",
-  "wc *",
-  "file *",
-  "stat *",
-  "du *",
-  "df*",
-  "which *",
-  "type *",
-  "command -v*",
-  "echo*",
-  "printf*",
-  "test *",
-  "true*",
-  "false*",
-  "sleep*",
-  "date*",
-  "uname*",
-  "env*",
-  "printenv*",
-  "python --version*",
-  "python3 --version*",
-  "node --version*",
-  "npm --version*",
-  "pnpm --version*",
-  "pip --version*",
-  "pip list*",
-  "pip show*",
-  "npm list*",
-  "npm ls*",
-  "pnpm list*",
-  "pnpm why*",
-  "tectonic*",
-  "pdflatex*",
-  "xelatex*",
-  "lualatex*",
-  "latexmk*",
-  "bibtex*",
-  "biber*",
-  "makeindex*",
-  "python *",
-  "python3 *",
-  "node *",
-  "pnpm test*",
-  "pnpm run*",
-  "pnpm exec*",
-  "npm test*",
-  "npm run*",
-  "npm exec*",
-  "pytest*",
-  "git *",
-  "pip *",
-  "pip3 *",
-  "python -m pip *",
-  "uv pip *",
-  "npm *",
-  "pnpm *",
-  "yarn *",
-];
-
-const BASH_READ_ONLY_PATTERNS = [
-  "pwd*",
-  "ls*",
-  "tree*",
-  "find *",
-  "cat *",
-  "head *",
-  "tail *",
-  "wc *",
-  "file *",
-  "stat *",
-  "du *",
-  "df*",
-  "which *",
-  "type *",
-  "command -v*",
-  "echo*",
-  "git status*",
-  "git diff*",
-  "git log*",
-  "git show*",
-  "git branch*",
-  "git remote*",
-  "git rev-parse*",
-  "git describe*",
-  "git stash list*",
-];
-
-const BASH_WRITE_OR_INSTALL_PATTERNS = [
-  "pip install*",
-  "pip uninstall*",
-  "pip sync*",
-  "pip3 install*",
-  "python -m pip install*",
-  "uv pip install*",
-  "npm install*",
-  "npm ci*",
-  "npm uninstall*",
-  "pnpm install*",
-  "pnpm add*",
-  "pnpm remove*",
-  "pnpm update*",
-  "yarn add*",
-  "yarn install*",
-  "brew install*",
-  "apt install*",
-  "apt-get install*",
-  "git add*",
-  "git commit*",
-  "git push*",
-  "git pull*",
-  "git merge*",
-  "git rebase*",
-  "git checkout*",
-  "git switch*",
-  "git reset*",
-  "git clean*",
-  "git stash*",
-  "cp *",
-  "mv *",
-  "tee *",
-  "curl *",
-  "wget *",
-];
-
-const BASH_DELETE_PATTERNS = [
-  "rm *",
-  "rmdir *",
-  "unlink *",
-];
 
 function isDeleteToolName(toolName: string): boolean {
   const n = toolName.toLowerCase();
@@ -289,7 +154,6 @@ function isShellToolName(toolName: string): boolean {
   return (
     n === "bash"
     || n === "experiment-run"
-    || n === "latex-compile"
     || n.includes("bash")
     || n === "shell"
     || n === "terminal"
@@ -308,6 +172,8 @@ function isFileWriteToolName(toolName: string): boolean {
     || n === "research-brief-update"
     || n === "experiment-log"
     || n === "interaction-write"
+    || n === "latex-compile"
+    || n === "latex-compile-standalone"
   );
 }
 
@@ -341,6 +207,10 @@ export function resolveSmartBashAction(
     return "deny";
   }
 
+  if (matchReservedBashOp(cmd)) {
+    return "deny";
+  }
+
   // File-access verbs carrying paths outside the project → visible prompt,
   // even when the cwd is inside the project (`cat /elsewhere/x` was silent).
   if (extractOutsideProjectPathArgs(cmd, cwd, projectRoot, { allowedPaths }).length > 0) {
@@ -348,24 +218,10 @@ export function resolveSmartBashAction(
   }
 
   const inProject = isCwdInsideProject(cwd, projectRoot);
-
-  if (inProject) {
-    if (bashCommandMatchesAnyPattern(cmd, BASH_IN_PROJECT_SAFE_PATTERNS)) {
-      return "allow";
-    }
-    return "prompt";
-  }
-
-  if (bashCommandMatchesAnyPattern(cmd, BASH_DELETE_PATTERNS)) {
-    return "deny";
-  }
-  if (bashCommandMatchesAnyPattern(cmd, BASH_READ_ONLY_PATTERNS)) {
-    return "allow";
-  }
-  if (bashCommandMatchesAnyPattern(cmd, BASH_WRITE_OR_INSTALL_PATTERNS)) {
-    return "prompt";
-  }
-  return "prompt";
+  const exception = matchBashException(cmd);
+  if (exception === "install") return "prompt";
+  if (exception === "delete") return inProject ? "prompt" : "deny";
+  return inProject ? "allow" : "prompt";
 }
 
 export function isPathInsideOrAllowed(
@@ -406,6 +262,10 @@ export function resolveHardDenyAction(ctx: SmartPermissionContext): boolean {
     return true;
   }
 
+  if (isShellToolName(toolName) && cmd && matchReservedBashOp(cmd)) {
+    return true;
+  }
+
   if (isDeleteToolName(toolName)) {
     const path = ctx.filePath?.trim();
     if (path && root && isPathInsideProject(path, root) === false) {
@@ -415,7 +275,7 @@ export function resolveHardDenyAction(ctx: SmartPermissionContext): boolean {
 
   if (isShellToolName(toolName) && cmd && root) {
     const inProject = isCwdInsideProject(ctx.bashCwd, root);
-    if (!inProject && bashCommandMatchesAnyPattern(cmd, BASH_DELETE_PATTERNS)) {
+    if (!inProject && matchBashException(cmd) === "delete") {
       return true;
     }
   }
@@ -484,10 +344,7 @@ function resolveSmartDefaultAction(
   }
 
   if (isShellToolName(toolName)) {
-    if (toolName === "latex-compile" && isCwdInsideProject(ctx.bashCwd, root)) {
-      return "allow";
-    }
-    if (toolName === "experiment-run" && isCwdInsideProject(ctx.bashCwd, root)) {
+    if (toolName === "experiment-run" && !ctx.bashCommand && isCwdInsideProject(ctx.bashCwd, root)) {
       return "allow";
     }
     return resolveSmartBashAction(ctx.bashCommand, root, ctx.bashCwd, allowedPaths);

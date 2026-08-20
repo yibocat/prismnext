@@ -19,6 +19,7 @@ export const TOOL_NAMES = {
   citationHealth: "citation-health",
   latexRoot: "latex-root",
   latexCompile: "latex-compile",
+  latexCompileStandalone: "latex-compile-standalone",
   researchBriefRead: "research-brief-read",
   researchBriefUpdate: "research-brief-update",
   projectRuleWrite: "project-rule-write",
@@ -39,3 +40,9 @@ export type ToolName = (typeof TOOL_NAMES)[ToolNameKey];
 
 /** All registered prismnext custom tool names (values of TOOL_NAMES). */
 export const ALL_TOOL_NAMES = Object.values(TOOL_NAMES);
+
+/** Paper compile or standalone-figure compile (both spawn a TeX engine). */
+export function isLatexCompileToolName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n === TOOL_NAMES.latexCompile || n === TOOL_NAMES.latexCompileStandalone;
+}

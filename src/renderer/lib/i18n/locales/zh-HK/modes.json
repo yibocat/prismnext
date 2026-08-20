@@ -47,6 +47,7 @@
     "reload": "重新載入",
     "stop": "停止載入",
     "urlPlaceholder": "搜尋或輸入網址",
+    "searchFor": "使用 {{engine}} 搜尋「{{query}}」",
     "bookmark": "書籤",
     "newTab": "新建分頁",
     "clearHistory": "清除歷史",

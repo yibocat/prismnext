@@ -113,6 +113,7 @@ export const MODULE_TOOL_MAP: Record<string, string[]> = {
   "latex-authoring": [
     "latex-root",
     "latex-compile",
+    "latex-compile-standalone",
     "literature-read",
     "literature-export-bib",
   ],

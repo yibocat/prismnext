@@ -12,7 +12,8 @@ import { remarkCitationRefs } from "@/lib/markdown/remark-citation-refs";
 import { remarkLibraryCiteRefs } from "@/lib/markdown/remark-library-cite-refs";
 import { remarkProjectFileRefs } from "@/lib/markdown/remark-project-file-refs";
 import { remarkExperimentRefs } from "@/lib/markdown/remark-experiment-refs";
-import { decodeProjectFileHref } from "@/lib/markdown/project-file-ref";
+import { decodeProjectFileHref, isSafeProjectFileRefPath } from "@/lib/markdown/project-file-ref";
+import { classifyArtifactKind } from "@/lib/markdown/chat-artifact";
 import { decodeExperimentRefHref } from "@/lib/markdown/experiment-ref";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -34,6 +35,16 @@ import { ChatFileInline, resolveChatFilePath } from "./chat-file-inline";
 import { ChatExperimentInline } from "./chat-experiment-inline";
 import { ChatArtifactBlock } from "@/lib/markdown/chat-artifact-block";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
+
+function visualArtifactPathFromHref(href: string | undefined): string | null {
+  if (!href?.trim()) return null;
+  const fromProtocol = decodeProjectFileHref(href);
+  const rel = fromProtocol
+    ?? (isSafeProjectFileRefPath(href) ? href.trim().replace(/\\/g, "/") : null);
+  if (!rel) return null;
+  const kind = classifyArtifactKind(rel);
+  return kind === "image" || kind === "pdf" ? rel : null;
+}
 
 function linkChildText(children: ReactNode): string | undefined {
   if (typeof children === "string") return children;
@@ -177,6 +188,15 @@ export const StaticMarkdown = memo(function StaticMarkdown({
             <LiteratureFigureInline
               bibkey={libraryFigure.bibkey}
               imageRel={libraryFigure.imageRel}
+            />
+          );
+        }
+        const visualPath = visualArtifactPathFromHref(href);
+        if (visualPath) {
+          return (
+            <ChatArtifactBlock
+              path={visualPath}
+              title={linkChildText(children)}
             />
           );
         }

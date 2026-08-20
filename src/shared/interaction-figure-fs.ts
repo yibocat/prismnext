@@ -4,7 +4,6 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve, sep } from "node:path";
-import { isImageArtifactPath } from "./artifact-path";
 import {
   isFigureStaticKind,
   pickFigureResourcePath,
@@ -46,13 +45,7 @@ export function validateFigureStaticSpec(
     return {
       ok: false,
       error:
-        "figure.static requires resources[] with an image path (png/svg/jpg/webp/gif), e.g. {\"role\":\"figure\",\"path\":\"experiments/foo/results/plot.png\"}",
-    };
-  }
-  if (!isImageArtifactPath(relPath)) {
-    return {
-      ok: false,
-      error: `figure.static path must be an image file (png/svg/jpg/webp/gif): ${relPath}`,
+        "figure.static requires resources[] with a visual path (png/svg/jpg/webp/gif/pdf), e.g. {\"role\":\"figure\",\"path\":\"figures/foo.pdf\"}",
     };
   }
   const absPath = resolveFigureAbsPath(projectRoot, relPath);

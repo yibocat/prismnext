@@ -6,6 +6,7 @@
  */
 
 import type { ContextUsageBreakdown } from "./agent-context-usage";
+import type { ToolOutcome } from "./agent-runtime";
 
 export type ConversationId = string;
 export type ConversationBackend = "pi" | "opencode" | "in-process";
@@ -47,6 +48,8 @@ export interface ContentBlock {
   _backfillInput?: Record<string, unknown> | null;
   _backfillName?: string | null;
   locations?: Array<{ file: string; line?: number }>;
+  /** Host-authored product outcome, copied from tool_finished. */
+  outcome?: ToolOutcome;
 }
 
 export interface TurnMessageMeta {

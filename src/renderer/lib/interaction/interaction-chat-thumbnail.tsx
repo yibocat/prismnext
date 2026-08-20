@@ -7,12 +7,14 @@ import { ChartLineIcon, ImageIcon } from "lucide-react";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction-figure";
+import { ChatArtifactPdf } from "@/lib/markdown/chat-artifact-pdf";
 import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction-plot";
 import { buildPlotOptions } from "./plot/build-plot-spec";
 import type { InteractionSpec } from "../../../shared/interaction-spec";
 import {
   artifactBasename,
   chatImagePathCandidates,
+  isPdfArtifactPath,
 } from "../../../shared/artifact-path";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
@@ -134,6 +136,21 @@ function PeekPlaceholder({
 
 function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: string }) {
   const rel = pickFigureResourcePath(spec);
+  if (rel && isPdfArtifactPath(rel)) {
+    return <ChatArtifactPdf path={rel} title={spec.title} embedded />;
+  }
+  return <FigureImagePeek spec={spec} projectRoot={projectRoot} rel={rel} />;
+}
+
+function FigureImagePeek({
+  spec,
+  projectRoot,
+  rel,
+}: {
+  spec: InteractionSpec;
+  projectRoot: string;
+  rel: string | null;
+}) {
   const workspaceHintsKey = useExperimentStore((s) => {
     const hints = new Set<string>();
     const detailWs = s.detail?.meta.workspacePath;

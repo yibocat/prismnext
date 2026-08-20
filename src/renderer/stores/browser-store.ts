@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { useDocumentStore } from "@/stores/document-store";
 import type { BrowserBookmark, BrowserRecentVisit } from "@/types/electron";
+import type { OmniboxAnchor } from "@/lib/browser/omnibox";
 
 /** Normalize URL for comparison: strip trailing slash, fragment, www prefix */
 function normalizeUrl(url: string): string {
@@ -20,6 +21,10 @@ interface BrowserState {
   recentVisits: BrowserRecentVisit[];
   maxRecentItems: number;
   loaded: boolean;
+  omniboxOpen: boolean;
+  omniboxQuery: string;
+  omniboxActiveIndex: number;
+  omniboxAnchor: OmniboxAnchor | null;
 
   loadFromProject: (projectRoot: string) => Promise<void>;
   addBookmark: (title: string, url: string) => Promise<void>;
@@ -29,6 +34,11 @@ interface BrowserState {
   recordVisit: (url: string, title: string) => Promise<void>;
   removeRecentVisit: (url: string) => Promise<void>;
   clearRecentVisits: () => Promise<void>;
+  openOmnibox: (query: string) => void;
+  setOmniboxQuery: (query: string) => void;
+  setOmniboxActiveIndex: (index: number) => void;
+  setOmniboxAnchor: (anchor: OmniboxAnchor | null) => void;
+  closeOmnibox: () => void;
 }
 
 function getProjectRoot(): string | null {
@@ -51,6 +61,10 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   // TODO: future — read maxRecentItems from user settings panel instead of hardcoding 50
   maxRecentItems: 50,
   loaded: false,
+  omniboxOpen: false,
+  omniboxQuery: "",
+  omniboxActiveIndex: 0,
+  omniboxAnchor: null,
 
   loadFromProject: async (projectRoot: string) => {
     if (!projectRoot) return;
@@ -120,5 +134,38 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   clearRecentVisits: async () => {
     set({ recentVisits: [] });
     persistRecent([]);
+  },
+
+  openOmnibox: (query: string) => {
+    set({
+      omniboxOpen: true,
+      omniboxQuery: query,
+      omniboxActiveIndex: query.trim() ? 0 : -1,
+    });
+  },
+
+  setOmniboxQuery: (query: string) => {
+    set({
+      omniboxOpen: true,
+      omniboxQuery: query,
+      omniboxActiveIndex: query.trim() ? 0 : -1,
+    });
+  },
+
+  setOmniboxActiveIndex: (index: number) => {
+    set({ omniboxActiveIndex: Math.max(-1, index) });
+  },
+
+  setOmniboxAnchor: (anchor) => {
+    set({ omniboxAnchor: anchor });
+  },
+
+  closeOmnibox: () => {
+    set({
+      omniboxOpen: false,
+      omniboxQuery: "",
+      omniboxActiveIndex: 0,
+      omniboxAnchor: null,
+    });
   },
 }));

@@ -1929,6 +1929,7 @@ export interface ElectronAPI {
   browserSaveRecent: (projectRoot: string, recent: BrowserRecentVisit[]) => Promise<{ success: boolean; error?: string }>;
   browserClearCookies: () => Promise<{ success: boolean; error?: string }>;
   browserClearCache: () => Promise<{ success: boolean; error?: string }>;
+  onBrowserOpenInTab: (callback: (data: { url: string; newTab: boolean }) => void) => () => void;
 
   // Terminal operations
   terminalCreate: (args: {

@@ -104,6 +104,74 @@ export interface ToolProgressEvent extends AgentEventBase {
   text?: string;
 }
 
+export type ToolOutcomeSystem = "interaction" | "experiment" | "literature";
+
+export type ToolOutcomeResource =
+  | { type: "file"; path: string; title?: string }
+  | { type: "entity"; system: ToolOutcomeSystem; id: string; title?: string };
+
+/** Host-authored product outcome. Not the model payload. */
+export interface ToolOutcome {
+  resources: ToolOutcomeResource[];
+}
+
+export function fileToolOutcome(path: string, title?: string): ToolOutcome {
+  const normalized = path.trim().replace(/\\/g, "/");
+  return { resources: [{ type: "file", path: normalized, ...(title?.trim() ? { title: title.trim() } : {}) }] };
+}
+
+export function entityToolOutcome(
+  system: ToolOutcomeSystem,
+  id: string,
+  title?: string,
+): ToolOutcome {
+  return {
+    resources: [{
+      type: "entity",
+      system,
+      id: id.trim(),
+      ...(title?.trim() ? { title: title.trim() } : {}),
+    }],
+  };
+}
+
+export function parseToolOutcome(value: unknown): ToolOutcome | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const resources = (value as { resources?: unknown }).resources;
+  if (!Array.isArray(resources)) return undefined;
+  const parsed: ToolOutcomeResource[] = [];
+  for (const item of resources) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const rec = item as Record<string, unknown>;
+    if (rec.type === "file" && typeof rec.path === "string" && rec.path.trim()) {
+      parsed.push({
+        type: "file",
+        path: rec.path.trim().replace(/\\/g, "/"),
+        ...(typeof rec.title === "string" && rec.title.trim()
+          ? { title: rec.title.trim() }
+          : {}),
+      });
+      continue;
+    }
+    if (
+      rec.type === "entity"
+      && (rec.system === "interaction" || rec.system === "experiment" || rec.system === "literature")
+      && typeof rec.id === "string"
+      && rec.id.trim()
+    ) {
+      parsed.push({
+        type: "entity",
+        system: rec.system,
+        id: rec.id.trim(),
+        ...(typeof rec.title === "string" && rec.title.trim()
+          ? { title: rec.title.trim() }
+          : {}),
+      });
+    }
+  }
+  return parsed.length ? { resources: parsed } : undefined;
+}
+
 export interface ToolFinishedEvent extends AgentEventBase {
   type: "tool_finished";
   toolCallId: AgentToolCallId;
@@ -112,6 +180,7 @@ export interface ToolFinishedEvent extends AgentEventBase {
   denied?: boolean;
   error?: string;
   result?: unknown;
+  outcome?: ToolOutcome;
 }
 
 export interface PermissionRequestedEvent extends AgentEventBase {

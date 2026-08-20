@@ -1,6 +1,6 @@
 /**
  * Detect shell invocations that run a TeX engine directly.
- * Those must use `latex-compile` so builds stay under `.prismnext/compile/`.
+ * Those must use the host compile tools so engines never run via bash.
  */
 
 import { TOOL_NAMES } from "./tool-names";
@@ -28,16 +28,17 @@ export function isDirectLatexCompileBashCommand(command: string): boolean {
 export function latexCompileBashBlockMessage(): string {
   return (
     `prismnext: do not compile LaTeX via bash (pdflatex / xelatex / lualatex / latexmk / tectonic). ` +
-    `Use the \`${TOOL_NAMES.latexCompile}\` tool (or Cmd+Enter / \`/compile\`) — it compiles the manuscript in ` +
-    `\`.prismnext/compile/\` and standalone figure files in place in their own folder. ` +
-    `Running engines via bash in the manuscript folder pollutes it with .aux/.log.`
+    `Use \`${TOOL_NAMES.latexCompile}\` for the paper (artifacts in \`.prismnext/compile/\`). ` +
+    `Use \`${TOOL_NAMES.latexCompileStandalone}\` for a \\documentclass{standalone} figure ` +
+    `(PDF next to the source). Running engines via bash pollutes the source folder with .aux/.log.`
   );
 }
 
 /** Injected on the next chat:send after ACP denies (permission reject has no reason string). */
 export function latexCompileBashRedirectNote(): string {
   return (
-    `A bash LaTeX compile was blocked. Call \`${TOOL_NAMES.latexCompile}\` in this conversation ` +
-    `(after \`${TOOL_NAMES.latexRoot}\` if needed) — do not use pdflatex/latexmk/tectonic in the shell.`
+    `A bash LaTeX compile was blocked. ` +
+    `Call \`${TOOL_NAMES.latexCompile}\` for the paper, or \`${TOOL_NAMES.latexCompileStandalone}\` ` +
+    `for a standalone figure — do not use pdflatex/latexmk/tectonic in the shell.`
   );
 }

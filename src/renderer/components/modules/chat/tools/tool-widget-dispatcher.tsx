@@ -87,6 +87,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "citation-health": LiteratureToolWidget,
   "latex-root": LatexToolWidget,
   "latex-compile": LatexToolWidget,
+  "latex-compile-standalone": LatexToolWidget,
   "research-brief-read": ResearchBriefToolWidget,
   "research-brief-update": ResearchBriefToolWidget,
   "project-rule-write": ProjectRuleToolWidget,

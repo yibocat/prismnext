@@ -40,6 +40,7 @@
     "missing_pi_provider": "Choose a provider in Settings → Models",
     "missing_pi_model": "Choose a model in Settings → Models",
     "electron_node_incompatible": "This Electron build cannot embed Pi",
-    "unsupportedProvider": "OpenCode catalog providers (Zen / Go) are not available here. Use a direct BYOK vendor such as DeepSeek, Anthropic, or OpenAI."
+    "unsupportedProvider": "OpenCode catalog providers (Zen / Go) are not available here. Use a direct BYOK vendor such as DeepSeek, Anthropic, or OpenAI.",
+    "turn_in_progress": "The previous turn is still running. Stop it and wait until it finishes, then send again. If you already stopped and still see this, quit the app fully and reopen."
   }
 }

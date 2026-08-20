@@ -40,6 +40,7 @@
     "missing_pi_provider": "请在「设置 → 模型」中选择供应商",
     "missing_pi_model": "请在「设置 → 模型」中选择模型",
     "electron_node_incompatible": "当前 Electron 无法嵌入 Pi",
-    "unsupportedProvider": "这里不支持 OpenCode 目录（Zen / Go）。请改用 DeepSeek、Anthropic、OpenAI 等直连密钥。"
+    "unsupportedProvider": "这里不支持 OpenCode 目录（Zen / Go）。请改用 DeepSeek、Anthropic、OpenAI 等直连密钥。",
+    "turn_in_progress": "上一轮对话还在进行。请先点停止，等它结束后再发送。如果已经停止却仍出现，请完全退出应用再打开。"
   }
 }

@@ -41,6 +41,8 @@ export interface RightTab {
   fileId?: string;
   url?: string;
   isLoading?: boolean;
+  /** Incremented to force the in-tab webview to reload (same URL included). */
+  reloadToken?: number;
   hibernated?: boolean;
   viewMode?: string;
   /** User shell vs read-only Job Monitor. Legacy `"ai"` is treated as job-monitor. */

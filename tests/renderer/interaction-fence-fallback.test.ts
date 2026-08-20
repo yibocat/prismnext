@@ -55,6 +55,27 @@ describe("extractInteractionWriteSuccess", () => {
     });
   });
 
+  it("prefers outcome entity over scraped spec", () => {
+    const toolUse: ContentBlock = {
+      type: "tool_use",
+      id: "tu1",
+      name: "interaction-write",
+      input: {},
+    };
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tu1",
+      content: { ok: true, spec: { id: "ignored", title: "Ignored" } },
+      outcome: {
+        resources: [{ type: "entity", system: "interaction", id: "loss-curve", title: "Loss" }],
+      },
+    };
+    expect(extractInteractionWriteSuccess(toolUse, toolResult)).toEqual({
+      id: "loss-curve",
+      title: "Loss",
+    });
+  });
+
   it("returns null on error or non-write tool", () => {
     const toolUse: ContentBlock = {
       type: "tool_use",

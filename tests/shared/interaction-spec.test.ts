@@ -3,6 +3,8 @@ import {
   isValidInteractionId,
   kindDisplayLabel,
   parseInteractionSpec,
+  coerceInteractionSpecInput,
+  explainInteractionSpecFailure,
   buildInteractionFenceMarkdown,
   interactionFenceHint,
   isAllowedInteractionKind,
@@ -59,6 +61,51 @@ describe("parseInteractionSpec", () => {
     expect(parseInteractionSpec(null)).toBeNull();
     expect(parseInteractionSpec({ id: "x", title: "", kind: "plot", compute: "local", revision: 1 })).toBeNull();
     expect(parseInteractionSpec({ id: "x", title: "T", kind: "plot", compute: "remote", revision: 1 })).toBeNull();
+  });
+});
+
+describe("coerceInteractionSpecInput", () => {
+  it("parses a JSON string, defaults compute/revision, and normalizes kind", () => {
+    const coerced = coerceInteractionSpecInput(
+      JSON.stringify({
+        id: "som-cell-diagram",
+        title: "LSTM 单元结构",
+        kind: "figure:static",
+        path: "figures/som-cell.pdf",
+      }),
+    );
+    expect(parseInteractionSpec(coerced)).toEqual({
+      id: "som-cell-diagram",
+      title: "LSTM 单元结构",
+      kind: "figure.static",
+      compute: "local",
+      revision: 1,
+      resources: [{ role: "figure", path: "figures/som-cell.pdf" }],
+    });
+  });
+
+  it("lifts source / imagePath / files aliases into resources", () => {
+    const coerced = coerceInteractionSpecInput({
+      id: "fig.a",
+      title: "A",
+      kind: "figure.static",
+      compute: "local",
+      revision: 1,
+      source: "out/a.png",
+      files: ["out/b.png"],
+    });
+    const spec = parseInteractionSpec(coerced);
+    expect(spec?.resources).toEqual([
+      { role: "figure", path: "out/a.png" },
+      { role: "figure", path: "out/b.png" },
+    ]);
+  });
+
+  it("explains missing fields instead of a bare invalid_spec", () => {
+    const hint = explainInteractionSpecFailure({ title: "T", kind: "figure.static" });
+    expect(hint).toMatch(/missing/i);
+    expect(hint).toMatch(/\bid\b/);
+    expect(hint).toMatch(/resources/i);
   });
 });
 

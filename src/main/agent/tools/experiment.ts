@@ -6,6 +6,7 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
+import { fileToolOutcome } from "../../../shared/agent-runtime";
 import { TOOL_NAMES } from "../../../shared/tool-names";
 import {
   isExperimentCtxError,
@@ -111,11 +112,14 @@ export const experimentRunTool: NativeToolDefinition = {
     }
 
     const kind = parseExperimentRunKind(args.kind);
+    const artifacts = Array.isArray(args.artifacts)
+      ? args.artifacts.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
     const started = await kickoffExperimentRun({
       ctx: ctxResult,
       id,
       command,
-      artifacts: Array.isArray(args.artifacts) ? args.artifacts.filter((item): item is string => typeof item === "string") : undefined,
+      artifacts: artifacts.length ? artifacts : undefined,
       notes: str(args.notes) || undefined,
       kind,
       chatSessionId: ctx.toolCallId,
@@ -127,12 +131,19 @@ export const experimentRunTool: NativeToolDefinition = {
       return { ok: false, error: "experiment_not_found" };
     }
 
+    const outcome = artifacts.length
+      ? {
+          resources: artifacts.map((path) => fileToolOutcome(path).resources[0]!),
+        }
+      : undefined;
+
     return {
       ok: true,
       started: true,
       runId: started.runId,
       executionId: started.executionId,
       hint: "Experiment run started in background. Output streams to the Job Monitor.",
+      outcome,
     };
   },
 };

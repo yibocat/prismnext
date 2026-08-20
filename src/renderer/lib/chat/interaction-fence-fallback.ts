@@ -30,6 +30,13 @@ export function extractInteractionWriteSuccess(
   if (!isInteractionWriteToolUse(toolUse)) return null;
   if (!toolResult || toolResult.is_error) return null;
 
+  const fromOutcome = toolResult.outcome?.resources.find(
+    (resource) => resource.type === "entity" && resource.system === "interaction",
+  );
+  if (fromOutcome && fromOutcome.type === "entity") {
+    return { id: fromOutcome.id, title: fromOutcome.title };
+  }
+
   const data = unwrapToolResultPayload(toolResult.content ?? toolUse.content);
   if (!data || data.ok === false) return null;
 

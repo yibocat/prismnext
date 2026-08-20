@@ -17,20 +17,26 @@ import {
   resolveToolCardGalleryPaths,
   type ChatArtifactKind,
 } from "./chat-artifact";
+import { useVisualStemClaim } from "./chat-visual-dedupe";
 
 export function ChatArtifactBlock({
   path,
   title,
   kind: kindProp,
+  dedupe = true,
 }: {
   path: string;
   title?: string;
   kind?: ChatArtifactKind;
+  /** Reply embeds collapse same-stem PNG/PDF. Tool-card galleries pass false. */
+  dedupe?: boolean;
 }) {
   const { t } = useTranslation();
   const rel = normalizeArtifactDisplayPath(path);
   const kind = kindProp ?? classifyArtifactKind(rel);
   const label = (title || artifactBasename(rel) || rel).trim();
+  const visual = kind === "image" || kind === "pdf";
+  const claimed = useVisualStemClaim(rel, dedupe && visual);
   const [copied, setCopied] = useState(false);
 
   const open = useCallback(() => {
@@ -46,6 +52,8 @@ export function ChatArtifactBlock({
       // ignore
     }
   }, [rel]);
+
+  if (visual && !claimed) return null;
 
   if (kind === "image") {
     return <ChatProjectImage src={rel} alt={label} />;
@@ -134,7 +142,7 @@ export function ChatArtifactGallery({
   return (
     <div className="mt-2 space-y-2">
       {visible.map((rel) => (
-        <ChatArtifactBlock key={rel} path={rel} />
+        <ChatArtifactBlock key={rel} path={rel} dedupe={false} />
       ))}
       {overflow > 0 ? (
         <p className="px-0.5 text-[length:var(--font-size-11)] text-muted-foreground">

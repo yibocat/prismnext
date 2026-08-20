@@ -152,7 +152,8 @@ export function PermissionsSettings() {
     try {
       const cfg = buildPermissionRulesFromSettings(settingsRecord(settings));
       const tool = testTool.trim().toLowerCase() || "bash";
-      const isBash = tool === "bash" || tool === "experiment-run" || tool === "latex-compile";
+      const isBash = tool === "bash" || tool === "experiment-run"
+        || tool === "latex-compile" || tool === "latex-compile-standalone";
       const detail = explainSmartPermissionAction(
         {
           toolName: tool,

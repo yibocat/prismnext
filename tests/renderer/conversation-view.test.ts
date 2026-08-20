@@ -181,4 +181,34 @@ describe("conversation-view", () => {
     expect(conversationVisibleTurns(conv, { expandCompacted: true }).map((turn) => turn.turnId))
       .toEqual(["t0", "t1", "t2"]);
   });
+
+  it("hides the compiled Referenced files dump from the user bubble", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c" }),
+      turns: [{
+        turnId: "t0",
+        turnIndex: 0,
+        user: {
+          blocks: [{
+            type: "text",
+            text: [
+              "## Referenced files",
+              "",
+              "[file unavailable: figures/lstm-cell.tex]",
+              "Absolute path: `figures/lstm-cell.tex`",
+              "Could not read text content. Use file tools if the path is accessible.",
+              "",
+              "我们专门为 LSTM 画了一个图 @figures/lstm-cell.tex ，你来给我展示一下",
+            ].join("\n"),
+          }],
+        },
+        assistant: { blocks: [] },
+        status: "completed",
+      }],
+    };
+    expect(conversationDisplayTurns(conv)[0]?.userBlocks).toEqual([{
+      type: "text",
+      text: "我们专门为 LSTM 画了一个图 @figures/lstm-cell.tex ，你来给我展示一下",
+    }]);
+  });
 });

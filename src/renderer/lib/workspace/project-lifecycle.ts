@@ -106,7 +106,15 @@ export async function resetApplicationStateForProjectSwitch(
   useChangesStore.getState().clearAll();
   useWorktreeStore.getState().clearAll();
   useTerminalStore.getState().resetProjectState();
-  useBrowserStore.setState({ bookmarks: [], recentVisits: [], loaded: false });
+  useBrowserStore.setState({
+    bookmarks: [],
+    recentVisits: [],
+    loaded: false,
+    omniboxOpen: false,
+    omniboxQuery: "",
+    omniboxActiveIndex: 0,
+    omniboxAnchor: null,
+  });
   useCheckpointStore.getState().clearAll();
   useTerminalAiStore.getState().reset();
   usePermissionStore.getState().clearAllPermissions();

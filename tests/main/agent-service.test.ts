@@ -164,6 +164,7 @@ describe("agent service status", () => {
       "literature-stage",
       "latex-root",
       "latex-compile",
+      "latex-compile-standalone",
       "research-brief-read",
       "research-brief-update",
       "experiment-log",
@@ -184,7 +185,7 @@ describe("agent service status", () => {
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(35);
+    expect(missingKey.tools).toHaveLength(36);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({
@@ -676,5 +677,112 @@ describe("agent session history", () => {
       fromDirectory: project,
       toDirectory: `${project}/wt`,
     }).count).toBe(1);
+  });
+
+  it("drops a disposed renderer instead of throwing on agent:event", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-owner-"));
+    dirs.push(userData);
+    const agent = createAgentService({
+      userDataDir: userData,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+    let sends = 0;
+    agent.attachOwner({
+      isDestroyed: () => false,
+      send() {
+        sends += 1;
+        throw new Error("Render frame was disposed before WebFrameMain could be accessed");
+      },
+    } as never);
+    expect(() => {
+      agent.dispatchEvent({
+        type: "text_delta",
+        runtimeSessionId: "rt-x",
+        tabId: "tab-x",
+        turnId: "turn-x",
+        text: "hi",
+      });
+    }).not.toThrow();
+    expect(sends).toBe(1);
+    agent.dispatchEvent({
+      type: "text_delta",
+      runtimeSessionId: "rt-x",
+      tabId: "tab-x",
+      turnId: "turn-x",
+      text: "again",
+    });
+    expect(sends).toBe(1);
+  });
+
+  it("releases the send lock on cancel so the next turn is not turn_in_progress", async () => {
+    const userData = mkdtempSync(join(tmpdir(), "prism-agent-lock-"));
+    const project = mkdtempSync(join(tmpdir(), "prism-agent-lock-proj-"));
+    dirs.push(userData, project);
+
+    let releaseHung!: () => void;
+    const hung = new Promise<void>((resolve) => {
+      releaseHung = resolve;
+    });
+    let sendTurns = 0;
+    const registry = new RuntimeRegistry({
+      userDataDir: userData,
+      startRuntime: async () => ({
+        runtime: {
+          ...fakeRuntime(),
+          async sendTurn() {
+            sendTurns += 1;
+            if (sendTurns === 1) await hung;
+          },
+        },
+        runtimeSessionId: "rt-lock",
+      }),
+    });
+    const agent = createAgentService({
+      userDataDir: userData,
+      registry,
+      getSettings: () => ({
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: { anthropic: "sk-test" },
+      }),
+      composeStableSystem: async () => "stable",
+      composeProjectRules: async () => "",
+      composeAgentsMd: async () => "",
+    });
+
+    const first = agent.send({
+      conversationId: "conv-lock",
+      tabId: "conv-lock",
+      turnId: "turn-a",
+      projectRoot: project,
+      text: "first",
+    });
+    await expect.poll(() => sendTurns).toBe(1);
+    expect(await agent.send({
+      conversationId: "conv-lock",
+      tabId: "conv-lock",
+      turnId: "turn-b",
+      projectRoot: project,
+      text: "second",
+    })).toEqual({ ok: false, error: "turn_in_progress" });
+
+    await agent.cancel("conv-lock");
+    expect(await agent.send({
+      conversationId: "conv-lock",
+      tabId: "conv-lock",
+      turnId: "turn-c",
+      projectRoot: project,
+      text: "after cancel",
+    })).toEqual({ ok: true });
+
+    releaseHung();
+    await expect(first).resolves.toEqual({ ok: true });
   });
 });

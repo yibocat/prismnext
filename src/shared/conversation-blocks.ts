@@ -65,6 +65,7 @@ export function finishToolBlock(
       content: event.error ?? event.result,
       is_error: Boolean(event.error || event.denied || !event.ok),
       status,
+      outcome: event.outcome,
     },
   ];
 }

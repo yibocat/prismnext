@@ -1221,6 +1221,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("browser:saveRecent", { projectRoot, recent }),
 	browserClearCookies: () => ipcRenderer.invoke("browser:clearCookies"),
 	browserClearCache: () => ipcRenderer.invoke("browser:clearCache"),
+	onBrowserOpenInTab: (callback: (data: { url: string; newTab: boolean }) => void) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			data: { url: string; newTab: boolean },
+		) => callback(data);
+		ipcRenderer.on("browser:open-in-tab", handler);
+		return () => ipcRenderer.removeListener("browser:open-in-tab", handler);
+	},
 
 	// Terminal operations
 	terminalCreate: (args: {

@@ -6,7 +6,8 @@
  */
 
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent, AgentToolCallId } from "../../shared/agent-runtime";
+import type { AgentEvent, AgentToolCallId, ToolOutcome } from "../../shared/agent-runtime";
+import { parseToolOutcome } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import {
   extractToolPathContext,
@@ -48,18 +49,22 @@ export interface ToolExecuteResult {
   error?: string;
   result?: unknown;
   reused?: boolean;
+  outcome?: ToolOutcome;
 }
 
 export type ToolHostEventSink = (event: AgentEvent) => void;
 
+function stripOutcome(value: Record<string, unknown>): Record<string, unknown> {
+  if (!("outcome" in value)) return value;
+  const { outcome: _drop, ...rest } = value;
+  return rest;
+}
+
 function interpretExecuteResult(value: unknown): ToolExecuteResult {
-  if (value && typeof value === "object" && "ok" in value) {
-    const rec = value as {
-      ok?: unknown;
-      error?: unknown;
-      denied?: unknown;
-      result?: unknown;
-    };
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const rec = value as Record<string, unknown>;
+    const outcome = parseToolOutcome(rec.outcome);
+    const rest = stripOutcome(rec);
     if (rec.ok === false) {
       return {
         ok: false,
@@ -67,9 +72,11 @@ function interpretExecuteResult(value: unknown): ToolExecuteResult {
         error: typeof rec.error === "string" && rec.error.trim()
           ? rec.error
           : "tool_failed",
-        result: rec.result ?? value,
+        result: rec.result ?? rest,
+        outcome,
       };
     }
+    return { ok: true, result: rest, outcome };
   }
   return { ok: true, result: value };
 }
@@ -145,7 +152,15 @@ export class ToolHost {
             abortSignal: signal,
           });
           return {
-            content: [{ type: "text", text: JSON.stringify(result) }],
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                ok: result.ok,
+                denied: result.denied,
+                error: result.error,
+                result: result.result,
+              }),
+            }],
             details: result,
           };
         },
@@ -286,6 +301,7 @@ export class ToolHost {
       denied: result.denied,
       error: result.error,
       result: result.result,
+      outcome: result.outcome,
     });
     return result;
   }

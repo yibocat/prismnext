@@ -219,7 +219,13 @@ export class AgentService {
   private interactions: InteractionBroker | null = null;
   private sessionId: string | null = null;
   private projectRoot: string | null = null;
+  /** Conversations whose `send()` is still awaiting the engine. */
   private readonly sending = new Set<string>();
+  /**
+   * Bumped when a turn lock is released early (cancel / terminal event) so a
+   * still-awaiting `send()` `finally` cannot drop a newer turn's lock.
+   */
+  private readonly sendEpoch = new Map<string, number>();
   private sink: ((event: AgentEvent) => void) | null = null;
   private permissionSink: ((request: PermissionGateRequest) => void) | null = null;
   private owner: WebContents | null = null;
@@ -348,6 +354,8 @@ export class AgentService {
     const text = input.text.trim();
     if (!text) return { ok: false, error: "missing_prompt" };
 
+    const sendEpoch = (this.sendEpoch.get(conversationId) ?? 0) + 1;
+    this.sendEpoch.set(conversationId, sendEpoch);
     this.sending.add(conversationId);
     this.activeTabId = input.tabId?.trim() || conversationId;
     try {
@@ -427,8 +435,18 @@ export class AgentService {
       });
       return { ok: false, error };
     } finally {
-      this.sending.delete(conversationId);
+      if (this.sendEpoch.get(conversationId) === sendEpoch) {
+        this.sending.delete(conversationId);
+      }
     }
+  }
+
+  /** Drop the in-flight send lock so Stop / timeout can start the next turn. */
+  private releaseTurnLock(conversationId: string | null | undefined): void {
+    const id = conversationId?.trim();
+    if (!id) return;
+    this.sendEpoch.set(id, (this.sendEpoch.get(id) ?? 0) + 1);
+    this.sending.delete(id);
   }
 
   async cancel(tabId?: string): Promise<void> {
@@ -440,10 +458,12 @@ export class AgentService {
         this.subsessionRuntimes.get(conversationId)?.cancelAllForParentSession(binding.runtimeSessionId);
       }
       await this.registry.cancelTurn(conversationId);
+      this.releaseTurnLock(conversationId);
       return;
     }
     if (!this.runtime || !this.sessionId) return;
     await this.runtime.cancelTurn(this.sessionId);
+    this.releaseTurnLock(this.activeConversationId);
   }
 
   async reset(tabId?: string): Promise<void> {
@@ -710,7 +730,14 @@ export class AgentService {
   }
 
   attachOwner(contents: WebContents): void {
-    this.owner = contents;
+    if (this.owner !== contents) {
+      this.owner = contents;
+      const drop = () => {
+        if (this.owner === contents) this.owner = null;
+      };
+      contents.once?.("destroyed", drop);
+      contents.once?.("render-process-gone", drop);
+    }
     this.sink = (event) => {
       if (event.subagent) {
         const parentRt =
@@ -737,6 +764,16 @@ export class AgentService {
         || event.type === "turn_cancelled"
       ) {
         this.persistSubagentRuns(event.runtimeSessionId);
+        this.releaseTurnLock(event.tabId);
+        const bound = this.registry.store.getSession(event.runtimeSessionId)?.conversationId;
+        if (bound && bound !== event.tabId) this.releaseTurnLock(bound);
+        // A finished prompt has no waiters. Only abort/fail should tear down
+        // an in-flight Allow/Deny — otherwise a premature terminal event
+        // silently kills a live delete (or any other) prompt.
+        if (event.type === "turn_cancelled" || event.type === "turn_failed") {
+          this.runtime?.cancelPendingPermissions?.(event.runtimeSessionId);
+          this.gate?.cancelSession(event.runtimeSessionId);
+        }
       }
       if (
         event.type === "tool_started"
@@ -757,15 +794,23 @@ export class AgentService {
           expertId: event.args.expertId,
         });
       }
-      if (this.owner && !this.owner.isDestroyed()) {
-        this.owner.send("agent:event", event);
-      }
+      this.emitToOwner("agent:event", event);
     };
     this.permissionSink = (request) => {
-      if (this.owner && !this.owner.isDestroyed()) {
-        this.owner.send("agent:permission", request);
-      }
+      this.emitToOwner("agent:permission", request);
     };
+  }
+
+  /** Renderer may be gone while WebContents.isDestroyed() is still false (reload / HMR). */
+  private emitToOwner(channel: string, payload: unknown): void {
+    const owner = this.owner;
+    if (!owner || owner.isDestroyed()) return;
+    try {
+      owner.send(channel, payload);
+    } catch {
+      this.owner = null;
+      log.warn("owner.send.drop", { channel, reason: "render_frame_gone" });
+    }
   }
 
   detachOwner(contents?: WebContents): void {
@@ -809,10 +854,23 @@ export class AgentService {
     this.mcpHosts.set(input.conversationId, mcpHost);
     const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
     const store = this.registry.store;
+    let runtimeRef: PiSdkRuntime | null = null;
     const gate = new PermissionGate({
       timeoutMs: 120_000,
       rules: buildPermissionRulesFromSettings(this.deps.getSettings()),
       onPrompt: (request) => {
+        // Only drop a prompt that belongs to a *different* live turn.
+        // A dead-looking turn with this request still in decide() is still
+        // this prompt() — showing the card is the contract, not silent deny.
+        if (
+          runtimeRef
+          && request.turnId
+          && runtimeRef.isTurnLive(request.runtimeSessionId)
+          && !runtimeRef.isTurnLive(request.runtimeSessionId, request.turnId)
+        ) {
+          gate.resolve(request.requestId, "deny");
+          return;
+        }
         this.sink?.({
           type: "permission_requested",
           runtimeSessionId: request.runtimeSessionId,
@@ -931,6 +989,7 @@ export class AgentService {
       persistSessions: true,
       piSessionDir: resolvePiRuntimeSessionDir(this.deps.userDataDir),
     });
+    runtimeRef = runtime;
     runtime.subscribe((event) => this.sink?.(event));
 
     try {
@@ -992,7 +1051,7 @@ export class AgentService {
       ? [conversationId]
       : this.registry.liveConversationIds();
     for (const id of ids) {
-      this.sending.delete(id);
+      this.releaseTurnLock(id);
       const host = this.mcpHosts.get(id);
       this.mcpHosts.delete(id);
       await host?.dispose().catch(() => {});

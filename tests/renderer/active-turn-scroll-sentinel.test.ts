@@ -155,6 +155,30 @@ describe("isFollowingStreamTurn", () => {
     expect(isFollowingStreamTurn(container, turn)).toBe(true);
   });
 
+  it("does not treat reading the top of an overflowing turn as following", () => {
+    const container = document.createElement("div");
+    const turn = document.createElement("section");
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    Object.defineProperty(container, "scrollHeight", { value: 2000 });
+    Object.defineProperty(turn, "offsetHeight", { value: 1200 });
+    container.scrollTop = 100;
+    stubRect(container, () => ({ top: 0, bottom: 400, left: 0, right: 100, width: 100, height: 400 }));
+    stubRect(turn, () => ({ top: 0, bottom: 1200, left: 0, right: 100, width: 100, height: 1200 }));
+    expect(isFollowingStreamTurn(container, turn)).toBe(false);
+  });
+
+  it("treats the tail of an overflowing turn as following", () => {
+    const container = document.createElement("div");
+    const turn = document.createElement("section");
+    Object.defineProperty(container, "clientHeight", { value: 400 });
+    Object.defineProperty(container, "scrollHeight", { value: 2000 });
+    Object.defineProperty(turn, "offsetHeight", { value: 1200 });
+    container.scrollTop = 900;
+    stubRect(container, () => ({ top: 0, bottom: 400, left: 0, right: 100, width: 100, height: 400 }));
+    stubRect(turn, () => ({ top: -800, bottom: 400, left: 0, right: 100, width: 100, height: 1200 }));
+    expect(isFollowingStreamTurn(container, turn)).toBe(true);
+  });
+
   it("does not treat a turn far below the viewport as following", () => {
     const container = document.createElement("div");
     const turn = document.createElement("section");
