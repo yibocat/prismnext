@@ -11,6 +11,9 @@ import { Type } from "@earendil-works/pi-ai";
 import type { McpServerDef } from "../../shared/teams/types";
 import type { PermissionGate } from "./permission-gate";
 import type { ToolExecuteContext } from "./tool-host";
+import { createLogger, shortLogDetail } from "../services/logger";
+
+const log = createLogger("mcp-host", "agent");
 
 export const MCP_TOOL_PREFIX = "mcp__";
 export const MCP_CONNECT_TIMEOUT_MS = 15_000;
@@ -103,11 +106,15 @@ export class AgentMcpHost {
         const connected = await connectMcpServer(server, opts.cwd, this.toolEnv);
         this.connections.set(name, connected);
         tools.push(...connected.tools);
+        log.info("mcp.connect", {
+          serverName: name,
+          toolCount: connected.tools.length,
+        });
       } catch (err) {
-        console.warn(
-          `[mcp-host] ${name}:`,
-          err instanceof Error ? err.message : String(err),
-        );
+        log.warn("mcp.connect.fail", {
+          serverName: name,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
     return tools;
@@ -236,15 +243,42 @@ function toPiMcpTool(input: {
           details: { ok: false, error: "mcp_aborted" },
         };
       }
-      const result = await input.client.callTool({
-        name: input.toolName,
-        arguments: args,
-      });
-      const text = formatMcpResult(result);
-      return {
-        content: [{ type: "text" as const, text }],
-        details: result,
-      };
+      const startedAt = Date.now();
+      log.info("tool.execute.start", { toolName: name, toolCallId });
+      try {
+        const result = await input.client.callTool({
+          name: input.toolName,
+          arguments: args,
+        });
+        const failed = Boolean((result as { isError?: boolean } | null)?.isError);
+        log.info("tool.execute.end", {
+          toolName: name,
+          toolCallId,
+          durationMs: Date.now() - startedAt,
+          ok: failed ? "error" : "ok",
+        });
+        if (failed) {
+          log.warn("tool.execute.error", { toolName: name, toolCallId, error: "mcp_error" });
+        }
+        const text = formatMcpResult(result);
+        return {
+          content: [{ type: "text" as const, text }],
+          details: result,
+        };
+      } catch (err) {
+        log.info("tool.execute.end", {
+          toolName: name,
+          toolCallId,
+          durationMs: Date.now() - startedAt,
+          ok: "error",
+        });
+        log.warn("tool.execute.error", {
+          toolName: name,
+          toolCallId,
+          error: shortLogDetail(err),
+        });
+        throw err;
+      }
     },
   });
 }

@@ -23,6 +23,9 @@ import {
   type PiPrimitiveToolName,
 } from "./capability-matrix";
 import type { ToolExecuteContext } from "./tool-host";
+import { createLogger, shortLogDetail } from "../services/logger";
+
+const log = createLogger("pi-primitive", "agent");
 
 type PrimitiveTurnContext = Omit<ToolExecuteContext, "toolCallId" | "abortSignal">;
 
@@ -75,7 +78,31 @@ export function wrapPiPrimitiveTools(input: {
             details: { ok: false, denied: true, error: decision.reason },
           };
         }
-        return original.execute(toolCallId, params, signal, onUpdate, ctx);
+        const startedAt = Date.now();
+        log.info("tool.execute.start", { toolName: name, toolCallId });
+        try {
+          const result = await original.execute(toolCallId, params, signal, onUpdate, ctx);
+          log.info("tool.execute.end", {
+            toolName: name,
+            toolCallId,
+            durationMs: Date.now() - startedAt,
+            ok: "ok",
+          });
+          return result;
+        } catch (err) {
+          log.info("tool.execute.end", {
+            toolName: name,
+            toolCallId,
+            durationMs: Date.now() - startedAt,
+            ok: "error",
+          });
+          log.warn("tool.execute.error", {
+            toolName: name,
+            toolCallId,
+            error: shortLogDetail(err),
+          });
+          throw err;
+        }
       },
     });
   });

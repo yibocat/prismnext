@@ -1297,7 +1297,10 @@
         "error": "错误"
       },
       "showAllLevels": "显示所有级别",
-      "showLevelOnly": "仅显示 {{level}}",
+      "showLevelOnly": "只显示 {{level}}",
+      "showLevelAndAbove": "只显示 {{level}}",
+      "capture": "记录",
+      "captureHint": "主进程写入的最低级别。调试供开发用。",
       "searchPlaceholder": "搜索消息、模块与详情…",
       "clearSearch": "清除搜索",
       "refresh": "刷新",
@@ -1309,7 +1312,10 @@
       "warnings": "{{count}} 条警告",
       "warnings_plural": "{{count}} 条警告",
       "emptyLevel": "当前视图中没有 {{level}} 日志。",
-      "activityHint": "主进程与界面活动将显示在这里。"
+      "activityHint": "主进程与界面活动将显示在这里。",
+      "copyRow": "复制这条日志",
+      "copySelected": "复制已选 {{count}} 条",
+      "copied": "已复制"
     },
     "promptStack": {
       "layers": "注入层",

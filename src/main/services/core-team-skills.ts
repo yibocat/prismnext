@@ -55,7 +55,9 @@ export function listCorePackSkills(): CoreSkillInfo[] {
         return manifest.skills.filter((s) => existsSync(join(skillsRoot, s.id, "SKILL.md")));
       }
     } catch (err) {
-      log.warn("core skills manifest.json 解析失败，退化为目录扫描", { error: String(err) });
+      log.warn("core skills manifest.json parse failed; falling back to directory scan", {
+        error: String(err),
+      });
     }
   }
 

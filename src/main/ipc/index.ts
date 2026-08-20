@@ -7,7 +7,7 @@ import { registerTerminalHandlers } from "./terminal";
 import { registerExecutionHandlers } from "./execution";
 import { registerGitHandlers } from "./git";
 import { registerWorktreeHandlers } from "./worktree";
-import { registerLogHandlers } from "./log";
+import { installIpcHandlerErrorGuard, registerLogHandlers } from "./log";
 import { registerThemeHandlers } from "./theme";
 import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
@@ -32,6 +32,7 @@ import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
 
 export function registerIpcHandlers(): void {
+  installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
   registerFsHandlers();
   registerCompileHandlers();

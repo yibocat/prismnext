@@ -17,7 +17,7 @@
 
 import { app } from "electron";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import {
   invalidateCatalog,
   registerExternalTeamRoot,
@@ -80,7 +80,7 @@ export function resolveProPackageDir(env: string | undefined = process.env.PRISM
   if (raw) {
     const dir = findProPackageDirUp(resolve(raw));
     if (dir) return dir;
-    log.warn("PRISM_PRO_PATH 已设置但找不到 pro 包目录", { raw });
+    log.warn("PRISM_PRO_PATH is set but the pro package directory was not found");
   }
   try {
     if (app?.isPackaged) {
@@ -107,7 +107,10 @@ export function resolveTeamsRootDir(packageDir: string): string | null {
       teamsRoot = root.trim();
     }
   } catch (err) {
-    log.warn("pro 包 package.json 解析失败", { packageDir, error: String(err) });
+    log.warn("pro package.json parse failed", {
+      package: basename(packageDir),
+      error: String(err),
+    });
     return null;
   }
   // 防逃逸：teamsRoot 必须仍在包目录内
@@ -147,7 +150,7 @@ export function discoverAndRegisterProTeams(): { registered: string[]; skipped: 
           registered.push(entry.name);
         } else {
           skipped.push(entry.name);
-          log.warn("teamsRoot 下存在无 team.json/plugin.json 的目录，跳过", { dir: join(teamsRoot, entry.name) });
+          log.warn("skipped folder without team.json/plugin.json", { name: entry.name });
         }
       }
     }
@@ -158,8 +161,12 @@ export function discoverAndRegisterProTeams(): { registered: string[]; skipped: 
   }
   lastRegisteredRoots = found;
 
-  if (registered.length || skipped.length) {
-    log.info("pro packs discovery 完成", { packageDir, registered, skipped });
+  if ((registered.length || skipped.length) && packageDir) {
+    log.info("pro packs discovery complete", {
+      package: basename(packageDir),
+      registered,
+      skipped,
+    });
   }
   return { registered, skipped };
 }

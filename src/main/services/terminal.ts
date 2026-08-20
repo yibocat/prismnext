@@ -1,6 +1,10 @@
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
+import { basename } from "node:path";
 import { getShellIntegrationLaunch } from "./terminal-integration";
+import { createLogger, shortLogDetail } from "./logger";
+
+const log = createLogger("terminal", "general");
 
 // ─── Types ───
 
@@ -88,7 +92,12 @@ export function createSession(
         TERM: "xterm-256color",
       } as { [key: string]: string },
     });
-  } catch {
+  } catch (err) {
+    log.warn("terminal.session.fail", {
+      op: "create",
+      project: basename(projectRoot),
+      error: shortLogDetail(err),
+    });
     throw new Error(`Failed to spawn PTY in ${cwd}`);
   }
 

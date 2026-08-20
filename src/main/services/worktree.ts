@@ -1,8 +1,11 @@
 import { existsSync, writeFileSync, readFileSync } from "node:fs";
 import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { execGit } from "./git";
+import { createLogger, shortLogDetail } from "./logger";
+
+const log = createLogger("worktree", "git");
 
 // ─── Types ───
 
@@ -118,102 +121,122 @@ export async function createWorktree(
   baseBranch?: string,
 ): Promise<WorktreeInfo> {
   const resolvedName = name || generateUniqueWorktreeName(projectRoot);
-  const branchName = `${BRANCH_PREFIX}${resolvedName}`;
-  const worktreePath = worktreePathForName(projectRoot, resolvedName);
-
-  if (existsSync(worktreePath)) {
-    throw new Error(`Worktree "${resolvedName}" already exists`);
-  }
-
-  if (!existsSync(join(projectRoot, ".git"))) {
-    throw new Error(
-      "Git repository required. Initialize Git in this project before creating a worktree.",
-    );
-  }
-
-  // Ensure at least one commit exists (git worktree add requires it)
-  try { await execGit(projectRoot, ["rev-parse", "HEAD"]); } catch {
-    // No commits yet — create initial commit with all existing files
-    try {
-      await execGit(projectRoot, ["add", "-A"]);
-      await execGit(projectRoot, ["commit", "-m", "Initial project setup"]);
-    } catch {
-      // Fallback: empty commit if add fails (e.g. empty directory)
-      await execGit(projectRoot, ["commit", "--allow-empty", "-m", "Initial project setup"]);
-    }
-  }
-
-  // Resolve base branch — default to the currently checked-out branch.
-  // Never fall back to detectMainBranch(): that always returns "main"/"master"
-  // regardless of which branch the user is actually on.
-  const resolvedBase = baseBranch || (await getCurrentBranch(projectRoot)) || (await detectMainBranch(projectRoot));
-
-  // Clean up zombie branch if it exists
-  try { await execGit(projectRoot, ["branch", "-D", branchName]); } catch {}
-
-  const relPath = join(WORKTREES_DIR, resolvedName);
-  await execGit(projectRoot, ["worktree", "add", "-b", branchName, relPath, resolvedBase]);
-
-  let head = "";
-  try { head = (await execGit(worktreePath, ["rev-parse", "--short", "HEAD"])).trim(); } catch {}
-
-  // Store the base branch as metadata so listWorktrees can read it back.
-  // git worktree list --porcelain doesn't track which branch a worktree was created from.
   try {
-    writeFileSync(join(worktreePath, ".prism-worktree-meta"), resolvedBase, "utf-8");
-  } catch {}
+    const branchName = `${BRANCH_PREFIX}${resolvedName}`;
+    const worktreePath = worktreePathForName(projectRoot, resolvedName);
 
-  return {
-    name: resolvedName,
-    path: normalizeWorktreePath(worktreePath),
-    branch: branchName,
-    baseBranch: resolvedBase,
-    head,
-    aheadCount: 0,
-    behindCount: 0,
-  };
+    if (existsSync(worktreePath)) {
+      throw new Error(`Worktree "${resolvedName}" already exists`);
+    }
+
+    if (!existsSync(join(projectRoot, ".git"))) {
+      throw new Error(
+        "Git repository required. Initialize Git in this project before creating a worktree.",
+      );
+    }
+
+    // Ensure at least one commit exists (git worktree add requires it)
+    try { await execGit(projectRoot, ["rev-parse", "HEAD"]); } catch {
+      // No commits yet — create initial commit with all existing files
+      try {
+        await execGit(projectRoot, ["add", "-A"]);
+        await execGit(projectRoot, ["commit", "-m", "Initial project setup"]);
+      } catch {
+        // Fallback: empty commit if add fails (e.g. empty directory)
+        await execGit(projectRoot, ["commit", "--allow-empty", "-m", "Initial project setup"]);
+      }
+    }
+
+    // Resolve base branch — default to the currently checked-out branch.
+    // Never fall back to detectMainBranch(): that always returns "main"/"master"
+    // regardless of which branch the user is actually on.
+    const resolvedBase = baseBranch || (await getCurrentBranch(projectRoot)) || (await detectMainBranch(projectRoot));
+
+    // Clean up zombie branch if it exists
+    try { await execGit(projectRoot, ["branch", "-D", branchName]); } catch {}
+
+    const relPath = join(WORKTREES_DIR, resolvedName);
+    await execGit(projectRoot, ["worktree", "add", "-b", branchName, relPath, resolvedBase]);
+
+    let head = "";
+    try { head = (await execGit(worktreePath, ["rev-parse", "--short", "HEAD"])).trim(); } catch {}
+
+    // Store the base branch as metadata so listWorktrees can read it back.
+    // git worktree list --porcelain doesn't track which branch a worktree was created from.
+    try {
+      writeFileSync(join(worktreePath, ".prism-worktree-meta"), resolvedBase, "utf-8");
+    } catch {}
+
+    return {
+      name: resolvedName,
+      path: normalizeWorktreePath(worktreePath),
+      branch: branchName,
+      baseBranch: resolvedBase,
+      head,
+      aheadCount: 0,
+      behindCount: 0,
+    };
+  } catch (err) {
+    log.warn("worktree.fail", {
+      op: "create",
+      name: resolvedName,
+      error: shortLogDetail(err),
+      project: basename(projectRoot),
+    });
+    throw err;
+  }
 }
 
 export async function removeWorktree(
   projectRoot: string,
   name: string,
 ): Promise<void> {
-  if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
-    throw new Error(`Invalid worktree name: ${name || "(empty)"}`);
-  }
+  try {
+    if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+      throw new Error(`Invalid worktree name: ${name || "(empty)"}`);
+    }
 
-  const worktreePath = join(projectRoot, WORKTREES_DIR, name);
-  const branchName = `${BRANCH_PREFIX}${name}`;
+    const worktreePath = join(projectRoot, WORKTREES_DIR, name);
+    const branchName = `${BRANCH_PREFIX}${name}`;
 
-  const errors: string[] = [];
+    const errors: string[] = [];
 
-  // Remove worktree checkout
-  if (existsSync(worktreePath)) {
-    try {
-      await execGit(projectRoot, ["worktree", "remove", "--force", worktreePath]);
-    } catch {
-      // If git remove fails, delete only this checkout directory — never prune all worktrees.
-      try { await rm(worktreePath, { recursive: true, force: true }); } catch {}
-      if (existsSync(worktreePath)) {
-        errors.push(`Failed to remove worktree directory: ${worktreePath}`);
+    // Remove worktree checkout
+    if (existsSync(worktreePath)) {
+      try {
+        await execGit(projectRoot, ["worktree", "remove", "--force", worktreePath]);
+      } catch {
+        // If git remove fails, delete only this checkout directory — never prune all worktrees.
+        try { await rm(worktreePath, { recursive: true, force: true }); } catch {}
+        if (existsSync(worktreePath)) {
+          errors.push(`Failed to remove worktree directory: ${worktreePath}`);
+        }
       }
     }
-  }
 
-  // Delete branch (only if worktree was successfully removed)
-  try {
-    await execGit(projectRoot, ["branch", "-D", branchName]);
-  } catch {
-    // Branch may not exist — that's OK if the worktree is gone
-    if (!existsSync(worktreePath)) {
-      // Worktree removed, branch cleanup is non-critical
-    } else {
-      errors.push(`Failed to delete branch: ${branchName}`);
+    // Delete branch (only if worktree was successfully removed)
+    try {
+      await execGit(projectRoot, ["branch", "-D", branchName]);
+    } catch {
+      // Branch may not exist — that's OK if the worktree is gone
+      if (!existsSync(worktreePath)) {
+        // Worktree removed, branch cleanup is non-critical
+      } else {
+        errors.push(`Failed to delete branch: ${branchName}`);
+      }
     }
-  }
 
-  if (errors.length > 0) {
-    throw new Error(errors.join("; "));
+    if (errors.length > 0) {
+      throw new Error(errors.join("; "));
+    }
+  } catch (err) {
+    log.warn("worktree.fail", {
+      op: "remove",
+      name,
+      error: shortLogDetail(err),
+      project: basename(projectRoot),
+    });
+    throw err;
   }
 }
 
@@ -429,8 +452,13 @@ export async function moveSessionsToProject(
         count++;
       }
     }
-  } catch {
-    // If source doesn't exist or is empty, that's OK — no sessions to move
+  } catch (err) {
+    log.warn("worktree.fail", {
+      op: "moveSessions",
+      name: worktreeName,
+      error: shortLogDetail(err),
+      project: basename(projectRoot),
+    });
   }
 
   return count;

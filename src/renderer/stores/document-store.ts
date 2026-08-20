@@ -292,7 +292,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Same-project reopen (e.g. last-project on launch) keeps the OpenCode runtime.
       await resetApplicationStateForProjectSwitch(canonicalRoot);
       if (generation !== openProjectGeneration) return;
-      console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
+      log.debug("openProject cleanup", { durationMs: Math.round(performance.now() - t1) });
 
       const t2 = performance.now();
       // Ensure .prismnext/ data hub exists before any agent operations.
@@ -304,7 +304,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       const result = await window.electronAPI.fsScanMetadata(canonicalRoot);
       if (generation !== openProjectGeneration) return;
-      console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
+      log.debug("openProject fsScanMetadata", { durationMs: Math.round(performance.now() - t2) });
       const files: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -360,7 +360,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           try {
             await window.electronAPI.projectClose();
           } catch (revertError) {
-            console.error("[openProject] failed to revoke superseded project authority", revertError);
+            log.warn("project.activate", { error: String(revertError), reason: "revoke_superseded" });
           }
         }
         return;
@@ -390,7 +390,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           if (previousRoot) await window.electronAPI.projectActivate(previousRoot);
           else await window.electronAPI.projectClose();
         } catch (revertError) {
-          console.error("[openProject] failed to restore previous project authority", revertError);
+          log.warn("project.activate", { error: String(revertError), reason: "restore_previous" });
         }
       }
       toast.error(`Failed to open project: ${error}`);
@@ -398,8 +398,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } finally {
       if (generation === openProjectGeneration) {
         const ms = Math.round(performance.now() - t0);
-        console.log(`[openProject] total: ${ms}ms  (${canonicalRoot})`);
-        log.info("openProject complete", { durationMs: ms, path: canonicalRoot });
+        const project = canonicalRoot.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? canonicalRoot;
+        log.debug("openProject complete", { durationMs: ms, project });
         set({ isOpeningProject: false });
       }
     }

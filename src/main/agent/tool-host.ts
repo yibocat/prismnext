@@ -14,6 +14,9 @@ import {
   type PermissionGateRequest,
 } from "./permission-gate";
 import type { NativeToolDefinition } from "./tools/types";
+import { createLogger, shortLogDetail } from "../services/logger";
+
+const log = createLogger("tool-host", "agent");
 
 export type { NativeToolDefinition } from "./tools/types";
 
@@ -173,6 +176,7 @@ export class ToolHost {
   ): Promise<ToolExecuteResult> {
     const tool = this.tools.get(toolName);
     if (!tool) {
+      log.warn("tool.execute.error", { toolName, toolCallId: ctx.toolCallId, error: `unknown_tool:${toolName}` });
       return { ok: false, error: `unknown_tool:${toolName}` };
     }
 
@@ -228,10 +232,37 @@ export class ToolHost {
       });
     }
 
+    const startedAt = Date.now();
+    log.info("tool.execute.start", { toolName, toolCallId: ctx.toolCallId });
     try {
-      const result = await tool.execute(args, ctx);
-      return this.finish(ctx, toolName, interpretExecuteResult(result));
+      const result = interpretExecuteResult(await tool.execute(args, ctx));
+      const ok = result.ok ? "ok" : result.denied ? "denied" : "error";
+      log.info("tool.execute.end", {
+        toolName,
+        toolCallId: ctx.toolCallId,
+        durationMs: Date.now() - startedAt,
+        ok,
+      });
+      if (ok === "error") {
+        log.warn("tool.execute.error", {
+          toolName,
+          toolCallId: ctx.toolCallId,
+          error: shortLogDetail(result.error),
+        });
+      }
+      return this.finish(ctx, toolName, result);
     } catch (err) {
+      log.info("tool.execute.end", {
+        toolName,
+        toolCallId: ctx.toolCallId,
+        durationMs: Date.now() - startedAt,
+        ok: "error",
+      });
+      log.warn("tool.execute.error", {
+        toolName,
+        toolCallId: ctx.toolCallId,
+        error: shortLogDetail(err),
+      });
       return this.finish(ctx, toolName, {
         ok: false,
         error: err instanceof Error ? err.message : String(err),

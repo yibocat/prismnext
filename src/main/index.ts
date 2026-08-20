@@ -35,6 +35,7 @@ import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
+import { disposeLogger } from "./ipc/log";
 import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
 import {
   getIsQuitting,
@@ -204,7 +205,7 @@ function disposeGlobalsWhenNoWindows(): void {
   stopInteractionBridge();
   stopImageDescribeBridge();
   setTerminalBridgeWindow(null);
-  void import("./ipc/log").then((m) => m.disposeLogger());
+  disposeLogger();
   mainWindow = null;
   setMainWindow(null);
 }
@@ -392,7 +393,6 @@ app.whenReady().then(async () => {
     try {
       const pruned = pruneOrphanProviderSettings();
       if (pruned.length) {
-        console.log(`[prismnext] Pruned orphan provider settings: ${pruned.join(", ")}`);
         log.info("Pruned orphan provider settings", { ids: pruned });
       }
     } catch (err: unknown) {
@@ -433,7 +433,6 @@ app.whenReady().then(async () => {
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[prismnext] Agent infrastructure init failed: ${message}`);
     log.warn("Agent infrastructure init failed", { error: message });
   }
 });
@@ -446,6 +445,7 @@ app.on("before-quit", () => {
   finalizeExecutionsForQuit();
   destroyAllAiPty();
   destroyAllTerminalSessions();
+  disposeLogger();
 });
 
 app.on("window-all-closed", () => {

@@ -213,7 +213,7 @@ export async function syncTexSourceToBuildDir(
     }
   }
 
-  log.info(`Synced tex sources (${sourceDirRel || "."}) → ${buildDir}`);
+  log.debug(`Synced tex sources (${sourceDirRel || "."}) → ${buildDir}`);
   return { buildMain, sourceDirRel };
 }
 
@@ -278,7 +278,7 @@ export async function syncTexSourceIncremental(
   }
 
   if (copied.size > 0) {
-    log.info(`Incremental sync (${copied.size} file(s)) → ${buildDir}`);
+    log.debug(`Incremental sync (${copied.size} file(s)) → ${buildDir}`);
   }
   return { buildMain, sourceDirRel, fullSync: false };
 }
@@ -330,7 +330,7 @@ export async function stageBibliographyForBuild(
   }
 
   if (copied.size > 0) {
-    log.info(`Staged ${copied.size} bibliography file(s) to ${outDir}: ${[...copied].join(", ")}`);
+    log.debug(`Staged ${copied.size} bibliography file(s) to ${outDir}: ${[...copied].join(", ")}`);
   } else {
     log.warn(`No bibliography files staged for ${mainFile} — biber/bibtex may fail`);
   }

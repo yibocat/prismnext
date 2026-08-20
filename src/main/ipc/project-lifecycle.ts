@@ -1,10 +1,14 @@
 import { ipcMain } from "electron";
+import { basename } from "node:path";
 import * as filesystem from "../services/filesystem";
 import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
 } from "../services/project-lifecycle-authority";
 import { clearRoots, registerProjectRoot } from "../services/active-project-roots";
+import { createLogger, shortLogDetail } from "../services/logger";
+
+const log = createLogger("project-lifecycle", "startup");
 
 type WatcherLifecycle = Pick<typeof filesystem, "stopWatching">;
 
@@ -26,23 +30,39 @@ export function registerProjectLifecycleHandlers(
   });
 
   ipcMain.handle("project:activate", async (_event, args: { rootPath: string }) => {
-    const rootPath = await authority.resolveRoot(args.rootPath);
-    const previousRoot = authority.currentRoot;
-    if (previousRoot !== rootPath && previousRoot) {
-      await watcher.stopWatching();
-    }
+    try {
+      const rootPath = await authority.resolveRoot(args.rootPath);
+      const previousRoot = authority.currentRoot;
+      if (previousRoot !== rootPath && previousRoot) {
+        await watcher.stopWatching();
+      }
 
-    const transition = authority.activate(rootPath);
-    if (transition.changed) {
-      clearRoots();
-      registerProjectRoot(rootPath);
+      const transition = authority.activate(rootPath);
+      if (transition.changed) {
+        clearRoots();
+        registerProjectRoot(rootPath);
+        log.info("project.activate", {
+          from: previousRoot ? basename(previousRoot) : undefined,
+          to: basename(rootPath),
+        });
+      }
+      return { rootPath };
+    } catch (err) {
+      log.warn("project.activate", {
+        to: args?.rootPath ? basename(args.rootPath) : undefined,
+        error: shortLogDetail(err),
+      });
+      throw err;
     }
-    return { rootPath };
   });
 
   ipcMain.handle("project:close", async () => {
+    const previousRoot = authority.currentRoot;
     await watcher.stopWatching();
     authority.close();
     clearRoots();
+    if (previousRoot) {
+      log.info("project.close", { project: basename(previousRoot) });
+    }
   });
 }

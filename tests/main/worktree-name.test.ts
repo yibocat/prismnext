@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+
+vi.mock("electron", () => ({
+  app: { getPath: () => "/tmp" },
+}));
+
 import { generateWorktreeNameForTest } from "../../src/main/services/worktree";
 
 describe("worktree name generation", () => {

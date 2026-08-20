@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
+import { LOG_RING_LIMIT, redactLogValue, sanitizeLogEntry } from "@shared/log-types";
 import { logBuffer } from "@/services/logger";
 
 interface LogState {
   // View state
   filterCategory: LogCategory | "all";
-  /** Exclusive level tab — "all" shows every level. */
+  /** Exact level tab — "warn" shows only warn. "all" shows every level. */
   filterLevel: LogLevel | "all";
   search: string;
   entries: LogEntry[];
@@ -21,7 +22,11 @@ interface LogState {
   fetchMainLogs: () => Promise<void>;
 
   // Export
-  exportLogs: () => string;
+  exportLogs: (filters?: {
+    category?: LogCategory | "all";
+    level?: LogLevel | "all";
+    search?: string;
+  }) => string;
 }
 
 function detailSearchText(detail: unknown): string {
@@ -41,7 +46,9 @@ export function filterLogEntries(
   filterLevel: LogLevel | "all",
   search: string,
 ): LogEntry[] {
-  const all = [...mainEntries, ...logBuffer].sort((a, b) => b.ts - a.ts || b.id - a.id);
+  const all = [...mainEntries, ...logBuffer]
+    .map(sanitizeLogEntry)
+    .sort((a, b) => b.ts - a.ts || b.id - a.id);
 
   let filtered = all;
   if (filterCategory !== "all") {
@@ -100,7 +107,7 @@ export const useLogStore = create<LogState>((set, get) => ({
     try {
       const result = await window.electronAPI.logFetch({
         category: get().filterCategory === "all" ? undefined : get().filterCategory as LogCategory,
-        limit: 2000,
+        limit: LOG_RING_LIMIT,
       });
       set({ mainEntries: result.entries });
       get().refresh();
@@ -109,13 +116,51 @@ export const useLogStore = create<LogState>((set, get) => ({
     }
   },
 
-  exportLogs: (): string => {
-    const lines: string[] = [];
-    for (const e of get().entries) {
-      const ts = new Date(e.ts).toISOString();
-      const base = `${ts} [${e.level.toUpperCase()}] [${e.process}:${e.category}] ${e.module}: ${e.message}`;
-      lines.push(e.detail !== undefined ? `${base} ${JSON.stringify(e.detail)}` : base);
-    }
-    return lines.join("\n");
+  exportLogs: (filters): string => {
+    const state = get();
+    const entries = filterLogEntries(
+      state.mainEntries,
+      filters?.category ?? state.filterCategory,
+      filters?.level ?? state.filterLevel,
+      filters?.search ?? state.search,
+    );
+    return formatLogExport(entries);
   },
 }));
+
+function formatLogHeader(entry: LogEntry): string {
+  const e = sanitizeLogEntry(entry);
+  const ts = new Date(e.ts).toISOString();
+  return `${ts} [${e.level.toUpperCase()}] [${e.process}:${e.category}] ${e.module}: ${e.message}`;
+}
+
+function formatLogDetail(detail: unknown): string {
+  const clean = redactLogValue(detail);
+  if (typeof clean === "string") return clean;
+  try {
+    return JSON.stringify(clean, null, 2);
+  } catch {
+    return String(clean);
+  }
+}
+
+export function formatLogExport(entries: LogEntry[]): string {
+  const lines: string[] = [];
+  for (const raw of entries) {
+    const e = sanitizeLogEntry(raw);
+    const base = formatLogHeader(e);
+    lines.push(e.detail !== undefined ? `${base} ${JSON.stringify(e.detail)}` : base);
+  }
+  return lines.join("\n");
+}
+
+/** Clipboard text: header plus pretty-printed detail (the expanded payload). */
+export function formatLogCopy(entries: LogEntry[]): string {
+  return entries
+    .map((raw) => {
+      const e = sanitizeLogEntry(raw);
+      if (e.detail === undefined) return formatLogHeader(e);
+      return `${formatLogHeader(e)}\n${formatLogDetail(e.detail)}`;
+    })
+    .join("\n\n");
+}

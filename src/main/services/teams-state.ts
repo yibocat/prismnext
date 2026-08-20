@@ -217,7 +217,7 @@ function moveCustomAgentDirs(projectRoot: string, kind: "experts" | "orchestrato
     const dest = join(localRoot, entry.name);
     try {
       if (existsSync(dest)) {
-        log.warn(`local ${kind} 已存在，丢弃 legacy 副本`, { id: entry.name });
+        log.warn(`local ${kind} already exists; discarded the legacy copy`, { id: entry.name });
         rmSync(src, { recursive: true, force: true });
         continue;
       }
@@ -227,7 +227,7 @@ function moveCustomAgentDirs(projectRoot: string, kind: "experts" | "orchestrato
       const def = JSON.parse(readFileSync(jsonPath, "utf-8")) as Record<string, unknown>;
       writeFileSync(jsonPath, `${JSON.stringify(stripIdentityFields(def), null, 2)}\n`, "utf-8");
     } catch (err) {
-      log.error(`迁移 custom ${kind} 失败: ${entry.name}`, { projectRoot, error: String(err) });
+      log.error(`failed to migrate custom ${kind}: ${entry.name}`, { projectRoot, error: String(err) });
     }
   }
 }
@@ -275,7 +275,7 @@ function migrateLegacySkillDirs(
       }
       const dest = join(localRoot, id);
       if (existsSync(dest)) {
-        log.warn("local skills 已存在，legacy 副本进 backup", { id });
+        log.warn("local skills already exist; moved the legacy copy to backup", { id });
         const backupDest = join(backupRoot, "skills", id);
         mkdirSync(dirname(backupDest), { recursive: true });
         if (existsSync(backupDest)) rmSync(backupDest, { recursive: true, force: true });
@@ -286,7 +286,7 @@ function migrateLegacySkillDirs(
       renameSync(src, dest);
       moved.add(id);
     } catch (err) {
-      log.error(`迁移 legacy skill 失败: ${id}`, { projectRoot, error: String(err) });
+      log.error(`failed to migrate legacy skill: ${id}`, { projectRoot, error: String(err) });
     }
   }
   // 空壳顺手清掉（残余文件留给 backupLegacyAgentFiles 处理）
@@ -348,7 +348,7 @@ function migrateLegacyCommands(projectRoot: string, disabled: Set<string>): void
       seen.add(name);
       const dest = join(localRoot, `${name}.md`);
       if (existsSync(dest)) {
-        log.warn("local commands 已存在，legacy 副本进 backup", { name });
+        log.warn("local commands already exist; moved the legacy copy to backup", { name });
         const backupDest = join(backupRoot, "commands", fileName);
         mkdirSync(dirname(backupDest), { recursive: true });
         renameSync(src, backupDest);
@@ -359,7 +359,7 @@ function migrateLegacyCommands(projectRoot: string, disabled: Set<string>): void
       rmSync(src, { force: true });
       if (forceDisabled || !enabled) disabled.add(`${LOCAL_TEAM_ID}:${name}`);
     } catch (err) {
-      log.error(`迁移 legacy command 失败: ${fileName}`, { projectRoot, error: String(err) });
+      log.error(`failed to migrate legacy command: ${fileName}`, { projectRoot, error: String(err) });
     }
   };
 
@@ -425,7 +425,7 @@ function migrateLegacySkillsManifestDisabled(
       "utf-8",
     );
   } catch (err) {
-    log.error("skills-manifest 瘦身失败", { projectRoot, error: String(err) });
+    log.error("failed to slim skills-manifest", { projectRoot, error: String(err) });
   }
 }
 
@@ -494,7 +494,7 @@ function moveToLegacyBackup(projectRoot: string, rel: string): boolean {
     renameSync(src, dest);
     return true;
   } catch (err) {
-    log.warn("R9 副本回收失败", { rel, error: String(err) });
+    log.warn("R9 copy reclaim failed", { rel, error: String(err) });
     return false;
   }
 }
@@ -606,7 +606,7 @@ function backupLegacyAgentFiles(projectRoot: string): void {
       mkdirSync(dirname(join(backupDir, rel)), { recursive: true });
       renameSync(src, join(backupDir, rel));
     } catch (err) {
-      log.warn("legacy backup 失败，原文件保留", { rel, error: String(err) });
+      log.warn("legacy backup failed; original file kept", { rel, error: String(err) });
     }
   };
   move("experts-manifest.json");
@@ -778,7 +778,7 @@ export function migrateTeamsStateIfNeeded(projectRoot: string): {
       }
       state = normalizePacksState(raw);
     } catch (err) {
-      log.error("packs.json 损坏，回退空状态", { projectRoot, error: String(err) });
+      log.error("packs.json is corrupt; falling back to empty state", { projectRoot, error: String(err) });
       version = 0;
       state = emptyPacksState();
     }
@@ -793,10 +793,10 @@ export function migrateTeamsStateIfNeeded(projectRoot: string): {
     for (const migration of MIGRATIONS) {
       try {
         state = migration.apply(projectRoot, state);
-        log.info(`packs 迁移已执行: ${migration.id}`, { projectRoot });
+        log.info(`packs migration applied: ${migration.id}`, { projectRoot });
       } catch (err) {
         // 单条迁移失败不阻断后续——状态操作可重入，下版本再试
-        log.error(`packs 迁移失败: ${migration.id}`, { projectRoot, error: String(err) });
+        log.error(`packs migration failed: ${migration.id}`, { projectRoot, error: String(err) });
       }
     }
   }
@@ -823,13 +823,13 @@ export function migrateTeamsStateIfNeeded(projectRoot: string): {
       }
     } catch (err) {
       // Upsert failure is non-fatal; state stays consistent, retried next read.
-      log.error("packs v2→v3 上卷失败", { projectRoot, error: String(err) });
+      log.error("packs v2→v3 rollup failed", { projectRoot, error: String(err) });
     }
   }
 
   if (hasLegacy) {
     state = migrateLegacyAgentState(projectRoot, state);
-    log.info("legacy agent 状态已迁移（R1–R8/R10/R11）", { projectRoot });
+    log.info("legacy agent state migrated (R1–R8/R10/R11)", { projectRoot });
   }
 
   writeTeamsState(projectRoot, state);
@@ -882,7 +882,7 @@ export function cleanupLegacyBackups(
     if (!existsSync(agentDir)) return removed;
     entries = readdirSync(agentDir, { withFileTypes: true });
   } catch (err) {
-    log.warn("legacy-backup 清理：读取 agent 目录失败", { projectRoot, error: String(err) });
+    log.warn("legacy-backup cleanup: failed to read the agent directory", { projectRoot, error: String(err) });
     return removed;
   }
   for (const entry of entries) {
@@ -897,11 +897,11 @@ export function cleanupLegacyBackups(
       rmSync(join(agentDir, entry.name), { recursive: true, force: true });
       removed.push(entry.name);
     } catch (err) {
-      log.warn("legacy-backup 清理：删除失败", { dir: entry.name, error: String(err) });
+      log.warn("legacy-backup cleanup: delete failed", { dir: entry.name, error: String(err) });
     }
   }
   if (removed.length > 0) {
-    log.info("legacy-backup 清理完成", { projectRoot, removed });
+    log.info("legacy-backup cleanup complete", { projectRoot, removed });
   }
   return removed;
 }

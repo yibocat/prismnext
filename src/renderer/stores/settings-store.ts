@@ -34,6 +34,7 @@ import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
 import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
 import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
 import type { ModelConfig } from "@/lib/providers";
+import type { LogLevel } from "@shared/log-types";
 
 const log = createLogger("settings-store");
 
@@ -189,6 +190,8 @@ export interface AppSettings {
   permissionDenyRules?: string[];
   /** Permission mode schema version (migration). */
   permissionModeSchemaVersion?: number;
+  /** Minimum level written by the main-process logger. Default info. */
+  logMinLevel?: LogLevel;
   /** Agent shell execution: mirror (OpenCode bash + UI mirror) | pty (custom bash tool) */
   agentTerminalMode?: "mirror" | "pty";
   /** Auto-open AI terminal tab when agent runs bash (default true). */

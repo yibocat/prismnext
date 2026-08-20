@@ -1,4 +1,5 @@
 import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
+import { LOG_LEVEL_ORDER, LOG_RING_LIMIT, redactAbsolutePaths, redactLogValue } from "@shared/log-types";
 
 // ─── Dev / prod toggle ───
 
@@ -7,9 +8,7 @@ const MIN_LEVEL: LogLevel =
     ? "info"
     : "debug";
 
-const LEVEL_ORDER: Record<LogLevel, number> = {
-  debug: 0, info: 1, warn: 2, error: 3,
-};
+const LEVEL_ORDER = LOG_LEVEL_ORDER;
 
 // ─── Console colors ───
 
@@ -20,7 +19,7 @@ const COLORS: Record<LogLevel, string> = {
 // ─── Ring buffer ───
 
 let _id = 0;
-const MAX_MEMORY = 5000;
+const MAX_MEMORY = LOG_RING_LIMIT;
 export const logBuffer: LogEntry[] = [];
 
 function push(entry: LogEntry) {
@@ -34,14 +33,16 @@ export function createLogger(module: string, category: LogCategory = "general") 
   function log(level: LogLevel, message: string, detail?: unknown) {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
 
+    const safeMessage = redactAbsolutePaths(message);
+    const safeDetail = detail === undefined ? undefined : redactLogValue(detail);
     const entry: LogEntry = {
       id: ++_id,
       ts: Date.now(),
       level,
       category,
       module,
-      message,
-      detail,
+      message: safeMessage,
+      detail: safeDetail,
       process: "renderer",
     };
 
@@ -54,7 +55,7 @@ export function createLogger(module: string, category: LogCategory = "general") 
       : level === "warn" ? console.warn
       : level === "info" ? console.info
       : console.debug;
-    fn(`%c[${level.toUpperCase()}]%c ${tag} ${message}`, `color:${color}`, "", detail ?? "");
+    fn(`%c[${level.toUpperCase()}]%c ${tag} ${safeMessage}`, `color:${color}`, "", safeDetail ?? "");
   }
 
   return {

@@ -41,6 +41,9 @@ import { cslEntryFromPaperRow } from "../../shared/bibliographic-metadata/helper
 import { broadcastToRenderer } from "./literature-broadcast";
 import { recordDownloadProvenance } from "./provenance-service";
 import "@citation-js/plugin-bibtex";
+import { createLogger, shortLogDetail } from "./logger";
+
+const log = createLogger("literature", "general");
 
 export interface PaperRow {
   id: string;
@@ -403,11 +406,28 @@ export function openLibraryDb(projectRoot: string): LibraryDb {
   ensureLibraryDirs(paths);
   let db = dbCache.get(paths.dbPath);
   if (!db) {
-    db = new DatabaseSync(paths.dbPath);
-    migrateLibraryDb(db);
-    ensureFtsHealthy(db);
-    upgradeOpaqueBibkeysInDb(db);
-    dbCache.set(paths.dbPath, db);
+    let opened: LibraryDb | undefined;
+    try {
+      opened = new DatabaseSync(paths.dbPath);
+      migrateLibraryDb(opened);
+      ensureFtsHealthy(opened);
+      upgradeOpaqueBibkeysInDb(opened);
+      dbCache.set(paths.dbPath, opened);
+      db = opened;
+    } catch (err) {
+      log.warn("literature.open.fail", {
+        project: path.basename(projectRoot),
+        error: shortLogDetail(err),
+      });
+      if (opened) {
+        try {
+          opened.close();
+        } catch {
+          // ignore close after a failed open
+        }
+      }
+      throw err;
+    }
   }
   return db;
 }
@@ -539,7 +559,9 @@ function repairFtsIndex(db: LibraryDb): void {
   try {
     db.exec("INSERT INTO papers_fts(papers_fts) VALUES('rebuild')");
   } catch (err) {
-    console.warn("[literature] FTS rebuild failed, recreating virtual table:", err);
+    log.warn("literature.fts_rebuild", {
+      error: shortLogDetail(err),
+    });
     recreateFtsIndex(db);
   }
 }

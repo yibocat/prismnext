@@ -1297,7 +1297,10 @@
         "error": "錯誤"
       },
       "showAllLevels": "顯示所有級別",
-      "showLevelOnly": "僅顯示 {{level}}",
+      "showLevelOnly": "只顯示 {{level}}",
+      "showLevelAndAbove": "只顯示 {{level}}",
+      "capture": "記錄",
+      "captureHint": "主程序寫入的最低級別。除錯供開發用。",
       "searchPlaceholder": "搜尋訊息、模組與詳情…",
       "clearSearch": "清除搜尋",
       "refresh": "重新整理",
@@ -1309,7 +1312,10 @@
       "warnings": "{{count}} 條警告",
       "warnings_plural": "{{count}} 條警告",
       "emptyLevel": "當前檢視中沒有 {{level}} 日誌。",
-      "activityHint": "主程序與介面活動將顯示在這裡。"
+      "activityHint": "主程序與介面活動將顯示在這裡。",
+      "copyRow": "複製這條日誌",
+      "copySelected": "複製已選 {{count}} 條",
+      "copied": "已複製"
     },
     "promptStack": {
       "layers": "注入層",

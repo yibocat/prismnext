@@ -84,6 +84,9 @@ import {
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
 import { buildLiveTaskRosterMarkdown } from "../../shared/subagent-roster";
+import { createLogger, shortLogDetail } from "../services/logger";
+
+const log = createLogger("agent-service", "agent");
 
 const AGENT_TOOLS = [
   ...PI_PRIMITIVE_TOOL_NAMES,
@@ -410,6 +413,11 @@ export class AgentService {
       return { ok: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
+      log.warn("turn.fail", {
+        conversationId,
+        runtimeSessionId: this.sessionId ?? undefined,
+        error: shortLogDetail(error),
+      });
       this.sink?.({
         type: "turn_failed",
         runtimeSessionId: this.sessionId ?? "none",

@@ -1,7 +1,8 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
-import { createLogger } from "../services/logger";
+import { basename } from "node:path";
+import { createLogger, shortLogDetail } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import {
   writeWorkspaceDirs,
@@ -369,7 +370,7 @@ export function registerFsHandlers(
         const agentConfigDir = join(prismDir, "agent-config");
         try { rmSync(agentConfigDir, { recursive: true }); } catch { /* not empty, leave it */ }
       } catch (err: any) {
-        console.warn(`[project] agent config migration failed: ${err.message}`);
+        fsLog.warn("project agent config migration failed", { error: err.message });
       }
     }
 
@@ -406,7 +407,9 @@ export function registerFsHandlers(
     ) => {
     const { join } = require("node:path");
     const { writeFileSync, existsSync, mkdirSync } = require("node:fs");
+    let failLogged = false;
 
+    try {
     // Guard against overwriting an existing project
     const prismDir = join(args.rootPath, ".prismnext");
     if (existsSync(prismDir)) {
@@ -464,9 +467,10 @@ export function registerFsHandlers(
     // Create configured folders on disk + log any failures
     const createResult = createConfiguredFolders(args.rootPath, workspaceDirs);
     if (createResult.errors.length > 0) {
-      fsLog.warn("project:create — some folders could not be created", {
-        rootPath: args.rootPath,
-        errors: createResult.errors,
+      fsLog.warn("project.create.fail", {
+        project: basename(args.rootPath),
+        reason: "folders",
+        error: shortLogDetail(createResult.errors.join("; ")),
       });
     }
 
@@ -487,12 +491,23 @@ export function registerFsHandlers(
       const { initRepo } = await import("../services/git");
       const gitResult = await initRepo(args.rootPath);
       if (!gitResult.success) {
-        fsLog.warn("project:create — git init failed", {
-          rootPath: args.rootPath,
-          error: gitResult.error,
+        failLogged = true;
+        fsLog.warn("project.create.fail", {
+          project: basename(args.rootPath),
+          reason: "git_init",
+          error: shortLogDetail(gitResult.error),
         });
         throw new Error(gitResult.error || "Failed to initialize git repository");
       }
+    }
+    } catch (err) {
+      if (!failLogged) {
+        fsLog.warn("project.create.fail", {
+          project: basename(args.rootPath),
+          error: shortLogDetail(err),
+        });
+      }
+      throw err;
     }
   });
 

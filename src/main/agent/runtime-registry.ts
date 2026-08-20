@@ -14,6 +14,9 @@ import {
   AgentSessionStore,
   resolvePiAgentRoot,
 } from "./session-store";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("runtime-registry", "agent");
 
 export interface StartRuntimeInput {
   conversationId: string;
@@ -143,6 +146,12 @@ export class RuntimeRegistry {
       binding,
       runtime: started.runtime,
       runtimeSessionId: started.runtimeSessionId,
+    });
+    log.info("session.open", {
+      conversationId: input.conversationId,
+      runtimeSessionId: started.runtimeSessionId,
+      persist: existing.piSessionFile || binding.piSessionFile ? "open" : "memory",
+      hasPiSessionFile: Boolean(binding.piSessionFile),
     });
     return binding;
   }

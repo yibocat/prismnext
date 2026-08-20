@@ -2,6 +2,9 @@ import { readdir, readFile, writeFile, unlink, rm, rename, mkdir, stat } from "n
 import { join, extname, dirname, basename } from "node:path";
 import { FSWatcher, watch } from "chokidar";
 import { BrowserWindow } from "electron";
+import { createLogger } from "./logger";
+
+const log = createLogger("fs-watch", "fs");
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -504,7 +507,9 @@ async function startWatchingExclusive(
       settleWatcherReadiness.push(settle);
       watcher.once("ready", settle);
       watcher.on("error", (err) => {
-        console.error("[fs-watch] chokidar error:", err);
+        log.error("fs-watch chokidar error", {
+          error: err instanceof Error ? err.message : String(err),
+        });
         if (settled) return;
         settled = true;
         reject(err);
@@ -529,12 +534,16 @@ async function startWatchingExclusive(
         import("./project-skills-refresh").then(({ scheduleSkillsRefreshFromPaths }) => {
           scheduleSkillsRefreshFromPaths(rootPath, paths);
         }).catch((err) => {
-          console.error("[fs-watch] skills refresh scheduling failed:", err);
+          log.error("fs-watch skills refresh scheduling failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
         import("./project-subagents-refresh").then(({ scheduleExpertsRefreshFromPaths }) => {
           scheduleExpertsRefreshFromPaths(rootPath, paths);
         }).catch((err) => {
-          console.error("[fs-watch] experts refresh scheduling failed:", err);
+          log.error("fs-watch experts refresh scheduling failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         });
       }
       const wins = BrowserWindow.getAllWindows();

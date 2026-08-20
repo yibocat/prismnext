@@ -17,10 +17,10 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
-import { createLogger } from "../services/logger";
+import { createLogger, shortLogDetail } from "../services/logger";
+import type { AgentMcpHost } from "./mcp-host";
 
 const piRuntimeLog = createLogger("pi-runtime", "agent");
-import type { AgentMcpHost } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
 import { InMemoryCredentialStore, Type } from "@earendil-works/pi-ai";
 import type {
@@ -807,6 +807,10 @@ export class PiSdkRuntime implements AgentRuntime {
       const live = this.sessions.get(runtimeSessionId);
       if (!live || !live.activeTurn || live.cancelled) return;
       if (live.activeTurn.turnId !== live.turnId) return;
+      piRuntimeLog.warn("turn.idle_timeout", {
+        runtimeSessionId: live.runtimeSessionId,
+        turnId: live.activeTurn.turnId,
+      });
       this.emit({
         type: "turn_failed",
         runtimeSessionId: live.runtimeSessionId,
@@ -1022,6 +1026,13 @@ export class PiSdkRuntime implements AgentRuntime {
       piSessionFile: handle.sessionFile,
       ...(handle.getModelRef?.() ? { modelRef: handle.getModelRef() } : {}),
     });
+    if (persist.mode !== "open") {
+      piRuntimeLog.info("session.create", {
+        conversationId,
+        runtimeSessionId,
+        persist: persist.mode,
+      });
+    }
     return {
       runtimeSessionId,
       tabId: input.tabId,
@@ -1034,14 +1045,6 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(input.runtimeSessionId);
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
-    piRuntimeLog.info("sendTurn", {
-      runtimeSessionId: input.runtimeSessionId,
-      tabId: input.tabId,
-      turnId: input.turnId,
-      textLen: input.text?.length,
-      sessionAgent: input.sessionAgent,
-      activeTurnBefore: !!session.activeTurn,
-    });
 
     const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
     const turnIndex = existingRecord?.turns.length ?? 0;
@@ -1079,6 +1082,11 @@ export class PiSdkRuntime implements AgentRuntime {
         })),
       );
     } catch (err) {
+      piRuntimeLog.warn("turn.fail", {
+        runtimeSessionId: session.runtimeSessionId,
+        turnId: session.turnId,
+        error: shortLogDetail(err),
+      });
       this.emit({
         type: "turn_failed",
         runtimeSessionId: session.runtimeSessionId,
@@ -1099,6 +1107,11 @@ export class PiSdkRuntime implements AgentRuntime {
       // Only fail the turn we actually prompted — if a new turn already started
       // within the window, its activeTurn belongs to that newer turn.
       if (active && active.turnId === turnIdAtPrompt && !live.cancelled) {
+        piRuntimeLog.warn("turn.fail", {
+          runtimeSessionId: session.runtimeSessionId,
+          turnId: turnIdAtPrompt,
+          error: "engine_ended_without_terminal_event",
+        });
         this.emit({
           type: "turn_failed",
           runtimeSessionId: session.runtimeSessionId,
@@ -1121,6 +1134,11 @@ export class PiSdkRuntime implements AgentRuntime {
       modelId,
       apiKey: input.apiKey,
     });
+    piRuntimeLog.info("session.set_model", {
+      runtimeSessionId: session.runtimeSessionId,
+      from: current ? `${current.provider}/${current.modelId}` : undefined,
+      to: `${provider}/${modelId}`,
+    });
     const next = session.handle.getModelRef?.() ?? { provider, modelId };
     this.opts.store.setModelRef(session.runtimeSessionId, next);
     this.emitSessionUsageSnapshot(session.runtimeSessionId, session.tabId, session.turnId, {
@@ -1130,12 +1148,23 @@ export class PiSdkRuntime implements AgentRuntime {
 
   async compact(runtimeSessionId: RuntimeSessionId): Promise<AgentCompactResult> {
     const session = this.sessions.get(runtimeSessionId);
-    if (!session) return { ok: false, error: "session_not_live" };
-    if (!session.handle.compact) return { ok: false, error: "compact_unavailable" };
+    if (!session) {
+      piRuntimeLog.warn("session.compact", { runtimeSessionId, ok: false, error: "session_not_live" });
+      return { ok: false, error: "session_not_live" };
+    }
+    if (!session.handle.compact) {
+      piRuntimeLog.warn("session.compact", { runtimeSessionId, ok: false, error: "compact_unavailable" });
+      return { ok: false, error: "compact_unavailable" };
+    }
     try {
       const result = await session.handle.compact();
       this.emitSessionUsageSnapshot(runtimeSessionId, session.tabId, session.turnId, {
         occupancyReset: true,
+      });
+      piRuntimeLog.info("session.compact", {
+        runtimeSessionId,
+        ok: true,
+        tokensBefore: result.tokensBefore,
       });
       return {
         ok: true,
@@ -1143,6 +1172,11 @@ export class PiSdkRuntime implements AgentRuntime {
         tokensBefore: result.tokensBefore,
       };
     } catch (err) {
+      piRuntimeLog.warn("session.compact", {
+        runtimeSessionId,
+        ok: false,
+        error: shortLogDetail(err),
+      });
       return {
         ok: false,
         error: err instanceof Error ? err.message : String(err),
@@ -1184,6 +1218,10 @@ export class PiSdkRuntime implements AgentRuntime {
     session.cancelled = true;
     this.opts.gate.cancelSession(runtimeSessionId);
     await session.handle.abort();
+    piRuntimeLog.debug("turn.cancelled", {
+      runtimeSessionId: session.runtimeSessionId,
+      turnId: session.turnId,
+    });
     this.emit({
       type: "turn_cancelled",
       runtimeSessionId: session.runtimeSessionId,
@@ -1201,6 +1239,11 @@ export class PiSdkRuntime implements AgentRuntime {
   async disposeSession(runtimeSessionId: RuntimeSessionId): Promise<void> {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
+    const conversationId = this.opts.store.getSession(runtimeSessionId)?.conversationId;
+    piRuntimeLog.info("session.dispose", {
+      runtimeSessionId,
+      conversationId,
+    });
     session.unsubscribe();
     await session.handle.abort().catch(() => {});
     session.handle.dispose();

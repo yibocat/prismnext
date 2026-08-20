@@ -6,7 +6,7 @@ vi.mock("@/services/logger", () => ({
 }));
 
 import { logBuffer } from "@/services/logger";
-import { filterLogEntries } from "@/stores/log-store";
+import { filterLogEntries, formatLogCopy, formatLogExport } from "@/stores/log-store";
 
 const mainEntries: LogEntry[] = [
   {
@@ -52,27 +52,103 @@ describe("filterLogEntries", () => {
     logBuffer.length = 0;
   });
 
-  it("returns only warn rows when warn tab is selected", () => {
-    const result = filterLogEntries(mainEntries, "all", "warn", "");
-    expect(result).toHaveLength(2);
-    expect(result.every((e) => e.level === "warn")).toBe(true);
+  it("keeps only the selected level", () => {
+    const withError: LogEntry[] = [
+      ...mainEntries,
+      {
+        id: 9,
+        ts: 9000,
+        level: "error",
+        category: "compile",
+        module: "compiler",
+        message: "compile.fail",
+        process: "main",
+      },
+    ];
+    const warnOnly = filterLogEntries(withError, "all", "warn", "");
+    expect(warnOnly.map((e) => e.level)).toEqual(["warn", "warn"]);
+
+    const errorOnly = filterLogEntries(withError, "all", "error", "");
+    expect(errorOnly).toHaveLength(1);
+    expect(errorOnly[0]?.level).toBe("error");
   });
 
-  it("returns only info rows when info tab is selected", () => {
+  it("keeps only info when info is selected", () => {
     const result = filterLogEntries(mainEntries, "all", "info", "");
     expect(result).toHaveLength(2);
     expect(result.every((e) => e.level === "info")).toBe(true);
   });
 
-  it("returns empty array when debug tab has no matches", () => {
-    const result = filterLogEntries(mainEntries, "all", "debug", "");
-    expect(result).toHaveLength(0);
+  it("keeps only debug when debug is selected", () => {
+    const withDebug: LogEntry[] = [
+      ...mainEntries,
+      {
+        id: 6,
+        ts: 6000,
+        level: "debug",
+        category: "startup",
+        module: "document-store",
+        message: "openProject complete",
+        process: "renderer",
+      },
+    ];
+    const result = filterLogEntries(withDebug, "all", "debug", "");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.level).toBe("debug");
   });
 
-  it("combines category and level filters", () => {
+  it("filters by category only", () => {
+    const result = filterLogEntries(mainEntries, "startup", "all", "");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.category).toBe("startup");
+  });
+
+  it("combines category and exact-level filters", () => {
     const result = filterLogEntries(mainEntries, "agent", "warn", "");
     expect(result).toHaveLength(2);
     expect(result.every((e) => e.category === "agent" && e.level === "warn")).toBe(true);
+
+    const agentInfo = filterLogEntries(mainEntries, "agent", "info", "");
+    expect(agentInfo).toHaveLength(1);
+    expect(agentInfo[0]?.module).toBe("prompt-manager");
+  });
+
+  it("exports the current filtered rows", () => {
+    const text = formatLogExport(filterLogEntries(mainEntries, "agent", "warn", ""));
+    expect(text).toContain("MCP providers/set not available");
+    expect(text).not.toContain("Prompt system initialized");
+  });
+
+  it("redacts home paths in export and search", () => {
+    const leaked: LogEntry[] = [
+      {
+        id: 8,
+        ts: 8000,
+        level: "info",
+        category: "startup",
+        module: "pro-packs-discovery",
+        message: "pro packs discovery complete",
+        detail: {
+          packageDir: "/Users/yibow/MyPro/ResearchPrism/prism-next-pro",
+          registered: ["prismnext.pro.claim-police"],
+        },
+        process: "main",
+      },
+    ];
+    const text = formatLogExport(leaked);
+    expect(text).toContain("…/prism-next-pro");
+    expect(text).not.toContain("/Users/yibow");
+    expect(text).not.toContain("yibow");
+
+    const byBasename = filterLogEntries(leaked, "all", "all", "prism-next-pro");
+    expect(byBasename).toHaveLength(1);
+    expect(String(byBasename[0]?.detail)).not.toContain("/Users/yibow");
+
+    const copied = formatLogCopy(leaked);
+    expect(copied).toContain("pro packs discovery complete");
+    expect(copied).toContain('"packageDir": "…/prism-next-pro"');
+    expect(copied).toContain("\n{");
+    expect(copied).not.toContain("/Users/yibow");
   });
 
   it("orders newest first", () => {

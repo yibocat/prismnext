@@ -26,6 +26,25 @@ import {
 import { isPiPrimitiveToolName } from "./capability-matrix";
 import { getNativeToolByName } from "./tools/index";
 import type { ToolPermissionCategory } from "./tools/types";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("permission-gate", "security");
+
+export type HardDenyCode = "latex" | "whole_disk" | "outside_project";
+
+export function classifyHardDeny(
+  request: Pick<PermissionGateRequest, "toolName" | "bashCommand">,
+  reason: string,
+): HardDenyCode {
+  const name = request.toolName.toLowerCase();
+  const command = request.bashCommand ?? "";
+  if ((name === "bash" || name === "experiment-run") && command) {
+    if (isWholeDiskSearchBashCommand(command)) return "whole_disk";
+    if (isDirectLatexCompileBashCommand(command)) return "latex";
+  }
+  if (reason.startsWith("outside_project:")) return "outside_project";
+  return "outside_project";
+}
 
 const PI_PRIMITIVE_CATEGORY: Record<string, ToolPermissionCategory> = {
   read: "read_only",
@@ -240,6 +259,12 @@ export class PermissionGate {
     // 1. Hard Deny invariants: whole-disk search, raw latex compilation, project escaping
     const hard = evaluateHardDeny({ ...request, allowedPaths });
     if (hard.deny) {
+      log.warn("permission.hard_deny", {
+        toolName: request.toolName,
+        code: classifyHardDeny(request, hard.reason),
+        runtimeSessionId: request.runtimeSessionId,
+        toolCallId: request.toolCallId,
+      });
       return { decision: "deny", reason: hard.reason, requestId: request.requestId };
     }
 
@@ -262,6 +287,11 @@ export class PermissionGate {
       bashCwd: request.bashCwd,
     };
     if (matchDenyRules(rules.denyRules, ruleCtx)) {
+      log.warn("permission.user_deny_rule", {
+        toolName: request.toolName,
+        runtimeSessionId: request.runtimeSessionId,
+        toolCallId: request.toolCallId,
+      });
       return { decision: "deny", reason: "user_deny_rule", requestId: request.requestId };
     }
 
@@ -290,6 +320,11 @@ export class PermissionGate {
       if (category === "read_only") {
         return { decision: "allow", reason: "readonly_allowed", requestId: request.requestId };
       }
+      log.warn("permission.readonly_mode", {
+        toolName: request.toolName,
+        runtimeSessionId: request.runtimeSessionId,
+        toolCallId: request.toolCallId,
+      });
       return { decision: "deny", reason: "readonly_mode", requestId: request.requestId };
     }
 
@@ -355,6 +390,11 @@ export class PermissionGate {
     return await new Promise<PermissionGateResult>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.requestId);
+        log.warn("permission.timeout", {
+          toolName: request.toolName,
+          runtimeSessionId: request.runtimeSessionId,
+          toolCallId: request.toolCallId,
+        });
         resolve({
           decision: "deny",
           reason: "permission_timeout",

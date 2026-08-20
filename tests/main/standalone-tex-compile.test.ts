@@ -97,7 +97,7 @@ describe("compileForAgent standalone routing", () => {
 
   it("compiles a standalone figure in place — never via the manuscript pipeline", async () => {
     const result = await compileForAgent(root, "figures/arch.tex");
-    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex");
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex", { source: "agent" });
     expect(compileLatex).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       success: true,
@@ -118,7 +118,7 @@ describe("compileForAgent standalone routing", () => {
       "utf-8",
     );
     const result = await compileForAgent(root, "figures/arch.tex");
-    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex");
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex", { source: "agent" });
     expect(compileLatex).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       success: true,
@@ -135,13 +135,13 @@ describe("compileForAgent standalone routing", () => {
       "utf-8",
     );
     await compileForAgent(root);
-    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex");
+    expect(compileStandaloneTexInPlace).toHaveBeenCalledWith(root, "figures/arch.tex", { source: "agent" });
     expect(compileLatex).not.toHaveBeenCalled();
   });
 
   it("keeps the manuscript on the shared build-dir pipeline", async () => {
     await compileForAgent(root, "manuscript/main.tex");
-    expect(compileLatex).toHaveBeenCalled();
+    expect(compileLatex).toHaveBeenCalledWith(root, "manuscript/main.tex", false, { source: "agent" });
     expect(compileStandaloneTexInPlace).not.toHaveBeenCalled();
   });
 

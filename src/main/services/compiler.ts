@@ -10,6 +10,31 @@ import { createLogger } from "./logger";
 
 const log = createLogger("compiler", "compile");
 
+export type CompileSource = "ui" | "agent";
+export type CompileRoute = "manuscript" | "standalone";
+export type CompileEngineId = "tectonic-bundled" | "tectonic-system" | "texlive";
+
+/** First non-empty line, truncated — never dump a TeX log into the app logger. */
+export function oneLineError(text: string | undefined, max = 240): string {
+  const line = (text ?? "").split(/\r?\n/).map((s) => s.trim()).find(Boolean) ?? "";
+  if (line.length <= max) return line;
+  return `${line.slice(0, Math.max(0, max - 1))}…`;
+}
+
+export function tectonicEngineId(bundled: boolean): Exclude<CompileEngineId, "texlive"> {
+  return bundled ? "tectonic-bundled" : "tectonic-system";
+}
+
+const PROJECT_LOCK_BUSY_MS = 3_000;
+
+type EngineCompileResult = {
+  success: boolean;
+  logContent: string;
+  superseded?: boolean;
+  timedOut?: boolean;
+  extraPasses?: number;
+};
+
 const MAX_CONCURRENT = 3;
 const COMPILE_TIMEOUT_MS = (() => {
   const raw = Number(process.env.PRISM_COMPILE_TIMEOUT_MS);
@@ -48,6 +73,8 @@ export interface CompileLatexOptions {
    * Skips the strict “citations unresolved” failure gate (PDF still returned).
    */
   fast?: boolean;
+  /** Who kicked off this job. Defaults to ui. Agent compiles must pass "agent". */
+  source?: CompileSource;
 }
 
 interface SynctexResult {
@@ -257,7 +284,7 @@ function runWithTimeout(
   cwd: string,
   env: NodeJS.ProcessEnv,
   timeoutMs: number
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve) => {
     const proc = spawn(cmd, args, {
       cwd,
@@ -288,11 +315,12 @@ function runWithTimeout(
         exitCode: timedOut ? -1 : (code ?? 1),
         stdout,
         stderr,
+        timedOut,
       });
     });
     proc.on("error", () => {
       clearTimeout(timer);
-      resolve({ exitCode: 1, stdout, stderr });
+      resolve({ exitCode: 1, stdout, stderr, timedOut: false });
     });
   });
 }
@@ -354,12 +382,13 @@ async function compileWithTectonic(
   outDir: string,
   tectonicPath: string,
   opts?: { synctex?: boolean; fast?: boolean },
-): Promise<{ success: boolean; logContent: string }> {
+): Promise<EngineCompileResult> {
   const mainStem = basename(mainFile, extname(mainFile));
   const logPath = join(outDir, `${mainStem}.log`);
   const pdfPath = join(outDir, `${mainStem}.pdf`);
 
   let exitCode: number;
+  let timedOut = false;
 
   // Live fast path: reuse a warm daemon session (Node worker + hot build dir).
   if (opts?.fast) {
@@ -369,19 +398,23 @@ async function compileWithTectonic(
     } catch (err) {
       const code = (err as Error & { code?: string }).code;
       if (code === "SUPERSEDED") {
-        // Renderer generation loop will issue another compile — treat as no-op.
         return {
           success: existsSync(pdfPath),
           logContent: "",
+          superseded: true,
         };
       }
-      log.warn("daemon compile failed, falling back to one-shot", {
-        error: err instanceof Error ? err.message : String(err),
+      log.warn("compile.daemon_fallback", {
+        error: oneLineError(err instanceof Error ? err.message : String(err)),
       });
-      exitCode = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+      const once = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+      exitCode = once.exitCode;
+      timedOut = once.timedOut;
     }
   } else {
-    exitCode = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+    const once = await runTectonicOnce(tectonicPath, cwd, outDir, mainFile, opts);
+    exitCode = once.exitCode;
+    timedOut = once.timedOut;
   }
 
   let logContent = "";
@@ -398,6 +431,7 @@ async function compileWithTectonic(
   return {
     success: existsSync(pdfPath),
     logContent,
+    timedOut,
   };
 }
 
@@ -407,13 +441,13 @@ async function runTectonicOnce(
   outDir: string,
   mainFile: string,
   opts?: { synctex?: boolean; fast?: boolean },
-): Promise<number> {
+): Promise<{ exitCode: number; timedOut: boolean }> {
   const args = ["--keep-logs", "--keep-intermediates", "--outdir", outDir];
   if (opts?.synctex !== false) args.push("--synctex");
   if (opts?.fast) args.push("-r", "0");
   args.push(mainFile);
-  const { exitCode } = await runWithTimeout(tectonicPath, args, cwd, process.env, COMPILE_TIMEOUT_MS);
-  return exitCode;
+  const { exitCode, timedOut } = await runWithTimeout(tectonicPath, args, cwd, process.env, COMPILE_TIMEOUT_MS);
+  return { exitCode, timedOut };
 }
 
 /**
@@ -427,7 +461,7 @@ async function compileWithTexlive(
   texContent: string,
   outDir: string,
   opts?: { synctex?: boolean; fast?: boolean },
-): Promise<{ success: boolean; logContent: string }> {
+): Promise<EngineCompileResult> {
   const enginePath = await findTexliveBinary(engine);
   if (!enginePath) {
     throw new Error(`${engine} not found. Install TeXLive or add it to your PATH.`);
@@ -439,15 +473,18 @@ async function compileWithTexlive(
   const mainStem = basename(mainFile, extname(mainFile));
   const synctexArg = opts?.synctex === false ? "-synctex=0" : "-synctex=1";
 
-  console.log(`[texlive] backend: ${engine} (${enginePath}) bibTool=${bibTool ?? "none"} fast=${opts?.fast ?? false}`);
-
   const commonArgs = [synctexArg, "-interaction=nonstopmode"];
   const logPath = join(outDir, `${mainStem}.log`);
 
   let logContent = "";
+  let timedOut = false;
+  let extraPasses = 0;
 
-  const runLatex = () =>
-    runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
+  const runLatex = async () => {
+    const r = await runWithTimeout(enginePath, [...commonArgs, mainFile], cwd, env, COMPILE_TIMEOUT_MS);
+    if (r.timedOut) timedOut = true;
+    return r;
+  };
 
   const readCompileLog = async (): Promise<string> => {
     try {
@@ -459,6 +496,13 @@ async function compileWithTexlive(
 
   // Pass 1
   await runLatex();
+  if (timedOut) {
+    return {
+      success: existsSync(join(outDir, `${mainStem}.pdf`)),
+      logContent: await readCompileLog(),
+      timedOut: true,
+    };
+  }
 
   // Live preview: one latex pass is enough to refresh body text.
   if (opts?.fast) {
@@ -467,6 +511,7 @@ async function compileWithTexlive(
     return {
       success: existsSync(pdfPath),
       logContent,
+      timedOut,
     };
   }
 
@@ -483,6 +528,7 @@ async function compileWithTexlive(
         env,
         COMPILE_TIMEOUT_MS,
       );
+      if (bibtexResult.timedOut) timedOut = true;
       if (bibtexResult.exitCode !== 0) {
         logContent += `\n\n=== bibtex failed (exit ${bibtexResult.exitCode}) ===\n`
           + `${bibtexResult.stdout}\n${bibtexResult.stderr}`.trim();
@@ -501,6 +547,7 @@ async function compileWithTexlive(
         env,
         COMPILE_TIMEOUT_MS,
       );
+      if (biberResult.timedOut) timedOut = true;
       if (biberResult.exitCode !== 0) {
         logContent += `\n\n=== biber failed (exit ${biberResult.exitCode}) ===\n`
           + `${biberResult.stdout}\n${biberResult.stderr}`.trim();
@@ -515,28 +562,30 @@ async function compileWithTexlive(
       for (let i = 0; i < initialBibPasses; i++) {
         await runBib();
         await runLatex();
+        if (timedOut) break;
       }
-      await runLatex();
+      if (!timedOut) await runLatex();
 
-      for (let round = 0; round < 6; round++) {
+      for (let round = 0; round < 6 && !timedOut; round++) {
         const passLog = await readCompileLog();
         const rerunBib =
           bibTool === "bibtex" ? logNeedsBibtexRerun(passLog) : logNeedsBiberRerun(passLog);
         const rerunLatex = logNeedsBibliographyRerun(passLog);
         if (!rerunBib && !rerunLatex) break;
 
+        extraPasses += 1;
         if (rerunBib) {
-          log.info(`Extra ${bibTool} pass ${round + 1}`);
+          log.debug(`Extra ${bibTool} pass ${round + 1}`);
           await runBib();
         }
         if (rerunBib || rerunLatex) {
-          log.info(`Extra LaTeX pass ${round + 1} — bibliography/cross-refs`);
+          log.debug(`Extra LaTeX pass ${round + 1} — bibliography/cross-refs`);
           await runLatex();
         }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return { success: false, logContent: message };
+      return { success: false, logContent: message, extraPasses };
     }
   } else {
     await runLatex();
@@ -546,16 +595,17 @@ async function compileWithTexlive(
   const pdfPath = join(outDir, `${mainStem}.pdf`);
   const xdvPath = join(outDir, `${mainStem}.xdv`);
   if (!existsSync(pdfPath) && existsSync(xdvPath)) {
-    console.log("[texlive] .xdv exists but no .pdf — running xdvipdfmx manually");
+    log.debug("compile.xdvipdfmx");
     const xdvipdfmxPath = await findTexliveBinary("xdvipdfmx");
     if (xdvipdfmxPath) {
-      await runWithTimeout(
+      const xdv = await runWithTimeout(
         xdvipdfmxPath,
         ["-o", join(outDir, `${mainStem}.pdf`), join(outDir, `${mainStem}.xdv`)],
         outDir,
         env,
-        COMPILE_TIMEOUT_MS
+        COMPILE_TIMEOUT_MS,
       );
+      if (xdv.timedOut) timedOut = true;
     }
   }
 
@@ -575,6 +625,8 @@ async function compileWithTexlive(
   return {
     success: existsSync(pdfPath),
     logContent,
+    timedOut,
+    extraPasses,
   };
 }
 
@@ -592,9 +644,22 @@ export async function compileLatex(
 ): Promise<CompileResult> {
   const buildDir = persistentBuildDir(projectDir);
   const dirtyRelPaths = options.dirtyRelPaths ?? [];
+  const source: CompileSource = options.source ?? "ui";
+  const route: CompileRoute = "manuscript";
+  const fast = options.fast === true;
+  const job = {
+    source,
+    route,
+    mainFile,
+    project: basename(projectDir),
+    fast,
+    dirtyCount: dirtyRelPaths.length,
+  };
+  const startedAt = Date.now();
+  const startLevel = fast ? "debug" : "info";
 
-  // Check concurrency limit
   if (activeCount >= MAX_CONCURRENT) {
+    log.warn("compile.busy", { ...job, reason: "max_concurrent" });
     return {
       success: false,
       error: "Maximum concurrent compilations reached. Please wait.",
@@ -602,20 +667,25 @@ export async function compileLatex(
     };
   }
 
-  // Acquire per-project lock
   let releaseLock: () => void;
   const lockPromise = new Promise<void>((resolve) => {
     releaseLock = resolve;
   });
   const existingLock = projectLocks.get(projectDir);
   if (existingLock) {
+    const waitStarted = Date.now();
     await existingLock;
+    const waitMs = Date.now() - waitStarted;
+    if (waitMs >= PROJECT_LOCK_BUSY_MS) {
+      log.warn("compile.busy", { ...job, reason: "project_lock", waitMs });
+    }
   }
   projectLocks.set(projectDir, lockPromise);
   activeCount++;
 
   try {
-    // Ensure output directory exists
+    log[startLevel]("compile.start", job);
+
     await mkdir(buildDir, { recursive: true });
 
     for (const { relPath, content: fileContent } of options.dirtyFiles ?? []) {
@@ -627,10 +697,11 @@ export async function compileLatex(
 
     const mainStem = basename(mainFile, extname(mainFile));
     const pdfPath = join(buildDir, `${mainStem}.pdf`);
+    const pdfRel = `.prismnext/compile/${mainStem}.pdf`;
 
-    // Verify main file exists in the project (not the build dir)
     const mainFilePath = join(projectDir, mainFile);
     if (!existsSync(mainFilePath)) {
+      log.error("compile.error", { ...job, code: "main_missing" });
       return {
         success: false,
         error: `Main file not found: ${mainFile}`,
@@ -638,7 +709,6 @@ export async function compileLatex(
       };
     }
 
-    // Read content for engine / bib detection (prefer just-flushed memory)
     const normalizedMainPath = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
     const flushedMain = options.dirtyFiles?.find(
       (f) => f.relPath.replace(/\\/g, "/").replace(/^\.\//, "") === normalizedMainPath,
@@ -665,40 +735,67 @@ export async function compileLatex(
     } else {
       ({ buildMain, sourceDirRel } = await syncTexSourceToBuildDir(projectDir, mainFile, buildDir));
     }
-    console.log(`[compiler] synced ${sourceDirRel || "."} → ${buildDir}, compiling ${buildMain}`);
 
-    // Tectonic (bundled) first; TeX Live only when Tectonic is unavailable.
     const wantSynctex = false;
-    const fast = options.fast === true;
-    let result: { success: boolean; logContent: string };
+    let result: EngineCompileResult;
     const tectonic = await resolveTectonicBinary();
     if (tectonic.available) {
-      console.log("[compiler] Using Tectonic:", tectonic.path, tectonic.bundled ? "(bundled)" : "(system)", fast ? "(fast)" : "");
+      const engineId = tectonicEngineId(tectonic.bundled);
+      log[startLevel]("compile.engine", { ...job, engine: engineId, bundled: tectonic.bundled });
       result = await compileWithTectonic(buildDir, buildMain, buildDir, tectonic.path, {
         synctex: wantSynctex,
         fast,
       });
     } else {
-      console.log("[compiler] Tectonic not found, falling back to TeX Live");
+      log.warn("compile.engine", { ...job, engine: "texlive", bundled: false });
       result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir, {
         synctex: wantSynctex,
         fast,
       });
     }
 
+    const durationMs = Date.now() - startedAt;
+    const extraPasses = result.extraPasses;
+
+    if (result.superseded) {
+      log.debug("compile.superseded", { ...job, durationMs });
+      return {
+        success: result.success,
+        pdfPath: result.success ? pdfPath : undefined,
+        logContent: result.logContent,
+        buildDir,
+      };
+    }
+
+    if (result.timedOut) {
+      log.error("compile.error", { ...job, code: "timeout", durationMs, extraPasses });
+      return {
+        success: false,
+        error: "Compilation timed out",
+        logContent: result.logContent,
+        buildDir,
+      };
+    }
+
     if (result.success) {
-      // Formal compiles still fail closed on unresolved cites; live/fast keeps the PDF.
       const bibTool = detectBibTool(content);
       if (
         !fast
         && bibTool
         && !bibliographyLooksResolved(buildDir, mainStem, result.logContent ?? "")
       ) {
+        const error =
+          "Citations unresolved — keys in \\cite{...} may be missing from references.bib. "
+          + "See compile log (Problems).";
+        log.warn("compile.fail", {
+          ...job,
+          durationMs,
+          extraPasses,
+          errorSummary: oneLineError(error),
+        });
         return {
           success: false,
-          error:
-            "Citations unresolved — keys in \\cite{...} may be missing from references.bib. "
-            + "See compile log (Problems).",
+          error,
           logContent: result.logContent,
           buildDir,
         };
@@ -706,6 +803,7 @@ export async function compileLatex(
       const pdfOnDisk = options.pdfOnDisk ?? options.fast === true;
       const pdfBytes = pdfOnDisk ? undefined : await readFile(pdfPath);
       lastBuilds.set(projectDir, { workDir: buildDir, mainFileName: mainFile, sourceDirRel });
+      log[fast ? "debug" : "info"]("compile.done", { ...job, durationMs, pdfPath: pdfRel });
       return {
         success: true,
         pdfBytes,
@@ -713,18 +811,50 @@ export async function compileLatex(
         logContent: result.logContent,
         buildDir,
       };
-    } else {
-      const error = extractErrorLines(result.logContent);
-      const citeUndefined = logHasUndefinedCitations(result.logContent ?? "");
-      return {
-        success: false,
-        error: citeUndefined
-          ? (error || "Citations unresolved — check manuscript/references.bib keys match \\cite{...} and recompile.")
-          : (error || "Compilation failed"),
-        logContent: result.logContent,
-        buildDir,
-      };
     }
+
+    const error = extractErrorLines(result.logContent);
+    const citeUndefined = logHasUndefinedCitations(result.logContent ?? "");
+    const failError = citeUndefined
+      ? (error || "Citations unresolved — check manuscript/references.bib keys match \\cite{...} and recompile.")
+      : (error || "Compilation failed");
+    const missingBinary = /not found/i.test(result.logContent ?? "") || /not found/i.test(failError);
+    if (missingBinary) {
+      log.error("compile.error", {
+        ...job,
+        code: "missing_binary",
+        durationMs,
+        extraPasses,
+        error: oneLineError(failError),
+      });
+    } else {
+      log.warn("compile.fail", {
+        ...job,
+        durationMs,
+        extraPasses,
+        errorSummary: oneLineError(failError),
+      });
+    }
+    return {
+      success: false,
+      error: failError,
+      logContent: result.logContent,
+      buildDir,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const code = /not found/i.test(message) ? "missing_binary" : "uncaught";
+    log.error("compile.error", {
+      ...job,
+      code,
+      durationMs: Date.now() - startedAt,
+      error: oneLineError(message),
+    });
+    return {
+      success: false,
+      error: message,
+      buildDir,
+    };
   } finally {
     activeCount--;
     projectLocks.delete(projectDir);
@@ -740,6 +870,10 @@ export interface StandaloneCompileResult {
   error?: string;
 }
 
+export interface StandaloneCompileOptions {
+  source?: CompileSource;
+}
+
 /**
  * Compile a standalone `.tex` (e.g. a `\documentclass{standalone}` TikZ
  * figure) IN PLACE: the engine runs in the figure's own folder and all
@@ -750,13 +884,26 @@ export interface StandaloneCompileResult {
 export async function compileStandaloneTexInPlace(
   projectDir: string,
   mainFile: string,
+  options: StandaloneCompileOptions = {},
 ): Promise<StandaloneCompileResult> {
+  const source: CompileSource = options.source ?? "ui";
+  const route: CompileRoute = "standalone";
+  const job = {
+    source,
+    route,
+    mainFile,
+    project: basename(projectDir),
+  };
+  const startedAt = Date.now();
+
   const normalized = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
   const absMain = join(projectDir, normalized);
   if (!existsSync(absMain)) {
+    log.error("compile.error", { ...job, code: "main_missing" });
     return { success: false, error: `Main file not found: ${mainFile}` };
   }
   if (activeCount >= MAX_CONCURRENT) {
+    log.warn("compile.busy", { ...job, reason: "max_concurrent" });
     return { success: false, error: "Maximum concurrent compilations reached. Please wait." };
   }
 
@@ -769,25 +916,33 @@ export async function compileStandaloneTexInPlace(
 
   activeCount++;
   try {
+    log.info("compile.start", job);
+
     const content = await readFile(absMain, "utf-8");
     const engine = detectTexEngine(content) || "xelatex";
 
     const tectonic = await resolveTectonicBinary();
     let success: boolean;
     let logContent: string;
+    let timedOut = false;
     if (tectonic.available) {
-      console.log("[compiler] standalone in-place via Tectonic:", normalized);
-      ({ success, logContent } = await compileWithTectonic(
+      const engineId = tectonicEngineId(tectonic.bundled);
+      log.info("compile.engine", { ...job, engine: engineId, bundled: tectonic.bundled });
+      const result = await compileWithTectonic(
         sourceDir,
         baseName,
         sourceDir,
         tectonic.path,
         { synctex: false },
-      ));
+      );
+      success = result.success;
+      logContent = result.logContent;
+      timedOut = result.timedOut === true;
     } else {
-      console.log("[compiler] standalone in-place via TeX Live:", normalized);
+      log.warn("compile.engine", { ...job, engine: "texlive", bundled: false });
       const enginePath = await findTexliveBinary(engine);
       if (!enginePath) {
+        log.error("compile.error", { ...job, code: "missing_binary", engine });
         return {
           success: false,
           error: `${engine} not found. Install TeXLive or add it to your PATH.`,
@@ -801,8 +956,9 @@ export async function compileStandaloneTexInPlace(
         baseName,
       ];
       // Two passes: TikZ `remember picture` / positioning needs a rerun to settle.
-      await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
-      await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
+      const pass1 = await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
+      const pass2 = await runWithTimeout(enginePath, args, sourceDir, env, COMPILE_TIMEOUT_MS);
+      timedOut = pass1.timedOut || pass2.timedOut;
       success = existsSync(pdfAbs);
       try {
         logContent = await readFile(join(sourceDir, `${mainStem}.log`), "utf-8");
@@ -811,14 +967,35 @@ export async function compileStandaloneTexInPlace(
       }
     }
 
-    if (!success) {
+    const durationMs = Date.now() - startedAt;
+    if (timedOut) {
+      log.error("compile.error", { ...job, code: "timeout", durationMs });
       return {
         success: false,
-        error: extractErrorLines(logContent ?? "") || "Compilation failed",
+        error: "Compilation timed out",
         logContent,
       };
     }
+    if (!success) {
+      const error = extractErrorLines(logContent ?? "") || "Compilation failed";
+      log.warn("compile.fail", { ...job, durationMs, errorSummary: oneLineError(error) });
+      return {
+        success: false,
+        error,
+        logContent,
+      };
+    }
+    log.info("compile.done", { ...job, durationMs, pdfPath: pdfRel });
     return { success: true, pdfPath: pdfRel, logContent };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log.error("compile.error", {
+      ...job,
+      code: "uncaught",
+      durationMs: Date.now() - startedAt,
+      error: oneLineError(message),
+    });
+    return { success: false, error: message };
   } finally {
     activeCount--;
   }

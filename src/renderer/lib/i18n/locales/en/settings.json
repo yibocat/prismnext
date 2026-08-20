@@ -1298,6 +1298,9 @@
       },
       "showAllLevels": "Show all levels",
       "showLevelOnly": "Show {{level}} only",
+      "showLevelAndAbove": "Show {{level}} only",
+      "capture": "Record",
+      "captureHint": "Minimum level the main process writes. Debug is for development.",
       "searchPlaceholder": "Search messages, modules, details…",
       "clearSearch": "Clear search",
       "refresh": "Refresh",
@@ -1309,7 +1312,10 @@
       "warnings": "{{count}} warning",
       "warnings_plural": "{{count}} warnings",
       "emptyLevel": "No {{level}} logs in the current view.",
-      "activityHint": "Activity from the main process and UI will appear here."
+      "activityHint": "Activity from the main process and UI will appear here.",
+      "copyRow": "Copy this log",
+      "copySelected": "Copy {{count}} selected",
+      "copied": "Copied"
     },
     "promptStack": {
       "layers": "Injection layers",

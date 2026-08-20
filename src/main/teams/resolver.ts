@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type {
   AssetKind,
   BlockReason,
@@ -668,8 +668,8 @@ export function resolveChatOrchestrator(
     resolved = pick(asset);
   }
 
-  log.info("resolveChatOrchestrator", {
-    projectRoot,
+  log.debug("resolveChatOrchestrator", {
+    project: basename(projectRoot),
     sessionTeamId: opts?.sessionTeamId ?? null,
     orchestratorIdArg: opts?.orchestratorId ?? null,
     teamId: resolved.teamId,

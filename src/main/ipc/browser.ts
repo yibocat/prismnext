@@ -1,6 +1,9 @@
 import { ipcMain, session } from "electron";
 import * as fs from "fs";
 import * as path from "path";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("browser-ipc", "ipc");
 
 const BROWSER_DIR = ".prismnext/browser";
 
@@ -55,7 +58,9 @@ function readJson<T>(filePath: string, fallback: T): T {
       return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
     }
   } catch {
-    console.error(`Failed to read or parse ${filePath}, using fallback`);
+    log.warn("Failed to read or parse browser state, using fallback", {
+      file: path.basename(filePath),
+    });
   }
   return fallback;
 }

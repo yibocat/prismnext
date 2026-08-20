@@ -15,7 +15,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   CORE_TEAM_ID,
   MY_CONTENT_TEAM_ID,
@@ -388,14 +388,20 @@ export function setActiveTeam(
     if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
     const view = getTeam(projectRoot, teamId);
     if (!view?.enabled || !view.hasOrchestrator) {
-      log.warn("setActiveTeam rejected", { teamId, scope, projectRoot, enabled: view?.enabled, hasOrchestrator: view?.hasOrchestrator });
+      log.warn("setActiveTeam rejected", {
+        teamId,
+        scope,
+        project: basename(projectRoot),
+        enabled: view?.enabled,
+        hasOrchestrator: view?.hasOrchestrator,
+      });
       throw new Error(`Team has no usable lead agent: ${teamId}`);
     }
     setProjectDefaultTeam(projectRoot, teamId);
-    log.info("setActiveTeam", {
+    log.debug("setActiveTeam", {
       teamId,
       scope,
-      projectRoot,
+      project: basename(projectRoot),
       lead: view.orchestratorId,
       teamName: view.manifest.name,
     });
@@ -413,7 +419,7 @@ export function setActiveTeam(
       throw new Error(`Team has no lead agent: ${teamId}`);
     }
     setAppDefaultTeam(teamId);
-    log.info("setActiveTeam", { teamId, scope, lead: record.orchestratorId });
+    log.debug("setActiveTeam", { teamId, scope, lead: record.orchestratorId });
     // Same as project scope: state write invalidates; skip content-refresh fan-out.
   }
 }

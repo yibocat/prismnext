@@ -582,7 +582,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const result = await window.electronAPI.gitStage(projectRoot, filePath);
     if (!result.success) {
-      console.error(`[git] stage failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "stage", path: filePath, error: result.error });
       toast.error(result.error || "Stage failed");
       set({ error: result.error || "Stage failed" });
       return;
@@ -595,7 +595,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const result = await window.electronAPI.gitUnstage(projectRoot, filePath);
     if (!result.success) {
-      console.error(`[git] unstage failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "unstage", path: filePath, error: result.error });
       toast.error(result.error || "Unstage failed");
       set({ error: result.error || "Unstage failed" });
       return;
@@ -610,7 +610,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     if (paths.length === 0) return;
     const result = await window.electronAPI.gitStageAll(projectRoot, paths);
     if (!result.success) {
-      console.error(`[git] stageAll failed`, result.error);
+      log.warn("git.fail", { op: "stageAll", error: result.error });
       // Don't toast — git may refuse to stage gitignored files, that's fine
     }
     await get().refreshStatus(projectRoot);
@@ -623,7 +623,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     if (paths.length === 0) return;
     const result = await window.electronAPI.gitUnstageAll(projectRoot, paths);
     if (!result.success) {
-      console.error(`[git] unstageAll failed`, result.error);
+      log.warn("git.fail", { op: "unstageAll", error: result.error });
     }
     await get().refreshStatus(projectRoot);
   },
@@ -633,7 +633,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const result = await window.electronAPI.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
     if (!result.success) {
-      console.error(`[git] discard failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "discard", path: filePath, error: result.error });
       toast.error(result.error || "Failed to discard changes");
       set({ error: result.error || "Failed to discard changes" });
       return;
@@ -652,7 +652,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const result = await window.electronAPI.gitCommit(projectRoot, message);
     if (!result.success) {
-      console.error("[git] commit failed:", result.error);
+      log.warn("git.fail", { op: "commit", error: result.error });
       toast.error(result.error || "Commit failed");
       set({ error: result.error || "Commit failed" });
       return;
@@ -672,13 +672,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
     const tWarmup = performance.now();
     await window.electronAPI.gitWarmup?.(projectRoot).catch(() => {});
     const wMs = Math.round(performance.now() - tWarmup);
-    console.log(`[switchBranch] warmup: ${wMs}ms  (${branch})`);
     log.debug("switchBranch warmup", { durationMs: wMs, branch });
 
     const tCheckout = performance.now();
     const result = await window.electronAPI.gitCheckout(projectRoot, branch);
     const cMs = Math.round(performance.now() - tCheckout);
-    console.log(`[switchBranch] gitCheckout: ${cMs}ms  (${branch})`);
     log.debug("gitCheckout", { durationMs: cMs, branch });
     if (!result.success) {
       set({
@@ -698,7 +696,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     // Clear commit selection when switching branches — old hash won't exist on new branch
     set({ switching: false, selectedCommitHash: null });
     await useDocumentStore.getState().reloadAllFromDisk();
-    console.log(`[switchBranch] total: ${Math.round(performance.now() - t0)}ms  (-> ${branch})`);
+    log.debug("switchBranch total", { durationMs: Math.round(performance.now() - t0), branch });
   },
 
   // ── createBranch ──

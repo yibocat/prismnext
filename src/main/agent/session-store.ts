@@ -6,12 +6,15 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { AgentPlanEvent } from "../../shared/agent-api";
 import type { RuntimeSessionId } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import type { ContentBlock, ConversationSubagentRun, TurnMessageMeta } from "../../shared/agent-conversation";
 import type { SessionUsageTotals } from "../../shared/agent-context-usage";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("session-store", "agent");
 
 export const PI_AGENT_DIR_NAME = "pi-agent";
 export const FORBIDDEN_PROJECT_RESOURCE_DIRS = [".pi", ".agents", ".opencode"] as const;
@@ -220,6 +223,9 @@ export class AgentSessionStore {
       try {
         const corruptPath = `${path}.corrupted.${Date.now()}`;
         renameSync(path, corruptPath);
+        log.warn("session.corrupt", {
+          runtimeSessionId: basename(path, ".json"),
+        });
       } catch {
         // ignore rename error
       }

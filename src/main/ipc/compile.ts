@@ -33,8 +33,7 @@ export function registerCompileHandlers(): void {
         fast?: boolean;
       },
     ) => {
-      log.info("compile:execute", {
-        projectDir: args.projectDir,
+      log.debug("compile:execute", {
         mainFile: args.mainFile,
         useTexlive: args.useTexlive ?? false,
         dirty: args.dirtyRelPaths?.length ?? 0,
@@ -51,10 +50,11 @@ export function registerCompileHandlers(): void {
           pdfOnDisk: args.pdfOnDisk,
           skipSynctex: args.skipSynctex,
           fast: args.fast,
+          source: "ui",
         },
       );
       if (result.success && (result.pdfBytes || result.pdfPath)) {
-        log.info("compile:execute success", {
+        log.debug("compile:execute success", {
           bytes: result.pdfBytes?.length,
           pdfPath: result.pdfPath,
         });
@@ -65,7 +65,7 @@ export function registerCompileHandlers(): void {
           stdout: result.logContent,
         };
       } else {
-        log.warn("compile:execute failed", { error: result.error || "unknown" });
+        log.debug("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
     },

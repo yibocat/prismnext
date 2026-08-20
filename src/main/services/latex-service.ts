@@ -245,11 +245,11 @@ export async function compileForAgent(
     resolvedContent = null;
   }
   if (resolvedContent && isStandaloneTexDocument(resolvedContent)) {
-    const res = await compileStandaloneTexInPlace(projectRoot, root.mainFile);
+    const res = await compileStandaloneTexInPlace(projectRoot, root.mainFile, { source: "agent" });
     return agentStandaloneCompileResult(root.mainFile, res);
   }
 
-  const result = await compileLatex(projectRoot, root.mainFile, useTexlive);
+  const result = await compileLatex(projectRoot, root.mainFile, useTexlive, { source: "agent" });
   const mainStem = basename(root.mainFile, extname(root.mainFile));
   const buildDir = ".prismnext/compile";
   const logContent = result.logContent ?? "";

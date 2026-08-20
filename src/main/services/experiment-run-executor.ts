@@ -9,7 +9,7 @@
  */
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, resolve as pathResolve } from "node:path";
+import { basename, dirname, join, resolve as pathResolve } from "node:path";
 import { tmpdir } from "node:os";
 import { app } from "electron";
 import { cancelAiCommandForSession } from "./ai-pty";
@@ -34,7 +34,7 @@ import {
   type ExperimentRunKind,
   type ExperimentRunResult,
 } from "../../shared/experiment-log";
-import { createLogger } from "./logger";
+import { createLogger, shortLogDetail } from "./logger";
 import {
   broadcastExperimentChanged,
   broadcastExperimentRunComplete,
@@ -218,6 +218,19 @@ function probeInterpreterVersion(pythonPath: string, cwd: string): string | null
   }
 }
 
+function logExperimentRunFail(
+  args: Pick<KickoffExperimentRunArgs, "ctx" | "id" | "command" | "runId">,
+  error: string,
+): void {
+  log.warn("experiment.run.fail", {
+    experimentId: args.id,
+    runId: args.runId,
+    command: args.command ? shortLogDetail(args.command) : undefined,
+    error,
+    project: basename(args.ctx.projectRoot),
+  });
+}
+
 function detectIslandEnv(
   ctx: KickoffExperimentRunArgs["ctx"],
   island: string,
@@ -238,10 +251,12 @@ export async function kickoffExperimentRun(
   if (!island || !existsSync(island)) {
     // Defer to nextTick so the caller (IPC handler) can return its immediate
     // response first; otherwise the sync callback would race the handler.
+    logExperimentRunFail(args, "experiment_not_found");
     queueMicrotask(() => reportResult(args, { ok: false, error: "experiment_not_found" }));
     return undefined;
   }
   if (!command.trim()) {
+    logExperimentRunFail(args, "missing_command");
     queueMicrotask(() => reportResult(args, { ok: false, error: "missing_command" }));
     return undefined;
   }
@@ -252,6 +267,7 @@ export async function kickoffExperimentRun(
   if (args.interpreter === "external") {
     const pythonPath = (args.pythonPath ?? "").trim();
     if (!pythonPath) {
+      logExperimentRunFail(args, "missing_python_path");
       queueMicrotask(() =>
         reportResult(args, { ok: false, error: "missing_python_path" }),
       );
@@ -274,6 +290,7 @@ export async function kickoffExperimentRun(
       ensureOpts: { runner: args.venvRunner },
     });
     if (gate.action === "block") {
+      logExperimentRunFail(args, gate.error);
       queueMicrotask(() => reportResult(args, { ok: false, error: gate.error }));
       return undefined;
     }
@@ -343,7 +360,9 @@ async function kickoffWithEnv(
   const stderrTmpDir = mkdtempSync(join(tmpdir(), "prism-exp-stderr-"));
   const stderrCapturePath = join(stderrTmpDir, `${runId}.log`);
   const registry = ensureExecutionRegistry();
-  const created = await registry.create(
+  let created;
+  try {
+    created = await registry.create(
     {
       origin: "experiment-run",
       command,
@@ -358,8 +377,19 @@ async function kickoffWithEnv(
       captureStderr: stderrCapturePath,
     },
     { start: false },
-  );
+    );
+  } catch (err) {
+    logExperimentRunFail({ ctx, id, command, runId }, shortLogDetail(err));
+    throw err;
+  }
   executionByRun.set(runKey, created.executionId);
+
+  log.info("experiment.run.start", {
+    experimentId: id,
+    runId,
+    command: shortLogDetail(command),
+    project: basename(ctx.projectRoot),
+  });
 
   // Announce before PTY so Chat / panel can lift runInFlight (Station 2).
   broadcastExperimentRunStarted(
@@ -438,7 +468,7 @@ async function kickoffWithEnv(
       } catch (err: unknown) {
         const finishedAt = new Date().toISOString();
         const message = err instanceof Error ? err.message : String(err);
-        log.warn("experiment-run failed", { id, runId, error: message });
+        logExperimentRunFail({ ctx, id, command, runId }, message);
         const stderr = "prismnext experiment-run: command failed to execute.";
         const logPath = maybeWriteFullLog(island, runId, message, stderr);
         const cancelled = consumeExperimentRunCancelled(id, runId);

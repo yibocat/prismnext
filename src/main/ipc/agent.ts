@@ -3,7 +3,6 @@
  */
 
 import { ipcMain } from "electron";
-import { createLogger } from "../services/logger";
 import type {
   AgentAnswerQuestionInput,
   AgentCompactInput,
@@ -27,8 +26,6 @@ import type {
 } from "../../shared/agent-api";
 import { getAgentService } from "../agent/agent-service";
 
-const agentIpcLog = createLogger("agent-ipc", "agent");
-
 export function registerAgentHandlers(): void {
   ipcMain.handle("agent:status", async (event, args?: { projectRoot?: string }) => {
     const agent = await getAgentService();
@@ -37,20 +34,12 @@ export function registerAgentHandlers(): void {
   });
 
   ipcMain.handle("agent:send", async (event, args: AgentSendInput) => {
-    agentIpcLog.info("agent:send incoming", {
-      conversationId: args.conversationId,
-      turnId: args.turnId,
-      textLen: args.text?.length,
-      sessionAgent: args.sessionAgent,
-      images: args.images?.length,
-    });
     const agent = await getAgentService();
     agent.attachOwner(event.sender);
     const result = await agent.send({
       ...args,
       tabId: args.tabId,
     });
-    agentIpcLog.info("agent:send result", result);
     return result;
   });
 

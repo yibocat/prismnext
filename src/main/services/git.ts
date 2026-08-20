@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, unlink, readdir, writeFile, stat } from "node:fs/promises";
-import { join } from "node:path";
-import { createLogger } from "./logger";
+import { basename, join } from "node:path";
+import { createLogger, shortLogDetail } from "./logger";
 
 const log = createLogger("git", "git");
 
@@ -87,15 +87,29 @@ function sh(projectRoot: string, gitArgs: string[]): Promise<string> {
     child.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
     child.on("close", (code) => {
       const ms = performance.now() - start;
-      // git timing logged via log.info below
-      log.debug(`git ${gitArgs[0]}`, { durationMs: Math.round(ms), args: gitArgs.join(" ") });
+      log.debug(`git ${gitArgs[0]}`, { durationMs: Math.round(ms) });
       if (code !== 0) {
+        if (shouldLogGitFail(gitArgs)) {
+          log.warn("git.fail", {
+            cmd: gitFailCommand(gitArgs),
+            exit: code ?? 1,
+            stderr: shortLogDetail(stderr.trim() || `git exited with code ${code}`, 300),
+            project: basename(projectRoot),
+          });
+        }
         reject(new Error(stderr.trim() || `git exited with code ${code}`));
       } else {
         resolve(stdout);
       }
     });
     child.on("error", (err) => {
+      if (shouldLogGitFail(gitArgs)) {
+        log.warn("git.fail", {
+          cmd: gitFailCommand(gitArgs),
+          error: shortLogDetail(err),
+          project: basename(projectRoot),
+        });
+      }
       reject(err);
     });
   });
@@ -147,6 +161,36 @@ export interface GitResult {
 // ─── Constants ───
 
 const GIT_TIMEOUT_MS = 30_000;
+
+/** User-facing verbs — probe commands (rev-parse, status, show) stay quiet. */
+const GIT_FAIL_LOG_VERBS = new Set([
+  "commit",
+  "push",
+  "pull",
+  "fetch",
+  "merge",
+  "rebase",
+  "add",
+  "checkout",
+  "switch",
+  "reset",
+  "stash",
+  "init",
+  "clone",
+  "cherry-pick",
+  "revert",
+]);
+
+export function gitFailCommand(gitArgs: string[]): string {
+  if (gitArgs[0] === "worktree" && gitArgs[1]) return `worktree ${gitArgs[1]}`;
+  return gitArgs[0] || "git";
+}
+
+export function shouldLogGitFail(gitArgs: string[]): boolean {
+  const verb = gitArgs[0];
+  if (verb === "worktree") return gitArgs[1] === "add" || gitArgs[1] === "remove";
+  return GIT_FAIL_LOG_VERBS.has(verb ?? "");
+}
 
 const BINARY_EXTS = new Set([
   ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp",
@@ -452,7 +496,11 @@ export async function getFileDiff(
       }
     }
   } catch (err) {
-    console.error(`[git] getFileDiff failed for ${filePath}:`, err);
+    log.warn("git.fail", {
+      op: "getFileDiff",
+      path: filePath,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // Check for binary content in fetched strings

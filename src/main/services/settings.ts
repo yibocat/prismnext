@@ -8,6 +8,10 @@ import {
   migratePermissionModeSetting,
   PERMISSION_MODE_SCHEMA_VERSION,
 } from "./permission-modes";
+import { createLogger, setLogLevel, shortLogDetail } from "./logger";
+import { isLogLevel, type LogLevel } from "./log-types";
+
+const log = createLogger("settings", "general");
 
 export interface AppSettings {
   aiModel: "default" | "sonnet" | "opus" | "haiku";
@@ -130,6 +134,9 @@ export interface AppSettings {
    */
   permissionModeSchemaVersion?: number;
 
+  /** Minimum level written by the main-process logger. Default info. */
+  logMinLevel?: LogLevel;
+
   // Renderer-side dynamic keys
   // the catch-all `raw` loop in getSettings(). Listed here for documentation.
   [key: string]: unknown;
@@ -187,12 +194,26 @@ const defaults: AppSettings = {
     "literature-library": true,
     "task-delegation": true,
   },
+  logMinLevel: "info",
 };
 
 const store = new Store<AppSettings>({
   name: "prism-settings",
   defaults,
 });
+
+function persistStore(patch: Record<string, unknown>): void {
+  try {
+    store.set(patch as never);
+  } catch (err) {
+    log.warn("settings.persist.fail", { error: shortLogDetail(err) });
+    throw err;
+  }
+}
+
+function applyLogMinLevel(value: unknown): void {
+  if (isLogLevel(value)) setLogLevel(value);
+}
 
 function encryptIfAvailable(value: string): string {
   if (safeStorage.isEncryptionAvailable()) {
@@ -277,9 +298,7 @@ export function getSettings(): AppSettings {
         settings.aiApiKeys = parsed as Record<string, string>;
       } else {
         // Decrypt returned ciphertext / garbage after app-name / userData moves.
-        console.warn(
-          "[settings] aiApiKeys decrypt did not yield a key map — re-enter API keys in Settings → AI",
-        );
+        log.warn("aiApiKeys decrypt did not yield a key map — re-enter API keys in Settings → AI");
         settings.aiApiKeys = {};
       }
     } catch {
@@ -288,9 +307,7 @@ export function getSettings(): AppSettings {
       if (rawKeys && typeof rawKeys === "object" && !Array.isArray(rawKeys)) {
         settings.aiApiKeys = rawKeys as Record<string, string>;
       } else {
-        console.warn(
-          "[settings] aiApiKeys could not be decrypted — re-enter API keys in Settings → AI",
-        );
+        log.warn("aiApiKeys could not be decrypted — re-enter API keys in Settings → AI");
         settings.aiApiKeys = {};
       }
     }
@@ -324,15 +341,16 @@ export function getSettings(): AppSettings {
   if (migrated.changed) {
     result.permissionMode = migrated.mode;
     result.permissionModeSchemaVersion = migrated.schemaVersion;
-    store.set({
+    persistStore({
       permissionMode: migrated.mode,
       permissionModeSchemaVersion: migrated.schemaVersion,
-    } as any);
+    });
   } else if (result.permissionModeSchemaVersion !== PERMISSION_MODE_SCHEMA_VERSION) {
     result.permissionModeSchemaVersion = PERMISSION_MODE_SCHEMA_VERSION;
-    store.set({ permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION } as any);
+    persistStore({ permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION });
   }
 
+  applyLogMinLevel(result.logMinLevel);
   return result as AppSettings;
 }
 
@@ -350,7 +368,8 @@ export function updateSettings(patch: Partial<AppSettings>): void {
     }
   }
 
-  store.set(encrypted as any);
+  persistStore(encrypted);
+  if ("logMinLevel" in patch) applyLogMinLevel(patch.logMinLevel);
 }
 
 /**
@@ -423,9 +442,7 @@ export function pruneOrphanProviderSettings(): string[] {
 
   if (Object.keys(patch).length > 0) {
     updateSettings(patch as Partial<AppSettings>);
-    console.log(
-      `[settings] Pruned orphan provider leftovers: ${[...pruned].sort().join(", ")}`,
-    );
+    log.debug("Pruned orphan provider leftovers", { ids: [...pruned].sort() });
   }
   return [...pruned].sort();
 }

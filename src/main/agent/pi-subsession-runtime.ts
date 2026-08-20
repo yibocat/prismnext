@@ -15,6 +15,9 @@ import type { NativeToolDefinition } from "./tools/types";
 import type { ResolvedPiRosterEntry } from "./team-binding";
 import { ALL_NATIVE_TOOLS } from "./tools/index";
 import type { HostSkillDir } from "./skill-loader";
+import { createLogger } from "../services/logger";
+
+const log = createLogger("subagent", "agent");
 
 export interface SubagentSessionRunnerInput {
   runtimeSessionId: string;
@@ -338,6 +341,10 @@ export class PiSubsessionRuntime {
     const executionPromise = (async (): Promise<RunSubagentTaskResult> => {
       try {
         if (!this.opts.createRunner) {
+          log.info("subagent.start", {
+            parentToolCallId: input.parentToolCallId,
+            expertFqid: input.expert.fqid,
+          });
           return { ok: true, text: `[Simulated output from ${input.expert.name}]: task completed.` };
         }
 
@@ -386,6 +393,10 @@ export class PiSubsessionRuntime {
           ? `Context:\n${input.context.trim()}\n\nTask:\n${input.prompt.trim()}`
           : input.prompt.trim();
 
+        log.info("subagent.start", {
+          parentToolCallId: input.parentToolCallId,
+          expertFqid: input.expert.fqid,
+        });
         await runner.prompt(fullUserPrompt);
         runner.dispose();
 
@@ -411,7 +422,20 @@ export class PiSubsessionRuntime {
     });
 
     try {
-      return await Promise.race([executionPromise, abortPromise]);
+      const result = await Promise.race([executionPromise, abortPromise]);
+      const outcome = result.ok
+        ? "ok"
+        : result.error?.startsWith("subagent_timeout")
+          ? "subagent_timeout"
+          : result.error === "cancelled" || result.error?.startsWith("cancelled")
+            ? "cancelled"
+            : "error";
+      log.info("subagent.end", {
+        parentToolCallId: input.parentToolCallId,
+        expertFqid: input.expert.fqid,
+        ok: outcome,
+      });
+      return result;
     } finally {
       clearTimeout(timeoutId);
       input.abortSignal?.removeEventListener("abort", onParentAbort);
