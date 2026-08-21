@@ -1,6 +1,6 @@
 /**
- * agents-sync.ts — build the opencode agent plan and write it to disk
- * (design §7.1). Driven entirely by the TeamResolver (teams/resolver.ts).
+ * agents-sync.ts — build the in-memory agent plan.
+ * Driven entirely by the TeamResolver (teams/resolver.ts).
  *
  * File set: every ENABLED subagent (mode: subagent) + the lead agent of every
  * team that is enabled AND hasOrchestrator (mode: primary). Switching the
@@ -13,7 +13,6 @@
 
 import { createHash } from "node:crypto";
 import { app } from "electron";
-import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { PromptContext } from "../prompts/types";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
@@ -201,25 +200,7 @@ export function getAgentsSyncState(projectRoot: string): AgentsSyncState | null 
   return syncStates.get(projectRoot) ?? null;
 }
 
-/** Remove agent files that are no longer in the plan. */
-function clearStaleAgentFiles(agentsDir: string, keep: Set<string>, previous: AgentsSyncState | null): void {
-  const previousFiles = previous?.agentFiles ?? [];
-  for (const file of previousFiles) {
-    if (keep.has(file)) continue;
-    const safe = file.replace(/[/\\]/g, "");
-    if (!safe || safe !== file) continue;
-    const target = join(agentsDir, safe);
-    if (existsSync(target)) {
-      try {
-        unlinkSync(target);
-      } catch {
-        // non-fatal
-      }
-    }
-  }
-}
-
-/** Write the agent plan to the opencode agents dir and record the sync state. */
+/** Record the agent plan in memory. Do not write OpenCode leftover dirs. */
 export function syncAgentsToOpencode(
   projectRoot: string,
   options?: {
@@ -228,15 +209,7 @@ export function syncAgentsToOpencode(
     defaultSubagentModel?: string | null;
   },
 ): AgentsSyncState {
-  const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
-  mkdirSync(agentsDir, { recursive: true });
-
   const plan = buildAgentsPlan(projectRoot, options);
-  const keep = new Set(plan.agentFiles);
-  clearStaleAgentFiles(agentsDir, keep, syncStates.get(projectRoot) ?? null);
-  for (const entry of plan.agentEntries) {
-    writeFileSync(join(agentsDir, entry.filename), entry.content, "utf-8");
-  }
 
   const state: AgentsSyncState = {
     projectRoot,

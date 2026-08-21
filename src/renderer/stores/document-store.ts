@@ -59,8 +59,6 @@ interface DocumentState {
   projectRoot: string | null;
   /** Current working root — projectRoot on main, worktree path when active */
   checkoutRoot: string | null;
-  showWelcome: boolean;
-  setShowWelcome: (show: boolean) => void;
   files: ProjectFile[];
   folders: string[];
   activeFileId: string | null;
@@ -244,8 +242,6 @@ function markSuppressWatcherReload() {
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
   checkoutRoot: null,
-  showWelcome: false,
-  setShowWelcome: (show) => set({ showWelcome: show }),
   files: [],
   folders: [],
   activeFileId: null,
@@ -369,12 +365,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       }
 
       useProjectStore.getState().addRecentProject(canonicalRoot);
-      window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
 
       set({
         projectRoot: canonicalRoot,
         checkoutRoot: canonicalRoot,
-        showWelcome: false,
         files,
         folders: result.folders,
         activeFileId: null,

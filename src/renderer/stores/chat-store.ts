@@ -2179,7 +2179,9 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   },
 
   clearAllSessions: () => {
-    void window.electronAPI?.agentDispose?.()?.catch(() => {});
+    for (const tab of get().tabs) {
+      void window.electronAPI?.agentDispose?.({ conversationId: tab.id })?.catch(() => {});
+    }
     const id = newConversationId();
     const tab = makeDefaultTab(id);
     set({

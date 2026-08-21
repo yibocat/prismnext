@@ -261,8 +261,9 @@ describe("Pi-first agent core boundaries", () => {
     const ask = sourceOf("src/renderer/components/modules/chat/tools/ask-question-widget.tsx");
     const composer = sourceOf("src/renderer/hooks/use-chat-composer.ts");
 
-    expect(lifecycle).toContain("agentDispose");
+    expect(lifecycle).not.toMatch(/agentDispose\(\s*\)/);
     expect(lifecycle).not.toContain("chatDispose");
+    expect(chatStore).toContain("agentDispose");
     expect(checkpoint).toContain("agentTruncateToTurn");
     expect(checkpoint).toContain("agentUndoTruncate");
     expect(checkpoint).not.toContain("sessionTruncateToTurn");

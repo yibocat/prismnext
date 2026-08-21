@@ -1056,33 +1056,26 @@ export class AgentService {
   }
 
   private async resetSession(conversationId?: string): Promise<void> {
-    const ids = conversationId
-      ? [conversationId]
-      : this.registry.liveConversationIds();
-    for (const id of ids) {
-      this.releaseTurnLock(id);
-      const host = this.mcpHosts.get(id);
-      this.mcpHosts.delete(id);
-      await host?.dispose().catch(() => {});
-      const subs = this.subsessionRuntimes.get(id);
-      this.subsessionRuntimes.delete(id);
-      if (subs) {
-        const runtimeSessionId = this.registry.getBinding(id)?.runtimeSessionId;
-        if (runtimeSessionId) subs.cancelAllForParentSession(runtimeSessionId);
-      }
-      await this.registry.disposeConversation(id).catch(() => {});
+    const id = conversationId?.trim();
+    if (!id) return;
+    this.releaseTurnLock(id);
+    const host = this.mcpHosts.get(id);
+    this.mcpHosts.delete(id);
+    await host?.dispose().catch(() => {});
+    const subs = this.subsessionRuntimes.get(id);
+    this.subsessionRuntimes.delete(id);
+    if (subs) {
+      const runtimeSessionId = this.registry.getBinding(id)?.runtimeSessionId;
+      if (runtimeSessionId) subs.cancelAllForParentSession(runtimeSessionId);
     }
-    if (!conversationId || conversationId === this.activeConversationId) {
+    await this.registry.disposeConversation(id).catch(() => {});
+    if (id === this.activeConversationId) {
       this.runtime = null;
       this.sessionId = null;
       this.projectRoot = null;
       this.activeConversationId = null;
     }
-    if (conversationId) {
-      this.startContexts.delete(conversationId);
-    } else {
-      this.startContexts.clear();
-    }
+    this.startContexts.delete(id);
   }
 }
 

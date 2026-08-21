@@ -19,6 +19,14 @@ describe("skillReadRootsFromDirs", () => {
       { dir: MPL },
     ])).toEqual([TIKZ, MPL]);
   });
+
+  it("drops leftover paper hangars and keeps home / bundled dirs", () => {
+    expect(skillReadRootsFromDirs([
+      { dir: TIKZ },
+      { dir: `${PROJECT}/.prismnext/agent/skills/old` },
+      { dir: "/Users/me/.prismnext/skills/my-flow" },
+    ])).toEqual([TIKZ, "/Users/me/.prismnext/skills/my-flow"]);
+  });
 });
 
 describe("isPathUnderSkillReadRoots", () => {

@@ -42,6 +42,8 @@ export function skillReadRootsFromDirs(
     if (!raw) continue;
     const abs = normalizeAbsPath(raw);
     if (seen.has(abs)) continue;
+    // Leftover paper hangars are not host-readable skill roots (S10.6).
+    if (abs.replace(/\\/g, "/").includes("/.prismnext/agent/")) continue;
     seen.add(abs);
     out.push(abs);
   }

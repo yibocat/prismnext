@@ -95,7 +95,6 @@ export async function resetApplicationStateForProjectSwitch(
   keepProjectPath?: string | null,
   options?: { previousProjectId?: string | null; stopExperimentIds?: string[] },
 ): Promise<void> {
-  await window.electronAPI.agentDispose();
   const previousProjectId = (options?.previousProjectId || "").trim();
   if (previousProjectId) {
     await window.electronAPI.executionApplyProjectSwitch?.({

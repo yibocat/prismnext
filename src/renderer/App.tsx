@@ -473,9 +473,7 @@ export function App() {
   }, [inSettings]);
 
   // ── Startup loading screen lifecycle ──
-  // Stay on splash until Agent+project warm finishes for auto-open, or welcome
-  // is confirmed (no last project / skip). Never treat "left welcome" alone as
-  // ready — that used to dismiss splash while Project was still Warming.
+  // Stay on splash until the workbench default project is focused.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const [autoOpenChecked, setAutoOpenChecked] = useState(false);
 
@@ -522,7 +520,7 @@ export function App() {
         <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
         <Toaster />
         <TabCloseConfirmDialog />
-        {/* Full-screen warm splash when #L already dismissed (e.g. open from Welcome / switch). */}
+        {/* Full-screen warm splash when #L already dismissed (e.g. project switch). */}
         {isOpeningProject && appReady ? (
           <div
             className="fixed inset-0 z-[99999] flex items-center justify-center bg-background"

@@ -28,15 +28,17 @@ export function registerSettingsHandlers(): void {
         syncTrayFromSettings();
       }
       if ("aiSubagentModel" in patch) {
-        const lastProjectPath =
-          typeof getSettings().lastProjectPath === "string"
-            ? getSettings().lastProjectPath!.trim()
-            : "";
-        if (lastProjectPath) {
-          const { refreshProjectSubagentsIntegration } = await import(
-            "../services/project-subagents-refresh"
-          );
-          await refreshProjectSubagentsIntegration(lastProjectPath);
+        try {
+          const { getWorkbenchState } = await import("../workbench/default-project");
+          const lastPath = getWorkbenchState().defaultLastPath?.trim();
+          if (lastPath) {
+            const { refreshProjectSubagentsIntegration } = await import(
+              "../services/project-subagents-refresh"
+            );
+            await refreshProjectSubagentsIntegration(lastPath);
+          }
+        } catch {
+          // Tests / missing home — skip disk-less in-memory refresh.
         }
       }
     },

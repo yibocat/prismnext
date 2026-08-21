@@ -3,13 +3,8 @@ import type { PromptContext } from "../prompts/types";
 import {
   buildAgentsPlan,
   getAgentsSyncState,
-  getOpencodeAgentsDir,
   syncAgentsToOpencode,
 } from "../teams/agents-sync";
-import {
-  clearSyncedAgentFiles,
-  readPrismExpertsSyncState,
-} from "./subagents-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { normalizeProjectRoot } from "./skills-sync";
 
@@ -37,21 +32,13 @@ export interface RefreshProjectExpertsResult {
   skipped: boolean;
 }
 
-/** Sync project agents to the app-level OpenCode agents dir (write only — no restart). */
+/** Rebuild the in-memory agent plan (no OpenCode leftover writes). */
 export async function refreshProjectSubagentsIntegration(
   projectRoot: string,
   options?: RefreshProjectExpertsOptions,
 ): Promise<RefreshProjectExpertsResult> {
   const root = normalizeProjectRoot(projectRoot);
-  const agentsDir = getOpencodeAgentsDir(root);
-  // Clean up files recorded by the LEGACY on-disk sync state (pre-T3) on the
-  // first switch; the new in-memory sync state handles staleness after that.
-  const legacyPrev = readPrismExpertsSyncState();
-  if (legacyPrev?.agentFiles?.length && !getAgentsSyncState(root)) {
-    clearSyncedAgentFiles(agentsDir, legacyPrev.agentFiles);
-  }
   const result = syncAgentsToOpencode(root, {
-    agentsDir,
     promptCtx: options?.promptCtx,
   });
   notifyExpertsIntegrationChanged(root);
