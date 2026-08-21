@@ -1,0 +1,34 @@
+{
+  "id": "tree",
+  "name": "Tree (root and two levels)",
+  "type": "template",
+  "domain": ["general"],
+  "tags": ["tree", "hierarchy", "taxonomy", "decision tree", "parse tree", "org chart"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "A root with two children and four leaves. Relabel; add a child with below=of and a flow arrow.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\rootlabel", "type": "text", "meaning": "root label"},
+      {"name": "\\alabel", "type": "text", "meaning": "left child"},
+      {"name": "\\blabel", "type": "text", "meaning": "right child"},
+      {"name": "\\clabel", "type": "text", "meaning": "first leaf under A"},
+      {"name": "\\dlabel", "type": "text", "meaning": "second leaf under A"},
+      {"name": "\\elabel", "type": "text", "meaning": "first leaf under B"},
+      {"name": "\\flabel", "type": "text", "meaning": "second leaf under B"}
+    ],
+    "node_naming": "fixed names: (root) (a) (b) (c) (d) (e) (f)",
+    "styles": ["nd", "leaf", "flow"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-child", "summary": "add a leaf with below=of its parent and a flow arrow; give it a semantic name"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (root) (a) (b) (c) (d) (e) (f) unless the user dropped that node",
+      "place children with below left/right=of only",
+      "colors only via the five palette names"
+    ]
+  }
+}

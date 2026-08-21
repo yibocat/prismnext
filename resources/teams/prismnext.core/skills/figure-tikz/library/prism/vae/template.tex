@@ -1,0 +1,66 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\boxh{2.4}
+\def\gap{0.85}
+\def\inputlabel{Input $x$}
+\def\encoderlabel{Encoder}
+\def\mulabel{$\mu$}
+\def\siglabel{$\sigma$}
+\def\zlabel{$z$}
+\def\decoderlabel{Decoder}
+\def\outputlabel{Output $\hat{x}$}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.4mm]},
+  node distance=0cm and \gap cm,
+  io/.style={
+    draw=otgray!60, fill=otgray!12, rounded corners=2pt,
+    minimum width=1.15cm, minimum height=\boxh cm,
+    align=center, font=\sffamily\small,
+  },
+  enc/.style={
+    draw=otblue!75!black, fill=otblue!16, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=\boxh cm,
+    align=center, font=\sffamily\small,
+  },
+  lat/.style={
+    draw=otorange!80!black, fill=otorange!20, rounded corners=2pt,
+    minimum width=0.95cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  dec/.style={
+    draw=otteal!75!black, fill=otteal!16, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=\boxh cm,
+    align=center, font=\sffamily\small,
+  },
+  flow/.style={draw=otgray!70, line width=0.9pt, ->},
+]
+  \node[io] (input) {\inputlabel};
+  \node[enc, right=of input] (enc) {\encoderlabel};
+  \node[lat, right=0.7cm of enc, yshift=0.55cm] (mu) {\mulabel};
+  \node[lat, right=0.7cm of enc, yshift=-0.55cm] (sig) {\siglabel};
+  \node[lat, right=0.85cm of mu, yshift=-0.55cm] (z) {\zlabel};
+  \node[dec, right=0.85cm of z] (dec) {\decoderlabel};
+  \node[io, right=of dec] (output) {\outputlabel};
+
+  \draw[flow] (input) -- (enc);
+  \draw[flow] (enc) -- (mu);
+  \draw[flow] (enc) -- (sig);
+  \draw[flow] (mu) -- (z);
+  \draw[flow] (sig) -- (z);
+  \draw[flow] (z) -- (dec);
+  \draw[flow] (dec) -- (output);
+\end{tikzpicture}
+\end{document}

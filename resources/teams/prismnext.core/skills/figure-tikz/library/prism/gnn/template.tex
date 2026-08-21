@@ -1,0 +1,66 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\graphlabel{Graph $G=(V,E)$}
+\def\nlabel{Message}
+\def\alabel{Aggregate}
+\def\ulabel{Update}
+\def\outlabel{$h_v^{(t+1)}$}
+\def\vone{$v_1$}
+\def\vtwo{$v_2$}
+\def\vthree{$v_3$}
+\def\vfour{$v_4$}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.2mm]},
+  vertex/.style={
+    circle, draw=otblue!75!black, fill=otblue!16,
+    minimum size=0.72cm, font=\sffamily\footnotesize, inner sep=1pt,
+  },
+  edge/.style={draw=otgray!65, line width=0.8pt, -},
+  blk/.style={
+    draw=otteal!75!black, fill=otteal!16, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  io/.style={
+    draw=otorange!80!black, fill=otorange!18, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  flow/.style={draw=otgray!70, line width=0.9pt, ->},
+  glabel/.style={font=\sffamily\footnotesize, text=otgray},
+]
+  \node[vertex] (v1) at (0,1.15) {\vone};
+  \node[vertex] (v2) at (1.35,1.55) {\vtwo};
+  \node[vertex] (v3) at (1.55,0.35) {\vthree};
+  \node[vertex] (v4) at (0.15,0.05) {\vfour};
+  \draw[edge] (v1) -- (v2);
+  \draw[edge] (v1) -- (v4);
+  \draw[edge] (v2) -- (v3);
+  \draw[edge] (v3) -- (v4);
+  \draw[edge] (v1) -- (v3);
+  \node[glabel] at (0.75,2.15) {\graphlabel};
+
+  \node[blk] (msg) at (4.15,1.55) {\nlabel};
+  \node[blk, below=0.4cm of msg] (agg) {\alabel};
+  \node[blk, below=0.4cm of agg] (upd) {\ulabel};
+  \node[io, right=0.85cm of agg] (out) {\outlabel};
+
+  \draw[flow] (v2.east) -- (msg.west);
+  \draw[flow] (msg) -- (agg);
+  \draw[flow] (agg) -- (upd);
+  \draw[flow] (agg) -- (out);
+\end{tikzpicture}
+\end{document}

@@ -4,15 +4,16 @@ Pick the chart by the comparison the reader must make — not by habit.
 
 ## By data shape
 
-| You want to show | Use | Not |
-|---|---|---|
-| Distribution of one variable | histogram / ECDF / violin | bar of means |
-| Group comparison (few groups) | box/violin + jittered points | bars alone ("dynamite plots" hide n) |
-| Trend over ordered x | line with CI band | bars |
-| Two-variable relationship | scatter (+ regression line if claimed) | line through categorical x |
-| Part-to-whole (few parts) | stacked bar | pie |
-| Matrix / pairwise structure | heatmap with stated color scale | 3-D anything |
-| Uncertainty | error bars / bands with the estimator named in the caption | unlabeled whiskers |
+| You want to show | Use | Script | Not |
+|---|---|---|---|
+| Distribution of one variable | histogram / ECDF / violin | `plot_box_violin.py` | bar of means |
+| Group comparison (few groups) | box/violin + box | `plot_box_violin.py` | bars alone ("dynamite plots" hide n) |
+| Trend over ordered x | line with CI band | `plot_timeseries_ci.py` | bars |
+| Two-variable relationship | scatter (+ regression line if claimed) | `plot_scatter_fit.py` | line through categorical x |
+| Grouped scores with error | grouped bar + yerr | `plot_grouped_bar.py` | dynamite without n |
+| Matrix / pairwise structure | heatmap with stated color scale | `plot_heatmap.py` | 3-D anything / `jet` |
+| Classifier trade-off | ROC and PR | `plot_roc_pr.py` | a remembered curve |
+| Uncertainty | error bars / bands with the estimator named in the caption | the matching script above | unlabeled whiskers |
 
 ## Rules that catch review comments
 

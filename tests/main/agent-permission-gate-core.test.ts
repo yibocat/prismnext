@@ -107,6 +107,37 @@ describe("PermissionGate Hard Deny Security Invariants", () => {
     const result = evaluateHardDeny(req);
     expect(result.deny).toBe(false);
   });
+
+  it("allows bash ls/cat of an enabled skill folder", () => {
+    const skill = "/app/resources/teams/prismnext.core/skills/figure-tikz";
+    const ls = evaluateHardDeny(makeRequest({
+      toolName: "bash",
+      bashCommand: `ls ${skill}/library`,
+      bashCwd: ROOT,
+      skillReadRoots: [skill],
+    }));
+    expect(ls.deny).toBe(false);
+
+    const cat = evaluateHardDeny(makeRequest({
+      toolName: "bash",
+      bashCommand: `cat ${skill}/library/catalog.json`,
+      bashCwd: ROOT,
+      skillReadRoots: [skill],
+    }));
+    expect(cat.deny).toBe(false);
+  });
+
+  it("still hard-denies bash copies out of a skill folder", () => {
+    const skill = "/app/resources/teams/prismnext.core/skills/figure-tikz";
+    const result = evaluateHardDeny(makeRequest({
+      toolName: "bash",
+      bashCommand: `cp ${skill}/library/catalog.json figures/catalog.json`,
+      bashCwd: ROOT,
+      skillReadRoots: [skill],
+    }));
+    expect(result.deny).toBe(true);
+    if (result.deny) expect(result.reason).toContain("outside_project");
+  });
 });
 
 describe("PermissionGate 4 Permission Modes Matrix", () => {

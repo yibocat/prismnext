@@ -9,7 +9,9 @@
  * - File-access verbs carrying path arguments that resolve outside the
  *   project root: surfaced to the smart permission policy as "prompt"
  *   (user may approve once or allow-always; Settings → Permissions →
- *   Allowed paths is the standing exception).
+ *   Allowed paths is the standing exception). Enabled skill folders are
+ *   a host-owned read exception (`skillReadRoots`) — ls/cat/find there
+ *   is not project-escape. Writes into those folders are still outside.
  */
 
 import {
@@ -19,6 +21,7 @@ import {
   normalizeFsSeparators,
   resolveFsPath,
 } from "./fs-path";
+import { isPathUnderSkillReadRoots, isSkillReadBashVerb } from "./skill-read-roots";
 
 /**
  * Spotlight / locate as a command word (optionally path-qualified / sudo),
@@ -108,12 +111,17 @@ function homeDirOrEmpty(homeDir?: string | null): string {
  * ignored; paths under `opts.allowedPaths` (the user's standing
  * outside-project allowances) are exempt.
  * Detection-only — the policy layer decides prompt vs allow.
+ * `skillReadRoots` exempts read-only verbs (ls/cat/find/…) only.
  */
 export function extractOutsideProjectPathArgs(
   command: string,
   cwd: string | null | undefined,
   projectRoot: string | null | undefined,
-  opts?: { homeDir?: string | null; allowedPaths?: string[] | null },
+  opts?: {
+    homeDir?: string | null;
+    allowedPaths?: string[] | null;
+    skillReadRoots?: string[] | null;
+  },
 ): string[] {
   const root = projectRoot?.trim() ? normalizeAbsPath(projectRoot.trim()) : "";
   if (!root || !command.trim()) return [];
@@ -123,11 +131,14 @@ export function extractOutsideProjectPathArgs(
   const allowed = (opts?.allowedPaths ?? [])
     .filter((p): p is string => typeof p === "string" && !!p.trim())
     .map((p) => normalizeAbsPath(p.trim()));
+  const skillRoots = (opts?.skillReadRoots ?? [])
+    .filter((p): p is string => typeof p === "string" && !!p.trim())
+    .map((p) => normalizeAbsPath(p.trim()));
 
   const offenders: string[] = [];
   const seen = new Set<string>();
 
-  const check = (rawToken: string, resolveBase: string): void => {
+  const check = (rawToken: string, resolveBase: string, verb: string): void => {
     let token = unquote(rawToken);
     if (!token || URL_SCHEME_RE.test(token)) return;
     // --opt=value / -o=value: inspect the value side.
@@ -154,6 +165,7 @@ export function extractOutsideProjectPathArgs(
     }
     if (isPathNestedInside(root, resolved)) return;
     if (allowed.some((ap) => isPathNestedInside(ap, resolved))) return;
+    if (isPathUnderSkillReadRoots(resolved, skillRoots) && isSkillReadBashVerb(verb)) return;
     if (!seen.has(resolved)) {
       seen.add(resolved);
       offenders.push(token);
@@ -189,7 +201,7 @@ export function extractOutsideProjectPathArgs(
       continue;
     }
     if (!FILE_ACCESS_VERBS.has(verb)) continue;
-    for (const arg of tokens.slice(i + 1)) check(arg, curBase);
+    for (const arg of tokens.slice(i + 1)) check(arg, curBase, verb);
   }
 
   return offenders;

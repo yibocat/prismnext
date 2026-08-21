@@ -1,0 +1,33 @@
+{
+  "id": "causal-graph",
+  "name": "Causal DAG (confounder + mediator)",
+  "type": "template",
+  "domain": ["stats"],
+  "tags": ["causal", "dag", "confounder", "mediator", "treatment", "outcome", "unobserved", "identification"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "Standard causal graph: unobserved $U$, confounder $Z$, treatment $X$, mediator $M$, outcome $Y$, including the direct $X\\to Y$ edge.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\zlabel", "type": "text", "meaning": "confounder node (use \\\\ for a second line)"},
+      {"name": "\\xlabel", "type": "text", "meaning": "treatment node"},
+      {"name": "\\mlabel", "type": "text", "meaning": "mediator node"},
+      {"name": "\\ylabel", "type": "text", "meaning": "outcome node"},
+      {"name": "\\ulabel", "type": "text", "meaning": "unobserved node"}
+    ],
+    "node_naming": "fixed names: (u) (z) (x) (m) (y)",
+    "styles": ["obs", "unobs", "flow"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "drop-edge", "summary": "delete one \\draw[flow] if that arrow is not in the claimed DAG"},
+      {"id": "add-node", "summary": "add an obs/unobs node with a semantic name and connect with flow arrows"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (u) (z) (x) (m) (y) unless the user dropped that variable",
+      "unobserved variables stay on the unobs (dashed) style",
+      "colors only via the five palette names"
+    ]
+  }
+}

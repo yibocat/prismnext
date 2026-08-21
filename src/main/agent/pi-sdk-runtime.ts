@@ -17,6 +17,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
+import { skillReadRootsFromDirs } from "../../shared/skill-read-roots";
 import { createLogger, shortLogDetail } from "../services/logger";
 import type { AgentMcpHost } from "./mcp-host";
 
@@ -470,6 +471,7 @@ export function createPiSdkSessionFactory(
     }
 
     const getContext = (): PiToolExecutionContext => turnContext;
+    const skillReadRoots = skillReadRootsFromDirs(input.skills);
     let turnContext: PiToolExecutionContext = {
       runtimeSessionId: opts.runtimeSessionId,
       tabId: opts.tabId,
@@ -478,6 +480,7 @@ export function createPiSdkSessionFactory(
       permissionMode: opts.permissionMode ?? "edit_auto",
       sessionAgent: opts.sessionAgent,
       allowedPaths: opts.allowedPaths,
+      skillReadRoots,
       askUser: input.interactions
         ? (question) => input.interactions!.askQuestion({
             requestId: question.requestId?.trim()
@@ -587,6 +590,7 @@ export function createPiSdkSessionFactory(
           askUser: next.askUser ?? turnContext.askUser,
           suggestPlan: next.suggestPlan ?? turnContext.suggestPlan,
           sessionAgent: next.sessionAgent ?? turnContext.sessionAgent,
+          skillReadRoots: next.skillReadRoots ?? turnContext.skillReadRoots,
         };
       },
       getSystemPrompt: () => {

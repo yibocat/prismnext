@@ -14,6 +14,7 @@ import {
   defineTool,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { existsSync } from "node:fs";
 import {
   extractToolPathContext,
   type PermissionGate,
@@ -24,6 +25,33 @@ import {
 } from "./capability-matrix";
 import type { ToolExecuteContext } from "./tool-host";
 import { createLogger, shortLogDetail } from "../services/logger";
+import {
+  formatAmbiguousSkillPath,
+  resolveSkillRelativePath,
+} from "../../shared/skill-read-roots";
+
+const SKILL_RELATIVE_TOOLS = new Set(["read", "ls", "grep", "find"]);
+
+function rewriteSkillRelativeArgs(
+  toolName: string,
+  args: Record<string, unknown>,
+  projectRoot: string,
+  skillReadRoots: readonly string[] | undefined,
+): { args: Record<string, unknown> } | { error: string } {
+  if (!SKILL_RELATIVE_TOOLS.has(toolName) || !skillReadRoots?.length) {
+    return { args };
+  }
+  const raw = typeof args.path === "string" ? args.path : "";
+  if (!raw.trim()) return { args };
+  const resolved = resolveSkillRelativePath(raw, projectRoot, skillReadRoots, existsSync);
+  if (resolved.action === "rewrite") {
+    return { args: { ...args, path: resolved.abs } };
+  }
+  if (resolved.action === "ambiguous") {
+    return { error: formatAmbiguousSkillPath(raw, resolved.candidates) };
+  }
+  return { args };
+}
 
 const log = createLogger("pi-primitive", "agent");
 
@@ -55,7 +83,20 @@ export function wrapPiPrimitiveTools(input: {
       ...original,
       execute: async (toolCallId, params, signal, onUpdate, ctx) => {
         const turn = input.getContext();
-        const args = (params ?? {}) as Record<string, unknown>;
+        const rawArgs = (params ?? {}) as Record<string, unknown>;
+        const rewritten = rewriteSkillRelativeArgs(
+          name,
+          rawArgs,
+          turn.projectRoot,
+          turn.skillReadRoots,
+        );
+        if ("error" in rewritten) {
+          return {
+            content: [{ type: "text", text: rewritten.error }],
+            details: { ok: false, error: rewritten.error },
+          };
+        }
+        const args = rewritten.args;
         const paths = extractToolPathContext(name, args, turn.projectRoot);
         const decision = await input.gate.decide({
           requestId: `perm-${toolCallId}`,
@@ -70,6 +111,7 @@ export function wrapPiPrimitiveTools(input: {
           sessionAgent: turn.sessionAgent,
           sessionId: turn.tabId,
           allowedPaths: turn.allowedPaths,
+          skillReadRoots: turn.skillReadRoots,
           ...paths,
         });
         if (decision.decision === "deny") {
@@ -81,7 +123,7 @@ export function wrapPiPrimitiveTools(input: {
         const startedAt = Date.now();
         log.info("tool.execute.start", { toolName: name, toolCallId });
         try {
-          const result = await original.execute(toolCallId, params, signal, onUpdate, ctx);
+          const result = await original.execute(toolCallId, args, signal, onUpdate, ctx);
           log.info("tool.execute.end", {
             toolName: name,
             toolCallId,

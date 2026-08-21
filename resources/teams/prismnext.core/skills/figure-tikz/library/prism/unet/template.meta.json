@@ -1,0 +1,36 @@
+{
+  "id": "unet",
+  "name": "U-Net (encoder–decoder with skips)",
+  "type": "template",
+  "domain": ["ml"],
+  "tags": ["unet", "u-net", "segmentation", "skip connection", "encoder", "decoder", "bottleneck", "architecture"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "Two-level U-Net: input, encoder 1/2, bottleneck, decoder 2/1, output. Purple dashed arrows are the skip connections.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\colgap", "type": "length-cm", "meaning": "horizontal gap", "default": "1.35"},
+      {"name": "\\rowgap", "type": "length-cm", "meaning": "vertical gap on the U", "default": "0.85"},
+      {"name": "\\inputlabel", "type": "text", "meaning": "input label"},
+      {"name": "\\encelabel", "type": "text", "meaning": "first encoder label"},
+      {"name": "\\enctlabel", "type": "text", "meaning": "second encoder label"},
+      {"name": "\\bottlabel", "type": "text", "meaning": "bottleneck label"},
+      {"name": "\\dectlabel", "type": "text", "meaning": "first decoder (deep) label"},
+      {"name": "\\decelabel", "type": "text", "meaning": "last decoder label"},
+      {"name": "\\outputlabel", "type": "text", "meaning": "output label"}
+    ],
+    "node_naming": "fixed names: (input) (e1) (e2) (botn) (d2) (d1) (output)",
+    "styles": ["enc", "bot", "dec", "io", "flow", "skip"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-level", "summary": "insert a matching encoder/decoder pair and a skip; keep the U shape and y-alignment"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (input) (e1) (e2) (botn) (d2) (d1) (output)",
+      "every encoder level that has a peer decoder keeps a skip",
+      "colors only via the five palette names"
+    ]
+  }
+}

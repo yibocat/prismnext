@@ -28,5 +28,14 @@ component upstream:
   Viewer resources (cmaps, standard fonts, wasm, iccs) are bundled for the
   built-in PDF reader.
 
+* TikZ catalog figures under
+  `resources/teams/prismnext.core/skills/figure-tikz/library/` mix a
+  vendored OpenTikZ slice (https://opentikz.org/,
+  https://github.com/opentikz/opentikz) — templates, examples, and
+  ml/systems icons, CC0 1.0 (see that directory's LICENSE-CONTENT) —
+  with PrismNext templates under `library/prism/` (MIT). Brand marks
+  inlined in a few OpenTikZ templates remain trademarks of their
+  owners. Brand-logo icons are not shipped.
+
 JavaScript dependencies are declared in package.json / pnpm-lock.yaml and
 carry their own licenses; this NOTICE does not attempt to enumerate them.

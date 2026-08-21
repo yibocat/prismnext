@@ -31,7 +31,7 @@
     {
       "id": "figure-matplotlib",
       "name": "figure-matplotlib",
-      "description": "Use when drawing a data figure with matplotlib/seaborn — copy the template and style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "description": "Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
@@ -52,7 +52,7 @@
     {
       "id": "figure-tikz",
       "name": "figure-tikz",
-      "description": "Use when drawing a standalone TikZ figure — architecture/pipeline/schematic diagrams (default), commutative diagrams, or small symbolic pgfplots. Closed path: copy the matching template, edit nodes, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "description": "Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path: match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },

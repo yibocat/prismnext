@@ -112,6 +112,31 @@ describe("smart-permission-policy", () => {
     expect(resolveSmartBashAction("cat /refs/x.bib", ROOT, ROOT, ["/refs"])).toBe("allow");
   });
 
+  it("allows read-only bash against enabled skill folders", () => {
+    const skill = "/app/resources/teams/prismnext.core/skills/figure-tikz";
+    expect(resolveSmartBashAction(
+      `ls ${skill}/library`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("allow");
+    expect(resolveSmartBashAction(
+      `cat ${skill}/library/catalog.json`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("allow");
+    expect(resolveSmartBashAction(
+      `cp ${skill}/library/catalog.json figures/catalog.json`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("prompt");
+  });
+
   it("reads stay silent allow inside and outside the project (deliberate)", () => {
     expect(resolveSmartPermissionAction({
       toolName: "read",

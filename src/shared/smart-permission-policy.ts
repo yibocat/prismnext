@@ -43,6 +43,8 @@ export type SmartPermissionContext = PlanPermissionContext & {
   sourcePath?: string | null;
   destinationPath?: string | null;
   bashCwd?: string | null;
+  /** Enabled team skill folders — readable host resources, not project-escape. */
+  skillReadRoots?: string[] | null;
 };
 
 /** OpenCode rules: reads allow; gated tools ask so requestPermission can run smart policy. */
@@ -194,6 +196,7 @@ export function resolveSmartBashAction(
   projectRoot: string | null | undefined,
   cwd: string | null | undefined,
   allowedPaths?: string[] | null,
+  skillReadRoots?: string[] | null,
 ): SmartPermissionAction {
   const cmd = normalizeBashCommand(command || "");
   if (!cmd) return "allow";
@@ -213,7 +216,8 @@ export function resolveSmartBashAction(
 
   // File-access verbs carrying paths outside the project → visible prompt,
   // even when the cwd is inside the project (`cat /elsewhere/x` was silent).
-  if (extractOutsideProjectPathArgs(cmd, cwd, projectRoot, { allowedPaths }).length > 0) {
+  // Enabled skill folders are readable host roots, not escape.
+  if (extractOutsideProjectPathArgs(cmd, cwd, projectRoot, { allowedPaths, skillReadRoots }).length > 0) {
     return "prompt";
   }
 
@@ -347,7 +351,13 @@ function resolveSmartDefaultAction(
     if (toolName === "experiment-run" && !ctx.bashCommand && isCwdInsideProject(ctx.bashCwd, root)) {
       return "allow";
     }
-    return resolveSmartBashAction(ctx.bashCommand, root, ctx.bashCwd, allowedPaths);
+    return resolveSmartBashAction(
+      ctx.bashCommand,
+      root,
+      ctx.bashCwd,
+      allowedPaths,
+      ctx.skillReadRoots,
+    );
   }
 
   return "allow";

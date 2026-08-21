@@ -1,0 +1,56 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\boxw{1.55}
+\def\gap{1.15}
+\def\xzerolabel{$x_0$}
+\def\xonelabel{$x_t$}
+\def\xtwolabel{$x_{T-1}$}
+\def\xtlabel{$x_T$}
+\def\fwdlabel{forward (noise)}
+\def\revlabel{reverse (denoise)}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.4mm]},
+  node distance=0cm and \gap cm,
+  state/.style={
+    draw=otblue!75!black, fill=otblue!14, rounded corners=2pt,
+    minimum width=\boxw cm, minimum height=0.8cm,
+    align=center, font=\sffamily\small,
+  },
+  noisy/.style={
+    draw=otgray!70, fill=otgray!14, rounded corners=2pt,
+    minimum width=\boxw cm, minimum height=0.8cm,
+    align=center, font=\sffamily\small,
+  },
+  fwd/.style={draw=otorange!80!black, line width=0.95pt, ->},
+  rev/.style={draw=otteal!80!black, line width=0.95pt, ->},
+  lbl/.style={font=\sffamily\footnotesize, text=otgray},
+]
+  \node[state] (x0) {\xzerolabel};
+  \node[state, right=of x0] (x1) {\xonelabel};
+  \node[state, right=of x1] (x2) {\xtwolabel};
+  \node[noisy, right=of x2] (xT) {\xtlabel};
+
+  \draw[fwd] (x0) -- (x1);
+  \draw[fwd] (x1) -- (x2);
+  \draw[fwd] (x2) -- (xT);
+  \node[lbl, above=0.28cm of x1] {\fwdlabel};
+
+  \draw[rev] ([yshift=-0.22cm]xT.south) -- ++(0,-0.45) -| ([yshift=-0.22cm]x2.south);
+  \draw[rev] ([yshift=-0.22cm]x2.south) -- ++(0,-0.45) -| ([yshift=-0.22cm]x1.south);
+  \draw[rev] ([yshift=-0.22cm]x1.south) -- ++(0,-0.45) -| ([yshift=-0.22cm]x0.south);
+  \node[lbl, below=0.85cm of x1] {\revlabel};
+\end{tikzpicture}
+\end{document}

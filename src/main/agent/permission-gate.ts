@@ -80,6 +80,8 @@ export interface PermissionGateRequest {
   /** Chat conversation id — Plan mode uses it to compute the canonical draft path. */
   sessionId?: string;
   allowedPaths?: string[];
+  /** Enabled team skill folders — readable; bash read-only verbs are not escape. */
+  skillReadRoots?: string[];
   filePath?: string | null;
   bashCommand?: string | null;
   bashCwd?: string | null;
@@ -206,7 +208,7 @@ export function evaluateHardDeny(request: PermissionGateRequest): { deny: true; 
       command,
       request.bashCwd,
       request.projectRoot,
-      { allowedPaths: request.allowedPaths },
+      { allowedPaths: request.allowedPaths, skillReadRoots: request.skillReadRoots },
     );
     if (outside.length > 0) {
       return { deny: true, reason: `outside_project:${outside.join(",")}` };
@@ -378,6 +380,7 @@ export class PermissionGate {
         request.projectRoot,
         request.bashCwd,
         allowedPaths,
+        request.skillReadRoots,
       );
       if (smart === "deny") {
         return { decision: "deny", reason: "smart_bash_deny", requestId: request.requestId };

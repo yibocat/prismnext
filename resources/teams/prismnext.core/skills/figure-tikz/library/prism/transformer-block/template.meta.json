@@ -1,0 +1,39 @@
+{
+  "id": "transformer-block",
+  "name": "Transformer block (MHA + FFN)",
+  "type": "template",
+  "domain": ["ml"],
+  "tags": ["transformer", "attention", "multi-head", "self-attention", "qkv", "feed-forward", "add and norm", "architecture"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "One transformer layer: input splits to Q/K/V, multi-head attention, Add&Norm, feed-forward, Add&Norm, output. Residual skips are dashed teal.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\boxw", "type": "length-cm", "meaning": "width of the main blocks", "default": "3.4"},
+      {"name": "\\boxh", "type": "length-cm", "meaning": "height of the main blocks", "default": "0.85"},
+      {"name": "\\gap", "type": "length-cm", "meaning": "vertical gap between stacked blocks", "default": "0.55"},
+      {"name": "\\inputlabel", "type": "text", "meaning": "input block label"},
+      {"name": "\\mhalabel", "type": "text", "meaning": "attention block label"},
+      {"name": "\\normonelabel", "type": "text", "meaning": "first Add&Norm label"},
+      {"name": "\\ffnlabel", "type": "text", "meaning": "feed-forward label"},
+      {"name": "\\normtwolabel", "type": "text", "meaning": "second Add&Norm label"},
+      {"name": "\\outputlabel", "type": "text", "meaning": "output block label"},
+      {"name": "\\qlabel", "type": "text", "meaning": "query chip"},
+      {"name": "\\klabel", "type": "text", "meaning": "key chip"},
+      {"name": "\\vlabel", "type": "text", "meaning": "value chip"}
+    ],
+    "node_naming": "fixed names: (input) (q) (k) (v) (mha) (n1) (ffn) (n2) (output)",
+    "styles": ["blk", "io", "qkv", "flow", "skip"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"},
+      {"id": "drop-residual", "summary": "delete one skip path if the user asked for a residual-free sketch"}
+    ],
+    "invariants": [
+      "preserve the node names (input) (q) (k) (v) (mha) (n1) (ffn) (n2) (output)",
+      "keep Q/K/V as three chips feeding (mha)",
+      "colors only via the five palette names"
+    ]
+  }
+}

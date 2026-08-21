@@ -1,0 +1,35 @@
+{
+  "id": "diffusion",
+  "name": "Diffusion (forward noise / reverse denoise)",
+  "type": "template",
+  "domain": ["ml"],
+  "tags": ["diffusion", "ddpm", "score matching", "noising", "denoising", "generative", "architecture"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "Four-state diffusion chain. Orange arrows go $x_0 \\to x_T$ (forward noise); teal arrows return (reverse denoise).",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\boxw", "type": "length-cm", "meaning": "state box width", "default": "1.55"},
+      {"name": "\\gap", "type": "length-cm", "meaning": "gap between states", "default": "1.15"},
+      {"name": "\\xzerolabel", "type": "text", "meaning": "clean state"},
+      {"name": "\\xonelabel", "type": "text", "meaning": "intermediate state"},
+      {"name": "\\xtwolabel", "type": "text", "meaning": "late state"},
+      {"name": "\\xtlabel", "type": "text", "meaning": "fully noised state"},
+      {"name": "\\fwdlabel", "type": "text", "meaning": "forward-process caption"},
+      {"name": "\\revlabel", "type": "text", "meaning": "reverse-process caption"}
+    ],
+    "node_naming": "fixed names: (x0) (x1) (x2) (xT)",
+    "styles": ["state", "noisy", "fwd", "rev", "lbl"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-state", "summary": "insert another state on the chain and extend both arrow rows"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (x0) (x1) (x2) (xT)",
+      "keep forward and reverse as two distinct styled arrow families",
+      "colors only via the five palette names"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, fit, backgrounds}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\laneaw{Agent}
+\def\lanebw{Tool}
+\def\lanecw{User}
+\def\aonelabel{Plan}
+\def\atonelabel{Call}
+\def\atwolabel{Act}
+\def\btonelabel{Run}
+\def\btwolabel{Result}
+\def\ctwolabel{Approve}
+\def\cthreelabel{Read}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.2mm]},
+  task/.style={
+    draw=otblue!75!black, fill=otblue!14, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  lane/.style={font=\sffamily\small\bfseries, text=otgray, anchor=east},
+  flow/.style={draw=otgray!70, line width=0.85pt, ->},
+]
+  \node[lane] (la) at (0,2.1) {\laneaw};
+  \node[lane] (lb) at (0,1.05) {\lanebw};
+  \node[lane] (lc) at (0,0.0) {\lanecw};
+
+  \node[task] (a1) at (2.2,2.1) {\aonelabel};
+  \node[task] (a2) at (4.4,2.1) {\atonelabel};
+  \node[task] (a3) at (6.6,2.1) {\atwolabel};
+
+  \node[task] (b2) at (4.4,1.05) {\btonelabel};
+  \node[task] (b3) at (6.6,1.05) {\btwolabel};
+
+  \node[task] (c3) at (6.6,0.0) {\ctwolabel};
+  \node[task] (c4) at (8.8,0.0) {\cthreelabel};
+
+  \begin{scope}[on background layer]
+    \node[fit=(la)(a1)(a3), inner sep=6pt, fill=otblue!6, rounded corners=3pt] {};
+    \node[fit=(lb)(b2)(b3), inner sep=6pt, fill=otteal!7, rounded corners=3pt] {};
+    \node[fit=(lc)(c3)(c4), inner sep=6pt, fill=otorange!7, rounded corners=3pt] {};
+  \end{scope}
+
+  \draw[flow] (a1) -- (a2);
+  \draw[flow] (a2) -- (b2);
+  \draw[flow] (b2) -- (b3);
+  \draw[flow] (b3) -- (a3);
+  \draw[flow] (a3) -- (c3);
+  \draw[flow] (c3) -- (c4);
+\end{tikzpicture}
+\end{document}

@@ -73,6 +73,62 @@ describe("extractOutsideProjectPathArgs", () => {
     expect(run("cat /refs/papers.bib && cat /other/x", ROOT, ["/refs"])).toEqual(["/other/x"]);
   });
 
+  it("exempts read-only bash verbs under enabled skill folders", () => {
+    const skill = "/app/teams/prismnext.core/skills/figure-tikz";
+    const opts = { homeDir: HOME, skillReadRoots: [skill] };
+    expect(extractOutsideProjectPathArgs(
+      `ls ${skill}/library`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([]);
+    expect(extractOutsideProjectPathArgs(
+      `cat ${skill}/library/catalog.json`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([]);
+    expect(extractOutsideProjectPathArgs(
+      `find ${skill} -name template.tex`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([]);
+    expect(extractOutsideProjectPathArgs(
+      `cd ${skill} && cat library/catalog.json`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([]);
+  });
+
+  it("still flags writes and copies that touch a skill folder", () => {
+    const skill = "/app/teams/prismnext.core/skills/figure-tikz";
+    const opts = { homeDir: HOME, skillReadRoots: [skill] };
+    expect(extractOutsideProjectPathArgs(
+      `cp ${skill}/library/templates/gan/template.tex figures/gan.tex`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([`${skill}/library/templates/gan/template.tex`]);
+    expect(extractOutsideProjectPathArgs(
+      `sed -i s/x/y/ ${skill}/SKILL.md`,
+      ROOT,
+      ROOT,
+      opts,
+    )).toEqual([`${skill}/SKILL.md`]);
+  });
+
+  it("does not treat an unrelated outside path as a skill read", () => {
+    const skill = "/app/teams/prismnext.core/skills/figure-tikz";
+    expect(extractOutsideProjectPathArgs(
+      "cat /elsewhere/SKILL.md",
+      ROOT,
+      ROOT,
+      { homeDir: HOME, skillReadRoots: [skill] },
+    )).toEqual(["/elsewhere/SKILL.md"]);
+  });
+
   it("ignores in-project paths, bare names, flags, URLs, non-verbs", () => {
     expect(run("cat src/a.ts")).toEqual([]);
     expect(run("cat notes.md")).toEqual([]);

@@ -229,6 +229,7 @@ function toPiMcpTool(input: {
           permissionMode: turn.permissionMode,
           sessionAgent: turn.sessionAgent,
           allowedPaths: turn.allowedPaths,
+          skillReadRoots: turn.skillReadRoots,
         });
         if (decision.decision === "deny") {
           return {

@@ -1,0 +1,56 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\boxw{3.6}
+\def\identlabel{Identification\\$n=1280$}
+\def\screenlabel{Screening\\$n=964$}
+\def\eliglabel{Eligibility\\$n=112$}
+\def\incllabel{Included\\$n=28$}
+\def\exscreenlabel{Excluded at screen\\$n=316$}
+\def\exeliglabel{Excluded at full text\\$n=84$}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.4mm]},
+  node distance=0.7cm,
+  stage/.style={
+    draw=otblue!75!black, fill=otblue!14, rounded corners=2pt,
+    minimum width=\boxw cm, minimum height=1.05cm,
+    align=center, font=\sffamily\small,
+  },
+  keep/.style={
+    draw=otteal!75!black, fill=otteal!16, rounded corners=2pt,
+    minimum width=\boxw cm, minimum height=1.05cm,
+    align=center, font=\sffamily\small,
+  },
+  drop/.style={
+    draw=otorange!80!black, fill=otorange!16, rounded corners=2pt,
+    minimum width=3.2cm, minimum height=0.95cm,
+    align=center, font=\sffamily\footnotesize,
+  },
+  flow/.style={draw=otgray!70, line width=0.9pt, ->},
+]
+  \node[stage] (ident) {\identlabel};
+  \node[stage, below=of ident] (screen) {\screenlabel};
+  \node[stage, below=of screen] (elig) {\eliglabel};
+  \node[keep, below=of elig] (incl) {\incllabel};
+  \node[drop, right=1.3cm of screen] (ex1) {\exscreenlabel};
+  \node[drop, right=1.3cm of elig] (ex2) {\exeliglabel};
+
+  \draw[flow] (ident) -- (screen);
+  \draw[flow] (screen) -- (elig);
+  \draw[flow] (elig) -- (incl);
+  \draw[flow] (screen) -- (ex1);
+  \draw[flow] (elig) -- (ex2);
+\end{tikzpicture}
+\end{document}

@@ -1,7 +1,9 @@
 # TikZ / pgfplots Recipes
 
 The techniques the shipped templates use, plus the failures you will
-actually hit. Read when modifying templates or writing new pictures.
+actually hit. Read when a compile error is a TikZ construct you do not
+recognize — not as a prelude to drawing. Prefer `library/catalog.json`
+over inventing a new picture.
 
 ## Libraries — load what you use
 

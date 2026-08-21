@@ -1,0 +1,1237 @@
+[
+  {
+    "id": "agent-mcp-stack",
+    "name": "Agent Tool-Use Stack (MCP)",
+    "type": "template",
+    "domain": [
+      "ml",
+      "brands"
+    ],
+    "tags": [
+      "llm",
+      "agent",
+      "mcp",
+      "tools",
+      "tool use",
+      "claude",
+      "brands",
+      "logo"
+    ],
+    "description": "LLM agent tool-use stack with brand logos: user to an LLM core to MCP servers fanning out to swappable tool cards.",
+    "path": "templates/agent-mcp-stack",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "svg.path",
+      "positioning",
+      "arrows.meta"
+    ],
+    "author": "Daniel Huang",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "distributed-training",
+    "name": "Distributed data-parallel training",
+    "type": "template",
+    "domain": [
+      "ml",
+      "systems"
+    ],
+    "tags": [
+      "distributed training",
+      "data parallel",
+      "parameter server",
+      "gpu",
+      "gradients",
+      "synchronization",
+      "system diagram"
+    ],
+    "description": "Editable data-parallel training figure composing the dataset, gpu, and server icons: a training-data source shards batches to GPU workers that exchange gradients and weights with a parameter server. Parametric spacing and labels.",
+    "path": "templates/distributed-training",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "encoder-decoder",
+    "name": "Encoder-decoder (bottleneck)",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "encoder",
+      "decoder",
+      "autoencoder",
+      "seq2seq",
+      "bottleneck",
+      "latent",
+      "representation learning",
+      "architecture"
+    ],
+    "description": "Block-level encoder-decoder 'hourglass': input block, encoder trapezoid narrowing to a latent bottleneck z, decoder trapezoid widening to an output block. Parametric sizes and labels.",
+    "path": "templates/encoder-decoder",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "flowchart",
+    "name": "Flowchart (decision + loop)",
+    "type": "template",
+    "domain": [
+      "general"
+    ],
+    "tags": [
+      "flowchart",
+      "decision",
+      "diamond",
+      "process",
+      "control flow",
+      "algorithm",
+      "branch",
+      "loop"
+    ],
+    "description": "Standard flowchart: terminal pills (start/end), process rectangles, a decision diamond with Yes/No branches, and a retry loop. Parametric spacing and labels.",
+    "path": "templates/flowchart",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning",
+      "shapes.geometric",
+      "shapes.misc"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "inference-serving",
+    "name": "Model inference serving",
+    "type": "template",
+    "domain": [
+      "systems",
+      "ml"
+    ],
+    "tags": [
+      "inference",
+      "serving",
+      "deployment",
+      "load balancer",
+      "gpu",
+      "cloud",
+      "feature store",
+      "system diagram"
+    ],
+    "description": "Editable deployment figure composing the cloud, server, gpu, and database icons: client requests flow over the internet through a load balancer to GPU-backed inference nodes that read from a feature store, with a dashed inference-cluster boundary. Parametric spacing and labels.",
+    "path": "templates/inference-serving",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "backgrounds",
+      "fit",
+      "positioning",
+      "shapes.symbols"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "llm-serving-stack",
+    "name": "LLM Serving Stack",
+    "type": "template",
+    "domain": [
+      "systems",
+      "brands"
+    ],
+    "tags": [
+      "llm",
+      "serving",
+      "inference",
+      "vllm",
+      "gpu",
+      "deployment",
+      "models",
+      "brands",
+      "logo"
+    ],
+    "description": "LLM inference serving stack with brand logos: users to a vLLM engine on a GPU cluster, serving swappable model cards.",
+    "path": "templates/llm-serving-stack",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "svg.path",
+      "positioning",
+      "arrows.meta"
+    ],
+    "author": "Daniel Huang",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "neural-net",
+    "name": "Feed-forward neural network",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "neural network",
+      "mlp",
+      "feedforward",
+      "fully connected",
+      "deep learning",
+      "architecture",
+      "layers"
+    ],
+    "description": "Parametric fully-connected feed-forward neural network. Layer count and neurons-per-layer are set by a single list at the top of the file.",
+    "path": "templates/neural-net",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "resnet-block",
+    "name": "ResNet residual block",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "resnet",
+      "residual block",
+      "residual learning",
+      "skip connection",
+      "identity shortcut",
+      "deep learning",
+      "architecture",
+      "cnn"
+    ],
+    "description": "The classic ResNet residual learning building block (He et al.): a stack of weight layers forming F(x), an identity skip connection that re-enters at a summation node, and a final activation. The number of weight layers is driven by a single list at the top of the file.",
+    "path": "templates/resnet-block",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "system-block-diagram",
+    "name": "System block diagram",
+    "type": "template",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "system",
+      "architecture",
+      "block diagram",
+      "microservices",
+      "components",
+      "database",
+      "cache",
+      "data flow"
+    ],
+    "description": "General system architecture diagram: external client, process boxes (gateway/services), datastore cylinders (database/cache), branching connections, and a dashed subsystem group box. Multiple component types, parametric spacing.",
+    "path": "templates/system-block-diagram",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "backgrounds",
+      "fit",
+      "positioning",
+      "shapes.geometric"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": true
+  },
+  {
+    "id": "causal-graph",
+    "name": "Causal DAG (confounder + mediator)",
+    "type": "template",
+    "domain": [
+      "stats"
+    ],
+    "tags": [
+      "causal",
+      "dag",
+      "confounder",
+      "mediator",
+      "treatment",
+      "outcome",
+      "unobserved",
+      "identification"
+    ],
+    "description": "Standard causal graph: unobserved $U$, confounder $Z$, treatment $X$, mediator $M$, outcome $Y$, including the direct $X\\to Y$ edge.",
+    "path": "prism/causal-graph",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "diffusion",
+    "name": "Diffusion (forward noise / reverse denoise)",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "diffusion",
+      "ddpm",
+      "score matching",
+      "noising",
+      "denoising",
+      "generative",
+      "architecture"
+    ],
+    "description": "Four-state diffusion chain. Orange arrows go $x_0 \\to x_T$ (forward noise); teal arrows return (reverse denoise).",
+    "path": "prism/diffusion",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "gnn",
+    "name": "GNN message-passing layer",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "gnn",
+      "graph neural network",
+      "message passing",
+      "aggregate",
+      "update",
+      "node classification",
+      "architecture"
+    ],
+    "description": "A four-node graph plus one message-passing step: Message → Aggregate → Update, writing $h_v^{(t+1)}$.",
+    "path": "prism/gnn",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "prisma-flow",
+    "name": "PRISMA screening flow",
+    "type": "template",
+    "domain": [
+      "research"
+    ],
+    "tags": [
+      "prisma",
+      "systematic review",
+      "screening",
+      "eligibility",
+      "included",
+      "flow diagram",
+      "literature"
+    ],
+    "description": "Four-stage PRISMA-style flow: identification → screening → eligibility → included, with two exclusion boxes. Counts live in the label macros.",
+    "path": "prism/prisma-flow",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "swimlane",
+    "name": "Swimlane (three actors)",
+    "type": "template",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "swimlane",
+      "sequence",
+      "lane",
+      "workflow",
+      "actor",
+      "handoff",
+      "process"
+    ],
+    "description": "Three horizontal lanes (agent / tool / user) with a short handoff sequence. Relabel the lanes and steps; keep one row per actor.",
+    "path": "prism/swimlane",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning",
+      "fit",
+      "backgrounds"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "timeline",
+    "name": "Timeline (five milestones)",
+    "type": "template",
+    "domain": [
+      "general"
+    ],
+    "tags": [
+      "timeline",
+      "milestones",
+      "schedule",
+      "phases",
+      "history",
+      "process"
+    ],
+    "description": "A single axis with five alternating above/below milestone labels.",
+    "path": "prism/timeline",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "transformer-block",
+    "name": "Transformer block (MHA + FFN)",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "transformer",
+      "attention",
+      "multi-head",
+      "self-attention",
+      "qkv",
+      "feed-forward",
+      "add and norm",
+      "architecture"
+    ],
+    "description": "One transformer layer: input splits to Q/K/V, multi-head attention, Add&Norm, feed-forward, Add&Norm, output. Residual skips are dashed teal.",
+    "path": "prism/transformer-block",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "tree",
+    "name": "Tree (root and two levels)",
+    "type": "template",
+    "domain": [
+      "general"
+    ],
+    "tags": [
+      "tree",
+      "hierarchy",
+      "taxonomy",
+      "decision tree",
+      "parse tree",
+      "org chart"
+    ],
+    "description": "A root with two children and four leaves. Relabel; add a child with below=of and a flow arrow.",
+    "path": "prism/tree",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "unet",
+    "name": "U-Net (encoder–decoder with skips)",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "unet",
+      "u-net",
+      "segmentation",
+      "skip connection",
+      "encoder",
+      "decoder",
+      "bottleneck",
+      "architecture"
+    ],
+    "description": "Two-level U-Net: input, encoder 1/2, bottleneck, decoder 2/1, output. Purple dashed arrows are the skip connections.",
+    "path": "prism/unet",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "vae",
+    "name": "VAE (encoder, $\\mu$/$\\sigma$, $z$, decoder)",
+    "type": "template",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "vae",
+      "variational autoencoder",
+      "latent",
+      "mu",
+      "sigma",
+      "reparameterize",
+      "generative",
+      "architecture"
+    ],
+    "description": "Variational autoencoder: input, encoder, split $\\mu$/$\\sigma$, sampled $z$, decoder, reconstruction.",
+    "path": "prism/vae",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "venn",
+    "name": "Venn (three sets)",
+    "type": "template",
+    "domain": [
+      "general"
+    ],
+    "tags": [
+      "venn",
+      "sets",
+      "overlap",
+      "intersection",
+      "euler"
+    ],
+    "description": "Three overlapping circles with set names and intersection labels. For two sets, drop circle C and its labels.",
+    "path": "prism/venn",
+    "tex": "template.tex",
+    "meta": "template.meta.json",
+    "requires": [
+      "tikz",
+      "positioning"
+    ],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "flash-attention",
+    "name": "FlashAttention (IO-aware attention)",
+    "type": "example",
+    "domain": [
+      "ml",
+      "systems"
+    ],
+    "tags": [
+      "flash attention",
+      "attention",
+      "transformer",
+      "gpu",
+      "memory hierarchy",
+      "sram",
+      "hbm",
+      "dram",
+      "tiling",
+      "kernel fusion",
+      "io-aware",
+      "kqv"
+    ],
+    "description": "FlashAttention, three-panel homage after Dao et al., 2022. Left: the GPU memory hierarchy as a banded triangle (SRAM 19 TB/s / HBM 1.5 TB/s / DRAM 12.8 GB/s) showing the bandwidth-vs-size trade-off. Center: the IO-aware dataflow — Q, K^T and V tiles streamed from HBM, copied block-by-block into SRAM (outer loop over K/V, inner loop over Q), where the QK^T block and softmax are fused before sm(QK^T)V is written back to HBM. Right: the GPT-2 attention runtime, a stacked PyTorch bar (Matmul/Mask/Softmax/Dropout/Matmul) versus FlashAttention's single fused kernel.",
+    "path": "examples/flash-attention",
+    "tex": "figure.tex",
+    "meta": "figure.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "calc",
+      "decorations.pathreplacing",
+      "positioning",
+      "amsmath"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "gan",
+    "name": "Generative Adversarial Network (GAN)",
+    "type": "example",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "gan",
+      "generative",
+      "adversarial",
+      "generator",
+      "discriminator",
+      "latent space",
+      "real fake",
+      "architecture",
+      "deep learning"
+    ],
+    "description": "Block-level GAN overview: a low-dimensional latent bar feeds the generator G (expanding trapezoid) producing generated fake images, while a high-dimensional sample-space stack supplies real images; both feed the discriminator D (compressing trapezoid) that outputs a real/fake decision. Parametric sizes, colors, and labels.",
+    "path": "examples/gan",
+    "tex": "figure.tex",
+    "meta": "figure.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "lora",
+    "name": "LoRA (low-rank adaptation)",
+    "type": "example",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "lora",
+      "low-rank adaptation",
+      "fine-tuning",
+      "peft",
+      "frozen weights",
+      "adapter",
+      "transformer",
+      "merged weights"
+    ],
+    "description": "Low-rank adaptation (LoRA), two-panel homage after Hu et al., 2021. During training: a frozen pretrained weight W feeds Wx in parallel with a trainable low-rank update B·A (rank-r bottleneck, A=N(0,sigma^2), B=0) feeding BAx, summed to h. After training: the adapter is folded into a single merged weight matrix W_merged, shown as a bar–square–bar stack. Center column gives h = Wx + BAx = (W + BA)x.",
+    "path": "examples/lora",
+    "tex": "figure.tex",
+    "meta": "figure.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "calc",
+      "decorations.pathreplacing",
+      "positioning",
+      "amsmath",
+      "amssymb"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "attention",
+    "name": "Attention block",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "attention",
+      "transformer",
+      "self-attention",
+      "qkv",
+      "query key value",
+      "block"
+    ],
+    "description": "Attention block with query/key/value inputs and an output.",
+    "path": "icons/ml/attention",
+    "tex": "attention.tex",
+    "meta": "attention.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta",
+      "positioning"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "convolution",
+    "name": "Convolution",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "convolution",
+      "cnn",
+      "kernel",
+      "filter",
+      "feature-map",
+      "stride",
+      "vision"
+    ],
+    "description": "A convolution: a sliding kernel window over a feature-map grid producing an output cell.",
+    "path": "icons/ml/convolution",
+    "tex": "convolution.tex",
+    "meta": "convolution.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "dataset",
+    "name": "Dataset / table",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "dataset",
+      "data",
+      "table",
+      "samples",
+      "features",
+      "spreadsheet",
+      "tabular"
+    ],
+    "description": "Tabular dataset icon: a small table with a header row.",
+    "path": "icons/ml/dataset",
+    "tex": "dataset.tex",
+    "meta": "dataset.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "embedding",
+    "name": "Embedding vector",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "embedding",
+      "vector",
+      "representation",
+      "latent",
+      "feature",
+      "encoding"
+    ],
+    "description": "An embedding vector drawn as a bracketed column of weighted cells.",
+    "path": "icons/ml/embedding",
+    "tex": "embedding.tex",
+    "meta": "embedding.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "layer",
+    "name": "Layer / feature maps",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "layer",
+      "feature map",
+      "tensor",
+      "conv",
+      "activation",
+      "stack",
+      "channels"
+    ],
+    "description": "Stacked feature maps representing a network layer / tensor.",
+    "path": "icons/ml/layer",
+    "tex": "layer.tex",
+    "meta": "layer.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "loss",
+    "name": "Loss curve",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "loss",
+      "objective",
+      "training",
+      "convergence",
+      "optimization",
+      "curve"
+    ],
+    "description": "A training-loss curve descending to a converged minimum on loss-vs-epoch axes.",
+    "path": "icons/ml/loss",
+    "tex": "loss.tex",
+    "meta": "loss.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "matrix",
+    "name": "Binary matrix",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "matrix",
+      "binary",
+      "bits",
+      "data",
+      "encoding",
+      "tensor"
+    ],
+    "description": "A grid of binary digits in curly braces, for raw data / encoded tensors / bit matrices.",
+    "path": "icons/ml/matrix",
+    "tex": "matrix.tex",
+    "meta": "matrix.meta.json",
+    "requires": [
+      "tikz",
+      "decorations.pathreplacing"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "model",
+    "name": "Model",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "model",
+      "network",
+      "ai",
+      "checkpoint",
+      "weights",
+      "black-box"
+    ],
+    "description": "A generic model: a rounded box marked with an AI sparkle, for use as a black-box network.",
+    "path": "icons/ml/model",
+    "tex": "model.tex",
+    "meta": "model.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "neuron",
+    "name": "Neuron",
+    "type": "icon",
+    "domain": [
+      "ml"
+    ],
+    "tags": [
+      "neuron",
+      "perceptron",
+      "unit",
+      "node",
+      "neural network",
+      "activation"
+    ],
+    "description": "Single artificial neuron / perceptron with weighted inputs and one output.",
+    "path": "icons/ml/neuron",
+    "tex": "neuron.tex",
+    "meta": "neuron.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "cloud",
+    "name": "Cloud",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "cloud",
+      "internet",
+      "saas",
+      "remote",
+      "hosting",
+      "infrastructure"
+    ],
+    "description": "Cloud icon for internet / cloud services.",
+    "path": "icons/systems/cloud",
+    "tex": "cloud.tex",
+    "meta": "cloud.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "container",
+    "name": "Container",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "container",
+      "docker",
+      "box",
+      "deployment",
+      "package",
+      "microservice"
+    ],
+    "description": "A container drawn as an isometric slatted cube, for deployment and packaging diagrams.",
+    "path": "icons/systems/container",
+    "tex": "container.tex",
+    "meta": "container.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "cpu",
+    "name": "CPU",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "cpu",
+      "processor",
+      "chip",
+      "compute",
+      "hardware",
+      "core"
+    ],
+    "description": "CPU / processor chip icon with pins and a labelled core.",
+    "path": "icons/systems/cpu",
+    "tex": "cpu.tex",
+    "meta": "cpu.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "database",
+    "name": "Database",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "database",
+      "db",
+      "datastore",
+      "storage",
+      "sql",
+      "persistence",
+      "cylinder"
+    ],
+    "description": "Classic cylinder database / datastore icon with stripe bands.",
+    "path": "icons/systems/database",
+    "tex": "database.tex",
+    "meta": "database.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "disk",
+    "name": "Disk / storage",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "disk",
+      "storage",
+      "hdd",
+      "drive",
+      "persistence",
+      "hardware"
+    ],
+    "description": "A hard disk drive: enclosure with a platter, spindle hub, and read/write arm.",
+    "path": "icons/systems/disk",
+    "tex": "disk.tex",
+    "meta": "disk.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "gpu",
+    "name": "GPU",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "gpu",
+      "graphics card",
+      "accelerator",
+      "compute",
+      "hardware",
+      "cuda"
+    ],
+    "description": "GPU / graphics-card icon with a fan and gold edge connector.",
+    "path": "icons/systems/gpu",
+    "tex": "gpu.tex",
+    "meta": "gpu.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "mobile",
+    "name": "Mobile / edge device",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "mobile",
+      "phone",
+      "edge",
+      "device",
+      "client",
+      "on-device"
+    ],
+    "description": "A handset representing a mobile or edge device, for client- and edge-side blocks.",
+    "path": "icons/systems/mobile",
+    "tex": "mobile.tex",
+    "meta": "mobile.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "network",
+    "name": "Network",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "network",
+      "topology",
+      "nodes",
+      "hub",
+      "graph",
+      "connectivity"
+    ],
+    "description": "A small network topology: a central hub linked to four peer nodes.",
+    "path": "icons/systems/network",
+    "tex": "network.tex",
+    "meta": "network.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "queue",
+    "name": "Message queue",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "queue",
+      "fifo",
+      "buffer",
+      "message",
+      "kafka",
+      "pipeline",
+      "broker"
+    ],
+    "description": "A FIFO message queue: buffered items with enqueue and dequeue arrows.",
+    "path": "icons/systems/queue",
+    "tex": "queue.tex",
+    "meta": "queue.meta.json",
+    "requires": [
+      "tikz",
+      "arrows.meta"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "server",
+    "name": "Server",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "server",
+      "rack",
+      "compute",
+      "infrastructure",
+      "datacenter",
+      "hardware"
+    ],
+    "description": "A rack-style server icon: stacked rack units with status LEDs and ventilation slits. Parametric unit count.",
+    "path": "icons/systems/server",
+    "tex": "server.tex",
+    "meta": "server.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  },
+  {
+    "id": "user",
+    "name": "User",
+    "type": "icon",
+    "domain": [
+      "systems"
+    ],
+    "tags": [
+      "user",
+      "client",
+      "person",
+      "actor",
+      "human",
+      "account"
+    ],
+    "description": "A user/client avatar: head and shoulders silhouette, for system actors and endpoints.",
+    "path": "icons/systems/user",
+    "tex": "user.tex",
+    "meta": "user.meta.json",
+    "requires": [
+      "tikz"
+    ],
+    "author": "OpenTikZ contributors",
+    "license": "CC0-1.0",
+    "has_edit_contract": false
+  }
+]

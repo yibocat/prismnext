@@ -1,0 +1,35 @@
+{
+  "id": "vae",
+  "name": "VAE (encoder, $\\mu$/$\\sigma$, $z$, decoder)",
+  "type": "template",
+  "domain": ["ml"],
+  "tags": ["vae", "variational autoencoder", "latent", "mu", "sigma", "reparameterize", "generative", "architecture"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "Variational autoencoder: input, encoder, split $\\mu$/$\\sigma$, sampled $z$, decoder, reconstruction.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\boxh", "type": "length-cm", "meaning": "height of encoder/decoder/I-O blocks", "default": "2.4"},
+      {"name": "\\gap", "type": "length-cm", "meaning": "horizontal gap", "default": "0.85"},
+      {"name": "\\inputlabel", "type": "text", "meaning": "input label"},
+      {"name": "\\encoderlabel", "type": "text", "meaning": "encoder label"},
+      {"name": "\\mulabel", "type": "text", "meaning": "mean chip"},
+      {"name": "\\siglabel", "type": "text", "meaning": "std chip"},
+      {"name": "\\zlabel", "type": "text", "meaning": "latent sample"},
+      {"name": "\\decoderlabel", "type": "text", "meaning": "decoder label"},
+      {"name": "\\outputlabel", "type": "text", "meaning": "reconstruction label"}
+    ],
+    "node_naming": "fixed names: (input) (enc) (mu) (sig) (z) (dec) (output)",
+    "styles": ["io", "enc", "lat", "dec", "flow"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (input) (enc) (mu) (sig) (z) (dec) (output)",
+      "keep the split $\\mu$/$\\sigma$ feeding $z$",
+      "colors only via the five palette names"
+    ]
+  }
+}

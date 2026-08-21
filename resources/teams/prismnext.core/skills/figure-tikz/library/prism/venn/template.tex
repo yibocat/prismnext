@@ -1,0 +1,39 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\alabel{A}
+\def\blabel{B}
+\def\clabel{C}
+\def\ablabel{$A \cap B$}
+\def\bclabel{$B \cap C$}
+\def\aclabel{$A \cap C$}
+\def\centerlabel{$A \cap B \cap C$}
+% =========================================================================
+
+\begin{tikzpicture}[
+  set/.style={circle, minimum size=3.15cm, line width=0.95pt, fill opacity=0.38},
+  lab/.style={font=\sffamily\small, text=otgray!15!black},
+]
+  \node[set, draw=otblue!80!black, fill=otblue!40] (A) at (0,0.95) {};
+  \node[set, draw=otteal!80!black, fill=otteal!40] (B) at (1.55,0.95) {};
+  \node[set, draw=otorange!80!black, fill=otorange!40] (C) at (0.78,-0.35) {};
+
+  \node[lab] at (-0.85,2.15) {\alabel};
+  \node[lab] at (2.4,2.15) {\blabel};
+  \node[lab] at (0.78,-2.05) {\clabel};
+  \node[lab] at (0.78,1.25) {\ablabel};
+  \node[lab] at (1.55,0.15) {\bclabel};
+  \node[lab] at (0.05,0.15) {\aclabel};
+  \node[lab] at (0.78,0.55) {\centerlabel};
+\end{tikzpicture}
+\end{document}

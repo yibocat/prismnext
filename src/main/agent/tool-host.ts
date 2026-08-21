@@ -30,6 +30,7 @@ export interface ToolExecuteContext {
   permissionMode: PermissionMode;
   sessionAgent?: SessionAgent;
   allowedPaths?: string[];
+  skillReadRoots?: string[];
   abortSignal?: AbortSignal;
   askUser?: (input: {
     prompt: string;
@@ -227,6 +228,7 @@ export class ToolHost {
       sessionAgent: ctx.sessionAgent,
       sessionId: ctx.tabId,
       allowedPaths: ctx.allowedPaths,
+      skillReadRoots: ctx.skillReadRoots,
       ...paths,
     };
 
