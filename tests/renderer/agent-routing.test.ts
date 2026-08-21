@@ -28,6 +28,7 @@ vi.mock("@/lib/git/checkout-context", () => ({
   resolveWorktreeAtCheckout: vi.fn(),
   resolveWorktreePathForSend: vi.fn(),
   isWorktreeCheckoutPath: vi.fn().mockReturnValue(false),
+  isPendingNewWorktree: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("@/lib/git/worktree-path", () => ({

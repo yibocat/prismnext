@@ -77,6 +77,8 @@ export interface AgentSendInput {
   tabId?: string;
   turnId: string;
   projectRoot: string;
+  /** Pi cwd. Worktree sessions use the home checkout; defaults to projectRoot. */
+  boundCheckoutPath?: string;
   text: string;
   attachments?: AgentSendAttachment[];
   /** Inline images passed straight to the Pi session for vision-capable models. */

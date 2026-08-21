@@ -21,6 +21,9 @@ import {
 import { replaceRegisteredRoots } from "../services/active-project-roots";
 import {
   ensureWorkbenchHome,
+  isPathInsideWorkbenchHome,
+  isWorkbenchHomePath,
+  parseHomeWorktreeCheckout,
   readWorkbenchHomeSettings,
   resolveWorkbenchHome,
   writeWorkbenchHomeSettings,
@@ -206,6 +209,15 @@ export function syncWorkbenchRegisteredRoots(opts?: DefaultProjectOpts): void {
 export function openWorkbenchFolder(absPath: string, opts?: DefaultProjectOpts): DefaultProjectRef {
   const lastPath = normalizeWorkbenchPath(resolve(absPath.trim()));
   if (!lastPath || lastPath === "/") throw new Error("missing_folder");
+  const checkout = parseHomeWorktreeCheckout(lastPath, opts);
+  if (checkout) {
+    const meta = readProjectSlotMeta(checkout.projectId, opts);
+    if (!meta?.lastPath) throw new Error("cannot_open_worktree_as_project");
+    return openWorkbenchFolder(meta.lastPath, opts);
+  }
+  if (isWorkbenchHomePath(lastPath, opts) || isPathInsideWorkbenchHome(lastPath, opts)) {
+    throw new Error("cannot_open_workbench_home");
+  }
   mkdirSync(lastPath, { recursive: true });
   const disk = readWorkbenchJson(lastPath);
   const decision = resolveOpenFolder({

@@ -1,9 +1,16 @@
-import { existsSync, writeFileSync, readFileSync } from "node:fs";
-import { copyFile, cp, mkdir, readdir, rm } from "node:fs/promises";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { readdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { execGit } from "./git";
 import { createLogger, shortLogDetail } from "./logger";
+import {
+  homeWorktreeCheckoutDir,
+  homeWorktreeSlotDir,
+  parseHomeWorktreeCheckout,
+  resolveWorkbenchHome,
+} from "../workbench/home";
+import { ensureWorkbenchId, readWorkbenchJson } from "../workbench/identity";
+import { PROJECTS_DIRNAME, WORKTREES_DIRNAME } from "../../shared/workbench-paths";
 
 const log = createLogger("worktree", "git");
 
@@ -35,8 +42,9 @@ export interface BranchInfo {
 
 // ─── Constants ───
 
-const WORKTREES_DIR = ".prismnext/worktrees";
 const BRANCH_PREFIX = "wt-";
+const WORKTREE_META_FILENAME = ".prism-worktree-meta";
+const WORKTREE_SLOT_META_FILENAME = "meta.json";
 
 function normalizeWorktreePath(worktreePath: string): string {
   return resolve(worktreePath);
@@ -77,19 +85,52 @@ export function generateWorktreeNameForTest(): string {
   return generateWorktreeName();
 }
 
-function worktreePathForName(projectRoot: string, name: string): string {
-  return join(projectRoot, WORKTREES_DIR, name);
+function assertWorktreeName(name: string): string {
+  if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
+    throw new Error(`Invalid worktree name: ${name || "(empty)"}`);
+  }
+  return name;
 }
 
-/** Pick a random adjective-noun name not already used under .prismnext/worktrees/. */
-function generateUniqueWorktreeName(projectRoot: string, maxAttempts = 64): string {
+function projectIdForWorktrees(projectRoot: string): string | null {
+  return readWorkbenchJson(projectRoot)?.id ?? null;
+}
+
+function worktreeCheckoutPath(projectId: string, name: string): string {
+  return homeWorktreeCheckoutDir(projectId, name);
+}
+
+function worktreeSlotPath(projectId: string, name: string): string {
+  return homeWorktreeSlotDir(projectId, name);
+}
+
+function homeWorktreesDir(projectId: string): string {
+  return join(resolveWorkbenchHome(), PROJECTS_DIRNAME, projectId, WORKTREES_DIRNAME);
+}
+
+/** Pick a random adjective-noun name not already used in the home worktree slot. */
+function generateUniqueWorktreeName(projectId: string, maxAttempts = 64): string {
   for (let i = 0; i < maxAttempts; i++) {
     const candidate = generateWorktreeName();
-    if (!existsSync(worktreePathForName(projectRoot, candidate))) {
+    if (!existsSync(worktreeSlotPath(projectId, candidate))) {
       return candidate;
     }
   }
   throw new Error("Could not generate a unique worktree name — try again or remove old worktrees.");
+}
+
+function writeWorktreeMeta(projectId: string, name: string, baseBranch: string, branchName: string): void {
+  const checkout = worktreeCheckoutPath(projectId, name);
+  try {
+    writeFileSync(join(checkout, WORKTREE_META_FILENAME), baseBranch, "utf-8");
+  } catch {}
+  try {
+    writeFileSync(
+      join(worktreeSlotPath(projectId, name), WORKTREE_SLOT_META_FILENAME),
+      `${JSON.stringify({ name, branch: branchName, baseBranch, createdAt: Date.now() }, null, 2)}\n`,
+      "utf-8",
+    );
+  } catch {}
 }
 
 /** Return the name of the default main branch (main or master, whichever exists). */
@@ -120,19 +161,22 @@ export async function createWorktree(
   name?: string,
   baseBranch?: string,
 ): Promise<WorktreeInfo> {
-  const resolvedName = name || generateUniqueWorktreeName(projectRoot);
+  let resolvedName = name || "";
   try {
-    const branchName = `${BRANCH_PREFIX}${resolvedName}`;
-    const worktreePath = worktreePathForName(projectRoot, resolvedName);
-
-    if (existsSync(worktreePath)) {
-      throw new Error(`Worktree "${resolvedName}" already exists`);
-    }
-
     if (!existsSync(join(projectRoot, ".git"))) {
       throw new Error(
         "Git repository required. Initialize Git in this project before creating a worktree.",
       );
+    }
+
+    const projectId = ensureWorkbenchId(projectRoot);
+    resolvedName = name ? assertWorktreeName(name) : generateUniqueWorktreeName(projectId);
+    const branchName = `${BRANCH_PREFIX}${resolvedName}`;
+    const slotDir = worktreeSlotPath(projectId, resolvedName);
+    const worktreePath = worktreeCheckoutPath(projectId, resolvedName);
+
+    if (existsSync(slotDir) || existsSync(worktreePath)) {
+      throw new Error(`Worktree "${resolvedName}" already exists`);
     }
 
     // Ensure at least one commit exists (git worktree add requires it)
@@ -155,17 +199,18 @@ export async function createWorktree(
     // Clean up zombie branch if it exists
     try { await execGit(projectRoot, ["branch", "-D", branchName]); } catch {}
 
-    const relPath = join(WORKTREES_DIR, resolvedName);
-    await execGit(projectRoot, ["worktree", "add", "-b", branchName, relPath, resolvedBase]);
+    mkdirSync(slotDir, { recursive: true });
+    try {
+      await execGit(projectRoot, ["worktree", "add", "-b", branchName, worktreePath, resolvedBase]);
+    } catch (err) {
+      try { await rm(slotDir, { recursive: true, force: true }); } catch {}
+      throw err;
+    }
 
     let head = "";
     try { head = (await execGit(worktreePath, ["rev-parse", "--short", "HEAD"])).trim(); } catch {}
 
-    // Store the base branch as metadata so listWorktrees can read it back.
-    // git worktree list --porcelain doesn't track which branch a worktree was created from.
-    try {
-      writeFileSync(join(worktreePath, ".prism-worktree-meta"), resolvedBase, "utf-8");
-    } catch {}
+    writeWorktreeMeta(projectId, resolvedName, resolvedBase, branchName);
 
     return {
       name: resolvedName,
@@ -192,12 +237,15 @@ export async function removeWorktree(
   name: string,
 ): Promise<void> {
   try {
-    if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") {
-      throw new Error(`Invalid worktree name: ${name || "(empty)"}`);
+    const resolvedName = assertWorktreeName(name);
+    const projectId = projectIdForWorktrees(projectRoot);
+    if (!projectId) {
+      throw new Error(`Worktree "${resolvedName}" not found`);
     }
 
-    const worktreePath = join(projectRoot, WORKTREES_DIR, name);
-    const branchName = `${BRANCH_PREFIX}${name}`;
+    const worktreePath = worktreeCheckoutPath(projectId, resolvedName);
+    const slotDir = worktreeSlotPath(projectId, resolvedName);
+    const branchName = `${BRANCH_PREFIX}${resolvedName}`;
 
     const errors: string[] = [];
 
@@ -212,6 +260,10 @@ export async function removeWorktree(
           errors.push(`Failed to remove worktree directory: ${worktreePath}`);
         }
       }
+    }
+
+    if (existsSync(slotDir)) {
+      try { await rm(slotDir, { recursive: true, force: true }); } catch {}
     }
 
     // Delete branch (only if worktree was successfully removed)
@@ -240,9 +292,37 @@ export async function removeWorktree(
   }
 }
 
+function readBaseBranch(checkoutPath: string, fallback: string): string {
+  try {
+    const meta = readFileSync(join(checkoutPath, WORKTREE_META_FILENAME), "utf-8").trim();
+    if (meta) return meta;
+  } catch {}
+  return fallback;
+}
+
+async function countAheadBehind(
+  projectRoot: string,
+  baseBranch: string,
+  branch: string,
+): Promise<{ aheadCount: number; behindCount: number }> {
+  let aheadCount = 0;
+  let behindCount = 0;
+  try {
+    const count = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branch}`]);
+    aheadCount = parseInt(count.trim(), 10) || 0;
+  } catch {}
+  try {
+    const count = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${baseBranch}`]);
+    behindCount = parseInt(count.trim(), 10) || 0;
+  } catch {}
+  return { aheadCount, behindCount };
+}
+
 export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]> {
-  const worktreesDir = join(projectRoot, WORKTREES_DIR);
-  if (!existsSync(worktreesDir)) return [];
+  const projectId = projectIdForWorktrees(projectRoot);
+  if (!projectId) return [];
+
+  const worktreesDir = homeWorktreesDir(projectId);
 
   let output = "";
   try {
@@ -254,7 +334,6 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
   const result: WorktreeInfo[] = [];
   const mainBranch = await detectMainBranch(projectRoot);
 
-  // Parse git worktree list --porcelain output
   const entries = output.split("\n\n").filter((s) => s.trim());
   for (const entry of entries) {
     const lines = entry.split("\n");
@@ -270,34 +349,13 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
       }
     }
 
-    // Only include worktrees under .prismnext/worktrees/
-    if (!worktreePath.includes(WORKTREES_DIR)) continue;
-
-    const wtName = worktreePath.split("/").pop() || "";
-    if (!wtName) continue;
-
-    // Validate: worktree checkout must exist and have a .git file
+    const parsed = parseHomeWorktreeCheckout(worktreePath);
+    if (!parsed || parsed.projectId !== projectId) continue;
+    const wtName = parsed.worktreeId;
     if (!existsSync(worktreePath) || !existsSync(join(worktreePath, ".git"))) continue;
 
-    // Read the base branch from metadata file written at create time.
-    // Falls back to main branch for worktrees created before this file was introduced.
-    let baseBranch: string = mainBranch;
-    try {
-      const meta = readFileSync(join(worktreePath, ".prism-worktree-meta"), "utf-8").trim();
-      if (meta) baseBranch = meta;
-    } catch {}
-
-    let aheadCount = 0;
-    try {
-      const count = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branch}`]);
-      aheadCount = parseInt(count.trim(), 10) || 0;
-    } catch {}
-
-    let behindCount = 0;
-    try {
-      const count = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${baseBranch}`]);
-      behindCount = parseInt(count.trim(), 10) || 0;
-    } catch {}
+    const baseBranch = readBaseBranch(worktreePath, mainBranch);
+    const { aheadCount, behindCount } = await countAheadBehind(projectRoot, baseBranch, branch);
 
     result.push({
       name: wtName,
@@ -310,34 +368,19 @@ export async function listWorktrees(projectRoot: string): Promise<WorktreeInfo[]
     });
   }
 
-  // Also scan the filesystem for directories in .prismnext/worktrees/ that
-  // git worktree list might miss
-  let dirEntries: any[];
+  let dirEntries: { name: string; isDirectory: () => boolean }[];
   try { dirEntries = await readdir(worktreesDir, { withFileTypes: true }); } catch { dirEntries = []; }
   for (const entry of dirEntries) {
     if (!entry.isDirectory()) continue;
     if (result.some((r) => r.name === entry.name)) continue;
-    // Validate: must have a .git file (worktree metadata link)
-    if (!existsSync(join(worktreesDir, entry.name, ".git"))) continue;
-    let baseBranch: string = mainBranch;
-    try {
-      const meta = readFileSync(join(worktreesDir, entry.name, ".prism-worktree-meta"), "utf-8").trim();
-      if (meta) baseBranch = meta;
-    } catch {}
+    const checkout = worktreeCheckoutPath(projectId, entry.name);
+    if (!existsSync(join(checkout, ".git"))) continue;
+    const baseBranch = readBaseBranch(checkout, mainBranch);
     const branch = `${BRANCH_PREFIX}${entry.name}`;
-    let aheadCount = 0;
-    let behindCount = 0;
-    try {
-      const ahead = await execGit(projectRoot, ["rev-list", "--count", `${baseBranch}..${branch}`]);
-      aheadCount = parseInt(ahead.trim(), 10) || 0;
-    } catch {}
-    try {
-      const behind = await execGit(projectRoot, ["rev-list", "--count", `${branch}..${baseBranch}`]);
-      behindCount = parseInt(behind.trim(), 10) || 0;
-    } catch {}
+    const { aheadCount, behindCount } = await countAheadBehind(projectRoot, baseBranch, branch);
     result.push({
       name: entry.name,
-      path: normalizeWorktreePath(join(worktreesDir, entry.name)),
+      path: normalizeWorktreePath(checkout),
       branch,
       baseBranch,
       head: "",
@@ -418,48 +461,12 @@ export async function getBranchesWithLocks(projectRoot: string): Promise<BranchI
 }
 
 /**
- * Move agent session files from a worktree to the project root.
- * Sessions are stored under .prismnext/sessions/<agent-id>/ within each worktree.
- * Copies all session files except index.json (which will be rebuilt).
+ * Sessions live in `~/.prismnext/sessions/` (P2), not inside a checkout.
+ * Closing a worktree re-homes via `agent:reassignDirectory`. Do not copy into the paper folder.
  */
 export async function moveSessionsToProject(
-  projectRoot: string,
-  worktreeName: string,
+  _projectRoot: string,
+  _worktreeName: string,
 ): Promise<number> {
-  const worktreePath = join(projectRoot, ".prismnext", "worktrees", worktreeName);
-  const sessionsDir = join(worktreePath, ".prismnext", "sessions");
-
-  let count = 0;
-
-  if (!existsSync(sessionsDir)) {
-    return count;
-  }
-
-  try {
-    const agentDirs = await readdir(sessionsDir, { withFileTypes: true });
-    for (const agentDir of agentDirs) {
-      if (!agentDir.isDirectory()) continue;
-      const srcDir = join(sessionsDir, agentDir.name);
-      const dstDir = join(projectRoot, ".prismnext", "sessions", agentDir.name);
-      await mkdir(dstDir, { recursive: true });
-
-      const files = await readdir(srcDir);
-      for (const file of files) {
-        if (file === "index.json") continue; // skip index, will be rebuilt
-        const srcPath = join(srcDir, file);
-        const dstPath = join(dstDir, file);
-        await copyFile(srcPath, dstPath);
-        count++;
-      }
-    }
-  } catch (err) {
-    log.warn("worktree.fail", {
-      op: "moveSessions",
-      name: worktreeName,
-      error: shortLogDetail(err),
-      project: basename(projectRoot),
-    });
-  }
-
-  return count;
+  return 0;
 }

@@ -16,13 +16,13 @@ describe("session cwd helpers", () => {
   });
 
   it("resolveWorktreePathForSend prefers tab.sessionCwd when worktree", () => {
-    const wtPath = "/proj/.prismnext/worktrees/calm-owl";
+    const wtPath = "/Users/me/.prismnext/projects/p_proj/worktrees/calm-owl/checkout";
     const path = resolveWorktreePathForSend({ sessionCwd: wtPath }, "/proj");
     expect(path).toBe(wtPath);
   });
 
   it("resolveWorktreePathForSend falls back to active worktree", () => {
-    const wtPath = "/proj/.prismnext/worktrees/calm-owl";
+    const wtPath = "/Users/me/.prismnext/projects/p_proj/worktrees/calm-owl/checkout";
     useWorktreeStore.setState({
       activeWorktree: {
         name: "calm-owl",
@@ -39,5 +39,11 @@ describe("session cwd helpers", () => {
 
   it("captureSessionCwd returns project root in local mode", () => {
     expect(captureSessionCwd()).toBe("/proj");
+  });
+
+  it("does not treat the old paper-side worktree path as a checkout", () => {
+    expect(
+      resolveWorktreePathForSend({ sessionCwd: "/proj/.prismnext/worktrees/calm-owl" }, "/proj"),
+    ).toBeUndefined();
   });
 });

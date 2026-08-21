@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { PROJECT_META_DIR, projectSlotMetaRel } from "../../src/shared/workbench-paths";
+import { PROJECT_META_DIR, projectSlotMetaRel, worktreeCheckoutRel } from "../../src/shared/workbench-paths";
 import { resolveWorkbenchHome, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import {
   ensureDefaultProject,
@@ -150,5 +150,21 @@ describe("removeWorkbenchProject", () => {
 
     const rejoined = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
     expect(rejoined.projectId).toBe(opened.projectId);
+  });
+
+  it("opening a home worktree checkout remaps to the paper project, not a new row", () => {
+    const { userHome, documentsDir, def } = setupHome();
+    const paper = path.join(tmpRoot(), "paper-wt");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    const home = resolveWorkbenchHome({ homeDir: userHome });
+    const checkout = path.join(home, worktreeCheckoutRel(opened.projectId, "calm-owl"));
+    fs.mkdirSync(checkout, { recursive: true });
+
+    const remapped = openWorkbenchFolder(checkout, { homeDir: userHome, documentsDir });
+    expect(remapped.projectId).toBe(opened.projectId);
+    expect(remapped.lastPath).toBe(norm(paper));
+    expect(getWorkbenchState({ homeDir: userHome, documentsDir }).workbenchProjectIds)
+      .toEqual([def.projectId, opened.projectId]);
   });
 });

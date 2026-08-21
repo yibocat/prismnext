@@ -10,17 +10,17 @@ import {
   scheduleGitStatusRefresh,
   refreshGitStatusNow,
 } from "./git-refresh-root";
+import { isHomeWorktreeCheckoutPath } from "../../../shared/workbench-paths";
 
 export { resolveGitRefreshRoot, scheduleGitStatusRefresh, refreshGitStatusNow };
-
-const WORKTREE_DIR = "/.prismnext/worktrees/";
+export { isPendingNewWorktree };
 
 export function isWorktreeCheckoutPath(
   checkoutRoot: string | null | undefined,
-  projectRoot: string | null | undefined,
+  _projectRoot?: string | null,
 ): boolean {
-  if (!checkoutRoot || !projectRoot) return false;
-  return checkoutRoot.startsWith(projectRoot) && checkoutRoot.includes(WORKTREE_DIR);
+  if (!checkoutRoot) return false;
+  return isHomeWorktreeCheckoutPath(checkoutRoot);
 }
 
 /** Active worktree, or match the current checkout root against known worktrees. */

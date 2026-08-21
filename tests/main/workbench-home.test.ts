@@ -15,6 +15,8 @@ import {
   workbenchJsonRel,
   worktreeCheckoutRel,
   worktreeSlotRel,
+  isHomeWorktreeCheckoutPath,
+  parseHomeWorktreeCheckoutPath,
 } from "../../src/shared/workbench-paths";
 import {
   HOME_BROWSER_DIRNAME,
@@ -76,6 +78,16 @@ describe("workbench-paths", () => {
       `${PROJECTS_DIRNAME}/p_abc/${WORKTREES_DIRNAME}/wt1/checkout`,
     );
     expect(libraryRel("p_abc")).not.toContain(".prismnext");
+  });
+
+  it("parses home worktree checkout paths and rejects the old paper-side layout", () => {
+    expect(
+      parseHomeWorktreeCheckoutPath(
+        "/Users/me/.prismnext/projects/p_abc/worktrees/calm-owl/checkout/src/main.tex",
+      ),
+    ).toEqual({ projectId: "p_abc", worktreeId: "calm-owl" });
+    expect(isHomeWorktreeCheckoutPath("/Users/me/.prismnext/projects/p_abc/worktrees/calm-owl/checkout")).toBe(true);
+    expect(isHomeWorktreeCheckoutPath("/Users/me/paper/.prismnext/worktrees/calm-owl")).toBe(false);
   });
 });
 

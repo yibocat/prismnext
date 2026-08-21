@@ -17,6 +17,9 @@ import {
   WORKBENCH_HOME_DIRNAME,
   WORKBENCH_JSON_FILENAME,
   normalizeWorkbenchPath,
+  parseHomeWorktreeCheckoutPath,
+  worktreeCheckoutRel,
+  worktreeSlotRel,
 } from "../../shared/workbench-paths";
 
 export interface WorkbenchHomeOpts {
@@ -56,6 +59,41 @@ export function homeSkillsManifestPath(opts?: WorkbenchHomeOpts): string {
 
 export function homeTeamsStatePath(opts?: WorkbenchHomeOpts): string {
   return join(resolveWorkbenchHome(opts), HOME_TEAMS_STATE_FILENAME);
+}
+
+export function homeBrowserDir(opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), HOME_BROWSER_DIRNAME);
+}
+
+export function homeWorktreeSlotDir(
+  projectId: string,
+  worktreeId: string,
+  opts?: WorkbenchHomeOpts,
+): string {
+  return join(resolveWorkbenchHome(opts), worktreeSlotRel(projectId, worktreeId));
+}
+
+export function homeWorktreeCheckoutDir(
+  projectId: string,
+  worktreeId: string,
+  opts?: WorkbenchHomeOpts,
+): string {
+  return join(resolveWorkbenchHome(opts), worktreeCheckoutRel(projectId, worktreeId));
+}
+
+/** Home-scoped checkout identity (D-15). Rejects a matching shape under another home. */
+export function parseHomeWorktreeCheckout(
+  absPath: string,
+  opts?: WorkbenchHomeOpts,
+): { projectId: string; worktreeId: string } | null {
+  const parsed = parseHomeWorktreeCheckoutPath(absPath);
+  if (!parsed) return null;
+  const checkout = normalizeWorkbenchPath(
+    homeWorktreeCheckoutDir(parsed.projectId, parsed.worktreeId, opts),
+  );
+  const child = normalizeWorkbenchPath(resolve(absPath));
+  if (child === checkout || child.startsWith(`${checkout}/`)) return parsed;
+  return null;
 }
 
 export function ensureWorkbenchHome(opts?: WorkbenchHomeOpts): string {

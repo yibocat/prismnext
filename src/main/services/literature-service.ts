@@ -42,7 +42,8 @@ import { broadcastToRenderer } from "./literature-broadcast";
 import { recordDownloadProvenance } from "./provenance-service";
 import "@citation-js/plugin-bibtex";
 import { createLogger, shortLogDetail } from "./logger";
-import { findWorkbenchProjectRoot, resolveWorkbenchHome } from "../workbench/home";
+import { findWorkbenchProjectRoot, parseHomeWorktreeCheckout, resolveWorkbenchHome } from "../workbench/home";
+import { readProjectSlotMeta } from "../workbench/default-project";
 import { ensureWorkbenchId } from "../workbench/identity";
 import { libraryRel, projectSlotRel } from "../../shared/workbench-paths";
 
@@ -125,6 +126,11 @@ export function resolveLibraryProjectRoot(candidate: string): string {
   const trimmed = candidate?.trim();
   if (!trimmed) return "";
   const resolved = path.resolve(trimmed);
+  const checkout = parseHomeWorktreeCheckout(resolved);
+  if (checkout) {
+    const meta = readProjectSlotMeta(checkout.projectId);
+    if (meta?.lastPath) return meta.lastPath;
+  }
   return findWorkbenchProjectRoot(resolved) ?? resolved;
 }
 

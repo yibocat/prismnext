@@ -25,7 +25,8 @@ import {
 } from "@/lib/chat/composer-send-queue";
 import { useDocumentStore } from "./document-store";
 import { lastPathForSession, sameProjectPath, useWorkbenchStore } from "./workbench-store";
-import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
+import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, isPendingNewWorktree, isWorktreeCheckoutPath, resolveWorktreePathForSend } from "@/lib/git/checkout-context";
+import { useWorktreeStore } from "./worktree-store";
 import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
 import { reconcileBackgroundSubAgentRunsFromMessages } from "@/lib/chat/reconcile-background-tasks";
@@ -1883,10 +1884,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
             t.id === tabId ? { ...t, pendingTurnMeta: { modelLabel } } : t,
           ),
         }));
+        if (projectPath && isPendingNewWorktree(useWorktreeStore.getState())) {
+          const info = await useWorktreeStore.getState().initializeWorktree(projectPath);
+          await applyCheckoutTransition({ type: "worktree-existing", worktree: info });
+        }
+        const boundCheckoutPath =
+          resolveWorktreePathForSend(get().tabs.find((t) => t.id === tabId), projectPath)
+          ?? captureSessionCwd()
+          ?? projectPath;
         const result = await window.electronAPI.agentSend({
           conversationId: tabId,
           turnId,
           projectRoot: projectPath,
+          boundCheckoutPath,
           text: userPrompt,
           tabId,
           sessionTeamId: composerExtras?.sessionTeamId ?? tabAfterUser?.sessionTeamId ?? undefined,

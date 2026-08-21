@@ -9,8 +9,9 @@ import {
   resolveLibraryProjectRoot,
 } from "../../src/main/services/literature-service";
 import { resolveWorkbenchHome } from "../../src/main/workbench/home";
+import { writeProjectSlotMeta } from "../../src/main/workbench/default-project";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
-import { libraryRel } from "../../src/shared/workbench-paths";
+import { libraryRel, worktreeCheckoutRel } from "../../src/shared/workbench-paths";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 describe("getLibraryPaths (D-28)", () => {
@@ -50,5 +51,13 @@ describe("getLibraryPaths (D-28)", () => {
     const nested = join(root, "manuscript", "src");
     expect(resolveLibraryProjectRoot(nested)).toBe(root);
     expect(readWorkbenchJson(root)?.id).toBe("p_walk");
+  });
+
+  it("maps a home worktree checkout back to the paper lastPath", () => {
+    const root = tempLiteratureProject("p_wt");
+    writeProjectSlotMeta("p_wt", { lastPath: root });
+    const checkout = join(resolveWorkbenchHome(), worktreeCheckoutRel("p_wt", "calm-owl"), "src");
+    expect(resolveLibraryProjectRoot(checkout)).toBe(root);
+    expect(resolveLibraryProjectRoot(join(root, ".prismnext", "worktrees", "old"))).toBe(root);
   });
 });

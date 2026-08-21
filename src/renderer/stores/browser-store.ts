@@ -46,13 +46,11 @@ function getProjectRoot(): string | null {
 }
 
 function persistBookmarks(bookmarks: BrowserBookmark[]): void {
-  const root = getProjectRoot();
-  if (root) window.electronAPI.browserSaveBookmarks(root, bookmarks);
+  void window.electronAPI.browserSaveBookmarks(getProjectRoot() ?? "", bookmarks);
 }
 
 function persistRecent(recent: BrowserRecentVisit[]): void {
-  const root = getProjectRoot();
-  if (root) window.electronAPI.browserSaveRecent(root, recent);
+  void window.electronAPI.browserSaveRecent(getProjectRoot() ?? "", recent);
 }
 
 export const useBrowserStore = create<BrowserState>()((set, get) => ({
@@ -66,10 +64,8 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   omniboxActiveIndex: 0,
   omniboxAnchor: null,
 
-  loadFromProject: async (projectRoot: string) => {
-    if (!projectRoot) return;
-    const data = await window.electronAPI.browserInit(projectRoot);
-    if (useDocumentStore.getState().projectRoot !== projectRoot) return;
+  loadFromProject: async (projectRoot?: string) => {
+    const data = await window.electronAPI.browserInit(projectRoot ?? "");
     set({
       bookmarks: data.bookmarks,
       recentVisits: data.recent,

@@ -3,7 +3,7 @@ import { resolveSessionWorktreeContext } from "../../src/renderer/lib/git/sessio
 import type { WorktreeInfo } from "@/types/electron";
 
 const PROJECT = "/Users/test/my-paper";
-const WT_PATH = `${PROJECT}/.prismnext/worktrees/calm-owl`;
+const WT_PATH = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
 
 const activeWorktrees: WorktreeInfo[] = [
   {
@@ -32,7 +32,7 @@ describe("resolveSessionWorktreeContext", () => {
   });
 
   it("labels closed worktree sessions from stored directory", () => {
-    const closedPath = `${PROJECT}/.prismnext/worktrees/old-owl`;
+    const closedPath = "/Users/test/.prismnext/projects/p_paper/worktrees/old-owl/checkout";
     const ctx = resolveSessionWorktreeContext(closedPath, PROJECT, activeWorktrees);
     expect(ctx.kind).toBe("closed-worktree");
     expect(ctx.shortLabel).toContain("old-owl");
@@ -46,7 +46,7 @@ describe("resolveSessionWorktreeContext", () => {
   });
 
   it("does not mark sibling worktree sessions as closed after one is removed", () => {
-    const foxPath = `${PROJECT}/.prismnext/worktrees/quick-fox`;
+    const foxPath = "/Users/test/.prismnext/projects/p_paper/worktrees/quick-fox/checkout";
     const remaining: WorktreeInfo[] = [
       {
         name: "quick-fox",

@@ -71,6 +71,36 @@ export function worktreeCheckoutRel(projectId: string, worktreeId: string): stri
   );
 }
 
+/**
+ * `…/.prismnext/projects/<id>/worktrees/<wtId>/checkout` (or a file under it).
+ * Path-only: does not check that this is the current machine's home.
+ */
+export function parseHomeWorktreeCheckoutPath(
+  absPath: string,
+): { projectId: string; worktreeId: string } | null {
+  const n = normalizeWorkbenchPath(absPath.replace(/\\/g, "/"));
+  const marker = `/${WORKBENCH_HOME_DIRNAME}/${PROJECTS_DIRNAME}/`;
+  const idx = n.indexOf(marker);
+  if (idx < 0) return null;
+  const rest = n.slice(idx + marker.length);
+  const parts = rest.split("/");
+  if (parts.length < 4) return null;
+  const [projectId, worktrees, worktreeId, checkout] = parts;
+  if (
+    !projectId
+    || worktrees !== WORKTREES_DIRNAME
+    || !worktreeId
+    || checkout !== WORKTREE_CHECKOUT_DIRNAME
+  ) {
+    return null;
+  }
+  return { projectId, worktreeId };
+}
+
+export function isHomeWorktreeCheckoutPath(absPath: string): boolean {
+  return parseHomeWorktreeCheckoutPath(absPath) !== null;
+}
+
 /** Resolve + unify slashes + drop trailing slash (except root). */
 export function normalizeWorkbenchPath(absPath: string): string {
   const resolved = absPath.replace(/\\/g, "/");

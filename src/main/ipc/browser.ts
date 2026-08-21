@@ -3,10 +3,9 @@ import type { WebContents } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { createLogger } from "../services/logger";
+import { ensureWorkbenchHome, homeBrowserDir } from "../workbench/home";
 
 const log = createLogger("browser-ipc", "ipc");
-
-const BROWSER_DIR = ".prismnext/browser";
 
 /**
  * Partition used by the in-app browser `<webview>` (see browser-view.tsx).
@@ -106,8 +105,13 @@ function writeJson(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
-function initBrowserState(projectRoot: string): BrowserState {
-  const dir = path.join(projectRoot, BROWSER_DIR);
+function browserStateDir(): string {
+  ensureWorkbenchHome();
+  return homeBrowserDir();
+}
+
+function initBrowserState(): BrowserState {
+  const dir = browserStateDir();
   ensureDir(dir);
 
   const bookmarksPath = path.join(dir, "bookmarks.json");
@@ -134,13 +138,13 @@ export function registerBrowserHandlers(): void {
     attachGuestWindowHandler(contents);
   });
 
-  ipcMain.handle("browser:init", async (_event, { projectRoot }: { projectRoot: string }) => {
-    return initBrowserState(projectRoot);
+  ipcMain.handle("browser:init", async () => {
+    return initBrowserState();
   });
 
-  ipcMain.handle("browser:saveBookmarks", async (_event, { projectRoot, bookmarks }: { projectRoot: string; bookmarks: Bookmark[] }) => {
+  ipcMain.handle("browser:saveBookmarks", async (_event, { bookmarks }: { projectRoot?: string; bookmarks: Bookmark[] }) => {
     try {
-      const dir = path.join(projectRoot, BROWSER_DIR);
+      const dir = browserStateDir();
       ensureDir(dir);
       writeJson(path.join(dir, "bookmarks.json"), bookmarks);
       return { success: true };
@@ -149,9 +153,9 @@ export function registerBrowserHandlers(): void {
     }
   });
 
-  ipcMain.handle("browser:saveRecent", async (_event, { projectRoot, recent }: { projectRoot: string; recent: RecentVisit[] }) => {
+  ipcMain.handle("browser:saveRecent", async (_event, { recent }: { projectRoot?: string; recent: RecentVisit[] }) => {
     try {
-      const dir = path.join(projectRoot, BROWSER_DIR);
+      const dir = browserStateDir();
       ensureDir(dir);
       writeJson(path.join(dir, "recent.json"), recent);
       return { success: true };
