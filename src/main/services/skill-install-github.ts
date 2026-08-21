@@ -370,8 +370,7 @@ export function readSkillVersionFromDir(skillDir: string): string | undefined {
 }
 
 export function copyGitHubSkillPaths(
-  projectRoot: string,
-  skillsRel: string,
+  destSkillsRoot: string,
   repoRoot: string,
   paths: string[],
 ): string[] {
@@ -382,7 +381,7 @@ export function copyGitHubSkillPaths(
     if (!existsSync(srcDir) || !statSync(srcDir).isDirectory()) {
       throw new Error(`Skill folder missing in cache: ${relPath}`);
     }
-    const destDir = join(projectRoot, skillsRel, folderName);
+    const destDir = join(destSkillsRoot, folderName);
     mkdirSync(destDir, { recursive: true });
     cpSync(srcDir, destDir, { recursive: true, force: true });
     installedIds.push(folderName);

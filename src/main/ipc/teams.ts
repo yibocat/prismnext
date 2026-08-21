@@ -197,15 +197,15 @@ export function registerPacksHandlers(): void {
     uninstallTeam(args.teamId);
   });
 
-  // Team enable/disable. scope="project" (the row switch) by default; "app" is
-  // the "disable in all projects" menu action. value=null follows the other layer.
+  // Team enable/disable is workbench-global (D-29). scope is kept for API
+  // compatibility; both layers write the home teams-state.json.
   ipcMain.handle(
     "teams:setEnabled",
     async (
       _event,
       args: { projectRoot?: string | null; teamId: string; enabled: boolean | null; scope?: TeamScope },
     ) => {
-      const scope: TeamScope = args.scope ?? "project";
+      const scope: TeamScope = args.scope ?? "app";
       return setTeamEnabled(args.teamId, args.enabled, scope, args.projectRoot ?? undefined);
     },
   );
@@ -217,7 +217,7 @@ export function registerPacksHandlers(): void {
       _event,
       args: { projectRoot?: string | null; fqid: Fqid; enabled: boolean | null; scope?: TeamScope },
     ) => {
-      const scope: TeamScope = args.scope ?? "project";
+      const scope: TeamScope = args.scope ?? "app";
       setAssetEnabled(args.fqid, args.enabled, scope, args.projectRoot ?? undefined);
     },
   );

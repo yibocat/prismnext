@@ -129,8 +129,8 @@ function resolveTeamState(
       : appState.installed.some((r) => r.teamId === id));
 
   const enabledApp = appState.teamEnabled[id];
-  const enabledProject = projectState.teamEnabled[id];
-  const flag = resolveTri(enabledProject, enabledApp, true);
+  const enabledProject = undefined;
+  const flag = resolveTri(undefined, enabledApp, true);
 
   const blockedBy: BlockReason | undefined =
     !installed
@@ -139,11 +139,9 @@ function resolveTeamState(
         ? "license"
         : !compatible
           ? "incompatible"
-          : enabledProject === false
-            ? "team-disabled-project"
-            : enabledProject === undefined && enabledApp === false
-              ? "team-disabled-app"
-              : undefined;
+          : enabledApp === false
+            ? "team-disabled-app"
+            : undefined;
 
   const counts: Record<AssetKind, number> = {
     orchestrator: 0,
@@ -253,14 +251,12 @@ function buildProjectView(projectRoot: string): ProjectView {
     ) => {
       const fqid = toFqid(team.manifest.id, id);
       const enabledApp = appState.assetEnabled[fqid];
-      const enabledProject = projectState.assetEnabled[fqid];
+      const enabledProject = undefined;
       const blockedBy: BlockReason | undefined = !team.enabled
         ? team.blockedBy
-        : enabledProject === false
-          ? "asset-disabled-project"
-          : enabledProject === undefined && enabledApp === false
-            ? "asset-disabled-app"
-            : undefined;
+        : enabledApp === false
+          ? "asset-disabled-app"
+          : undefined;
       const hasOverride =
         appState.assetOverrides[fqid] !== undefined ||
         projectState.assetOverrides[fqid] !== undefined;
@@ -301,13 +297,11 @@ function buildProjectView(projectRoot: string): ProjectView {
   for (const a of listAppCommandAssets()) {
     const fqid = toFqid(APP_COMMANDS_OWNER_ID, a.id);
     const enabledApp = appState.assetEnabled[fqid];
-    const enabledProject = projectState.assetEnabled[fqid];
+    const enabledProject = undefined;
     const blockedBy: BlockReason | undefined =
-      enabledProject === false
-        ? "asset-disabled-project"
-        : enabledProject === undefined && enabledApp === false
-          ? "asset-disabled-app"
-          : undefined;
+      enabledApp === false
+        ? "asset-disabled-app"
+        : undefined;
     assets.push({
       fqid,
       kind: "command",

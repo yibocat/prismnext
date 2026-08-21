@@ -5,7 +5,7 @@
  * Team commands stay under team dirs. Tests seal PRISM_APP_COMMANDS_DIR.
  */
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   getCommandRegistry,
@@ -206,7 +206,21 @@ describe("commands registry: app layer + identity", () => {
     const root = project();
     sealAppStore();
     addInstalledTeam("test.notes");
-    setTeamEnabled("test.notes", true, "project", root);
+    setTeamEnabled("test.notes", true, "app", root);
+    const hangar = join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID);
+    mkdirSync(hangar, { recursive: true });
+    writeFileSync(
+      join(hangar, "team.json"),
+      JSON.stringify({
+        id: PROJECT_DEFAULT_TEAM_ID,
+        name: "This project",
+        description: "hangar",
+        version: "0.0.0",
+        packFormatVersion: 1,
+        tier: "free",
+        publisher: "user",
+      }),
+    );
 
     const effective = listEffectiveSlashCommands(root, PROJECT_DEFAULT_TEAM_ID);
     expect(effective.some((c) => c.fqid === `${APP_COMMANDS_OWNER_ID}:setup`)).toBe(true);

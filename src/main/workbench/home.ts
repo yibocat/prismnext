@@ -9,7 +9,9 @@ import {
   HOME_SESSIONS_DIRNAME,
   HOME_SETTINGS_FILENAME,
   HOME_SKILLS_DIRNAME,
+  HOME_SKILLS_MANIFEST_FILENAME,
   HOME_TEAMS_DIRNAME,
+  HOME_TEAMS_STATE_FILENAME,
   PROJECT_META_DIR,
   PROJECTS_DIRNAME,
   WORKBENCH_HOME_DIRNAME,
@@ -34,6 +36,26 @@ function resolveUserHome(opts?: WorkbenchHomeOpts): string {
 
 export function resolveWorkbenchHome(opts?: WorkbenchHomeOpts): string {
   return normalizeWorkbenchPath(join(resolveUserHome(opts), WORKBENCH_HOME_DIRNAME));
+}
+
+export function homeSkillsDir(opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), HOME_SKILLS_DIRNAME);
+}
+
+export function homeSkillDir(skillId: string, opts?: WorkbenchHomeOpts): string {
+  return join(homeSkillsDir(opts), skillId);
+}
+
+export function homeTeamsDir(opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), HOME_TEAMS_DIRNAME);
+}
+
+export function homeSkillsManifestPath(opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), HOME_SKILLS_MANIFEST_FILENAME);
+}
+
+export function homeTeamsStatePath(opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), HOME_TEAMS_STATE_FILENAME);
 }
 
 export function ensureWorkbenchHome(opts?: WorkbenchHomeOpts): string {

@@ -3,25 +3,34 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { checkSkillUpdates } from "../../src/main/services/skill-install-updates";
-import { PRISM_SKILLS_REL, writeSkillsManifest } from "../../src/main/services/skills-sync";
+import { writeSkillsManifest } from "../../src/main/services/skills-sync";
 import { sha256Hex } from "../../src/main/services/skill-install-digest";
+import { homeSkillDir, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("skill-install-updates", () => {
   let projectRoot = "";
+  let userHome = "";
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setWorkbenchUserHomeOverride(null);
     if (projectRoot) {
       rmSync(projectRoot, { recursive: true, force: true });
       projectRoot = "";
     }
+    if (userHome) {
+      rmSync(userHome, { recursive: true, force: true });
+      userHome = "";
+    }
   });
 
   function setupProject(manifestInstalls: Parameters<typeof writeSkillsManifest>[1]["installs"]) {
+    userHome = mkdtempSync(join(tmpdir(), "prism-skill-updates-home-"));
+    setWorkbenchUserHomeOverride(userHome);
     projectRoot = mkdtempSync(join(tmpdir(), "prism-skill-updates-"));
-    mkdirSync(join(projectRoot, PRISM_SKILLS_REL, "demo-skill"), { recursive: true });
+    mkdirSync(homeSkillDir("demo-skill"), { recursive: true });
     writeFileSync(
-      join(projectRoot, PRISM_SKILLS_REL, "demo-skill", "SKILL.md"),
+      join(homeSkillDir("demo-skill"), "SKILL.md"),
       "---\nname: demo\nversion: 1.0.0\n---\n",
       "utf-8",
     );
@@ -75,12 +84,8 @@ describe("skill-install-updates", () => {
         registryDigest: sha256Hex(remoteMd),
       },
     ]);
-    mkdirSync(join(projectRoot, PRISM_SKILLS_REL, "wrangler"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, PRISM_SKILLS_REL, "wrangler", "SKILL.md"),
-      remoteMd,
-      "utf-8",
-    );
+    mkdirSync(homeSkillDir("wrangler"), { recursive: true });
+    writeFileSync(join(homeSkillDir("wrangler"), "SKILL.md"), remoteMd, "utf-8");
 
     vi.stubGlobal(
       "fetch",
@@ -124,12 +129,8 @@ describe("skill-install-updates", () => {
         registryDigest: "olddigest",
       },
     ]);
-    mkdirSync(join(projectRoot, PRISM_SKILLS_REL, "wrangler"), { recursive: true });
-    writeFileSync(
-      join(projectRoot, PRISM_SKILLS_REL, "wrangler", "SKILL.md"),
-      remoteMd,
-      "utf-8",
-    );
+    mkdirSync(homeSkillDir("wrangler"), { recursive: true });
+    writeFileSync(join(homeSkillDir("wrangler"), "SKILL.md"), remoteMd, "utf-8");
 
     vi.stubGlobal(
       "fetch",

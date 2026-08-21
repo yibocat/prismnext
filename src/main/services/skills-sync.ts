@@ -9,7 +9,6 @@ import type { SkillInstallRecord } from "../../shared/skill-install-types";
 import {
   CORE_TEAM_ID,
   isProjectLocalTeamId,
-  LOCAL_TEAM_ID,
   LOCAL_TEAM_REL,
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
@@ -17,6 +16,7 @@ import {
   type TeamSource,
 } from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
+import { homeSkillsRel } from "../../shared/workbench-paths";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
 import {
@@ -26,20 +26,25 @@ import {
   resolveSkillsRoster,
 } from "../teams/resolver";
 import { precedenceRank } from "../teams/precedence";
-import { setProjectAssetEnabled } from "../teams/state-project";
+import { setAppAssetEnabled } from "../teams/state-app";
 import { ensureMyContentTeam } from "../teams/my-content";
-import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
-import { getTeamRecord } from "../teams/catalog";
+import { getTeamRecord, invalidateCatalog } from "../teams/catalog";
+import {
+  ensureWorkbenchHome,
+  homeSkillDir,
+  homeSkillsDir,
+  homeSkillsManifestPath,
+} from "../workbench/home";
 
-/** Legacy flat skills tree (R6 migrate-in only; new writes must not use this). */
+/** Legacy flat skills tree. New writes must not use this. */
 export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
 /**
- * Project Team hangar skills — default write target for custom / library installs
- * (`.prismnext/agent/teams/project.local/skills`).
- * `LOCAL_TEAM_REL` kept for watcher / pre-M8 path matching.
+ * Retired paper-side hangar. Kept so watchers / tests can recognize leftover
+ * paths. New writes go to `~/.prismnext/skills/<id>`.
  */
 export const PRISM_LOCAL_SKILLS_REL = `${PROJECT_TEAMS_REL}/${PROJECT_DEFAULT_TEAM_ID}/skills`;
 export const PRISM_LEGACY_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
+/** @deprecated Project-side leftover; live manifest is `~/.prismnext/skills-manifest.json`. */
 export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
 /**
  * OpenCode `skills.paths` entry (relative to session cwd).
@@ -86,8 +91,13 @@ export function projectRootFromAgentPath(absPath: string): string | null {
 
 /** Whether a filesystem change should trigger skills OpenCode sync. */
 export function isSkillsIntegrationPath(absPath: string, projectRoot: string): boolean {
-  const root = normalizeOpencodeConfigPath(normalizeProjectRoot(projectRoot)).replace(/\/$/, "");
   const normalized = normalizeOpencodeConfigPath(absPath);
+  const homeSkills = normalizeOpencodeConfigPath(homeSkillsDir());
+  if (normalized === homeSkills || normalized.startsWith(`${homeSkills}/`)) return true;
+  const homeManifest = normalizeOpencodeConfigPath(homeSkillsManifestPath());
+  if (normalized === homeManifest) return true;
+
+  const root = normalizeOpencodeConfigPath(normalizeProjectRoot(projectRoot)).replace(/\/$/, "");
   const rootLower = root.toLowerCase();
   const normLower = normalized.toLowerCase();
   if (!normLower.startsWith(rootLower + "/") && normLower !== rootLower) return false;
@@ -102,15 +112,9 @@ export function isSkillsIntegrationPath(absPath: string, projectRoot: string): b
   return false;
 }
 
-/** True when the path is the project's skills manifest (not a skill folder). */
-export function isSkillsManifestPath(absPath: string, projectRoot: string): boolean {
-  const root = normalizeOpencodeConfigPath(normalizeProjectRoot(projectRoot)).replace(/\/$/, "");
-  const normalized = normalizeOpencodeConfigPath(absPath);
-  const rootLower = root.toLowerCase();
-  const normLower = normalized.toLowerCase();
-  if (!normLower.startsWith(rootLower + "/") && normLower !== rootLower) return false;
-  const rel = normalized.slice(root.length).replace(/^\//, "");
-  return rel === SKILLS_MANIFEST_REL.replace(/\\/g, "/");
+/** True when the path is the workbench skills manifest (not a skill folder). */
+export function isSkillsManifestPath(absPath: string, _projectRoot?: string): boolean {
+  return normalizeOpencodeConfigPath(absPath) === normalizeOpencodeConfigPath(homeSkillsManifestPath());
 }
 
 /** Re-export — legacy id stripped from manifests on read (Core ≠ install library). */
@@ -175,8 +179,8 @@ export interface InstalledSkillInfo {
   removable: boolean;
 }
 
-export function readSkillsManifest(projectRoot: string): SkillsManifest {
-  const path = join(projectRoot, SKILLS_MANIFEST_REL);
+export function readSkillsManifest(_projectRoot?: string): SkillsManifest {
+  const path = homeSkillsManifestPath();
   if (!existsSync(path)) {
     return { disabled: [], sources: defaultLibrarySources(), installs: [] };
   }
@@ -306,39 +310,40 @@ export function removeSkillInstallRecord(projectRoot: string, skillId: string): 
 }
 
 /** 解析技能引用（FQID 原样；裸 id 按 resolver 规则解析）→ local 内容 id；非 local 或不存在 → null */
-function resolveLocalSkillId(projectRoot: string, fqidOrBareId: string): string | null {
+function resolveHangarSkillId(projectRoot: string, fqidOrBareId: string): string | null {
   const parsed = parseFqid(fqidOrBareId);
   if (parsed) {
-    return isProjectLocalTeamId(parsed.teamId) ? parsed.contentId : null;
+    return isHangarSkillTeam(parsed.teamId) ? parsed.contentId : null;
   }
   const fqid = resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
   const resolved = parseFqid(fqid);
-  return resolved && isProjectLocalTeamId(resolved.teamId) ? resolved.contentId : null;
+  return resolved && isHangarSkillTeam(resolved.teamId) ? resolved.contentId : null;
 }
 
 /**
- * 删除项目技能 —— 只允许 local 内容（pack 内容只能禁用，结构上杜绝误删；
- * 治 P9 同类问题）。同时清理 install 记录与该 FQID 的禁用项。
+ * Delete a workbench hangar skill (Common Team / leftover project.local id).
+ * Pack skills can only be disabled.
  */
 export function deleteProjectSkill(projectRoot: string, fqidOrBareId: string): void {
-  const localId = resolveLocalSkillId(projectRoot, fqidOrBareId);
+  const localId = resolveHangarSkillId(projectRoot, fqidOrBareId);
   if (!localId) {
     throw new Error(
-      `Only project-local skills can be deleted (disable pack skills instead): ${fqidOrBareId}`,
+      `Only workbench user skills can be deleted (disable pack skills instead): ${fqidOrBareId}`,
     );
   }
-  const skillDir = join(projectRoot, PRISM_LOCAL_SKILLS_REL, localId);
+  const skillDir = homeSkillDir(localId);
   if (existsSync(skillDir)) {
     rmSync(skillDir, { recursive: true, force: true });
   }
   removeSkillInstallRecord(projectRoot, localId);
-  setProjectAssetEnabled(projectRoot, `${PROJECT_DEFAULT_TEAM_ID}:${localId}`, true);
+  setAppAssetEnabled(`${MY_CONTENT_TEAM_ID}:${localId}`, null);
+  invalidateCatalog();
 }
 
-export function writeSkillsManifest(projectRoot: string, manifest: SkillsManifest): void {
-  const path = join(projectRoot, SKILLS_MANIFEST_REL);
-  mkdirSync(join(projectRoot, ".prismnext", "agent"), { recursive: true });
+export function writeSkillsManifest(_projectRoot: string, manifest: SkillsManifest): void {
+  ensureWorkbenchHome();
+  const path = homeSkillsManifestPath();
   writeFileSync(path, JSON.stringify(manifest, null, 2), "utf-8");
 }
 
@@ -363,8 +368,8 @@ export function listProjectSkills(projectRoot: string): InstalledSkillInfo[] {
     }
     const hangar = isHangarSkillTeam(skill.teamId);
     const installOrigin = hangar ? installBySkillId.get(skill.id) : undefined;
-    const skillDirRel = isProjectLocalTeamId(skill.teamId)
-      ? `${PRISM_LOCAL_SKILLS_REL}/${skill.id}`
+    const skillDirRel = hangar
+      ? homeSkillsRel(skill.id)
       : skill.dir;
     results.push({
       fqid: skill.fqid,
@@ -405,7 +410,7 @@ export function setSkillContentEnabled(
     ? fqidOrBareId
     : resolveRef(projectRoot, fqidOrBareId, undefined, "skill");
   if (!fqid) return null;
-  setProjectAssetEnabled(projectRoot, fqid, enabled ? true : false);
+  setAppAssetEnabled(fqid, enabled ? true : false);
   return fqid;
 }
 
@@ -448,6 +453,12 @@ export function computeProfileSkillDisabled(
       const trimmed = id.trim();
       if (!trimmed) continue;
       allowed.add(parseFqid(trimmed)?.contentId ?? trimmed);
+    }
+    for (const skill of skills) {
+      if (skill.teamId === MY_CONTENT_TEAM_ID && skill.enabled) {
+        allowed.add(skill.id);
+        if (skill.runtimeName) allowed.add(skill.runtimeName);
+      }
     }
     for (const skill of skills) {
       if (!skill.enabled) continue;
@@ -548,13 +559,11 @@ export interface ProjectSkillsOpencodePatch {
 }
 
 /**
- * Prepare project skills state for OpenCode. Skill files are referenced in
- * place — bundled/store team skills stay in their team dirs (reference model,
- * no copying); user skills live under the Project Team hangar
- * (`.prismnext/agent/teams/project.local/skills/`).
- * Pi sessions load these dirs through ClosedResourceLoader.
- * This helper still cleans stray project `.opencode/` artifacts and keeps
- * `.gitignore` entries; it does not write OpenCode config.
+ * Prepare project skills state for Pi. Skill files are referenced in place —
+ * bundled team skills stay in their team dirs; user skills live under
+ * `~/.prismnext/skills/<id>`. Pi sessions load these dirs through
+ * ClosedResourceLoader. This helper still cleans stray project `.opencode/`
+ * artifacts and keeps `.gitignore` entries; it does not write OpenCode config.
  *
  * skills.paths order = OpenCode same-name shadow priority (later wins):
  *   [other teams (id sort)…, core team, .prismnext/agent (hangar + legacy, highest)]
@@ -572,12 +581,7 @@ export function syncProjectSkillsIntegration(
   const root = normalizeProjectRoot(projectRoot);
   cleanupProjectOpenCodeArtifacts(root);
   ensureOpencodeArtifactsGitignored(root);
-
-  // Local Pack 技能目录是项目技能的唯一写入位置；确保存在（OpenCode 扫描根稳定）
-  const localSkillsRoot = join(root, PRISM_LOCAL_SKILLS_REL);
-  if (!existsSync(localSkillsRoot)) {
-    mkdirSync(localSkillsRoot, { recursive: true });
-  }
+  mkdirSync(homeSkillsDir(), { recursive: true });
 
   // 有激活技能的团队目录（去重）。skills.paths 顺序 = OpenCode 同名遮蔽优先级
   // （later wins），按 §7.5 优先级 rank 降序排列：core（rank 5，最弱）最前，
@@ -620,7 +624,7 @@ export function syncProjectSkillsIntegration(
   };
 }
 
-/** Write a user skill into a writable team (default: project.local). */
+/** Write a user skill into the workbench hangar (`~/.prismnext/skills/<id>`). */
 export function installProjectSkill(
   projectRoot: string,
   skillId: string,
@@ -630,21 +634,22 @@ export function installProjectSkill(
   const root = normalizeProjectRoot(projectRoot);
   const id = skillId.trim();
   if (!id) throw new Error("Skill id is required");
-  const tid = (targetTeamId?.trim() || PROJECT_DEFAULT_TEAM_ID);
-  let teamDir: string;
-  if (tid === MY_CONTENT_TEAM_ID) {
-    teamDir = ensureMyContentTeam().dir;
-  } else if (tid === PROJECT_DEFAULT_TEAM_ID || isProjectLocalTeamId(tid)) {
-    teamDir = ensureProjectDefaultTeamDir(root);
-  } else {
-    const record = getTeamRecord(tid, [root]);
-    if (!record) throw new Error(`Target team not found: ${tid}`);
-    if (!record.writable) throw new Error(`Target team is read-only: ${tid}`);
-    teamDir = record.dir;
+  const tid = (targetTeamId?.trim() || MY_CONTENT_TEAM_ID);
+  if (tid === MY_CONTENT_TEAM_ID || tid === PROJECT_DEFAULT_TEAM_ID || isProjectLocalTeamId(tid)) {
+    ensureMyContentTeam();
+    const dir = homeSkillDir(id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "SKILL.md"), content, "utf-8");
+    invalidateCatalog();
+    return { teamId: MY_CONTENT_TEAM_ID, dir };
   }
-  const dir = join(teamDir, "skills", id);
+  const record = getTeamRecord(tid, [root]);
+  if (!record) throw new Error(`Target team not found: ${tid}`);
+  if (!record.writable) throw new Error(`Target team is read-only: ${tid}`);
+  const dir = join(record.dir, "skills", id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "SKILL.md"), content, "utf-8");
+  invalidateCatalog();
   return { teamId: tid, dir };
 }
 

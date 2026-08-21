@@ -292,4 +292,12 @@ export function registerSkillsHandlers(): void {
       return refreshProjectSkills(args.projectPath);
     },
   );
+
+  ipcMain.handle("agent:homeSkillsDir", async () => {
+    const { homeSkillsDir } = await import("../workbench/home");
+    const { mkdirSync } = await import("node:fs");
+    const dir = homeSkillsDir();
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  });
 }

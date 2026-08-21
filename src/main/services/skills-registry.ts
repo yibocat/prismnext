@@ -16,7 +16,8 @@ import { tmpdir } from "node:os";
 import extractZip from "extract-zip";
 import { extract as extractTar } from "tar";
 import { fetchOk, readResponseBytes, verifySha256Digest } from "./skill-install-digest";
-import { PRISM_LOCAL_SKILLS_REL } from "./skills-sync";
+import { invalidateCatalog } from "../teams/catalog";
+import { homeSkillDir } from "../workbench/home";
 
 export interface RegistrySkillEntry {
   name: string;
@@ -181,7 +182,7 @@ async function fetchRegistryTextFile(artifactUrl: string): Promise<string> {
 }
 
 function writeSkillFile(projectRoot: string, skillId: string, relPath: string, content: string): void {
-  const dest = join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId, relPath);
+  const dest = join(homeSkillDir(skillId), relPath);
   mkdirSync(dirname(dest), { recursive: true });
   writeFileSync(dest, content, "utf-8");
 }
@@ -228,7 +229,7 @@ async function installArchiveSkill(
     await extractArchiveToDir(entry.url, archivePath, extractDir, entry.digest);
 
     const sourceDir = resolveExtractedSkillDir(extractDir);
-    const destDir = join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId);
+    const destDir = homeSkillDir(skillId);
     mkdirSync(destDir, { recursive: true });
     cpSync(sourceDir, destDir, { recursive: true, force: true });
   } finally {
@@ -242,7 +243,7 @@ async function installSkillMdSkill(
   indexUrl: string,
 ): Promise<void> {
   const skillId = skillNameToFolderId(entry.name);
-  const skillDir = join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId);
+  const skillDir = homeSkillDir(skillId);
   mkdirSync(skillDir, { recursive: true });
 
   if (entry.files && entry.files.length > 0) {
@@ -274,9 +275,10 @@ export async function installRegistrySkill(
 ): Promise<void> {
   if (entry.type === "archive") {
     await installArchiveSkill(projectRoot, entry);
-    return;
+  } else {
+    await installSkillMdSkill(projectRoot, entry, indexUrl);
   }
-  await installSkillMdSkill(projectRoot, entry, indexUrl);
+  invalidateCatalog();
 }
 
 /** Folder id must match OpenCode skill directory naming. */

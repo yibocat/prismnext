@@ -4,10 +4,11 @@ import type { GitHubInstallOrigin, SkillInstallRecord, SkillUpdateInfo } from ".
 import { parseSha256Digest, sha256Hex, verifySha256Digest } from "./skill-install-digest";
 import { githubRawSkillMdUrl, parseSkillVersionFromMarkdown } from "./skill-install-github";
 import { fetchRegistryIndex, fetchSkillMarkdown, skillNameToFolderId } from "./skills-registry";
-import { PRISM_LOCAL_SKILLS_REL, readSkillsManifest } from "./skills-sync";
+import { readSkillsManifest } from "./skills-sync";
+import { homeSkillDir } from "../workbench/home";
 
-function readInstalledSkillDigest(projectRoot: string, skillId: string): string | undefined {
-  const skillMd = join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId, "SKILL.md");
+function readInstalledSkillDigest(_projectRoot: string, skillId: string): string | undefined {
+  const skillMd = join(homeSkillDir(skillId), "SKILL.md");
   if (!existsSync(skillMd)) return undefined;
   return sha256Hex(readFileSync(skillMd, "utf-8"));
 }

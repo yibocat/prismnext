@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, expect, it, afterEach, vi } from "vitest";
+import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
 import {
   listProjectSkills,
   readSkillsManifest,
@@ -30,14 +30,15 @@ import {
 import {
   readTeamsState,
 } from "../../src/main/services/teams-state";
-import { setProjectTeamEnabled, setProjectAssetEnabled } from "../../src/main/teams/state-project";
+import { setAppAssetEnabled, setAppTeamEnabled, setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
 } from "../../src/main/services/teams-installed";
-import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests, listAssets as listAssetsV2 } from "../../src/main/teams/resolver";
-import { CORE_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../src/shared/teams/types";
+import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../src/shared/teams/types";
+import { homeSkillDir, homeSkillsDir, homeSkillsManifestPath, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
+import { HOME_SKILLS_DIRNAME } from "../../src/shared/workbench-paths";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];
@@ -48,8 +49,8 @@ function temp(prefix = "prism-skills-"): string {
   return dir;
 }
 
-function writeLocalSkill(root: string, id: string, extra = ""): void {
-  const dir = join(root, PRISM_LOCAL_SKILLS_REL, id);
+function writeLocalSkill(id: string, extra = ""): void {
+  const dir = homeSkillDir(id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "SKILL.md"),
@@ -58,8 +59,15 @@ function writeLocalSkill(root: string, id: string, extra = ""): void {
   );
 }
 
+beforeEach(() => {
+  const home = makeTempDir("wb-skills-home-");
+  tempDirs.push(home);
+  setWorkbenchUserHomeOverride(home);
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  setWorkbenchUserHomeOverride(null);
   for (const dir of listExternalTeamRoots()) unregisterExternalTeamRoot(dir);
   while (tempDirs.length) rmSync(tempDirs.pop()!, { recursive: true, force: true });
   setTeamsInstalledDataDir(null);
@@ -77,21 +85,21 @@ function sealAppStore(): string {
 }
 
 describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
-  it("lists local skills from the Local Pack", () => {
+  it("lists user skills from the workbench hangar", () => {
     const root = temp();
-    writeLocalSkill(root, "citations");
+    writeLocalSkill("citations");
 
     const skills = listProjectSkills(root);
     expect(skills).toHaveLength(1);
-    expect(skills[0].fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
+    expect(skills[0].fqid).toBe(`${MY_CONTENT_TEAM_ID}:citations`);
     expect(skills[0].name).toBe("citations");
     expect(skills[0].enabled).toBe(true);
     expect(skills[0].origin).toBe("custom");
     expect(skills[0].removable).toBe(true);
-    expect(skills[0].skillDirRel).toBe(`${PRISM_LOCAL_SKILLS_REL}/citations`);
+    expect(skills[0].skillDirRel).toBe(`${HOME_SKILLS_DIRNAME}/citations`);
   });
 
-  it("legacy .prismnext/agent/skills migrates into the Local Pack on read (R6)", () => {
+  it("does not migrate leftover paper-side skills into the hangar", () => {
     const root = temp();
     const legacyDir = join(root, ".prismnext/agent/skills/citations");
     mkdirSync(legacyDir, { recursive: true });
@@ -102,36 +110,31 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     );
 
     const skills = listProjectSkills(root);
-    expect(skills).toHaveLength(1);
-    expect(skills[0].fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
-    expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(false);
-    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL, "citations", "SKILL.md"))).toBe(true);
+    expect(skills.filter((s) => s.id === "citations")).toHaveLength(0);
+    expect(existsSync(join(homeSkillsDir(), "citations", "SKILL.md"))).toBe(false);
   });
 
-  it("setSkillContentEnabled toggles via teams.json assetEnabled (FQID + bare id)", () => {
+  it("setSkillContentEnabled toggles via workbench teams-state (FQID + bare id)", () => {
     const root = temp();
-    writeLocalSkill(root, "citations");
+    writeLocalSkill("citations");
 
-    // 裸 id 解析（唯一匹配 → local）
     const fqid = setSkillContentEnabled(root, "citations", false);
-    expect(fqid).toBe(`${PROJECT_DEFAULT_TEAM_ID}:citations`);
+    expect(fqid).toBe(`${MY_CONTENT_TEAM_ID}:citations`);
     expect(listProjectSkills(root)[0].enabled).toBe(false);
 
-    setSkillContentEnabled(root, `${PROJECT_DEFAULT_TEAM_ID}:citations`, true);
+    setSkillContentEnabled(root, `${MY_CONTENT_TEAM_ID}:citations`, true);
     expect(listProjectSkills(root)[0].enabled).toBe(true);
   });
 
   it("computeProfileSkillDisabled denies only inactive names (shadow carve-out)", () => {
     const root = temp();
-    writeLocalSkill(root, "academic-citations");
-    writeLocalSkill(root, "peer-review-response");
-    writeLocalSkill(root, "literature-review");
-    setSkillContentEnabled(root, `${PROJECT_DEFAULT_TEAM_ID}:literature-review`, false);
+    writeLocalSkill("academic-citations");
+    writeLocalSkill("peer-review-response");
+    writeLocalSkill("literature-review");
+    setSkillContentEnabled(root, `${MY_CONTENT_TEAM_ID}:literature-review`, false);
 
-    // Active team is project.local (hangar); own-team skills stay allowed.
-    // Only the disabled asset is denied.
     const disabled = computeProfileSkillDisabled(root, {
-      teamId: PROJECT_DEFAULT_TEAM_ID,
+      teamId: MY_CONTENT_TEAM_ID,
     });
     expect(disabled).toEqual(["literature-review"]);
   });
@@ -147,16 +150,16 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
     addInstalledTeam("acme.foreign");
 
     const root = temp();
-    writeLocalSkill(root, "local-skill");
+    writeLocalSkill("local-skill");
 
     const scoped = computeProfileSkillDisabled(root, {
-      teamId: PROJECT_DEFAULT_TEAM_ID,
+      teamId: MY_CONTENT_TEAM_ID,
     });
     expect(scoped).toContain("foreign-skill");
     expect(scoped).not.toContain("local-skill");
 
     const withSlash = computeProfileSkillDisabled(root, {
-      teamId: PROJECT_DEFAULT_TEAM_ID,
+      teamId: MY_CONTENT_TEAM_ID,
       extraAllowIds: ["foreign-skill"],
     });
     expect(withSlash).not.toContain("foreign-skill");
@@ -164,16 +167,16 @@ describe("skills-sync: 列表与启停（resolver 接管，§5.6.2）", () => {
 });
 
 describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
-  it("sync emits the local scan entry and creates the Local Pack skills dir", () => {
+  it("sync emits the local scan entry and does not create a paper-side hangar", () => {
     const root = temp();
     const result = syncProjectSkillsIntegration(root);
 
     expect(result.skillsPaths).toEqual([PRISM_OPENCODE_SKILLS_SCAN_REL]);
     expect(existsSync(join(root, ".opencode/opencode.json"))).toBe(false);
     expect(existsSync(join(root, ".agents/skills"))).toBe(false);
-    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(true);
-    // legacy skills 目录不再被创建
+    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(false);
     expect(existsSync(join(root, ".prismnext/agent/skills"))).toBe(false);
+    expect(existsSync(homeSkillsDir())).toBe(true);
   });
 
   it("skills scan entry covers SKILL.md at any depth (OpenCode semantics)", () => {
@@ -222,7 +225,7 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     addInstalledTeam("aaa.pack");
 
     // pack.a 整包禁用 → 目录出 paths；solo 无激活实例 → deny
-    setProjectTeamEnabled(root, "aaa.pack", false);
+    setAppTeamEnabled("aaa.pack", false);
     let result = syncProjectSkillsIntegration(root, { teamId: CORE_TEAM_ID });
     expect(result.skillsPaths).toEqual([
       join(teamsRoot, CORE_TEAM_ID).replace(/\\/g, "/"),
@@ -237,16 +240,18 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     expect(result.skillPermissions["shared"]).toBe("deny");
 
     // core 的 shared 也被逐项禁用 → 无激活实例 → deny
-    setProjectAssetEnabled(root, `${CORE_TEAM_ID}:shared`, false);
+    setAppAssetEnabled(`${CORE_TEAM_ID}:shared`, false);
     result = syncProjectSkillsIntegration(root, { teamId: CORE_TEAM_ID });
     expect(result.skillPermissions["shared"]).toBe("deny");
   });
 
-  it("detects skills integration paths (local + legacy backstop + manifest)", () => {
+  it("detects skills integration paths (home hangar + leftover paper paths)", () => {
     const root = temp();
+    const homeSkillMd = join(homeSkillDir("demo"), "SKILL.md");
     const localSkillMd = join(root, PRISM_LOCAL_SKILLS_REL, "demo/SKILL.md");
     const legacySkillMd = join(root, ".prismnext/agent/skills/demo/SKILL.md");
     const manifest = join(root, ".prismnext/agent/skills-manifest.json");
+    expect(isSkillsIntegrationPath(homeSkillMd, root)).toBe(true);
     expect(isSkillsIntegrationPath(localSkillMd.replace(/\//g, "\\"), root)).toBe(true);
     expect(isSkillsIntegrationPath(legacySkillMd.replace(/\//g, "\\"), root)).toBe(true);
     expect(isSkillsIntegrationPath(manifest.replace(/\//g, "\\"), root)).toBe(true);
@@ -326,7 +331,7 @@ describe("skills-sync: 项目清理与 gitignore（不变）", () => {
     expect(existsSync(join(root, ".agents"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/.opencode"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/opencode"))).toBe(false);
-    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(true);
+    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(false);
   });
 
   it("appends opencode artifact lines to project .gitignore", () => {
@@ -348,7 +353,7 @@ describe("skills-sync: 项目清理与 gitignore（不变）", () => {
 
     expect(existsSync(join(root, ".prismnext/.opencode"))).toBe(false);
     expect(existsSync(join(root, ".prismnext/.prismnext"))).toBe(false);
-    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(true);
+    expect(existsSync(join(root, PRISM_LOCAL_SKILLS_REL))).toBe(false);
     expect(existsSync(join(root, ".opencode"))).toBe(false);
   });
 });
@@ -384,9 +389,9 @@ describe("skills-sync: 技能库来源（manifest 元数据，不变）", () => 
 
   it("strips legacy prism-curated bundled source from manifests", () => {
     const root = temp();
-    mkdirSync(join(root, ".prismnext/agent"), { recursive: true });
+    mkdirSync(join(homeSkillsManifestPath(), ".."), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext/agent/skills-manifest.json"),
+      homeSkillsManifestPath(),
       JSON.stringify({
         sources: [
           { id: PRISM_CURATED_SOURCE_ID, kind: "bundled", connected: true },
@@ -435,9 +440,9 @@ describe("skills-sync: 技能库来源（manifest 元数据，不变）", () => 
 
   it("migrates legacy registryUrls to sources", () => {
     const root = temp();
-    mkdirSync(join(root, ".prismnext/agent"), { recursive: true });
+    mkdirSync(join(homeSkillsManifestPath(), ".."), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext/agent/skills-manifest.json"),
+      homeSkillsManifestPath(),
       JSON.stringify({
         registryUrls: ["https://legacy.example/.well-known/agent-skills/index.json"],
       }),

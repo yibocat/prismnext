@@ -1621,6 +1621,7 @@ export interface ElectronAPI {
     }>
   >;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
+  agentHomeSkillsDir: () => Promise<string>;
   subagentsList: (projectPath: string) => Promise<import("@shared/agent-subagents").SubagentInfo[]>;
   orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-subagents").OrchestratorInfo[]>;
   subagentsGetDetail: (

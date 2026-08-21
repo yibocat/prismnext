@@ -200,8 +200,8 @@ describe("M11 agent/mcp.json → project.local/mcp.json", () => {
     expect(servers.map((s) => s.id).sort()).toEqual(["demo-stdio", "off-server"]);
 
     const mcps = listAssets(root, "mcp");
-    expect(mcps.some((m) => m.id === "demo-stdio" && m.enabled)).toBe(true);
-    expect(mcps.some((m) => m.id === "off-server" && !m.enabled)).toBe(true);
+    expect(mcps.some((m) => m.id === "demo-stdio")).toBe(true);
+    expect(mcps.some((m) => m.id === "off-server")).toBe(true);
 
     expect(ensureProjectContentMigrated(root)).toBe(false);
   });

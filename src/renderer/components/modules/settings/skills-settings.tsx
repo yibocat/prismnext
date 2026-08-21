@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { revealProjectHiddenPath } from "@/lib/files/open-project-path";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useSkillsRefreshStore } from "@/lib/settings/skills-refresh";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
@@ -205,7 +204,9 @@ export function SkillsSettings({
   };
 
   const openSkillsFolder = () => {
-    revealProjectHiddenPath(".prismnext/agent/teams/project.local/skills");
+    void window.electronAPI.agentHomeSkillsDir().then((dir) => {
+      if (dir) void window.electronAPI.shellShowItemInFolder(dir);
+    });
   };
 
   const openCreateSkill = () => {

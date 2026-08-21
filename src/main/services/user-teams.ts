@@ -3,10 +3,8 @@
  *
  * A user team is just an app-level pack living at
  * `~/.prismnext/teams/<teamId>/` (plugin.json + orchestrators/ + experts/...).
- * The whole `user-packs/` directory is registered as an external pack root, so
- * the existing catalog / resolver treat user teams exactly like installed
- * packs: app-level sharing across projects, project-level enable/disable, and
- * the same content model (orchestrators / experts / skills / commands / MCP).
+ * Catalog scans that home folder as the writable user root — same content
+ * model as installed packs, with enable/disable shared across projects.
  *
  * Because teamDirFingerprint aggregates every content file, any change inside
  * a user team (new orchestrator, edited expert, …) bumps the catalog
@@ -16,12 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
-import { HOME_TEAMS_DIRNAME } from "../../shared/workbench-paths";
-import { resolveWorkbenchHome } from "../workbench/home";
-import {
-  invalidateCatalog as invalidateCatalogV2,
-  registerExternalTeamRoot as registerExternalTeamRootV2,
-} from "../teams/catalog";
+import { appTeamsDir, setAppTeamsDirForTests } from "../teams/scope";
+import { invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
 import { createLogger } from "./logger";
 
 const log = createLogger("user-teams");
@@ -29,31 +23,23 @@ const log = createLogger("user-teams");
 export const USER_PACKS_REL = "user-packs";
 
 /** Test-injectable root (sealed fixture per test), like packs-installed. */
-let dataDirOverride: string | null = null;
-
 export function setUserTeamsDataDir(dir: string | null): void {
-  dataDirOverride = dir;
+  setAppTeamsDirForTests(dir);
 }
 
 function rootDir(): string {
-  if (dataDirOverride) return dataDirOverride;
-  return join(resolveWorkbenchHome(), HOME_TEAMS_DIRNAME);
+  return appTeamsDir();
 }
 
-/** Absolute path of the user-packs root (for fingerprinting). */
+/** Absolute path of the user teams root (for fingerprinting). */
 export function userTeamsRootDir(): string {
   return rootDir();
 }
 
-let registeredRoot: string | null = null;
-
-/** Register the current `user-packs/` root as an external pack root (idempotent per dir). */
+/** Ensure the home teams folder exists and the catalog will rescan it. */
 export function ensureUserTeamsRegistered(): void {
-  const dir = rootDir();
-  if (registeredRoot === dir) return;
-  registerExternalTeamRootV2(dir, "user");
+  mkdirSync(rootDir(), { recursive: true });
   invalidateCatalogV2();
-  registeredRoot = dir;
 }
 
 export interface UserTeam {

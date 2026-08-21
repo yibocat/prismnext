@@ -967,6 +967,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:checkSkillUpdates", { projectPath }),
 	agentDeleteSkill: (projectPath: string, skillId: string) =>
 		ipcRenderer.invoke("agent:deleteSkill", { projectPath, skillId }),
+	agentHomeSkillsDir: () => ipcRenderer.invoke("agent:homeSkillsDir"),
 	subagentsList: (projectPath: string) =>
 		ipcRenderer.invoke("subagents:list", { projectPath }),
 	orchestratorsList: (projectPath: string) =>

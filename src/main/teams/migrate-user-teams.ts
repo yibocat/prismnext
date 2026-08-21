@@ -147,10 +147,7 @@ export function migrateUserTeams(options: UserTeamsMigrationOptions): UserTeamsM
   return result;
 }
 
-/** Run M2 against the real application data directories. */
+/** Retired: user teams are created in ~/.prismnext/teams/. Do not copy user-packs. */
 export function ensureUserTeamsMigrated(): UserTeamsMigrationResult {
-  return migrateUserTeams({
-    legacyRoot: legacyUserTeamsDir(),
-    teamsRoot: appTeamsDir(),
-  });
+  return { moved: [], conflicts: [] };
 }

@@ -6,10 +6,10 @@ import type {
   SkillSourceAnalysis,
 } from "../../shared/skill-install-types";
 import {
-  PRISM_LOCAL_SKILLS_REL,
   readSkillsManifest,
   recordSkillInstalls,
 } from "./skills-sync";
+import { homeSkillDir, homeSkillsDir } from "../workbench/home";
 import {
   analyzeDiscoverySkillSource,
   getCachedDiscoveryIndex,
@@ -107,8 +107,7 @@ async function installGitHubPackages(
   }
 
   const installedFolderIds = copyGitHubSkillPaths(
-    projectRoot,
-    PRISM_LOCAL_SKILLS_REL,
+    homeSkillsDir(),
     cached.repoRoot,
     pathsToCopy,
   );
@@ -120,7 +119,7 @@ async function installGitHubPackages(
 }
 
 function digestInstalledSkillMd(projectRoot: string, skillId: string): string | undefined {
-  const skillMd = join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId, "SKILL.md");
+  const skillMd = join(homeSkillDir(skillId), "SKILL.md");
   if (!existsSync(skillMd)) return undefined;
   return sha256Hex(readFileSync(skillMd, "utf-8"));
 }
@@ -137,7 +136,7 @@ function buildInstallRecords(
       skillId,
       origin,
       installedAt: new Date().toISOString(),
-      contentVersion: readSkillVersionFromDir(join(projectRoot, PRISM_LOCAL_SKILLS_REL, skillId)),
+      contentVersion: readSkillVersionFromDir(homeSkillDir(skillId)),
       contentDigest: digestInstalledSkillMd(projectRoot, skillId),
       registryDigest: extras.registryDigest,
       packagePath: extras.packagePath,

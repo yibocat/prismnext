@@ -22,6 +22,8 @@ export const HOME_BROWSER_DIRNAME = "browser";
 export const HOME_JOBS_DIRNAME = "jobs";
 export const HOME_RUNTIME_SESSIONS_DIRNAME = "runtime-sessions";
 export const HOME_SETTINGS_FILENAME = "settings.json";
+export const HOME_SKILLS_MANIFEST_FILENAME = "skills-manifest.json";
+export const HOME_TEAMS_STATE_FILENAME = "teams-state.json";
 export const PROJECT_SLOT_META_FILENAME = "meta.json";
 /** Built-in first-run folder under the platform Documents directory (D-18). */
 export const BUILTIN_DEFAULT_PROJECT_DIRNAME = "PrismNext";
@@ -49,6 +51,10 @@ export function projectSlotMetaRel(projectId: string): string {
 
 export function libraryRel(projectId: string): string {
   return posixJoin(PROJECTS_DIRNAME, projectId, LIBRARY_DIRNAME);
+}
+
+export function homeSkillsRel(skillId?: string): string {
+  return skillId ? posixJoin(HOME_SKILLS_DIRNAME, skillId) : HOME_SKILLS_DIRNAME;
 }
 
 export function worktreeSlotRel(projectId: string, worktreeId: string): string {

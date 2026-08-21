@@ -1,19 +1,13 @@
 /**
  * state-app.ts — App-level Team state (design 2026-08-10 §5.1.3).
  *
- * Persists `<userData>/teams-state.json`: install records + app-level default
- * team + team/asset tri-state overrides + global overrides. Shared by all projects.
- *
- * T6: the read-time fallback is now a one-shot on-disk migration. When
- * teams-state.json does not exist but packs-installed.json does, the
- * install records are copied to teams-state.json and written to disk.
- * Subsequent reads find teams-state.json and skip the migration.
+ * Persists `~/.prismnext/teams-state.json`: install records + workbench-wide
+ * default team + team/asset tri-state overrides. Shared by all projects.
  *
  * Write rules: atomic write (tmp + rename) + write counter + change event
  * (each listener wrapped in try/catch).
  */
 
-import { app } from "electron";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
@@ -23,8 +17,9 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyAppTeamsState, normalizeAppTeamsState } from "../../shared/teams/state";
-import { listInstalledTeams } from "../services/teams-installed";
 import { createLogger } from "../services/logger";
+import { listInstalledTeams } from "../services/teams-installed";
+import { homeTeamsStatePath } from "../workbench/home";
 
 const log = createLogger("teams-state-app");
 
@@ -37,32 +32,10 @@ export function setAppTeamsStateDataDir(dir: string | null): void {
 
 function filePath(): string {
   if (dataDirOverride) return join(dataDirOverride, APP_TEAMS_STATE_FILE);
-  try {
-    return join(app.getPath("userData"), APP_TEAMS_STATE_FILE);
-  } catch {
-    return join(process.env.TMPDIR ?? "/tmp", APP_TEAMS_STATE_FILE);
-  }
+  return homeTeamsStatePath();
 }
 
-/**
- * T6 one-shot migration (M1): copy install records from the legacy
- * packs-installed.json to the new teams-state.json and write to disk.
- * This runs once — after teams-state.json exists, it's never called again.
- */
-function migrateFromLegacyInstalled(): AppTeamsState {
-  const list = listInstalledTeams();
-  const state: AppTeamsState = {
-    ...emptyAppTeamsState(),
-    installed: list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt })),
-  };
-  writeAppTeamsState(state);
-  log.info("T6 migration: packs-installed.json → teams-state.json written", {
-    count: state.installed.length,
-  });
-  return state;
-}
-
-/** Read app state; teams-state.json → one-shot migration from legacy → empty. */
+/** Read workbench team state. Missing or unreadable → empty (no legacy copy). */
 export function readAppTeamsState(): AppTeamsState {
   const path = filePath();
   if (existsSync(path)) {
@@ -89,18 +62,19 @@ export function readAppTeamsState(): AppTeamsState {
     }
   }
 
-  // T6 one-shot migration: teams-state.json doesn't exist. If the legacy
-  // packs-installed.json has records, copy them and write teams-state.json.
+  const empty = emptyAppTeamsState();
   try {
-    const legacyList = listInstalledTeams();
-    if (legacyList.length > 0) {
-      return migrateFromLegacyInstalled();
+    const list = listInstalledTeams();
+    if (list.length > 0) {
+      return {
+        ...empty,
+        installed: list.map((r) => ({ teamId: r.teamId, installedAt: r.installedAt })),
+      };
     }
   } catch {
-    // Legacy store not available — empty state.
+    // Install store unavailable — empty state.
   }
-
-  return emptyAppTeamsState();
+  return empty;
 }
 
 /** Atomic write (tmp + rename) + write counter + change event. */
