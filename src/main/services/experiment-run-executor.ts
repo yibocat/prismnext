@@ -2,10 +2,8 @@
  * experiment-run executor — runs a shell command in the workspace experiment island,
  * appends run record to `.workbench/experiments/<id>/runs.jsonl`.
  *
- * Two completion sinks (Sprint 0.7):
- *  - Bridge caller passes `resPath` (legacy file-bridge contract; unchanged).
- *  - UI IPC caller passes `onComplete(result)` (Sprint 0.7).
- *  - Both can be used at once; either is optional.
+ * Completion: UI IPC / tests may pass `onComplete(result)`. Optional `resPath`
+ * is leftover and unused on the Pi path.
  */
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -172,7 +170,7 @@ export interface KickoffExperimentRunArgs {
   kind?: ExperimentRunKind;
   /** Optional caller-supplied runId; if omitted, the executor generates one. */
   runId?: string;
-  /** Legacy file-bridge completion sink — optional in Sprint 0.7. */
+  /** Optional leftover completion file — unused on the Pi path. */
   resPath?: string;
   /** UI completion callback — fires after the run finishes (or fails). */
   onComplete?: (result: ExperimentRunResult) => void;

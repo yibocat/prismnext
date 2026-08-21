@@ -1,40 +1,42 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   app: {
-    getPath: () => path.join(os.tmpdir(), "prism-ix-bridge-userdata"),
+    getPath: () => path.join(os.tmpdir(), "prism-ix-tool-userdata"),
   },
   BrowserWindow: {
     getAllWindows: () => [],
   },
 }));
 
-import { processInteractionBridgeOnceForTests } from "../../src/main/services/interaction-bridge";
-import { getInteractionBridgeRoot } from "../../src/main/services/prism-bridge-paths";
+import { interactionWriteTool } from "../../src/main/agent/tools/interaction";
+import type { ToolExecuteContext } from "../../src/main/agent/tool-host";
 
-const bridgeRoot = path.join(os.tmpdir(), "prism-interaction-bridge-test");
 const projectRoots: string[] = [];
 
-beforeEach(() => {
-  process.env.PRISM_INTERACTION_BRIDGE_ROOT = bridgeRoot;
-  fs.mkdirSync(bridgeRoot, { recursive: true });
-});
+function toolCtx(projectRoot: string): ToolExecuteContext {
+  return {
+    runtimeSessionId: "test-session",
+    tabId: "test-session",
+    turnId: "turn-1",
+    toolCallId: "tc-1",
+    projectRoot,
+    permissionMode: "ask",
+  };
+}
 
 afterEach(() => {
   for (const root of projectRoots.splice(0)) {
     fs.rmSync(root, { recursive: true, force: true });
   }
-  if (fs.existsSync(bridgeRoot)) {
-    fs.rmSync(bridgeRoot, { recursive: true, force: true });
-  }
 });
 
-describe("interaction-bridge", () => {
+describe("interaction-write native tool", () => {
   it("writes spec and returns fence hint", async () => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-bridge-proj-"));
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ix-tool-proj-"));
     projectRoots.push(projectRoot);
     const figRel = "results/loss.png";
     fs.mkdirSync(path.join(projectRoot, "results"), { recursive: true });
@@ -45,16 +47,9 @@ describe("interaction-bridge", () => {
         "base64",
       ),
     );
-    const sessionId = "test-session";
-    const sessionDir = path.join(getInteractionBridgeRoot(), sessionId);
-    fs.mkdirSync(sessionDir, { recursive: true });
-    const requestId = "req-1";
-    fs.writeFileSync(
-      path.join(sessionDir, `${requestId}.request.json`),
-      JSON.stringify({
-        action: "write",
-        sessionId,
-        projectRoot,
+
+    const result = await interactionWriteTool.execute(
+      {
         spec: {
           id: "fig.loss",
           title: "Demo loss",
@@ -63,18 +58,13 @@ describe("interaction-bridge", () => {
           revision: 1,
           resources: [{ role: "figure", path: figRel }],
         },
-      }),
-      "utf-8",
-    );
-
-    await processInteractionBridgeOnceForTests();
-
-    const result = JSON.parse(
-      fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
+      },
+      toolCtx(projectRoot),
     ) as Record<string, unknown>;
+
     expect(result.ok).toBe(true);
-    expect(result.fenceMarkdown).toContain("```interaction");
-    expect(result.fenceMarkdown).toContain("id: fig.loss");
+    expect(String(result.fenceMarkdown)).toContain("```interaction");
+    expect(String(result.fenceMarkdown)).toContain("id: fig.loss");
     expect(result.relativePath).toBe(".workbench/interactions/fig.loss/spec.json");
   });
 });

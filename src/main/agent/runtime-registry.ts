@@ -16,6 +16,7 @@ import {
   AgentSessionStore,
   resolvePiAgentRoot,
 } from "./session-store";
+import { setSessionScratchLookup } from "../services/chat-session-registry";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("runtime-registry", "agent");
@@ -58,6 +59,7 @@ export class RuntimeRegistry {
   constructor(opts: RuntimeRegistryOptions) {
     this.store = opts.store ?? new AgentSessionStore(resolvePiAgentRoot());
     this.startRuntime = opts.startRuntime;
+    setSessionScratchLookup(this.store);
   }
 
   getBinding(conversationId: string): ConversationBinding | null {

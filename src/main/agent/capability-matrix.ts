@@ -45,7 +45,7 @@ export const PI_PRIMITIVE_TOOLS: readonly ToolCapability[] = [
 export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
   { name: TOOL_NAMES.literatureSearch, kind: "host_research", notes: "literature-service.searchPapers" },
   { name: TOOL_NAMES.literatureDiscover, kind: "host_research", notes: "literature-discovery.discoverLiterature" },
-  { name: TOOL_NAMES.literatureStage, kind: "host_research", notes: "literature-bridge / enrich" },
+  { name: TOOL_NAMES.literatureStage, kind: "host_research", notes: "literature-citation-staging" },
   { name: TOOL_NAMES.literatureAdd, kind: "host_research", notes: "literature-service create/enrich" },
   { name: TOOL_NAMES.literatureDelete, kind: "host_research", notes: "literature-service delete" },
   { name: TOOL_NAMES.literatureRead, kind: "host_research", notes: "literature-service + extracts" },

@@ -6,6 +6,8 @@ import {
   getSessionProjectRoot,
   unregisterChatSession,
   resolveCitationStagingSessionId,
+  resolveSessionScratchKey,
+  setSessionScratchLookup,
   isSubAgentSession,
   _resetChatSessionRegistryForTests,
 } from "../../src/main/services/chat-session-registry";
@@ -43,5 +45,27 @@ describe("chat-session-registry", () => {
     expect(isSubAgentSession("sub-rt-parent-1710000000000")).toBe(true);
     expect(resolveCitationStagingSessionId("sub-task-session")).toBe("sub-task-session");
     expect(isSubAgentSession("sub-task-session")).toBe(false);
+  });
+
+  it("uses the peeled id as scratch key when no store is injected", () => {
+    expect(resolveSessionScratchKey("sess-1")).toBe("sess-1");
+    expect(resolveSessionScratchKey("sub-rt-parent-1710000000000")).toBe("rt-parent");
+  });
+
+  it("maps a runtime id to conversationId when lookup is injected", () => {
+    setSessionScratchLookup({
+      getSession(id) {
+        if (id === "rt-1") return { conversationId: "conv-1", runtimeSessionId: "rt-1" };
+        return null;
+      },
+      getByConversationId(id) {
+        if (id === "conv-1") return { conversationId: "conv-1", runtimeSessionId: "rt-1" };
+        return null;
+      },
+    });
+    expect(resolveSessionScratchKey("rt-1")).toBe("conv-1");
+    expect(resolveSessionScratchKey("sub-rt-1-1710000000000")).toBe("conv-1");
+    expect(resolveSessionScratchKey("unknown")).toBe("unknown");
+    expect(resolveSessionScratchKey("conv-1")).toBe("conv-1");
   });
 });

@@ -10,8 +10,8 @@ vi.mock("electron", () => ({
 
 import {
   dispatchProvenanceQuery,
-  type ExperimentLogBridgeRequest,
-} from "../../src/main/services/experiment-log-bridge";
+  type ExperimentToolRequest,
+} from "../../src/main/services/experiment-tool-dispatch";
 import { recordRunProvenance } from "../../src/main/services/provenance-service";
 import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
 
@@ -38,8 +38,8 @@ function makeRun(): ExperimentRunEntry {
   };
 }
 
-function req(partial: Partial<ExperimentLogBridgeRequest>): ExperimentLogBridgeRequest {
-  return { tool: "provenance-query", action: "", ...partial } as ExperimentLogBridgeRequest;
+function req(partial: Partial<ExperimentToolRequest>): ExperimentToolRequest {
+  return { tool: "provenance-query", action: "", ...partial } as ExperimentToolRequest;
 }
 
 describe("dispatchProvenanceQuery (experiment -> agent loop)", () => {

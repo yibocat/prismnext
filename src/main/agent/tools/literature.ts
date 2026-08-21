@@ -324,7 +324,8 @@ export const literatureStageTool: NativeToolDefinition = {
       ? (rawOrigin as (typeof allowed)[number])
       : "agent";
 
-    const { stageLiteratureCitation } = await import("../../services/literature-bridge");
+    const { stageLiteratureCitation } = await import("../../services/literature-citation-staging");
+    // tabId is the product conversationId on the live send path.
     return stageLiteratureCitation(ctx.projectRoot, ctx.tabId || ctx.runtimeSessionId, {
       doi: doi || undefined,
       arxivId: arxivId || undefined,

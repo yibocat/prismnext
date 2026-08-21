@@ -123,6 +123,11 @@ export function homeSkillsRel(skillId?: string): string {
   return skillId ? posixJoin(HOME_SKILLS_DIRNAME, skillId) : HOME_SKILLS_DIRNAME;
 }
 
+/** Session citation scratch next to the product session json (not Application Support). */
+export function sessionCitationsRel(conversationId: string): string {
+  return posixJoin(HOME_SESSIONS_DIRNAME, conversationId, "citations");
+}
+
 export function worktreeSlotRel(projectId: string, worktreeId: string): string {
   return posixJoin(PROJECTS_DIRNAME, projectId, WORKTREES_DIRNAME, worktreeId);
 }

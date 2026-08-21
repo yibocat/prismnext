@@ -1,8 +1,5 @@
 /** Maps chat sessionId ↔ renderer tabId + project root (shared across main services). */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { getTerminalBridgeRoot } from "./prism-bridge-paths";
 import { createLogger } from "./logger";
 
 const log = createLogger("chat-session-registry", "agent");
@@ -51,22 +48,42 @@ export function isSubAgentSession(sessionId: string): boolean {
   return lastDash > 3 && /^\d{10,}$/.test(id.slice(lastDash + 1));
 }
 
-function getBridgeRoot(): string {
-  return getTerminalBridgeRoot();
+/** Narrow session-store lookup so citation scratch can key off conversationId. */
+export interface SessionScratchLookup {
+  getSession(id: string): { conversationId?: string; runtimeSessionId: string } | null;
+  getByConversationId(id: string): { conversationId?: string; runtimeSessionId: string } | null;
 }
 
-function persistSessionMapping(sessionId: string, tabId: string, projectRoot?: string): void {
+let scratchLookup: SessionScratchLookup | null = null;
+
+export function setSessionScratchLookup(lookup: SessionScratchLookup | null): void {
+  scratchLookup = lookup;
+}
+
+function scratchKeyFromRecord(record: {
+  conversationId?: string;
+  runtimeSessionId: string;
+}): string {
+  const key = (record.conversationId || record.runtimeSessionId).trim();
+  return key || record.runtimeSessionId;
+}
+
+/**
+ * Directory key for `~/.prismnext/sessions/<key>/citations/`.
+ * Peels `sub-*` to the parent runtime id, then maps to conversationId when a store is injected.
+ */
+export function resolveSessionScratchKey(sessionId: string): string {
+  const id = resolveCitationStagingSessionId(sessionId);
+  if (!id) return id;
   try {
-    const dir = join(getBridgeRoot(), "sessions");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      join(dir, `${sessionId}.json`),
-      JSON.stringify({ sessionId, tabId, projectRoot: projectRoot ?? null }),
-      "utf-8",
-    );
+    const byRuntime = scratchLookup?.getSession(id);
+    if (byRuntime) return scratchKeyFromRecord(byRuntime);
+    const byConv = scratchLookup?.getByConversationId(id);
+    if (byConv) return scratchKeyFromRecord(byConv);
   } catch {
-    // ignore
+    // Missing / corrupt store — keep the peeled id.
   }
+  return id;
 }
 
 export function registerChatSession(sessionId: string, tabId: string, projectRoot?: string): void {
@@ -80,7 +97,6 @@ export function registerChatSession(sessionId: string, tabId: string, projectRoo
   if (projectRoot?.trim()) {
     sessionToProjectRoot.set(sessionId, projectRoot.trim());
   }
-  persistSessionMapping(sessionId, tabId, projectRoot);
 }
 
 export function resolveChatTabId(sessionId: string): string | undefined {
@@ -110,8 +126,6 @@ export function setSessionProjectRoot(sessionId: string, projectRoot: string): v
   const root = projectRoot.trim();
   if (!root) return;
   sessionToProjectRoot.set(sessionId, root);
-  const tabId = sessionToTab.get(sessionId);
-  if (tabId) persistSessionMapping(sessionId, tabId, root);
 }
 
 export function unregisterChatSession(sessionId: string): void {
@@ -295,4 +309,5 @@ export function _resetChatSessionRegistryForTests(): void {
   sessionTaskAllowlistSatisfied.clear();
   sessionTaskAllowlistFollowUpUsed.clear();
   sessionDeferredTaskAllowlistFollowUp.clear();
+  scratchLookup = null;
 }

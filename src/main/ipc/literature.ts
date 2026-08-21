@@ -71,7 +71,7 @@ import { StagedCitationAddCancelledError } from "../lib/staged-citation-add-canc
 import { STAGED_CITATION_CREATE_CANCELLED } from "../../shared/citation-staging";
 import { exportZoteroBibliography } from "../services/zotero-sync";
 import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/citation-staging";
-import { stageLiteratureCitation } from "../services/literature-bridge";
+import { stageLiteratureCitation } from "../services/literature-citation-staging";
 import {
   getPaperCitationNetwork,
   getPaperCitationNetworkPage,

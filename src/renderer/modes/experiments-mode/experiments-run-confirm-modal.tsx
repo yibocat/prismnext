@@ -8,7 +8,7 @@
  *   tool-call lifecycle (triggered only from `requestPermission`, keyed
  *   by `{tabId, toolCallId, permissionId}`, executed via
  *   `answerPermission`). It is NOT reusable from a pure UI path —
- *   `registerBashJobIntent` is a file-bridge marker, not a UX entry.
+ *   `registerBashJobIntent` is a leftover IPC hook, not a UX entry.
  *
  *   So we build our own modal. The same permission rules are consulted
  *   via the renderer-side `shouldShowPermissionGate` helper (the

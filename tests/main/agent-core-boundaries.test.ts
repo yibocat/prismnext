@@ -137,7 +137,14 @@ describe("Pi-first agent core boundaries", () => {
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
 
     expect(main).not.toContain("startTerminalBridge");
-    expect(main).toContain("stopTerminalBridge");
+    expect(main).not.toContain("stopTerminalBridge");
+    expect(main).not.toContain("stopLiteratureBridge");
+    expect(main).not.toContain("stopLatexBridge");
+    expect(main).not.toContain("stopResearchBriefBridge");
+    expect(main).not.toContain("stopExperimentLogBridge");
+    expect(main).not.toContain("stopInteractionBridge");
+    expect(main).not.toContain("stopImageDescribeBridge");
+    expect(main).not.toContain("setTerminalBridgeWindow");
     expect(main).not.toContain("startLiteratureBridge");
     expect(main).not.toContain("startLatexBridge");
     expect(main).not.toContain("startResearchBriefBridge");
@@ -336,7 +343,7 @@ describe("Pi-first agent core boundaries", () => {
     const resolver = sourceOf("src/main/teams/resolver.ts");
     const experiment = sourceOf("src/main/ipc/experiment.ts");
     const registry = sourceOf("src/main/services/chat-session-registry.ts");
-    const literature = sourceOf("src/main/services/literature-bridge.ts");
+    const literature = sourceOf("src/main/services/literature-citation-staging.ts");
     const citations = sourceOf("src/main/services/session-citations-context.ts");
     const libraryTask = sourceOf("src/main/services/library-task-context.ts");
 

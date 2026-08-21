@@ -63,8 +63,8 @@ export const NO_EXPERIMENT_FOLDER_HINT =
 
 /**
  * Resolve the experiment storage context for a project, or surface a
- * `no_experiment_folder` error. Shared by the file-bridge and the UI IPC
- * (Sprint 0.7 D5) so the error shape stays identical.
+ * `no_experiment_folder` error. Shared by the agent dispatch and the UI IPC
+ * so the error shape stays identical.
  */
 export type ExperimentCtxError = {
   ok: false;

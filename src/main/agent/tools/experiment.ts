@@ -18,8 +18,8 @@ import {
   dispatchExperimentLog,
   dispatchProvenanceQuery,
   dispatchResultsSnapshot,
-  type ExperimentLogBridgeRequest,
-} from "../../services/experiment-log-bridge";
+  type ExperimentToolRequest,
+} from "../../services/experiment-tool-dispatch";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -58,7 +58,7 @@ export const experimentLogTool: NativeToolDefinition = {
       return { ok: false, error: ctxResult.error, hint: ctxResult.hint };
     }
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "experiment-log",
       action,
       sessionId: ctx.runtimeSessionId,
@@ -175,7 +175,7 @@ export const resultsSnapshotTool: NativeToolDefinition = {
       return { ok: false, error: ctxResult.error, hint: ctxResult.hint };
     }
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "results-snapshot",
       action: "snapshot",
       id,
@@ -212,7 +212,7 @@ export const provenanceQueryTool: NativeToolDefinition = {
     const action = str(args.action);
     if (!action) return { ok: false, error: "missing_action" };
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "provenance-query",
       action,
       sessionId: ctx.runtimeSessionId,

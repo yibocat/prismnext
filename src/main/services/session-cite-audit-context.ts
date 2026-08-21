@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
+import { resolveSessionScratchKey } from "./chat-session-registry";
+import { sessionCitationsDir } from "../workbench/home";
 
 export const CITE_AUDIT_APPENDIX_MARKER = "## Session citation audit (this chat)";
 
@@ -20,7 +21,7 @@ export interface SessionCiteAuditSnapshot {
 }
 
 function auditPath(sessionId: string): string {
-  return join(getLiteratureBridgeRoot(), sessionId.trim(), "cite-audit.json");
+  return join(sessionCitationsDir(resolveSessionScratchKey(sessionId)), "cite-audit.json");
 }
 
 function readStringArray(value: unknown): string[] | undefined {
@@ -46,7 +47,7 @@ function readSnapshot(sessionId: string): SessionCiteAuditSnapshot | null {
 function writeSnapshot(sessionId: string, snapshot: SessionCiteAuditSnapshot): void {
   const id = sessionId?.trim();
   if (!id) return;
-  const dir = join(getLiteratureBridgeRoot(), id);
+  const dir = sessionCitationsDir(resolveSessionScratchKey(id));
   mkdirSync(dir, { recursive: true });
   writeFileSync(auditPath(id), JSON.stringify(snapshot, null, 2), "utf-8");
 }

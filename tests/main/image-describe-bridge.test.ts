@@ -28,13 +28,10 @@ vi.mock("../../src/main/services/logger", () => ({
   createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
 }));
 
-import {
-  MAX_IMAGE_BYTES,
-  processImageDescribeBridgeOnceForTests,
-} from "../../src/main/services/image-describe-bridge";
-import { getImageDescribeBridgeRoot } from "../../src/main/services/prism-bridge-paths";
+import { imageDescribeTool } from "../../src/main/agent/tools/system";
+import type { ToolExecuteContext } from "../../src/main/agent/tool-host";
 
-const bridgeRoot = path.join(os.tmpdir(), "prism-image-describe-bridge-test");
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const PNG_B64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
@@ -53,19 +50,15 @@ function writePng(projectRoot: string, rel = "results/loss.png"): string {
   return rel;
 }
 
-function writeRequest(sessionDir: string, requestId: string, payload: Record<string, unknown>): void {
-  fs.mkdirSync(sessionDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(sessionDir, `${requestId}.request.json`),
-    JSON.stringify(payload),
-    "utf-8",
-  );
-}
-
-function readResult(sessionDir: string, requestId: string): Record<string, unknown> {
-  return JSON.parse(
-    fs.readFileSync(path.join(sessionDir, `${requestId}.result.json`), "utf-8"),
-  ) as Record<string, unknown>;
+function toolCtx(projectRoot: string): ToolExecuteContext {
+  return {
+    runtimeSessionId: "s1",
+    tabId: "s1",
+    turnId: "turn-1",
+    toolCallId: "tc-1",
+    projectRoot,
+    permissionMode: "ask",
+  };
 }
 
 function stubFetchOk(text = "A tiny red dot on white.") {
@@ -80,8 +73,6 @@ function stubFetchOk(text = "A tiny red dot on white.") {
 }
 
 beforeEach(() => {
-  process.env.PRISM_IMAGE_DESCRIBE_BRIDGE_ROOT = bridgeRoot;
-  fs.mkdirSync(bridgeRoot, { recursive: true });
   settingsState.current = {};
 });
 
@@ -90,29 +81,19 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
-  if (fs.existsSync(bridgeRoot)) {
-    fs.rmSync(bridgeRoot, { recursive: true, force: true });
-  }
 });
 
-describe("image-describe-bridge", () => {
+describe("imageDescribeTool", () => {
   it("rejects paths that escape the project root (relative traversal)", async () => {
     settingsState.current = {
       aiVisionFallbackModel: "openai/gpt-4o",
       aiApiKeys: { openai: "sk-test" },
     };
     const projectRoot = makeProject();
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-traverse");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-traverse",
-      projectRoot,
-      imagePath: "../outside.png",
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: "../outside.png" },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("escapes the project root");
   });
@@ -126,17 +107,10 @@ describe("image-describe-bridge", () => {
     const outsideDir = makeProject();
     const outsideAbs = path.join(outsideDir, "secret.png");
     fs.writeFileSync(outsideAbs, Buffer.from(PNG_B64, "base64"));
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-outside");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-outside",
-      projectRoot,
-      imagePath: outsideAbs,
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: outsideAbs },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("escapes the project root");
   });
@@ -144,17 +118,10 @@ describe("image-describe-bridge", () => {
   it("returns an actionable error when no multimodal helper is configured", async () => {
     const projectRoot = makeProject();
     const rel = writePng(projectRoot);
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-no-helper");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-no-helper",
-      projectRoot,
-      imagePath: rel,
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: rel },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("Multimodal helper");
     expect(String(result.error)).toContain("Settings");
@@ -167,17 +134,10 @@ describe("image-describe-bridge", () => {
     };
     const projectRoot = makeProject();
     fs.writeFileSync(path.join(projectRoot, "notes.txt"), "hello", "utf-8");
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-ext");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-ext",
-      projectRoot,
-      imagePath: "notes.txt",
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: "notes.txt" },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("Unsupported image type");
   });
@@ -193,17 +153,10 @@ describe("image-describe-bridge", () => {
       path.join(projectRoot, "results/big.png"),
       Buffer.alloc(MAX_IMAGE_BYTES + 1, 1),
     );
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-big");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-big",
-      projectRoot,
-      imagePath: "results/big.png",
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: "results/big.png" },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain("too large");
   });
@@ -216,23 +169,14 @@ describe("image-describe-bridge", () => {
     const fetchMock = stubFetchOk();
     const projectRoot = makeProject();
     const rel = writePng(projectRoot);
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-ok");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-ok",
-      projectRoot,
-      imagePath: rel,
-      question: "which curve converges fastest?",
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: rel, question: "which curve converges fastest?" },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect(result.description).toBe("A tiny red dot on white.");
-    expect(result.path).toBe("results/loss.png");
-    expect(result.model).toBe("openai/gpt-4o");
-    expect(result.cached).toBe(false);
+    expect(result.imagePath).toBe("results/loss.png");
+    expect(result.helperModel).toBe("openai/gpt-4o");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
@@ -257,17 +201,10 @@ describe("image-describe-bridge", () => {
     const fetchMock = stubFetchOk("custom description");
     const projectRoot = makeProject();
     const rel = writePng(projectRoot, "fig.png");
-    const sessionDir = path.join(getImageDescribeBridgeRoot(), "s-custom");
-    writeRequest(sessionDir, "req-1", {
-      action: "describe",
-      sessionId: "s-custom",
-      projectRoot,
-      imagePath: rel,
-    });
-
-    await processImageDescribeBridgeOnceForTests();
-
-    const result = readResult(sessionDir, "req-1");
+    const result = await imageDescribeTool.execute(
+      { imagePath: rel },
+      toolCtx(projectRoot),
+    ) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     expect(result.description).toBe("custom description");
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];

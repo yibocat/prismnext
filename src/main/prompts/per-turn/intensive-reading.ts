@@ -2,7 +2,7 @@ import { TOOL_NAMES } from "../../../shared/tool-names";
 
 /**
  * Per-turn intensive reading block (L4) — bibkey list + read-pdf pointer.
- * Gate is HARD in literature-bridge; do not reprint manuals here.
+ * Intensive list lives on the session; do not reprint manuals here.
  */
 
 export interface IntensivePaper {

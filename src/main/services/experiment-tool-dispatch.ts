@@ -1,34 +1,11 @@
 /**
- * Polls the experiment-log file bridge for OpenCode tool requests.
+ * In-process dispatch for experiment-log / results-snapshot / provenance-query.
+ * Pi native tools call these functions directly. experiment-run is kicked off
+ * here only for tests / leftover executeExperimentAction — the product tool
+ * calls kickoffExperimentRun itself.
  *
- * Shared bridge root for BOTH `experiment-log` and `experiment-run` tools —
- * the `tool` field in the request discriminates which tool wrote it, and the
- * `action` field routes the dispatch. This mirrors how research-brief-bridge
- * handles read/update on one root.
- *
- * experiment-log actions (list/create/read/append_run/detect_env) are SYNC
- * and fast: the result is written by processSessionDir, exactly like
- * research-brief-bridge.
- *
- * experiment-run is ASYNC (PTY): the dispatcher kicks off the executor
- * (fire-and-forget) which writes the `.result.json` itself when the run
- * completes. processSessionDir just unlinks the request and moves on, so a
- * long run cannot block other bridge requests.
- *
- * Errors are data ({ ok: false, error, hint? }), never thrown across the bridge.
+ * Errors are data ({ ok: false, error, hint? }), never thrown.
  */
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { join, basename } from "node:path";
-import { createLogger } from "./logger";
-import { getExperimentLogBridgeRoot } from "./prism-bridge-paths";
 import { getSessionProjectRoot } from "./chat-session-registry";
 import {
   appendRun,
@@ -56,10 +33,8 @@ import {
 } from "./provenance-service";
 import { broadcastExperimentChanged } from "./experiment-ui-events";
 
-const log = createLogger("experiment-log-bridge", "agent");
-
-export interface ExperimentLogBridgeRequest {
-  /** Which tool wrote this request. provenance-query / results-snapshot share the bridge. */
+export interface ExperimentToolRequest {
+  /** Which tool issued this request. provenance-query / results-snapshot share the type. */
   tool: "experiment-log" | "experiment-run" | "provenance-query" | "results-snapshot";
   action: string;
   sessionId?: string;
@@ -108,19 +83,15 @@ export interface ExperimentLogBridgeRequest {
   limit?: number;
 }
 
-function bridgeRoot(): string {
-  return getExperimentLogBridgeRoot();
-}
-
 /**
  * Resolve the checkout that owns the experiment registry / islands.
  *
- * Prefer the tool-supplied OpenCode `directory` (`req.projectRoot`) so Agent
- * runs land in the active worktree when chat cwd is a worktree. The chat
- * session registry often stores the canonical **main** project path for
- * literature / MCP — that must not override experiment cwd (Bug #9).
+ * Prefer the tool-supplied `projectRoot` so Agent runs land in the active
+ * worktree when chat cwd is a worktree. The chat session registry often
+ * stores the canonical **main** project path for literature / MCP — that
+ * must not override experiment cwd (Bug #9).
  */
-function resolveProjectRoot(req: ExperimentLogBridgeRequest): string {
+function resolveProjectRoot(req: ExperimentToolRequest): string {
   const fromTool = req.projectRoot?.trim().replace(/\\/g, "/") || "";
   if (fromTool) return fromTool;
   const fromSession = req.sessionId ? getSessionProjectRoot(req.sessionId) : undefined;
@@ -135,19 +106,18 @@ function notConfigured(): Record<string, unknown> {
   };
 }
 
-/** In-memory entry for ToolHost — same work as the disk-bridge poller, no request.json. */
+/** In-process entry for tests / leftover callers — no request.json. */
 export function executeExperimentAction(
-  req: ExperimentLogBridgeRequest,
+  req: ExperimentToolRequest,
 ): Record<string, unknown> | null {
-  return dispatch(req, "");
+  return dispatch(req);
 }
 
 /**
- * Dispatch a SYNC experiment-log action. Returns the result to write to the
- * result file, OR `null` for experiment-run (the executor writes the result
- * file itself, fire-and-forget).
+ * Dispatch a sync experiment-log action. Returns the result, or `null` for
+ * experiment-run (the executor finishes asynchronously).
  */
-function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<string, unknown> | null {
+function dispatch(req: ExperimentToolRequest): Record<string, unknown> | null {
   const projectRoot = resolveProjectRoot(req);
   if (!projectRoot) {
     return {
@@ -213,7 +183,6 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
       artifacts: req.artifacts,
       notes: req.notes,
       kind,
-      resPath,
       chatSessionId: req.sessionId ?? null,
       interpreter,
       pythonPath: pythonPath || undefined,
@@ -226,7 +195,7 @@ function dispatch(req: ExperimentLogBridgeRequest, resPath: string): Record<stri
 }
 
 export function dispatchExperimentLog(
-  req: ExperimentLogBridgeRequest,
+  req: ExperimentToolRequest,
   ctx: ExperimentStorageContext,
 ): Record<string, unknown> {
   switch (req.action) {
@@ -356,7 +325,7 @@ export function dispatchExperimentLog(
 
 /** Dispatch results-snapshot (read-only lab scan). Exported for tests. */
 export function dispatchResultsSnapshot(
-  req: ExperimentLogBridgeRequest,
+  req: ExperimentToolRequest,
   ctx: ExperimentStorageContext,
 ): Record<string, unknown> {
   if (req.action && req.action !== "snapshot") {
@@ -388,7 +357,7 @@ export function dispatchResultsSnapshot(
  * (agent) should treat it as "no provenance recorded".
  */
 export function dispatchProvenanceQuery(
-  req: ExperimentLogBridgeRequest,
+  req: ExperimentToolRequest,
   projectRoot: string,
 ): Record<string, unknown> {
   switch (req.action) {
@@ -649,130 +618,4 @@ function validateAppendRunInput(
       logPath,
     },
   };
-}
-
-const processingRequests = new Set<string>();
-let pollInFlight = false;
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-async function processSessionDir(sessionDir: string): Promise<void> {
-  if (!existsSync(sessionDir)) return;
-
-  let entries: string[];
-  try {
-    entries = readdirSync(sessionDir);
-  } catch {
-    return;
-  }
-
-  for (const name of entries) {
-    const isRequest = name.endsWith(".request.json");
-    const isOrphanClaim = name.endsWith(".claiming");
-    if (!isRequest && !isOrphanClaim) continue;
-
-    const requestId = isRequest
-      ? name.slice(0, -".request.json".length)
-      : name.slice(0, -".claiming".length);
-    const resPath = join(sessionDir, `${requestId}.result.json`);
-    const claimPath = join(sessionDir, `${requestId}.claiming`);
-    if (existsSync(resPath)) continue;
-    if (processingRequests.has(requestId)) continue;
-
-    if (isRequest) {
-      // Atomic claim (Bug #30): rename request → claiming so a second prismnext
-      // instance / poll cannot dispatch the same request.
-      try {
-        renameSync(join(sessionDir, name), claimPath);
-      } catch {
-        continue;
-      }
-    }
-    // Orphan `.claiming` (crash mid-flight): set was cleared; resume from claim.
-
-    processingRequests.add(requestId);
-    try {
-      const raw = readFileSync(claimPath, "utf-8");
-      const req = JSON.parse(raw) as ExperimentLogBridgeRequest;
-      const result = dispatch(req, resPath);
-      if (result !== null) {
-        // Sync action: write the result now, then drop the claim.
-        writeFileSync(resPath, JSON.stringify(result), "utf-8");
-        try { unlinkSync(claimPath); } catch {}
-        processingRequests.delete(requestId);
-      }
-      // Async `experiment-run` (`result === null`): keep `.claiming` on disk AND
-      // keep `requestId` in `processingRequests` until `resPath` appears.
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.warn("experiment-log bridge request failed", { session: basename(sessionDir), error: message });
-      writeFileSync(resPath, JSON.stringify({ error: message, ok: false }), "utf-8");
-      try { unlinkSync(claimPath); } catch {}
-      processingRequests.delete(requestId);
-    }
-  }
-
-  // Post-pass: release slots whose results exist (claiming or leftover request).
-  let liveNames: string[];
-  try {
-    liveNames = readdirSync(sessionDir);
-  } catch {
-    return;
-  }
-  for (const name of liveNames) {
-    let requestId: string | null = null;
-    let holdPath: string | null = null;
-    if (name.endsWith(".claiming")) {
-      requestId = name.slice(0, -".claiming".length);
-      holdPath = join(sessionDir, name);
-    } else if (name.endsWith(".request.json")) {
-      requestId = name.slice(0, -".request.json".length);
-      holdPath = join(sessionDir, name);
-    }
-    if (!requestId || !holdPath) continue;
-    const resPath = join(sessionDir, `${requestId}.result.json`);
-    if (!existsSync(resPath)) continue;
-    processingRequests.delete(requestId);
-    try { unlinkSync(holdPath); } catch {}
-  }
-}
-
-async function pollBridge(): Promise<void> {
-  if (pollInFlight) return;
-  pollInFlight = true;
-  try {
-    mkdirSync(bridgeRoot(), { recursive: true });
-    let sessions: string[];
-    try {
-      sessions = readdirSync(bridgeRoot());
-    } catch {
-      return;
-    }
-    for (const s of sessions) {
-      await processSessionDir(join(bridgeRoot(), s));
-    }
-  } finally {
-    pollInFlight = false;
-  }
-}
-
-export function startExperimentLogBridge(): void {
-  if (pollTimer) return;
-  mkdirSync(bridgeRoot(), { recursive: true });
-  pollTimer = setInterval(() => {
-    void pollBridge();
-  }, 50);
-  log.info("Experiment log bridge started");
-}
-
-export function stopExperimentLogBridge(): void {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-  processingRequests.clear();
-}
-
-/** @internal */
-export async function processExperimentLogBridgeOnceForTests(): Promise<void> {
-  await pollBridge();
 }

@@ -8,20 +8,19 @@ import {
   recordCiteAuditHealth,
   readSessionCiteAuditSnapshotForTests,
 } from "../../src/main/services/session-cite-audit-context";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("session-cite-audit-context", () => {
-  let bridgeRoot: string;
-  const prevBridge = process.env.PRISM_LITERATURE_BRIDGE_ROOT;
+  let home: string;
 
   beforeEach(() => {
-    bridgeRoot = mkdtempSync(join(tmpdir(), "prism-cite-audit-"));
-    process.env.PRISM_LITERATURE_BRIDGE_ROOT = bridgeRoot;
+    home = mkdtempSync(join(tmpdir(), "prism-cite-audit-home-"));
+    setWorkbenchUserHomeOverride(home);
   });
 
   afterEach(() => {
-    if (prevBridge === undefined) delete process.env.PRISM_LITERATURE_BRIDGE_ROOT;
-    else process.env.PRISM_LITERATURE_BRIDGE_ROOT = prevBridge;
-    rmSync(bridgeRoot, { recursive: true, force: true });
+    setWorkbenchUserHomeOverride(null);
+    rmSync(home, { recursive: true, force: true });
   });
 
   it("persists a unified citation-health snapshot per session", () => {

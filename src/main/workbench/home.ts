@@ -18,6 +18,7 @@ import {
   WORKBENCH_JSON_FILENAME,
   normalizeWorkbenchPath,
   parseHomeWorktreeCheckoutPath,
+  sessionCitationsRel,
   worktreeCheckoutRel,
   worktreeSlotRel,
 } from "../../shared/workbench-paths";
@@ -43,6 +44,11 @@ export function resolveWorkbenchHome(opts?: WorkbenchHomeOpts): string {
 
 export function homeSkillsDir(opts?: WorkbenchHomeOpts): string {
   return join(resolveWorkbenchHome(opts), HOME_SKILLS_DIRNAME);
+}
+
+/** `~/.prismnext/sessions/<conversationId>/citations/` */
+export function sessionCitationsDir(conversationId: string, opts?: WorkbenchHomeOpts): string {
+  return join(resolveWorkbenchHome(opts), sessionCitationsRel(conversationId));
 }
 
 export function homeSkillDir(skillId: string, opts?: WorkbenchHomeOpts): string {

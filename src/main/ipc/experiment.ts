@@ -1,9 +1,9 @@
 /**
  * experiment:* IPC — UI track for the Experiments RightArea mode (Sprint 0.7).
  *
- * Mirrors the file-bridge flow (single source of truth: `experiment-log-service` +
- * `kickoffExperimentRun`). Validates the project has a Workspace Experiment folder
- * configured and consults the current permission mode before kicking off a run.
+ * Single source of truth: `experiment-log-service` + `kickoffExperimentRun`.
+ * Validates the project has a Workspace Experiment folder configured and
+ * consults the current permission mode before kicking off a run.
  */
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { existsSync } from "node:fs";

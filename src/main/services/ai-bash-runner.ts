@@ -1,14 +1,6 @@
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getTerminalBridgeRoot } from "./prism-bridge-paths";
-import { resolveChatTabId, getSessionProjectRoot } from "./chat-session-registry";
+import { resolveChatTabId } from "./chat-session-registry";
 import {
   getExecutionRegistry,
   initExecutionRegistry,
@@ -31,7 +23,7 @@ export interface RunAiBashJobArgs {
   toolCallId: string;
   command: string;
   cwd: string;
-  /** Optional project root hint (OpenCode session directory). */
+  /** Optional project root hint (session cwd). */
   projectRoot?: string;
 }
 
@@ -42,33 +34,10 @@ export interface RunAiBashJobResult {
   executionId: string;
 }
 
-function getBridgeRoot(): string {
-  return getTerminalBridgeRoot();
-}
-
 const inFlight = new Map<string, Promise<RunAiBashJobResult>>();
 
 /** @deprecated Job output is broadcast via execution:event; kept for caller compatibility. */
 export function setAiBashRunnerWindow(_win: unknown): void {}
-
-function writeBridgeResult(
-  resPath: string,
-  streamPath: string | undefined,
-  result: RunAiBashJobResult,
-): void {
-  try {
-    writeFileSync(resPath, JSON.stringify(result), "utf-8");
-  } catch {
-    // ignore
-  }
-  if (streamPath && result.output) {
-    try {
-      writeFileSync(streamPath, result.output, "utf-8");
-    } catch {
-      // ignore
-    }
-  }
-}
 
 function resultFromSummary(
   summary: TerminalExecutionSummary,
@@ -86,15 +55,11 @@ async function reuseExistingExecution(
   registry: ExecutionRegistry,
   existing: TerminalExecutionSummary,
   args: RunAiBashJobArgs,
-  resPath: string,
-  streamPath: string,
 ): Promise<RunAiBashJobResult> {
   const final = terminalExecutionIsFinal(existing.state)
     ? existing
     : await registry.waitForFinal(existing.executionId);
-  const result = resultFromSummary(final, args.cwd);
-  writeBridgeResult(resPath, streamPath, result);
-  return result;
+  return resultFromSummary(final, args.cwd);
 }
 
 function resolveChatTab(sessionId: string, chatTabId?: string): string {
@@ -115,29 +80,12 @@ function requireRegistry(): ExecutionRegistry {
   }
 }
 
-/** Register pending bash job before user approves — OpenCode polls bridge by sessionId. */
-export function registerBashJobIntent(args: {
+/** Leftover IPC hook — OpenCode used to poll a marker file. No-op on the Pi path. */
+export function registerBashJobIntent(_args: {
   sessionId: string;
   toolCallId: string;
   command: string;
-}): void {
-  const sessionDir = join(getBridgeRoot(), args.sessionId);
-  mkdirSync(sessionDir, { recursive: true });
-  try {
-    writeFileSync(
-      join(sessionDir, ".active-tool.json"),
-      JSON.stringify({
-        toolCallId: args.toolCallId,
-        command: args.command,
-        startedAt: Date.now(),
-        phase: "awaiting_approval",
-      }),
-      "utf-8",
-    );
-  } catch {
-    // ignore
-  }
-}
+}): void {}
 
 /** Run one AI bash job (PTY). Deduped per session + toolCallId. */
 export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult> {
@@ -146,34 +94,6 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
   if (existing) return existing;
 
   const chatTabId = resolveChatTab(args.sessionId, args.chatTabId);
-  const sessionDir = join(getBridgeRoot(), args.sessionId);
-  const streamPath = join(sessionDir, `${args.toolCallId}.stream`);
-  const resPath = join(sessionDir, `${args.toolCallId}.result.json`);
-
-  mkdirSync(sessionDir, { recursive: true });
-  try {
-    writeFileSync(
-      join(sessionDir, `${args.toolCallId}.meta.json`),
-      JSON.stringify({
-        toolCallId: args.toolCallId,
-        command: args.command,
-        cwd: args.cwd,
-        chatTabId,
-      }),
-      "utf-8",
-    );
-    writeFileSync(
-      join(sessionDir, ".active-tool.json"),
-      JSON.stringify({
-        toolCallId: args.toolCallId,
-        command: args.command,
-        startedAt: Date.now(),
-      }),
-      "utf-8",
-    );
-  } catch {
-    // ignore
-  }
 
   const failWithoutSpawn = async (output: string, reason: string): Promise<RunAiBashJobResult> => {
     const registry = requireRegistry();
@@ -196,7 +116,6 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
       cwd: args.cwd,
       executionId: created.executionId,
     };
-    writeBridgeResult(resPath, undefined, blocked);
     log.warn(reason, { chatTabId, command: args.command.slice(0, 120) });
     return blocked;
   };
@@ -227,7 +146,7 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
     const registry = requireRegistry();
     const existing = registry.findByToolCallId(args.toolCallId);
     if (existing) {
-      return reuseExistingExecution(registry, existing, args, resPath, streamPath);
+      return reuseExistingExecution(registry, existing, args);
     }
     const created = await registry.create(
       {
@@ -242,23 +161,13 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
       },
       { start: false },
     );
-    const unsubscribe = registry.subscribe((event) => {
-      if (event.executionId !== created.executionId || event.type !== "output" || !event.data) return;
-      try {
-        appendFileSync(streamPath, event.data, "utf-8");
-      } catch {
-        // ignore
-      }
-    });
     try {
       await registry.start(created.executionId);
       const final = await registry.waitForFinal(created.executionId);
       const result = resultFromSummary(final, args.cwd);
-      writeBridgeResult(resPath, undefined, result);
       log.info("AI bash job finished", { chatTabId, exitCode: result.exitCode });
       return result;
     } finally {
-      unsubscribe();
       inFlight.delete(key);
     }
   })();
@@ -267,42 +176,7 @@ export function runAiBashJob(args: RunAiBashJobArgs): Promise<RunAiBashJobResult
   return promise;
 }
 
-/** Poll-based bridge entry (custom bash.ts). */
-export async function runAiBashFromBridgeRequest(
-  sessionId: string,
-  sessionDirName: string,
-  requestId: string,
-  req: {
-    command: string;
-    cwd: string;
-    toolCallId?: string;
-    chatTabId?: string;
-    rendererTabId?: string;
-  },
-): Promise<RunAiBashJobResult> {
-  const toolCallId = req.toolCallId || requestId;
-  const sessionKey = sessionId || sessionDirName;
-  return runAiBashJob({
-    sessionId: sessionKey,
-    chatTabId: req.rendererTabId || req.chatTabId,
-    toolCallId,
-    command: req.command,
-    cwd: req.cwd || process.cwd(),
-    // Bridge requests carry no project root — resolve it from the session
-    // registry so the Python gate never falls into its no-root passthrough
-    // while the session is in fact inside a project.
-    projectRoot: getSessionProjectRoot(sessionKey),
-  });
-}
-
 /** @internal */
 export function _resetAiBashRunnerForTests(): void {
   inFlight.clear();
-}
-
-/** @internal */
-export function _readBridgeResultForTests(sessionId: string, toolCallId: string): RunAiBashJobResult | null {
-  const resPath = join(getBridgeRoot(), sessionId, `${toolCallId}.result.json`);
-  if (!existsSync(resPath)) return null;
-  return JSON.parse(readFileSync(resPath, "utf-8")) as RunAiBashJobResult;
 }

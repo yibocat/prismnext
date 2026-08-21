@@ -23,13 +23,6 @@ import { destroyAllAiPty } from "./services/ai-pty";
 import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
 import { startExecutionEventBroadcast } from "./ipc/execution";
 import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
-import { stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
-import { stopLiteratureBridge } from "./services/literature-bridge";
-import { stopLatexBridge } from "./services/latex-bridge";
-import { stopResearchBriefBridge } from "./services/research-brief-bridge";
-import { stopExperimentLogBridge } from "./services/experiment-log-bridge";
-import { stopInteractionBridge } from "./services/interaction-bridge";
-import { stopImageDescribeBridge } from "./services/image-describe-bridge";
 import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
@@ -199,14 +192,6 @@ function disposeGlobalsWhenNoWindows(): void {
   disposeChat();
   destroyAllAiPty();
   destroyAllTerminalSessions();
-  stopTerminalBridge();
-  stopLiteratureBridge();
-  stopLatexBridge();
-  stopResearchBriefBridge();
-  stopExperimentLogBridge();
-  stopInteractionBridge();
-  stopImageDescribeBridge();
-  setTerminalBridgeWindow(null);
   disposeLogger();
   mainWindow = null;
   setMainWindow(null);
@@ -267,7 +252,6 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow(windowConfig);
   mainWindow = win;
   setMainWindow(win);
-  setTerminalBridgeWindow(win);
   attachWindowStateEmitter(win);
   attachWindowBoundsPersistence(win);
 
@@ -275,7 +259,6 @@ function createWindow(): BrowserWindow {
   win.on("focus", () => {
     mainWindow = win;
     setMainWindow(win);
-    setTerminalBridgeWindow(win);
     exec("git --version", { timeout: 15000 }, () => {
       // focus warmup complete
     });
@@ -305,7 +288,6 @@ function createWindow(): BrowserWindow {
     if (mainWindow === win) {
       mainWindow = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
       setMainWindow(mainWindow);
-      setTerminalBridgeWindow(mainWindow);
     }
     disposeGlobalsWhenNoWindows();
   });
@@ -368,9 +350,7 @@ app.whenReady().then(async () => {
 
   initExecutionRegistry(join(workbenchHome, HOME_JOBS_DIRNAME));
   startExecutionEventBroadcast();
-  // File-bridge pollers are not started, including the leftover terminal
-  // request.json watcher (Pi bash goes through execution-registry). stop*()
-  // on quit stays a no-op if never started.
+  // Pi bash / experiment-run go through execution-registry (Job Monitor).
 
   try {
     const { initAppUpdater } = await import("./services/update-checker");

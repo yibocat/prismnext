@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
-import { isSubAgentSession, resolveCitationStagingSessionId } from "./chat-session-registry";
+import { isSubAgentSession, resolveSessionScratchKey } from "./chat-session-registry";
+import { sessionCitationsDir } from "../workbench/home";
 
 export interface LibraryTaskHitRecord {
   bibkey: string;
@@ -12,8 +12,8 @@ export interface LibraryTaskHitRecord {
 
 export const LIBRARY_TASK_APPENDIX_MARKER = "## Library papers (this Task)";
 
-function hitsPath(parentSessionId: string): string {
-  return join(getLiteratureBridgeRoot(), parentSessionId, "library-task-hits.json");
+function hitsPath(scratchKey: string): string {
+  return join(sessionCitationsDir(scratchKey), "library-task-hits.json");
 }
 
 function oneLineSummary(text: string | null | undefined, max = 160): string {
@@ -25,9 +25,9 @@ function oneLineSummary(text: string | null | undefined, max = 160): string {
 export function readLibraryTaskHitRecords(sessionId: string): LibraryTaskHitRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const parentId = resolveCitationStagingSessionId(id);
+  const scratchKey = resolveSessionScratchKey(id);
   try {
-    const p = hitsPath(parentId);
+    const p = hitsPath(scratchKey);
     if (!existsSync(p)) return [];
     const raw = JSON.parse(readFileSync(p, "utf-8")) as LibraryTaskHitRecord[];
     if (!Array.isArray(raw)) return [];
@@ -62,10 +62,11 @@ export function mergeLibraryTaskHits(
     });
   }
 
-  const dir = join(getLiteratureBridgeRoot(), parent);
+  const scratchKey = resolveSessionScratchKey(parent);
+  const dir = sessionCitationsDir(scratchKey);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
-    hitsPath(parent),
+    hitsPath(scratchKey),
     JSON.stringify([...byKey.values()].sort((a, b) => a.bibkey.localeCompare(b.bibkey))),
     "utf-8",
   );
@@ -78,8 +79,7 @@ export function recordLibraryTaskHitsFromToolSession(
 ): void {
   if (!toolSessionId?.trim() || hits.length === 0) return;
   if (!isSubAgentSession(toolSessionId)) return;
-  const parentId = resolveCitationStagingSessionId(toolSessionId);
-  mergeLibraryTaskHits(parentId, hits);
+  mergeLibraryTaskHits(toolSessionId, hits);
 }
 
 export function hitsFromLiteratureSearchResult(

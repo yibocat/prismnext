@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getLiteratureBridgeRoot } from "./prism-bridge-paths";
-import { resolveCitationStagingSessionId } from "./chat-session-registry";
+import { resolveSessionScratchKey } from "./chat-session-registry";
+import { sessionCitationsDir } from "../workbench/home";
 import { normalizeLibraryCiteMarkers } from "../../shared/normalize-library-cite-markers";
 import {
   buildLibraryTaskHitsAppendix,
@@ -23,17 +23,17 @@ export interface SessionCitationRecord {
 
 const APPENDIX_MARKER = "## Session citations (this chat)";
 
-function stagingPath(stagingSessionId: string): string {
-  return join(getLiteratureBridgeRoot(), stagingSessionId, "staging.json");
+function stagingPath(scratchKey: string): string {
+  return join(sessionCitationsDir(scratchKey), "staging.json");
 }
 
 /** Read staged citation records for a chat session (parent session for Task sub-sessions). */
 export function readSessionCitationRecords(sessionId: string): SessionCitationRecord[] {
   const id = sessionId?.trim();
   if (!id) return [];
-  const stagingSessionId = resolveCitationStagingSessionId(id);
+  const scratchKey = resolveSessionScratchKey(id);
   try {
-    const p = stagingPath(stagingSessionId);
+    const p = stagingPath(scratchKey);
     if (!existsSync(p)) return [];
     const raw = JSON.parse(readFileSync(p, "utf-8")) as SessionCitationRecord[];
     if (!Array.isArray(raw)) return [];
