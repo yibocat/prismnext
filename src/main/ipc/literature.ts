@@ -35,8 +35,12 @@ import {
   replacePdfFromFile,
   attachLocalPdfToPaper,
   mapPaperForRenderer,
+  resolveLibraryDisplayAbs,
   type PaperRow,
 } from "../services/literature-service";
+import { readWorkbenchJson } from "../workbench/identity";
+import { resolveWorkbenchHome } from "../workbench/home";
+import { libraryRel } from "../../shared/workbench-paths";
 import {
   getCitationHealth,
   importProjectBibKeysIntoLibrary,
@@ -106,6 +110,13 @@ export function registerLiteratureHandlers(): void {
   ipcMain.handle("literature:list", async (_event, args: { projectRoot: string }) => {
     return listPapers(args.projectRoot).map(mapPaperForRenderer);
   });
+
+  ipcMain.handle(
+    "literature:resolveAbs",
+    async (_event, args: { projectRoot: string; rel: string }) => {
+      return resolveLibraryDisplayAbs(args.projectRoot, args.rel);
+    },
+  );
 
   ipcMain.handle("literature:getPdfCacheStatus", async (_event, args: { projectRoot: string }) => {
     const papers = listPapers(args.projectRoot);
@@ -663,8 +674,10 @@ export function registerLiteratureHandlers(): void {
   ipcMain.handle("literature:pickProjectRoot", async () => {
     const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
     if (result.canceled || !result.filePaths[0]) return { path: null };
-    const libraryDb = path.join(result.filePaths[0], ".prismnext", "library", "library.db");
-    if (!fs.existsSync(libraryDb)) return { path: null, error: "No library.db in selected project" };
+    const json = readWorkbenchJson(result.filePaths[0]);
+    if (!json) return { path: null, error: "No workbench project in selected folder" };
+    const libraryDb = path.join(resolveWorkbenchHome(), libraryRel(json.id), "library.db");
+    if (!fs.existsSync(libraryDb)) return { path: null, error: "No library in the workbench project slot" };
     return { path: result.filePaths[0] };
   });
 

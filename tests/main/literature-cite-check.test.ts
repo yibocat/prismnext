@@ -3,9 +3,10 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { citeCheckLiterature, openLibraryDb } from "../../src/main/services/literature-service";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function mkTempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-cite-check-"));
+  return tempLiteratureProject();
 }
 
 describe("citeCheckLiterature", () => {
@@ -17,7 +18,6 @@ describe("citeCheckLiterature", () => {
 
   it("reports missing citekeys from project .tex files", () => {
     projectRoot = mkTempProject();
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
     openLibraryDb(projectRoot);
     const db = openLibraryDb(projectRoot);
     const now = Date.now();

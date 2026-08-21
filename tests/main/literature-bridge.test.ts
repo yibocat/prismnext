@@ -7,6 +7,7 @@ vi.mock("electron", () => ({
   app: {
     getPath: () => path.join(os.tmpdir(), "prism-lit-bridge-userdata"),
   },
+  BrowserWindow: { getAllWindows: () => [] },
 }));
 
 vi.mock("../../src/main/services/literature-enrich", () => ({
@@ -33,6 +34,7 @@ import { setSessionProjectRoot, setSessionIntensiveBibkeys, _resetChatSessionReg
 import { processLiteratureBridgeOnceForTests } from "../../src/main/services/literature-bridge";
 import { createPaper } from "../../src/main/services/literature-service";
 import { getLiteratureBridgeRoot } from "../../src/main/services/prism-bridge-paths";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 const bridgeRoot = path.join(os.tmpdir(), "prism-literature-bridge-test");
@@ -42,8 +44,7 @@ beforeEach(() => {
 });
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-bridge-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

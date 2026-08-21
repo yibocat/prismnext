@@ -12,6 +12,7 @@ import { readWorkbenchJson } from "../../src/main/workbench/identity";
 import { readWorkspaceDirs } from "../../src/main/services/workspace-config";
 import { DEFAULT_PROJECT_GITIGNORE } from "../../src/main/services/git";
 import { listPapers } from "../../src/main/services/literature-service";
+import { tempWorkbenchHome } from "./helpers/temp-literature-project";
 
 const temps: string[] = [];
 
@@ -101,6 +102,7 @@ describe("DEFAULT_PROJECT_GITIGNORE", () => {
 
 describe("literature list on a fresh workbench project", () => {
   it("does not mkdir .prismnext just to return an empty list", () => {
+    tempWorkbenchHome();
     const root = tmpProject();
     createWorkbenchProjectOnDisk({ rootPath: root });
     expect(listPapers(root)).toEqual([]);

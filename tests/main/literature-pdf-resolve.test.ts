@@ -12,6 +12,7 @@ import {
   derivePaperPdfSource,
   resolvePaperPdfBytes,
 } from "../../src/main/services/literature-pdf-resolve";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import {
   createPaper,
   upsertZoteroPaperRow,
@@ -27,9 +28,7 @@ import {
 const SAMPLE_PDF = Buffer.from("%PDF-1.4 cached");
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-pdf-resolve-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library", "attachments"), { recursive: true });
-  return dir;
+  return tempLiteratureProject();
 }
 
 describe("literature-pdf-resolve", () => {

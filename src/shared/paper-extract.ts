@@ -15,7 +15,7 @@ export interface PaperExtractState {
   startedAt?: number;
   finishedAt?: number;
   error?: string;
-  /** Relative to `.prismnext/library/extract/` */
+  /** Relative to the project library extract dir (`library/extract/`). */
   mdPath?: string;
   pages?: number;
   remoteJobId?: string;

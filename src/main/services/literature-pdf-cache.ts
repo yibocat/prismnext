@@ -76,7 +76,7 @@ export function getPdfCacheStatusForPapers(
 // New downloads go to attachments/ via literature-pdf-resolve.ts.
 
 export function getPdfCacheDir(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext", "library", "pdf-cache");
+  return path.join(getLibraryPaths(projectRoot).libraryDir, "pdf-cache");
 }
 
 export interface LiteratureStorageStats {

@@ -564,7 +564,7 @@
       "cleanupFailed": "清理失败。"
     },
     "storageDesc": "缓存的 PDF 会保留，直到你删除对应条目或清理下方未引用文件。",
-    "extractDesc": "Agent 与文献面板会读取 .prismnext/library/extract/ 下的缓存 Markdown。设置 Token 后，MinerU（云端）可上传 PDF 做高精度解析。",
+    "extractDesc": "Agent 与文献面板会读取本项目工作台文献库中的缓存 Markdown。设置 Token 后，MinerU（云端）可上传 PDF 做高精度解析。",
     "discoveryDesc": "内置 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可选 API 密钥。无密钥也可搜索；密钥可提高速率限制。",
     "zoteroDesc": "可选 — 在 Zotero 桌面端运行时流式读取 PDF。Better BibTeX 提供 citekey；编辑集合需要 Web API 凭证或 debug-bridge 插件。",
     "rows": {

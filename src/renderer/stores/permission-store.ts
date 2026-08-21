@@ -16,6 +16,7 @@ export function pickActivePermission(
   return withToolId[0] ?? tabPerms[0];
 }
 
+/** Filter only. Always returns a new array — do not use as a Zustand selector. */
 export function listBackgroundPending(
   permissions: PendingPermission[],
   activeTabId: string,

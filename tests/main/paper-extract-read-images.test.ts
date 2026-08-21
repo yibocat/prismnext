@@ -57,10 +57,10 @@ describe("readPaperPdfContent figure paths", () => {
     );
 
     expect(result.markdown).toContain(
-      ".prismnext/library/extract/paper-abc/images/fig-1.png",
+      "library/extract/paper-abc/images/fig-1.png",
     );
     expect(result.hasFigures).toBe(true);
-    expect(result.figures?.[0]).toContain(".prismnext/library/extract/paper-abc/images/fig-1.png");
+    expect(result.figures?.[0]).toContain("library/extract/paper-abc/images/fig-1.png");
     expect(result.hint).toMatch(/embed/i);
   });
 });

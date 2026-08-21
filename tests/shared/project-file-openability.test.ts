@@ -6,7 +6,7 @@ import {
 
 describe("project-file-openability", () => {
   it("flags database and archive extensions", () => {
-    expect(isBinaryProjectFile(".prismnext/library/library.db")).toBe(true);
+    expect(isBinaryProjectFile("library/library.db")).toBe(true);
     expect(isBinaryProjectFile("data/archive.zip")).toBe(true);
     expect(fileExtensionLower("notes/report.md")).toBe(".md");
     expect(isBinaryProjectFile("notes/report.md")).toBe(false);

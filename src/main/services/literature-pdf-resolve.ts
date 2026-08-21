@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import { readFile } from "node:fs/promises";
 import {
   fetchItemPdfBytes,
@@ -11,6 +10,7 @@ import {
   openLibraryDb,
   readPaperPdfBytes,
   attachPdfBufferToPaper,
+  resolvePaperPdfPath,
   type PaperRow,
 } from "./literature-service";
 
@@ -57,7 +57,9 @@ function storeDownloadedPdf(
 ): string {
   const paper = attachPdfBufferToPaper(projectRoot, paperId, bytes);
   if (!paper.pdf_path) throw new Error("Failed to store PDF");
-  return path.join(projectRoot, ".prismnext", "library", paper.pdf_path);
+  const abs = resolvePaperPdfPath(projectRoot, paper);
+  if (!abs) throw new Error("Failed to store PDF");
+  return abs;
 }
 
 /**
@@ -74,7 +76,8 @@ async function resolvePdfResource(
 
   // 1. Already has a local PDF (unified path — covers both local imports and previously-downloaded Zotero PDFs)
   if (paper.pdf_path) {
-    const abs = path.join(projectRoot, ".prismnext", "library", paper.pdf_path);
+    const abs = resolvePaperPdfPath(projectRoot, paper);
+    if (!abs) return { bytes: null, absPath: null, source: "none" };
     onProgress?.({ phase: "reading" });
     return { bytes: null, absPath: abs, source: paper.origin === "zotero" ? "zotero" : "local" };
   }

@@ -47,7 +47,7 @@ export const literatureSearchTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureSearch,
   label: "Search Literature",
   description:
-    "Search papers in the current project's local literature library (.prismnext/library/library.db). " +
+    "Search papers in the current project's literature library (workbench home `projects/<id>/library/`). " +
     "Searches title, abstract, authors, bibkey, tags, and AI summary. " +
     "Does NOT search external catalogs (use literature-discover for external search).",
   promptGuidelines: [
@@ -159,7 +159,7 @@ export const literatureReadTool: NativeToolDefinition = {
       note: a.note,
       color: a.color,
     }));
-    const pdfRel = paper.pdf_path ? `.prismnext/library/${paper.pdf_path.replace(/\\/g, "/")}` : null;
+    const pdfRel = paper.pdf_path ? `library/${paper.pdf_path.replace(/\\/g, "/")}` : null;
     return {
       paper: {
         ...mapPaperForAgent(paper),
@@ -349,7 +349,7 @@ export const literatureAddTool: NativeToolDefinition = {
   }),
   permission: {
     category: "safe_write",
-    extractPath: () => ".prismnext/library/library.db",
+    extractPath: () => "library/library.db",
   },
   async execute(args, ctx) {
     const normDoi = str(args.doi) ? normalizeDoi(str(args.doi)) : null;
@@ -423,7 +423,7 @@ export const literatureDeleteTool: NativeToolDefinition = {
   }),
   permission: {
     category: "destructive",
-    extractPath: () => ".prismnext/library/library.db",
+    extractPath: () => "library/library.db",
   },
   async execute(args, ctx) {
     const bibkey = str(args.bibkey);

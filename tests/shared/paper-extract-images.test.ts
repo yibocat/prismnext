@@ -11,12 +11,12 @@ import {
 describe("paper-extract-images", () => {
   it("rewrites MinerU images/ refs to project extract paths", () => {
     expect(rewritePaperExtractImageSrcs("![Fig 1](images/fig-0.png)", "paper-1")).toBe(
-      "![Fig 1](.prismnext/library/extract/paper-1/images/fig-0.png)",
+      "![Fig 1](library/extract/paper-1/images/fig-0.png)",
     );
   });
 
   it("leaves already-rewritten and remote images alone", () => {
-    const abs = "![x](.prismnext/library/extract/paper-1/images/a.png)";
+    const abs = "![x](library/extract/paper-1/images/a.png)";
     expect(rewritePaperExtractImageSrcs(abs, "paper-1")).toBe(abs);
     expect(rewritePaperExtractImageSrcs("![x](https://example.com/a.png)", "paper-1")).toBe(
       "![x](https://example.com/a.png)",
@@ -24,10 +24,10 @@ describe("paper-extract-images", () => {
   });
 
   it("detects extract figure markdown", () => {
-    const md = "![Fig](.prismnext/library/extract/p1/images/fig-0.png)";
+    const md = "![Fig](library/extract/p1/images/fig-0.png)";
     expect(markdownHasExtractFigures(md)).toBe(true);
     expect(listExtractFigurePaths(md)).toEqual([
-      ".prismnext/library/extract/p1/images/fig-0.png",
+      "library/extract/p1/images/fig-0.png",
     ]);
   });
 
@@ -41,7 +41,7 @@ describe("paper-extract-images", () => {
 
   it("resolves library figure paths", () => {
     expect(resolveLibraryFigurePath("p1", "images/fig-0.png")).toBe(
-      ".prismnext/library/extract/p1/images/fig-0.png",
+      "library/extract/p1/images/fig-0.png",
     );
   });
 });

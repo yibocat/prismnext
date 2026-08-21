@@ -30,11 +30,13 @@ import {
   syncBoundZoteroCollection,
   syncZoteroCollections,
 } from "../../src/main/services/zotero-sync";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import {
   getZoteroMirrorByPaperId,
   listCollectionPaperIds,
   listCollections,
   listPapers,
+  projectHomeSlotDir,
   removePapersFromCollection,
 } from "../../src/main/services/literature-service";
 import { writeLiteratureProjectConfig } from "../../src/main/services/workspace-config";
@@ -90,7 +92,7 @@ function mockZoteroItem(overrides: Partial<import("../../src/main/services/zoter
 }
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-zotero-sync-"));
+  return tempLiteratureProject();
 }
 
 describe("zotero-sync", () => {
@@ -115,7 +117,7 @@ describe("zotero-sync", () => {
   it("syncs bound collection items into library db", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",
@@ -165,7 +167,7 @@ describe("zotero-sync", () => {
   it("writes csl_json with extended fields from BBT BibTeX on sync", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    writeLiteratureProjectConfig(path.join(projectRoot, ".prismnext"), {
+    writeLiteratureProjectConfig(projectHomeSlotDir(projectRoot), {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",
     });
@@ -215,7 +217,7 @@ describe("zotero-sync", () => {
   it("updates existing zotero papers on re-sync", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",
@@ -314,7 +316,7 @@ describe("zotero-sync", () => {
   it("prunes non-materialized zotero papers removed from bound collection", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",
@@ -389,7 +391,7 @@ describe("zotero-sync", () => {
   it("keeps bound collection when missing from collection list sync", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "BOUNDKEY",
       zoteroCollectionName: "Bound only",
@@ -495,7 +497,7 @@ describe("zotero-sync", () => {
   it("addPapersToZoteroCollection links papers in Zotero and cache", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",
@@ -538,7 +540,7 @@ describe("zotero-sync", () => {
   it("removePapersFromZoteroCollection unlinks in Zotero and cache", async () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    const prismDir = path.join(projectRoot, ".prismnext");
+    const prismDir = projectHomeSlotDir(projectRoot);
     writeLiteratureProjectConfig(prismDir, {
       zoteroCollectionId: "COLKEY1",
       zoteroCollectionName: "Thesis",

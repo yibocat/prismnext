@@ -7,8 +7,10 @@ import {
   importProjectBibKeysIntoLibrary,
 } from "../../src/main/services/citation-health";
 
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
+
 function mkTempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-citation-health-"));
+  return tempLiteratureProject();
 }
 
 describe("getCitationHealth", () => {
@@ -21,8 +23,6 @@ describe("getCitationHealth", () => {
   it("reports bibFallback from manuscript .bib for keys missing in library", () => {
     projectRoot = mkTempProject();
     fs.mkdirSync(path.join(projectRoot, "manuscript"), { recursive: true });
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
-
     fs.writeFileSync(
       path.join(projectRoot, "manuscript", "main.tex"),
       String.raw`\documentclass{article}
@@ -63,8 +63,6 @@ describe("importProjectBibKeysIntoLibrary", () => {
   it("imports missing keys from project .bib into library.db", async () => {
     projectRoot = mkTempProject();
     fs.mkdirSync(path.join(projectRoot, "manuscript"), { recursive: true });
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
-
     fs.writeFileSync(
       path.join(projectRoot, "manuscript", "main.tex"),
       "\\documentclass{article}\n\\cite{fromBib}\n",

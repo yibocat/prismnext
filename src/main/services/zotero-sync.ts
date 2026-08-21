@@ -21,6 +21,7 @@ import {
   deleteCollection,
   getLibraryPaths,
   openLibraryDb,
+  projectHomeSlotDir,
   removePapersFromCollection,
   replaceCollectionPaperLinks,
   updateCollection,
@@ -100,7 +101,7 @@ export function pruneOrphanZoteroPapers(
 }
 
 function prismDir(projectRoot: string): string {
-  return path.join(projectRoot, ".workbench");
+  return projectHomeSlotDir(projectRoot);
 }
 
 export async function syncZoteroCollections(

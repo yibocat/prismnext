@@ -975,6 +975,7 @@ export interface ElectronAPI {
 
   // Literature library
   literatureList: (projectRoot: string) => Promise<LiteraturePaper[]>;
+  literatureResolveAbs: (projectRoot: string, rel: string) => Promise<string | null>;
   literatureGetPdfCacheStatus: (
     projectRoot: string,
   ) => Promise<Record<string, { cached: boolean; stale: boolean }>>;

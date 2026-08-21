@@ -32,7 +32,7 @@ function samplePaper(overrides: Partial<LiteraturePaper> = {}): LiteraturePaper 
 describe("libraryPdfRelativePath", () => {
   it("prefixes library dir", () => {
     expect(libraryPdfRelativePath(samplePaper())).toBe(
-      ".prismnext/library/attachments/abc123def4567890.pdf",
+      "library/attachments/abc123def4567890.pdf",
     );
   });
 });
@@ -88,7 +88,7 @@ describe("buildPaperAgentContextBlock", () => {
     expect(block).toContain("We study geometric deep learning");
     expect(block).toContain("notes/N98JPVKU/2026-06-30-note.md");
     expect(block).toContain("Key idea: k-DisGNN");
-    expect(block).toContain(".prismnext/library/attachments/");
+    expect(block).toContain("library/attachments/");
     expect(block).toContain("path only");
   });
 });

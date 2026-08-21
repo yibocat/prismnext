@@ -35,9 +35,10 @@ vi.mock("../../src/main/services/literature-ai-metadata-heuristics", () => ({
 }));
 
 import { runAiMetadataForPaper } from "../../src/main/services/literature-ai-metadata";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-ai-meta-"));
+  return tempLiteratureProject();
 }
 
 describe("literature-ai-metadata", () => {

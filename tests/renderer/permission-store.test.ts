@@ -68,4 +68,8 @@ describe("permission-store", () => {
     expect(hasPendingPermission(perms, "tab-a")).toBe(true);
     expect(hasPendingPermission(perms, "tab-c")).toBe(false);
   });
+
+  it("allocates a new array even when empty (unsafe as a Zustand selector)", () => {
+    expect(listBackgroundPending([], "tab-a")).not.toBe(listBackgroundPending([], "tab-a"));
+  });
 });

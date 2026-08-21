@@ -22,12 +22,12 @@ import {
 } from "../../src/main/services/literature-enrich";
 import { getPaper, listPapers } from "../../src/main/services/literature-service";
 import * as bibliographic from "../../src/shared/bibliographic-metadata";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-staged-add-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

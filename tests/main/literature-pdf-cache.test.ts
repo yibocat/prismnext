@@ -9,11 +9,10 @@ import {
   getLibraryPaths,
 } from "../../src/main/services/literature-service";
 import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../../src/main/services/literature-pdf-cache";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-pdfcache-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library", "attachments"), { recursive: true });
-  return dir;
+  return tempLiteratureProject();
 }
 
 const roots: string[] = [];

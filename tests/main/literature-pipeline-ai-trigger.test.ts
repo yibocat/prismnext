@@ -29,6 +29,7 @@ vi.mock("../../src/main/services/settings", () => ({
 }));
 
 import { maybeEnqueueAiMetadataAfterMetadata } from "../../src/main/services/literature-ai-metadata-queue";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const EXTRACT_MD = `
 # Paper
@@ -42,7 +43,7 @@ Lorem ipsum dolor sit amet.
 `;
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-pipeline-"));
+  return tempLiteratureProject();
 }
 
 function seedReadyExtract(projectRoot: string, paperId: string, markdown: string): void {

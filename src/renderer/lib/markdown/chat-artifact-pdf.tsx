@@ -38,7 +38,9 @@ async function resolveArtifactAbsPath(
 ): Promise<string | null> {
   const candidates = chatImagePathCandidates(src, workspaceHints);
   for (const rel of candidates) {
-    const abs = resolveProjectRelativePath(projectRoot, rel);
+    const abs = rel.replace(/\\/g, "/").startsWith("library/")
+      ? await window.electronAPI.literatureResolveAbs(projectRoot, rel)
+      : resolveProjectRelativePath(projectRoot, rel);
     if (!abs) continue;
     try {
       if (await window.electronAPI.fsExists(abs)) return abs;

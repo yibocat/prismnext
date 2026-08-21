@@ -15,7 +15,7 @@ import {
 } from "../../shared/paper-citation-network";
 import { mainNetFetch } from "../lib/main-network";
 import { openAlexWorkLookupUrl } from "../../shared/openalex-lookup";
-import { getPaper } from "./literature-service";
+import { getLibraryPaths, getPaper } from "./literature-service";
 import {
   fetchS2CitedByPage,
   fetchS2ReferencesPage,
@@ -62,7 +62,7 @@ type S2CacheFile = S2CitationCache & { source: "semantic-scholar" };
 export type CitationCacheFile = OpenAlexCitationCache | S2CacheFile;
 
 function citationsCacheDir(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext", "library", "cache", "citations");
+  return path.join(getLibraryPaths(projectRoot).libraryDir, "cache", "citations");
 }
 
 function citationsCachePath(projectRoot: string, paperId: string): string {

@@ -20,12 +20,12 @@ import {
   resolveOrphanZoteroPaper,
 } from "../../src/main/services/literature-service";
 import { upsertPaperExtractState, getPaperExtractState } from "../../src/main/services/paper-extract-db";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-zotero-mat-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

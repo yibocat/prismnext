@@ -7,6 +7,7 @@ import {
   createPaper,
   replacePdfFromFile,
 } from "../../src/main/services/literature-service";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import {
   getPaperExtractState,
   invalidatePaperExtracts,
@@ -14,7 +15,7 @@ import {
 } from "../../src/main/services/paper-extract-db";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-extract-auto-"));
+  return tempLiteratureProject();
 }
 
 describe("invalidatePaperExtracts", () => {

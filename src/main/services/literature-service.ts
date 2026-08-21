@@ -42,6 +42,9 @@ import { broadcastToRenderer } from "./literature-broadcast";
 import { recordDownloadProvenance } from "./provenance-service";
 import "@citation-js/plugin-bibtex";
 import { createLogger, shortLogDetail } from "./logger";
+import { findWorkbenchProjectRoot, resolveWorkbenchHome } from "../workbench/home";
+import { ensureWorkbenchId } from "../workbench/identity";
+import { libraryRel, projectSlotRel } from "../../shared/workbench-paths";
 
 const log = createLogger("literature", "general");
 
@@ -115,32 +118,46 @@ export type LibraryDb = DatabaseSync;
 const dbCache = new Map<string, LibraryDb>();
 
 /**
- * Literature library.db lives under the main project root, not an isolated
- * worktree checkout. Map session cwd / OpenCode directory back to the project
- * root when it points at `.prismnext/worktrees/<name>`.
+ * Paper folder that owns `.workbench/workbench.json`.
+ * Walks up from a session cwd; does not string-slice old worktree paths.
  */
 export function resolveLibraryProjectRoot(candidate: string): string {
   const trimmed = candidate?.trim();
   if (!trimmed) return "";
   const resolved = path.resolve(trimmed);
-  const norm = resolved.replace(/\\/g, "/");
-  const marker = "/.prismnext/worktrees/";
-  const idx = norm.indexOf(marker);
-  if (idx >= 0) {
-    return norm.slice(0, idx);
-  }
-  return resolved;
+  return findWorkbenchProjectRoot(resolved) ?? resolved;
+}
+
+/** Home slot `~/.prismnext/projects/<id>/` for this paper folder (D-28). */
+export function projectHomeSlotDir(projectRoot: string): string {
+  const root = resolveLibraryProjectRoot(projectRoot);
+  const projectId = ensureWorkbenchId(root);
+  return path.join(resolveWorkbenchHome(), projectSlotRel(projectId));
 }
 
 export function getLibraryPaths(projectRoot: string): LibraryPaths {
   const root = resolveLibraryProjectRoot(projectRoot);
-  const libraryDir = path.join(root, ".prismnext", "library");
+  const projectId = ensureWorkbenchId(root);
+  const libraryDir = path.join(resolveWorkbenchHome(), libraryRel(projectId));
   return {
     libraryDir,
     dbPath: path.join(libraryDir, "library.db"),
     attachmentsDir: path.join(libraryDir, "attachments"),
     extractDir: path.join(libraryDir, "extract"),
   };
+}
+
+/** Map a display rel (`library/attachments/…`) to the home-slot file. Old `.prismnext/library/` → null (D-30). */
+export function resolveLibraryDisplayAbs(projectRoot: string, displayRel: string): string | null {
+  const norm = displayRel.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (!norm || norm.includes("..") || norm.startsWith(".prismnext/")) return null;
+  if (!norm.startsWith("library/")) return null;
+  return path.join(getLibraryPaths(projectRoot).libraryDir, norm.slice("library/".length));
+}
+
+export function libraryDisplayRel(libraryRelPath: string): string {
+  const norm = libraryRelPath.replace(/\\/g, "/").replace(/^\.\//, "");
+  return norm.startsWith("library/") ? norm : `library/${norm}`;
 }
 
 function ensureLibraryDirs(paths: LibraryPaths): void {
@@ -803,7 +820,6 @@ function libraryDbExists(projectRoot: string): boolean {
 }
 
 export function listPapers(projectRoot: string): PaperRow[] {
-  if (!libraryDbExists(projectRoot)) return [];
   const db = openLibraryDb(projectRoot);
   return db.prepare(`${PAPER_SELECT} ORDER BY p.updated_at DESC`).all() as unknown as PaperRow[];
 }
@@ -999,7 +1015,7 @@ export function attachPdfBufferToPaper(projectRoot: string, paperId: string, buf
 
 /**
  * Record a `download_recorded` provenance event for a library PDF (Phase 1.1).
- * `paper.pdf_path` is library-relative; we rebase it to project-relative.
+ * `paper.pdf_path` is library-relative; provenance stores the `library/` display path.
  */
 export function recordPdfDownload(
   projectRoot: string,
@@ -1009,13 +1025,8 @@ export function recordPdfDownload(
   bytes: number | null,
 ): void {
   if (!paper?.pdf_path) return;
-  const paths = getLibraryPaths(projectRoot);
-  const absPdf = path.join(paths.libraryDir, paper.pdf_path);
-  const relPdf = path
-    .relative(resolveLibraryProjectRoot(projectRoot), absPdf)
-    .replace(/\\/g, "/");
   recordDownloadProvenance(projectRoot, {
-    artifactPath: relPdf,
+    artifactPath: libraryDisplayRel(paper.pdf_path),
     source,
     identifier: paper.doi ?? paper.arxiv_id ?? null,
     sourceUrl,
@@ -1727,7 +1738,6 @@ export function listReadingList(projectRoot: string): PaperRow[] {
 }
 
 export function listCollections(projectRoot: string): CollectionRow[] {
-  if (!libraryDbExists(projectRoot)) return [];
   const db = openLibraryDb(projectRoot);
   return db
     .prepare(
@@ -2452,7 +2462,6 @@ export function findProjectBibPath(projectRoot: string): string {
       .map((d) => path.join(projectRoot, d.name, "references.bib")),
     path.join(projectRoot, "references.bib"),
     path.join(projectRoot, "bibliography.bib"),
-    path.join(projectRoot, ".prismnext", "library", "references.bib"),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;

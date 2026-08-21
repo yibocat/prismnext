@@ -40,7 +40,8 @@ import {
   buildExperimentStorageContext,
   createExperiment,
 } from "../../src/main/services/experiment-log-service";
-import { openLibraryDb } from "../../src/main/services/literature-service";
+import { getLibraryPaths, openLibraryDb } from "../../src/main/services/literature-service";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import { createSession } from "../../src/main/services/terminal";
 import * as executionRegistry from "../../src/main/services/execution-registry";
 import type { ExecutionRegistry } from "../../src/main/services/execution-registry";
@@ -145,8 +146,8 @@ describe("L4 experiment / literature / terminal logs", () => {
   });
 
   it("logs literature.open.fail when the library file cannot be opened", () => {
-    const root = tmp("prism-l4-lit-");
-    const dbPath = join(root, ".prismnext", "library", "library.db");
+    const root = tempLiteratureProject();
+    const dbPath = getLibraryPaths(root).dbPath;
     mkdirSync(dbPath, { recursive: true });
     expect(() => openLibraryDb(root)).toThrow();
     expect(warn).toHaveBeenCalledWith(

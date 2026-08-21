@@ -62,7 +62,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "literature-library",
     label: "Literature Library (tags & search)",
     description:
-      "Project library papers: search/read in `.prismnext/library/`, cite as [@bibkey]. External papers use Chat Paper Citations.",
+      "Project library papers: search/read in the current project library, cite as [@bibkey]. External papers use Chat Paper Citations.",
     enabled: true,
     profileOnly: true,
     source: "app",

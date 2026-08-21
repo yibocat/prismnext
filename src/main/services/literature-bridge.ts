@@ -54,7 +54,7 @@ function bridgeRoot(): string {
 
 function libraryPdfRelativePath(pdfPath: string | null): string | null {
   if (!pdfPath?.trim()) return null;
-  return `.prismnext/library/${pdfPath.replace(/\\/g, "/")}`;
+  return `library/${pdfPath.replace(/\\/g, "/")}`;
 }
 
 export interface LiteratureActionRequest {

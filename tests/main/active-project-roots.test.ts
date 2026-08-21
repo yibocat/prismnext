@@ -60,7 +60,7 @@ describe("active-project-roots registry", () => {
       registerProjectRoot(projA);
       expect(isPathContained(projAFile)).toBe(true);
       expect(isPathContained(projA)).toBe(true); // root itself
-      expect(isPathContained(join(projA, ".prismnext", "library", "library.db"))).toBe(true);
+      expect(isPathContained(join(projA, ".workbench", "compile", "main.pdf"))).toBe(true);
     });
 
     it("blocks paths under a different (unregistered) project", () => {

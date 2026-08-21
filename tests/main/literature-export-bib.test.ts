@@ -9,8 +9,10 @@ import {
 } from "../../src/main/services/literature-service";
 import { checkBibConsistency } from "../../src/main/services/latex-service";
 
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
+
 function mkTempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-export-bib-"));
+  return tempLiteratureProject();
 }
 
 describe("mergeLibraryIntoProjectBib", () => {
@@ -23,8 +25,6 @@ describe("mergeLibraryIntoProjectBib", () => {
   it("appends cited library keys missing from project .bib", () => {
     projectRoot = mkTempProject();
     fs.mkdirSync(path.join(projectRoot, "manuscript"), { recursive: true });
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
-
     openLibraryDb(projectRoot);
     const db = openLibraryDb(projectRoot);
     const now = Date.now();
@@ -71,8 +71,6 @@ describe("checkBibConsistency libraryCheck", () => {
   it("includes libraryCheck by default", () => {
     projectRoot = mkTempProject();
     fs.mkdirSync(path.join(projectRoot, "manuscript"), { recursive: true });
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
-
     openLibraryDb(projectRoot);
     const db = openLibraryDb(projectRoot);
     const now = Date.now();

@@ -28,8 +28,9 @@ export function resolveExtractRelativeAssetPath(
 
 /**
  * Resolve a local markdown image for any project document (extract, notes, …).
- * - `.prismnext/…` → project-root relative (notes that embed extract figures)
+ * - `library/extract/…` → workbench home slot (D-28)
  * - otherwise → relative to the markdown file (MinerU `images/` next to extract md)
+ * Old `.prismnext/library/extract/…` is not resolved (D-30).
  */
 export function resolveDocumentMarkdownImageRel(
   mdRelativePath: string,
@@ -40,9 +41,21 @@ export function resolveDocumentMarkdownImageRel(
 
   const norm = assetSrc.trim().replace(/\\/g, "/").replace(/^\.\//, "");
   if (norm.startsWith("/") || norm.includes("..")) return null;
-  if (norm.startsWith(".prismnext/")) return norm;
+  if (norm.startsWith(".prismnext/")) return null;
+  if (norm.startsWith("library/")) return norm;
 
   return resolveExtractRelativeAssetPath(mdRelativePath, assetSrc);
+}
+
+export async function resolveReadableProjectAbs(
+  projectRoot: string,
+  rel: string,
+): Promise<string | null> {
+  const norm = rel.replace(/\\/g, "/").replace(/^\.\//, "");
+  if (norm.startsWith("library/")) {
+    return window.electronAPI.literatureResolveAbs(projectRoot, norm);
+  }
+  return resolveProjectRelativePath(projectRoot, rel);
 }
 
 export function ExtractMarkdownImage({
@@ -67,16 +80,18 @@ export function ExtractMarkdownImage({
       setDataUrl(null);
       return;
     }
-    const abs = resolveProjectRelativePath(projectRoot, rel);
-    if (!abs) {
-      setDataUrl(null);
-      return;
-    }
     let cancelled = false;
-    void window.electronAPI
-      .fsReadImage(abs)
-      .then(({ dataUrl: url }) => {
-        if (!cancelled) setDataUrl(url);
+    void resolveReadableProjectAbs(projectRoot, rel)
+      .then((abs) => {
+        if (!abs) {
+          if (!cancelled) setDataUrl(null);
+          return;
+        }
+        return window.electronAPI.fsReadImage(abs);
+      })
+      .then((result) => {
+        if (cancelled || !result) return;
+        setDataUrl(result.dataUrl);
       })
       .catch(() => {
         if (!cancelled) setDataUrl(null);
@@ -154,7 +169,7 @@ export function ChatProjectImage({
     const candidates = chatImagePathCandidates(src, workspaceHints);
 
     const tryRead = async (rel: string): Promise<{ url: string; abs: string; mtimeMs: number } | null> => {
-      const abs = resolveProjectRelativePath(projectRoot, rel);
+      const abs = await resolveReadableProjectAbs(projectRoot, rel);
       if (!abs) return null;
       try {
         const exists = await window.electronAPI.fsExists(abs);

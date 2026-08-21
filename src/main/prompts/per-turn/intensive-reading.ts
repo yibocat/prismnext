@@ -32,7 +32,7 @@ export function buildIntensiveReadingInstruction(
   });
 
   const rules: string[] = [
-    `- Extracts live under \`.prismnext/library/extract/\`; use \`${readPdfTool}\` (optional \`pages=\` / \`query=\`). Gate is enforced by the tool.`,
+    `- Extracts live in the project library extract cache; use \`${readPdfTool}\` (optional \`pages=\` / \`query=\`). Gate is enforced by the tool.`,
   ];
 
   if (options?.hasPaperSnippets) {

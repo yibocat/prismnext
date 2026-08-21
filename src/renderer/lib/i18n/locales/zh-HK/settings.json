@@ -564,7 +564,7 @@
       "cleanupFailed": "清理失敗。"
     },
     "storageDesc": "快取的 PDF 會保留，直到你刪除對應條目或清理下方未引用檔案。",
-    "extractDesc": "Agent 與文獻面板會讀取 .prismnext/library/extract/ 下的快取 Markdown。設定 Token 後，MinerU（雲端）可上傳 PDF 做高精度解析。",
+    "extractDesc": "Agent 與文獻面板會讀取本專案工作臺文獻庫中的快取 Markdown。設定 Token 後，MinerU（雲端）可上傳 PDF 做高精度解析。",
     "discoveryDesc": "內建 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可選 API 金鑰。無金鑰也可搜尋；金鑰可提高速率限制。",
     "zoteroDesc": "可選 — 在 Zotero 桌面端執行時流式讀取 PDF。Better BibTeX 提供 citekey；編輯集合需要 Web API 憑證或 debug-bridge 外掛。",
     "rows": {

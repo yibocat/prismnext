@@ -1,16 +1,18 @@
 /**
  * Extract markdown may use paths relative to the extract dir (`images/fig.png`).
- * Rewrite to project-root-relative paths so chat, notes, and agent replies can embed figures.
+ * Rewrite to `library/extract/<id>/…` display paths (home slot, D-28).
+ * Old `.prismnext/library/extract/…` is not rewritten or parsed (D-30).
  */
 export function rewritePaperExtractImageSrcs(markdown: string, paperId: string): string {
   const id = paperId.trim();
   if (!id || !markdown) return markdown;
-  const base = `.prismnext/library/extract/${id}/`;
+  const base = `library/extract/${id}/`;
   return markdown.replace(
     /!\[([^\]]*)\]\(\s*([^)\s]+)\s*\)/g,
     (full, alt: string, src: string) => {
       const raw = src.trim().replace(/\\/g, "/");
       if (/^(https?:|data:|blob:|file:)/i.test(raw)) return full;
+      if (raw.startsWith("library/extract/")) return full;
       if (raw.includes(".prismnext/library/extract/")) return full;
       const norm = raw.replace(/^\.\//, "");
       if (!norm.startsWith("images/")) return full;
@@ -20,14 +22,14 @@ export function rewritePaperExtractImageSrcs(markdown: string, paperId: string):
 }
 
 const EXTRACT_FIGURE_PATH_RE =
-  /^\.prismnext\/library\/extract\/([^/]+)\/(images\/[^?\s#]+)$/i;
+  /^library\/extract\/([^/]+)\/(images\/[^?\s#]+)$/i;
 
 /** True when markdown contains embeddable extract figure paths (after rewrite). */
 export function markdownHasExtractFigures(markdown: string): boolean {
-  return /!\[[^\]]*\]\(\s*\.prismnext\/library\/extract\/[^)]+\/images\//.test(markdown);
+  return /!\[[^\]]*\]\(\s*library\/extract\/[^)]+\/images\//.test(markdown);
 }
 
-/** List unique figure paths from markdown image syntax (project-relative or `images/…`). */
+/** List unique figure paths from markdown image syntax (`library/extract/…` or `images/…`). */
 export function listExtractFigurePaths(markdown: string): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -35,7 +37,7 @@ export function listExtractFigurePaths(markdown: string): string[] {
     const raw = m[1]?.trim().replace(/\\/g, "/").replace(/^\.\//, "");
     if (!raw) continue;
     const isExtractFigure =
-      raw.startsWith("images/") || raw.includes(".prismnext/library/extract/");
+      raw.startsWith("images/") || raw.startsWith("library/extract/");
     if (!isExtractFigure || seen.has(raw)) continue;
     seen.add(raw);
     out.push(raw);
@@ -56,14 +58,14 @@ export function isLibraryExtractFigurePath(src: string): boolean {
   return parseLibraryExtractFigurePath(src) != null;
 }
 
-/** Resolve a bibkey + extract-relative image ref to a project-relative path. */
+/** Resolve a paper id + extract-relative image ref to a library display path. */
 export function resolveLibraryFigurePath(paperId: string, imageRel: string): string {
   const id = paperId.trim();
   const rel = imageRel.trim().replace(/\\/g, "/").replace(/^\.\//, "");
   if (!id || !rel) return rel;
-  if (rel.startsWith(".prismnext/library/extract/")) return rel;
+  if (rel.startsWith("library/extract/")) return rel;
   const imagePath = rel.startsWith("images/") ? rel : `images/${rel.replace(/^images\//, "")}`;
-  return `.prismnext/library/extract/${id}/${imagePath}`;
+  return `library/extract/${id}/${imagePath}`;
 }
 
 export function encodeLibraryFigureHref(bibkey: string, imageRel: string): string {

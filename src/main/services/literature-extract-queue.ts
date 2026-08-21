@@ -168,7 +168,7 @@ async function resolvePdfForExtract(
     );
   }
   if (!hadLocal) {
-    emit({ phase: "caching_pdf", message: "PDF cached under .prismnext/library/attachments/", percent: 100 });
+    emit({ phase: "caching_pdf", message: "PDF cached under the project library attachments/", percent: 100 });
     emitExtractEvent("extract:pdfCached", { projectRoot, paperId: paper.id });
   }
   return pdfAbs;

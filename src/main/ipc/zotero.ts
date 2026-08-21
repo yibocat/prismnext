@@ -1,5 +1,4 @@
 import { ipcMain } from "electron";
-import * as path from "node:path";
 import {
   getZoteroStatus,
   listZoteroCollections,
@@ -17,9 +16,10 @@ import {
   writeLiteratureProjectConfig,
   type LiteratureProjectConfig,
 } from "../services/workspace-config";
+import { projectHomeSlotDir } from "../services/literature-service";
 
 function prismDir(projectRoot: string): string {
-  return path.join(projectRoot, ".workbench");
+  return projectHomeSlotDir(projectRoot);
 }
 
 export function registerZoteroHandlers(): void {

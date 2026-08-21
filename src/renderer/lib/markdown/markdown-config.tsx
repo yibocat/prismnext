@@ -125,7 +125,7 @@ export function rehypePluginsForSurface(_surface: MarkdownRenderSurface) {
 export function isScientificExtractPath(filePath: string | undefined): boolean {
   if (!filePath) return false;
   const norm = filePath.replace(/\\/g, "/").toLowerCase();
-  return norm.includes(".prismnext/library/extract/") && norm.endsWith(".md");
+  return /(?:^|\/)library\/extract\/.+\.md$/.test(norm) && !norm.includes(".prismnext/");
 }
 
 export function markdownPreviewProfileForPath(filePath: string | undefined): MarkdownPreviewProfile {

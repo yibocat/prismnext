@@ -489,6 +489,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	// Literature library
 	literatureList: (projectRoot: string) => ipcRenderer.invoke("literature:list", { projectRoot }),
+	literatureResolveAbs: (projectRoot: string, rel: string) =>
+		ipcRenderer.invoke("literature:resolveAbs", { projectRoot, rel }),
 	literatureGetPdfCacheStatus: (projectRoot: string) =>
 		ipcRenderer.invoke("literature:getPdfCacheStatus", { projectRoot }),
 	literatureGetStorageStats: (projectRoot: string) =>

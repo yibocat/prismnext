@@ -4,15 +4,17 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createPaper } from "../../src/main/services/literature-service";
 import {
+  getPaperExtractAbsPath,
   getPaperExtractState,
   listPaperExtractStates,
   readExtractBlocks,
   upsertPaperExtractState,
   writeExtractArtifacts,
 } from "../../src/main/services/paper-extract-db";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-extract-"));
+  return tempLiteratureProject();
 }
 
 describe("paper-extract-db", () => {
@@ -62,7 +64,7 @@ describe("paper-extract-db", () => {
     const batch = listPaperExtractStates(projectRoot, [paper.id]);
     expect(batch[paper.id]?.pdfjs?.status).toBe("ready");
 
-    const absMd = path.join(projectRoot, ".prismnext", "library", "extract", written.mdPath);
+    const absMd = getPaperExtractAbsPath(projectRoot, written.mdPath);
     expect(fs.readFileSync(absMd, "utf-8")).toContain("Hello");
   });
 
@@ -81,15 +83,7 @@ describe("paper-extract-db", () => {
       { images: [{ relPath: "images/a.png", data: Buffer.from("png-bytes") }] },
     );
 
-    const imgAbs = path.join(
-      projectRoot,
-      ".prismnext",
-      "library",
-      "extract",
-      paper.id,
-      "images",
-      "a.png",
-    );
+    const imgAbs = getPaperExtractAbsPath(projectRoot, `${paper.id}/images/a.png`);
     expect(fs.existsSync(imgAbs)).toBe(true);
     expect(fs.readFileSync(imgAbs).toString()).toBe("png-bytes");
     expect(written.mdPath).toContain(`${paper.id}/mineru.md`);

@@ -39,9 +39,8 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const sessionTitle = useSessionTitle();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const loadSession = useChatStore((s) => s.loadSession);
-  const backgroundPending = usePermissionStore((s) =>
-    listBackgroundPending(s.permissions, activeTabId),
-  );
+  const permissions = usePermissionStore((s) => s.permissions);
+  const backgroundPending = listBackgroundPending(permissions, activeTabId);
   const members = useWorkbenchStore((s) => s.members);
   const sessionProjectIds = useWorkbenchStore((s) => s.sessionProjectIds);
   const waiting = backgroundPending[0];
