@@ -418,20 +418,6 @@ app.whenReady().then(async () => {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
       }
 
-      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/teams-state");
-      const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
-      // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
-      // legacy settings.builtinCommands → teams.json migration; consumed once.。
-      registerLegacyBuiltinCommandStatesHooks({
-        read: () => {
-          const states = (getSettings() as Record<string, unknown>).builtinCommands;
-          return states && typeof states === "object" && !Array.isArray(states)
-            ? (states as Record<string, boolean>)
-            : null;
-        },
-        clear: () => clearLegacyBuiltinCommandStates(),
-      });
-
       log.info("Prompt system initialized");
     } catch (err: any) {
       log.warn("Prompt system init failed", { error: (err as Error).message });

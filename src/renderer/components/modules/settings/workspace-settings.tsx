@@ -275,7 +275,7 @@ export function WorkspaceSettings() {
             </TabsTrigger>
           </TabsList>
 
-          {/* ── This project (project-scoped, lives in <project>/.prismnext) ── */}
+          {/* ── This project (project-scoped, lives in <project>/.workbench) ── */}
           <TabsContent value="project" className="mt-6 focus-visible:ring-0">
             {projectRoot ? (
               <div>

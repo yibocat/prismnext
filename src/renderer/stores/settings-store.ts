@@ -105,8 +105,6 @@ export interface AppSettings {
   zoteroApiKey?: string;
   zoteroUserId?: string;
   zoteroLastBBTDetected?: boolean;
-  /** @deprecated Leftover electron-store key. Not used to open or refresh a project. */
-  lastProjectPath?: string | null;
   defaultProjectId?: string;
   workbenchProjectIds?: string[];
   /** @deprecated Use lastActiveFileIdByProject */
@@ -490,39 +488,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         r.aiCustomModelsData = migrated;
         window.electronAPI.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
         log.info("Migrated aiCustomModels → aiCustomModelsData");
-      }
-
-      // One-time store reshape only — lastProjectPath is not a product open key.
-      const legacyProject = typeof r.lastProjectPath === "string" ? r.lastProjectPath : null;
-      if (legacyProject) {
-        let migratedScoped = false;
-        if (r.lastActiveFileId && !r.lastActiveFileIdByProject?.[legacyProject]) {
-          r.lastActiveFileIdByProject = {
-            ...(r.lastActiveFileIdByProject ?? {}),
-            [legacyProject]: r.lastActiveFileId,
-          };
-          migratedScoped = true;
-        }
-        if (
-          Array.isArray(r.recentOpenedFiles) &&
-          r.recentOpenedFiles.length > 0 &&
-          !r.recentOpenedFilesByProject?.[legacyProject]
-        ) {
-          r.recentOpenedFilesByProject = {
-            ...(r.recentOpenedFilesByProject ?? {}),
-            [legacyProject]: r.recentOpenedFiles,
-          };
-          migratedScoped = true;
-        }
-        if (migratedScoped) {
-          window.electronAPI
-            .settingsSet({
-              lastActiveFileIdByProject: r.lastActiveFileIdByProject,
-              recentOpenedFilesByProject: r.recentOpenedFilesByProject,
-            })
-            .catch(() => {});
-          log.info("Migrated global recent/lastActive → per-project maps", { legacyProject });
-        }
       }
 
       for (const catalogId of ["opencode-go"] as const) {

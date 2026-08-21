@@ -1,4 +1,4 @@
-/** Utilities for resolving project-relative paths (including hidden `.prismnext/` / `.brief.md`). */
+/** Utilities for resolving project-relative paths (including hidden `.workbench/` / leftover `.prismnext/` / `.brief.md`). */
 
 const PRISMNEXT_PREFIX = ".prismnext/";
 const WORKBENCH_PREFIX = ".workbench/";

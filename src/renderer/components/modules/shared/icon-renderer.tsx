@@ -18,7 +18,7 @@ export interface IconRendererProps {
   variant?: IconVariant;
   /**
    * Resolved data URL for `kind: "image"`. Callers load via `useIconImageSrc`
-   * (file under team dir / `.prismnext/`).
+   * (file under team dir / `.workbench/`).
    */
   imageSrc?: string | null;
   className?: string;

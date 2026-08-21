@@ -96,7 +96,7 @@ interface DocumentState {
   openFile: (id: string) => Promise<void>;
   /** Seed opened content without reading disk (after atomic create+write). */
   seedOpenedFile: (id: string, content: string) => void;
-  /** Register metadata for a hidden project file (`.prismnext/…`, `.brief.md`) not in the file tree scan */
+  /** Register metadata for a hidden project file (`.workbench/…`, `.brief.md`) not in the file tree scan */
   ensureLazyProjectFileMeta: (relativePath: string) => Promise<boolean>;
   /** Open a file outside the project root */
   openExternalFile: (absolutePath: string, opts?: { pin?: boolean }) => Promise<void>;

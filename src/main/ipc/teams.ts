@@ -52,7 +52,7 @@ function requireProjectRoot(projectRoot: string | null | undefined): string {
 interface UnifiedMcpEntry {
   name: string;
   enabled: boolean;
-  /** "project" = user-defined in .prismnext/agent/mcp.json; otherwise the team name. */
+  /** "project" = user-defined in the project hangar mcp.json; otherwise the team name. */
   origin: string;
   autoStart: boolean;
 }

@@ -239,10 +239,6 @@ export const USER_TEAM_PUBLISHER = "user";
 export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_TEAM_ID}:research-prism`;
 /** Chat / active-team final fallback when no other lead is usable. */
 export const FALLBACK_ORCHESTRATOR_FQID: Fqid = `${MY_CONTENT_TEAM_ID}:${MY_CONTENT_LEAD_ID}`;
-/** Local Pack 目录（相对项目根）；pack-catalog / packs-state 共用此常量拼绝对路径 */
-/** Leftover Local Pack dir (relative to paper root). Not a live write target (D-30). */
-export const LOCAL_TEAM_REL = ".prismnext/agent/local";
-
 /**
  * Project-level enable/disable override for a pack (spec L2).
  * Absent = automatically enabled once the pack is installed at app level.
@@ -256,7 +252,7 @@ export interface AssetOverride {
   thoughtLevel?: string;
   temperature?: number;
   modules?: string[];
-  /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层；T6 迁移为 roster） */
+  /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层） */
   allowedExperts?: string[];
   /**
    * Lead-scoped skills allowlist (mirrors allowedExperts).

@@ -9,7 +9,6 @@ import type { SkillInstallRecord } from "../../shared/skill-install-types";
 import {
   CORE_TEAM_ID,
   isProjectLocalTeamId,
-  LOCAL_TEAM_REL,
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
   PROJECT_TEAMS_REL,
@@ -36,24 +35,14 @@ import {
   homeSkillsManifestPath,
 } from "../workbench/home";
 
-/** Legacy flat skills tree. New writes must not use this. */
-export const PRISM_SKILLS_REL = ".prismnext/agent/skills";
-/**
- * Retired paper-side hangar. Kept so watchers / tests can recognize leftover
- * paths. New writes go to `~/.prismnext/skills/<id>`.
- */
+/** Live project hangar skills (created only by explicit project-team CRUD). */
 export const PRISM_LOCAL_SKILLS_REL = `${PROJECT_TEAMS_REL}/${PROJECT_DEFAULT_TEAM_ID}/skills`;
-export const PRISM_LEGACY_LOCAL_SKILLS_REL = `${LOCAL_TEAM_REL}/skills`;
-/** @deprecated Project-side leftover; live manifest is `~/.prismnext/skills-manifest.json`. */
-export const SKILLS_MANIFEST_REL = ".prismnext/agent/skills-manifest.json";
 /**
- * OpenCode `skills.paths` entry (relative to session cwd).
- * OpenCode discovers SKILL.md at ANY depth beneath each entry, so this single
- * relative entry covers `teams/project.local/skills/<id>` and the legacy
- * `skills/<id>` backstop. It is always emitted LAST — OpenCode resolves
- * duplicate skill names "later wins", so hangar skills shadow team/bundle skills.
+ * Leftover OpenCode `skills.paths` scan entry (relative to session cwd).
+ * Covers `.workbench/agent/teams/project.local/skills/<id>` at any depth.
+ * Always emitted last so hangar skills shadow team/bundle skills.
  */
-export const PRISM_OPENCODE_SKILLS_SCAN_REL = ".prismnext/agent";
+export const PRISM_OPENCODE_SKILLS_SCAN_REL = ".workbench/agent";
 
 /** OpenCode built-in skills we keep enabled in core but hide from the agent. */
 export const OPENCODE_HIDDEN_SKILLS = ["customize-opencode"] as const;
@@ -80,10 +69,10 @@ export function normalizeOpencodeConfigPath(absPath: string): string {
   return absPath.replace(/\\/g, "/");
 }
 
-/** Project root when path is under `.prismnext/agent/`. */
+/** Project root when path is under `.workbench/agent/`. */
 export function projectRootFromAgentPath(absPath: string): string | null {
   const normalized = normalizeOpencodeConfigPath(absPath);
-  const marker = "/.prismnext/agent/";
+  const marker = "/.workbench/agent/";
   const idx = normalized.toLowerCase().indexOf(marker);
   if (idx === -1) return null;
   return normalized.slice(0, idx);
@@ -103,13 +92,8 @@ export function isSkillsIntegrationPath(absPath: string, projectRoot: string): b
   if (!normLower.startsWith(rootLower + "/") && normLower !== rootLower) return false;
 
   const rel = normalized.slice(root.length).replace(/^\//, "");
-  const manifestRel = SKILLS_MANIFEST_REL.replace(/\\/g, "/");
-  if (rel === manifestRel || rel.startsWith(`${manifestRel}/`)) return true;
-  for (const skillsRel of [PRISM_SKILLS_REL, PRISM_LOCAL_SKILLS_REL]) {
-    const prefix = skillsRel.replace(/\\/g, "/");
-    if (rel === prefix || rel.startsWith(`${prefix}/`)) return true;
-  }
-  return false;
+  const prefix = PRISM_LOCAL_SKILLS_REL.replace(/\\/g, "/");
+  return rel === prefix || rel.startsWith(`${prefix}/`);
 }
 
 /** True when the path is the workbench skills manifest (not a skill folder). */
@@ -566,7 +550,7 @@ export interface ProjectSkillsOpencodePatch {
  * artifacts and keeps `.gitignore` entries; it does not write OpenCode config.
  *
  * skills.paths order = OpenCode same-name shadow priority (later wins):
- *   [other teams (id sort)…, core team, .prismnext/agent (hangar + legacy, highest)]
+ *   [other teams (id sort)…, core team, .workbench/agent (hangar, highest)]
  * Matches resolver bare-id precedence (project.local > core > others).
  * Disabled / unlicensed teams omit their dirs; per-skill deny uses skillPermissions.
  */
@@ -592,7 +576,7 @@ export function syncProjectSkillsIntegration(
   const teamDirs = new Map<string, string>(); // teamId → teamDir
   const teamMeta = new Map<string, { scope: "app" | "project"; source: TeamSource }>();
   for (const skill of listAssets(root, "skill")) {
-    // Project-local skills are covered by the trailing `.prismnext/agent` path.
+    // Project-local skills are covered by the trailing `.workbench/agent` path.
     if (!skill.enabled || isProjectLocalTeamId(skill.teamId)) continue;
     if (!teamDirs.has(skill.teamId)) {
       teamDirs.set(skill.teamId, dirname(dirname(skill.dir)));

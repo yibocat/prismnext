@@ -27,8 +27,6 @@ export interface AppSettings {
   trayIconEnabled?: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
-  /** @deprecated Leftover electron-store key. Not a product path; do not branch on it. */
-  lastProjectPath?: string;
   /** Workbench default project role (P3). Not used to auto-open in P1. */
   defaultProjectId?: string;
   /** Projects currently on the workbench (P3/P4). */
@@ -265,8 +263,12 @@ export function getSettings(): AppSettings {
       (store.get("sidebarCollapsed") as boolean) ?? defaults.sidebarCollapsed,
     rightPanelCollapsed:
       (store.get("rightPanelCollapsed") as boolean) ?? defaults.rightPanelCollapsed,
-    lastProjectPath: store.get("lastProjectPath") as string | undefined,
   };
+
+  if ("lastProjectPath" in raw) {
+    store.delete("lastProjectPath" as keyof AppSettings);
+    delete raw.lastProjectPath;
+  }
 
   // Decrypt sensitive fields
   const encryptedKey = store.get("zoteroApiKey") as string | undefined;
@@ -364,6 +366,7 @@ export function updateSettings(patch: Partial<AppSettings>): void {
 
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
+    if (key === "lastProjectPath") continue;
 
     if (isSensitiveKey(key)) {
       const stringValue = typeof value === "string" ? value : JSON.stringify(value);
@@ -375,14 +378,6 @@ export function updateSettings(patch: Partial<AppSettings>): void {
 
   persistStore(encrypted);
   if ("logMinLevel" in patch) applyLogMinLevel(patch.logMinLevel);
-}
-
-/**
- * R11（Phase 3）：清空 legacy 的 builtin command 全局启停键。
- * 状态已由 packs-state 迁移进首个迁移项目的 packs.json disabledContent。
- */
-export function clearLegacyBuiltinCommandStates(): void {
-  store.delete("builtinCommands" as keyof AppSettings);
 }
 
 /**

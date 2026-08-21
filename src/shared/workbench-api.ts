@@ -1,6 +1,6 @@
 /**
  * Workbench home settings and IPC shapes.
- * Source of truth: ~/.prismnext/settings.json (not electron-store lastProjectPath).
+ * Source of truth: ~/.prismnext/settings.json.
  */
 
 export interface WorkbenchProjectMember {

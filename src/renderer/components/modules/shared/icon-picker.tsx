@@ -38,7 +38,7 @@ export interface IconPickerProps {
   triggerLabel?: string;
   /**
    * Directory that holds `icon.png` for an existing image icon
-   * (team dir, or `<project>/.prismnext`).
+   * (team dir, or `<project>/.workbench`).
    */
   imageBaseDir?: string | null;
   /**

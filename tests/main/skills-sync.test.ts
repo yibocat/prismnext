@@ -27,9 +27,6 @@ import {
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
-import {
-  readTeamsState,
-} from "../../src/main/services/teams-state";
 import { setAppAssetEnabled, setAppTeamEnabled, setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import {
   addInstalledTeam,
@@ -180,7 +177,7 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
   });
 
   it("skills scan entry covers SKILL.md at any depth (OpenCode semantics)", () => {
-    expect(PRISM_OPENCODE_SKILLS_SCAN_REL).toBe(".prismnext/agent");
+    expect(PRISM_OPENCODE_SKILLS_SCAN_REL).toBe(".workbench/agent");
   });
 
   it("skillsPaths: pack dirs（非 core 字典序 → core）→ local 扫描位最后", () => {
@@ -245,34 +242,27 @@ describe("skills-sync: OpenCode 集成路径（引用模型）", () => {
     expect(result.skillPermissions["shared"]).toBe("deny");
   });
 
-  it("detects skills integration paths (home hangar + leftover paper paths)", () => {
+  it("detects skills integration paths (home hangar + workbench hangar)", () => {
     const root = temp();
     const homeSkillMd = join(homeSkillDir("demo"), "SKILL.md");
     const localSkillMd = join(root, PRISM_LOCAL_SKILLS_REL, "demo/SKILL.md");
-    const legacySkillMd = join(root, ".prismnext/agent/skills/demo/SKILL.md");
-    const manifest = join(root, ".prismnext/agent/skills-manifest.json");
+    const leftoverSkillMd = join(root, ".prismnext/agent/skills/demo/SKILL.md");
     expect(isSkillsIntegrationPath(homeSkillMd, root)).toBe(true);
     expect(isSkillsIntegrationPath(localSkillMd.replace(/\//g, "\\"), root)).toBe(true);
-    expect(isSkillsIntegrationPath(legacySkillMd.replace(/\//g, "\\"), root)).toBe(true);
-    expect(isSkillsIntegrationPath(manifest.replace(/\//g, "\\"), root)).toBe(true);
+    expect(isSkillsIntegrationPath(leftoverSkillMd.replace(/\//g, "\\"), root)).toBe(false);
     expect(isSkillsIntegrationPath(join(root, "main.tex"), root)).toBe(false);
-    // local pack 的 experts 目录不触发 skills 刷新
     expect(
-      isSkillsIntegrationPath(join(root, ".prismnext/agent/local/experts/x/expert.json"), root),
-    ).toBe(false);
-    // Prompt sync must not look like a skills change (was restarting OpenCode after each turn).
-    expect(
-      isSkillsIntegrationPath(join(root, ".prismnext/agent/_prism-system.md"), root),
+      isSkillsIntegrationPath(join(root, ".workbench/agent/teams/project.local/experts/x/expert.json"), root),
     ).toBe(false);
     expect(
-      isSkillsIntegrationPath(join(root, ".prismnext/agent/AGENTS.md"), root),
+      isSkillsIntegrationPath(join(root, ".workbench/agent/AGENTS.md"), root),
     ).toBe(false);
   });
 
   it("resolves project root from agent path on Windows-style separators", () => {
-    const abs = "C:/Users/test/project/.prismnext/agent/skills/x/SKILL.md";
+    const abs = "C:/Users/test/project/.workbench/agent/teams/project.local/skills/x/SKILL.md";
     expect(projectRootFromAgentPath(abs)).toBe("C:/Users/test/project");
-    const backslash = "C:\\Users\\test\\project\\.prismnext\\agent\\skills\\x\\SKILL.md";
+    const backslash = "C:\\Users\\test\\project\\.workbench\\agent\\teams\\project.local\\skills\\x\\SKILL.md";
     expect(projectRootFromAgentPath(backslash)).toBe("C:/Users/test/project");
   });
 });

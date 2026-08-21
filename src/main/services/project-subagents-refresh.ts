@@ -101,14 +101,6 @@ export function isExpertsIntegrationPath(absPath: string, projectRoot: string): 
   return (
     normalized.includes(`${root}/${projectTeamsRel()}/`)
     || normalized.endsWith(`${root}/${PROJECT_META_DIR}/agent/teams.json`)
-    // leftover paper-side hangar / local pack (not live writes)
-    || normalized.includes(`${root}/.prismnext/agent/local/`)
-    || normalized.includes(`${root}/.prismnext/agent/teams/`)
-    || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
-    || normalized.endsWith(`${root}/.prismnext/agent/packs.json`)
-    || normalized.includes(`${root}/.prismnext/agent/experts/`)
-    || normalized.endsWith(`${root}/.prismnext/agent/experts-manifest.json`)
-    || normalized.endsWith(`${root}/.prismnext/agent/orchestrators-manifest.json`)
   );
 }
 
