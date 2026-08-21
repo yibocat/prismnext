@@ -80,6 +80,7 @@ import {
 import {
   AgentMcpHost,
   mcpDefsFromTeamAssets,
+  resolveMcpSpawnCwd,
   selectMcpServers,
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
@@ -405,7 +406,7 @@ export class AgentService {
       if (!this.sessionId) {
         return { ok: false, error: "session_missing" };
       }
-      await this.attachLiveMcpTools(conversationId, projectRoot);
+      await this.attachLiveMcpTools(conversationId);
 
       const userText = buildAgentUserText({
         text: input.sessionAgent === "plan"
@@ -1032,15 +1033,21 @@ export class AgentService {
     }
   }
 
-  private async attachLiveMcpTools(conversationId: string, projectRoot: string): Promise<void> {
+  private async attachLiveMcpTools(conversationId: string): Promise<void> {
     const host = this.mcpHosts.get(conversationId);
     const runtime = this.registry.getRuntime(conversationId) as PiSdkRuntime | null;
     const sessionId = this.registry.getBinding(conversationId)?.runtimeSessionId;
     const ctx = this.startContexts.get(conversationId);
     if (!host || !runtime || !sessionId || !ctx) return;
+    const record = this.registry.store.getByConversationId(conversationId);
     const tools = await host.ensure(
       selectMcpServers(ctx.mcpServers ?? [], ctx.mcpAllowlist),
-      { cwd: projectRoot },
+      {
+        cwd: resolveMcpSpawnCwd({
+          boundCheckoutPath: record?.boundCheckoutPath,
+          projectRoot: record?.projectRoot || this.projectRoot || "",
+        }),
+      },
     );
     const fresh = host.takeUnattached(tools);
     if (fresh.length === 0) return;

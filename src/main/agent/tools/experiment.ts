@@ -193,7 +193,7 @@ export const resultsSnapshotTool: NativeToolDefinition = {
 export const provenanceQueryTool: NativeToolDefinition = {
   name: TOOL_NAMES.provenanceQuery,
   label: "Query Provenance",
-  description: "Query provenance history (.prismnext/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
+  description: "Query provenance history (.workbench/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
   promptGuidelines: [
     "Use `resolve_artifact` to answer \"which run produced this file\" (command/env/exit/chat), and `resolve_run` for a run by id.",
     "An empty/null result is honest — nothing is recorded yet; report that rather than inventing a provenance.",

@@ -1,6 +1,6 @@
 /**
  * experiment-run executor — runs a shell command in the workspace experiment island,
- * appends run record to `.prismnext/experiments/<id>/runs.jsonl`.
+ * appends run record to `.workbench/experiments/<id>/runs.jsonl`.
  *
  * Two completion sinks (Sprint 0.7):
  *  - Bridge caller passes `resPath` (legacy file-bridge contract; unchanged).
@@ -189,7 +189,7 @@ export interface KickoffExperimentRunArgs {
    * NOT the PTY session id built below - kept separate to avoid collision.
    */
   chatSessionId?: string | null;
-  /** Default true — ensure shared project `.prismnext/.venv` before detect/run. */
+  /** Default true — ensure shared project `.workbench/.venv` before detect/run. */
   ensureVenv?: boolean;
   venvRunner?: ExperimentVenvRunner;
   /**
@@ -281,7 +281,7 @@ export async function kickoffExperimentRun(
     return kickoffWithEnv(args, island, env, { PYTHONUNBUFFERED: "1" });
   }
 
-  // Hard gate: Python under Experiment uses the shared project `.prismnext/.venv`.
+  // Hard gate: Python under Experiment uses the shared project `.workbench/.venv`.
   if (isPythonRelatedCommand(command) && args.ensureVenv !== false) {
     const gate = gateExperimentPythonExecution({
       projectRoot: ctx.projectRoot,
@@ -551,7 +551,7 @@ function reportResult(
 
 /**
  * Build PTY env vars so the run uses the detected python interpreter:
- *  - If `env.python` points at the shared project `.prismnext/.venv`, prepend its
+ *  - If `env.python` points at the shared project `.workbench/.venv`, prepend its
  *    `bin` dir to PATH (so `python` / `pip` resolve to the venv).
  *  - Set `VIRTUAL_ENV` to the venv root so `pip` / `python` / `uv pip` self-identify it.
  *  - Always set `PYTHONUNBUFFERED=1` for streaming output.
@@ -561,7 +561,7 @@ function reportResult(
 export function buildPythonEnvExtra(env: ExperimentEnv): Record<string, string> {
   const extra: Record<string, string> = { PYTHONUNBUFFERED: "1" };
   if (env.python && env.venvPath) {
-    // env.python is `.prismnext/.venv/bin/python` (posix) or
+    // env.python is `.workbench/.venv/bin/python` (posix) or
     // `…/Scripts/python.exe` (windows). dirname gives the bin dir.
     const venvBin = dirname(env.python);
     const venvRoot = pathResolve(venvBin, "..");

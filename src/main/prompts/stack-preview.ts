@@ -101,9 +101,9 @@ export async function buildPromptStackPreview(
     section(
       "agents-md",
       "AGENTS.md (project instructions)",
-      "Read from `.prismnext/agent/AGENTS.md` and appended in AgentService",
+      "Read from `.workbench/agent/AGENTS.md` and appended in AgentService",
       ctx.agentsMdContent ?? "",
-      ".prismnext/agent/AGENTS.md",
+      ".workbench/agent/AGENTS.md",
     ),
   );
 
@@ -114,7 +114,7 @@ export async function buildPromptStackPreview(
       "Project rules",
       "Each chat turn — user message block (all enabled always rules)",
       projectRules,
-      ".prismnext/agent/rules/*/RULE.md",
+      ".workbench/agent/rules/*/RULE.md",
     ),
   );
 

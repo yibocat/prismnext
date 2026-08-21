@@ -9,6 +9,19 @@ export const PROJECT_META_DIR = ".workbench";
 export const WORKBENCH_HOME_DIRNAME = ".prismnext";
 export const WORKBENCH_JSON_FILENAME = "workbench.json";
 export const PROJECT_COMPILE_DIRNAME = "compile";
+export const PROJECT_AGENT_DIRNAME = "agent";
+export const PROJECT_AGENTS_MD_FILENAME = "AGENTS.md";
+export const PROJECT_RULES_DIRNAME = "rules";
+export const PROJECT_TEAMS_DIRNAME = "teams";
+export const PROJECT_TEAMS_STATE_FILENAME = "teams.json";
+export const PROJECT_INTERACTIONS_DIRNAME = "interactions";
+export const PROJECT_EXPERIMENTS_DIRNAME = "experiments";
+export const PROJECT_VENV_DIRNAME = ".venv";
+export const PROJECT_PROVENANCE_FILENAME = "provenance.jsonl";
+export const PROJECT_TERMINAL_DIRNAME = "terminal";
+export const PROJECT_RESEARCH_DIRNAME = "research";
+export const PROJECT_PLANS_DIRNAME = "plans";
+export const PROJECT_STATE_DIRNAME = "state";
 
 export const PROJECTS_DIRNAME = "projects";
 export const LIBRARY_DIRNAME = "library";
@@ -39,6 +52,59 @@ export function workbenchJsonRel(): string {
 /** Paper compile cache, relative to the project root. */
 export function projectCompileRel(): string {
   return posixJoin(PROJECT_META_DIR, PROJECT_COMPILE_DIRNAME);
+}
+
+/** Project agent instructions — this is the file Settings and Pi both read. */
+export function projectAgentsMdRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_AGENT_DIRNAME, PROJECT_AGENTS_MD_FILENAME);
+}
+
+export function projectRulesRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_AGENT_DIRNAME, PROJECT_RULES_DIRNAME);
+}
+
+export function projectTeamsRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_AGENT_DIRNAME, PROJECT_TEAMS_DIRNAME);
+}
+
+export function projectTeamsStateRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_AGENT_DIRNAME, PROJECT_TEAMS_STATE_FILENAME);
+}
+
+export function projectInteractionsRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_INTERACTIONS_DIRNAME);
+}
+
+export function projectExperimentsRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_EXPERIMENTS_DIRNAME);
+}
+
+export function projectVenvRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_VENV_DIRNAME);
+}
+
+export function projectProvenanceRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_PROVENANCE_FILENAME);
+}
+
+export function projectTerminalDirRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_TERMINAL_DIRNAME);
+}
+
+export function projectResearchPlansRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_RESEARCH_DIRNAME, PROJECT_PLANS_DIRNAME);
+}
+
+export function projectCheckpointsRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_STATE_DIRNAME, "checkpoints");
+}
+
+export function projectSessionsDisplayRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_STATE_DIRNAME, "sessions-display.json");
+}
+
+export function projectSessionsContextRel(): string {
+  return posixJoin(PROJECT_META_DIR, PROJECT_STATE_DIRNAME, "sessions-context.json");
 }
 
 export function projectSlotRel(projectId: string): string {

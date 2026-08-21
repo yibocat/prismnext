@@ -52,7 +52,7 @@ export function resolveRunImagePathsForDisplay(
     artifacts: run.artifacts,
     artifactSnapshots: run.artifactSnapshots,
   });
-  // Snapshots are already project-relative under .prismnext/ — pass through.
+  // Snapshots are already project-relative under .workbench/experiments/ — pass through.
   if ((run.artifactSnapshots?.length ?? 0) > 0) {
     return preferred;
   }

@@ -216,13 +216,15 @@ describe("findPrismProjectRoot — skip workbench home", () => {
     expect(findPrismProjectRoot(resolveWorkbenchHome({ homeDir: fakeHome }))).toBeNull();
   });
 
-  it("still finds a real project that has its own .prismnext folder", () => {
+  it("finds a paper folder by .workbench, not leftover .prismnext", () => {
     const fakeHome = path.join(tmpRoot(), "Users", "me");
     setWorkbenchUserHomeOverride(fakeHome);
     ensureWorkbenchHome({ homeDir: fakeHome });
     const project = path.join(fakeHome, "Documents", "old-paper");
     fs.mkdirSync(path.join(project, WORKBENCH_HOME_DIRNAME), { recursive: true });
+    expect(findPrismProjectRoot(path.join(project, "src"))).toBeNull();
 
+    fs.mkdirSync(path.join(project, PROJECT_META_DIR), { recursive: true });
     expect(findPrismProjectRoot(path.join(project, "src"))).toBe(
       path.resolve(project).replace(/\\/g, "/").replace(/\/+$/, ""),
     );

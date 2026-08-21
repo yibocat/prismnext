@@ -1,18 +1,20 @@
 /**
  * Interactive Research Artifact — Scene Spec (P0 shell).
- * True source lives at `.prismnext/interactions/<id>/spec.json`.
+ * True source lives at `.workbench/interactions/<id>/spec.json`.
  *
  * Naming note (avoid confusion):
- * - **Interaction spec** — this file; directory `.prismnext/interactions/` stores specs.
+ * - **Interaction spec** — this file; directory `.workbench/interactions/` stores specs.
  * - **Chat `artifact` fence** — embeds a project **file path** in chat (see chat-artifact.ts).
  * - **Run `artifacts[]`** — experiment-run output paths in runs.jsonl / provenance.
- * - **Legacy** — specs written before 0.6.6 may still be under `.prismnext/artifacts/` (auto-migrated on read/write).
+ * - **Leftover** — pre-workbench specs under `.prismnext/interactions/` or `.prismnext/artifacts/` are not read (D-30).
  */
 
-/** Project-relative root for Interaction spec directories. */
-export const INTERACTION_SPEC_DIR_REL = ".prismnext/interactions";
+import { projectInteractionsRel } from "./workbench-paths";
 
-/** Pre-0.6.6 spec root — read + lazy migrate only. */
+/** Project-relative root for Interaction spec directories. */
+export const INTERACTION_SPEC_DIR_REL = projectInteractionsRel();
+
+/** @deprecated Leftover paper-side path. Not read or migrated (D-30). */
 export const LEGACY_INTERACTION_SPEC_DIR_REL = ".prismnext/artifacts";
 
 export function interactionSpecRelativePath(id: string): string {

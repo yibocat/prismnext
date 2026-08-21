@@ -400,11 +400,11 @@ export function useChatComposer() {
       let promptToSend = promptText;
       if (hadSetup) {
         promptToSend = [
-          "Refine `.prismnext/agent/AGENTS.md` based on the user request below.",
+          "Refine `.workbench/agent/AGENTS.md` based on the user request below.",
           "The file was just scaffolded by `/setup` from a local project scan.",
           "",
           "Rules:",
-          "- Read `.prismnext/agent/AGENTS.md` first, then update it in one write.",
+          "- Read `.workbench/agent/AGENTS.md` first, then update it in one write.",
           "- Do NOT re-explore the repository (no glob/grep/list unless the user explicitly asked).",
           "- Keep sections concise; this file is for AI agents, not end-user docs.",
           "",

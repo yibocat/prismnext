@@ -77,7 +77,7 @@ describe("assistantTextEmbedsArtifactPath", () => {
     expect(
       assistantTextEmbedsArtifactPath(
         "```artifact\npath: manuscript/fig.png\ntitle: x\n```",
-        ".prismnext/experiments/e1/artifacts/r1/fig.png",
+        ".workbench/experiments/e1/artifacts/r1/fig.png",
       ),
     ).toBe(true);
   });
@@ -136,9 +136,9 @@ describe("collapseVisualArtifactPaths", () => {
     expect(
       collapseVisualArtifactPaths([
         "experiments/e1/fig.svg",
-        ".prismnext/experiments/e1/artifacts/run-1/fig.svg",
+        ".workbench/experiments/e1/artifacts/run-1/fig.svg",
       ]),
-    ).toEqual([".prismnext/experiments/e1/artifacts/run-1/fig.svg"]);
+    ).toEqual([".workbench/experiments/e1/artifacts/run-1/fig.svg"]);
   });
 
   it("keeps non-visual files even when the stem matches a figure", () => {

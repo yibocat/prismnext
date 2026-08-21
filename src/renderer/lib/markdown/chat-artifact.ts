@@ -2,7 +2,7 @@
  * Chat artifact fence helpers — explicit ```artifact blocks in AI replies.
  *
  * Terminology: "artifact" here means **project file path embed**, not Interaction specs
- * (`.prismnext/interactions/<id>/spec.json` — see interaction-spec.ts and ```interaction fences).
+ * (`.workbench/interactions/<id>/spec.json` — see interaction-spec.ts and ```interaction fences).
  * See docs-private/superpowers/specs/2026-07-18-chat-artifact-block-design.md
  */
 import {

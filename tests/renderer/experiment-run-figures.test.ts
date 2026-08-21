@@ -114,14 +114,14 @@ describe("extractExperimentArtifactPaths", () => {
           cwd: "experiment/exp-demo",
           artifacts: ["manuscript/benchmark.png", "out/metrics.json"],
           artifactSnapshots: [
-            ".prismnext/experiments/exp-demo/artifacts/run-1/benchmark.png",
+            ".workbench/experiments/exp-demo/artifacts/run-1/benchmark.png",
           ],
           exitCode: 0,
         },
       }),
     };
     expect(extractExperimentArtifactPaths(toolUse, toolResult)).toEqual([
-      ".prismnext/experiments/exp-demo/artifacts/run-1/benchmark.png",
+      ".workbench/experiments/exp-demo/artifacts/run-1/benchmark.png",
       "out/metrics.json",
     ]);
   });
@@ -390,13 +390,13 @@ describe("one chat preview per logical figure", () => {
             "experiments/e1/results/fig.pdf",
             "experiments/e1/results/fig.png",
           ],
-          artifactSnapshots: [".prismnext/experiments/e1/artifacts/run-1/fig.png"],
+          artifactSnapshots: [".workbench/experiments/e1/artifacts/run-1/fig.png"],
           exitCode: 0,
         },
       }),
     };
     expect(extractExperimentArtifactPaths(toolUse, toolResult)).toEqual([
-      ".prismnext/experiments/e1/artifacts/run-1/fig.png",
+      ".workbench/experiments/e1/artifacts/run-1/fig.png",
     ]);
   });
 
@@ -418,13 +418,13 @@ describe("one chat preview per logical figure", () => {
       },
     ];
     const [tu1, tr1] = mk("tu1");
-    const [tu2, tr2] = mk("tu2", [".prismnext/experiments/e1/artifacts/run-2/fig.svg"]);
+    const [tu2, tr2] = mk("tu2", [".workbench/experiments/e1/artifacts/run-2/fig.svg"]);
     const map = new Map<string, ContentBlock>([
       ["tu1", tr1],
       ["tu2", tr2],
     ]);
     expect(collectExperimentArtifactPathsFromBlocks([tu1, tu2], map)).toEqual([
-      ".prismnext/experiments/e1/artifacts/run-2/fig.svg",
+      ".workbench/experiments/e1/artifacts/run-2/fig.svg",
     ]);
   });
 });

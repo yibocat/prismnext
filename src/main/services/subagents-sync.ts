@@ -10,13 +10,10 @@
  *   - CRUD 写 project.local / user teams 目录（M8 后 teams/project.local/）
  */
 
-import { app } from "electron";
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   rmSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -26,7 +23,6 @@ import {
   type SubagentInfo,
   type OrchestratorDefinition,
   type OrchestratorInfo,
-  type PrismExpertsSyncState,
   type SaveCustomSubagentPayload,
   type SaveCustomOrchestratorPayload,
   DEFAULT_ORCHESTRATOR_ID,
@@ -73,8 +69,6 @@ import { createLogger } from "./logger";
 const log = createLogger("subagents-sync", "agent");
 
 export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
-
-export const PRISM_EXPERTS_SYNC_REL = "prism-experts-sync.json";
 
 // ── 裸 id / 文件名命名空间 ─────────────────────────────────
 
@@ -480,9 +474,8 @@ export function buildProjectSubagentsAgentPlan(
   projectRoot: string,
   options?: { promptCtx?: PromptContext; defaultSubagentModel?: string | null },
 ): ProjectExpertsAgentPlan {
-  // The Project Team lead is an automatic agent-plan entry, even before the
-  // project has user-created content. Invalidate a prior view after the seed
-  // so resolution includes its freshly written manifest and lead.
+  // Leftover local/ or agent/mcp.json may still need M8/M11. This does not
+  // mkdir an empty project.local hangar.
   if (ensureProjectContentMigrated(projectRoot)) {
     invalidateResolver(projectRoot);
   }
@@ -602,88 +595,6 @@ export function renderOrchestratorAgentMarkdown(
   const bodyWithExperts = appendSubagentRosterSection(instructionsBody, roster);
   const body = appendCapabilityRefs(def, bodyWithExperts, promptCtx, "orchestrator");
   return `${serializeFrontmatter(frontmatter)}\n\n${body}\n`;
-}
-
-// ── opencode 同步（与重构前一致）─────────────────────────────
-
-export function getOpencodeAgentsDir(): string {
-  return join(app.getPath("userData"), "opencode-server", "config", "opencode", "agents");
-}
-
-export function getPrismExpertsSyncStatePath(): string {
-  return join(app.getPath("userData"), "opencode-server", PRISM_EXPERTS_SYNC_REL);
-}
-
-export function readPrismExpertsSyncState(): PrismExpertsSyncState | null {
-  const path = getPrismExpertsSyncStatePath();
-  if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, "utf-8")) as PrismExpertsSyncState;
-  } catch {
-    return null;
-  }
-}
-
-export function writePrismExpertsSyncState(state: PrismExpertsSyncState): void {
-  const path = getPrismExpertsSyncStatePath();
-  mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, JSON.stringify(state, null, 2), "utf-8");
-}
-
-export function clearSyncedAgentFiles(agentsDir: string, agentFiles: string[]): void {
-  for (const file of agentFiles) {
-    const safe = file.replace(/[/\\]/g, "");
-    if (!safe || safe !== file) continue;
-    const target = join(agentsDir, safe);
-    if (existsSync(target)) {
-      try {
-        unlinkSync(target);
-      } catch {
-        // non-fatal
-      }
-    }
-  }
-}
-
-export function syncProjectSubagentsToOpencode(
-  projectRoot: string,
-  options?: {
-    agentsDir?: string;
-    syncStatePath?: string;
-    promptCtx?: PromptContext;
-    defaultSubagentModel?: string | null;
-  },
-): { agentFiles: string[]; orchestratorId: string; orchestratorContentHash: string; syncContentHash: string } {
-  const agentsDir = options?.agentsDir ?? getOpencodeAgentsDir();
-  mkdirSync(agentsDir, { recursive: true });
-
-  const plan = buildProjectSubagentsAgentPlan(projectRoot, options);
-  for (const entry of plan.agentEntries) {
-    writeFileSync(join(agentsDir, entry.filename), entry.content, "utf-8");
-  }
-
-  const state: PrismExpertsSyncState = {
-    projectRoot,
-    syncedAt: Date.now(),
-    agentFiles: plan.agentFiles,
-    orchestratorId: plan.orchestratorId,
-    orchestratorContentHash: plan.orchestratorContentHash,
-    syncContentHash: plan.syncContentHash,
-  };
-
-  if (options?.syncStatePath) {
-    mkdirSync(join(options.syncStatePath, ".."), { recursive: true });
-    writeFileSync(options.syncStatePath, JSON.stringify(state, null, 2), "utf-8");
-  } else {
-    writePrismExpertsSyncState(state);
-  }
-
-  return {
-    agentFiles: plan.agentFiles,
-    orchestratorId: plan.orchestratorId,
-    orchestratorContentHash: plan.orchestratorContentHash,
-    syncContentHash: plan.syncContentHash,
-  };
 }
 
 // ── local pack 内容读写（旧 custom experts/orchestrators 契约）──

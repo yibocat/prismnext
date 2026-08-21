@@ -10,6 +10,7 @@ import {
   resolveSmartPermissionAction,
 } from "../../shared/smart-permission-policy";
 import { isLatexCompileToolName } from "../../shared/tool-names";
+import { projectRulesRel } from "../../shared/workbench-paths";
 import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
@@ -171,7 +172,7 @@ export function extractToolPathContext(
   if (name === "project-rule-write") {
     const ruleName = str("name");
     return {
-      filePath: ruleName ? `.prismnext/agent/rules/${ruleName}/RULE.md` : null,
+      filePath: ruleName ? `${projectRulesRel()}/${ruleName}/RULE.md` : null,
     };
   }
   if (name === "bash" || name === "experiment-run") {

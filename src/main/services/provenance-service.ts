@@ -1,5 +1,5 @@
 /**
- * Provenance service - append-only `.prismnext/provenance.jsonl` event log.
+ * Provenance service - append-only `.workbench/provenance.jsonl` event log.
  *
  * Cross-cutting stream that binds experiment runs and claimed output artifacts
  * back to their generating command / env / chat session. `runs.jsonl` remains
@@ -74,7 +74,7 @@ export function readProvenanceEvents(projectRoot: string): ProvenanceEvent[] {
   return out;
 }
 
-/** Append one event (creates `.prismnext/` if needed). Never throws; returns false on I/O failure. */
+/** Append one event (creates `.workbench/` if needed). Never throws; returns false on I/O failure. */
 export function appendProvenanceEvent(projectRoot: string, event: ProvenanceEvent): boolean {
   const root = projectRoot.replace(/\\/g, "/");
   try {

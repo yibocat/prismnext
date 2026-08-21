@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { projectTerminalDirRel } from "../../shared/workbench-paths";
 
 // ─── Types ───
 
@@ -18,12 +19,12 @@ export interface TerminalConfig {
 
 // ─── Constants ───
 
-const TERMINAL_DIR = ".prismnext/terminal";
+const TERMINAL_DIR = projectTerminalDirRel();
 const CONFIG_FILE = "config.json";
 
 // ─── Service ───
 
-/** Load terminal config from the project's .prismnext/terminal/config.json. */
+/** Load terminal config from `.workbench/terminal/config.json`. */
 export function loadConfig(projectRoot: string): TerminalConfig {
   const dir = path.join(projectRoot, TERMINAL_DIR);
   const filePath = path.join(dir, CONFIG_FILE);
@@ -40,7 +41,7 @@ export function loadConfig(projectRoot: string): TerminalConfig {
   }
 }
 
-/** Save terminal config to the project's .prismnext/terminal/config.json. */
+/** Save terminal config to `.workbench/terminal/config.json`. */
 export function saveConfig(projectRoot: string, config: TerminalConfig): void {
   const dir = path.join(projectRoot, TERMINAL_DIR);
   if (!fs.existsSync(dir)) {

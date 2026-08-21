@@ -48,7 +48,7 @@ describe("provenance-service", () => {
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it("appendProvenanceEvent creates the file + .prismnext dir", () => {
+  it("appendProvenanceEvent creates the file under .workbench", () => {
     appendProvenanceEvent(projectRoot, {
       id: generateProvenanceId(),
       schemaVersion: 1,
@@ -70,7 +70,8 @@ describe("provenance-service", () => {
       stdoutTailBytes: 0,
       stderrTailBytes: 0,
     });
-    expect(existsSync(join(projectRoot, ".prismnext", "provenance.jsonl"))).toBe(true);
+    expect(existsSync(join(projectRoot, ".workbench", "provenance.jsonl"))).toBe(true);
+    expect(existsSync(join(projectRoot, ".prismnext"))).toBe(false);
     expect(readProvenanceEvents(projectRoot)).toHaveLength(1);
   });
 
@@ -226,9 +227,9 @@ describe("provenance-service", () => {
   it("skips corrupt lines without throwing", () => {
     // Hand-write a corrupt line followed by a good one.
     const { appendFileSync, mkdirSync } = require("node:fs");
-    mkdirSync(join(projectRoot, ".prismnext"), { recursive: true });
+    mkdirSync(join(projectRoot, ".workbench"), { recursive: true });
     appendFileSync(
-      join(projectRoot, ".prismnext", "provenance.jsonl"),
+      join(projectRoot, ".workbench", "provenance.jsonl"),
       "{not json\n" +
         JSON.stringify({
           id: "prov_ok",

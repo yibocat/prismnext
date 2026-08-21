@@ -1,5 +1,7 @@
+import { projectResearchPlansRel } from "./workbench-paths";
+
 /** Project-relative directory for session research plans (not brief.md). */
-export const RESEARCH_PLANS_DIR_REL = ".prismnext/research/plans";
+export const RESEARCH_PLANS_DIR_REL = projectResearchPlansRel();
 
 /** Per-session living drafts (one file per chat session). */
 export const RESEARCH_PLAN_DRAFTS_DIR_REL = `${RESEARCH_PLANS_DIR_REL}/drafts`;

@@ -6,6 +6,7 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { notifyPromptConfigChanged } from "@/lib/settings/prompt-config-notify";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import { projectAgentsMdRel } from "@shared/workbench-paths";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
@@ -25,7 +26,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
   const [viewMode, setViewMode] = useState<"source" | "preview">("preview");
 
   const agentsMdPath = projectRoot
-    ? `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/AGENTS.md`
+    ? `${projectRoot.replace(/[/\\]+$/, "")}/${projectAgentsMdRel()}`
     : "";
 
   const loadContent = useCallback(

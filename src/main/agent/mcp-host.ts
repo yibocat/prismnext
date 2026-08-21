@@ -55,6 +55,15 @@ export function mcpDefsFromTeamAssets(
  * Empty allowlist = only autoStart servers (lazy).
  * Names in the allowlist join autoStart for this turn.
  */
+/** Stdio MCP processes start in the session checkout, not always the paper root. */
+export function resolveMcpSpawnCwd(opts: {
+  boundCheckoutPath?: string | null;
+  projectRoot: string;
+}): string {
+  const checkout = opts.boundCheckoutPath?.trim();
+  return checkout || opts.projectRoot;
+}
+
 export function selectMcpServers(
   servers: readonly McpServerDef[],
   allowlist?: string[] | null,

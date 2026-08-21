@@ -1,5 +1,5 @@
 /**
- * Experiment log service — split registry (`.prismnext/experiments/`) vs workspace lab.
+ * Experiment log service — split registry (`.workbench/experiments/`) vs workspace lab.
  *
  * Registry holds meta.json + runs.jsonl per experiment id.
  * Workspace experiment folder is an empty lab — agent-owned layout.
@@ -28,7 +28,7 @@ import {
 } from "../../shared/artifact-path";
 import { resolveExperimentDir } from "./workspace-config";
 import { generateProvenanceId, recordRunProvenance } from "./provenance-service";
-import { isWorkbenchHomePath } from "../workbench/home";
+import { PROJECT_META_DIR } from "../../shared/workbench-paths";
 import {
   EXPERIMENT_META_FILENAME,
   EXPERIMENT_REGISTRY_REL,
@@ -81,8 +81,7 @@ export function isExperimentCtxError(
 }
 
 export function resolveExperimentCtx(projectRoot: string): ExperimentCtxResult {
-  const prismDir = join(projectRoot, ".prismnext");
-  const resolved = resolveExperimentDir(projectRoot, prismDir);
+  const resolved = resolveExperimentDir(projectRoot);
   if ("error" in resolved) {
     return { ok: false, error: "no_experiment_folder", hint: NO_EXPERIMENT_FOLDER_HINT };
   }
@@ -94,7 +93,7 @@ const IS_WIN = process.platform === "win32";
 /** Resolved paths for one project + Workspace experiment folder. */
 export interface ExperimentStorageContext {
   projectRoot: string;
-  /** Absolute `.prismnext/experiments` */
+  /** Absolute `.workbench/experiments` */
   registryRoot: string;
   /** Workspace experiment folder name (e.g. `experiment`) */
   workspaceRel: string;
@@ -306,7 +305,7 @@ function whichProbe(binary: string, cwd: string): string | null {
 
 /**
  * Absolute paths for the project-scoped shared Python venv
- * (`.prismnext/.venv` — may not exist yet).
+ * (`.workbench/.venv` — may not exist yet).
  */
 export function resolveProjectPythonVenv(projectRoot: string): {
   venvAbs: string;
@@ -314,7 +313,7 @@ export function resolveProjectPythonVenv(projectRoot: string): {
   python: string;
 } {
   const root = pathResolve(projectRoot);
-  const venvAbs = join(root, ".prismnext", EXPERIMENT_VENV_DIR);
+  const venvAbs = join(root, PROJECT_META_DIR, EXPERIMENT_VENV_DIR);
   const python = IS_WIN
     ? join(venvAbs, "Scripts", "python.exe")
     : join(venvAbs, "bin", "python");
@@ -323,7 +322,7 @@ export function resolveProjectPythonVenv(projectRoot: string): {
 
 /**
  * Absolute path to the shared project venv Python interpreter.
- * `projectRoot` is the Prism project root (directory that contains `.prismnext/`).
+ * `projectRoot` is the PrismNext project root (directory that contains `.workbench/`).
  */
 export function resolveWorkspaceExperimentVenvPython(projectRoot: string): string {
   return resolveProjectPythonVenv(projectRoot).python;
@@ -344,7 +343,7 @@ export interface EnsureExperimentPythonVenvResult {
   ok: boolean;
   /** True when this call created the venv (false if it already existed). */
   created: boolean;
-  /** Project-relative venv path (always `.prismnext/.venv` when present). */
+  /** Project-relative venv path (always `.workbench/.venv` when present). */
   venvPath: string | null;
   python: string | null;
   method?: "uv" | "venv" | "existing";
@@ -381,8 +380,8 @@ function ensurePrismVenvGitignored(projectRoot: string): void {
       return;
     }
   }
-  const line = ".prismnext/.venv/";
-  if (content.includes(line) || content.includes(".prismnext/.venv")) return;
+  const line = `${PRISMNEXT_VENV_REL}/`;
+  if (content.includes(line) || content.includes(PRISMNEXT_VENV_REL)) return;
   const prefix = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
   writeFileSync(
     gitignorePath,
@@ -392,12 +391,12 @@ function ensurePrismVenvGitignored(projectRoot: string): void {
 }
 
 /**
- * Ensure one shared project venv at `.prismnext/.venv` for Experiment,
+ * Ensure one shared project venv at `.workbench/.venv` for Experiment,
  * Interaction, and other project Python. Prefer `uv venv`, fall back to
  * `python3 -m venv`. Idempotent when the interpreter already exists.
  * Never installs packages into system Python. Lazy — call on first need.
  *
- * @param projectRoot Prism project root (contains `.prismnext/`). Callers that
+ * @param projectRoot PrismNext project root (contains `.workbench/`). Callers that
  *   only have an experiment workspace path should pass `ctx.projectRoot` or
  *   resolve via `findPrismProjectRoot`.
  */
@@ -420,7 +419,7 @@ export function ensureExperimentPythonVenv(
     };
   }
 
-  mkdirSync(join(root, ".prismnext"), { recursive: true });
+  mkdirSync(join(root, PROJECT_META_DIR), { recursive: true });
   ensurePrismVenvGitignored(root);
 
   const uvCmd = `uv venv ${PRISMNEXT_VENV_REL}`;
@@ -464,12 +463,12 @@ export function ensureExperimentPythonVenv(
 /** Alias — same as {@link ensureExperimentPythonVenv}. */
 export const ensureProjectPythonVenv = ensureExperimentPythonVenv;
 
-/** Walk up from a path looking for a `.prismnext` directory (project root). */
+/** Walk up from a path looking for a `.workbench` directory (project root). */
 export function findPrismProjectRoot(start: string): string | null {
   let cur = pathResolve(start || "");
   for (let i = 0; i < 48; i++) {
-    const marker = join(cur, ".prismnext");
-    if (existsSync(marker) && !isWorkbenchHomePath(marker)) {
+    const marker = join(cur, PROJECT_META_DIR);
+    if (existsSync(marker)) {
       return cur.replace(/\\/g, "/");
     }
     const parent = dirname(cur);
@@ -581,7 +580,7 @@ function isUnderExperimentWorkspace(
     findPrismProjectRoot(cwd) ||
     findPrismProjectRoot(process.cwd());
   if (!projectRoot) return false;
-  const resolved = resolveExperimentDir(projectRoot, join(projectRoot, ".prismnext"));
+  const resolved = resolveExperimentDir(projectRoot);
   if ("error" in resolved) return false;
   const candidates: string[] = [cwd];
   for (const cd of extractCdTargets(command)) {
@@ -598,7 +597,7 @@ function isUnderExperimentWorkspace(
 /**
  * Hard gate for Python under a Prism project.
  *
- * Shared venv: `.prismnext/.venv` (Experiment + Interaction + other project Python).
+ * Shared venv: `.workbench/.venv` (Experiment + Interaction + other project Python).
  *
  * - Non-Python → passthrough
  * - No project root → passthrough
@@ -704,7 +703,7 @@ export function gateExperimentPythonExecution(opts: {
     );
   }
 
-  const resolved = resolveExperimentDir(projectRoot, join(projectRoot, ".prismnext"));
+  const resolved = resolveExperimentDir(projectRoot);
   if ("error" in resolved) {
     // No Experiment folder configured — still use the project venv.
     return applyProjectVenv();
@@ -783,7 +782,7 @@ export function gateExperimentPythonExecution(opts: {
   };
 }
 
-/** Detect runtime environment; Python prefers the shared project `.prismnext/.venv`. */
+/** Detect runtime environment; Python prefers the shared project `.workbench/.venv`. */
 export function detectEnv(
   probeCwd: string,
   workspace?: { workspaceAbs: string; workspaceRel: string; projectRoot?: string },
@@ -1080,7 +1079,7 @@ export interface CreateExperimentInput {
 }
 
 export interface CreateExperimentOptions {
-  /** Default true — best-effort shared `uv venv` / `python -m venv` at `.prismnext/.venv`. */
+  /** Default true — best-effort shared `uv venv` / `python -m venv` at `.workbench/.venv`. */
   ensureVenv?: boolean;
   venvRunner?: ExperimentVenvRunner;
 }

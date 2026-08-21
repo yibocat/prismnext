@@ -7,6 +7,7 @@ import {
 } from "../teams/agents-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { normalizeProjectRoot } from "./skills-sync";
+import { PROJECT_META_DIR, projectTeamsRel } from "../../shared/workbench-paths";
 
 const EXPERTS_REFRESH_DEBOUNCE_MS = 800;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -98,15 +99,13 @@ export function isExpertsIntegrationPath(absPath: string, projectRoot: string): 
   const normalized = absPath.replace(/\\/g, "/");
   const root = projectRoot.replace(/\\/g, "/");
   return (
-    // local pack（用户自建 orchestrators/experts/skills/commands）
-    normalized.includes(`${root}/.prismnext/agent/local/`)
-    || normalized.includes(`${root}/.prismnext/agent/teams/project.local/`)
-    // project teams root + teams.json（v2 启停 / 默认活动团队）
+    normalized.includes(`${root}/${projectTeamsRel()}/`)
+    || normalized.endsWith(`${root}/${PROJECT_META_DIR}/agent/teams.json`)
+    // leftover paper-side hangar / local pack (not live writes)
+    || normalized.includes(`${root}/.prismnext/agent/local/`)
     || normalized.includes(`${root}/.prismnext/agent/teams/`)
     || normalized.endsWith(`${root}/.prismnext/agent/teams.json`)
-    // packs.json (legacy — migration input only)
     || normalized.endsWith(`${root}/.prismnext/agent/packs.json`)
-    // legacy 路径（迁移前/回滚期仍可能变动）
     || normalized.includes(`${root}/.prismnext/agent/experts/`)
     || normalized.endsWith(`${root}/.prismnext/agent/experts-manifest.json`)
     || normalized.endsWith(`${root}/.prismnext/agent/orchestrators-manifest.json`)

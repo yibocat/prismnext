@@ -7,8 +7,10 @@ import {
   isCanonicalSessionDraftPath,
   isResearchPlanDraftPath,
   LEGACY_DRAFT_PLAN_REL,
+  RESEARCH_PLANS_DIR_REL,
   sessionDraftPlanRel,
 } from "./research-plan";
+import { projectRulesRel } from "./workbench-paths";
 
 /** OpenCode primary agent identity for a chat tab. */
 export type SessionAgent = "build" | "plan";
@@ -106,10 +108,10 @@ export function researchBriefEditRedirectNote(): string {
   );
 }
 
-export const PRISM_RULES_REL = ".prismnext/agent/rules";
+export const PRISM_RULES_REL = projectRulesRel();
 const PROJECT_RULE_FILE = "RULE.md";
 
-/** True when path is a project RULE.md under `.prismnext/agent/rules/`. */
+/** True when path is a project RULE.md under `.workbench/agent/rules/`. */
 export function isProjectRulePath(
   filePath: string | null | undefined,
   projectRoot?: string | null,
@@ -187,15 +189,15 @@ export function getPlanPermissionOverride(
   return undefined;
 }
 
-/** True for `.prismnext/research/plans/**` (draft + approved). */
+/** True for `.workbench/research/plans/**` (draft + approved). */
 export function isResearchPlansDirPath(
   filePath: string | null | undefined,
   projectRoot?: string | null,
 ): boolean {
   if (!filePath?.trim()) return false;
   const normalized = filePath.replace(/\\/g, "/").replace(/\/+/g, "/");
-  const marker = ".prismnext/research/plans/";
-  if (normalized.includes(marker) || normalized.endsWith(".prismnext/research/plans")) {
+  const marker = `${RESEARCH_PLANS_DIR_REL}/`;
+  if (normalized.includes(marker) || normalized.endsWith(RESEARCH_PLANS_DIR_REL)) {
     return true;
   }
   if (projectRoot?.trim()) {

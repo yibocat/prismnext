@@ -15,7 +15,7 @@ describe("msg cache plan reopen", () => {
         type: "plan-decision",
         planDecision: "approved",
         planTitle: "Demo",
-        planPath: ".prismnext/research/plans/2026-07-18-abcd.md",
+        planPath: ".workbench/research/plans/2026-07-18-abcd.md",
       },
       { type: "assistant", message: { content: [{ type: "text", text: "Build step 1" }] } },
     ];

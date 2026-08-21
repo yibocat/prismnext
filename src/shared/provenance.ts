@@ -1,6 +1,6 @@
 /**
  * Provenance Lite - shared schema + types for the append-only
- * `.prismnext/provenance.jsonl` event log.
+ * `.workbench/provenance.jsonl` event log.
  *
  * Cross-cutting event stream that binds experiment runs and claimed output
  * artifacts back to their generating command / env / chat session, so the
@@ -12,8 +12,10 @@
  * Design: docs-private/superpowers/specs/2026-07-11-provenance-lite-design.md
  */
 
+import { projectProvenanceRel } from "./workbench-paths";
+
 /** Project-relative path to the append-only event log. */
-export const PROVENANCE_REL = ".prismnext/provenance.jsonl";
+export const PROVENANCE_REL = projectProvenanceRel();
 
 /** Bump on breaking field renames. Existing events carry their own version. */
 export const PROVENANCE_SCHEMA_VERSION = 1 as const;

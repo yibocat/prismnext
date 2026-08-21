@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { WorkbenchProjectMember, WorkbenchState } from "../../shared/workbench-api";
+import {
+  workbenchStateFromOpenResult,
+  type WorkbenchProjectMember,
+  type WorkbenchState,
+} from "../../shared/workbench-api";
 
 export function sameProjectPath(
   a: string | null | undefined,
@@ -27,6 +31,41 @@ export function groupSessionsByProject(
     member,
     sessions: sessions.filter((session) => session.projectId === member.id),
   }));
+}
+
+/** `null` = never toggled; only the focused project starts open. */
+export function isWorkbenchProjectExpanded(
+  projectId: string,
+  expandedIds: readonly string[] | null | undefined,
+  focusProjectId: string,
+): boolean {
+  if (expandedIds == null) return Boolean(projectId) && projectId === focusProjectId;
+  return expandedIds.includes(projectId);
+}
+
+export function toggleWorkbenchProjectExpanded(
+  projectId: string,
+  expandedIds: readonly string[] | null | undefined,
+  focusProjectId: string,
+): string[] {
+  const current = expandedIds == null
+    ? (focusProjectId ? [focusProjectId] : [])
+    : [...expandedIds];
+  return current.includes(projectId)
+    ? current.filter((id) => id !== projectId)
+    : [...current, projectId];
+}
+
+export function ensureWorkbenchProjectExpanded(
+  projectId: string,
+  expandedIds: readonly string[] | null | undefined,
+  focusProjectId: string,
+): string[] {
+  const current = expandedIds == null
+    ? (focusProjectId ? [focusProjectId] : [])
+    : [...expandedIds];
+  if (!projectId || current.includes(projectId)) return current;
+  return [...current, projectId];
 }
 
 export function lastPathForSession(conversationId: string): string | null {
@@ -92,7 +131,8 @@ export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({
     return state;
   },
   openFolder: async (absPath) => {
-    const state = await window.electronAPI.workbenchOpenFolder(absPath);
+    const result = await window.electronAPI.workbenchOpenFolder(absPath);
+    const state = workbenchStateFromOpenResult(result);
     set(applyState(state));
     return state;
   },

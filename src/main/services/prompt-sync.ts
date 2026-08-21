@@ -1,8 +1,9 @@
 import type { PromptContext } from "../prompts/types";
+import { projectAgentsMdRel } from "../../shared/workbench-paths";
 
 export const PRISM_SYSTEM_FILE = "_prism-system.md";
-export const PRISM_AGENTS_REL = ".prismnext/agent/AGENTS.md";
-export const PRISM_SYSTEM_REL = ".prismnext/agent/_prism-system.md";
+export const PRISM_AGENTS_REL = projectAgentsMdRel();
+export const PRISM_SYSTEM_REL = ".workbench/agent/_prism-system.md";
 
 /** Paths relative to session cwd — OpenCode `instructions` array entries. */
 export const PRISM_OPENCODE_INSTRUCTIONS = [

@@ -3,7 +3,6 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +12,6 @@ import { isInteractionPlotKind } from "../../shared/interaction-plot";
 import { validatePlotSpec } from "../../shared/interaction-plot-fs";
 import {
   INTERACTION_SPEC_DIR_REL,
-  LEGACY_INTERACTION_SPEC_DIR_REL,
   isValidInteractionId,
   isAllowedInteractionKind,
   parseInteractionSpec,
@@ -28,24 +26,13 @@ export function interactionSpecsDir(projectRoot: string): string {
 /** @deprecated Use interactionSpecsDir — legacy name kept for internal grep stability. */
 export const interactionArtifactsDir = interactionSpecsDir;
 
-function legacyInteractionSpecsDir(projectRoot: string): string {
-  return join(projectRoot, LEGACY_INTERACTION_SPEC_DIR_REL);
-}
-
 export function interactionSpecPath(projectRoot: string, id: string): string {
   return join(interactionSpecsDir(projectRoot), id, "spec.json");
 }
 
-function legacyInteractionSpecPath(projectRoot: string, id: string): string {
-  return join(legacyInteractionSpecsDir(projectRoot), id, "spec.json");
-}
-
 function resolveExistingSpecAbsPath(projectRoot: string, id: string): string | null {
   const primary = interactionSpecPath(projectRoot, id);
-  if (existsSync(primary)) return primary;
-  const legacy = legacyInteractionSpecPath(projectRoot, id);
-  if (existsSync(legacy)) return legacy;
-  return null;
+  return existsSync(primary) ? primary : null;
 }
 
 function listIdsUnderRoot(root: string): string[] {
@@ -58,43 +45,6 @@ function listIdsUnderRoot(root: string): string[] {
     if (existsSync(join(root, id, "spec.json"))) out.push(id);
   }
   return out;
-}
-
-function removeLegacyInteractionDir(projectRoot: string, id: string): void {
-  const legacyDir = join(legacyInteractionSpecsDir(projectRoot), id);
-  if (!existsSync(legacyDir)) return;
-  try {
-    rmSync(legacyDir, { recursive: true, force: true });
-  } catch {
-    // best-effort — new path is canonical
-  }
-}
-
-/** Move any specs still under legacy `.prismnext/artifacts/` into `interactions/`. */
-export function migrateLegacyInteractionSpecs(projectRoot: string): number {
-  const legacyRoot = legacyInteractionSpecsDir(projectRoot);
-  if (!existsSync(legacyRoot)) return 0;
-
-  let migrated = 0;
-  for (const id of listIdsUnderRoot(legacyRoot)) {
-    if (existsSync(interactionSpecPath(projectRoot, id))) {
-      removeLegacyInteractionDir(projectRoot, id);
-      continue;
-    }
-    const legacyAbs = legacyInteractionSpecPath(projectRoot, id);
-    if (!existsSync(legacyAbs)) continue;
-    let raw: unknown;
-    try {
-      raw = JSON.parse(readFileSync(legacyAbs, "utf8"));
-    } catch {
-      continue;
-    }
-    const spec = parseInteractionSpec(raw);
-    if (!spec || spec.id !== id) continue;
-    const write = writeInteractionSpec(projectRoot, spec);
-    if (write.ok) migrated += 1;
-  }
-  return migrated;
 }
 
 export function readInteractionSpec(
@@ -137,7 +87,6 @@ export function writeInteractionSpec(
   const abs = join(dir, "spec.json");
   try {
     writeFileSync(abs, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-    removeLegacyInteractionDir(projectRoot, parsed.id);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "write failed" };
@@ -145,17 +94,7 @@ export function writeInteractionSpec(
 }
 
 export function listInteractionIds(projectRoot: string): string[] {
-  migrateLegacyInteractionSpecs(projectRoot);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const root of [interactionSpecsDir(projectRoot), legacyInteractionSpecsDir(projectRoot)]) {
-    for (const id of listIdsUnderRoot(root)) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      out.push(id);
-    }
-  }
-  return out.sort();
+  return listIdsUnderRoot(interactionSpecsDir(projectRoot)).sort();
 }
 
 export type InteractionSummary = {

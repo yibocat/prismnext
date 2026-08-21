@@ -588,7 +588,7 @@ describe("PermissionGate Plan Mode Overrides", () => {
       permissionMode: "edit_auto",
       sessionAgent: "plan",
       sessionId: SESSION,
-      filePath: `.prismnext/research/plans/drafts/${SESSION}.md`,
+      filePath: `.workbench/research/plans/drafts/${SESSION}.md`,
     }));
     expect(res.decision).toBe("allow");
     expect(res.reason).toBe("plan_override_allow");
@@ -601,7 +601,7 @@ describe("PermissionGate Plan Mode Overrides", () => {
       permissionMode: "edit_auto",
       sessionAgent: "plan",
       sessionId: SESSION,
-      filePath: ".prismnext/research/plans/drafts/other-file.md",
+      filePath: ".workbench/research/plans/drafts/other-file.md",
     }));
     expect(res.decision).toBe("deny");
     expect(res.reason).toBe("plan_override_deny");

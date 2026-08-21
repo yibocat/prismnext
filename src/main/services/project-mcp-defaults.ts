@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createLogger } from "./logger";
 import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
@@ -72,20 +72,22 @@ function writeMcpServers(
  * the legacy agent-level file once that target exists.
  */
 export function ensureDefaultMcpServers(agentDir: string): EnsureDefaultMcpResult {
-  mkdirSync(agentDir, { recursive: true });
-  // M11 is the only permitted reader/converter of agent/mcp.json. Derive the
-  // project root from <project>/.prismnext/agent and migrate before creating
-  // a v2 default file.
+  // M11 is the only permitted reader/converter of agent/mcp.json. Do not
+  // mkdir an empty hangar when the project has no MCP config yet.
   const legacyMcpPath = join(agentDir, "mcp.json");
   const hadLegacyMcp = existsSync(legacyMcpPath);
   const teamsMigrated = ensureProjectContentMigrated(dirname(dirname(agentDir)));
-  // Seeding Project Team is a Teams change, not an MCP change. Only a legacy
-  // mcp.json that was actually consumed should reload open ACP sessions.
   const migrated = hadLegacyMcp && !existsSync(legacyMcpPath);
   const projectLocalMcp = join(agentDir, "teams", "project.local", "mcp.json");
   if (!existsSync(projectLocalMcp)) {
-    mkdirSync(dirname(projectLocalMcp), { recursive: true });
-    writeFileSync(projectLocalMcp, "[]\n", "utf-8");
+    return {
+      added: false,
+      migrated,
+      teamsMigrated,
+      reenabled: false,
+      removed: false,
+      path: projectLocalMcp,
+    };
   }
 
   let servers: Array<{ id?: unknown }> = [];

@@ -1,17 +1,11 @@
 import { clearPdfCache } from "@/stores/compile-store";
-import { useChatStore } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
-import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useExecutionStore } from "@/stores/execution-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useGitStore } from "@/stores/git-store";
 import { useLayoutStore } from "@/stores/layout-store";
-import { usePermissionStore } from "@/stores/permission-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
-import { useTerminalAiStore } from "@/stores/terminal-ai-store";
-import { useTerminalStore } from "@/stores/terminal-store";
-import { useBrowserStore } from "@/stores/browser-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { i18n } from "@/lib/i18n";
@@ -81,57 +75,6 @@ export async function applyWorkbenchFocusChange(): Promise<void> {
   clearPdfCache();
   useChangesStore.getState().clearAll();
   useWorktreeStore.getState().clearAll();
-  useGitStore.getState().clearAll();
-  useWorkspaceConfigStore.getState().reset();
-  useExperimentStore.getState().reset();
-}
-
-/**
- * Tear down in-memory state that must not leak across projects.
- * Called at the start of openProject and from closeProject.
- * @param keepProjectPath When reopening the same project, keep its OpenCode runtime.
- */
-export async function resetApplicationStateForProjectSwitch(
-  keepProjectPath?: string | null,
-  options?: { previousProjectId?: string | null; stopExperimentIds?: string[] },
-): Promise<void> {
-  const previousProjectId = (options?.previousProjectId || "").trim();
-  if (previousProjectId) {
-    await window.electronAPI.executionApplyProjectSwitch?.({
-      projectId: previousProjectId,
-      stopExperimentIds: options?.stopExperimentIds,
-    });
-  }
-
-  useRightPanelStore.getState().closeAllTabs({ force: true });
-  useChatStore.getState().clearAllSessions();
-
-  useLayoutStore.getState().setLeftSidebarView("sessions");
-  useLayoutStore.getState().setLeftSidebarOverlay(false);
-  useLayoutStore.getState().setRightSidebarOpen(false);
-  useLayoutStore.setState({
-    showArchived: false,
-    pinnedSessionIds: [],
-    archivedSessionIds: [],
-    expandedFileTreeFolders: [],
-  });
-
-  clearPdfCache();
-  useChangesStore.getState().clearAll();
-  useWorktreeStore.getState().clearAll();
-  useTerminalStore.getState().resetProjectState();
-  useBrowserStore.setState({
-    bookmarks: [],
-    recentVisits: [],
-    loaded: false,
-    omniboxOpen: false,
-    omniboxQuery: "",
-    omniboxActiveIndex: 0,
-    omniboxAnchor: null,
-  });
-  useCheckpointStore.getState().clearAll();
-  useTerminalAiStore.getState().reset();
-  usePermissionStore.getState().clearAllPermissions();
   useGitStore.getState().clearAll();
   useWorkspaceConfigStore.getState().reset();
   useExperimentStore.getState().reset();

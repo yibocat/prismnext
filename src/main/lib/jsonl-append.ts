@@ -1,7 +1,7 @@
 /**
  * Locked JSONL append — exclusive lock file + sync append + fsync.
  *
- * Used by experiment `runs.jsonl` and project `.prismnext/provenance.jsonl`
+ * Used by experiment `runs.jsonl` and project `.workbench/provenance.jsonl`
  * so concurrent Agent / UI writers do not interleave mid-line. Single-line
  * POSIX appends are usually atomic for small writes; the lock serializes
  * prismnext writers (bridge poll + IPC). `fsync` reduces the power-loss window.

@@ -12,7 +12,7 @@ describe("research-plan tab routing", () => {
 
   it("recognizes per-session drafts and approved plans as plan file paths", () => {
     expect(isResearchPlanFilePath(sessionDraftPlanRel("ses_1"))).toBe(true);
-    expect(isResearchPlanFilePath(".prismnext/research/plans/2026-07-18-abcd.md")).toBe(true);
+    expect(isResearchPlanFilePath(".workbench/research/plans/2026-07-18-abcd.md")).toBe(true);
     expect(isResearchPlanFilePath("manuscript/main.tex")).toBe(false);
   });
 });

@@ -11,7 +11,7 @@ import {
 } from "@/lib/agent/rules-markdown";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
-import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
+import { projectRulesRel } from "@shared/workbench-paths";
 
 type RuleMarkdownSlot = Extract<SettingsPanelSlot, { kind: "rule-markdown" }>;
 
@@ -30,7 +30,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
   );
 
   const ruleDirRel =
-    slot.mode === "edit" ? `.prismnext/agent/rules/${slot.ruleId}` : null;
+    slot.mode === "edit" ? `${projectRulesRel()}/${slot.ruleId}` : null;
   const rulePath =
     projectRoot && ruleDirRel
       ? `${projectRoot.replace(/[/\\]+$/, "")}/${ruleDirRel}/RULE.md`

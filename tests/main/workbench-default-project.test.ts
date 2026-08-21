@@ -6,17 +6,42 @@ import {
   BUILTIN_DEFAULT_PROJECT_DIRNAME,
   HOME_SETTINGS_FILENAME,
   PROJECT_META_DIR,
+  projectAgentsMdRel,
+  projectProvenanceRel,
+  projectResearchPlansRel,
+  projectRulesRel,
+  projectSessionsContextRel,
+  projectSessionsDisplayRel,
   projectSlotMetaRel,
+  projectTerminalDirRel,
 } from "../../src/shared/workbench-paths";
 import { resolveWorkbenchHome, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import {
   ensureDefaultProject,
   getWorkbenchState,
+  openWorkbenchFolder,
   resolveBuiltinDefaultProjectPath,
   setDefaultFromFolder,
   setDefaultProjectId,
 } from "../../src/main/workbench/default-project";
+import { ensureProjectContentMigrated } from "../../src/main/teams/migrate-project-content";
+import { ensureDefaultMcpServers } from "../../src/main/services/project-mcp-defaults";
+import { readWritableTeamMcpJson } from "../../src/main/services/team-mcp-files";
+import { buildProjectSubagentsAgentPlan } from "../../src/main/services/subagents-sync";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
+import { installProjectRule } from "../../src/main/services/rules-sync";
+import { appendProvenanceEvent } from "../../src/main/services/provenance-service";
+import { saveConfig as saveTerminalConfig } from "../../src/main/services/terminal-config";
+import { ensureResearchPlansDir } from "../../src/main/services/research-plan-service";
+import { appendUserDisplay } from "../../src/main/services/session-display-store";
+import { persistSessionContext } from "../../src/main/services/session-context-store";
+import { writeInteractionSpec } from "../../src/main/services/interaction-store";
+import {
+  buildExperimentStorageContext,
+  createExperiment,
+} from "../../src/main/services/experiment-log-service";
+import { INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction-spec";
+import { EXPERIMENT_REGISTRY_REL } from "../../src/shared/experiment-log";
 
 const temps: string[] = [];
 
@@ -127,5 +152,90 @@ describe("change default role (D-19)", () => {
     expect(back.defaultProjectId).toBe(first.projectId);
     expect(back.defaultLastPath).toBe(first.lastPath);
     expect(readWorkbenchJson(next.lastPath)?.id).toBe(next.projectId);
+  });
+});
+
+describe("open folder does not seed paper .prismnext", () => {
+  it("stays free of .prismnext after open + catalog/MCP/agent-plan (no experiments)", () => {
+    const userHome = path.join(tmpRoot(), "Users", "me");
+    const documentsDir = path.join(userHome, "Documents");
+    const folder = path.join(tmpRoot(), "opened-paper");
+    fs.mkdirSync(folder, { recursive: true });
+
+    const opened = openWorkbenchFolder(folder, { homeDir: userHome, documentsDir });
+    expect(fs.existsSync(path.join(opened.lastPath, projectAgentsMdRel()))).toBe(true);
+
+    expect(ensureProjectContentMigrated(opened.lastPath)).toBe(false);
+    const mcp = ensureDefaultMcpServers(path.join(opened.lastPath, PROJECT_META_DIR, "agent"));
+    expect(mcp.added).toBe(false);
+    expect(readWritableTeamMcpJson(opened.lastPath, "project.local")).toBe("[]\n");
+    buildProjectSubagentsAgentPlan(opened.lastPath, { defaultSubagentModel: null });
+
+    expect(fs.existsSync(path.join(opened.lastPath, ".prismnext"))).toBe(false);
+  });
+
+  it("live experiment/rule/interaction/session writes stay under .workbench", () => {
+    const userHome = path.join(tmpRoot(), "Users", "me");
+    const documentsDir = path.join(userHome, "Documents");
+    const folder = path.join(tmpRoot(), "live-paper");
+    fs.mkdirSync(folder, { recursive: true });
+    const opened = openWorkbenchFolder(folder, { homeDir: userHome, documentsDir });
+    const root = opened.lastPath;
+
+    installProjectRule(root, "cite-style", "---\nname: Cite\ndescription: Cite\napply: always\nenabled: true\n---\nUse Nature.\n");
+    appendProvenanceEvent(root, {
+      id: "prov_test",
+      schemaVersion: 1,
+      type: "run_recorded",
+      at: "2026-08-21T00:00:00.000Z",
+      workspaceRel: ".",
+      chatSessionId: null,
+      gitBranch: null,
+      gitCommit: null,
+      experimentId: null,
+      runId: "run_1",
+      command: "echo hi",
+      cwd: ".",
+      exitCode: 0,
+      startedAt: "2026-08-21T00:00:00.000Z",
+      finishedAt: "2026-08-21T00:00:01.000Z",
+      env: { python: null, pythonVersion: null, platform: "darwin", gitCommit: null },
+      artifacts: [],
+      stdoutTailBytes: 0,
+      stderrTailBytes: 0,
+    });
+    saveTerminalConfig(root, { quickCommands: [] });
+    ensureResearchPlansDir(root);
+    appendUserDisplay(root, "ses_1", [{ type: "text", text: "hi" }]);
+    persistSessionContext(root, "ses_1", { tokens: 12, updatedAt: Date.now() });
+
+    const ix = writeInteractionSpec(root, {
+      id: "fig.live",
+      title: "Live",
+      kind: "figure.static",
+      compute: "local",
+      revision: 1,
+    });
+    expect(ix.ok).toBe(true);
+
+    fs.mkdirSync(path.join(root, "experiment"), { recursive: true });
+    const created = createExperiment(
+      buildExperimentStorageContext(root, "experiment"),
+      { title: "Live write" },
+      { ensureVenv: false },
+    );
+    expect(created.ok).toBe(true);
+
+    expect(fs.existsSync(path.join(root, projectRulesRel(), "cite-style", "RULE.md"))).toBe(true);
+    expect(fs.existsSync(path.join(root, projectProvenanceRel()))).toBe(true);
+    expect(fs.existsSync(path.join(root, projectTerminalDirRel(), "config.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, projectResearchPlansRel()))).toBe(true);
+    expect(fs.existsSync(path.join(root, projectSessionsDisplayRel()))).toBe(true);
+    expect(fs.existsSync(path.join(root, projectSessionsContextRel()))).toBe(true);
+    expect(fs.existsSync(path.join(root, INTERACTION_SPEC_DIR_REL, "fig.live", "spec.json"))).toBe(true);
+    if (created.ok) {
+      expect(fs.existsSync(path.join(root, EXPERIMENT_REGISTRY_REL, created.id, "meta.json"))).toBe(true);
+    }
+    expect(fs.existsSync(path.join(root, ".prismnext"))).toBe(false);
   });
 });

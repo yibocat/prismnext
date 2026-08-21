@@ -18,7 +18,7 @@ describe("plan-ui-events", () => {
     const events: PlanUiEvent[] = [
       {
         kind: "plan-artifact",
-        path: ".prismnext/research/plans/current-draft.md",
+        path: ".workbench/research/plans/current-draft.md",
         title: "Demo",
         afterIndex: 2,
       },
@@ -83,7 +83,7 @@ describe("plan-ui-events", () => {
       planArtifactCardFromEvents([
         {
           kind: "plan-artifact",
-          path: ".prismnext/research/plans/current-draft.md",
+          path: ".workbench/research/plans/current-draft.md",
           title: "T",
           afterIndex: 2,
         },
@@ -94,7 +94,7 @@ describe("plan-ui-events", () => {
         },
       ]),
     ).toEqual({
-      path: ".prismnext/research/plans/current-draft.md",
+      path: ".workbench/research/plans/current-draft.md",
       title: "T",
       discarded: false,
     });

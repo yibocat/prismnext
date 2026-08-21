@@ -127,13 +127,13 @@ describe("groupDeclaredArtifactsByRun", () => {
         run({
           runId: "r1",
           artifacts: ["ws/plot.png"],
-          artifactSnapshots: [".prismnext/experiments/e1/artifacts/r1/plot.png"],
+          artifactSnapshots: [".workbench/experiments/e1/artifacts/r1/plot.png"],
           notes: "first plot",
         }),
         run({
           runId: "r2",
           artifacts: ["ws/plot.png"],
-          artifactSnapshots: [".prismnext/experiments/e1/artifacts/r2/plot.png"],
+          artifactSnapshots: [".workbench/experiments/e1/artifacts/r2/plot.png"],
           notes: "replot",
         }),
       ],
@@ -141,10 +141,10 @@ describe("groupDeclaredArtifactsByRun", () => {
     );
     expect(groups).toHaveLength(2);
     expect(groups[0]!.buckets.figures).toEqual([
-      ".prismnext/experiments/e1/artifacts/r2/plot.png",
+      ".workbench/experiments/e1/artifacts/r2/plot.png",
     ]);
     expect(groups[1]!.buckets.figures).toEqual([
-      ".prismnext/experiments/e1/artifacts/r1/plot.png",
+      ".workbench/experiments/e1/artifacts/r1/plot.png",
     ]);
     expect(groups[0]!.supersededCount).toBe(0);
     expect(groups[1]!.supersededCount).toBe(0);

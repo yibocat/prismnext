@@ -13,6 +13,6 @@ describe("CORE_PERSONA_PROMPT", () => {
     expect(CORE_PERSONA_PROMPT).not.toContain("LaTeX-only");
     expect(CORE_PERSONA_PROMPT).not.toContain("first person");
     expect(CORE_PERSONA_PROMPT).not.toContain("\\chapter");
-    expect(CORE_PERSONA_PROMPT).not.toContain(".prismnext/.venv");
+    expect(CORE_PERSONA_PROMPT).not.toContain(".workbench/.venv");
   });
 });

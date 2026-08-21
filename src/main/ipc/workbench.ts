@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import type { WorkbenchState } from "../../shared/workbench-api";
+import type { WorkbenchOpenResult, WorkbenchState } from "../../shared/workbench-api";
 import {
   getWorkbenchState,
   openWorkbenchFolder,
@@ -36,10 +36,14 @@ export function registerWorkbenchHandlers(): void {
 
   ipcMain.handle(
     "workbench:openFolder",
-    async (_event, args: { absPath: string }): Promise<WorkbenchState> => {
-      openWorkbenchFolder(args.absPath);
+    async (_event, args: { absPath: string }): Promise<WorkbenchOpenResult> => {
+      const opened = openWorkbenchFolder(args.absPath);
       syncWorkbenchRegisteredRoots();
-      return getWorkbenchState();
+      return {
+        ...getWorkbenchState(),
+        openedProjectId: opened.projectId,
+        openedLastPath: opened.lastPath,
+      };
     },
   );
 

@@ -1,5 +1,5 @@
 /**
- * Pure helpers for `.prismnext/agent/rules/<id>/RULE.md` — shared by tests and
+ * Pure helpers for `.workbench/agent/rules/<id>/RULE.md` — shared by tests and
  * Electron main. OpenCode tool `project-rule-write.ts` inlines the same logic.
  */
 

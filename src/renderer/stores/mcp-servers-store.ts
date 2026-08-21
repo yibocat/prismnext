@@ -6,6 +6,7 @@ import {
   type McpServerEntry,
 } from "@/lib/agent/mcp-config";
 import { MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import { projectTeamsRel } from "@shared/workbench-paths";
 
 interface McpServersState {
   /** Last loaded team’s entries (for the open editor / install panel). */
@@ -112,5 +113,5 @@ export function mcpJsonRelPath(teamId: string = PROJECT_DEFAULT_TEAM_ID): string
   if (teamId === MY_CONTENT_TEAM_ID) {
     return "app teams / Common Team / mcp.json";
   }
-  return `.prismnext/agent/teams/${teamId}/mcp.json`;
+  return `${projectTeamsRel()}/${teamId}/mcp.json`;
 }

@@ -9,7 +9,7 @@
  *   bundled  resources/teams/                    (app, core/bundled; read-only)
  *   pro      <proPackageDir>/<teamsRoot>/        (app, pro; read-only, license-gated)
  *   user     ~/.prismnext/teams/                 (app, user; writable)
- *   project  <projectRoot>/.prismnext/agent/teams/ (project, user; writable)
+ *   project  <projectRoot>/.workbench/agent/teams/ (project, user; writable)
  *
  * Dual layout (T0 froze the on-disk format; T6 migrates it): the new layout
  * Canonical layout: team.json + orchestrators/<id>/ + subagents/ (+ skills/commands).
@@ -32,7 +32,6 @@ import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 import {
   CORE_TEAM_ID,
   LOCAL_TEAM_ID,
-  LOCAL_TEAM_REL,
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
   USER_TEAM_PUBLISHER,
@@ -617,10 +616,6 @@ function computeFingerprint(projectRoots: string[]): string {
       parts.push(teamDirFingerprint(join(root, entry.name)));
     }
   }
-  // Pre-M8 fallback dir still fingerprints until physically moved.
-  for (const projectRoot of projectRoots) {
-    parts.push(`local:${teamDirFingerprint(join(projectRoot, LOCAL_TEAM_REL))}`);
-  }
   parts.push(`home-skills:${skillRootFingerprint(homeSkillsDir())}`);
   return djb2(parts.sort().join("||"));
 }
@@ -664,19 +659,6 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
         });
         continue;
       }
-      teams.push(team);
-      byId.set(team.manifest.id, team);
-    }
-  }
-
-  // Pre-M8 safety net: if migration could not move local/, surface it as
-  // project.local (M10 id). Prefer the real teams/project.local/ when present.
-  for (const projectRoot of projectRoots) {
-    if (byId.has(PROJECT_DEFAULT_TEAM_ID) || byId.has(LOCAL_TEAM_ID)) continue;
-    const legacyLocal = join(projectRoot, LOCAL_TEAM_REL);
-    if (!existsSync(legacyLocal)) continue;
-    const team = scanTeam(legacyLocal, "project", "user", true, PROJECT_DEFAULT_TEAM_ID);
-    if (team) {
       teams.push(team);
       byId.set(team.manifest.id, team);
     }

@@ -11,9 +11,6 @@
  * the single-slot PrismExpertsSyncState (B11).
  */
 
-import { createHash } from "node:crypto";
-import { app } from "electron";
-import { join, resolve } from "node:path";
 import type { PromptContext } from "../prompts/types";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 import {
@@ -33,14 +30,6 @@ import {
 import { createLogger } from "../services/logger";
 
 const log = createLogger("teams-agents-sync");
-
-function projectRuntimeKey(projectRoot: string): string {
-  return createHash("sha256").update(resolve(projectRoot)).digest("hex").slice(0, 24);
-}
-
-function projectRuntimeAgentsDir(userDataDir: string, projectRoot: string): string {
-  return join(userDataDir, "opencode-runtimes", projectRuntimeKey(projectRoot), "config", "opencode", "agents");
-}
 
 export interface AgentFileEntry {
   filename: string;
@@ -190,11 +179,6 @@ export interface AgentsSyncState {
 }
 
 const syncStates = new Map<string, AgentsSyncState>();
-
-export function getOpencodeAgentsDir(projectRoot?: string): string {
-  if (projectRoot) return projectRuntimeAgentsDir(app.getPath("userData"), projectRoot);
-  return join(app.getPath("userData"), "opencode-server", "config", "opencode", "agents");
-}
 
 export function getAgentsSyncState(projectRoot: string): AgentsSyncState | null {
   return syncStates.get(projectRoot) ?? null;

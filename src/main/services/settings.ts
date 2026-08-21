@@ -27,6 +27,7 @@ export interface AppSettings {
   trayIconEnabled?: boolean;
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
+  /** @deprecated Leftover electron-store key. Not a product path; do not branch on it. */
   lastProjectPath?: string;
   /** Workbench default project role (P3). Not used to auto-open in P1. */
   defaultProjectId?: string;

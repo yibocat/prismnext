@@ -335,7 +335,7 @@ describe("experiment-log-service", () => {
     expect(r.run.artifacts).toEqual(["manuscript/fig.png"]);
     expect(r.run.artifactSnapshots?.length).toBe(1);
     const snapRel = r.run.artifactSnapshots![0]!;
-    expect(snapRel).toContain(`.prismnext/experiments/${id}/artifacts/`);
+    expect(snapRel).toContain(`.workbench/experiments/${id}/artifacts/`);
     expect(snapRel.endsWith("fig.png")).toBe(true);
     const snapAbs = join(c.projectRoot, snapRel);
     expect(existsSync(snapAbs)).toBe(true);
@@ -607,7 +607,7 @@ describe("experimentEnvDisplayRows", () => {
       rVersion: "4.4.0",
       platform: "darwin",
       gitCommit: "abc1234",
-      venvPath: ".prismnext/.venv",
+      venvPath: ".workbench/.venv",
     });
     expect(rows.map((r) => r.label)).toEqual([
       "Python",

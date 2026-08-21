@@ -34,6 +34,13 @@
     "stopSession": "Stop",
     "chat": "Chat"
   },
+  "workbench": {
+    "title": "Workbench",
+    "addProject": "Add project",
+    "newSessionInProject": "New chat in this project",
+    "missingFolder": "Folder not found",
+    "emptyProject": "No chats yet"
+  },
   "project": {
     "noProject": "No Project Open",
     "noRecent": "No recent projects",

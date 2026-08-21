@@ -166,7 +166,7 @@ describe("gateExperimentPythonExecution external-interpreter warning", () => {
 
   function stubProjectVenv(): ExperimentVenvRunner {
     return () => {
-      const bin = join(root, ".prismnext", ".venv", "bin");
+      const bin = join(root, ".workbench", ".venv", "bin");
       mkdirSync(bin, { recursive: true });
       const py = join(bin, "python");
       writeFileSync(py, "#!/bin/sh\necho ok\n");
@@ -193,7 +193,7 @@ describe("gateExperimentPythonExecution external-interpreter warning", () => {
   });
 
   it("does not warn when the absolute path IS the project venv python", () => {
-    const venvPy = join(root, ".prismnext", ".venv", "bin", "python");
+    const venvPy = join(root, ".workbench", ".venv", "bin", "python");
     const gate = gateExperimentPythonExecution({
       projectRoot: root,
       cwd: join(root, "labs", "exp-demo"),
@@ -218,7 +218,7 @@ describe("gateExperimentPythonExecution external-interpreter warning", () => {
   });
 });
 
-describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
+describe("gateExperimentPythonExecution (project .workbench/.venv)", () => {
   let root: string;
 
   beforeEach(() => {
@@ -241,7 +241,7 @@ describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
 
   function stubProjectVenv(): ExperimentVenvRunner {
     return () => {
-      const bin = join(root, ".prismnext", ".venv", "bin");
+      const bin = join(root, ".workbench", ".venv", "bin");
       mkdirSync(bin, { recursive: true });
       const py = join(bin, "python");
       writeFileSync(py, "#!/bin/sh\necho ok\n");
@@ -273,7 +273,7 @@ describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
     });
     expect(gate.action).toBe("apply");
     if (gate.action !== "apply") return;
-    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.workbench[/\\]\.venv/);
   });
 
   it("applies project venv when python runs inside an island", () => {
@@ -286,7 +286,7 @@ describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
     });
     expect(gate.action).toBe("apply");
     if (gate.action !== "apply") return;
-    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.workbench[/\\]\.venv/);
     expect(gate.envExtra.VIRTUAL_ENV).not.toContain("exp-demo");
     expect(gate.envExtra.VIRTUAL_ENV).not.toMatch(/labs[/\\]\.venv$/);
     expect(
@@ -305,7 +305,7 @@ describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
     });
     expect(gate.action).toBe("apply");
     if (gate.action !== "apply") return;
-    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.prismnext[/\\]\.venv/);
+    expect(gate.envExtra.VIRTUAL_ENV).toMatch(/\.workbench[/\\]\.venv/);
   });
 
   it("blocks python scripts at Experiment folder root (no island)", () => {

@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { projectSessionsDisplayRel } from "../../shared/workbench-paths";
 
 /** Persisted user-message display payload (renderer ContentBlock[]). */
 export type UserDisplayContent = Record<string, unknown>[];
@@ -42,7 +43,7 @@ export interface SessionTurnMeta {
 type SessionDisplayStore = Record<string, SessionDisplayEntry>;
 
 function storePath(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext", "agent", "sessions-display.json");
+  return path.join(projectRoot, projectSessionsDisplayRel());
 }
 
 function readStore(projectRoot: string): SessionDisplayStore {

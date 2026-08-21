@@ -4,7 +4,8 @@
  * M8: `.prismnext/agent/local/**` → `.prismnext/agent/teams/project.local/**`
  * M11: `.prismnext/agent/mcp.json` (object map) → `project.local/mcp.json` (array)
  *
- * Idempotent: safe to call on every catalog build / project open.
+ * Idempotent: safe to call on catalog build / project open.
+ * Does not mkdir an empty project.local hangar — no hangar means no hangar.
  */
 
 import {
@@ -452,82 +453,25 @@ function projectLocalPresent(dest: string): boolean {
 }
 
 /**
- * Run M8 + M11 for one project. Returns true when any on-disk change was made.
+ * Hangar maintenance only. Leftover paper `.prismnext/agent/local` and
+ * `agent/mcp.json` are not read or copied (D-30).
  */
 export function ensureProjectContentMigrated(projectRoot: string): boolean {
   if (!projectRoot?.trim()) return false;
 
   const dest = projectDefaultTeamDir(projectRoot);
-  const legacyLocal = join(projectRoot, LOCAL_TEAM_REL);
-  const legacyLocalStillThere = existsSync(legacyLocal);
-  const legacyMcpStillThere = existsSync(join(projectRoot, LEGACY_AGENT_MCP_REL));
-  const needsM8 = legacyLocalStillThere && !projectLocalPresent(dest);
-  const needsM8Merge = legacyLocalStillThere && projectLocalPresent(dest);
+  if (!projectLocalPresent(dest)) return false;
 
   let changed = false;
-
-  mkdirSync(projectTeamsDir(projectRoot), { recursive: true });
-
-  if (needsM8) {
-    try {
-      renameSync(legacyLocal, dest);
-    } catch {
-      cpSync(legacyLocal, dest, { recursive: true });
-      rmSync(legacyLocal, { recursive: true, force: true });
-    }
+  if (writeProjectLocalManifest(dest)) changed = true;
+  if (ensureProjectLocalLead(dest)) {
     normalizeProjectLocalLayout(projectRoot, dest);
-    log.info("M8: moved local/ → teams/project.local/", { projectRoot });
-    changed = true;
-  } else if (needsM8Merge) {
-    mergeLegacyLocalIntoProjectLocal(projectRoot, legacyLocal, dest);
-    if (readdirSync(legacyLocal).length === 0) {
-      rmSync(legacyLocal, { recursive: true, force: true });
-    } else {
-      moveIntoBackup(projectRoot, legacyLocal, "local-unmerged");
-    }
-    normalizeProjectLocalLayout(projectRoot, dest);
-    log.info("M8: merged local/ → teams/project.local/", { projectRoot });
-    changed = true;
-  } else if (
-    projectLocalPresent(dest)
-    && !existsSync(join(dest, "team.json"))
-    && !existsSync(join(dest, "plugin.json"))
-  ) {
-    writeProjectLocalManifest(dest);
     changed = true;
   }
-
-  if (legacyMcpStillThere) {
-    if (!projectLocalPresent(dest)) {
-      mkdirSync(dest, { recursive: true });
-      writeProjectLocalManifest(dest);
-    }
-    if (migrateProjectMcp(projectRoot, dest)) changed = true;
-  }
-
-  // Always seed the project hangar so Settings → Teams lists it before any
-  // user-created skills/subagents land there (not only after first write).
-  if (!projectLocalPresent(dest)) {
-    mkdirSync(dest, { recursive: true });
-    writeProjectLocalManifest(dest);
-    ensureProjectLocalLead(dest);
-    log.info("seeded empty project.local hangar", { projectRoot });
-    changed = true;
-  } else {
-    if (writeProjectLocalManifest(dest)) changed = true;
-    if (ensureProjectLocalLead(dest)) {
-      // A legacy/custom lead may already occupy project.local. Once the
-      // built-in Project lead is seeded, move those extra leads into their
-      // own sibling teams so project.local stays the unconditional hangar.
-      normalizeProjectLocalLayout(projectRoot, dest);
-      changed = true;
-    }
-  }
-
   return changed;
 }
 
-/** Ensure writable project.local dir + manifest exist (CRUD target). */
+/** Writable project.local dir + manifest (explicit CRUD only — not on open). */
 export function ensureProjectDefaultTeamDir(projectRoot: string): string {
   ensureProjectContentMigrated(projectRoot);
   const dest = projectDefaultTeamDir(projectRoot);

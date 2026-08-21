@@ -11,7 +11,7 @@
  * Everything else (file bytes, hashes, enabled/override/view semantics) must
  * match exactly.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -20,6 +20,16 @@ import {
   listSubagents,
   listOrchestrators,
 } from "../../src/main/services/subagents-sync";
+import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
+import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
+import { writeProjectTeamsState } from "../../src/main/teams/state-project";
+import { emptyProjectTeamsState } from "../../src/shared/teams/state";
+import {
+  CORE_TEAM_ID,
+  PROJECT_DEFAULT_TEAM_ID,
+  PROJECT_TEAMS_REL,
+} from "../../src/shared/teams/types";
 
 const GOLDEN_DIR = join(__dirname, "golden");
 
@@ -113,14 +123,8 @@ function assertPlanMatchesGolden(root: string, fixture: string): void {
   const golden = loadGolden(fixture);
   const plan = buildProjectSubagentsAgentPlan(root, { defaultSubagentModel: null });
 
-  // Every project gets the Project Team hangar lead, including an empty project.
-  // Keep this explicit so a future count/list relaxation cannot drop it silently.
-  expect(golden.agentFiles).toContain("project.md");
-  expect(golden.views.orchestrators).toContainEqual(expect.objectContaining({ id: "project" }));
-  expect(plan.agentFiles).toContain("project.md");
-  expect(listOrchestrators(root)).toContainEqual(
-    expect.objectContaining({ fqid: "project.local:project", id: "project" }),
-  );
+  // Empty projects have no hangar lead. A Project Team appears only after
+  // explicit CRUD (or leftover on-disk migration).
   expect(plan.orchestratorId).toBe(golden.orchestratorId);
   expect([...plan.agentFiles].sort()).toEqual([...golden.agentFiles].sort());
   expect(plan.orchestratorContentHash).toBe(golden.orchestratorContentHash);
@@ -144,6 +148,23 @@ function assertPlanMatchesGolden(root: string, fixture: string): void {
 }
 
 describe("agent plan golden parity (Phase 2)", () => {
+  const temps: string[] = [];
+
+  beforeEach(() => {
+    const home = mkdtempSync(join(tmpdir(), "prism-golden-home-"));
+    temps.push(home);
+    setWorkbenchUserHomeOverride(home);
+    setAppTeamsDirForTests(join(home, "teams"));
+    mkdirSync(join(home, "teams"), { recursive: true });
+    __resetTeamsResolverForTests();
+  });
+
+  afterEach(() => {
+    setAppTeamsDirForTests(null);
+    setWorkbenchUserHomeOverride(null);
+    __resetTeamsResolverForTests();
+    while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  });
   it("default fixture (empty project)", () => {
     const root = mkdtempSync(join(tmpdir(), "prism-golden-default-"));
     try {
@@ -156,17 +177,21 @@ describe("agent plan golden parity (Phase 2)", () => {
   it("customized fixture (disabled + overrides + custom content)", () => {
     const root = mkdtempSync(join(tmpdir(), "prism-golden-custom-"));
     try {
-      const agentDir = join(root, ".prismnext", "agent");
-      mkdirSync(agentDir, { recursive: true });
-
+      const hangar = join(root, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID);
+      const notes = join(root, PROJECT_TEAMS_REL, "notes-local");
+      mkdirSync(join(hangar, "subagents", "latex-polisher"), { recursive: true });
+      mkdirSync(join(notes, "orchestrators", "notes-local"), { recursive: true });
       writeFileSync(
-        join(agentDir, "experts-manifest.json"),
+        join(hangar, "team.json"),
         JSON.stringify(
           {
-            disabledBuiltinIds: ["peer-reviewer"],
-            builtinOverrides: {
-              "methodology-auditor": { temperature: 0.4, model: "openai/gpt-4o" },
-            },
+            id: PROJECT_DEFAULT_TEAM_ID,
+            name: "Project Team",
+            description: "This project's hangar",
+            version: "0.1.0",
+            packFormatVersion: 1,
+            tier: "free",
+            publisher: "user",
           },
           null,
           2,
@@ -174,34 +199,12 @@ describe("agent plan golden parity (Phase 2)", () => {
         "utf-8",
       );
       writeFileSync(
-        join(agentDir, "orchestrators-manifest.json"),
-        JSON.stringify(
-          {
-            defaultOrchestratorId: "research-prism",
-            disabledBuiltinIds: [],
-            builtinOverrides: {
-              "research-prism": {
-                allowedExperts: ["literature-synthesizer", "methodology-auditor"],
-              },
-            },
-          },
-          null,
-          2,
-        ),
-        "utf-8",
-      );
-
-      const expertDir = join(agentDir, "experts", "custom", "latex-polisher");
-      mkdirSync(expertDir, { recursive: true });
-      writeFileSync(
-        join(expertDir, "expert.json"),
+        join(hangar, "subagents", "latex-polisher", "subagent.json"),
         JSON.stringify(
           {
             id: "latex-polisher",
             name: "LaTeX Polisher",
             description: "Polishes LaTeX manuscripts for clarity and consistency.",
-            builtin: false,
-            removable: true,
             model: "anthropic/claude-sonnet-4-20250514",
             modules: ["latex-workspace", "project-brief"],
             permission: { edit: "deny" },
@@ -212,22 +215,34 @@ describe("agent plan golden parity (Phase 2)", () => {
         "utf-8",
       );
       writeFileSync(
-        join(expertDir, "instructions.md"),
+        join(hangar, "subagents", "latex-polisher", "instructions.md"),
         "You polish LaTeX prose. Fix inconsistent notation; never rewrite results.\n",
         "utf-8",
       );
-
-      const orchDir = join(agentDir, "orchestrators", "custom", "notes-local");
-      mkdirSync(orchDir, { recursive: true });
       writeFileSync(
-        join(orchDir, "orchestrator.json"),
+        join(notes, "team.json"),
         JSON.stringify(
           {
             id: "notes-local",
             name: "Notes Local",
             description: "Coordinates local note-taking workflows.",
-            builtin: false,
-            removable: true,
+            version: "0.1.0",
+            packFormatVersion: 1,
+            tier: "free",
+            publisher: "user",
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      writeFileSync(
+        join(notes, "orchestrators", "notes-local", "orchestrator.json"),
+        JSON.stringify(
+          {
+            id: "notes-local",
+            name: "Notes Local",
+            description: "Coordinates local note-taking workflows.",
             thoughtLevel: "low",
             allowedExperts: ["latex-polisher", "literature-synthesizer"],
           },
@@ -237,10 +252,20 @@ describe("agent plan golden parity (Phase 2)", () => {
         "utf-8",
       );
       writeFileSync(
-        join(orchDir, "instructions.md"),
+        join(notes, "orchestrators", "notes-local", "instructions.md"),
         "You coordinate local notes. Delegate polishing to latex-polisher.\n",
         "utf-8",
       );
+      writeProjectTeamsState(root, {
+        ...emptyProjectTeamsState(),
+        assetEnabled: { [`${CORE_TEAM_ID}:peer-reviewer`]: false },
+        assetOverrides: {
+          [`${CORE_TEAM_ID}:methodology-auditor`]: { temperature: 0.4, model: "openai/gpt-4o" },
+          [`${CORE_TEAM_ID}:research-prism`]: {
+            allowedExperts: ["literature-synthesizer", "methodology-auditor"],
+          },
+        },
+      });
 
       assertPlanMatchesGolden(root, "customized");
     } finally {

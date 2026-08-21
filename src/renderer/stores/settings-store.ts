@@ -105,7 +105,7 @@ export interface AppSettings {
   zoteroApiKey?: string;
   zoteroUserId?: string;
   zoteroLastBBTDetected?: boolean;
-  /** Path to auto-reopen on next launch. P1 no longer uses this to auto-open. */
+  /** @deprecated Leftover electron-store key. Not used to open or refresh a project. */
   lastProjectPath?: string | null;
   defaultProjectId?: string;
   workbenchProjectIds?: string[];
@@ -492,7 +492,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         log.info("Migrated aiCustomModels → aiCustomModelsData");
       }
 
-      // Migrate: global recent/lastActive → per-project maps (one-time, keyed by lastProjectPath)
+      // One-time store reshape only — lastProjectPath is not a product open key.
       const legacyProject = typeof r.lastProjectPath === "string" ? r.lastProjectPath : null;
       if (legacyProject) {
         let migratedScoped = false;

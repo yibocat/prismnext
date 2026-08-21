@@ -35,6 +35,8 @@ describe("prompt stack preview", () => {
     expect(stable?.content).toContain("# prismnext");
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
+    const agents = preview.sections.find((s) => s.id === "agents-md");
+    expect(agents?.fileHint).toBe(".workbench/agent/AGENTS.md");
   });
 
   it("includes orchestrator agent.md with profile modules", async () => {

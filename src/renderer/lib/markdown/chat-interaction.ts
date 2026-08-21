@@ -2,7 +2,7 @@
  * Chat ```interaction fence — reference to a persisted Interaction Spec by id.
  *
  * Terminology: this is NOT the chat ```artifact fence (file path preview).
- * Spec files live under `.prismnext/interactions/<id>/spec.json` on disk.
+ * Spec files live under `.workbench/interactions/<id>/spec.json` on disk.
  */
 import { buildInteractionFenceMarkdown as buildInteractionFenceMarkdownShared } from "../../../shared/interaction-spec";
 import { parseKeyedFenceBody } from "../../../shared/chat-fence-parse";

@@ -534,6 +534,42 @@ describe("PiSubsessionRuntime & Dynamic Task Tool (Phase 5B)", () => {
     expect(result.error).toBe("cancelled");
   });
 
+  it("delegated expert inherits the parent checkout, not the paper root", async () => {
+    const paper = tempDir;
+    const checkout = join(tempDir, "wt-checkout");
+    const seen: string[] = [];
+    const subsessionRuntime = new PiSubsessionRuntime({
+      allTools: [toolA],
+      gate,
+      projectRoot: paper,
+      boundCheckoutPath: checkout,
+      createRunner: async (input) => {
+        seen.push(input.boundCheckoutPath);
+        return {
+          prompt: async () => {},
+          abort: async () => {},
+          dispose: () => {},
+        };
+      },
+    });
+    const taskTool = createTaskDelegationTool({
+      subsessionRuntime,
+      roster: [sampleExpert],
+    });
+    await taskTool.execute(
+      { expertId: "citation-auditor", prompt: "Check" },
+      {
+        runtimeSessionId: "ses-1",
+        tabId: "tab-1",
+        turnId: "t-1",
+        toolCallId: "call-checkout",
+        projectRoot: paper,
+        permissionMode: "auto",
+      },
+    );
+    expect(seen).toEqual([checkout]);
+  });
+
   it("emits tool_finished as failed when Task execute returns ok: false", async () => {
     const subsessionRuntime = new PiSubsessionRuntime({
       allTools: [toolA],

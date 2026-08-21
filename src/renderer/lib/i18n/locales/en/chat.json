@@ -194,7 +194,7 @@
     "approveDrawerBody": "Approve to start Build against the plan file, or deny to discard the draft and keep chatting.",
     "approveDrawerBodyWithTitle": "{{title}}",
     "viewDraft": "View draft",
-    "draftNotYet": "Draft file not ready yet — the agent should write this session's `.prismnext/research/plans/drafts/<sessionId>.md` first.",
+    "draftNotYet": "Draft file not ready yet — the agent should write this session's `.workbench/research/plans/drafts/<sessionId>.md` first.",
     "draftMissingRedirect": "This turn did not update the plan draft file. Chat text is not the plan of record — the next message will require the agent to write the draft first.",
     "approveExecute": "Approve & Build",
     "rejectPlan": "Deny",

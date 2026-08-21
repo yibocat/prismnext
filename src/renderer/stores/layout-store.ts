@@ -142,6 +142,13 @@ interface LayoutState {
   togglePinSession: (sessionId: string) => void;
   togglePinnedExpanded: () => void;
 
+  /**
+   * Workbench folder expand set. `null` = never toggled (only the focused
+   * project starts open). `[]` = user collapsed every folder.
+   */
+  expandedWorkbenchProjectIds: string[] | null;
+  setExpandedWorkbenchProjectIds: (ids: string[] | null) => void;
+
   sessionSort: "updated" | "created";
   setSessionSort: (sort: "updated" | "created") => void;
 
@@ -286,6 +293,9 @@ export const useLayoutStore = create<LayoutState>()(
           return { editorMaximized: false, rightAreaUnmaxNonce: s.rightAreaUnmaxNonce + 1 };
         }),
 
+      expandedWorkbenchProjectIds: null,
+      setExpandedWorkbenchProjectIds: (ids) => set({ expandedWorkbenchProjectIds: ids }),
+
       pinnedSessionIds: [],
       pinnedExpanded: true,
       togglePinSession: (sessionId) => set((s) => {
@@ -411,6 +421,7 @@ export const useLayoutStore = create<LayoutState>()(
         rightAreaWidth: state.rightAreaWidth,
         settingsDetailWidth: state.settingsDetailWidth,
         sessionSort: state.sessionSort,
+        expandedWorkbenchProjectIds: state.expandedWorkbenchProjectIds,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
         texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,
         texworkspacePanesSwapped: state.texworkspacePanesSwapped,

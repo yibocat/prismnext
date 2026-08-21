@@ -4,14 +4,12 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useDocumentStore } from "@/stores/document-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import {
   SidebarProvider,
   Sidebar,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import {
@@ -85,7 +83,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
   const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   const sidebarContent = (
@@ -96,14 +93,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
             <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
           )}
         </div>
-
-        {projectRoot && (
-          <div className="shrink-0 px-2 flex flex-col gap-1">
-            <div>
-              <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
-            </div>
-          </div>
-        )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
           {SETTINGS_GROUPS.map((group) => (

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { formatTokenCount } from "@shared/token-estimate";
+import { projectAgentsMdRel } from "@shared/workbench-paths";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
@@ -182,7 +183,7 @@ export function PromptsRulesSettings() {
   } | null>(null);
 
   const agentsMdPath = projectRoot
-    ? `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/AGENTS.md`
+    ? `${projectRoot.replace(/[/\\]+$/, "")}/${projectAgentsMdRel()}`
     : "";
 
   const refreshSummaries = useCallback(async () => {

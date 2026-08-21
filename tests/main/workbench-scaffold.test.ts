@@ -91,6 +91,7 @@ describe("DEFAULT_PROJECT_GITIGNORE", () => {
   it("ignores compile cache and leaves workbench.json trackable", () => {
     expect(DEFAULT_PROJECT_GITIGNORE).toContain(".workbench/compile/");
     expect(DEFAULT_PROJECT_GITIGNORE).toContain(".venv/");
+    expect(DEFAULT_PROJECT_GITIGNORE).toContain(".workbench/experiments/");
     expect(DEFAULT_PROJECT_GITIGNORE).toMatch(/interactions\//);
     const lines = DEFAULT_PROJECT_GITIGNORE.split("\n");
     expect(lines).not.toContain(".prismnext/");

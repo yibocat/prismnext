@@ -1,11 +1,11 @@
 /**
- * Persist per-session context ring data under
- * `.prismnext/agent/sessions-context.json`.
+ * Persist per-session context ring data under `.workbench/state/sessions-context.json`.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { createLogger } from "./logger";
 import type { ContextUsageSource } from "../../shared/session-context-usage";
+import { projectSessionsContextRel } from "../../shared/workbench-paths";
 
 const log = createLogger("session-context-store", "agent");
 
@@ -23,7 +23,7 @@ export interface SessionContextData {
 }
 
 function contextStorePath(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext", "agent", "sessions-context.json");
+  return path.join(projectRoot, projectSessionsContextRel());
 }
 
 export function persistSessionContext(

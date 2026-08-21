@@ -6,7 +6,7 @@ import type { PromptContext } from "./types";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import { createLogger } from "../services/logger";
 import { readWorkbenchJson } from "../workbench/identity";
-import { PROJECT_META_DIR } from "../../shared/workbench-paths";
+import { projectAgentsMdRel } from "../../shared/workbench-paths";
 
 const log = createLogger("prompt-context", "agent");
 
@@ -52,8 +52,6 @@ export async function buildPromptContext(
   const ctx: PromptContext = { projectRoot };
 
   if (projectRoot) {
-    const prismDir = path.join(projectRoot, PROJECT_META_DIR);
-
     ctx.workspaceDirs = readWorkspaceDirsSafe(projectRoot);
     log.info(
       `Workspace dirs loaded: ${ctx.workspaceDirs.length} folder(s)`,
@@ -61,7 +59,7 @@ export async function buildPromptContext(
     );
 
     ctx.agentsMdContent =
-      readFileIfExists(path.join(prismDir, "agent", "AGENTS.md")) ?? undefined;
+      readFileIfExists(path.join(projectRoot, projectAgentsMdRel())) ?? undefined;
   }
 
   try {

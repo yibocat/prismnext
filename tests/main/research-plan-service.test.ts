@@ -29,7 +29,7 @@ describe("research-plan-service", () => {
     if (root) rmSync(root, { recursive: true, force: true });
   });
 
-  it("ensureResearchPlansDir creates .prismnext/research/plans", () => {
+  it("ensureResearchPlansDir creates .workbench/research/plans", () => {
     root = mkdtempSync(join(tmpdir(), "prism-plan-"));
     const dir = ensureResearchPlansDir(root);
     expect(dir).toBe(join(root, RESEARCH_PLANS_DIR_REL));
@@ -149,7 +149,7 @@ describe("research-plan-service", () => {
     expect(promoted.ok).toBe(true);
     if (!promoted.ok) return;
     expect(promoted.relativePath).toMatch(
-      /\.prismnext\/research\/plans\/\d{4}-\d{2}-\d{2}-[a-f0-9]{4}\.md$/,
+      /\.workbench\/research\/plans\/\d{4}-\d{2}-\d{2}-[a-f0-9]{4}\.md$/,
     );
     expect(existsSync(promoted.absolutePath)).toBe(true);
     expect(existsSync(join(root, draftRel))).toBe(false);

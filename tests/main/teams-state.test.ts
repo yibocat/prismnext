@@ -192,7 +192,7 @@ describe("state-app / state-project — IO, counter, listeners", () => {
   });
 
   it("project state: corrupt file self-heals to empty", () => {
-    const p = join(projectRoot, ".prismnext", "agent");
+    const p = join(projectRoot, ".workbench", "agent");
     mkdirSync(p, { recursive: true });
     writeFileSync(join(p, "teams.json"), "{ not json", "utf-8");
     expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
@@ -201,7 +201,7 @@ describe("state-app / state-project — IO, counter, listeners", () => {
   });
 
   it("project state: rewrites persisted user.local identities to project.local", () => {
-    const p = join(projectRoot, ".prismnext", "agent");
+    const p = join(projectRoot, ".workbench", "agent");
     mkdirSync(p, { recursive: true });
     writeFileSync(
       join(p, "teams.json"),

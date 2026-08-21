@@ -4,6 +4,7 @@ import {
   isMcpToolName,
   mcpDefsFromTeamAssets,
   mcpToolName,
+  resolveMcpSpawnCwd,
   sanitizeMcpSegment,
   selectMcpServers,
 } from "../../src/main/agent/mcp-host";
@@ -57,5 +58,14 @@ describe("mcp-host selection and names", () => {
     expect(sanitizeMcpSegment("")).toBe("unnamed");
     expect(isMcpToolName("mcp__papers__search")).toBe(true);
     expect(isMcpToolName("literature-search")).toBe(false);
+  });
+
+  it("spawns MCP in the session checkout, not the paper root", () => {
+    expect(resolveMcpSpawnCwd({
+      boundCheckoutPath: "/home/.prismnext/projects/p_a/worktrees/wt/checkout",
+      projectRoot: "/papers/a",
+    })).toBe("/home/.prismnext/projects/p_a/worktrees/wt/checkout");
+    expect(resolveMcpSpawnCwd({ boundCheckoutPath: "  ", projectRoot: "/papers/a" })).toBe("/papers/a");
+    expect(resolveMcpSpawnCwd({ projectRoot: "/papers/a" })).toBe("/papers/a");
   });
 });

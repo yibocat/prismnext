@@ -12,6 +12,7 @@ import {
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
   PROJECT_LOCAL_LEAD_ID,
+  PROJECT_TEAMS_REL,
 } from "../../src/shared/teams/types";
 import { makeTempDir } from "./packs-test-utils";
 import {
@@ -195,29 +196,22 @@ describe("createTeam seeds a lead", () => {
 });
 
 describe("project.local hangar", () => {
-  it("seeds empty project.local on migrate even with no user content yet", () => {
+  it("does not seed an empty project.local hangar when the paper has no team files", () => {
     const project = makeTempDir("project-local-empty-seed-");
     tempDirs.push(project);
-    expect(ensureProjectContentMigrated(project)).toBe(true);
-    const dest = join(project, ".prismnext", "agent", "teams", PROJECT_DEFAULT_TEAM_ID);
-    expect(existsSync(join(dest, "team.json"))).toBe(true);
-    expect(existsSync(join(dest, "orchestrators", PROJECT_LOCAL_LEAD_ID, "orchestrator.json"))).toBe(
-      true,
-    );
-    const seeded = JSON.parse(readFileSync(join(dest, "team.json"), "utf-8")) as { name?: string };
-    expect(seeded.name).toBe("Project Team");
+    expect(ensureProjectContentMigrated(project)).toBe(false);
+    expect(existsSync(join(project, ".prismnext"))).toBe(false);
     invalidateCatalog();
-    const record = getTeamRecord(PROJECT_DEFAULT_TEAM_ID, [project]);
-    expect(record?.hasOrchestrator).toBe(true);
+    expect(getTeamRecord(PROJECT_DEFAULT_TEAM_ID, [project])).toBeFalsy();
     expect(scanAllTeams([project]).some((t) => t.manifest.id === PROJECT_DEFAULT_TEAM_ID)).toBe(
-      true,
+      false,
     );
   });
 
   it("rewrites legacy Chinese project.local display name to English canonical", () => {
     const project = makeTempDir("project-local-rename-");
     tempDirs.push(project);
-    const dest = join(project, ".prismnext", "agent", "teams", PROJECT_DEFAULT_TEAM_ID);
+    const dest = join(project, PROJECT_TEAMS_REL, PROJECT_DEFAULT_TEAM_ID);
     mkdirSync(dest, { recursive: true });
     writeFileSync(
       join(dest, "team.json"),
@@ -292,9 +286,7 @@ describe("project.local hangar", () => {
       readFileSync(
         join(
           project,
-          ".prismnext",
-          "agent",
-          "teams",
+          PROJECT_TEAMS_REL,
           PROJECT_DEFAULT_TEAM_ID,
           "orchestrators",
           PROJECT_LOCAL_LEAD_ID,

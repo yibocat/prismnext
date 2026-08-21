@@ -1,7 +1,7 @@
 /**
  * state-project.ts — Project-level Team state (design 2026-08-10 §5.1.4).
  *
- * Persists `<projectRoot>/.prismnext/agent/teams.json`: project default team +
+ * Persists `<projectRoot>/.workbench/agent/teams.json`: project default team +
  * team/asset tri-state overrides + project overrides. Per-project.
  *
  * T6: the read-time fallback is now a one-shot on-disk migration. When

@@ -2,11 +2,13 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { IGNORED_DIRECTORY_NAMES } from "./filesystem";
+import { projectAgentsMdRel } from "../../shared/workbench-paths";
 
 const SCAFFOLD_IGNORE_DIRS = new Set([
   ...IGNORED_DIRECTORY_NAMES,
   ".git",
   ".prismnext",
+  ".workbench",
   "dist",
   "out",
   "build",
@@ -236,7 +238,7 @@ export function renderAgentsMdFromDigest(parts: {
 
 /** Build AGENTS.md content from a fast local survey (no AI). */
 export async function buildAgentsMdScaffold(projectRoot: string): Promise<AgentsMdScaffoldResult> {
-  const agentsMdPath = join(projectRoot, ".workbench", "agent", "AGENTS.md");
+  const agentsMdPath = join(projectRoot, projectAgentsMdRel());
   const updated = existsSync(agentsMdPath);
 
   const treeLines: TreeLine[] = [];

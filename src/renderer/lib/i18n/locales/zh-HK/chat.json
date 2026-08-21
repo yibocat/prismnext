@@ -220,7 +220,7 @@
     "approveDrawerBody": "同意後按計劃檔案開始構建；拒絕則丟棄草稿，會話可繼續聊。",
     "approveDrawerBodyWithTitle": "{{title}}",
     "viewDraft": "檢視草稿",
-    "draftNotYet": "草稿檔案尚未就緒 — 請等助手寫入本會話的 `.prismnext/research/plans/drafts/<sessionId>.md`。",
+    "draftNotYet": "草稿檔案尚未就緒 — 請等助手寫入本會話的 `.workbench/research/plans/drafts/<sessionId>.md`。",
     "draftMissingRedirect": "本輪未寫入計劃草稿檔案。聊天內容不是正式計劃 — 下一條訊息會強制要求助手先寫草稿。",
     "approveExecute": "Approve & Build",
     "rejectPlan": "Deny",

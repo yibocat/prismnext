@@ -100,7 +100,7 @@ export function buildLiveTaskRosterMarkdown(
     "",
     "When the user asks to use a subagent, expert, or team specialist, call the **task** tool immediately with `expertId` from this list.",
     "",
-    "**Do not** discover experts by searching the project. Do not `ls`, `find`, `grep`, or `read` `team.json`, `teams.json`, `subagents/`, or `.prismnext/agent/teams/` to decide who to call.",
+    "**Do not** discover experts by searching the project. Do not `ls`, `find`, `grep`, or `read` `team.json`, `teams.json`, `subagents/`, or `.workbench/agent/teams/` to decide who to call.",
     "",
   ];
 

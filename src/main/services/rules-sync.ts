@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { projectRulesRel } from "../../shared/workbench-paths";
 
-export const PRISM_RULES_REL = ".prismnext/agent/rules";
+export const PRISM_RULES_REL = projectRulesRel();
 const RULE_FILE = "RULE.md";
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/;

@@ -11,15 +11,23 @@ import {
 } from "../../shared/teams/types";
 import { getTeamRecord } from "../teams/catalog";
 import { ensureMyContentTeam } from "../teams/my-content";
-import { ensureProjectDefaultTeamDir } from "../teams/migrate-project-content";
+import {
+  ensureProjectDefaultTeamDir,
+  projectDefaultTeamDir,
+} from "../teams/migrate-project-content";
 
-export function resolveWritableTeamDir(projectRoot: string, teamId: string): string {
+export function resolveWritableTeamDir(
+  projectRoot: string,
+  teamId: string,
+  options?: { create?: boolean },
+): string {
   const tid = teamId.trim() || PROJECT_DEFAULT_TEAM_ID;
+  const create = options?.create !== false;
   if (tid === MY_CONTENT_TEAM_ID) {
     return ensureMyContentTeam().dir;
   }
   if (tid === PROJECT_DEFAULT_TEAM_ID || isProjectLocalTeamId(tid)) {
-    return ensureProjectDefaultTeamDir(projectRoot);
+    return create ? ensureProjectDefaultTeamDir(projectRoot) : projectDefaultTeamDir(projectRoot);
   }
   const record = getTeamRecord(tid, [projectRoot]);
   if (!record) throw new Error(`Target team not found: ${tid}`);
@@ -27,12 +35,16 @@ export function resolveWritableTeamDir(projectRoot: string, teamId: string): str
   return record.dir;
 }
 
-export function resolveWritableTeamMcpPath(projectRoot: string, teamId: string): string {
-  return join(resolveWritableTeamDir(projectRoot, teamId), "mcp.json");
+export function resolveWritableTeamMcpPath(
+  projectRoot: string,
+  teamId: string,
+  options?: { create?: boolean },
+): string {
+  return join(resolveWritableTeamDir(projectRoot, teamId, options), "mcp.json");
 }
 
 export function readWritableTeamMcpJson(projectRoot: string, teamId: string): string {
-  const path = resolveWritableTeamMcpPath(projectRoot, teamId);
+  const path = resolveWritableTeamMcpPath(projectRoot, teamId, { create: false });
   if (!existsSync(path)) return "[]\n";
   return readFileSync(path, "utf-8");
 }

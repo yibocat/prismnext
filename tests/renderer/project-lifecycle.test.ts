@@ -16,11 +16,12 @@ vi.stubGlobal("window", {
 
 import { useExecutionStore } from "../../src/renderer/stores/execution-store";
 import { useTabCloseConfirmStore } from "../../src/renderer/stores/tab-close-confirm-store";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   applyWorkbenchFocusChange,
   confirmProjectSwitchIfNeeded,
   listRunningExperimentIds,
-  resetApplicationStateForProjectSwitch,
 } from "../../src/renderer/lib/workspace/project-lifecycle";
 
 describe("project switch lifecycle", () => {
@@ -126,35 +127,16 @@ describe("project switch lifecycle", () => {
     await expect(abortPending).resolves.toBe("abort");
   });
 
-  it("does not destroy all AI PTYs or reset execution state when switching projects", async () => {
-    useExecutionStore.setState({
-      byId: {
-        exp: {
-          lastSequence: 1,
-          tail: "",
-          replaying: false,
-          summary: {
-            executionId: "exp",
-            origin: "experiment-run",
-            state: "running",
-            command: "python train.py",
-            cwd: "/tmp",
-            projectId: "/proj-a",
-            createdAt: 1,
-          },
-        },
-      },
-    });
-    await resetApplicationStateForProjectSwitch("/proj-b", {
-      previousProjectId: "/proj-a",
-      stopExperimentIds: [],
-    });
-    expect(terminalDestroyAllAiPty).not.toHaveBeenCalled();
-    expect(executionApplyProjectSwitch).toHaveBeenCalledWith({
-      projectId: "/proj-a",
-      stopExperimentIds: [],
-    });
-    expect(useExecutionStore.getState().byId.exp?.summary?.executionId).toBe("exp");
+  it("does not export the leftover full-teardown switch helper", async () => {
+    const lifecycle = await import("../../src/renderer/lib/workspace/project-lifecycle");
+    expect(lifecycle).not.toHaveProperty("resetApplicationStateForProjectSwitch");
+    const openSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/stores/document-store.ts"),
+      "utf-8",
+    );
+    expect(openSrc).not.toContain("resetApplicationStateForProjectSwitch");
+    expect(openSrc).not.toContain("members.length - 1");
+    expect(openSrc).toContain("focusPathAfterOpenFolder");
   });
 
   it("focus change does not dispose agents, clear chats, or stop experiments", async () => {

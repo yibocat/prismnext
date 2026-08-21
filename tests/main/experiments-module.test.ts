@@ -20,7 +20,7 @@ describe("EXPERIMENTS_PROMPT", () => {
 
   it("documents shared project Python venv and non-system installs", () => {
     expect(EXPERIMENTS_PROMPT).toContain("Runtime environments");
-    expect(EXPERIMENTS_PROMPT).toContain(".prismnext/.venv");
+    expect(EXPERIMENTS_PROMPT).toContain(".workbench/.venv");
     expect(EXPERIMENTS_PROMPT).toContain("never");
     expect(EXPERIMENTS_PROMPT).toContain("system Python");
     expect(EXPERIMENTS_PROMPT).toContain("other runtimes");

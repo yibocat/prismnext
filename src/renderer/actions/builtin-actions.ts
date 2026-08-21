@@ -84,7 +84,7 @@ actionRegistry.register("setup-agents-md", async () => {
   await window.electronAPI.fsWrite(result.agentsMdPath, result.content);
 
   const verb = result.updated ? "Updated" : "Created";
-  return `${verb} .prismnext/agent/AGENTS.md from a local project scan (${result.stats.dirsListed} dirs, ${result.stats.filesListed} files). Add text after /setup to ask AI to refine it.`;
+  return `${verb} .workbench/agent/AGENTS.md from a local project scan (${result.stats.dirsListed} dirs, ${result.stats.filesListed} files). Add text after /setup to ask AI to refine it.`;
 });
 
 // ── compact-context ──

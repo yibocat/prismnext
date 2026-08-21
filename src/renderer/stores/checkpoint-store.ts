@@ -10,6 +10,7 @@ import {
 } from "@/lib/chat/conversation-view";
 import type { Conversation } from "../../shared/agent-conversation";
 import { createLogger } from "@/services/logger";
+import { projectCheckpointsRel } from "@shared/workbench-paths";
 
 const log = createLogger("checkpoint-store", "agent");
 
@@ -166,7 +167,7 @@ function checkpointReferencesWorktree(
 }
 
 async function listCheckpointSessionIds(projectRoot: string): Promise<string[]> {
-  const dir = `${projectRoot}/.prismnext/agent/checkpoints`;
+  const dir = `${projectRoot}/${projectCheckpointsRel()}`;
   try {
     const exists = await window.electronAPI.fsExists(dir);
     if (!exists) return [];
@@ -180,7 +181,7 @@ async function listCheckpointSessionIds(projectRoot: string): Promise<string[]> 
 }
 
 function checkpointPath(projectRoot: string, sessionId: string): string {
-  return `${projectRoot}/.prismnext/agent/checkpoints/${sessionId}.json`;
+  return `${projectRoot}/${projectCheckpointsRel()}/${sessionId}.json`;
 }
 
 async function readFileSnapshot(

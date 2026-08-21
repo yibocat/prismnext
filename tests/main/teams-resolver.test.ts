@@ -28,6 +28,7 @@ import {
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
 import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
+import { PROJECT_TEAMS_REL } from "../../src/shared/teams/types";
 import { emptyAppTeamsState } from "../../src/shared/teams/state";
 import {
   readAppTeamsState,
@@ -159,6 +160,8 @@ beforeEach(() => {
   appDataDir = mkdtempSync(join(tmpdir(), "teams-appdata-"));
   projectRoot = mkdtempSync(join(tmpdir(), "teams-project-"));
   setAppTeamsStateDataDir(appDataDir);
+  setAppTeamsDirForTests(join(appDataDir, "teams"));
+  mkdirSync(join(appDataDir, "teams"), { recursive: true });
   __setHostVersionForTests("0.7.0");
   writeAppTeamsState(emptyAppTeamsState());
   // Seal the bundled root to an empty dir so only fixture teams appear.
@@ -237,7 +240,7 @@ describe("tri-state matrix (team + asset)", () => {
 
 describe("scope", () => {
   it("each project has its own project.local hangar without leaking source assets", () => {
-    const projectTeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectTeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectTeams, "project.local", { subagents: ["mine"] });
 
     const inProject = listTeams(projectRoot).find((t) => t.manifest.id === "project.local");
@@ -255,11 +258,11 @@ describe("scope", () => {
   });
 
   it("rejects an app default from project A and preserves project B's active team", () => {
-    const projectATeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectATeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectATeams, "project.local", { orchestrator: { id: "lead-a" } });
     const projectB = mkdtempSync(join(tmpdir(), "teams-project-b-"));
     try {
-      const projectBTeams = join(projectB, ".prismnext", "agent", "teams");
+      const projectBTeams = join(projectB, PROJECT_TEAMS_REL);
       writeTeam(projectBTeams, "project.local", { orchestrator: { id: "lead-b" } });
       setProjectDefaultTeam(projectB, "project.local");
 
@@ -326,7 +329,7 @@ describe("resolveRoster", () => {
     writeTeam(root, "acme.global", {
       orchestrator: { id: "lead", roster: { mode: "list", members: ["project.local:mine"] } },
     });
-    const projectTeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectTeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectTeams, "project.local", { subagents: ["mine"] });
     const view = resolveRoster(projectRoot, "acme.global")!;
     expect(view.entries[0].unavailable).toBe("out-of-scope");
@@ -448,7 +451,7 @@ describe("resolveActiveTeam", () => {
   it("falls back to the project hangar when core is uninstalled and My Content is absent", () => {
     const root = useExternalRoot("bundled");
     writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
-    writeTeam(join(projectRoot, ".prismnext", "agent", "teams"), "project.local", {
+    writeTeam(join(projectRoot, PROJECT_TEAMS_REL), "project.local", {
       orchestrator: { id: "lead" },
     });
     writeAppTeamsState({

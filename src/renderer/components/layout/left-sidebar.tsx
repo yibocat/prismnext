@@ -28,10 +28,12 @@ import {
   Minus,
   CircleAlert,
   Square,
+  FolderIcon,
+  PlusIcon,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
-import { ProjectSwitcher } from "@/components/modules/shared";
 import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { WorkbenchAddMenu } from "@/components/layout/workbench-add-menu";
 import { LeftNavButton, LeftNavButtonBar, leftNavPanelRefs } from "@/components/layout/left-nav-button";
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import { leftNavRegistry } from "@/lib/workspace/left-nav";
@@ -44,8 +46,11 @@ import {
 } from "@/lib/chat/session-ui-prefs";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import {
+  ensureWorkbenchProjectExpanded,
   groupSessionsByProject,
+  isWorkbenchProjectExpanded,
   sameProjectPath,
+  toggleWorkbenchProjectExpanded,
   useWorkbenchStore,
   type WorkbenchSessionRow,
 } from "@/stores/workbench-store";
@@ -193,8 +198,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     s.tabs.some((t) => t.kind === "texworkspace"),
   );
   const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
-  const pinnedExpanded = useLayoutStore((s) => s.pinnedExpanded);
-  const togglePinnedExpanded = useLayoutStore((s) => s.togglePinnedExpanded);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const showArchived = useLayoutStore((s) => s.showArchived);
   const toggleShowArchived = useLayoutStore((s) => s.toggleShowArchived);
@@ -232,6 +235,12 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const members = useWorkbenchStore((s) => s.members);
   const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
+  const focusProjectId = useWorkbenchStore((s) => s.focusProjectId);
+  const expandedWorkbenchProjectIds = useLayoutStore((s) => s.expandedWorkbenchProjectIds);
+  const setExpandedWorkbenchProjectIds = useLayoutStore((s) => s.setExpandedWorkbenchProjectIds);
+  const newSession = useChatStore((s) => s.newSession);
+  const focusProject = useDocumentStore((s) => s.focusProject);
+  const [missingProjectIds, setMissingProjectIds] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const sessionsRef = useRef(sessions);
@@ -264,6 +273,30 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       void togglePinSessionForProject(root, sessionId);
     }
   }, [projectPathForSession, archivedSessionIds, pinnedSessionIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (members.length === 0) {
+      setMissingProjectIds(new Set());
+      return;
+    }
+    void Promise.all(
+      members.map(async (member) => {
+        try {
+          const ok = await window.electronAPI.fsExists(member.lastPath);
+          return [member.id, ok] as const;
+        } catch {
+          return [member.id, false] as const;
+        }
+      }),
+    ).then((rows) => {
+      if (cancelled) return;
+      setMissingProjectIds(new Set(rows.filter(([, ok]) => !ok).map(([id]) => id)));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [members]);
 
   const fetchSessions = useCallback(async (options?: FetchSessionsOptions) => {
     const targets = members.length > 0
@@ -425,7 +458,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     return b.lastModified - a.lastModified;
   });
 
-  const empty = !loading && sortedSessions.length === 0;
   const sessionGroups = useMemo(
     () => groupSessionsByProject(
       members,
@@ -443,6 +475,28 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     void fetchSessionsRef.current({ silent: true });
   }, [members, projectRoot]);
 
+  const toggleProjectExpanded = useCallback((projectId: string) => {
+    setExpandedWorkbenchProjectIds(
+      toggleWorkbenchProjectExpanded(projectId, expandedWorkbenchProjectIds, focusProjectId),
+    );
+  }, [expandedWorkbenchProjectIds, focusProjectId, setExpandedWorkbenchProjectIds]);
+
+  const newSessionInProject = useCallback(async (projectId: string, lastPath: string) => {
+    setExpandedWorkbenchProjectIds(
+      ensureWorkbenchProjectExpanded(projectId, expandedWorkbenchProjectIds, focusProjectId),
+    );
+    await focusProject(lastPath);
+    newSession();
+    setLeftSidebarOverlay(false);
+  }, [
+    expandedWorkbenchProjectIds,
+    focusProject,
+    focusProjectId,
+    newSession,
+    setExpandedWorkbenchProjectIds,
+    setLeftSidebarOverlay,
+  ]);
+
   const renderSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
@@ -455,9 +509,18 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     );
     const isWorktreeSession = checkoutContext.kind !== "local";
     return (
-      <SidebarMenuItem key={s.id}>
+      <SidebarMenuItem key={s.id} data-workbench-session={s.id}>
         <SidebarMenuButton
           onClick={() => {
+            if (s.projectId) {
+              setExpandedWorkbenchProjectIds(
+                ensureWorkbenchProjectExpanded(
+                  s.projectId,
+                  useLayoutStore.getState().expandedWorkbenchProjectIds,
+                  useWorkbenchStore.getState().focusProjectId,
+                ),
+              );
+            }
             loadSession(s.id, s.directory, s.projectLastPath);
             setLeftSidebarOverlay(false);
           }}
@@ -622,10 +685,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         </div>
         {/* ── Fixed function buttons (do not scroll) ── */}
         <div className="shrink-0 px-2 flex flex-col gap-1">
-          <div>
-            <ProjectSwitcher className="flex w-full items-center gap-2 rounded-md border border-border px-2 py-1.5 text-[length:var(--font-session-item)] font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors" />
-          </div>
-
           {/* 导航按钮由 leftNavRegistry 驱动，新增入口见 left-nav/items.tsx */}
           <LeftNavButtonBar
             items={primaryNavItems}
@@ -634,33 +693,11 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
           />
         </div>
 
-        {/* ── Scrollable session list ── */}
+        {/* ── Scrollable workbench tree ── */}
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
-          {sortedSessions.filter((s) => pinnedSessionIds.includes(s.id)).length > 0 && (
-            <div>
-              <button
-                type="button"
-                className="w-full pt-2 pb-1 flex items-center justify-between"
-                onClick={togglePinnedExpanded}
-              >
-                <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-                  {t("nav.sessions.pinned")}
-                </span>
-                {pinnedExpanded ? <ChevronDown className="size-3 text-muted-foreground/50" /> : <ChevronRight className="size-3 text-muted-foreground/50" />}
-              </button>
-              {pinnedExpanded && (
-                <SidebarMenu>
-                  {sortedSessions
-                    .filter((s) => !archivedSessionIds.includes(s.id) && pinnedSessionIds.includes(s.id))
-                    .map(renderSessionItem)}
-                </SidebarMenu>
-              )}
-            </div>
-          )}
-
           <div className="pt-2 pb-1 flex items-center justify-between">
             <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-              {showArchived ? t("nav.sessions.archived") : t("nav.sessions.sessions")}
+              {showArchived ? t("nav.sessions.archived") : t("nav.workbench.title")}
             </span>
             <div className="flex items-center gap-0.5">
               <Hint
@@ -705,13 +742,14 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   </AppMenuCheckItem>
                 </AppMenuContent>
               </AppMenu>
+              <WorkbenchAddMenu />
             </div>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
             </div>
-          ) : empty && members.length === 0 ? (
+          ) : members.length === 0 ? (
             <div className="flex flex-1 items-center justify-center px-4">
               <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
                 <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
@@ -723,31 +761,89 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             </div>
           ) : (
             sessionGroups.map(({ member, sessions: groupSessions }) => {
-              const visible = groupSessions.filter((s) => {
+              const missing = missingProjectIds.has(member.id);
+              const expanded = isWorkbenchProjectExpanded(
+                member.id,
+                expandedWorkbenchProjectIds,
+                focusProjectId,
+              );
+              const pinned = groupSessions.filter((s) => {
+                if (showArchived) return false;
+                return pinnedSessionIds.includes(s.id) && !archivedSessionIds.includes(s.id);
+              });
+              const rest = groupSessions.filter((s) => {
                 if (showArchived) return archivedSessionIds.includes(s.id);
                 return !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id);
               });
+              const visible = [...pinned, ...rest];
               return (
                 <div key={member.id}>
-                  <div className="pt-1 pb-1 flex items-center justify-between gap-1">
-                    <span className="truncate text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
-                      {member.displayName}
-                    </span>
+                  <div className="group/project flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      data-workbench-project={member.id}
+                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      onClick={() => toggleProjectExpanded(member.id)}
+                    >
+                      {expanded ? (
+                        <ChevronDown className="size-3 shrink-0 text-muted-foreground/50" />
+                      ) : (
+                        <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />
+                      )}
+                      <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-[length:var(--font-session-item)] font-medium">
+                        {member.displayName}
+                      </span>
+                      {missing ? (
+                        <span className="truncate text-[length:var(--font-hint)] text-muted-foreground/70">
+                          {t("nav.workbench.missingFolder")}
+                        </span>
+                      ) : null}
+                    </button>
+                    {missing ? null : (
+                      <Hint label={t("nav.workbench.newSessionInProject")}>
+                        <button
+                          type="button"
+                          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity hover:text-muted-foreground group-hover/project:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void newSessionInProject(member.id, member.lastPath);
+                          }}
+                        >
+                          <PlusIcon className="size-3" />
+                        </button>
+                      </Hint>
+                    )}
                     {member.id !== defaultProjectId ? (
                       <Hint label={t("nav.project.removeFromWorkbench")}>
                         <button
                           type="button"
-                          className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-                          onClick={() => void removeFromWorkbench(member.id)}
+                          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity hover:text-muted-foreground group-hover/project:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void removeFromWorkbench(member.id);
+                          }}
                         >
                           <Minus className="size-3" />
                         </button>
                       </Hint>
                     ) : null}
                   </div>
-                  <SidebarMenu>
-                    {visible.map(renderSessionItem)}
-                  </SidebarMenu>
+                  {expanded ? (
+                    missing ? (
+                      <p className="pl-6 pr-1 pb-1 text-[length:var(--font-hint)] text-muted-foreground/70">
+                        {t("nav.workbench.missingFolder")}
+                      </p>
+                    ) : visible.length === 0 ? (
+                      <p className="pl-6 pr-1 pb-1 text-[length:var(--font-hint)] text-muted-foreground/70">
+                        {t("nav.workbench.emptyProject")}
+                      </p>
+                    ) : (
+                      <SidebarMenu className="pl-3">
+                        {visible.map(renderSessionItem)}
+                      </SidebarMenu>
+                    )
+                  ) : null}
                 </div>
               );
             })

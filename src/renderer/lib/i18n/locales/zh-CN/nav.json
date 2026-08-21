@@ -34,6 +34,13 @@
     "stopSession": "停止",
     "chat": "对话"
   },
+  "workbench": {
+    "title": "工作台",
+    "addProject": "加入项目",
+    "newSessionInProject": "在此项目新建对话",
+    "missingFolder": "找不到文件夹",
+    "emptyProject": "还没有对话"
+  },
   "project": {
     "noProject": "未打开项目",
     "noRecent": "暂无最近项目",

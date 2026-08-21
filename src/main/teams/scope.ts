@@ -25,7 +25,7 @@ export function appTeamsDir(): string {
   return homeTeamsDir();
 }
 
-/** Project teams root: `<projectRoot>/.prismnext/agent/teams/`. */
+/** Project teams root: `<projectRoot>/.workbench/agent/teams/`. */
 export function projectTeamsDir(projectRoot: string): string {
   return join(projectRoot, PROJECT_TEAMS_REL);
 }

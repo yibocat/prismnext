@@ -72,7 +72,7 @@ export interface RightTab {
   experimentsView?: "list" | "detail";
   /** Experiments mode: active detail tab pane (overview | run | results) */
   experimentsDetailTab?: "overview" | "run" | "results";
-  /** Interaction mode: persisted object id under .prismnext/interactions/<id>/ */
+  /** Interaction mode: persisted object id under .workbench/interactions/<id>/ */
   interactionId?: string;
 }
 

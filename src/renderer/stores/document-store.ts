@@ -26,6 +26,10 @@ import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/r
 import { loadWorkbenchSessionUiPrefs } from "@/lib/chat/session-ui-prefs";
 import { applyWorkbenchFocusChange } from "@/lib/workspace/project-lifecycle";
 import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
+import {
+  focusPathAfterOpenFolder,
+  workbenchStateFromOpenResult,
+} from "../../shared/workbench-api";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -260,14 +264,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
-    const state = await window.electronAPI.workbenchOpenFolder(rootPath);
+    const opened = await window.electronAPI.workbenchOpenFolder(rootPath);
     useWorkbenchStore.setState({
-      ...state,
+      ...workbenchStateFromOpenResult(opened),
       loaded: true,
     });
-    const member = state.members.find((item) => sameProjectPath(item.lastPath, rootPath))
-      ?? state.members[state.members.length - 1];
-    await get().focusProject(member?.lastPath ?? rootPath);
+    await get().focusProject(focusPathAfterOpenFolder(opened.openedLastPath, rootPath));
   },
 
   focusProject: async (rootPath: string) => {

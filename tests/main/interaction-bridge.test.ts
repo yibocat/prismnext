@@ -75,6 +75,6 @@ describe("interaction-bridge", () => {
     expect(result.ok).toBe(true);
     expect(result.fenceMarkdown).toContain("```interaction");
     expect(result.fenceMarkdown).toContain("id: fig.loss");
-    expect(result.relativePath).toBe(".prismnext/interactions/fig.loss/spec.json");
+    expect(result.relativePath).toBe(".workbench/interactions/fig.loss/spec.json");
   });
 });

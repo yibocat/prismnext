@@ -11,10 +11,10 @@ describe("plan-artifact-ui", () => {
       type: "tool_use",
       name: "write",
       id: "1",
-      input: { file_path: ".prismnext/research/plans/current-draft.md" },
+      input: { file_path: ".workbench/research/plans/current-draft.md" },
     };
     expect(isPlanFileToolUse(tool)).toBe(true);
-    expect(planPathFromToolUse(tool)).toBe(".prismnext/research/plans/current-draft.md");
+    expect(planPathFromToolUse(tool)).toBe(".workbench/research/plans/current-draft.md");
   });
 
   it("ignores unrelated writes", () => {

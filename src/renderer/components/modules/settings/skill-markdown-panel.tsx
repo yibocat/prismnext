@@ -11,6 +11,7 @@ import {
   validateSkillMarkdown,
 } from "@/lib/agent/skills-markdown";
 import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import { projectTeamsRel } from "@shared/workbench-paths";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
@@ -55,7 +56,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
   const skillPath = useMemo(() => {
     if (slot.mode === "edit" && slot.absPath) return slot.absPath;
     if (slot.mode === "edit" && projectRoot) {
-      return `${projectRoot.replace(/[/\\]+$/, "")}/.prismnext/agent/teams/${targetTeamId}/skills/${slot.skillId}/SKILL.md`;
+      return `${projectRoot.replace(/[/\\]+$/, "")}/${projectTeamsRel()}/${targetTeamId}/skills/${slot.skillId}/SKILL.md`;
     }
     return null;
   }, [slot, projectRoot, targetTeamId]);

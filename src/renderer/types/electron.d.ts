@@ -633,7 +633,7 @@ export interface ElectronAPI {
   ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
   workbenchOpenFolder: (
     absPath: string,
-  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  ) => Promise<import("../../shared/workbench-api").WorkbenchOpenResult>;
   workbenchRemoveProject: (
     projectId: string,
   ) => Promise<import("../../shared/workbench-api").WorkbenchState>;

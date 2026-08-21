@@ -37,7 +37,9 @@ import {
 export const WORKBENCH_GITIGNORE = [
   "compile/",
   ".venv/",
+  "experiments/",
   "interactions/",
+  "provenance.jsonl",
   "settings.json",
   "state.json",
   "cache/",

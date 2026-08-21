@@ -3,7 +3,7 @@
  *
  * Storage model (split registry / workspace):
  *
- *   .prismnext/experiments/<id>/     ← Platform registry (agent metadata)
+ *   .workbench/experiments/<id>/     ← Platform registry (agent metadata)
  *     meta.json                      — title, briefLinks, workspacePath pointer
  *     runs.jsonl                     — append-only run records
  *     artifacts/<runId>/             — frozen image copies (`artifactSnapshots`)
@@ -17,8 +17,10 @@
  * generators that need randomness or time live in the main-process service.
  */
 
+import { projectExperimentsRel, projectVenvRel } from "./workbench-paths";
+
 /** Project-relative registry root for experiment metadata. */
-export const EXPERIMENT_REGISTRY_REL = ".prismnext/experiments";
+export const EXPERIMENT_REGISTRY_REL = projectExperimentsRel();
 
 /** Filenames inside a registry entry directory. */
 export const EXPERIMENT_META_FILENAME = "meta.json";
@@ -31,7 +33,7 @@ export const EXPERIMENT_RUNS_STATS_FILENAME = "runs.stats.json";
  * Interaction artifact generation, and other project Python packages.
  * Created lazily on first Python need (not on project open).
  */
-export const PRISMNEXT_VENV_REL = ".prismnext/.venv";
+export const PRISMNEXT_VENV_REL = projectVenvRel();
 
 /**
  * Basename of the venv directory (for filesystem walk skip lists).
@@ -89,7 +91,7 @@ export function parseExperimentRunKind(value: unknown): ExperimentRunKind | unde
     : undefined;
 }
 
-/** Experiment-level metadata — `meta.json` body (lives under `.prismnext/experiments/<id>/`). */
+/** Experiment-level metadata — `meta.json` body (lives under `.workbench/experiments/<id>/`). */
 export interface ExperimentMeta {
   id: string;
   title: string;
@@ -120,7 +122,7 @@ export function isSafeExperimentId(id: string): boolean {
 
 /** Best-effort runtime snapshot (optional; returned by `detect_env` / auto-filled on runs). */
 export interface ExperimentEnv {
-  /** Resolved python interpreter, if any (prefers `.prismnext/.venv/bin/python`). */
+  /** Resolved python interpreter, if any (prefers `.workbench/.venv/bin/python`). */
   python: string | null;
   pythonVersion: string | null;
   /** Resolved Rscript path, if R is available. */
@@ -131,12 +133,12 @@ export interface ExperimentEnv {
   gitCommit: string | null;
   /**
    * Project-relative path to the shared project venv
-   * (`.prismnext/.venv`), or null when missing.
+   * (`.workbench/.venv`), or null when missing.
    */
   venvPath: string | null;
   /**
    * Interpreter actually used for the run (external-interpreter lane).
-   * "project" = the shared `.prismnext/.venv`; "external" = a user-declared
+   * "project" = the shared `.workbench/.venv`; "external" = a user-declared
    * interpreter outside the project venv (e.g. a SageMath environment).
    * Absent in run records predating the lane.
    */
@@ -160,7 +162,7 @@ export interface ExperimentRunEntry {
   artifacts: string[];
   /**
    * Frozen copies of image artifacts at append time (project-relative under
-   * `.prismnext/experiments/<id>/artifacts/<runId>/`). Prefer these when
+   * `.workbench/experiments/<id>/artifacts/<runId>/`). Prefer these when
    * showing "what this run produced"; `artifacts` remain the mutable working paths.
    * Optional — old JSONL lines omit it.
    */

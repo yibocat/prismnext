@@ -239,6 +239,15 @@ export class PiSubsessionRuntime {
     return slot;
   }
 
+  /** Parent worktree checkout when set; else the paper root. */
+  parentCheckoutPath(): string {
+    return this.opts.boundCheckoutPath?.trim() || this.opts.projectRoot?.trim() || "";
+  }
+
+  private resolveChildCheckout(input: { boundCheckoutPath?: string; projectRoot: string }): string {
+    return this.parentCheckoutPath() || input.boundCheckoutPath?.trim() || input.projectRoot;
+  }
+
   private beginChildSession(input: {
     parentSessionId: string;
     parentTabId: string;
@@ -361,7 +370,7 @@ export class PiSubsessionRuntime {
               parentToolCallId: input.parentToolCallId,
               expert: input.expert,
               projectRoot: input.projectRoot,
-              boundCheckoutPath: input.boundCheckoutPath,
+              boundCheckoutPath: this.resolveChildCheckout(input),
               abortController,
             });
             childText = built.childText;
@@ -375,7 +384,7 @@ export class PiSubsessionRuntime {
             parentToolCallId: input.parentToolCallId,
             expert: input.expert,
             projectRoot: input.projectRoot,
-            boundCheckoutPath: input.boundCheckoutPath,
+            boundCheckoutPath: this.resolveChildCheckout(input),
             abortController,
           });
           childText = built.childText;
@@ -517,7 +526,7 @@ export function createTaskDelegationTool(opts: {
         parentTurnId: ctx.turnId,
         parentToolCallId: ctx.toolCallId,
         projectRoot: ctx.projectRoot,
-        boundCheckoutPath: ctx.projectRoot,
+        boundCheckoutPath: opts.subsessionRuntime.parentCheckoutPath() || ctx.projectRoot,
         permissionMode: ctx.permissionMode,
         expert: target,
         prompt,
