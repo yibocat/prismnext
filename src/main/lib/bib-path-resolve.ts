@@ -110,7 +110,7 @@ export function intendedBibliographyPath(
 
 /** Project-relative path to the manuscript main .tex (workspace config + common fallbacks). */
 export function resolveMainTexRelativePath(projectRoot: string): string | null {
-  const dirs = readWorkspaceDirs(path.join(projectRoot, ".prismnext"));
+  const dirs = readWorkspaceDirs(projectRoot);
   const manuscript = dirs.find((d) => d.function === "manuscript");
   if (manuscript && "mainTex" in manuscript) {
     const rel = normalizeRel(path.join(manuscript.name, manuscript.mainTex));

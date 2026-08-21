@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   registerProjectRoot,
   registerWorkspaceRoots,
+  replaceRegisteredRoots,
   clearRoots,
   isPathContained,
   isPathUnderHome,
@@ -97,6 +98,17 @@ describe("active-project-roots registry", () => {
       registerProjectRoot(projB);
       expect(isPathContained(projAFile)).toBe(false); // A no longer active
       expect(isPathContained(projBFile)).toBe(true);  // B now active
+    });
+
+    it("replaceRegisteredRoots keeps every workbench member contained", () => {
+      replaceRegisteredRoots([projA, projB]);
+      expect(isPathContained(projAFile)).toBe(true);
+      expect(isPathContained(projBFile)).toBe(true);
+      expect(_registeredRoots()).toEqual([projA, projB].sort());
+
+      replaceRegisteredRoots([projB]);
+      expect(isPathContained(projAFile)).toBe(false);
+      expect(isPathContained(projBFile)).toBe(true);
     });
   });
 

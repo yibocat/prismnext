@@ -554,9 +554,13 @@ describe("resolveExperimentDir (workspace integration)", () => {
   });
 
   function writeSettings(projectRoot: string, workspaceDirs: unknown[]): void {
-    const prismDir = join(projectRoot, ".prismnext");
-    mkdirSync(prismDir, { recursive: true });
-    writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ workspaceDirs }), "utf-8");
+    const metaDir = join(projectRoot, ".workbench");
+    mkdirSync(metaDir, { recursive: true });
+    writeFileSync(
+      join(metaDir, "workbench.json"),
+      JSON.stringify({ id: "p_test", workspace: { folders: workspaceDirs } }),
+      "utf-8",
+    );
   }
 
   it("returns not_configured when no experiment folder is configured", () => {

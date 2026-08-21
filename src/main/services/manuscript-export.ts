@@ -1,6 +1,7 @@
 import { access, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { zipSync, strToU8 } from "fflate";
+import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench-paths";
 
 const TEX_AUX_EXT = new Set([
   ".aux",
@@ -28,7 +29,7 @@ const TEX_AUX_EXT = new Set([
   ".alg",
 ]);
 
-const SKIP_NAMES = new Set([".git", ".ds_store", "thumbs.db", ".prismnext"]);
+const SKIP_NAMES = new Set([".git", ".ds_store", "thumbs.db", ".prismnext", ".workbench"]);
 
 /** True if this relative path should be omitted from a manuscript zip. */
 export function shouldExcludeFromManuscriptZip(relPath: string): boolean {
@@ -51,7 +52,7 @@ export function resolveCompilePdfAbsolutePath(
   mainRelativePath: string,
 ): string {
   const stem = basename(mainRelativePath, extname(mainRelativePath));
-  return join(projectRoot, ".prismnext", "compile", `${stem}.pdf`);
+  return join(projectRoot, PROJECT_META_DIR, PROJECT_COMPILE_DIRNAME, `${stem}.pdf`);
 }
 
 export async function fileExists(absPath: string): Promise<boolean> {

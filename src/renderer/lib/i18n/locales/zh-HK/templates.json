@@ -55,7 +55,7 @@
     "willTouch": "將寫入或覆蓋的檔案：",
     "willRemove": "將移除的舊模板檔案：",
     "noFileList": "此步驟沒有逐檔列表 — 確認後繼續。",
-    "backupNote": "寫入前會把重疊或先前套用的模板檔案備份到 .prismnext/backups。",
+    "backupNote": "寫入前會把重疊或先前套用的模板檔案備份到 .workbench/backups。",
     "backupMerge": "備份併合並",
     "backupReplace": "備份並替換"
   }

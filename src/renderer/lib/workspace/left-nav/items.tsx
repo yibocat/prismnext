@@ -1,7 +1,6 @@
 import { Bot, BookOpenIcon, FileType, FlaskConical, LayoutTemplate, Package, SettingsIcon } from "lucide-react";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
-import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
 import { leftNavRegistry } from "./registry";
@@ -190,11 +189,7 @@ const settingsNav: LeftNavDefinition = {
   },
   onToggleOff: () => {
     const st = useLayoutStore.getState();
-    const doc = useDocumentStore.getState();
     resetSettingsEditors();
-    if (!doc.projectRoot) {
-      doc.setShowWelcome(true);
-    }
     st.setLeftSidebarView("sessions");
   },
   trailing: <ShortcutKbdChips id="shell.openSettings" />,

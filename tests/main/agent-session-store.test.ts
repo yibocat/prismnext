@@ -419,4 +419,24 @@ describe("AgentSessionStore v2 conversation identity", () => {
     expect(store.getByConversationId("conv-del")).toBeNull();
     expect(store.getSession("rt-del")).toBeNull();
   });
+
+  it("writes projectId on new records and lists by projectId first", () => {
+    const a = store.createSession({
+      runtimeSessionId: "ses-id-a",
+      title: "A",
+      projectRoot: "/paper-a",
+      projectId: "p_paper_a",
+    });
+    store.createSession({
+      runtimeSessionId: "ses-id-b",
+      title: "B",
+      projectRoot: "/paper-b",
+      projectId: "p_paper_b",
+    });
+    expect(a.projectId).toBe("p_paper_a");
+    expect(store.listSessionsByProjectId("p_paper_a")).toHaveLength(1);
+    expect(store.listSessionsByProjectId("p_paper_a")[0]?.runtimeSessionId).toBe("ses-id-a");
+    expect(store.listSessionsByProjectId("p_paper_b")[0]?.title).toBe("B");
+    expect(store.getSession("ses-id-a")?.projectId).toBe("p_paper_a");
+  });
 });

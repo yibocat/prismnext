@@ -28,6 +28,10 @@ export interface AppSettings {
   sidebarCollapsed: boolean;
   rightPanelCollapsed: boolean;
   lastProjectPath?: string;
+  /** Workbench default project role (P3). Not used to auto-open in P1. */
+  defaultProjectId?: string;
+  /** Projects currently on the workbench (P3/P4). */
+  workbenchProjectIds?: string[];
   lastActiveFileId?: string | null;
   zoteroApiKey?: string;
   zoteroUserId?: string;

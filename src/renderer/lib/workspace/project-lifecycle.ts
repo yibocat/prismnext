@@ -72,6 +72,21 @@ export async function confirmProjectSwitchIfNeeded(
 }
 
 /**
+ * Refresh the focused project's file/research UI without killing other
+ * conversations, permissions, or background experiments (P4 / D-5 / D-6).
+ */
+export async function applyWorkbenchFocusChange(): Promise<void> {
+  useRightPanelStore.getState().closeAllTabs({ force: true });
+  useLayoutStore.getState().setLeftSidebarOverlay(false);
+  clearPdfCache();
+  useChangesStore.getState().clearAll();
+  useWorktreeStore.getState().clearAll();
+  useGitStore.getState().clearAll();
+  useWorkspaceConfigStore.getState().reset();
+  useExperimentStore.getState().reset();
+}
+
+/**
  * Tear down in-memory state that must not leak across projects.
  * Called at the start of openProject and from closeProject.
  * @param keepProjectPath When reopening the same project, keep its OpenCode runtime.

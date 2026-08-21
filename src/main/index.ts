@@ -8,7 +8,6 @@ import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
 import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
 import { ensureUserTeamsRegistered } from "./services/user-teams";
-import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
 import { ensureMyContentTeam } from "./teams/my-content";
 import { disposeChat, registerIpcHandlers } from "./ipc/index";
 import {
@@ -35,6 +34,9 @@ import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
+import { HOME_JOBS_DIRNAME } from "../shared/workbench-paths";
+import { ensureWorkbenchHome } from "./workbench/home";
+import { ensureDefaultProject } from "./workbench/default-project";
 import { disposeLogger } from "./ipc/log";
 import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
 import {
@@ -339,10 +341,14 @@ registerWindowHandlers();
 registerNewWindowHandler(createWindow);
 
 app.whenReady().then(async () => {
+  const workbenchHome = ensureWorkbenchHome();
+  try {
+    ensureDefaultProject();
+  } catch (err) {
+    log.warn("default project ensure failed", { error: (err as Error).message });
+  }
   registerLiteraturePdfProtocol();
   installMainProcessNetwork();
-  // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
-  ensureUserTeamsMigrated();
   // Always-on My Content + chat lead (safety net so Core can be offloaded).
   ensureMyContentTeam();
   // Temporary read compatibility for any legacy directory that could not be
@@ -360,7 +366,7 @@ app.whenReady().then(async () => {
     ...(existsSync(aboutIcon) ? { iconPath: aboutIcon } : {}),
   });
 
-  initExecutionRegistry(join(app.getPath("userData"), "execution-history"));
+  initExecutionRegistry(join(workbenchHome, HOME_JOBS_DIRNAME));
   startExecutionEventBroadcast();
   // File-bridge pollers are not started, including the leftover terminal
   // request.json watcher (Pi bash goes through execution-registry). stop*()

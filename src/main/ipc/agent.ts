@@ -73,6 +73,11 @@ export function registerAgentHandlers(): void {
     return agent.listSessions(args.projectRoot);
   });
 
+  ipcMain.handle("agent:listSessionsByProjectId", async (_event, args: { projectId: string }) => {
+    const agent = await getAgentService();
+    return agent.listSessionsByProjectId(args.projectId);
+  });
+
   ipcMain.handle("agent:loadSession", async (_event, args: AgentLoadSessionInput) => {
     const agent = await getAgentService();
     return agent.loadSession(args);

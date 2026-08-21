@@ -22,6 +22,7 @@ const SKIP_DIR_NAMES = new Set([
   "__pycache__",
   ".git",
   ".prismnext",
+  ".workbench",
 ]);
 const FIGURE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg", ".pdf"]);
 const DEFAULT_MAX_DEPTH = 4;

@@ -905,7 +905,7 @@ export async function isGitRepo(projectRoot: string): Promise<boolean> {
 /**
  * Initialize a git repository: `git init`
  */
-const DEFAULT_GITIGNORE = [
+export const DEFAULT_PROJECT_GITIGNORE = [
   "# LaTeX build artifacts",
   "*.aux",
   "*.log",
@@ -921,8 +921,16 @@ const DEFAULT_GITIGNORE = [
   "*.snm",
   "*.vrb",
   "",
-  "# Build & cache (prismnext internal — not tracked)",
-  ".prismnext/",
+  "# Workbench build & cache — do not ignore the whole .workbench directory",
+  ".workbench/compile/",
+  ".workbench/.venv/",
+  ".workbench/interactions/",
+  ".workbench/backups/",
+  ".workbench/cache/",
+  ".workbench/state/",
+  ".workbench/state.json",
+  ".workbench/settings.json",
+  ".venv/",
   ".prism-worktree-meta",
   "*.pyc",
   "__pycache__/",
@@ -946,7 +954,7 @@ export async function initRepo(projectRoot: string): Promise<GitResult> {
     await execGit(projectRoot, ["init"]);
     // Write default .gitignore
     try {
-      await writeFile(join(projectRoot, ".gitignore"), DEFAULT_GITIGNORE);
+      await writeFile(join(projectRoot, ".gitignore"), DEFAULT_PROJECT_GITIGNORE);
     } catch { /* non-critical */ }
     // Stage everything and create initial commit
     try {

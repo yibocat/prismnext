@@ -32,7 +32,7 @@ export function resolveCompilePdfDiskPath(
 ): string {
   return joinProjectPath(
     projectRoot,
-    ".prismnext",
+    ".workbench",
     "compile",
     `${texStem(mainRelativePath)}.pdf`,
   );
@@ -66,7 +66,7 @@ let _ensureDiskPdfKey: string | null = null;
 
 /**
  * If memory cache is empty, try loading a previously compiled PDF from
- * `<project>/.prismnext/compile/<stem>.pdf`. Returns true when bytes are available.
+ * `<project>/.workbench/compile/<stem>.pdf`. Returns true when bytes are available.
  */
 export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boolean> {
   if (!projectRoot) return false;

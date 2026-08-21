@@ -30,10 +30,12 @@ import { registerProLicenseHandlers } from "./pro-license";
 import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
+import { registerWorkbenchHandlers } from "./workbench";
 
 export function registerIpcHandlers(): void {
   installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
+  registerWorkbenchHandlers();
   registerFsHandlers();
   registerCompileHandlers();
   registerAgentHandlers();

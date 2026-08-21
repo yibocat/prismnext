@@ -222,7 +222,7 @@ export function renderAgentsMdFromDigest(parts: {
     "",
     "## Boundaries",
     "",
-    "- `.prismnext/` — prismnext session data, compile cache, and agent config (this file).",
+    "- `.workbench/` — project id, compile cache, and agent config (this file).",
     "- Do not commit secrets or API keys.",
     "",
   );
@@ -236,7 +236,7 @@ export function renderAgentsMdFromDigest(parts: {
 
 /** Build AGENTS.md content from a fast local survey (no AI). */
 export async function buildAgentsMdScaffold(projectRoot: string): Promise<AgentsMdScaffoldResult> {
-  const agentsMdPath = join(projectRoot, ".prismnext", "agent", "AGENTS.md");
+  const agentsMdPath = join(projectRoot, ".workbench", "agent", "AGENTS.md");
   const updated = existsSync(agentsMdPath);
 
   const treeLines: TreeLine[] = [];

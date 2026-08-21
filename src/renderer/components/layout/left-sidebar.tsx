@@ -25,6 +25,9 @@ import {
   ArrowUpDown,
   ChevronDown,
   ChevronRight,
+  Minus,
+  CircleAlert,
+  Square,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { ProjectSwitcher } from "@/components/modules/shared";
@@ -40,6 +43,13 @@ import {
   togglePinSessionForProject,
 } from "@/lib/chat/session-ui-prefs";
 import { useWorktreeStore } from "@/stores/worktree-store";
+import {
+  groupSessionsByProject,
+  sameProjectPath,
+  useWorkbenchStore,
+  type WorkbenchSessionRow,
+} from "@/stores/workbench-store";
+import { hasPendingPermission, usePermissionStore } from "@/stores/permission-store";
 import {
   AppMenu,
   AppMenuCheckItem,
@@ -61,6 +71,8 @@ interface SessionInfo {
   lastModified: number;
   createdAt: number;
   directory?: string;
+  projectId?: string;
+  projectLastPath?: string;
 }
 
 type FetchSessionsOptions = {
@@ -78,7 +90,9 @@ function sessionsListEqual(a: SessionInfo[], b: SessionInfo[]): boolean {
       || x.title !== y.title
       || x.lastModified !== y.lastModified
       || x.createdAt !== y.createdAt
-      || x.directory !== y.directory
+      ||       x.directory !== y.directory
+      || x.projectId !== y.projectId
+      || x.projectLastPath !== y.projectLastPath
     ) {
       return false;
     }
@@ -212,50 +226,78 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const hasAnyStreaming = streamingSessionIds.size > 0;
   const loadSession = useChatStore((s) => s.loadSession);
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
+  const cancelExecution = useChatStore((s) => s.cancelExecution);
+  const pendingPermissions = usePermissionStore((s) => s.permissions);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const worktrees = useWorktreeStore((s) => s.worktrees);
-
-  const archiveSession = useCallback((sessionId: string) => {
-    if (!projectRoot) return;
-    void toggleArchiveSessionForProject(projectRoot, sessionId);
-  }, [projectRoot]);
-
-  const pinSession = useCallback((sessionId: string) => {
-    if (!projectRoot) return;
-    void togglePinSessionForProject(projectRoot, sessionId);
-  }, [projectRoot]);
-
-  const clearSessionUiPrefs = useCallback((sessionId: string) => {
-    if (!projectRoot) return;
-    if (archivedSessionIds.includes(sessionId)) {
-      void toggleArchiveSessionForProject(projectRoot, sessionId);
-    }
-    if (pinnedSessionIds.includes(sessionId)) {
-      void togglePinSessionForProject(projectRoot, sessionId);
-    }
-  }, [projectRoot, archivedSessionIds, pinnedSessionIds]);
-
+  const members = useWorkbenchStore((s) => s.members);
+  const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
+  const projectPathForSession = useCallback((sessionId: string) => {
+    const row = sessionsRef.current.find((item) => item.id === sessionId);
+    return row?.projectLastPath || projectRoot;
+  }, [projectRoot]);
+
+  const archiveSession = useCallback((sessionId: string) => {
+    const root = projectPathForSession(sessionId);
+    if (!root) return;
+    void toggleArchiveSessionForProject(root, sessionId);
+  }, [projectPathForSession]);
+
+  const pinSession = useCallback((sessionId: string) => {
+    const root = projectPathForSession(sessionId);
+    if (!root) return;
+    void togglePinSessionForProject(root, sessionId);
+  }, [projectPathForSession]);
+
+  const clearSessionUiPrefs = useCallback((sessionId: string) => {
+    const root = projectPathForSession(sessionId);
+    if (!root) return;
+    if (archivedSessionIds.includes(sessionId)) {
+      void toggleArchiveSessionForProject(root, sessionId);
+    }
+    if (pinnedSessionIds.includes(sessionId)) {
+      void togglePinSessionForProject(root, sessionId);
+    }
+  }, [projectPathForSession, archivedSessionIds, pinnedSessionIds]);
+
   const fetchSessions = useCallback(async (options?: FetchSessionsOptions) => {
-    if (!projectRoot) {
+    const targets = members.length > 0
+      ? members
+      : projectRoot
+        ? [{ id: "", lastPath: projectRoot, displayName: "" }]
+        : [];
+    if (targets.length === 0) {
       setSessions([]);
       return;
     }
     const silent = options?.silent ?? sessionsRef.current.length > 0;
     if (!silent) setLoading(true);
     try {
-      const listed = await window.electronAPI.agentListSessions(projectRoot);
-      const result = listed.map((s) => ({
-        id: s.conversationId,
-        title: s.title,
-        lastModified: s.updatedAt,
-        createdAt: s.createdAt,
-        directory: s.directory,
+      const listed = await Promise.all(targets.map(async (member) => {
+        const rows = member.id
+          ? await window.electronAPI.agentListSessionsByProjectId(member.id)
+          : await window.electronAPI.agentListSessions(member.lastPath);
+        return rows.map((s) => ({
+          id: s.conversationId,
+          title: s.title,
+          lastModified: s.updatedAt,
+          createdAt: s.createdAt,
+          directory: s.directory,
+          projectId: member.id,
+          projectLastPath: member.lastPath,
+        }));
       }));
+      const result = listed.flat();
+      useWorkbenchStore.getState().recordSessionProjects(
+        Object.fromEntries(
+          result.filter((s) => s.projectId).map((s) => [s.id, s.projectId]),
+        ),
+      );
       const chatStore = useChatStore.getState();
       const tabs = chatStore.tabs;
       const merged = result.map((s) => {
@@ -284,7 +326,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [projectRoot]);
+  }, [members, projectRoot]);
 
   const fetchSessionsRef = useRef(fetchSessions);
   fetchSessionsRef.current = fetchSessions;
@@ -384,25 +426,48 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   });
 
   const empty = !loading && sortedSessions.length === 0;
+  const sessionGroups = useMemo(
+    () => groupSessionsByProject(
+      members,
+      sortedSessions.filter((s): s is SessionInfo & WorkbenchSessionRow => Boolean(s.projectId)),
+    ),
+    [members, sortedSessions],
+  );
+
+  const removeFromWorkbench = useCallback(async (projectId: string) => {
+    const removed = members.find((member) => member.id === projectId);
+    const next = await useWorkbenchStore.getState().removeProject(projectId);
+    if (removed && sameProjectPath(removed.lastPath, projectRoot)) {
+      await useDocumentStore.getState().focusProject(next.defaultLastPath);
+    }
+    void fetchSessionsRef.current({ silent: true });
+  }, [members, projectRoot]);
 
   const renderSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
-    const checkoutContext = resolveSessionWorktreeContext(s.directory, projectRoot, worktrees);
+    const isWaitingPermission = hasPendingPermission(pendingPermissions, s.id);
+    const checkoutContext = resolveSessionWorktreeContext(
+      s.directory,
+      s.projectLastPath || projectRoot,
+      worktrees,
+    );
     const isWorktreeSession = checkoutContext.kind !== "local";
     return (
       <SidebarMenuItem key={s.id}>
         <SidebarMenuButton
           onClick={() => {
-            loadSession(s.id, s.directory);
+            loadSession(s.id, s.directory, s.projectLastPath);
             setLeftSidebarOverlay(false);
           }}
           isActive={isActive}
           size="sm"
         >
           <span className="relative size-3.5 shrink-0 flex items-center justify-center">
-            {isWorktreeSession ? (
+            {isWaitingPermission ? (
+              <CircleAlert className="absolute size-3.5 text-warning" strokeWidth={2.5} />
+            ) : isWorktreeSession ? (
               <WorkflowIcon className="absolute size-3 text-primary/70 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2} />
             ) : isSessionStreaming ? (
               <CircleDotDashed className="absolute size-3.5 text-primary transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
@@ -434,9 +499,31 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             </Hint>
           </span>
           <span className="truncate text-[length:var(--font-session-item)] flex-1">{displayChatTitle(s.title, t)}</span>
-          <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
-            {relativeTime(s.lastModified, t)}
-          </span>
+          {isSessionStreaming ? (
+            <Hint label={t("nav.sessions.stopSession")}>
+              <span
+                role="button"
+                tabIndex={0}
+                className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void cancelExecution(s.id);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    void cancelExecution(s.id);
+                  }
+                }}
+              >
+                <Square className="size-3" />
+              </span>
+            </Hint>
+          ) : (
+            <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
+              {relativeTime(s.lastModified, t)}
+            </span>
+          )}
           {showArchived ? (
             <>
               <Hint label={t("nav.sessions.restoreFromArchive")}>
@@ -624,7 +711,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             <div className="flex items-center justify-center py-8">
               <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
             </div>
-          ) : empty ? (
+          ) : empty && members.length === 0 ? (
             <div className="flex flex-1 items-center justify-center px-4">
               <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
                 <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
@@ -635,14 +722,35 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               </p>
             </div>
           ) : (
-            <SidebarMenu>
-              {sortedSessions
-                .filter((s) => {
-                  if (showArchived) return archivedSessionIds.includes(s.id);
-                  return !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id);
-                })
-                .map(renderSessionItem)}
-            </SidebarMenu>
+            sessionGroups.map(({ member, sessions: groupSessions }) => {
+              const visible = groupSessions.filter((s) => {
+                if (showArchived) return archivedSessionIds.includes(s.id);
+                return !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id);
+              });
+              return (
+                <div key={member.id}>
+                  <div className="pt-1 pb-1 flex items-center justify-between gap-1">
+                    <span className="truncate text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
+                      {member.displayName}
+                    </span>
+                    {member.id !== defaultProjectId ? (
+                      <Hint label={t("nav.project.removeFromWorkbench")}>
+                        <button
+                          type="button"
+                          className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+                          onClick={() => void removeFromWorkbench(member.id)}
+                        >
+                          <Minus className="size-3" />
+                        </button>
+                      </Hint>
+                    ) : null}
+                  </div>
+                  <SidebarMenu>
+                    {visible.map(renderSessionItem)}
+                  </SidebarMenu>
+                </div>
+              );
+            })
           )}
         </div>
         <SidebarFooter className="px-2 pb-2">

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
+import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import {
   AppMenu,
@@ -32,6 +33,11 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const openProject = useDocumentStore((s) => s.openProject);
+  const defaultLastPath = useWorkbenchStore((s) => s.defaultLastPath);
+  const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
+  const members = useWorkbenchStore((s) => s.members);
+  const onDefaultProject = sameProjectPath(projectRoot, defaultLastPath);
+  const focusedMember = members.find((member) => sameProjectPath(member.lastPath, projectRoot));
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
@@ -94,6 +100,15 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
 
   const handleCloseProject = () => {
     useDocumentStore.getState().closeProject();
+  };
+
+  const handleRemoveFromWorkbench = async () => {
+    if (!focusedMember || focusedMember.id === defaultProjectId) return;
+    const next = await useWorkbenchStore.getState().removeProject(focusedMember.id);
+    setLeftSidebarOverlay(false);
+    if (next.defaultLastPath) {
+      await useDocumentStore.getState().focusProject(next.defaultLastPath);
+    }
   };
 
   return (
@@ -160,10 +175,19 @@ export function ProjectSwitcher({ className }: ProjectSwitcherProps) {
           <AppMenuItem className={sidebarItemClass} onClick={handleOpenProjectDialog}>
             {t("nav.project.openProject")}
           </AppMenuItem>
-          <AppMenuSeparator />
-          <AppMenuItem className={sidebarItemClass} onClick={handleCloseProject}>
-            {t("nav.project.closeProject")}
-          </AppMenuItem>
+          {onDefaultProject ? null : (
+            <>
+              <AppMenuSeparator />
+              <AppMenuItem className={sidebarItemClass} onClick={handleCloseProject}>
+                {t("nav.project.closeProject")}
+              </AppMenuItem>
+              {focusedMember ? (
+                <AppMenuItem className={sidebarItemClass} onClick={() => void handleRemoveFromWorkbench()}>
+                  {t("nav.project.removeFromWorkbench")}
+                </AppMenuItem>
+              ) : null}
+            </>
+          )}
         </AppMenuContent>
       </AppMenu>
 

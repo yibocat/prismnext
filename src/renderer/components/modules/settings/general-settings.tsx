@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRightIcon, InfoIcon } from "lucide-react";
 import {
@@ -10,6 +11,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useWorkbenchStore } from "@/stores/workbench-store";
 import {
   APP_LOCALE_PREFERENCES,
   normalizeAppLocalePreference,
@@ -77,6 +79,15 @@ export function GeneralSettings() {
   );
   const trayIconEnabled = useSettingsStore((s) => s.settings.trayIconEnabled !== false);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
+  const members = useWorkbenchStore((s) => s.members);
+  const hydrateWorkbench = useWorkbenchStore((s) => s.hydrate);
+  const setDefault = useWorkbenchStore((s) => s.setDefault);
+  const setDefaultFromFolder = useWorkbenchStore((s) => s.setDefaultFromFolder);
+
+  useEffect(() => {
+    void hydrateWorkbench();
+  }, [hydrateWorkbench]);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -115,6 +126,52 @@ export function GeneralSettings() {
                   ))}
                 </AppSelectContent>
               </AppSelect>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className={CATEGORY_HEADER}>{t("settings.general.workbench")}</h3>
+          <div className={CARD}>
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>{t("settings.general.defaultProject")}</p>
+                <p className={ROW_DESC}>{t("settings.general.defaultProjectDesc")}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {members.length > 0 ? (
+                  <AppSelect
+                    value={defaultProjectId}
+                    onValueChange={(id) => {
+                      void setDefault(id);
+                    }}
+                  >
+                    <AppSelectTrigger className="w-52 shrink-0">
+                      <AppSelectValue />
+                    </AppSelectTrigger>
+                    <AppSelectContent>
+                      {members.map((member) => (
+                        <AppSelectItem key={member.id} value={member.id}>
+                          {member.displayName}
+                        </AppSelectItem>
+                      ))}
+                    </AppSelectContent>
+                  </AppSelect>
+                ) : null}
+                <button
+                  type="button"
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[length:var(--font-size-12)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  onClick={() => {
+                    void (async () => {
+                      const result = await window.electronAPI.dialogOpenFolder();
+                      if (result.canceled || !result.path) return;
+                      await setDefaultFromFolder(result.path);
+                    })();
+                  }}
+                >
+                  {t("settings.general.defaultProjectFolder")}
+                </button>
+              </div>
             </div>
           </div>
         </div>

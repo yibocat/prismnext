@@ -12,7 +12,8 @@ import {
   resolveAgentAuth,
 } from "../../src/main/agent/agent-service";
 import { RuntimeRegistry } from "../../src/main/agent/runtime-registry";
-import { AgentSessionStore } from "../../src/main/agent/session-store";
+import { AgentSessionStore, resolvePiAgentRoot } from "../../src/main/agent/session-store";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
 import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
 
@@ -310,6 +311,7 @@ function fakeRuntime(): AgentRuntime {
 describe("agent session history", () => {
   const dirs: string[] = [];
   afterEach(() => {
+    setWorkbenchUserHomeOverride(null);
     for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
     dirs.length = 0;
   });
@@ -318,7 +320,8 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-hist-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
-    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    setWorkbenchUserHomeOverride(userData);
+    const store = new AgentSessionStore(resolvePiAgentRoot());
     store.createSession({
       conversationId: "conv-1",
       runtimeSessionId: "rt-1",
@@ -366,7 +369,8 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-resume-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
-    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    setWorkbenchUserHomeOverride(userData);
+    const store = new AgentSessionStore(resolvePiAgentRoot());
     store.createSession({
       conversationId: "conv-resume",
       runtimeSessionId: "rt-old",
@@ -423,6 +427,7 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-compact-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
+    setWorkbenchUserHomeOverride(userData);
     const compacted: string[] = [];
     const registry = new RuntimeRegistry({
       userDataDir: userData,
@@ -496,6 +501,7 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-subruns-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
+    setWorkbenchUserHomeOverride(userData);
     const registry = new RuntimeRegistry({
       userDataDir: userData,
       startRuntime: async () => ({
@@ -575,7 +581,8 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-trunc-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
-    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    setWorkbenchUserHomeOverride(userData);
+    const store = new AgentSessionStore(resolvePiAgentRoot());
     store.createSession({
       conversationId: "conv-cut",
       runtimeSessionId: "rt-cut",
@@ -625,7 +632,8 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-plan-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-proj-"));
     dirs.push(userData, project);
-    const store = new AgentSessionStore(join(userData, "pi-agent"));
+    setWorkbenchUserHomeOverride(userData);
+    const store = new AgentSessionStore(resolvePiAgentRoot());
     store.createSession({
       conversationId: "conv-plan",
       runtimeSessionId: "rt-plan",
@@ -682,6 +690,7 @@ describe("agent session history", () => {
   it("drops a disposed renderer instead of throwing on agent:event", async () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-owner-"));
     dirs.push(userData);
+    setWorkbenchUserHomeOverride(userData);
     const agent = createAgentService({
       userDataDir: userData,
       getSettings: () => ({
@@ -725,6 +734,7 @@ describe("agent session history", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-agent-lock-"));
     const project = mkdtempSync(join(tmpdir(), "prism-agent-lock-proj-"));
     dirs.push(userData, project);
+    setWorkbenchUserHomeOverride(userData);
 
     let releaseHung!: () => void;
     const hung = new Promise<void>((resolve) => {

@@ -148,11 +148,12 @@ describe("gateExperimentPythonExecution external-interpreter warning", () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "prism-py-gate-ext-"));
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [{ function: "experiment", name: "labs" }],
+        id: "p_test",
+        workspace: { folders: [{ function: "experiment", name: "labs" }] },
       }),
       "utf-8",
     );
@@ -222,11 +223,12 @@ describe("gateExperimentPythonExecution (project .prismnext/.venv)", () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "prism-py-gate-"));
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [{ function: "experiment", name: "labs" }],
+        id: "p_test",
+        workspace: { folders: [{ function: "experiment", name: "labs" }] },
       }),
       "utf-8",
     );
@@ -406,11 +408,12 @@ describe("gateExperimentPythonExecution external-interpreter bash lane (gap 3)",
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "prism-py-gate-sage-"));
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [{ function: "experiment", name: "labs" }],
+        id: "p_test",
+        workspace: { folders: [{ function: "experiment", name: "labs" }] },
       }),
       "utf-8",
     );

@@ -183,7 +183,7 @@ function LiveStructurePreview({
         <div className="flex items-center gap-1.5 pl-4 text-muted-foreground">
           <span className="text-muted-foreground/50">├──</span>
           <FolderIcon className="size-3 text-muted-foreground" />
-          <span className="text-foreground/80">.prismnext/</span>
+          <span className="text-foreground/80">.workbench/</span>
           <span className="font-sans text-[10px] text-muted-foreground/70">
             ({t("project.new.prismnextConfigTag", "智能体规则与配置")})
           </span>

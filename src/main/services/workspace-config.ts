@@ -13,6 +13,11 @@ import {
   iconSpecToJSON,
   type IconSpec,
 } from "../../shared/icon-spec";
+import {
+  readWorkbenchJson,
+  writeWorkbenchJson,
+  ensureWorkbenchId,
+} from "../workbench/identity";
 
 interface ProjectSettings {
   version?: number;
@@ -23,12 +28,16 @@ interface ProjectSettings {
   [key: string]: unknown;
 }
 
-function getSettingsPath(prismDir: string): string {
-  return path.join(prismDir, "settings.json");
+export const DEFAULT_WORKSPACE_FOLDERS: WorkspaceFolder[] = [
+  { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+];
+
+function getSettingsPath(metaDir: string): string {
+  return path.join(metaDir, "settings.json");
 }
 
-function readProjectSettings(prismDir: string): ProjectSettings {
-  const settingsPath = getSettingsPath(prismDir);
+function readProjectSettings(metaDir: string): ProjectSettings {
+  const settingsPath = getSettingsPath(metaDir);
   try {
     const raw = fs.readFileSync(settingsPath, "utf-8");
     return JSON.parse(raw);
@@ -37,66 +46,42 @@ function readProjectSettings(prismDir: string): ProjectSettings {
   }
 }
 
-function writeProjectSettings(prismDir: string, settings: ProjectSettings): void {
-  const settingsPath = getSettingsPath(prismDir);
-  // Ensure the .prismnext directory exists before writing
-  if (!fs.existsSync(prismDir)) {
-    fs.mkdirSync(prismDir, { recursive: true });
+export function writeProjectSettings(metaDir: string, settings: ProjectSettings): void {
+  const settingsPath = getSettingsPath(metaDir);
+  if (!fs.existsSync(metaDir)) {
+    fs.mkdirSync(metaDir, { recursive: true });
   }
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
 }
 
-export function readWorkspaceDirs(prismDir: string): WorkspaceFolder[] {
-  const settings = readProjectSettings(prismDir);
+function foldersFromWorkbench(projectRoot: string): WorkspaceFolder[] | null {
+  const folders = readWorkbenchJson(projectRoot)?.workspace?.folders;
+  if (!Array.isArray(folders) || folders.length === 0) return null;
+  return folders as WorkspaceFolder[];
+}
 
-  if (Array.isArray(settings.workspaceDirs)) {
-    // Non-empty array: trust it (user's real configuration).
-    if (settings.workspaceDirs.length > 0) {
-      return settings.workspaceDirs;
-    }
-    // Empty array: this is the data-loss signature from a previous autosave bug
-    // (project-switch cleanup overwrote settings.json with []). An empty config
-    // is never a valid intent - a project needs at least a manuscript folder.
-    // Fall through to default instead of returning [], so the project recovers
-    // its functional folders instead of staying permanently empty.
-  }
-
-  // Migrate from old format: { manuscript: { dir, main } }
-  const oldManuscript = settings.manuscript as
-    | { dir?: string; main?: string }
-    | undefined;
-  if (oldManuscript?.dir) {
-    const migrated: WorkspaceFolder[] = [
-      {
-        function: "manuscript",
-        name: oldManuscript.dir,
-        mainTex: oldManuscript.main || "main.tex",
-      },
-    ];
-    // Write back in the new format so migration only happens once
-    settings.workspaceDirs = migrated;
-    writeProjectSettings(prismDir, settings);
-    return migrated;
-  }
-
-  // Default — no workspaceDirs key at all (fresh project)
-  return [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }];
+/** Read manuscript/folder layout from `.workbench/workbench.json` (D-14). */
+export function readWorkspaceDirs(projectRoot: string): WorkspaceFolder[] {
+  return foldersFromWorkbench(projectRoot) ?? DEFAULT_WORKSPACE_FOLDERS;
 }
 
 export function writeWorkspaceDirs(
-  prismDir: string,
+  projectRoot: string,
   dirs: WorkspaceFolder[],
 ): void {
   // Guard against the data-loss signature: never persist an empty folder list.
-  // A project must keep at least one workspace folder (the manuscript). The
-  // IPC layer (validateWorkspaceDirs) already rejects [], but writeWorkspaceDirs
-  // is also called directly by migrations; this is the hard backstop.
   if (!Array.isArray(dirs) || dirs.length === 0) {
     return;
   }
-  const settings = readProjectSettings(prismDir);
-  settings.workspaceDirs = dirs;
-  writeProjectSettings(prismDir, settings);
+  const existing = readWorkbenchJson(projectRoot);
+  const id = existing?.id ?? ensureWorkbenchId(projectRoot);
+  writeWorkbenchJson(projectRoot, {
+    id,
+    workspace: {
+      ...existing?.workspace,
+      folders: dirs,
+    },
+  });
 }
 
 /** Read the project's visual identity (emoji / lucide / image); null when unset. */
@@ -117,7 +102,7 @@ function removeProjectIconImageFile(prismDir: string): void {
 }
 
 /**
- * Rewrite the project's visual identity in `.prismnext/settings.json`.
+ * Rewrite the project's visual identity in `.workbench/settings.json`.
  * Non-image icons also remove a leftover `icon.png`.
  */
 export function writeProjectIcon(prismDir: string, icon: IconSpec | null): void {
@@ -133,7 +118,7 @@ export function writeProjectIcon(prismDir: string, icon: IconSpec | null): void 
   writeProjectSettings(prismDir, settings);
 }
 
-/** Write PNG bytes to `.prismnext/icon.png` and set projectIcon to image relative path. */
+/** Write PNG bytes to `.workbench/icon.png` and set projectIcon to image relative path. */
 export function writeProjectIconImage(prismDir: string, pngBytes: Buffer): void {
   if (!pngBytes || pngBytes.length === 0) throw new Error("Empty icon image");
   if (pngBytes.length > 256 * 1024) throw new Error("Icon image is too large");
@@ -293,9 +278,9 @@ export function writeLiteratureProjectConfig(
  */
 export function resolveExperimentDir(
   projectRoot: string,
-  prismDir: string,
+  _prismDir?: string,
 ): { rel: string; abs: string } | { error: "not_configured" } {
-  const dirs = readWorkspaceDirs(prismDir);
+  const dirs = readWorkspaceDirs(projectRoot);
   const exp = findExperimentConfig(dirs);
   if (!exp) return { error: "not_configured" };
   const root = projectRoot.replace(/\\/g, "/");

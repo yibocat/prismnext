@@ -24,6 +24,7 @@ import {
   type ComposerQueueItem,
 } from "@/lib/chat/composer-send-queue";
 import { useDocumentStore } from "./document-store";
+import { lastPathForSession, sameProjectPath, useWorkbenchStore } from "./workbench-store";
 import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 import { useSettingsStore } from "./settings-store";
 import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
@@ -638,7 +639,7 @@ interface ChatState {
       promptFiles?: Array<{ uri: string; name: string; mimeType: string; size?: number }>;
     },
   ) => Promise<void>;
-  cancelExecution: () => Promise<void>;
+  cancelExecution: (conversationId?: string) => Promise<void>;
   enqueueComposerSend: (
     tabId: string,
     item: ComposerQueueItem,
@@ -668,7 +669,7 @@ interface ChatState {
   newPiSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
-  loadSession: (sessionId: string, sessionDirectory?: string) => Promise<void>;
+  loadSession: (sessionId: string, sessionDirectory?: string, projectLastPath?: string) => Promise<void>;
   /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
   checkPromptStale: (tabId?: string) => Promise<void>;
   /** Truncate in-memory Conversation (and leftover messages) to a turn. */
@@ -1108,6 +1109,11 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeTabId: id,
       ...projectActiveTab([...s.tabs, tab], id),
     }));
+    const focusProjectId = useWorkbenchStore.getState().focusProjectId;
+    if (focusProjectId) {
+      useWorkbenchStore.getState().recordSessionProject(id, focusProjectId);
+    }
+    useWorkbenchStore.getState().setFocusConversation(id);
     syncCheckoutForTab(tab);
     syncCitationStagingForTab(tab);
     return id;
@@ -1220,6 +1226,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       activeTabId: id,
       ...projectActiveTab(tabs, id),
     });
+    useWorkbenchStore.getState().setFocusConversation(id);
+    const mapped = lastPathForSession(id);
+    const currentRoot = useDocumentStore.getState().projectRoot;
+    if (mapped && !sameProjectPath(mapped, currentRoot)) {
+      void useDocumentStore.getState().focusProject(mapped);
+    }
     syncCheckoutForTab(targetTab);
     syncCitationStagingForTab(targetTab);
     void import("./terminal-ai-store").then(({ useTerminalAiStore }) => {
@@ -1823,8 +1835,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     },
   ) => {
     const docState = useDocumentStore.getState();
-    const projectPath = docState.projectRoot || "";
     const tabId = get().activeTabId;
+    const projectPath = lastPathForSession(tabId) || docState.projectRoot || "";
 
     const tabBeforePrompt = get().tabs.find((t) => t.id === tabId);
     if (tabBeforePrompt?.legacyReadOnly) {
@@ -1986,8 +1998,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  cancelExecution: async () => {
-    const tabId = get().activeTabId;
+  cancelExecution: async (conversationId?: string) => {
+    const tabId = conversationId?.trim() || get().activeTabId;
     const tab = get().tabs.find((t) => t.id === tabId);
     const turnId = tab?.conversation.live?.turnId;
     try {
@@ -2316,9 +2328,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
   },
 
-  loadSession: async (conversationId: string, sessionDirectory?: string) => {
-    const projectPath = useDocumentStore.getState().projectRoot || "";
-    if (!projectPath || !conversationId.trim()) return;
+  loadSession: async (conversationId: string, sessionDirectory?: string, projectLastPath?: string) => {
+    if (!conversationId.trim()) return;
+    const mappedPath = projectLastPath || lastPathForSession(conversationId);
+    const currentRoot = useDocumentStore.getState().projectRoot || "";
+    if (mappedPath && !sameProjectPath(mappedPath, currentRoot)) {
+      await useDocumentStore.getState().focusProject(mappedPath);
+    }
+    const projectPath = useDocumentStore.getState().projectRoot || mappedPath || "";
+    if (!projectPath) return;
+    useWorkbenchStore.getState().setFocusConversation(conversationId);
 
     const existingTab = get().tabs.find((t) => (
       t.id === conversationId
@@ -2389,6 +2408,12 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       });
       persistAndSyncIntensiveReading(tabId, hydratedTab.intensivePaperIds);
       syncCitationStagingForTab(hydratedTab);
+      const member = useWorkbenchStore.getState().members.find((item) =>
+        sameProjectPath(item.lastPath, projectPath),
+      );
+      if (member) {
+        useWorkbenchStore.getState().recordSessionProject(conversationId, member.id);
+      }
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) =>

@@ -54,17 +54,17 @@ export function normalizeProjectIcon(raw: string | null | undefined): string | n
   return value;
 }
 
-/** Absolute `.prismnext` dir for a project root. */
+/** Absolute `.workbench` dir for a project root. */
 export function projectIconBaseDir(projectPath: string): string {
-  return `${projectPath.replace(/[/\\]+$/, "")}/.prismnext`;
+  return `${projectPath.replace(/[/\\]+$/, "")}/.workbench`;
 }
 
-/** Read `projectIcon` (IconSpec) from a project's `.prismnext/settings.json`. */
+/** Read `projectIcon` (IconSpec) from a project's `.workbench/settings.json`. */
 export async function loadProjectIcon(projectPath: string): Promise<IconSpec | null> {
   const root = projectPath.replace(/[/\\]+$/, "");
   try {
     const settingsRes = await window.electronAPI.fsRead(
-      `${root}/.prismnext/settings.json`,
+      `${root}/.workbench/settings.json`,
     );
     const raw = settingsRes?.content?.trim();
     if (!raw) return null;
@@ -77,7 +77,7 @@ export async function loadProjectIcon(projectPath: string): Promise<IconSpec | n
 
 /**
  * Project icon badge. Accepts an `IconSpec` (emoji / lucide / image) or a legacy
- * emoji string. Image icons resolve from `<project>/.prismnext/icon.png`.
+ * emoji string. Image icons resolve from `<project>/.workbench/icon.png`.
  */
 export function ProjectIconBadge({
   icon,

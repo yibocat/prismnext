@@ -94,6 +94,14 @@ export function clearRoots(): void {
   _roots.clear();
 }
 
+/** Replace the registry with the given workbench member lastPaths (P4). */
+export function replaceRegisteredRoots(absList: readonly string[]): void {
+  _roots.clear();
+  for (const abs of absList) {
+    registerProjectRoot(abs);
+  }
+}
+
 /** True if `absPath` is equal to or nested under a registered project root. */
 export function isPathContained(abs: string): boolean {
   if (!abs || typeof abs !== "string" || !isAbsolute(abs)) return false;

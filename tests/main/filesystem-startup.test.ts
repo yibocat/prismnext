@@ -40,7 +40,7 @@ describe("filesystem watcher startup", () => {
   it("does not create any watcher when Agent-root initialization fails", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watcher-startup-failure-"));
     testState.watch.mockImplementation(() => fakeWatcher());
-    writeFileSync(join(root, ".prismnext"), "not a directory\n");
+    writeFileSync(join(root, ".workbench"), "not a directory\n");
 
     try {
       await expect(startWatching(root)).rejects.toThrow();

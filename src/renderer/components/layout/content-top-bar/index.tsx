@@ -18,6 +18,8 @@ import {
 import { openRightArea } from "@/lib/workspace/right-area-layout";
 import { Hint } from "@/components/ui/hint";
 import { WindowControls } from "@/components/layout/window-controls";
+import { listBackgroundPending, usePermissionStore } from "@/stores/permission-store";
+import { lastPathForSession, useWorkbenchStore } from "@/stores/workbench-store";
 
 interface ContentTopBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;
@@ -35,6 +37,22 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
   const sessionTitle = useSessionTitle();
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const loadSession = useChatStore((s) => s.loadSession);
+  const backgroundPending = usePermissionStore((s) =>
+    listBackgroundPending(s.permissions, activeTabId),
+  );
+  const members = useWorkbenchStore((s) => s.members);
+  const sessionProjectIds = useWorkbenchStore((s) => s.sessionProjectIds);
+  const waiting = backgroundPending[0];
+  const waitingTabTitle = useChatStore((s) => (
+    waiting ? s.tabs.find((tab) => tab.id === waiting.tabId)?.title : undefined
+  ));
+  const waitingName = waiting
+    ? members.find((member) => member.id === sessionProjectIds[waiting.tabId])?.displayName
+      || waitingTabTitle
+      || t("nav.sessions.chat")
+    : "";
   const chatTabCount = useChatStore((s) => s.tabs.length);
   const showOpenTabs = shouldShowChatOpenTabs(chatTabCount);
   const sessionDirectory = useChatStore((s) => {
@@ -92,6 +110,25 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
             />
           )
         )}
+        {waiting ? (
+          <Hint label={t("nav.sessions.waitingPermissionHint")}>
+            <button
+              type="button"
+              className="no-drag inline-flex h-6 max-w-[14rem] shrink-0 items-center rounded-md bg-muted px-1.5 text-[length:var(--font-chat-meta)] text-foreground hover:bg-accent hover:text-accent-foreground"
+              onClick={() => {
+                void loadSession(
+                  waiting.tabId,
+                  undefined,
+                  lastPathForSession(waiting.tabId) ?? undefined,
+                );
+              }}
+            >
+              <span className="truncate">
+                {t("nav.sessions.waitingPermission", { name: waitingName })}
+              </span>
+            </button>
+          </Hint>
+        ) : null}
       </div>
 
       {/* ── Right: expand right panel (RightArea or Settings detail) + Window controls ── */}

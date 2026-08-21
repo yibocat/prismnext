@@ -160,7 +160,7 @@ export function isLatexCompileToolUse(toolUse: ContentBlock): boolean {
   return name === "latex-compile" || name === "latex-compile-standalone";
 }
 
-/** Successful compile PDF (in-place figure or `.prismnext/compile/` paper). */
+/** Successful compile PDF (in-place figure or `.workbench/compile/` paper). */
 export function extractLatexCompileArtifactPaths(
   toolUse: ContentBlock,
   toolResult?: ContentBlock,

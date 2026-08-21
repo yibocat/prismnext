@@ -12,6 +12,7 @@ const DEFAULT_SKIP = new Set([
   "node_modules",
   "__pycache__",
   ".prismnext",
+  ".workbench",
   ".opencode",
   ".agents",
   "dist",

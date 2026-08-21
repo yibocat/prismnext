@@ -33,7 +33,7 @@ describe("latex compile bash messages", () => {
   it("point at paper vs standalone tools", () => {
     expect(latexCompileBashBlockMessage()).toContain("latex-compile");
     expect(latexCompileBashBlockMessage()).toContain("latex-compile-standalone");
-    expect(latexCompileBashBlockMessage()).toContain(".prismnext/compile/");
+    expect(latexCompileBashBlockMessage()).toContain(".workbench/compile/");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile-standalone");
   });

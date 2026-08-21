@@ -9,12 +9,13 @@ import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-g
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useWorkbenchStore } from "@/stores/workbench-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
-import { ProjectSetupDialog, WelcomePage } from "@/components/modules/project";
+import { ProjectSetupDialog } from "@/components/modules/project";
 import { PrismRibbonMark } from "@/components/brand/prism-ribbon-mark";
 import { Toaster } from "@/components/ui/sonner";
 import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
@@ -93,9 +94,7 @@ export function App() {
   const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const showWelcome = useDocumentStore((s) => s.showWelcome);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
-  const setShowWelcome = useDocumentStore((s) => s.setShowWelcome);
   const inSettings = leftSidebarView === "settings";
   const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
   const hasSettingsEditorTab = useRightPanelStore((s) =>
@@ -473,54 +472,38 @@ export function App() {
     };
   }, [inSettings]);
 
-  useEffect(() => {
-    if (projectRoot || !showWelcome) return;
-    const st = useSettingsStore.getState();
-    if (!st.loaded) {
-      const unsub = useSettingsStore.subscribe((s) => {
-        if (s.loaded) {
-          unsub();
-          autoOpen(s.settings.lastProjectPath);
-        }
-      });
-      return;
-    }
-    autoOpen(st.settings.lastProjectPath);
-
-    async function autoOpen(path?: string | null) {
-      if (!path) {
-        setAutoOpenChecked(true); // no project → show welcome
-        return;
-      }
-      try {
-        const exists = await window.electronAPI.fsExists(path);
-        if (exists) {
-          // Keep splash (#L) up — do not flip showWelcome yet (avoids blank/welcome flash).
-          useDocumentStore.setState({ isOpeningProject: true });
-          await useDocumentStore.getState().openProject(path);
-          setAutoOpenChecked(true);
-        } else {
-          setAutoOpenChecked(true); // path doesn't exist → show welcome
-        }
-      } catch {
-        setAutoOpenChecked(true);
-      }
-    }
-  }, []);
-
   // ── Startup loading screen lifecycle ──
   // Stay on splash until Agent+project warm finishes for auto-open, or welcome
   // is confirmed (no last project / skip). Never treat "left welcome" alone as
   // ready — that used to dismiss splash while Project was still Warming.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const [autoOpenChecked, setAutoOpenChecked] = useState(false);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const state = await useWorkbenchStore.getState().hydrate();
+        if (cancelled) return;
+        const current = useDocumentStore.getState().projectRoot;
+        if (!current && state.defaultLastPath) {
+          await useDocumentStore.getState().openProject(state.defaultLastPath);
+        }
+      } catch (err) {
+        console.error("[app] workbench launch failed", err);
+      } finally {
+        if (!cancelled) setAutoOpenChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsLoaded]);
   const appReady =
     settingsLoaded &&
-    (
-      (showWelcome && autoOpenChecked)
-      || (Boolean(projectRoot) && !isOpeningProject)
-      || (!showWelcome && !projectRoot && autoOpenChecked)
-    );
+    autoOpenChecked &&
+    (Boolean(projectRoot) ? !isOpeningProject : true);
 
   useEffect(() => {
     if (!appReady) return;
@@ -530,9 +513,6 @@ export function App() {
     if (!el) return;
     el.remove();
   }, [appReady]);
-
-  // While restoring last project, keep splash only — never mount Welcome (flash).
-  const showWelcomeUi = showWelcome && autoOpenChecked && !isOpeningProject && !projectRoot;
 
   return (
     <GlobalErrorBoundary>
@@ -565,13 +545,8 @@ export function App() {
             </div>
           </div>
         ) : null}
-        {showWelcomeUi ? (
-          <WelcomePage onSkip={() => {
-            setShowWelcome(false);
-            setAutoOpenChecked(true);
-          }} />
-        ) : projectRoot ? (
-          <div className="flex h-full flex-col" key={projectRoot}>
+        {projectRoot ? (
+          <div className="flex h-full flex-col">
             <Group
               id="main-layout"
               orientation="horizontal"

@@ -14,7 +14,8 @@ import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
 import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
-import { usePermissionStore, type PendingPermission } from "@/stores/permission-store";
+import { pickActivePermission, usePermissionStore, type PendingPermission } from "@/stores/permission-store";
+import { projectRootForSession } from "@/stores/workbench-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -158,23 +159,14 @@ export function useComposerHostedPermission(
   isAwaitingPermission: boolean,
 ): boolean {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const activeTabId = useChatStore((s) => s.activeTabId);
   const rules = usePermissionRulesConfig();
+  const sessionRoot = projectRootForSession(activeTabId, projectRoot);
   const ctx = useMemo(
-    () => buildToolSmartPermissionContext(toolUse, projectRoot),
-    [toolUse, projectRoot],
+    () => buildToolSmartPermissionContext(toolUse, sessionRoot),
+    [toolUse, sessionRoot],
   );
   return isComposerHostedPermission(undefined, toolName, isAwaitingPermission, ctx, rules);
-}
-
-function pickActivePermission(
-  tabId: string,
-  permissions: PendingPermission[],
-): PendingPermission | undefined {
-  const tabPerms = permissions.filter((p) => p.tabId === tabId);
-  if (tabPerms.length === 0) return undefined;
-  const withToolId = tabPerms.filter((p) => p.toolCallId);
-  if (withToolId.length === 1) return withToolId[0];
-  return withToolId[0] ?? tabPerms[0];
 }
 
 function permissionInput(
@@ -374,6 +366,7 @@ export type PermissionGateState = {
 export function usePermissionGateState(): PermissionGateState {
   const activeTabId = useChatStore((s) => s.activeTabId);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const sessionRoot = projectRootForSession(activeTabId, projectRoot);
   const rules = usePermissionRulesConfig();
   const permission = usePermissionStore((s) =>
     pickActivePermission(activeTabId, s.permissions),
@@ -422,13 +415,13 @@ export function usePermissionGateState(): PermissionGateState {
     };
     const base = buildToolSmartPermissionContext(
       { type: "tool_use", input, title: toolUse?.title },
-      projectRoot,
+      sessionRoot,
     );
     return {
       ...base,
       filePath: base.filePath || permission.message || null,
     };
-  }, [permission, toolUse, projectRoot]);
+  }, [permission, toolUse, sessionRoot]);
 
   const show = !!permission && !!smartCtx
     && resolveSmartPermissionAction({ toolName, ...smartCtx }, rules) === "prompt";

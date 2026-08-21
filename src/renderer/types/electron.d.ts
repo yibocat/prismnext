@@ -624,6 +624,19 @@ export interface ElectronAPI {
   ) => Promise<import("../../shared/pro").ActivateLicenseResult>;
   proClearLicense: () => Promise<{ ok: true }>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
+  workbenchGetState: () => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  workbenchSetDefault: (
+    projectId: string,
+  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  workbenchSetDefaultFromFolder: (
+    absPath: string,
+  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  workbenchOpenFolder: (
+    absPath: string,
+  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  workbenchRemoveProject: (
+    projectId: string,
+  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
     content: string;
@@ -1654,6 +1667,7 @@ export interface ElectronAPI {
     decision: "allow" | "deny";
   }) => Promise<{ ok: boolean }>;
   agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent-api").AgentSessionSummary[]>;
+  agentListSessionsByProjectId: (projectId: string) => Promise<import("../../shared/agent-api").AgentSessionSummary[]>;
   agentLoadSession: (
     args: import("../../shared/agent-api").AgentLoadSessionInput,
   ) => Promise<import("../../shared/agent-api").AgentLoadSessionResult>;

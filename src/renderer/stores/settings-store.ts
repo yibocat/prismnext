@@ -105,8 +105,10 @@ export interface AppSettings {
   zoteroApiKey?: string;
   zoteroUserId?: string;
   zoteroLastBBTDetected?: boolean;
-  /** Path to auto-reopen on next launch */
+  /** Path to auto-reopen on next launch. P1 no longer uses this to auto-open. */
   lastProjectPath?: string | null;
+  defaultProjectId?: string;
+  workbenchProjectIds?: string[];
   /** @deprecated Use lastActiveFileIdByProject */
   lastActiveFileId?: string | null;
   /** Recently opened files per project root */

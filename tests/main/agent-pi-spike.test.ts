@@ -18,11 +18,13 @@ import {
   tryLoadPiSdkModule,
 } from "../../src/main/agent/pi-sdk-runtime";
 import { AgentSessionStore, FORBIDDEN_PROJECT_RESOURCE_DIRS, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import { ToolHost } from "../../src/main/agent/tool-host";
 
 describe("pi sdk spike", () => {
   const dirs: string[] = [];
   afterEach(() => {
+    setWorkbenchUserHomeOverride(null);
     for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
     dirs.length = 0;
   });
@@ -55,7 +57,8 @@ describe("pi sdk spike", () => {
     const project = mkdtempSync(join(tmpdir(), "prism-pi-persist-proj-"));
     dirs.push(userData, project);
     writeFileSync(join(project, "README.md"), "keep", "utf-8");
-    const sessionDir = resolvePiRuntimeSessionDir(userData);
+    setWorkbenchUserHomeOverride(userData);
+    const sessionDir = resolvePiRuntimeSessionDir();
     const created = createPiSessionManager(project, { mode: "create", sessionDir });
     const file = created.getSessionFile();
     expect(file).toBeTruthy();

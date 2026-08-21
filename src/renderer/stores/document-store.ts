@@ -23,12 +23,9 @@ import {
   resolveProjectRelativePath,
 } from "@/lib/files/project-path";
 import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
-import { loadSessionUiPrefsIntoLayout } from "@/lib/chat/session-ui-prefs";
-import {
-  confirmProjectSwitchIfNeeded,
-  listRunningExperimentIds,
-  resetApplicationStateForProjectSwitch,
-} from "@/lib/workspace/project-lifecycle";
+import { loadWorkbenchSessionUiPrefs } from "@/lib/chat/session-ui-prefs";
+import { applyWorkbenchFocusChange } from "@/lib/workspace/project-lifecycle";
+import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -90,6 +87,8 @@ interface DocumentState {
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
+  /** Switch the focused workbench project without joining or tearing down agents. */
+  focusProject: (rootPath: string) => Promise<void>;
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
@@ -245,7 +244,7 @@ function markSuppressWatcherReload() {
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
   checkoutRoot: null,
-  showWelcome: true,
+  showWelcome: false,
   setShowWelcome: (show) => set({ showWelcome: show }),
   files: [],
   folders: [],
@@ -265,37 +264,41 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const state = await window.electronAPI.workbenchOpenFolder(rootPath);
+    useWorkbenchStore.setState({
+      ...state,
+      loaded: true,
+    });
+    const member = state.members.find((item) => sameProjectPath(item.lastPath, rootPath))
+      ?? state.members[state.members.length - 1];
+    await get().focusProject(member?.lastPath ?? rootPath);
+  },
+
+  focusProject: async (rootPath: string) => {
     const previousRoot = get().projectRoot;
-    const switching = Boolean(previousRoot && previousRoot !== rootPath);
-    let stopExperimentIds: string[] | undefined;
-    if (switching) {
-      const decision = await confirmProjectSwitchIfNeeded(previousRoot);
-      if (decision === "abort") return;
-      stopExperimentIds = decision === "stop" && previousRoot
-        ? listRunningExperimentIds(previousRoot)
-        : [];
-      await window.electronAPI.executionApplyProjectSwitch?.({
-        projectId: previousRoot!,
-        stopExperimentIds,
-      });
+    if (sameProjectPath(previousRoot, rootPath) && get().initialized) {
+      const member = useWorkbenchStore.getState().members.find((item) =>
+        sameProjectPath(item.lastPath, rootPath),
+      );
+      if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+      return;
     }
 
     const generation = ++openProjectGeneration;
     projectOpenSupersededByClose = false;
     const t0 = performance.now();
     let canonicalRoot = rootPath;
-    set({ isOpeningProject: true });
+    const firstOpen = !previousRoot;
+    if (firstOpen) set({ isOpeningProject: true });
     try {
       ({ rootPath: canonicalRoot } = await window.electronAPI.projectOpen(rootPath));
       if (generation !== openProjectGeneration) return;
       const t1 = performance.now();
-      // Same-project reopen (e.g. last-project on launch) keeps the OpenCode runtime.
-      await resetApplicationStateForProjectSwitch(canonicalRoot);
+      await applyWorkbenchFocusChange();
       if (generation !== openProjectGeneration) return;
-      log.debug("openProject cleanup", { durationMs: Math.round(performance.now() - t1) });
+      log.debug("focusProject cleanup", { durationMs: Math.round(performance.now() - t1) });
 
       const t2 = performance.now();
-      // Ensure .prismnext/ data hub exists before any agent operations.
       window.electronAPI.projectEnsure(canonicalRoot).catch(() => {});
 
       void import("./command-store").then(({ useCommandStore }) => {
@@ -304,7 +307,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       const result = await window.electronAPI.fsScanMetadata(canonicalRoot);
       if (generation !== openProjectGeneration) return;
-      log.debug("openProject fsScanMetadata", { durationMs: Math.round(performance.now() - t2) });
+      log.debug("focusProject fsScanMetadata", { durationMs: Math.round(performance.now() - t2) });
       const files: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -327,7 +330,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       window.electronAPI.gitWarmup?.(canonicalRoot).catch(() => {});
 
-      // Workspace / prefs can load from path without committing projectRoot yet.
       const workspaceStore = useWorkspaceConfigStore.getState();
       await workspaceStore.loadConfig(canonicalRoot);
       if (generation !== openProjectGeneration) return;
@@ -369,7 +371,6 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       useProjectStore.getState().addRecentProject(canonicalRoot);
       window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
 
-      // Commit UI only when ready — splash stays up until this point.
       set({
         projectRoot: canonicalRoot,
         checkoutRoot: canonicalRoot,
@@ -382,7 +383,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         initialized: true,
       });
 
-      loadSessionUiPrefsIntoLayout(canonicalRoot);
+      const wb = useWorkbenchStore.getState();
+      const member = wb.members.find((item) => sameProjectPath(item.lastPath, canonicalRoot));
+      if (member) wb.setFocusProject(member.id);
+      loadWorkbenchSessionUiPrefs(wb.members.map((item) => item.lastPath));
       useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
       if (generation === openProjectGeneration) {
@@ -399,40 +403,26 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (generation === openProjectGeneration) {
         const ms = Math.round(performance.now() - t0);
         const project = canonicalRoot.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? canonicalRoot;
-        log.debug("openProject complete", { durationMs: ms, project });
-        set({ isOpeningProject: false });
+        log.debug("focusProject complete", { durationMs: ms, project });
+        if (firstOpen) set({ isOpeningProject: false });
       }
     }
   },
 
   closeProject: async () => {
     const previousRoot = get().projectRoot;
-    const decision = await confirmProjectSwitchIfNeeded(previousRoot);
-    if (decision === "abort") return;
-    if (previousRoot) {
-      await window.electronAPI.executionApplyProjectSwitch?.({
-        projectId: previousRoot,
-        stopExperimentIds: decision === "stop" ? listRunningExperimentIds(previousRoot) : [],
-      });
+    let defaultLastPath = useWorkbenchStore.getState().defaultLastPath.trim();
+    if (!defaultLastPath) {
+      try {
+        const wb = await window.electronAPI.workbenchGetState();
+        defaultLastPath = wb.defaultLastPath?.trim() ?? "";
+      } catch {
+        defaultLastPath = "";
+      }
     }
-    openProjectGeneration++;
-    projectOpenSupersededByClose = true;
-    clearAutoSaveTimer();
-    // Clear last project path so next launch shows welcome page
-    window.electronAPI.settingsSet({ lastProjectPath: null } as any);
-    await window.electronAPI.projectClose();
-    await resetApplicationStateForProjectSwitch();
-    set({
-      projectRoot: null,
-      checkoutRoot: null,
-      showWelcome: true,
-      files: [],
-      folders: [],
-      activeFileId: null,
-      fileMetadata: new Map(),
-      openedContents: new Map(),
-      initialized: false,
-    });
+    if (!defaultLastPath) return;
+    if (sameProjectPath(previousRoot, defaultLastPath)) return;
+    await get().focusProject(defaultLastPath);
   },
 
   openFile: async (id: string) => {

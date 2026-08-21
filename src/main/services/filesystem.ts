@@ -49,6 +49,7 @@ const STYLE_EXTENSIONS = new Set([
 export const HIDDEN_DIRECTORY_NAMES = new Set([
   ".git",
   ".prismnext",
+  ".workbench",
   "node_modules",
   "__pycache__",
   "venv",
@@ -160,17 +161,18 @@ function normalizeWatchPath(filePath: string): string {
   return filePath.replace(/\\/g, "/").toLowerCase();
 }
 
-/** Root-project watcher: `.prismnext` is always a separate, hidden domain. */
+/** Root-project watcher: `.workbench` / leftover `.prismnext` stay hidden. */
 export function isWatchIgnored(filePath: string): boolean {
   const n = normalizeWatchPath(filePath);
   if (n.endsWith("/.prismnext") || n.includes("/.prismnext/")) return true;
+  if (n.endsWith("/.workbench") || n.includes("/.workbench/")) return true;
   if (n.includes("/node_modules/")) return true;
   // Project-root living research brief (hidden from tree, still watch for open editors).
   if (n.endsWith("/.brief.md") || /(^|\/)\.brief\.md$/.test(n)) return false;
 
   if (/(^|\/)\.[^\/]/.test(n)) return true;
   if (n.includes("/__pycache__/")) return true;
-  if (n.includes("/.prismnext/compile/")) return true;
+  if (n.includes("/.prismnext/compile/") || n.includes("/.workbench/compile/")) return true;
 
   for (const ext of WATCH_IGNORED_EXTENSIONS) {
     if (n.endsWith(ext)) return true;
@@ -179,13 +181,13 @@ export function isWatchIgnored(filePath: string): boolean {
 }
 
 /**
- * Dedicated Agent-content watcher: its root is `.prismnext/agent`, and it
+ * Dedicated Agent-content watcher: its root is `.workbench/agent`, and it
  * only traverses user-editable content homes. Every hidden or dependency
  * segment remains excluded even under an allowed Team.
  */
 export function isAgentContentWatchIgnored(filePath: string): boolean {
   const n = normalizeWatchPath(filePath);
-  const agentRoot = "/.prismnext/agent";
+  const agentRoot = "/.workbench/agent";
   const index = n.lastIndexOf(agentRoot);
   if (index < 0) return true;
   const relative = n.slice(index + agentRoot.length).replace(/^\/+/, "");
@@ -462,7 +464,7 @@ async function startWatchingExclusive(
   }
 
   const epoch = watcherEpoch;
-  const agentRoot = join(rootPath, ".prismnext", "agent");
+  const agentRoot = join(rootPath, ".workbench", "agent");
   // The dedicated watcher cannot discover a root created after chokidar starts.
   // This is the app-owned Agent metadata location derived from `rootPath`, not
   // an arbitrary external path, so create only this empty lifecycle directory.

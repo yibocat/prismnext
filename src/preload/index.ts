@@ -180,6 +180,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	projectActivate: (rootPath: string) => ipcRenderer.invoke("project:activate", { rootPath }),
 	projectClose: () => ipcRenderer.invoke("project:close"),
 	projectEnsure: (rootPath: string) => ipcRenderer.invoke("project:ensure", { rootPath }),
+	workbenchGetState: () => ipcRenderer.invoke("workbench:getState"),
+	workbenchSetDefault: (projectId: string) =>
+		ipcRenderer.invoke("workbench:setDefault", { projectId }),
+	workbenchSetDefaultFromFolder: (absPath: string) =>
+		ipcRenderer.invoke("workbench:setDefaultFromFolder", { absPath }),
+	workbenchOpenFolder: (absPath: string) =>
+		ipcRenderer.invoke("workbench:openFolder", { absPath }),
+	workbenchRemoveProject: (projectId: string) =>
+		ipcRenderer.invoke("workbench:removeProject", { projectId }),
 	projectScaffoldAgentsMd: (rootPath: string) =>
 		ipcRenderer.invoke("project:scaffoldAgentsMd", { rootPath }),
 	projectCheck: (rootPath: string) => ipcRenderer.invoke("project:check", { rootPath }),
@@ -994,6 +1003,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:resolvePermission", args),
 	agentListSessions: (projectRoot: string) =>
 		ipcRenderer.invoke("agent:listSessions", { projectRoot }),
+	agentListSessionsByProjectId: (projectId: string) =>
+		ipcRenderer.invoke("agent:listSessionsByProjectId", { projectId }),
 	agentLoadSession: (args: import("../shared/agent-api").AgentLoadSessionInput) =>
 		ipcRenderer.invoke("agent:loadSession", args),
 	agentRenameSession: (args: import("../shared/agent-api").AgentRenameSessionInput) =>

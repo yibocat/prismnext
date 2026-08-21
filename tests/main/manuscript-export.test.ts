@@ -11,10 +11,11 @@ describe("shouldExcludeFromManuscriptZip", () => {
     expect(shouldExcludeFromManuscriptZip("figures/plot.pdf")).toBe(false);
   });
 
-  it("excludes VCS junk and .prismnext", () => {
+  it("excludes VCS junk and project meta dirs", () => {
     expect(shouldExcludeFromManuscriptZip(".git/config")).toBe(true);
     expect(shouldExcludeFromManuscriptZip("sub/.DS_Store")).toBe(true);
     expect(shouldExcludeFromManuscriptZip(".prismnext/compile/main.pdf")).toBe(true);
+    expect(shouldExcludeFromManuscriptZip(".workbench/compile/main.pdf")).toBe(true);
   });
 
   it("excludes TeX auxiliaries", () => {
@@ -25,9 +26,9 @@ describe("shouldExcludeFromManuscriptZip", () => {
 });
 
 describe("resolveCompilePdfAbsolutePath", () => {
-  it("maps main tex to .prismnext/compile/<stem>.pdf", () => {
+  it("maps main tex to .workbench/compile/<stem>.pdf", () => {
     expect(resolveCompilePdfAbsolutePath("/proj", "manuscript/main.tex")).toBe(
-      "/proj/.prismnext/compile/main.pdf",
+      "/proj/.workbench/compile/main.pdf",
     );
   });
 });

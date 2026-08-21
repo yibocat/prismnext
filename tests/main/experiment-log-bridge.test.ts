@@ -46,11 +46,11 @@ import {
 } from "../../src/main/services/chat-session-registry";
 
 function writeWorkspaceSettings(projectRoot: string, workspaceDirs: unknown[]): void {
-  const prismDir = join(projectRoot, ".prismnext");
-  mkdirSync(prismDir, { recursive: true });
+  const metaDir = join(projectRoot, ".workbench");
+  mkdirSync(metaDir, { recursive: true });
   writeFileSync(
-    join(prismDir, "settings.json"),
-    JSON.stringify({ workspaceDirs }),
+    join(metaDir, "workbench.json"),
+    JSON.stringify({ id: "p_test", workspace: { folders: workspaceDirs } }),
     "utf-8",
   );
 }

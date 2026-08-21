@@ -2,7 +2,7 @@
  * user-packs.ts — User-created teams, stored app-level like installed teams.
  *
  * A user team is just an app-level pack living at
- * `userData/user-packs/<teamId>/` (plugin.json + orchestrators/ + experts/...).
+ * `~/.prismnext/teams/<teamId>/` (plugin.json + orchestrators/ + experts/...).
  * The whole `user-packs/` directory is registered as an external pack root, so
  * the existing catalog / resolver treat user teams exactly like installed
  * packs: app-level sharing across projects, project-level enable/disable, and
@@ -13,10 +13,11 @@
  * fingerprint and invalidates every project view automatically.
  */
 
-import { app } from "electron";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
+import { HOME_TEAMS_DIRNAME } from "../../shared/workbench-paths";
+import { resolveWorkbenchHome } from "../workbench/home";
 import {
   invalidateCatalog as invalidateCatalogV2,
   registerExternalTeamRoot as registerExternalTeamRootV2,
@@ -36,12 +37,7 @@ export function setUserTeamsDataDir(dir: string | null): void {
 
 function rootDir(): string {
   if (dataDirOverride) return dataDirOverride;
-  try {
-    return join(app.getPath("userData"), USER_PACKS_REL);
-  } catch {
-    // Non-Electron context (vitest without app) → throwaway tmp dir.
-    return join(process.env.TMPDIR ?? "/tmp", USER_PACKS_REL);
-  }
+  return join(resolveWorkbenchHome(), HOME_TEAMS_DIRNAME);
 }
 
 /** Absolute path of the user-packs root (for fingerprinting). */

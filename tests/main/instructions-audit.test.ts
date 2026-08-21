@@ -101,7 +101,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(latex).toContain("Soft workflow");
     expect(latex).toContain("latex-compile");
     expect(latex).toContain("standalone");
-    expect(latex).toContain(".prismnext/compile/");
+    expect(latex).toContain(".workbench/compile/");
     expect(latex).not.toContain("pdflatex");
     expect(latex).not.toContain("forbidden");
   });

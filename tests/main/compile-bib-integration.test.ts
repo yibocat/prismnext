@@ -50,7 +50,7 @@ Test \cite{christiano2017deep,zhang2025landscape}.
     const result = await compileLatex(root, "manuscript/main.tex", true);
     expect(result.success).toBe(true);
 
-    const buildDir = result.buildDir ?? join(root, ".prismnext", "compile");
+    const buildDir = result.buildDir ?? join(root, ".workbench", "compile");
     expect(existsSync(join(buildDir, "references.bib"))).toBe(true);
     expect(existsSync(join(buildDir, "main.bbl"))).toBe(true);
 

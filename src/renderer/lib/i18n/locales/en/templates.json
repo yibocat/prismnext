@@ -55,7 +55,7 @@
     "willTouch": "Files that will be overwritten or written:",
     "willRemove": "Template files that will be removed:",
     "noFileList": "No per-file list for this step — confirm to continue.",
-    "backupNote": "A copy of overlapping or previously applied template files is saved under .prismnext/backups before changes are written.",
+    "backupNote": "A copy of overlapping or previously applied template files is saved under .workbench/backups before changes are written.",
     "backupMerge": "Backup & Merge",
     "backupReplace": "Backup & Replace"
   }

@@ -5,8 +5,11 @@
  * Git Worktree isolation, and atomic Checkpoint-aligned rollback & regret.
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { HOME_RUNTIME_SESSIONS_DIRNAME } from "../../shared/workbench-paths";
+import { resolveWorkbenchHome } from "../workbench/home";
+import { ensureWorkbenchId, mintProjectId, readWorkbenchJson } from "../workbench/identity";
 import type { AgentPlanEvent } from "../../shared/agent-api";
 import type { RuntimeSessionId } from "../../shared/agent-runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
@@ -16,7 +19,6 @@ import { createLogger } from "../services/logger";
 
 const log = createLogger("session-store", "agent");
 
-export const PI_AGENT_DIR_NAME = "pi-agent";
 export const FORBIDDEN_PROJECT_RESOURCE_DIRS = [".pi", ".agents", ".opencode"] as const;
 export const SESSION_SCHEMA_VERSION = 2;
 
@@ -85,6 +87,8 @@ export interface AgentSessionRecord {
   tabId?: string;
   title: string;
   projectRoot: string;
+  /** Workbench project id. Required on records written after P1. */
+  projectId: string;
   boundCheckoutPath: string;
   backend: "in-process" | "pi-sdk";
   permissionMode: PermissionMode;
@@ -117,6 +121,7 @@ export interface CreateSessionRecordInput {
   tabId?: string;
   title?: string;
   projectRoot: string;
+  projectId?: string;
   boundCheckoutPath?: string;
   backend?: "in-process" | "pi-sdk";
   permissionMode?: PermissionMode;
@@ -176,6 +181,7 @@ export class AgentSessionStore {
         runtimeSessionId: input.runtimeSessionId,
         tabId: input.tabId ?? existing.tabId,
         projectRoot: input.projectRoot || existing.projectRoot,
+        projectId: input.projectId || existing.projectId || assignProjectId(input),
         boundCheckoutPath: input.boundCheckoutPath || existing.boundCheckoutPath,
         ...(input.modelRef ? { modelRef: input.modelRef } : {}),
         ...(input.piSessionFile ? { piSessionFile: input.piSessionFile } : {}),
@@ -192,6 +198,7 @@ export class AgentSessionStore {
       tabId: input.tabId,
       title: input.title || "New Chat",
       projectRoot: input.projectRoot,
+      projectId: assignProjectId(input),
       boundCheckoutPath: input.boundCheckoutPath || input.projectRoot,
       backend: input.backend || "pi-sdk",
       permissionMode: input.permissionMode || "edit_auto",
@@ -387,61 +394,32 @@ export class AgentSessionStore {
   }
 
   listSessionsByCheckout(boundCheckoutPath: string): AgentSessionRecord[] {
-    const dir = this.sessionsDir();
-    if (!existsSync(dir)) return [];
-
     const normTarget = normalizePath(boundCheckoutPath);
-    const results: AgentSessionRecord[] = [];
+    return this.collapseConversationDuplicates(
+      this.loadActiveSessions().filter((session) => (
+        normalizePath(session.boundCheckoutPath || session.projectRoot) === normTarget
+      )),
+    );
+  }
 
-    try {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        if (!entry.endsWith(".json") || entry.includes(".corrupted.") || entry.includes(".tmp.")) {
-          continue;
-        }
-        const session = this.getSession(entry.replace(/\.json$/, ""));
-        if (!session) continue;
-        if (session.archivedAt) continue;
-
-        const sessionBound = normalizePath(session.boundCheckoutPath || session.projectRoot);
-        if (sessionBound === normTarget) {
-          results.push(session);
-        }
-      }
-    } catch {
-      return [];
-    }
-
-    return this.collapseConversationDuplicates(results);
+  listSessionsByProjectId(projectId: string): AgentSessionRecord[] {
+    const id = projectId.trim();
+    if (!id) return [];
+    return this.collapseConversationDuplicates(
+      this.loadActiveSessions().filter((session) => session.projectId === id),
+    );
   }
 
   listSessionsByProject(projectRoot: string): AgentSessionRecord[] {
-    const dir = this.sessionsDir();
-    if (!existsSync(dir)) return [];
+    const id = readWorkbenchJson(projectRoot)?.id;
+    if (id) return this.listSessionsByProjectId(id);
 
     const normTarget = normalizePath(projectRoot);
-    const results: AgentSessionRecord[] = [];
-
-    try {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        if (!entry.endsWith(".json") || entry.includes(".corrupted.") || entry.includes(".tmp.")) {
-          continue;
-        }
-        const session = this.getSession(entry.replace(/\.json$/, ""));
-        if (!session) continue;
-        if (session.archivedAt) continue;
-
-        const sessionProject = normalizePath(session.projectRoot);
-        if (sessionProject === normTarget) {
-          results.push(session);
-        }
-      }
-    } catch {
-      return [];
-    }
-
-    return this.collapseConversationDuplicates(results);
+    return this.collapseConversationDuplicates(
+      this.loadActiveSessions().filter((session) => (
+        normalizePath(session.projectRoot) === normTarget
+      )),
+    );
   }
 
   rebindCheckout(fromPath: string, toPath: string): number {
@@ -501,6 +479,16 @@ export class AgentSessionStore {
     return next;
   }
 
+  private loadActiveSessions(): AgentSessionRecord[] {
+    const results: AgentSessionRecord[] = [];
+    for (const id of this.sessionFileIds()) {
+      const session = this.getSession(id);
+      if (!session || session.archivedAt) continue;
+      results.push(session);
+    }
+    return results;
+  }
+
   private sessionFileIds(): string[] {
     const dir = this.sessionsDir();
     if (!existsSync(dir)) return [];
@@ -558,12 +546,27 @@ export class AgentSessionStore {
   }
 }
 
-export function resolvePiAgentRoot(userDataDir: string): string {
-  return join(userDataDir, PI_AGENT_DIR_NAME);
+export function resolvePiAgentRoot(): string {
+  return resolveWorkbenchHome();
 }
 
-export function resolvePiRuntimeSessionDir(userDataDir: string): string {
-  return join(userDataDir, PI_AGENT_DIR_NAME, "runtime-sessions");
+export function resolvePiRuntimeSessionDir(): string {
+  return join(resolveWorkbenchHome(), HOME_RUNTIME_SESSIONS_DIRNAME);
+}
+
+function assignProjectId(input: CreateSessionRecordInput): string {
+  if (input.projectId?.trim()) return input.projectId.trim();
+  const root = input.projectRoot?.trim();
+  if (root) {
+    try {
+      if (existsSync(root) && statSync(root).isDirectory()) {
+        return ensureWorkbenchId(root);
+      }
+    } catch {
+      // mint below
+    }
+  }
+  return mintProjectId();
 }
 
 function sessionUpdatedAt(record: AgentSessionRecord): number {
@@ -583,6 +586,7 @@ function migrateSessionRecord(raw: unknown): AgentSessionRecord {
     ...record,
     version: SESSION_SCHEMA_VERSION,
     conversationId,
+    projectId: typeof record.projectId === "string" ? record.projectId : "",
     eventJournal: record.eventJournal ?? [],
   };
 }

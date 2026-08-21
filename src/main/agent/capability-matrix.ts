@@ -54,7 +54,7 @@ export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
   { name: TOOL_NAMES.citationHealth, kind: "host_research", notes: "citation health service" },
   { name: TOOL_NAMES.literatureExportBib, kind: "host_research", notes: "bibliography export" },
   { name: TOOL_NAMES.latexRoot, kind: "host_research", notes: "latex-service root resolve" },
-  { name: TOOL_NAMES.latexCompile, kind: "host_research", notes: "compiler.ts under .prismnext/compile" },
+  { name: TOOL_NAMES.latexCompile, kind: "host_research", notes: "compiler.ts under .workbench/compile" },
   { name: TOOL_NAMES.latexCompileStandalone, kind: "host_research", notes: "compiler.ts in-place standalone figure" },
   { name: TOOL_NAMES.researchBriefRead, kind: "host_research", notes: "research-brief-service.read" },
   { name: TOOL_NAMES.researchBriefUpdate, kind: "host_research", notes: "research-brief-service.update" },

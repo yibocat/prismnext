@@ -19,6 +19,7 @@ import {
   type CollectionRow,
   addPapersToCollection,
   deleteCollection,
+  getLibraryPaths,
   openLibraryDb,
   removePapersFromCollection,
   replaceCollectionPaperLinks,
@@ -99,7 +100,7 @@ export function pruneOrphanZoteroPapers(
 }
 
 function prismDir(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext");
+  return path.join(projectRoot, ".workbench");
 }
 
 export async function syncZoteroCollections(
@@ -228,6 +229,8 @@ export async function syncBoundZoteroCollection(projectRoot: string): Promise<Zo
 }
 
 export function getZoteroLastSync(projectRoot: string): number | null {
+  const { dbPath } = getLibraryPaths(projectRoot);
+  if (!fs.existsSync(dbPath)) return null;
   const db = openLibraryDb(projectRoot);
   const row = db.prepare("SELECT value FROM meta WHERE key = 'zotero_last_sync'").get() as
     | { value: string }

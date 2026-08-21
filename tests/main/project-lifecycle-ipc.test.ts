@@ -35,7 +35,7 @@ function createAuthority(paths: Record<string, string>): ProjectLifecycleAuthori
 }
 
 function registerHandlers(authority: ProjectLifecycleAuthority) {
-  registerProjectLifecycleHandlers(watcher, authority);
+  registerProjectLifecycleHandlers(watcher, authority, () => []);
   registerFsHandlers(watcher, authority);
 }
 

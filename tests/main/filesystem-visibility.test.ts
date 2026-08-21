@@ -53,6 +53,7 @@ describe("filesystem visibility", () => {
   it("hides only internal and dependency directories", () => {
     expect(HIDDEN_DIRECTORY_NAMES.has(".git")).toBe(true);
     expect(HIDDEN_DIRECTORY_NAMES.has(".prismnext")).toBe(true);
+    expect(HIDDEN_DIRECTORY_NAMES.has(".workbench")).toBe(true);
     expect(shouldSkipProjectDirectory(".github")).toBe(false);
     expect(shouldSkipProjectDirectory(".vscode")).toBe(false);
     expect(shouldSkipProjectDirectory("manuscript")).toBe(false);
@@ -81,7 +82,9 @@ describe("filesystem visibility", () => {
     for (const path of [
       `${root}/.prismnext`,
       `${root}/.prismnext/agent`,
-      `${root}/.prismnext/agent/teams/project.local/subagents/reviewer/instructions.md`,
+      `${root}/.workbench`,
+      `${root}/.workbench/agent`,
+      `${root}/.workbench/agent/teams/project.local/subagents/reviewer/instructions.md`,
     ]) {
       expect(isWatchIgnored(path), path).toBe(true);
     }
@@ -90,19 +93,19 @@ describe("filesystem visibility", () => {
   it("only allows agent skills, local, and Teams subtrees in the dedicated watcher", () => {
     const root = "/tmp/prism-watch-boundary";
     for (const path of [
-      `${root}/.prismnext/agent`,
-      `${root}/.prismnext/agent/skills/example/SKILL.md`,
-      `${root}/.prismnext/agent/local/experts/reviewer/instructions.md`,
-      `${root}/.prismnext/agent/teams/project.local/subagents/reviewer/instructions.md`,
+      `${root}/.workbench/agent`,
+      `${root}/.workbench/agent/skills/example/SKILL.md`,
+      `${root}/.workbench/agent/local/experts/reviewer/instructions.md`,
+      `${root}/.workbench/agent/teams/project.local/subagents/reviewer/instructions.md`,
     ]) {
       expect(isAgentContentWatchIgnored(path), path).toBe(false);
     }
     for (const path of [
       `${root}/.git/config`,
       `${root}/node_modules/pkg/index.js`,
-      `${root}/.prismnext/agent/other/config.json`,
-      `${root}/.prismnext/agent/teams/project.local/node_modules/pkg/index.js`,
-      `${root}/.prismnext/agent/.hidden/cache.json`,
+      `${root}/.workbench/agent/other/config.json`,
+      `${root}/.workbench/agent/teams/project.local/node_modules/pkg/index.js`,
+      `${root}/.workbench/agent/.hidden/cache.json`,
     ]) {
       expect(isAgentContentWatchIgnored(path), path).toBe(true);
     }
@@ -112,7 +115,7 @@ describe("filesystem visibility", () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watch-new-agent-"));
     const teamInstructions = join(
       root,
-      ".prismnext",
+      ".workbench",
       "agent",
       "teams",
       "project.local",
@@ -144,10 +147,10 @@ describe("filesystem visibility", () => {
 
   it("cleans up a failed Agent-root initialization before a later start", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watch-agent-init-fail-"));
-    const blockedAgentParent = join(root, ".prismnext");
+    const blockedAgentParent = join(root, ".workbench");
     const teamInstructions = join(
       root,
-      ".prismnext",
+      ".workbench",
       "agent",
       "teams",
       "project.local",
@@ -185,7 +188,7 @@ describe("filesystem visibility", () => {
     const root = mkdtempSync(join(tmpdir(), "prism-watch-teams-"));
     const teamInstructions = join(
       root,
-      ".prismnext",
+      ".workbench",
       "agent",
       "teams",
       "project.local",

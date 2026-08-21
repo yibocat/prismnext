@@ -17,6 +17,7 @@ vi.stubGlobal("window", {
 import { useExecutionStore } from "../../src/renderer/stores/execution-store";
 import { useTabCloseConfirmStore } from "../../src/renderer/stores/tab-close-confirm-store";
 import {
+  applyWorkbenchFocusChange,
   confirmProjectSwitchIfNeeded,
   listRunningExperimentIds,
   resetApplicationStateForProjectSwitch,
@@ -154,5 +155,12 @@ describe("project switch lifecycle", () => {
       stopExperimentIds: [],
     });
     expect(useExecutionStore.getState().byId.exp?.summary?.executionId).toBe("exp");
+  });
+
+  it("focus change does not dispose agents, clear chats, or stop experiments", async () => {
+    await applyWorkbenchFocusChange();
+    expect(agentDispose).not.toHaveBeenCalled();
+    expect(executionApplyProjectSwitch).not.toHaveBeenCalled();
+    expect(terminalDestroyAllAiPty).not.toHaveBeenCalled();
   });
 });

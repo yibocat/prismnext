@@ -1,17 +1,20 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
 import * as fs from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "../services/logger";
 import type { WorkspaceFolder } from "../../renderer/types/workspace";
 import {
-  writeWorkspaceDirs,
-  createConfiguredFolders,
-  validateWorkspaceDirs,
   writeProjectIcon,
   writeProjectIconImage,
 } from "../services/workspace-config";
-import { ICON_IMAGE_FILENAME, normalizeIconSpec, type IconSpec } from "../../shared/icon-spec";
+import type { IconSpec } from "../../shared/icon-spec";
+import {
+  createWorkbenchProjectOnDisk,
+  ensureWorkbenchProjectMeta,
+  checkWorkbenchProject,
+  projectMetaAbs,
+} from "../workbench/scaffold";
 import type { Dirent } from "node:fs";
 import {
   assertSafeRelativePath,
@@ -310,88 +313,6 @@ export function registerFsHandlers(
     },
   );
 
-  // ─── Project creation ───
-
-  const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
-
-% ── Packages ──
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
-\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
-\usepackage[
-  style=nature,
-  backend=bibtex,
-  sorting=none,
-]{biblatex}
-\addbibresource{references.bib}
-
-% ── Title ──
-\title{Title}
-\author{Author}
-\date{\today}
-
-\begin{document}
-
-\maketitle
-
-\begin{abstract}
-  Write your abstract here.
-\end{abstract}
-
-\section{Introduction}
-
-\section{Methods}
-
-\section{Results}
-
-\section{Discussion}
-
-\printbibliography
-
-\end{document}
-`;
-
-  async function createAgentConfig(prismDir: string): Promise<void> {
-    const { join } = require("node:path");
-    const { existsSync, mkdirSync, writeFileSync, renameSync, rmSync } = require("node:fs");
-
-    const newAgentDir = join(prismDir, "agent");
-    const oldAgentDir = join(prismDir, "agent-config", "opencode");
-
-    // Migration: rename old .prismnext/agent-config/opencode/ → .prismnext/agent/
-    if (existsSync(oldAgentDir) && !existsSync(newAgentDir)) {
-      try {
-        renameSync(oldAgentDir, newAgentDir);
-        // Remove settings.json (permissions belong to app-level OpenCode config)
-        const oldSettings = join(newAgentDir, "settings.json");
-        if (existsSync(oldSettings)) rmSync(oldSettings);
-        // Clean up empty agent-config/ parent if empty
-        const agentConfigDir = join(prismDir, "agent-config");
-        try { rmSync(agentConfigDir, { recursive: true }); } catch { /* not empty, leave it */ }
-      } catch (err: any) {
-        fsLog.warn("project agent config migration failed", { error: err.message });
-      }
-    }
-
-    // Create new directory structure
-    if (!existsSync(newAgentDir)) {
-      mkdirSync(newAgentDir, { recursive: true });
-    }
-
-    // Ensure mcp.json exists; strip legacy Paper Search MCP if present.
-    // M11 moves this to teams/project.local/mcp.json — the old agent/mcp.json
-    // is only a migration input now.
-    const { ensureDefaultMcpServers } = await import("../services/project-mcp-defaults");
-    ensureDefaultMcpServers(newAgentDir);
-
-    // Create AGENTS.md template (empty, ready for user to fill in)
-    const agentsMdPath = join(newAgentDir, "AGENTS.md");
-    if (!existsSync(agentsMdPath)) {
-      writeFileSync(agentsMdPath, "", "utf-8");
-    }
-  }
-
   ipcMain.handle(
     "project:create",
     async (
@@ -401,91 +322,19 @@ export function registerFsHandlers(
         workspaceDirs?: WorkspaceFolder[];
         initGit?: boolean;
         projectIcon?: IconSpec | string | null;
-        /** Optional PNG bytes (base64) written to `.prismnext/icon.png`. */
+        /** Optional PNG bytes (base64) written to `.workbench/icon.png`. */
         projectIconImagePngBase64?: string;
       },
     ) => {
-    const { join } = require("node:path");
-    const { writeFileSync, existsSync, mkdirSync } = require("node:fs");
     let failLogged = false;
 
     try {
-    // Guard against overwriting an existing project
-    const prismDir = join(args.rootPath, ".prismnext");
-    if (existsSync(prismDir)) {
-      throw new Error(
-        `A prismnext project already exists at "${args.rootPath}". ` +
-        `Choose a different directory or open the existing project.`
-      );
-    }
-
-    // Hidden .prismnext/ structure
-    await fs.createDirectory(prismDir);
-    await fs.createDirectory(join(prismDir, "sessions"));
-    await fs.createDirectory(join(prismDir, "compile"));
-
-    // Build workspace dirs — use provided or default
-    const workspaceDirs: WorkspaceFolder[] = args.workspaceDirs && args.workspaceDirs.length > 0
-      ? args.workspaceDirs
-      : [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }];
-
-    // Validate server-side — safety net against malformed client data
-    const validationErrors = validateWorkspaceDirs(workspaceDirs);
-    if (validationErrors.length > 0) {
-      throw new Error(
-        `Invalid workspace folder configuration:\n${validationErrors.map((e) => `- ${e}`).join("\n")}`,
-      );
-    }
-
-    // Write settings.json in ONE pass: set version + compiler, then write via workspace-config
-    // writeWorkspaceDirs does a read-modify-write, so we pre-populate the initial settings
-    // to avoid a second read-write cycle.
-    const settingsPath = join(prismDir, "settings.json");
-    const iconSpec = normalizeIconSpec(args.projectIcon);
-    const initialSettings: Record<string, unknown> = {
-      version: 1,
-      compiler: "tectonic",
-    };
-    // Image icons are written as a sibling file (not Base64 in JSON).
-    if (args.projectIconImagePngBase64) {
-      const png = Buffer.from(args.projectIconImagePngBase64, "base64");
-      if (png.length > 0 && png.length <= 256 * 1024) {
-        writeFileSync(join(prismDir, ICON_IMAGE_FILENAME), png);
-        initialSettings.projectIcon = { kind: "image", value: ICON_IMAGE_FILENAME };
-      }
-    } else if (iconSpec && iconSpec.kind !== "image") {
-      initialSettings.projectIcon = iconSpec;
-    }
-    writeFileSync(settingsPath, JSON.stringify(initialSettings, null, 2));
-    writeWorkspaceDirs(prismDir, workspaceDirs);
-
-    writeFileSync(join(prismDir, ".gitignore"), "compile/\nstate.json\ncache/\nstate/\n");
-
-    // Create agent-config templates
-    await createAgentConfig(prismDir);
-
-    // Create configured folders on disk + log any failures
-    const createResult = createConfiguredFolders(args.rootPath, workspaceDirs);
-    if (createResult.errors.length > 0) {
-      fsLog.warn("project.create.fail", {
-        project: basename(args.rootPath),
-        reason: "folders",
-        error: shortLogDetail(createResult.errors.join("; ")),
-      });
-    }
-
-    // Write main.tex into the manuscript folder (if one exists)
-    const manuscriptEntry = workspaceDirs.find(d => d.function === "manuscript");
-    if (manuscriptEntry && "mainTex" in manuscriptEntry) {
-      const manuscriptPath = join(args.rootPath, manuscriptEntry.name);
-      const mainTexFullPath = join(manuscriptPath, manuscriptEntry.mainTex);
-      // Ensure the parent directory exists (handles mainTex with subdirectories like "tex/main.tex")
-      const mainTexDir = join(mainTexFullPath, "..");
-      if (!existsSync(mainTexDir)) {
-        mkdirSync(mainTexDir, { recursive: true });
-      }
-      writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
-    }
+    createWorkbenchProjectOnDisk({
+      rootPath: args.rootPath,
+      workspaceDirs: args.workspaceDirs,
+      projectIcon: args.projectIcon,
+      projectIconImagePngBase64: args.projectIconImagePngBase64,
+    });
 
     if (args.initGit) {
       const { initRepo } = await import("../services/git");
@@ -511,93 +360,33 @@ export function registerFsHandlers(
     }
   });
 
-  // ─── Update a project's visual identity in `.prismnext/settings.json` ───
   ipcMain.handle(
     "project:setIcon",
     async (_event, args: { rootPath: string; icon: IconSpec | null }) => {
-      const { join } = require("node:path");
-      const prismDir = join(args.rootPath, ".prismnext");
-      writeProjectIcon(prismDir, args.icon);
+      writeProjectIcon(projectMetaAbs(args.rootPath), args.icon);
     },
   );
 
   ipcMain.handle(
     "project:setIconImage",
     async (_event, args: { rootPath: string; pngBase64: string }) => {
-      const { join } = require("node:path");
-      const prismDir = join(args.rootPath, ".prismnext");
-      writeProjectIconImage(prismDir, Buffer.from(args.pngBase64, "base64"));
+      writeProjectIconImage(projectMetaAbs(args.rootPath), Buffer.from(args.pngBase64, "base64"));
     },
   );
 
-  // ─── Ensure .prismnext/ exists (idempotent) ───
-  // Called on every project open (not just create) so that the data hub
-  // directory tree is always present. Safe to call on already-initialized
-  // projects — it only creates missing files/dirs.
   ipcMain.handle("project:ensure", async (_event, args: { rootPath: string }) => {
-    const { join } = require("node:path");
-    const { existsSync, mkdirSync } = require("node:fs");
-
-    const prismDir = join(args.rootPath, ".prismnext");
-    if (!existsSync(prismDir)) {
-      mkdirSync(prismDir, { recursive: true });
-    }
-    if (!existsSync(join(prismDir, "compile"))) {
-      mkdirSync(join(prismDir, "compile"), { recursive: true });
-    }
-
-    // Agent config templates — only created if missing, never overwrite
-    await createAgentConfig(prismDir);
-    const { refreshProjectSkillsIntegration } = await import("../services/project-skills-refresh");
-    await refreshProjectSkillsIntegration(args.rootPath);
-
-    const { ensureResearchBrief } = await import("../services/research-brief-service");
-    ensureResearchBrief(args.rootPath);
-
-    // .gitignore — only create if missing
-    const gitignorePath = join(prismDir, ".gitignore");
-    if (!existsSync(gitignorePath)) {
-      const { writeFileSync } = require("node:fs");
-      writeFileSync(gitignorePath, "compile/\nstate.json\ncache/\nstate/\n", "utf-8");
-    }
-
+    ensureWorkbenchProjectMeta(args.rootPath);
     return { success: true };
   });
 
   ipcMain.handle("project:scaffoldAgentsMd", async (_event, args: { rootPath: string }) => {
-    const { join } = require("node:path");
     const { mkdirSync } = require("node:fs");
-    const agentDir = join(args.rootPath, ".prismnext", "agent");
-    mkdirSync(agentDir, { recursive: true });
+    mkdirSync(join(projectMetaAbs(args.rootPath), "agent"), { recursive: true });
     return await buildAgentsMdScaffold(args.rootPath);
   });
 
   ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {
-    const { join } = require("node:path");
-    const { existsSync } = require("node:fs");
-
-    const PRISM_DIR = ".prismnext";
-    const PRISM_FILES = ["settings.json", ".gitignore"];
-    const PRISM_SUBDIRS = ["compile"];
-
-    const missing: string[] = [];
-
-    // Check .prismnext/ directory (only required structure)
-    const prismPath = join(args.rootPath, PRISM_DIR);
-    if (!existsSync(prismPath)) {
-      missing.push(`${PRISM_DIR}/`);
-    } else {
-      // Check internal files
-      for (const f of PRISM_FILES) {
-        if (!existsSync(join(prismPath, f))) missing.push(`${PRISM_DIR}/${f}`);
-      }
-      // Check internal subdirectories
-      for (const d of PRISM_SUBDIRS) {
-        if (!existsSync(join(prismPath, d))) missing.push(`${PRISM_DIR}/${d}/`);
-      }
-    }
-
-    return { missing };
+    return checkWorkbenchProject(args.rootPath);
   });
 
   // ─── Template apply (staged writes) ───
@@ -631,7 +420,7 @@ export function registerFsHandlers(
       }
 
       const basePath = join(args.rootPath, args.manuscriptDir);
-      const prismDir = join(args.rootPath, ".prismnext");
+      const prismDir = projectMetaAbs(args.rootPath);
       const settingsPath = join(prismDir, "settings.json");
       const stagingDir = join(prismDir, ".template-staging");
 
@@ -919,7 +708,7 @@ export function registerFsHandlers(
       assertSafeRelativePaths(args.files);
 
       const basePath = join(args.rootPath, args.manuscriptDir);
-      const backupsDir = join(args.rootPath, ".prismnext", "backups");
+      const backupsDir = join(projectMetaAbs(args.rootPath), "backups");
       const backupDir = join(backupsDir, args.backupLabel);
 
       if (!existsSync(backupsDir)) {
@@ -982,7 +771,7 @@ export function registerFsHandlers(
       const { join } = require("node:path");
       const { readdirSync, readFileSync, existsSync, statSync } = require("node:fs");
 
-      const backupsDir = join(args.rootPath, ".prismnext", "backups");
+      const backupsDir = join(projectMetaAbs(args.rootPath), "backups");
       if (!existsSync(backupsDir)) return [];
 
       const entries = (readdirSync(backupsDir, { withFileTypes: true }) as Dirent[])
@@ -1023,7 +812,7 @@ export function registerFsHandlers(
       const { join } = require("node:path");
       const { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } = require("node:fs");
 
-      const backupsDir = join(args.rootPath, ".prismnext", "backups");
+      const backupsDir = join(projectMetaAbs(args.rootPath), "backups");
       const backupDir = join(backupsDir, args.backupLabel);
       const manifestPath = join(backupDir, "manifest.json");
 
@@ -1042,7 +831,7 @@ export function registerFsHandlers(
       const basePath = join(args.rootPath, args.manuscriptDir);
 
       // Read current settings to find stale files to remove
-      const prismDir = join(args.rootPath, ".prismnext");
+      const prismDir = projectMetaAbs(args.rootPath);
       const settingsPath = join(prismDir, "settings.json");
       let currentAppliedFiles: Record<string, string> = {};
       let settings: Record<string, unknown> = {};
@@ -1164,7 +953,7 @@ export function registerFsHandlers(
         throw new Error(`Invalid backup label: ${label}`);
       }
 
-      const backupsDir = join(args.rootPath, ".prismnext", "backups");
+      const backupsDir = join(projectMetaAbs(args.rootPath), "backups");
       const backupDir = join(backupsDir, label);
       const rel = relative(resolve(backupsDir), resolve(backupDir));
       if (!rel || rel.startsWith("..") || isAbsolute(rel)) {

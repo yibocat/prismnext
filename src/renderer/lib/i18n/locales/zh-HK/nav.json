@@ -28,14 +28,19 @@
     "hoursAgo": "{{n}} 小時前",
     "daysAgo": "{{n}} 天前",
     "showActive": "顯示進行中的會話",
-    "restoreFromArchive": "從歸檔恢復"
+    "restoreFromArchive": "從歸檔恢復",
+    "waitingPermission": "{{name}} 在等許可",
+    "waitingPermissionHint": "開啟該會話以批准",
+    "stopSession": "停止",
+    "chat": "對話"
   },
   "project": {
     "noProject": "未開啟專案",
     "noRecent": "暫無最近專案",
     "newProject": "新建專案…",
     "openProject": "開啟專案…",
-    "closeProject": "關閉專案"
+    "closeProject": "關閉專案",
+    "removeFromWorkbench": "從工作台移除"
   },
   "teams": "團隊"
 }

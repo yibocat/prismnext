@@ -52,6 +52,21 @@ export function loadSessionUiPrefsIntoLayout(projectRoot: string): void {
   });
 }
 
+/** Union pin/archive ids across workbench members so grouped lists stay complete. */
+export function loadWorkbenchSessionUiPrefs(memberPaths: readonly string[]): void {
+  const pinned = new Set<string>();
+  const archived = new Set<string>();
+  for (const path of memberPaths) {
+    for (const id of getPinnedSessionIdsForProject(path)) pinned.add(id);
+    for (const id of getArchivedSessionIdsForProject(path)) archived.add(id);
+  }
+  useLayoutStore.setState({
+    archivedSessionIds: [...archived],
+    pinnedSessionIds: [...pinned],
+    showArchived: false,
+  });
+}
+
 export async function toggleArchiveSessionForProject(
   projectRoot: string,
   sessionId: string,

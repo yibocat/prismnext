@@ -181,9 +181,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
               type="button"
               className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
               onClick={() => {
-                if (!projectRoot) {
-                  useDocumentStore.getState().setShowWelcome(true);
-                }
                 useLayoutStore.getState().setLeftSidebarView("sessions");
                 setLeftSidebarOverlay(false);
               }}

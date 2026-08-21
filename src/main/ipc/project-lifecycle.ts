@@ -5,7 +5,8 @@ import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
 } from "../services/project-lifecycle-authority";
-import { clearRoots, registerProjectRoot } from "../services/active-project-roots";
+import { clearRoots, replaceRegisteredRoots } from "../services/active-project-roots";
+import { listWorkbenchMembers } from "../workbench/default-project";
 import { createLogger, shortLogDetail } from "../services/logger";
 
 const log = createLogger("project-lifecycle", "startup");
@@ -20,9 +21,18 @@ type WatcherLifecycle = Pick<typeof filesystem, "stopWatching">;
  * and watcher teardown happen in `project:activate` / `project:close`, which
  * the renderer calls when the UI actually commits or abandons the project.
  */
+function defaultMemberRoots(): string[] {
+  try {
+    return listWorkbenchMembers().map((member) => member.lastPath);
+  } catch {
+    return [];
+  }
+}
+
 export function registerProjectLifecycleHandlers(
   watcher: WatcherLifecycle = filesystem,
   authority: ProjectLifecycleAuthority = projectLifecycleAuthority,
+  memberRoots: () => string[] = defaultMemberRoots,
 ): void {
   ipcMain.handle("project:open", async (_event, args: { rootPath: string }) => {
     const rootPath = await authority.resolveRoot(args.rootPath);
@@ -38,9 +48,8 @@ export function registerProjectLifecycleHandlers(
       }
 
       const transition = authority.activate(rootPath);
+      replaceRegisteredRoots([rootPath, ...memberRoots()]);
       if (transition.changed) {
-        clearRoots();
-        registerProjectRoot(rootPath);
         log.info("project.activate", {
           from: previousRoot ? basename(previousRoot) : undefined,
           to: basename(rootPath),

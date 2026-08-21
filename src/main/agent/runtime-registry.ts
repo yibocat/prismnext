@@ -10,6 +10,8 @@ import {
 import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
 import type { AgentTurnImage, TurnInput } from "../../shared/agent-runtime";
 import type { AgentRuntime } from "./runtime";
+import type { PermissionGate } from "./permission-gate";
+import type { InteractionBroker } from "./interaction-broker";
 import {
   AgentSessionStore,
   resolvePiAgentRoot,
@@ -30,6 +32,8 @@ export interface StartedRuntime {
   runtime: AgentRuntime;
   runtimeSessionId: string;
   piSessionFile?: string;
+  gate?: PermissionGate;
+  interactions?: InteractionBroker;
 }
 
 export interface RuntimeRegistryOptions {
@@ -42,6 +46,8 @@ interface LiveBinding {
   binding: ConversationBinding;
   runtime: AgentRuntime;
   runtimeSessionId: string;
+  gate?: PermissionGate;
+  interactions?: InteractionBroker;
 }
 
 export class RuntimeRegistry {
@@ -50,7 +56,7 @@ export class RuntimeRegistry {
   private readonly live = new Map<string, LiveBinding>();
 
   constructor(opts: RuntimeRegistryOptions) {
-    this.store = opts.store ?? new AgentSessionStore(resolvePiAgentRoot(opts.userDataDir));
+    this.store = opts.store ?? new AgentSessionStore(resolvePiAgentRoot());
     this.startRuntime = opts.startRuntime;
   }
 
@@ -111,6 +117,8 @@ export class RuntimeRegistry {
       binding,
       runtime: started.runtime,
       runtimeSessionId: started.runtimeSessionId,
+      gate: started.gate,
+      interactions: started.interactions,
     });
     return binding;
   }
@@ -146,6 +154,8 @@ export class RuntimeRegistry {
       binding,
       runtime: started.runtime,
       runtimeSessionId: started.runtimeSessionId,
+      gate: started.gate,
+      interactions: started.interactions,
     });
     log.info("session.open", {
       conversationId: input.conversationId,
@@ -197,5 +207,61 @@ export class RuntimeRegistry {
     if (!live) return;
     this.live.delete(conversationId);
     await live.runtime.disposeSession(live.runtimeSessionId).catch(() => {});
+  }
+
+  getLiveByRuntimeSessionId(runtimeSessionId: string): {
+    conversationId: string;
+    runtimeSessionId: string;
+    runtime: AgentRuntime;
+  } | null {
+    for (const [conversationId, live] of this.live) {
+      if (live.runtimeSessionId === runtimeSessionId) {
+        return {
+          conversationId,
+          runtimeSessionId: live.runtimeSessionId,
+          runtime: live.runtime,
+        };
+      }
+    }
+    return null;
+  }
+
+  cancelConversationWaiters(conversationId: string): string | null {
+    const live = this.live.get(conversationId);
+    if (!live) return null;
+    live.gate?.cancelSession(live.runtimeSessionId);
+    live.interactions?.cancelSession(live.runtimeSessionId);
+    return live.runtimeSessionId;
+  }
+
+  resolvePermission(requestId: string, decision: "allow" | "deny"): boolean {
+    for (const live of this.live.values()) {
+      if (live.gate?.resolve(requestId, decision)) return true;
+    }
+    return false;
+  }
+
+  answerQuestion(
+    requestId: string,
+    payload: { answer?: string; selected?: string[] },
+  ): boolean {
+    for (const live of this.live.values()) {
+      if (live.interactions?.resolveQuestion(requestId, payload)) return true;
+    }
+    return false;
+  }
+
+  resolvePlanSuggest(requestId: string, decision: "accept" | "dismiss"): boolean {
+    for (const live of this.live.values()) {
+      if (live.interactions?.resolvePlanSuggest(requestId, decision)) return true;
+    }
+    return false;
+  }
+
+  cancelHostWaiters(runtimeSessionId: string): void {
+    const live = this.getLiveByRuntimeSessionId(runtimeSessionId);
+    live?.gate?.cancelSession(runtimeSessionId);
+    live?.interactions?.cancelSession(runtimeSessionId);
+    live?.runtime.cancelPendingPermissions?.(runtimeSessionId);
   }
 }

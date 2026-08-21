@@ -7,6 +7,7 @@ import {
   writeWorkspaceDirs,
   validateWorkspaceDirs,
 } from "../../src/main/services/workspace-config";
+import { readWorkbenchJson, writeWorkbenchJson } from "../../src/main/workbench/identity";
 
 let tmpDir: string;
 
@@ -18,63 +19,38 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-function makePrismDir(root: string) {
-  const prismDir = path.join(root, ".prismnext");
-  fs.mkdirSync(prismDir, { recursive: true });
-  return prismDir;
-}
-
-function writeSettings(prismDir: string, content: object) {
-  fs.writeFileSync(
-    path.join(prismDir, "settings.json"),
-    JSON.stringify(content, null, 2),
-  );
-}
-
-function readSettings(prismDir: string): any {
-  return JSON.parse(fs.readFileSync(path.join(prismDir, "settings.json"), "utf-8"));
-}
-
 describe("workspace-config — readConfig", () => {
-  it("returns default when settings.json does not exist", () => {
-    const prismDir = makePrismDir(tmpDir);
-    fs.rmSync(path.join(prismDir, "settings.json"), { force: true });
-
-    const result = readWorkspaceDirs(prismDir);
+  it("returns default when workbench.json does not exist", () => {
+    const result = readWorkspaceDirs(tmpDir);
     expect(result).toEqual([
       { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
     ]);
   });
 
-  it("returns workspaceDirs when present and non-empty", () => {
-    const prismDir = makePrismDir(tmpDir);
-    writeSettings(prismDir, {
-      version: 1,
-      compiler: "tectonic",
-      workspaceDirs: [
-        { function: "manuscript", name: "paper", mainTex: "article.tex" },
-        { function: "literature", name: "lit" },
-      ],
+  it("returns workspace folders from workbench.json when present and non-empty", () => {
+    writeWorkbenchJson(tmpDir, {
+      id: "p_test",
+      workspace: {
+        folders: [
+          { function: "manuscript", name: "paper", mainTex: "article.tex" },
+          { function: "literature", name: "lit" },
+        ],
+      },
     });
 
-    const result = readWorkspaceDirs(prismDir);
+    const result = readWorkspaceDirs(tmpDir);
     expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({ function: "manuscript", name: "paper" });
     expect(result[1]).toMatchObject({ function: "literature", name: "lit" });
   });
 
-  it("recovers default instead of returning [] when workspaceDirs is empty (data-loss guard)", () => {
-    // An empty array on disk is the data-loss signature from the old autosave
-    // project-switch bug. readWorkspaceDirs must NOT return [] - it falls
-    // through to the default so the project recovers its functional folders.
-    const prismDir = makePrismDir(tmpDir);
-    writeSettings(prismDir, {
-      version: 1,
-      compiler: "tectonic",
-      workspaceDirs: [],
+  it("recovers default instead of returning [] when folders is empty (data-loss guard)", () => {
+    writeWorkbenchJson(tmpDir, {
+      id: "p_test",
+      workspace: { folders: [] },
     });
 
-    const result = readWorkspaceDirs(prismDir);
+    const result = readWorkspaceDirs(tmpDir);
     expect(result).not.toEqual([]);
     expect(result.length).toBeGreaterThanOrEqual(1);
     expect(result.some((d) => d.function === "manuscript")).toBe(true);
@@ -82,40 +58,32 @@ describe("workspace-config — readConfig", () => {
 });
 
 describe("workspace-config — writeConfig", () => {
-  it("writes workspaceDirs to settings.json", () => {
-    const prismDir = makePrismDir(tmpDir);
-    writeSettings(prismDir, {
-      version: 1,
-      compiler: "tectonic",
-    });
+  it("writes workspace folders to workbench.json", () => {
+    writeWorkbenchJson(tmpDir, { id: "p_test" });
 
-    writeWorkspaceDirs(prismDir, [
+    writeWorkspaceDirs(tmpDir, [
       { function: "manuscript", name: "paper", mainTex: "main.tex" },
     ]);
 
-    const written = readSettings(prismDir);
-    expect(written.workspaceDirs).toHaveLength(1);
-    expect(written.workspaceDirs[0].name).toBe("paper");
+    const written = readWorkbenchJson(tmpDir);
+    expect(written?.id).toBe("p_test");
+    expect(written?.workspace?.folders).toHaveLength(1);
+    expect(written?.workspace?.folders?.[0]).toMatchObject({ name: "paper" });
   });
 
   it("refuses to write an empty folder list (data-loss backstop)", () => {
-    // writeWorkspaceDirs is the hard backstop: even if a caller bypasses
-    // validateWorkspaceDirs, an empty array must never be persisted.
-    const prismDir = makePrismDir(tmpDir);
-    writeSettings(prismDir, {
-      version: 1,
-      compiler: "tectonic",
-      workspaceDirs: [
-        { function: "manuscript", name: "paper", mainTex: "main.tex" },
-      ],
+    writeWorkbenchJson(tmpDir, {
+      id: "p_test",
+      workspace: {
+        folders: [{ function: "manuscript", name: "paper", mainTex: "main.tex" }],
+      },
     });
 
-    writeWorkspaceDirs(prismDir, []);
+    writeWorkspaceDirs(tmpDir, []);
 
-    // The existing non-empty config is preserved - [] did not overwrite it.
-    const written = readSettings(prismDir);
-    expect(written.workspaceDirs).not.toEqual([]);
-    expect(written.workspaceDirs?.length).toBeGreaterThanOrEqual(1);
+    const written = readWorkbenchJson(tmpDir);
+    expect(written?.workspace?.folders).not.toEqual([]);
+    expect(written?.workspace?.folders?.length).toBeGreaterThanOrEqual(1);
   });
 });
 

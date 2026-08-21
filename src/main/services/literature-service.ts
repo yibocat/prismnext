@@ -798,7 +798,12 @@ export interface SearchPapersOptions {
   collection?: string | null;
 }
 
+function libraryDbExists(projectRoot: string): boolean {
+  return fs.existsSync(getLibraryPaths(projectRoot).dbPath);
+}
+
 export function listPapers(projectRoot: string): PaperRow[] {
+  if (!libraryDbExists(projectRoot)) return [];
   const db = openLibraryDb(projectRoot);
   return db.prepare(`${PAPER_SELECT} ORDER BY p.updated_at DESC`).all() as unknown as PaperRow[];
 }
@@ -1722,6 +1727,7 @@ export function listReadingList(projectRoot: string): PaperRow[] {
 }
 
 export function listCollections(projectRoot: string): CollectionRow[] {
+  if (!libraryDbExists(projectRoot)) return [];
   const db = openLibraryDb(projectRoot);
   return db
     .prepare(
@@ -2327,6 +2333,7 @@ const CITE_COMMAND_RE =
 
 const TEX_SCAN_SKIP_DIRS = new Set([
   ".prismnext",
+  ".workbench",
   "node_modules",
   ".git",
   "out",
@@ -2440,7 +2447,7 @@ export function findProjectBibPath(projectRoot: string): string {
   }
 
   const candidates = [
-    ...readWorkspaceDirs(path.join(projectRoot, ".prismnext"))
+    ...readWorkspaceDirs(projectRoot)
       .filter((d) => d.function === "manuscript")
       .map((d) => path.join(projectRoot, d.name, "references.bib")),
     path.join(projectRoot, "references.bib"),

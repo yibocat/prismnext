@@ -56,7 +56,7 @@ import { applySubagentEventToRuns } from "../../shared/conversation-blocks";
 import type { ConversationSubagentRun } from "../../shared/agent-conversation";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
-import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
+import { resolvePiAgentRoot, resolvePiRuntimeSessionDir, type AgentSessionRecord } from "./session-store";
 import { RuntimeRegistry, type StartRuntimeInput } from "./runtime-registry";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { InteractionBroker } from "./interaction-broker";
@@ -215,8 +215,6 @@ export interface AgentServiceDeps {
 
 export class AgentService {
   private runtime: PiSdkRuntime | null = null;
-  private gate: PermissionGate | null = null;
-  private interactions: InteractionBroker | null = null;
   private sessionId: string | null = null;
   private projectRoot: string | null = null;
   /** Conversations whose `send()` is still awaiting the engine. */
@@ -374,8 +372,15 @@ export class AgentService {
         mcpServers: mcpDefsFromTeamAssets(teamBinding?.mcps),
       });
       let binding = this.registry.getBinding(conversationId);
+      const existing = this.registry.store.getByConversationId(conversationId);
+      if (binding && existing) {
+        const recRoot = existing.projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+        const want = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+        if (recRoot !== want) {
+          return { ok: false, error: "conversation_project_mismatch" };
+        }
+      }
       if (!binding) {
-        const existing = this.registry.store.getByConversationId(conversationId);
         binding = existing
           ? await this.registry.openConversation({
               conversationId,
@@ -386,6 +391,7 @@ export class AgentService {
               conversationId,
               tabId: this.activeTabId,
               projectRoot,
+              boundCheckoutPath: existing?.boundCheckoutPath,
             });
       }
       this.updateDefaultTitle(conversationId, text);
@@ -449,21 +455,15 @@ export class AgentService {
     this.sending.delete(id);
   }
 
-  async cancel(tabId?: string): Promise<void> {
-    const conversationId = tabId?.trim() || this.activeConversationId;
-    if (conversationId) {
-      const binding = this.registry.getBinding(conversationId);
-      if (binding?.runtimeSessionId) {
-        this.interactions?.cancelSession(binding.runtimeSessionId);
-        this.subsessionRuntimes.get(conversationId)?.cancelAllForParentSession(binding.runtimeSessionId);
-      }
-      await this.registry.cancelTurn(conversationId);
-      this.releaseTurnLock(conversationId);
-      return;
+  async cancel(conversationId?: string): Promise<void> {
+    const id = conversationId?.trim();
+    if (!id) return;
+    const runtimeSessionId = this.registry.cancelConversationWaiters(id);
+    if (runtimeSessionId) {
+      this.subsessionRuntimes.get(id)?.cancelAllForParentSession(runtimeSessionId);
     }
-    if (!this.runtime || !this.sessionId) return;
-    await this.runtime.cancelTurn(this.sessionId);
-    this.releaseTurnLock(this.activeConversationId);
+    await this.registry.cancelTurn(id);
+    this.releaseTurnLock(id);
   }
 
   async reset(tabId?: string): Promise<void> {
@@ -475,18 +475,18 @@ export class AgentService {
   }
 
   resolvePermission(requestId: string, decision: "allow" | "deny"): boolean {
-    return this.gate?.resolve(requestId, decision) ?? false;
+    return this.registry.resolvePermission(requestId, decision);
   }
 
   answerQuestion(input: AgentAnswerQuestionInput): boolean {
-    return this.interactions?.resolveQuestion(input.requestId, {
+    return this.registry.answerQuestion(input.requestId, {
       answer: input.answer,
       selected: input.selected,
-    }) ?? false;
+    });
   }
 
   resolvePlanSuggest(input: AgentResolvePlanSuggestInput): boolean {
-    return this.interactions?.resolvePlanSuggest(input.requestId, input.decision) ?? false;
+    return this.registry.resolvePlanSuggest(input.requestId, input.decision);
   }
 
   async deleteSession(input: AgentDeleteSessionInput): Promise<{ ok: boolean }> {
@@ -496,8 +496,6 @@ export class AgentService {
     this.registry.store.deleteByConversationId(conversationId);
     if (conversationId === this.activeConversationId) {
       this.runtime = null;
-      this.gate = null;
-      this.interactions = null;
       this.sessionId = null;
       this.activeConversationId = null;
     }
@@ -507,7 +505,17 @@ export class AgentService {
   listSessions(projectRoot: string): AgentSessionSummary[] {
     const root = projectRoot.trim();
     if (!root) return [];
-    return this.registry.store.listSessionsByProject(root).map((record) => ({
+    return this.summarizeSessions(this.registry.store.listSessionsByProject(root));
+  }
+
+  listSessionsByProjectId(projectId: string): AgentSessionSummary[] {
+    const id = projectId.trim();
+    if (!id) return [];
+    return this.summarizeSessions(this.registry.store.listSessionsByProjectId(id));
+  }
+
+  private summarizeSessions(records: AgentSessionRecord[]): AgentSessionSummary[] {
+    return records.map((record) => ({
       conversationId: record.conversationId || record.runtimeSessionId,
       title: record.title,
       updatedAt: Date.parse(record.updatedAt) || 0,
@@ -771,8 +779,7 @@ export class AgentService {
         // an in-flight Allow/Deny — otherwise a premature terminal event
         // silently kills a live delete (or any other) prompt.
         if (event.type === "turn_cancelled" || event.type === "turn_failed") {
-          this.runtime?.cancelPendingPermissions?.(event.runtimeSessionId);
-          this.gate?.cancelSession(event.runtimeSessionId);
+          this.registry.cancelHostWaiters(event.runtimeSessionId);
         }
       }
       if (
@@ -849,10 +856,9 @@ export class AgentService {
   private async startRuntime(input: StartRuntimeInput) {
     const ctx = this.startContexts.get(input.conversationId);
     if (!ctx) throw new Error("start_context_missing");
-    this.startContexts.delete(input.conversationId);
     const mcpHost = this.mcpHosts.get(input.conversationId) ?? new AgentMcpHost();
     this.mcpHosts.set(input.conversationId, mcpHost);
-    const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
+    const agentRoot = resolvePiAgentRoot();
     const store = this.registry.store;
     let runtimeRef: PiSdkRuntime | null = null;
     const gate = new PermissionGate({
@@ -987,7 +993,7 @@ export class AgentService {
       gate,
       agentDir: join(agentRoot, "runtime"),
       persistSessions: true,
-      piSessionDir: resolvePiRuntimeSessionDir(this.deps.userDataDir),
+      piSessionDir: resolvePiRuntimeSessionDir(),
     });
     runtimeRef = runtime;
     runtime.subscribe((event) => this.sink?.(event));
@@ -997,12 +1003,11 @@ export class AgentService {
         tabId: input.tabId,
         projectRoot: input.projectRoot,
         conversationId: input.conversationId,
+        boundCheckoutPath: input.boundCheckoutPath,
         piSessionFile: input.piSessionFile,
         permissionMode: ctx.permissionMode,
         sessionAgent: "build",
       });
-      this.gate = gate;
-      this.interactions = interactions;
       const { getSessionIntensiveBibkeys, setSessionIntensiveBibkeys } = await import(
         "../services/chat-session-registry"
       );
@@ -1014,6 +1019,8 @@ export class AgentService {
         runtime,
         runtimeSessionId: created.runtimeSessionId,
         piSessionFile: created.piSessionFile,
+        gate,
+        interactions,
       };
     } catch (err) {
       this.mcpHosts.delete(input.conversationId);
@@ -1025,9 +1032,9 @@ export class AgentService {
 
   private async attachLiveMcpTools(conversationId: string, projectRoot: string): Promise<void> {
     const host = this.mcpHosts.get(conversationId);
-    const runtime = this.runtime;
-    const sessionId = this.sessionId;
-    const ctx = this.startContext;
+    const runtime = this.registry.getRuntime(conversationId) as PiSdkRuntime | null;
+    const sessionId = this.registry.getBinding(conversationId)?.runtimeSessionId;
+    const ctx = this.startContexts.get(conversationId);
     if (!host || !runtime || !sessionId || !ctx) return;
     const tools = await host.ensure(
       selectMcpServers(ctx.mcpServers ?? [], ctx.mcpAllowlist),
@@ -1065,11 +1072,13 @@ export class AgentService {
     }
     if (!conversationId || conversationId === this.activeConversationId) {
       this.runtime = null;
-      this.gate = null;
-      this.interactions = null;
       this.sessionId = null;
       this.projectRoot = null;
       this.activeConversationId = null;
+    }
+    if (conversationId) {
+      this.startContexts.delete(conversationId);
+    } else {
       this.startContexts.clear();
     }
   }

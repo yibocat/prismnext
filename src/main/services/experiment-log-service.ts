@@ -28,6 +28,7 @@ import {
 } from "../../shared/artifact-path";
 import { resolveExperimentDir } from "./workspace-config";
 import { generateProvenanceId, recordRunProvenance } from "./provenance-service";
+import { isWorkbenchHomePath } from "../workbench/home";
 import {
   EXPERIMENT_META_FILENAME,
   EXPERIMENT_REGISTRY_REL,
@@ -467,7 +468,10 @@ export const ensureProjectPythonVenv = ensureExperimentPythonVenv;
 export function findPrismProjectRoot(start: string): string | null {
   let cur = pathResolve(start || "");
   for (let i = 0; i < 48; i++) {
-    if (existsSync(join(cur, ".prismnext"))) return cur.replace(/\\/g, "/");
+    const marker = join(cur, ".prismnext");
+    if (existsSync(marker) && !isWorkbenchHomePath(marker)) {
+      return cur.replace(/\\/g, "/");
+    }
     const parent = dirname(cur);
     if (parent === cur) break;
     cur = parent;

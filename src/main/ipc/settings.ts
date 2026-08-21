@@ -120,7 +120,7 @@ export function registerSettingsHandlers(): void {
     async (_event, args: { projectPath: string }) => {
       const { readFileSync, existsSync } = require("node:fs");
       const { join } = require("node:path");
-      const settingsPath = join(args.projectPath, ".prismnext", "settings.json");
+      const settingsPath = join(args.projectPath, ".workbench", "settings.json");
       if (!existsSync(settingsPath)) return { contextComponents: {} };
       try {
         const raw = readFileSync(settingsPath, "utf-8");
@@ -137,7 +137,7 @@ export function registerSettingsHandlers(): void {
     async (_event, args: { projectPath: string; config: any }) => {
       const { readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
       const { join } = require("node:path");
-      const prismDir = join(args.projectPath, ".prismnext");
+      const prismDir = join(args.projectPath, ".workbench");
       const settingsPath = join(prismDir, "settings.json");
       if (!existsSync(prismDir)) mkdirSync(prismDir, { recursive: true });
       let data: any = {};

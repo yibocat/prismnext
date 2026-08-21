@@ -1110,7 +1110,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   /** Standalone Files PDF — same Uint8Array path as compile preview (not data URL). */
   const [filePdfBytes, setFilePdfBytes] = useState<Uint8Array | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  /** Hydrating compile preview from `.prismnext/compile/` when memory cache is empty. */
+  /** Hydrating compile preview from `.workbench/compile/` when memory cache is empty. */
   const [diskHydrating, setDiskHydrating] = useState(false);
 
   const compilePdfBytes = useMemo(() => {

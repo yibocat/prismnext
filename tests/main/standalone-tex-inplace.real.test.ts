@@ -49,6 +49,7 @@ describe("compileStandaloneTexInPlace (real engine)", () => {
     // In place: PDF + log + aux live next to the source…
     expect(existsSync(join(root, "figures", "box.pdf"))).toBe(true);
     // …and the shared manuscript build dir was never created.
+    expect(existsSync(join(root, ".workbench", "compile"))).toBe(false);
     expect(existsSync(join(root, ".prismnext", "compile"))).toBe(false);
   }, 120_000);
 });

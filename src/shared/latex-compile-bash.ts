@@ -28,7 +28,7 @@ export function isDirectLatexCompileBashCommand(command: string): boolean {
 export function latexCompileBashBlockMessage(): string {
   return (
     `prismnext: do not compile LaTeX via bash (pdflatex / xelatex / lualatex / latexmk / tectonic). ` +
-    `Use \`${TOOL_NAMES.latexCompile}\` for the paper (artifacts in \`.prismnext/compile/\`). ` +
+    `Use \`${TOOL_NAMES.latexCompile}\` for the paper (artifacts in \`.workbench/compile/\`). ` +
     `Use \`${TOOL_NAMES.latexCompileStandalone}\` for a \\documentclass{standalone} figure ` +
     `(PDF next to the source). Running engines via bash pollutes the source folder with .aux/.log.`
   );

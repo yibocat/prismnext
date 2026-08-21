@@ -1,4 +1,4 @@
-/** Project-level template state persisted in `.prismnext/settings.json`. */
+/** Project-level template state persisted in `.workbench/settings.json`. */
 
 export interface ProjectTemplateState {
   id: string;
@@ -8,7 +8,7 @@ export interface ProjectTemplateState {
 }
 
 function settingsPathForRoot(projectRoot: string): string {
-  return `${projectRoot}/.prismnext/settings.json`;
+  return `${projectRoot}/.workbench/settings.json`;
 }
 
 function parseTemplateState(raw: unknown): ProjectTemplateState | null {

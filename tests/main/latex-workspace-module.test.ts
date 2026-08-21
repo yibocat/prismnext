@@ -10,7 +10,7 @@ describe("buildLatexWorkspacePrompt", () => {
     expect(latex).toContain("Soft workflow");
     expect(latex).toContain(TOOL_NAMES.latexCompile);
     expect(latex).toContain(TOOL_NAMES.latexRoot);
-    expect(latex).toContain(".prismnext/compile/");
+    expect(latex).toContain(".workbench/compile/");
     expect(latex).toContain("Scope boundary");
     expect(latex).toContain("Route the request");
     expect(latex).toContain("Citation & bibliography audit");

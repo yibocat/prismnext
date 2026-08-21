@@ -28,14 +28,19 @@
     "hoursAgo": "{{n}}h ago",
     "daysAgo": "{{n}}d ago",
     "showActive": "Show active sessions",
-    "restoreFromArchive": "Restore from archive"
+    "restoreFromArchive": "Restore from archive",
+    "waitingPermission": "{{name}} is waiting for approval",
+    "waitingPermissionHint": "Open that chat to approve",
+    "stopSession": "Stop",
+    "chat": "Chat"
   },
   "project": {
     "noProject": "No Project Open",
     "noRecent": "No recent projects",
     "newProject": "New Project...",
     "openProject": "Open Project...",
-    "closeProject": "Close Project"
+    "closeProject": "Close Project",
+    "removeFromWorkbench": "Remove from Workbench"
   },
   "teams": "Teams"
 }

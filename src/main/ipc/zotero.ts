@@ -19,7 +19,7 @@ import {
 } from "../services/workspace-config";
 
 function prismDir(projectRoot: string): string {
-  return path.join(projectRoot, ".prismnext");
+  return path.join(projectRoot, ".workbench");
 }
 
 export function registerZoteroHandlers(): void {
@@ -66,7 +66,7 @@ export function registerZoteroHandlers(): void {
   );
 
   ipcMain.handle("zotero:pullCollections", async (_event, args: { projectRoot: string }) => {
-    const binding = readLiteratureProjectConfig(path.join(args.projectRoot, ".prismnext"));
+    const binding = readLiteratureProjectConfig(prismDir(args.projectRoot));
     const { upserted, pruned } = await syncZoteroCollections(
       args.projectRoot,
       binding.zoteroCollectionId ?? null,

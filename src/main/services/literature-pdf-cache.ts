@@ -23,6 +23,7 @@ export function getPdfCacheStatesForPapers(
   papers: PaperPdfCacheProbe[],
 ): Record<string, PaperPdfCacheState> {
   const paths = getLibraryPaths(projectRoot);
+  if (!fs.existsSync(paths.dbPath)) return {};
   const db = openLibraryDb(projectRoot);
   const result: Record<string, PaperPdfCacheState> = {};
 

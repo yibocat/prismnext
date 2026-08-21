@@ -21,11 +21,14 @@ describe("bib-path-resolve", () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "prism-bib-path-"));
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
+        id: "p_test",
+        workspace: {
+          folders: [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
+        },
       }),
       "utf-8",
     );
@@ -87,14 +90,14 @@ Hello \cite{smith2024}.
 
   it("stages bibliography into build dir for biber/bibtex", async () => {
     const tex = readFileSync(join(root, "manuscript", "main.tex"), "utf-8");
-    const outDir = join(root, ".prismnext", "compile");
+    const outDir = join(root, ".workbench", "compile");
     mkdirSync(outDir, { recursive: true });
     await stageBibliographyForBuild(root, "manuscript/main.tex", tex, outDir);
     expect(existsSync(join(outDir, "references.bib"))).toBe(true);
   });
 
   it("syncs manuscript tree into build dir before compile", async () => {
-    const outDir = join(root, ".prismnext", "compile");
+    const outDir = join(root, ".workbench", "compile");
     const { buildMain, sourceDirRel } = await syncTexSourceToBuildDir(
       root,
       "manuscript/main.tex",
@@ -107,7 +110,7 @@ Hello \cite{smith2024}.
   });
 
   it("incremental sync copies only dirty files when build tree exists", async () => {
-    const outDir = join(root, ".prismnext", "compile");
+    const outDir = join(root, ".workbench", "compile");
     await syncTexSourceToBuildDir(root, "manuscript/main.tex", outDir);
 
     writeFileSync(
