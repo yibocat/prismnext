@@ -82,6 +82,21 @@ describe("permission gate (smart policy)", () => {
     })).toBe(false);
   });
 
+  it("prompts experiment-run when the command would prompt as bash", () => {
+    expect(shouldShowPermissionGate(undefined, "experiment-run", {
+      projectRoot: ROOT,
+      bashCommand: "pip install requests",
+      bashCwd: ROOT,
+    })).toBe(true);
+  });
+
+  it("allows experiment-run without a command when cwd is in project", () => {
+    expect(shouldShowPermissionGate(undefined, "experiment-run", {
+      projectRoot: ROOT,
+      bashCwd: ROOT,
+    })).toBe(false);
+  });
+
   it("readonly still denies edit and bash", () => {
     expect(resolvePermissionAction("readonly", "edit")).toBe("deny");
     expect(resolvePermissionAction("readonly", "bash")).toBe("deny");

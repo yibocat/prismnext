@@ -38,18 +38,26 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { buildPermissionRulesFromSettings, resolvePermissionMode } from "@shared/permissions/modes";
-import { shouldShowPermissionGate } from "@/components/modules/chat/permission-gate-panel";
+import {
+  buildPermissionAskView,
+  shouldShowPermissionGate,
+} from "@/components/modules/chat/permission-gate-panel";
+import { PermissionAskSurface } from "@/components/modules/chat/permission-ask-surface";
 import {
   EXPERIMENT_RUN_KINDS,
   parseExperimentRunKind,
   type ExperimentRunKind,
 } from "../../../shared/experiments/log";
+import { EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS } from "../../../shared/permissions/timeouts";
 import { experimentsCodeClass } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
-import {
-  ExperimentsRunConfirmModal,
-  type ExperimentsRunConfirmDenyReason,
-} from "./experiments-run-confirm-modal";
+import type { PendingPermission } from "@/stores/permission-store";
+
+let experimentRunAskNonce = 0;
+
+export function nextExperimentRunHostKey(experimentId: string): string {
+  return `experiment-run:${experimentId}:${++experimentRunAskNonce}`;
+}
 
 const KIND_UNTYPED = "__untyped__";
 
@@ -85,9 +93,12 @@ export function ExperimentsRunDialog({
 
   const [command, setCommand] = useState("");
   const [kind, setKind] = useState<ExperimentRunKind | "">("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingCommand, setPendingCommand] = useState("");
-  const [pendingKind, setPendingKind] = useState<ExperimentRunKind | "">("");
+  const [ask, setAsk] = useState<{
+    hostKey: string;
+    command: string;
+    kind: ExperimentRunKind | "";
+    cwd: string;
+  } | null>(null);
   const [starting, setStarting] = useState(false);
 
   const isInFlightForCurrent = Boolean(
@@ -96,9 +107,7 @@ export function ExperimentsRunDialog({
 
   useEffect(() => {
     if (!open) {
-      setConfirmOpen(false);
-      setPendingCommand("");
-      setPendingKind("");
+      setAsk(null);
       setStarting(false);
     }
   }, [open]);
@@ -109,7 +118,8 @@ export function ExperimentsRunDialog({
     command.trim().length > 0 &&
     !isInFlightForCurrent &&
     !isReadonly &&
-    !starting;
+    !starting &&
+    !ask;
 
   const startRun = useCallback(
     async (cmd: string, runKind: ExperimentRunKind | undefined) => {
@@ -140,13 +150,18 @@ export function ExperimentsRunDialog({
     if (!canRun || !projectRoot || !selectedId) return;
     const trimmed = command.trim();
     const runKind = parseExperimentRunKind(kind);
+    const cwd = useExperimentStore.getState().detail?.meta.workspacePath ?? projectRoot;
     if (shouldShowPermissionGate(permissionMode, "experiment-run", {
       projectRoot,
-      bashCwd: projectRoot,
+      bashCommand: trimmed,
+      bashCwd: cwd,
     }, permRules)) {
-      setPendingCommand(trimmed);
-      setPendingKind(kind);
-      setConfirmOpen(true);
+      setAsk({
+        hostKey: nextExperimentRunHostKey(selectedId),
+        command: trimmed,
+        kind,
+        cwd,
+      });
       return;
     }
     void startRun(trimmed, runKind);
@@ -162,23 +177,38 @@ export function ExperimentsRunDialog({
   ]);
 
   const handleAllow = useCallback(() => {
-    if (!projectRoot || !selectedId) return;
-    setConfirmOpen(false);
-    setKind(pendingKind);
-    void startRun(pendingCommand, parseExperimentRunKind(pendingKind));
-  }, [pendingCommand, pendingKind, projectRoot, selectedId, startRun]);
+    if (!projectRoot || !selectedId || !ask) return;
+    setKind(ask.kind);
+    const pending = ask;
+    setAsk(null);
+    void startRun(pending.command, parseExperimentRunKind(pending.kind));
+  }, [ask, projectRoot, selectedId, startRun]);
 
   const handleDeny = useCallback(
-    (reason: ExperimentsRunConfirmDenyReason) => {
-      setConfirmOpen(false);
-      setPendingCommand("");
-      setPendingKind("");
+    (reason: "timeout" | "user") => {
+      setAsk(null);
       if (reason === "timeout") {
         toast.info(t("experiments.runPanel.confirmTimeout"));
       }
     },
     [t],
   );
+
+  const handleAskTimeout = useCallback(() => handleDeny("timeout"), [handleDeny]);
+  const handleAskUserDeny = useCallback(() => handleDeny("user"), [handleDeny]);
+
+  const askView = useMemo(() => {
+    if (!ask) return null;
+    const permission: PendingPermission = {
+      id: ask.hostKey,
+      tabId: ask.hostKey,
+      toolName: "experiment-run",
+      message: ask.command,
+      args: { command: ask.command, cwd: ask.cwd },
+      options: [],
+    };
+    return buildPermissionAskView(permission, "experiment-run");
+  }, [ask]);
 
   const handleCancel = useCallback(() => {
     if (!projectRoot || !selectedId || !runInFlight || runInFlight.id !== selectedId) {
@@ -202,11 +232,9 @@ export function ExperimentsRunDialog({
       .openTerminalAtCwd(paths.workspaceAbs, t("experiments.runPanel.labTab", { name: leaf }));
   }, [projectRoot, selectedId, getPaths, t]);
 
-  const cwd = useExperimentStore((s) => s.detail?.meta.workspacePath) ?? "";
   const liveCommand = isInFlightForCurrent ? (runInFlight?.command ?? command) : command;
 
   return (
-    <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -224,7 +252,7 @@ export function ExperimentsRunDialog({
             <div className="flex flex-wrap items-center gap-1.5">
               <AppSelect
                 value={kind || KIND_UNTYPED}
-                disabled={isInFlightForCurrent || starting}
+                disabled={isInFlightForCurrent || starting || Boolean(ask)}
                 onValueChange={(v) =>
                   setKind(v === KIND_UNTYPED ? "" : (v as ExperimentRunKind))
                 }
@@ -259,7 +287,7 @@ export function ExperimentsRunDialog({
                   size="xs"
                   variant="ghost"
                   onClick={handleReuseLast}
-                  disabled={lastCommand == null || isInFlightForCurrent || starting}
+                  disabled={lastCommand == null || isInFlightForCurrent || starting || Boolean(ask)}
                   className="h-7 gap-1 px-1.5"
                 >
                   <HistoryIcon className="size-3" aria-hidden />
@@ -288,7 +316,7 @@ export function ExperimentsRunDialog({
               onChange={(e) => setCommand(e.target.value)}
               placeholder="python train.py --epochs 50"
               spellCheck={false}
-              disabled={isInFlightForCurrent || starting}
+              disabled={isInFlightForCurrent || starting || Boolean(ask)}
               rows={4}
               className={cn(
                 "min-h-[5.5rem] w-full resize-y",
@@ -328,6 +356,20 @@ export function ExperimentsRunDialog({
                   {t("experiments.cancel")}
                 </Button>
               </div>
+            ) : ask && askView ? (
+              <div className="w-full">
+                <PermissionAskSurface
+                  key={ask.hostKey}
+                  toolName="experiment-run"
+                  summary={askView.summary}
+                  peek={askView.peek}
+                  resolving={starting}
+                  onAllow={() => handleAllow()}
+                  onDeny={handleAskUserDeny}
+                  timeoutMs={EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS}
+                  onTimeout={handleAskTimeout}
+                />
+              </div>
             ) : (
               <>
                 <Button type="button" size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
@@ -365,14 +407,5 @@ export function ExperimentsRunDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ExperimentsRunConfirmModal
-        open={confirmOpen}
-        command={pendingCommand}
-        cwd={cwd}
-        onAllow={handleAllow}
-        onDeny={handleDeny}
-      />
-    </>
   );
 }

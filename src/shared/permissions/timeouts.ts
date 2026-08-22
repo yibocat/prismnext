@@ -14,7 +14,7 @@ export const PERMISSION_TIMEOUT_MS = 120_000;
 export const PERMISSION_UI_TIMEOUT_MS = PERMISSION_TIMEOUT_MS;
 
 /**
- * Experiments mode "Run" confirm modal auto-deny.
+ * Experiments mode "Run" PermissionAskSurface auto-deny.
  * Shorter than {@link PERMISSION_TIMEOUT_MS} by design, but long enough to
  * re-read a multi-line command (Bug #16 — 15s was too aggressive).
  */
