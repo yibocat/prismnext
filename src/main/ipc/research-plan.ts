@@ -6,7 +6,7 @@ import {
   readDraftPlan,
   sessionHasPendingPlanDraft,
   writeResearchPlan,
-} from "../services/research-plan-service";
+} from "../research/research-plan-service";
 import type { ResearchPlanDoc } from "../../shared/research/plan";
 
 export function registerResearchPlanHandlers(): void {

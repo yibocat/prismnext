@@ -16,7 +16,7 @@ import {
   AgentSessionStore,
   resolvePiAgentRoot,
 } from "./session-store";
-import { setSessionScratchLookup } from "../services/chat-session-registry";
+import { setSessionScratchLookup } from "../session/chat-session-registry";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("runtime-registry", "agent");

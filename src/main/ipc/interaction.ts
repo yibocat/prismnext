@@ -3,7 +3,7 @@ import {
   listInteractionIds,
   readInteractionSpec,
   writeInteractionSpec,
-} from "../services/interaction-store";
+} from "../interaction/interaction-store";
 import type { InteractionSpec } from "../../shared/interaction/spec";
 
 export function registerInteractionHandlers(): void {

@@ -21,7 +21,7 @@ import {
   skillPermissionNeedsRepair,
   isSkillsIntegrationPath,
   projectRootFromAgentPath,
-} from "../../src/main/services/skills-sync";
+} from "../../src/main/skills/skills-sync";
 import {
   listExternalTeamRoots,
   registerExternalTeamRoot,

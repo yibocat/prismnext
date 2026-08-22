@@ -6,7 +6,7 @@ import {
   installProjectSkill,
   listProjectSkills,
   syncProjectSkillsIntegration,
-} from "../../src/main/services/skills-sync";
+} from "../../src/main/skills/skills-sync";
 import { setAppTeamEnabled, setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests, listTeams } from "../../src/main/teams/resolver";
 import {

@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { app } from "electron";
 import { createLogger } from "../app/logger";
+import { getUserDataPath } from "../app/paths";
 import { extractPdfTextWithPdfJs } from "../literature/extract/literature-extract-pdfjs";
 
 const log = createLogger("prompt-file-attachments", "agent");
@@ -25,7 +25,7 @@ export function _setAttachCacheDirForTests(dir: string | null) {
 
 function getAttachCacheDir(): string {
   if (attachCacheDirOverride) return attachCacheDirOverride;
-  return path.join(app.getPath("userData"), "composer-attach-cache");
+  return path.join(getUserDataPath(), "composer-attach-cache");
 }
 
 interface ExtractCacheEntry {

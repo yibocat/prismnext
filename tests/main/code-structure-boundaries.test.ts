@@ -390,4 +390,52 @@ describe("code structure host port (Phase 3)", () => {
       expect(importsFrom(file, /from\s+["'][^"']*\/agent\//)).toEqual([]);
     }
   });
+
+  it("promotes session, skills, research, and interaction out of services", () => {
+    for (const rel of [
+      "src/main/session/chat-session-registry.ts",
+      "src/main/session/project-chat-prewarm.ts",
+      "src/main/session/prompt-file-attachments.ts",
+      "src/main/skills/skills-sync.ts",
+      "src/main/skills/skills-registry.ts",
+      "src/main/skills/project-skills-refresh.ts",
+      "src/main/research/research-plan-service.ts",
+      "src/main/research/research-brief-service.ts",
+      "src/main/interaction/interaction-store.ts",
+      "src/main/interaction/interaction-ui-events.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/chat-session-registry.ts",
+      "src/main/services/project-chat-prewarm.ts",
+      "src/main/services/prompt-file-attachments.ts",
+      "src/main/services/skills-sync.ts",
+      "src/main/services/skills-registry.ts",
+      "src/main/services/project-skills-refresh.ts",
+      "src/main/services/research-plan-service.ts",
+      "src/main/services/research-brief-service.ts",
+      "src/main/services/interaction-store.ts",
+      "src/main/services/interaction-ui-events.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("keeps session, skills, research, and interaction free of Electron, ipc, and agent", () => {
+    for (const dir of [
+      "src/main/session",
+      "src/main/skills",
+      "src/main/research",
+      "src/main/interaction",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        expect(sourceOf(relative(REPO, file)), relative(REPO, file)).not.toMatch(
+          /from\s+["']electron["']/,
+        );
+        expect(importsFrom(file, /from\s+["'](?:\.\.\/)+ipc\//)).toEqual([]);
+        expect(importsFrom(file, /from\s+["'](?:\.\.\/)+agent\//)).toEqual([]);
+      }
+    }
+  });
 });

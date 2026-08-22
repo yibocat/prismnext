@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkSkillUpdates } from "../../src/main/services/skill-install-updates";
-import { writeSkillsManifest } from "../../src/main/services/skills-sync";
-import { sha256Hex } from "../../src/main/services/skill-install-digest";
+import { checkSkillUpdates } from "../../src/main/skills/skill-install-updates";
+import { writeSkillsManifest } from "../../src/main/skills/skills-sync";
+import { sha256Hex } from "../../src/main/skills/skill-install-digest";
 import { homeSkillDir, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("skill-install-updates", () => {

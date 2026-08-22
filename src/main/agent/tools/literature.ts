@@ -23,7 +23,7 @@ import {
   addSessionIntensiveBibkey,
   getSessionIntensiveBibkeys,
   removeSessionIntensiveBibkey,
-} from "../../services/chat-session-registry";
+} from "../../session/chat-session-registry";
 import { normalizeArxivId, normalizeDoi } from "../../../shared/literature/doi-utils";
 import type { NativeToolDefinition } from "./types";
 

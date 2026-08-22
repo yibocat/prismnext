@@ -128,7 +128,7 @@ export function registerFsHandlers(
     async (_event, args: { absPath: string; content: string }) => {
       assertContained(args.absPath, "fs:write");
       await fs.writeTexFileContent(args.absPath, args.content);
-      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.absPath);
     },
   );
@@ -146,7 +146,7 @@ export function registerFsHandlers(
         args.relativePath,
         args.content,
       );
-      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(absPath);
       return { absPath };
     },
@@ -155,7 +155,7 @@ export function registerFsHandlers(
   ipcMain.handle("fs:delete", async (_event, args: { absPath: string }) => {
     assertContained(args.absPath, "fs:delete");
     await fs.deleteFileFromDisk(args.absPath);
-    const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+    const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
     scheduleSkillsRefreshFromAgentPath(args.absPath);
   });
 
@@ -164,7 +164,7 @@ export function registerFsHandlers(
     async (_event, args: { absPath: string }) => {
       assertContained(args.absPath, "fs:deleteFolder");
       await fs.deleteFolderFromDisk(args.absPath);
-      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.absPath);
     },
   );
@@ -175,7 +175,7 @@ export function registerFsHandlers(
       assertContained(args.oldPath, "fs:rename");
       assertContained(args.newPath, "fs:rename");
       await fs.renameFileOnDisk(args.oldPath, args.newPath);
-      const { scheduleSkillsRefreshFromAgentPath } = await import("../services/project-skills-refresh");
+      const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
       scheduleSkillsRefreshFromAgentPath(args.oldPath);
       scheduleSkillsRefreshFromAgentPath(args.newPath);
     },

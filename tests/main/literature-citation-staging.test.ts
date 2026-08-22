@@ -34,7 +34,7 @@ import {
   setSessionIntensiveBibkeys,
   setSessionScratchLookup,
   _resetChatSessionRegistryForTests,
-} from "../../src/main/services/chat-session-registry";
+} from "../../src/main/session/chat-session-registry";
 import { stageLiteratureCitation } from "../../src/main/literature/citation/literature-citation-staging";
 import { createPaper, listPapers } from "../../src/main/literature/facade";
 import { sessionCitationsDir } from "../../src/main/workbench/home";

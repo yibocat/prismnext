@@ -20,7 +20,7 @@ import {
   writeAppTeamsState,
 } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests, listMcpServers } from "../../src/main/teams/resolver";
-import { syncProjectSkillsIntegration } from "../../src/main/services/skills-sync";
+import { syncProjectSkillsIntegration } from "../../src/main/skills/skills-sync";
 import { getCommandRegistry, __resetCommandRegistriesForTests } from "../../src/main/commands/registry";
 
 let tmp: string;

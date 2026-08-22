@@ -11,7 +11,7 @@ import {
   listInteractionSummaries,
   readInteractionSpec,
   upsertInteractionSpec,
-} from "../../services/interaction-store";
+} from "../../interaction/interaction-store";
 import {
   INTERACTION_SPEC_DIR_REL,
   interactionFenceHint,
@@ -21,7 +21,7 @@ import {
   parseInteractionSpec,
   type InteractionSpec,
 } from "../../../shared/interaction/spec";
-import { broadcastInteractionChanged } from "../../services/interaction-ui-events";
+import { broadcastInteractionChanged } from "../../interaction/interaction-ui-events";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

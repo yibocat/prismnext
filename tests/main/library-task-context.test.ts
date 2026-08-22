@@ -10,7 +10,7 @@ import {
   readLibraryTaskHitRecords,
   formatLibraryTaskHitsMarkdown,
   LIBRARY_TASK_APPENDIX_MARKER,
-} from "../../src/main/services/library-task-context";
+} from "../../src/main/session/library-task-context";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 const PARENT = "parent-session";

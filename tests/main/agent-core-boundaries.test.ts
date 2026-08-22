@@ -242,8 +242,8 @@ describe("Pi-first agent core boundaries", () => {
   });
 
   it("injects project skills through Pi and does not write OpenCode config", () => {
-    const refresh = sourceOf("src/main/services/project-skills-refresh.ts");
-    const prewarm = sourceOf("src/main/services/project-chat-prewarm.ts");
+    const refresh = sourceOf("src/main/skills/project-skills-refresh.ts");
+    const prewarm = sourceOf("src/main/session/project-chat-prewarm.ts");
     const loader = sourceOf("src/main/agent/skill-loader.ts");
     const runtime = sourceOf("src/main/agent/pi-sdk-runtime.ts");
 
@@ -338,14 +338,14 @@ describe("Pi-first agent core boundaries", () => {
     const ipcIndex = sourceOf("src/main/ipc/index.ts");
     const main = sourceOf("src/main/index.ts");
     const settings = sourceOf("src/main/ipc/settings.ts");
-    const prewarm = sourceOf("src/main/services/project-chat-prewarm.ts");
+    const prewarm = sourceOf("src/main/session/project-chat-prewarm.ts");
     const experts = sourceOf("src/main/services/project-subagents-refresh.ts");
     const resolver = sourceOf("src/main/teams/resolver.ts");
     const experiment = sourceOf("src/main/ipc/experiment.ts");
-    const registry = sourceOf("src/main/services/chat-session-registry.ts");
+    const registry = sourceOf("src/main/session/chat-session-registry.ts");
     const literature = sourceOf("src/main/literature/citation/literature-citation-staging.ts");
-    const citations = sourceOf("src/main/services/session-citations-context.ts");
-    const libraryTask = sourceOf("src/main/services/library-task-context.ts");
+    const citations = sourceOf("src/main/session/session-citations-context.ts");
+    const libraryTask = sourceOf("src/main/session/library-task-context.ts");
 
     expect(ipcIndex).not.toContain("registerChatHandlers");
     expect(ipcIndex).not.toMatch(/from\s+["']\.\/chat["']/);

@@ -23,7 +23,7 @@ vi.mock("../../src/main/services/project-subagents-refresh", () => ({
   scheduleExpertsRefreshFromPaths: refreshSpies.subagents,
 }));
 
-vi.mock("../../src/main/services/project-skills-refresh", () => ({
+vi.mock("../../src/main/skills/project-skills-refresh", () => ({
   scheduleSkillsRefreshFromPaths: refreshSpies.skills,
 }));
 

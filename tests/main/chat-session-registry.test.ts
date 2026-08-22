@@ -10,7 +10,7 @@ import {
   setSessionScratchLookup,
   isSubAgentSession,
   _resetChatSessionRegistryForTests,
-} from "../../src/main/services/chat-session-registry";
+} from "../../src/main/session/chat-session-registry";
 
 describe("chat-session-registry", () => {
   beforeEach(() => {

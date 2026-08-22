@@ -7,7 +7,7 @@ import {
   enrichTaskToolResultContent,
   formatSessionCitationsMarkdown,
   readSessionCitationRecords,
-} from "../../src/main/services/session-citations-context";
+} from "../../src/main/session/session-citations-context";
 import { sessionCitationsDir, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 const SESSION = "sess-parent";
@@ -98,7 +98,7 @@ describe("session-citations-context", () => {
 
   it("writeToolOutputIntoPartData updates string and object outputs", async () => {
     const { writeToolOutputIntoPartData, readToolPartOutputText } = await import(
-      "../../src/main/services/session-citations-context"
+      "../../src/main/session/session-citations-context"
     );
 
     const stringPart = {

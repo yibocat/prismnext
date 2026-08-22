@@ -12,7 +12,7 @@ import {
   deleteSessionDisplays,
   restoreUserDisplays,
   upsertPlanArtifactEvent,
-} from "../../src/main/services/session-display-store";
+} from "../../src/main/session/session-display-store";
 
 describe("session-display-store", () => {
   let tmpDir: string;

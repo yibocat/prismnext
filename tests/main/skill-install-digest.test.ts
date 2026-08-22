@@ -4,7 +4,7 @@ import {
   parseSha256Digest,
   sha256Hex,
   verifySha256Digest,
-} from "../../src/main/services/skill-install-digest";
+} from "../../src/main/skills/skill-install-digest";
 
 describe("skill-install-digest", () => {
   it("parses sha256 digest prefix", () => {

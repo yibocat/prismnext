@@ -6,7 +6,7 @@
  *
  * Errors are data ({ ok: false, error, hint? }), never thrown.
  */
-import { getSessionProjectRoot } from "../services/chat-session-registry";
+import { getSessionProjectRoot } from "../session/chat-session-registry";
 import {
   appendRun,
   createExperiment,

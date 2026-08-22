@@ -6,7 +6,7 @@ import {
   broadcastExperimentRunStarted,
   sendToExperimentRenderers,
 } from "../../src/main/experiment/experiment-ui-events";
-import { broadcastInteractionChanged } from "../../src/main/services/interaction-ui-events";
+import { broadcastInteractionChanged } from "../../src/main/interaction/interaction-ui-events";
 
 type Recorded = {
   kind: "broadcast" | "origin";

@@ -453,7 +453,7 @@ export function notifyTeamsChanged(projectRoot?: string): void {
     void import("../services/project-subagents-refresh")
       .then((m) => m.scheduleSubagentsRefresh(root))
       .catch(() => {});
-    void import("../services/project-skills-refresh")
+    void import("../skills/project-skills-refresh")
       .then((m) => m.scheduleSkillsRefresh(root))
       .catch(() => {});
   }

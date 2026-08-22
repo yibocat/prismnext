@@ -533,7 +533,7 @@ async function startWatchingExclusive(
       const paths = changedPaths.size > 0 ? Array.from(changedPaths) : undefined;
       changedPaths = new Set();
       if (paths?.length) {
-        import("../services/project-skills-refresh").then(({ scheduleSkillsRefreshFromPaths }) => {
+        import("../skills/project-skills-refresh").then(({ scheduleSkillsRefreshFromPaths }) => {
           scheduleSkillsRefreshFromPaths(rootPath, paths);
         }).catch((err) => {
           log.error("fs-watch skills refresh scheduling failed", {

@@ -7,7 +7,7 @@ import {
   buildTaskDelegationCiteAuditPreface,
   recordCiteAuditHealth,
   readSessionCiteAuditSnapshotForTests,
-} from "../../src/main/services/session-cite-audit-context";
+} from "../../src/main/session/session-cite-audit-context";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("session-cite-audit-context", () => {

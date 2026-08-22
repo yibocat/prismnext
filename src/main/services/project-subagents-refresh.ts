@@ -5,8 +5,8 @@ import {
   getAgentsSyncState,
   syncAgentsToOpencode,
 } from "../teams/agents-sync";
-import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
-import { normalizeProjectRoot } from "./skills-sync";
+import { invalidateProjectChatPrewarm } from "../session/project-chat-prewarm";
+import { normalizeProjectRoot } from "../skills/skills-sync";
 import { PROJECT_META_DIR, projectTeamsRel } from "../../shared/workbench/paths";
 
 const EXPERTS_REFRESH_DEBOUNCE_MS = 800;

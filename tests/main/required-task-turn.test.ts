@@ -9,7 +9,7 @@ import {
   claimTaskAllowlistFollowUp,
   deferTaskAllowlistFollowUp,
   takeDeferredTaskAllowlistFollowUp,
-} from "../../src/main/services/chat-session-registry";
+} from "../../src/main/session/chat-session-registry";
 import {
   shouldDenyOutsideTaskAllowlist,
   resolveTaskPermissionDenial,

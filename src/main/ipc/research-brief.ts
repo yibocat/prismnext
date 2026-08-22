@@ -5,7 +5,7 @@ import {
   readResearchBrief,
   researchBriefAbsPath,
   updateResearchBriefSection,
-} from "../services/research-brief-service";
+} from "../research/research-brief-service";
 
 export function registerResearchBriefHandlers(): void {
   ipcMain.handle("researchBrief:ensure", async (_event, args: { projectRoot: string }) => {

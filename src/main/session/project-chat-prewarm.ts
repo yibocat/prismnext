@@ -6,12 +6,12 @@ import { buildPromptContext } from "../prompts/context";
 import { createLogger } from "../app/logger";
 import {
   refreshProjectSubagentsIntegrationIfNeeded,
-} from "./project-subagents-refresh";
+} from "../services/project-subagents-refresh";
 import {
   refreshProjectSkillsIntegrationIfNeeded,
-} from "./project-skills-refresh";
+} from "../skills/project-skills-refresh";
 import { getAgentsSyncState } from "../teams/agents-sync";
-import { normalizeProjectRoot } from "./skills-sync";
+import { normalizeProjectRoot } from "../skills/skills-sync";
 import type { ProjectWarmPhase } from "../../shared/agent/status";
 
 const log = createLogger("project-chat-prewarm", "agent");

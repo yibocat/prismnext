@@ -4,7 +4,7 @@ import {
   resolveArtifactUrl,
   skillNameToFolderId,
   installRegistrySkill,
-} from "../../src/main/services/skills-registry";
+} from "../../src/main/skills/skills-registry";
 import {
   findLibraryCardByRegistryUrl,
   libraryCardForRegistryUrl,

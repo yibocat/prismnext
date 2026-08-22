@@ -7,7 +7,7 @@ import {
   readInteractionSpec,
   upsertInteractionSpec,
   interactionSpecPath,
-} from "../../src/main/services/interaction-store";
+} from "../../src/main/interaction/interaction-store";
 import { LEGACY_INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction/spec";
 
 /** Minimal valid 1×1 PNG */

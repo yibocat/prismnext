@@ -680,7 +680,7 @@ export class AgentService {
     const projectRoot = input.projectRoot.trim();
     if (!conversationId || !projectRoot) return { ok: false };
     const { getPaper } = await import("../literature/facade");
-    const { setSessionIntensiveBibkeys } = await import("../services/chat-session-registry");
+    const { setSessionIntensiveBibkeys } = await import("../session/chat-session-registry");
     const bibkeys: string[] = [];
     for (const paperId of input.paperIds ?? []) {
       const paper = getPaper(projectRoot, paperId);
@@ -1012,7 +1012,7 @@ export class AgentService {
         sessionAgent: "build",
       });
       const { getSessionIntensiveBibkeys, setSessionIntensiveBibkeys } = await import(
-        "../services/chat-session-registry"
+        "../session/chat-session-registry"
       );
       const intensive = getSessionIntensiveBibkeys(input.conversationId);
       if (intensive.length > 0) {

@@ -17,7 +17,7 @@ import {
   WORKBENCH_JSON_FILENAME,
   workbenchJsonRel,
 } from "../../shared/workbench/paths";
-import { ensureResearchBrief } from "../services/research-brief-service";
+import { ensureResearchBrief } from "../research/research-brief-service";
 import {
   createConfiguredFolders,
   DEFAULT_WORKSPACE_FOLDERS,

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createLogger } from "../../app/logger";
-import { resolveSessionScratchKey } from "../../services/chat-session-registry";
+import { resolveSessionScratchKey } from "../../session/chat-session-registry";
 import { sessionCitationsDir } from "../../workbench/home";
 import { normalizeArxivId, normalizeDoi } from "../../../shared/literature/doi-utils";
 import { findExistingByIdentifier } from "../facade";

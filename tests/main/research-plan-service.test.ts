@@ -12,7 +12,7 @@ import {
   sessionHasPendingPlanDraft,
   snapshotSessionDraftMeta,
   writeResearchPlan,
-} from "../../src/main/services/research-plan-service";
+} from "../../src/main/research/research-plan-service";
 import {
   LEGACY_DRAFT_PLAN_REL,
   RESEARCH_PLANS_DIR_REL,

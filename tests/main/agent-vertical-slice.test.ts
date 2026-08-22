@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Type } from "@earendil-works/pi-ai";
 import { createInProcessSpike } from "../../src/main/agent/in-process-runtime";
 import { AgentSessionStore } from "../../src/main/agent/session-store";
-import { ensureResearchBrief, updateResearchBriefSection } from "../../src/main/services/research-brief-service";
+import { ensureResearchBrief, updateResearchBriefSection } from "../../src/main/research/research-brief-service";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 import type { NativeToolDefinition } from "../../src/main/agent/tools/types";
 import type { DiscoverLiteratureInput, DiscoverLiteratureResult } from "../../src/shared/literature/discovery";

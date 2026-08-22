@@ -26,7 +26,7 @@ import * as experimentRunExecutor from "../../src/main/experiment/experiment-run
 import {
   registerChatSession,
   _resetChatSessionRegistryForTests,
-} from "../../src/main/services/chat-session-registry";
+} from "../../src/main/session/chat-session-registry";
 
 function writeWorkspaceSettings(projectRoot: string, workspaceDirs: unknown[]): void {
   const metaDir = join(projectRoot, ".workbench");

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveChatTabId } from "../services/chat-session-registry";
+import { resolveChatTabId } from "../session/chat-session-registry";
 import {
   getExecutionRegistry,
   initExecutionRegistry,

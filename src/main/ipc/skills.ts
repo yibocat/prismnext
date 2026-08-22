@@ -11,21 +11,21 @@ import {
   setSkillContentEnabled,
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
-} from "../services/skills-sync";
+} from "../skills/skills-sync";
 import {
   fetchLibraryCatalog,
   installAllFromLibrarySource,
   installLibraryCatalogItem,
   uninstallAllFromLibrarySource,
-} from "../services/skill-library-catalog";
-import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
-import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../services/skill-install";
+} from "../skills/skill-library-catalog";
+import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../skills/project-skills-refresh";
+import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../skills/skill-install";
 import {
   fetchRegistryIndex,
   installRegistrySkill,
   validateRegistryIndex,
   type RegistrySkillEntry,
-} from "../services/skills-registry";
+} from "../skills/skills-registry";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import { toFqid } from "../../shared/teams/state";
 import { listCorePackSkills, readCoreSkillMd } from "../services/core-team-skills";
@@ -171,7 +171,7 @@ export function registerSkillsHandlers(): void {
         targetTeamId?: string;
       },
     ) => {
-      const { installProjectSkill } = await import("../services/skills-sync");
+      const { installProjectSkill } = await import("../skills/skills-sync");
       installProjectSkill(
         args.projectPath,
         args.skillId,
