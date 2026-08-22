@@ -7,7 +7,7 @@ import {
   findContentListEntryName,
   findMiddleJsonEntryName,
   reapplyGeometryFromMiddle,
-} from "../../src/main/services/mineru-blocks";
+} from "../../src/main/literature/extract/mineru-blocks";
 import {
   hitTestBlock,
   blocksOverlappingRect,

@@ -7,9 +7,9 @@ import {
 import {
   resetCatalogFetchForTests,
   setCatalogFetch,
-} from "../../src/shared/bibliographic-metadata/catalog-fetch";
-import { arxivDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/arxiv";
-import { crossrefDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/crossref";
+} from "../../src/main/literature/catalog/catalog-fetch";
+import { arxivDiscoveryAdapter } from "../../src/main/literature/discovery/sources/arxiv";
+import { crossrefDiscoveryAdapter } from "../../src/main/literature/discovery/sources/crossref";
 
 afterEach(() => resetCatalogFetchForTests());
 

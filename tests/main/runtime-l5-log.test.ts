@@ -12,7 +12,7 @@ const storeCtl = vi.hoisted(() => ({
   data: {} as Record<string, unknown>,
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");

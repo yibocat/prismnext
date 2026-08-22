@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadata";
+import { resolveBibliographicMetadata } from "../literature/catalog";
 
 /**
  * Global bibliographic catalog IPC — not scoped to the literature library UI.

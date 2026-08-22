@@ -1,13 +1,13 @@
 import { ipcMain, dialog, BrowserWindow } from "electron";
-import * as fs from "../services/filesystem";
-import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
+import * as fs from "../project/filesystem";
+import { buildAgentsMdScaffold } from "../project/agents-md-scaffold";
 import { basename, join } from "node:path";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   writeProjectIcon,
   writeProjectIconImage,
-} from "../services/workspace-config";
+} from "../project/workspace-config";
 import type { IconSpec } from "../../shared/platform/icon-spec";
 import {
   createWorkbenchProjectOnDisk,
@@ -26,11 +26,11 @@ import {
   isPathUnderHome,
   assertContained,
   assertUnderHome,
-} from "../services/active-project-roots";
+} from "../project/active-project-roots";
 import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
-} from "../services/project-lifecycle-authority";
+} from "../project/project-lifecycle-authority";
 
 const templateLog = createLogger("template-ipc", "ipc");
 const fsLog = createLogger("fs-ipc", "fs");
@@ -337,7 +337,7 @@ export function registerFsHandlers(
     });
 
     if (args.initGit) {
-      const { initRepo } = await import("../services/git");
+      const { initRepo } = await import("../git/facade");
       const gitResult = await initRepo(args.rootPath);
       if (!gitResult.success) {
         failLogged = true;

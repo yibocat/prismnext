@@ -10,7 +10,7 @@ import {
   recordRunProvenance,
   resolveRunForArtifact,
   resolveRunById,
-} from "../../src/main/services/provenance-service";
+} from "../../src/main/experiment/provenance-service";
 import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 
 function makeRun(overrides: Partial<ExperimentRunEntry> = {}): ExperimentRunEntry {

@@ -1,7 +1,7 @@
 // prism-next/src/main/prompts/layers/custom-rules.ts
 
 import type { PromptLayer, PromptContext } from "../types";
-import { createLogger } from "../../services/logger";
+import { createLogger } from "../../app/logger";
 
 const log = createLogger("custom-rules", "agent");
 

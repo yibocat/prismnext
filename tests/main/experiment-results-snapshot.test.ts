@@ -5,8 +5,8 @@ import { join } from "node:path";
 import {
   buildExperimentStorageContext,
   createExperiment,
-} from "../../src/main/services/experiment-log-service";
-import { snapshotExperiment } from "../../src/main/services/experiment-results-snapshot";
+} from "../../src/main/experiment/facade";
+import { snapshotExperiment } from "../../src/main/experiment/experiment-results-snapshot";
 
 describe("snapshotExperiment", () => {
   let root: string;

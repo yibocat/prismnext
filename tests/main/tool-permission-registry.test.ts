@@ -3,11 +3,11 @@ import {
   TOOL_PERMISSION_REGISTRY,
   getToolPermissionEntry,
   buildPermissionRulesForMode,
-} from "../../src/main/services/tool-permission-registry";
+} from "../../src/shared/permissions/tool-registry";
 import {
   resolvePermissionAction,
   getPermissionRuleForTool,
-} from "../../src/main/services/permission-modes";
+} from "../../src/shared/permissions/modes";
 
 // Rule shape constants (mirror the ones in tool-permission-registry.ts so the
 // test pins classifications independently of the constant names).

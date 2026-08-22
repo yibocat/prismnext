@@ -3,7 +3,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 import type { ContextUsageSource } from "../../shared/agent/session-context-usage";
 import { projectSessionsContextRel } from "../../shared/workbench/paths";
 

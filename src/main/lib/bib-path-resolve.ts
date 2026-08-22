@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createLogger } from "../services/logger";
-import { readWorkspaceDirs } from "../services/workspace-config";
+import { createLogger } from "../app/logger";
+import { readWorkspaceDirs } from "./workspace-dirs";
 
 const log = createLogger("bib-path", "fs");
 

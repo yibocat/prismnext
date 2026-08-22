@@ -15,7 +15,7 @@ import {
   type PermissionGateRequest,
 } from "./permission-gate";
 import type { NativeToolDefinition } from "./tools/types";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("tool-host", "agent");
 

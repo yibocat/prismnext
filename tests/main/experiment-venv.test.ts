@@ -15,7 +15,7 @@ import {
   createExperiment,
   buildExperimentStorageContext,
   type ExperimentVenvRunner,
-} from "../../src/main/services/experiment-log-service";
+} from "../../src/main/experiment/facade";
 import { PRISMNEXT_VENV_REL } from "../../src/shared/experiments/log";
 
 function makeProject(): string {

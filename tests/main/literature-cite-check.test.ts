@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { citeCheckLiterature, openLibraryDb } from "../../src/main/services/literature-service";
+import { citeCheckLiterature, openLibraryDb } from "../../src/main/literature/facade";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function mkTempProject(): string {

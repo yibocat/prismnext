@@ -16,7 +16,7 @@ import type {
   OrchestratorInfo,
   SaveCustomSubagentPayload,
   SaveCustomOrchestratorPayload,
-} from "../services/agent-subagents";
+} from "../../shared/agent/subagents";
 
 export function registerExpertsHandlers(): void {
   ipcMain.handle("subagents:list", async (_event, args: { projectPath: string }) => {

@@ -6,7 +6,7 @@ import {
   readWorkspaceDirs,
   writeWorkspaceDirs,
   validateWorkspaceDirs,
-} from "../../src/main/services/workspace-config";
+} from "../../src/main/project/workspace-config";
 import { readWorkbenchJson, writeWorkbenchJson } from "../../src/main/workbench/identity";
 
 let tmpDir: string;

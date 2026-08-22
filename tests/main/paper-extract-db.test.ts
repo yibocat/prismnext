@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createPaper } from "../../src/main/services/literature-service";
+import { createPaper } from "../../src/main/literature/facade";
 import {
   getPaperExtractAbsPath,
   getPaperExtractState,
@@ -10,7 +10,7 @@ import {
   readExtractBlocks,
   upsertPaperExtractState,
   writeExtractArtifacts,
-} from "../../src/main/services/paper-extract-db";
+} from "../../src/main/literature/extract/paper-extract-db";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {

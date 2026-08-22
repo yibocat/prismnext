@@ -14,7 +14,7 @@ import {
 import {
   gateExperimentPythonExecution,
   type ExperimentVenvRunner,
-} from "../../src/main/services/experiment-log-service";
+} from "../../src/main/experiment/facade";
 
 describe("isPythonRelatedCommand", () => {
   it("detects python / pip / uv pip", () => {

@@ -53,20 +53,20 @@ import { registerExperimentHandlers } from "../../src/main/ipc/experiment";
 import {
   kickoffExperimentRun,
   _resetExperimentRunCancelledForTests,
-} from "../../src/main/services/experiment-run-executor";
+} from "../../src/main/experiment/experiment-run-executor";
 import {
   buildExperimentStorageContext,
   createExperiment,
   type ExperimentStorageContext,
-} from "../../src/main/services/experiment-log-service";
+} from "../../src/main/experiment/facade";
 import {
   _hasActiveAiPtyForSession,
   _resetAiPtyForTests,
-} from "../../src/main/services/ai-pty";
+} from "../../src/main/terminal/ai-pty";
 import {
   getExecutionRegistry,
   _resetExecutionRegistryForTests,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 interface FakeEvent {
   sender: { send: (channel: string, payload: unknown) => void };
@@ -489,7 +489,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const runId = "run-20260708-120000-cafe";
     const sessionId = `experiment:${id}:${runId}`;
 
-    const { runAiCommand } = await import("../../src/main/services/ai-pty");
+    const { runAiCommand } = await import("../../src/main/terminal/ai-pty");
     void runAiCommand({
       command: "sleep 30",
       cwd: process.cwd(),

@@ -5,7 +5,7 @@ vi.mock("electron", () => ({
   app: { getPath: () => "/tmp/prism-experiment-run-env-test" },
 }));
 
-import { buildPythonEnvExtra } from "../../src/main/services/experiment-run-executor";
+import { buildPythonEnvExtra } from "../../src/main/experiment/experiment-run-executor";
 import type { ExperimentEnv } from "../../src/shared/experiments/log";
 
 const baseEnv: ExperimentEnv = {

@@ -19,7 +19,7 @@ import {
   PROJECT_LOCAL_LEAD_ID,
   PROJECT_TEAMS_REL,
 } from "../../shared/teams/types";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { projectTeamsDir } from "./scope";
 
 const log = createLogger("teams-migrate-content", "agent");

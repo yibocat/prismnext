@@ -62,7 +62,7 @@ import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-mat
 import { InteractionBroker } from "./interaction-broker";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition, type ExperimentRunFn } from "./tools/index";
 import { resolveTeamPiBinding, type ResolvedPiLeadConfig, type ResolvedPiRosterEntry, type TeamPiBindingInput, type TeamPiBindingResult } from "./team-binding";
-import { buildPermissionRulesFromSettings } from "../services/permission-modes";
+import { buildPermissionRulesFromSettings } from "../../shared/permissions/modes";
 import {
   createTaskDelegationTool,
   PiSubsessionRuntime,
@@ -85,7 +85,7 @@ import {
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
 import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("agent-service", "agent");
 
@@ -679,7 +679,7 @@ export class AgentService {
     const conversationId = input.conversationId.trim();
     const projectRoot = input.projectRoot.trim();
     if (!conversationId || !projectRoot) return { ok: false };
-    const { getPaper } = await import("../services/literature-service");
+    const { getPaper } = await import("../literature/facade");
     const { setSessionIntensiveBibkeys } = await import("../services/chat-session-registry");
     const bibkeys: string[] = [];
     for (const paperId of input.paperIds ?? []) {

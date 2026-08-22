@@ -37,7 +37,7 @@ import {
   USER_TEAM_PUBLISHER,
 } from "../../shared/teams/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { homeSkillsDir } from "../workbench/home";
 import { appTeamsDir, projectTeamsDir } from "./scope";
 

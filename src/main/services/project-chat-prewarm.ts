@@ -3,7 +3,7 @@
  * Does not spawn or reload OpenCode.
  */
 import { buildPromptContext } from "../prompts/context";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 import {
   refreshProjectSubagentsIntegrationIfNeeded,
 } from "./project-subagents-refresh";

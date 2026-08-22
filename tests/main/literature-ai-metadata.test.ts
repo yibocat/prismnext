@@ -8,7 +8,7 @@ import {
   getPaper,
   mapPaperForRenderer,
   updatePaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 
 vi.mock("../../src/main/services/provider-chat", () => ({
   completeChatJson: vi.fn().mockResolvedValue(
@@ -27,14 +27,14 @@ vi.mock("../../src/main/services/settings", () => ({
   })),
 }));
 
-vi.mock("../../src/main/services/literature-ai-metadata-heuristics", () => ({
+vi.mock("../../src/main/literature/ai-metadata/literature-ai-metadata-heuristics", () => ({
   heuristicAbstractAndKeywords: vi.fn(() => ({
     abstract: "This paper studies world models for control.",
     keywordHints: ["world models"],
   })),
 }));
 
-import { runAiMetadataForPaper } from "../../src/main/services/literature-ai-metadata";
+import { runAiMetadataForPaper } from "../../src/main/literature/ai-metadata/literature-ai-metadata";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {

@@ -32,7 +32,7 @@ import {
 import { isPiPrimitiveToolName } from "./capability-matrix";
 import { getNativeToolByName } from "./tools/index";
 import type { ToolPermissionCategory } from "./tools/types";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("permission-gate", "security");
 

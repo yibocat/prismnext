@@ -7,7 +7,7 @@ import { createActiveModulesLayer } from "./layers/active-modules";
 import { createAgentsMdLayer } from "./layers/agents-md";
 import { createCustomRulesLayer } from "./layers/custom-rules";
 import { ALL_MODULES } from "./modules";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { countPromptTokens } from "../lib/token-estimate";
 
 /** DJB2 — must stay in sync with PromptComposer fingerprint hashing. */

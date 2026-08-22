@@ -1,6 +1,6 @@
 /** Maps chat sessionId ↔ renderer tabId + project root (shared across main services). */
 
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("chat-session-registry", "agent");
 

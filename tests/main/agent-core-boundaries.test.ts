@@ -343,7 +343,7 @@ describe("Pi-first agent core boundaries", () => {
     const resolver = sourceOf("src/main/teams/resolver.ts");
     const experiment = sourceOf("src/main/ipc/experiment.ts");
     const registry = sourceOf("src/main/services/chat-session-registry.ts");
-    const literature = sourceOf("src/main/services/literature-citation-staging.ts");
+    const literature = sourceOf("src/main/literature/citation/literature-citation-staging.ts");
     const citations = sourceOf("src/main/services/session-citations-context.ts");
     const libraryTask = sourceOf("src/main/services/library-task-context.ts");
 

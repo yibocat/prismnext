@@ -33,8 +33,8 @@ import {
   normalizeIconSpec,
   type IconSpec,
 } from "../../shared/platform/icon-spec";
-import { createLogger } from "../services/logger";
-import { _registeredRoots } from "../services/active-project-roots";
+import { createLogger } from "../app/logger";
+import { _registeredRoots } from "../project/active-project-roots";
 import { licenseGrants } from "../services/teams-license";
 import { getTeamRecord, invalidateCatalog, scanAllTeams } from "./catalog";
 import {

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   getCitationHealth,
   importProjectBibKeysIntoLibrary,
-} from "../../src/main/services/citation-health";
+} from "../../src/main/literature/citation/citation-health";
 
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 

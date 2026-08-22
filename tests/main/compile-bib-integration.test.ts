@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compileLatex } from "../../src/main/services/compiler";
-import { resetTectonicBinaryCacheForTests } from "../../src/main/services/tectonic-binary";
+import { compileLatex } from "../../src/main/compile/facade";
+import { resetTectonicBinaryCacheForTests } from "../../src/main/compile/tectonic-binary";
 
 vi.mock("electron", () => ({
   app: {

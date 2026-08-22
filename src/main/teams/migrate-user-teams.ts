@@ -20,7 +20,7 @@ import {
 import { dirname, join } from "node:path";
 import { appTeamsDir } from "./scope";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("teams-migrate-user", "agent");
 const USER_PACKS_REL = "user-packs";

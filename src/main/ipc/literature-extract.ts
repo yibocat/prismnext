@@ -7,16 +7,16 @@ import {
   enqueuePaperExtract,
   resumeExtractQueues,
   retryPaperExtract,
-} from "../services/literature-extract-queue";
+} from "../literature/extract/literature-extract-queue";
 import {
   getPaperExtractAbsPath,
   getPaperExtractState,
   listPaperExtractStates,
   readExtractBlocks,
   readExtractMarkdown,
-} from "../services/paper-extract-db";
-import { readPaperPdfContent } from "../services/paper-extract-read";
-import { testMineruConnection } from "../services/mineru-client";
+} from "../literature/extract/paper-extract-db";
+import { readPaperPdfContent } from "../literature/extract/paper-extract-read";
+import { testMineruConnection } from "../literature/extract/mineru-client";
 import { getSettings } from "../services/settings";
 
 export function registerLiteratureExtractHandlers(): void {

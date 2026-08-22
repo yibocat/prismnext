@@ -8,7 +8,7 @@ import {
   buildPermissionRulesFromSettings,
   resolvePermissionAction,
   resolvePermissionMode,
-} from "../services/permission-modes";
+} from "../../shared/permissions/modes";
 
 const MAX_SHELL_OUTPUT = 10_240; // 10KB
 const SHELL_TIMEOUT_MS = 5_000;

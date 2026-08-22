@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 const compileLatex = vi.fn();
 const compileStandaloneTexInPlace = vi.fn();
 
-vi.mock("../../src/main/services/compiler", async (importOriginal) => {
+vi.mock("../../src/main/compile/facade", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../src/main/services/compiler")>();
+    await importOriginal<typeof import("../../src/main/compile/facade")>();
   return {
     ...actual,
     compileLatex: (...args: unknown[]) => compileLatex(...args),
@@ -22,7 +22,7 @@ import {
   compileForAgent,
   compileManuscriptForAgent,
   compileStandaloneForAgent,
-} from "../../src/main/services/latex-service";
+} from "../../src/main/compile/latex-service";
 
 const STANDALONE_FIGURE = String.raw`\documentclass[tikz,border=2mm]{standalone}
 \usepackage{tikz}

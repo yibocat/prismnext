@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as filesystem from "../../src/main/services/filesystem";
+import * as filesystem from "../../src/main/project/filesystem";
 
 const refreshSpies = vi.hoisted(() => ({
   subagents: vi.fn(),
@@ -34,7 +34,7 @@ import {
   stopWatching,
   shouldSkipProjectDirectory,
   HIDDEN_DIRECTORY_NAMES,
-} from "../../src/main/services/filesystem";
+} from "../../src/main/project/filesystem";
 
 const isAgentContentWatchIgnored = (
   filesystem as typeof filesystem & {

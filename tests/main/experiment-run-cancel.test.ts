@@ -3,7 +3,7 @@ import {
   markExperimentRunCancelled,
   _consumeExperimentRunCancelledForTests,
   _resetExperimentRunCancelledForTests,
-} from "../../src/main/services/experiment-run-executor";
+} from "../../src/main/experiment/experiment-run-executor";
 
 describe("markExperimentRunCancelled (Bug #21)", () => {
   afterEach(() => {

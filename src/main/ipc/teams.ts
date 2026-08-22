@@ -25,7 +25,7 @@ import {
   resolveRoster,
 } from "../teams/resolver";
 import { getTeamRecord } from "../teams/catalog";
-import { _registeredRoots } from "../services/active-project-roots";
+import { _registeredRoots } from "../project/active-project-roots";
 import {
   createTeam,
   deleteTeam,

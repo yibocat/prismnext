@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveMainTexRelativePath } from "./bib-path-resolve";
-import { detectBibTool, detectTexEngine } from "../services/compiler";
+import { detectBibTool, detectTexEngine } from "./tex-detect";
 import { projectCompileRel } from "../../shared/workbench/paths";
 
 /** Parse % !TEX root magic comment from content. */

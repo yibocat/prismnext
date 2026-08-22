@@ -14,7 +14,7 @@
 import { app } from "electron";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("packs-installed");
 

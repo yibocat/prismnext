@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractAbstractFromMarkdown,
   extractKeywordHintsFromText,
-} from "../../src/main/services/literature-ai-metadata-heuristics";
+} from "../../src/main/literature/ai-metadata/literature-ai-metadata-heuristics";
 
 const SAMPLE = `
 # Paper

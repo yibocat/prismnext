@@ -28,8 +28,8 @@ import type {
   SubagentDefV2,
   TeamViewV2,
 } from "../../shared/teams/view";
-import { createLogger } from "../services/logger";
-import { _registeredRoots } from "../services/active-project-roots";
+import { createLogger } from "../app/logger";
+import { _registeredRoots } from "../project/active-project-roots";
 import { licenseGrants, licenseStateVersion } from "../services/teams-license";
 import {
   appTeamsStateWriteCounter,

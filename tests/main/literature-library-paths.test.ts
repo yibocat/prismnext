@@ -7,7 +7,7 @@ import {
   listPapers,
   resolveLibraryDisplayAbs,
   resolveLibraryProjectRoot,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import { resolveWorkbenchHome } from "../../src/main/workbench/home";
 import { writeProjectSlotMeta } from "../../src/main/workbench/default-project";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";

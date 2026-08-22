@@ -7,8 +7,8 @@ import {
   upsertZoteroPaperRow,
   openLibraryDb,
   getLibraryPaths,
-} from "../../src/main/services/literature-service";
-import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../../src/main/services/literature-pdf-cache";
+} from "../../src/main/literature/facade";
+import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../../src/main/literature/pdf/literature-pdf-cache";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {

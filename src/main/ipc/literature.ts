@@ -13,7 +13,6 @@ import {
   deletePaper,
   detachZoteroMirror,
   promoteZoteroPaperToProject,
-  exportBibTeX,
   formatBibliography,
   fetchAndApplyMetadata,
   getAnnotations,
@@ -36,8 +35,9 @@ import {
   attachLocalPdfToPaper,
   mapPaperForRenderer,
   resolveLibraryDisplayAbs,
+  bibliographyExportContent,
   type PaperRow,
-} from "../services/literature-service";
+} from "../literature/facade";
 import { readWorkbenchJson } from "../workbench/identity";
 import { resolveWorkbenchHome } from "../workbench/home";
 import { libraryRel } from "../../shared/workbench/paths";
@@ -45,37 +45,36 @@ import {
   getCitationHealth,
   importProjectBibKeysIntoLibrary,
   syncLibraryToManuscriptBib,
-} from "../services/citation-health";
-import { onPaperPdfAttached, onPaperPdfChanged } from "../services/literature-extract-automation";
-import { resolvePaperPdfBytes, ensurePaperPdfAbsPath } from "../services/literature-pdf-resolve";
-import { toLiteraturePdfUrl } from "../services/literature-pdf-protocol";
-import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../services/literature-pdf-cache";
+} from "../literature/citation/citation-health";
+import { onPaperPdfAttached, onPaperPdfChanged } from "../literature/extract/literature-extract-automation";
+import { resolvePaperPdfBytes, ensurePaperPdfAbsPath } from "../literature/pdf/literature-pdf-resolve";
+import { toLiteraturePdfUrl } from "../literature/pdf/url";
+import { getPdfCacheStatesForPapers, getLiteratureStorageStats, pruneOrphanPdfAttachments } from "../literature/pdf/literature-pdf-cache";
 import {
   addPapersToZoteroCollection,
   deleteCollectionInZotero,
   removePapersFromZoteroCollection,
   renameCollectionInZotero,
-} from "../services/zotero-sync";
+} from "../literature/zotero/zotero-sync";
 import {
   createPaperFromCatalog,
   createPaperFromStagedCitation,
   downloadPdfForPaper,
   ingestPdfWithEnrich,
-} from "../services/literature-enrich";
+} from "../literature/enrich";
 import {
   beginStagedCitationAdd,
   cancelStagedCitationAdd,
   endStagedCitationAdd,
-} from "../services/staged-citation-add-abort";
+} from "../literature/citation/staged-citation-add-abort";
 import { StagedCitationAddCancelledError } from "../lib/staged-citation-add-cancelled";
 import { STAGED_CITATION_CREATE_CANCELLED } from "../../shared/literature/citation-staging";
-import { exportZoteroBibliography } from "../services/zotero-sync";
 import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/literature/citation-staging";
-import { stageLiteratureCitation } from "../services/literature-citation-staging";
+import { stageLiteratureCitation } from "../literature/citation/literature-citation-staging";
 import {
   getPaperCitationNetwork,
   getPaperCitationNetworkPage,
-} from "../services/literature-citation-network";
+} from "../literature/citation/literature-citation-network";
 import type { PaperCitationSectionKind } from "../../shared/literature/paper-citation-network";
 
 function mapPaperRow(row: PaperRow | null) {
@@ -84,26 +83,6 @@ function mapPaperRow(row: PaperRow | null) {
 
 function mapPaperPayload<T extends { paper: PaperRow }>(result: T) {
   return { ...result, paper: mapPaperForRenderer(result.paper) };
-}
-
-async function bibliographyExportContent(
-  projectRoot: string,
-  paperIds?: string[],
-): Promise<string> {
-  const papers = paperIds?.length
-    ? listPapers(projectRoot).filter((p) => paperIds.includes(p.id))
-    : listPapers(projectRoot);
-  const zoteroPaperIds = papers.filter((p) => p.zotero_key).map((p) => p.id);
-  if (zoteroPaperIds.length > 0) {
-    try {
-      return await exportZoteroBibliography(projectRoot, paperIds);
-    } catch {
-      if (zoteroPaperIds.length === papers.length) {
-        return exportBibTeX(projectRoot, paperIds);
-      }
-    }
-  }
-  return exportBibTeX(projectRoot, paperIds);
 }
 
 export function registerLiteratureHandlers(): void {
@@ -485,7 +464,7 @@ export function registerLiteratureHandlers(): void {
   ipcMain.handle(
     "literature:regenerateAiMetadata",
     async (_event, args: { projectRoot: string; paperId: string }) => {
-      const { enqueueAiMetadata } = await import("../services/literature-ai-metadata-queue");
+      const { enqueueAiMetadata } = await import("../literature/ai-metadata/literature-ai-metadata-queue");
       enqueueAiMetadata(args.projectRoot, args.paperId, { force: true });
       return { ok: true };
     },

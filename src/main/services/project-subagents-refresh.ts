@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { getHostEvents } from "../app/event-sink";
 import type { PromptContext } from "../prompts/types";
 import {
   buildAgentsPlan,
@@ -13,11 +13,7 @@ const EXPERTS_REFRESH_DEBOUNCE_MS = 800;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export function notifyExpertsIntegrationChanged(projectPath: string): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("subagents:integrationChanged", { projectPath });
-    }
-  }
+  getHostEvents().broadcast("subagents:integrationChanged", { projectPath });
 }
 
 export interface RefreshProjectExpertsOptions {

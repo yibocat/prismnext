@@ -13,7 +13,7 @@ import {
   resolveRunById,
   resolveRunForArtifact,
   type ResolvedArtifactProvenance,
-} from "../services/provenance-service";
+} from "../experiment/provenance-service";
 
 export function registerProvenanceHandlers(): void {
   ipcMain.handle(

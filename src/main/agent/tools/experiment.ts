@@ -11,15 +11,15 @@ import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   isExperimentCtxError,
   resolveExperimentCtx,
-} from "../../services/experiment-log-service";
+} from "../../experiment/facade";
 import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiments/log";
-import { kickoffExperimentRun } from "../../services/experiment-run-executor";
+import { kickoffExperimentRun } from "../../experiment/experiment-run-executor";
 import {
   dispatchExperimentLog,
   dispatchProvenanceQuery,
   dispatchResultsSnapshot,
   type ExperimentToolRequest,
-} from "../../services/experiment-tool-dispatch";
+} from "../../experiment/experiment-tool-dispatch";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

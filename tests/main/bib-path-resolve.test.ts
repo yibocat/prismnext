@@ -14,7 +14,7 @@ import {
   syncTexSourceIncremental,
   withBibInputsEnv,
 } from "../../src/main/lib/bib-path-resolve";
-import { detectBibTool } from "../../src/main/services/compiler";
+import { detectBibTool } from "../../src/main/lib/tex-detect";
 
 describe("bib-path-resolve", () => {
   let root: string;

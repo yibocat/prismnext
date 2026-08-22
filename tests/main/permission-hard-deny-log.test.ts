@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const warn = vi.fn();
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({
     debug: vi.fn(),
     info: vi.fn(),

@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   runAiBashJob,
   _resetAiBashRunnerForTests,
-} from "../../src/main/services/ai-bash-runner";
+} from "../../src/main/terminal/ai-bash-runner";
 import {
   getExecutionRegistry,
   initExecutionRegistry,
   _resetExecutionRegistryForTests,
   type ExecutionTransport,
   type ExecutionTransportHandlers,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 function createFakeTransport() {
   const started: string[] = [];

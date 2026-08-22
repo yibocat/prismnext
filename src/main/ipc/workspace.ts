@@ -8,7 +8,7 @@ import {
   writeWorkspaceDirs,
   validateWorkspaceDirs,
   createConfiguredFolders,
-} from "../services/workspace-config";
+} from "../project/workspace-config";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { promptManager } from "../prompts";
 

@@ -17,7 +17,7 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyAppTeamsState, normalizeAppTeamsState } from "../../shared/teams/state";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { listInstalledTeams } from "../services/teams-installed";
 import { homeTeamsStatePath } from "../workbench/home";
 

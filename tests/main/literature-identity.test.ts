@@ -13,7 +13,7 @@ import {
   upsertZoteroPaperRow,
   openLibraryDb,
   type PaperRow,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/main/services/zotero-client", () => ({
+vi.mock("../../src/main/literature/zotero/zotero-client", () => ({
   listZoteroCollections: vi.fn(),
   listCollectionItemRecords: vi.fn(),
   listCollectionTreeItemRecords: vi.fn(),
@@ -29,7 +29,7 @@ import {
   renameCollectionInZotero,
   syncBoundZoteroCollection,
   syncZoteroCollections,
-} from "../../src/main/services/zotero-sync";
+} from "../../src/main/literature/zotero/zotero-sync";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import {
   getZoteroMirrorByPaperId,
@@ -38,8 +38,8 @@ import {
   listPapers,
   projectHomeSlotDir,
   removePapersFromCollection,
-} from "../../src/main/services/literature-service";
-import { writeLiteratureProjectConfig } from "../../src/main/services/workspace-config";
+} from "../../src/main/literature/facade";
+import { writeLiteratureProjectConfig } from "../../src/main/project/workspace-config";
 import {
   addItemsToZoteroCollection,
   createZoteroCollection,
@@ -52,7 +52,7 @@ import {
   removeItemFromZoteroCollection,
   renameZoteroCollection,
   resolveItemBibliographies,
-} from "../../src/main/services/zotero-client";
+} from "../../src/main/literature/zotero/zotero-client";
 
 function bibEntry(citekey: string, rawBibtex?: string) {
   return {
@@ -61,9 +61,9 @@ function bibEntry(citekey: string, rawBibtex?: string) {
   };
 }
 
-function mockZoteroItem(overrides: Partial<import("../../src/main/services/zotero-client").ZoteroItemRecord> & {
+function mockZoteroItem(overrides: Partial<import("../../src/main/literature/zotero/zotero-client").ZoteroItemRecord> & {
   key: string;
-}): import("../../src/main/services/zotero-client").ZoteroItemRecord {
+}): import("../../src/main/literature/zotero/zotero-client").ZoteroItemRecord {
   return {
     key: overrides.key,
     version: overrides.version ?? 1,
@@ -287,7 +287,7 @@ describe("zotero-sync", () => {
     const { upserted: count } = await syncZoteroCollections(projectRoot, "A");
     expect(count).toBe(1);
 
-    const collections = await import("../../src/main/services/literature-service").then((m) =>
+    const collections = await import("../../src/main/literature/facade").then((m) =>
       m.listCollections(projectRoot),
     );
     expect(collections.map((c) => c.id)).toEqual(["A"]);

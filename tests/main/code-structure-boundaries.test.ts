@@ -115,7 +115,7 @@ describe("code structure contracts (Phase 1)", () => {
   });
 
   it("maps PaperRow to LiteraturePaper in one shared DTO", () => {
-    const svc = sourceOf("src/main/services/literature-service.ts");
+    const svc = sourceOf("src/main/literature/papers.ts");
     expect(svc).toMatch(/function mapPaperForRenderer\(row: PaperRow\): LiteraturePaper/);
     expect(sourceOf("src/shared/literature/paper.ts")).toMatch(/export interface LiteraturePaper/);
   });
@@ -161,5 +161,233 @@ describe("code structure shared packages (Phase 2)", () => {
   it("does not nest bibliographic-metadata under literature this phase", () => {
     expect(existsSync(join(REPO, "src/shared/bibliographic-metadata"))).toBe(true);
     expect(existsSync(join(REPO, "src/shared/literature/bibliographic-metadata"))).toBe(false);
+  });
+
+  it("keeps HTTP catalog lookup out of shared bibliographic-metadata", () => {
+    expect(existsSync(join(REPO, "src/shared/bibliographic-metadata/catalog-fetch.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/shared/bibliographic-metadata/resolver.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/shared/bibliographic-metadata/sources/crossref.ts"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/literature/catalog/catalog-fetch.ts"))).toBe(true);
+    expect(existsSync(join(REPO, "src/main/literature/catalog/resolver.ts"))).toBe(true);
+    for (const file of walkTsFiles(join(REPO, "src/shared/bibliographic-metadata"))) {
+      const src = sourceOf(relative(REPO, file));
+      expect(src).not.toMatch(/from\s+["']node:http["']/);
+      expect(src).not.toMatch(/catalogFetch/);
+      expect(src).not.toMatch(/globalThis\.fetch/);
+    }
+  });
+});
+
+describe("code structure host port (Phase 3)", () => {
+  it("keeps HostEvents free of Electron", () => {
+    const src = sourceOf("src/main/app/event-sink.ts");
+    expect(src).toMatch(/export type HostEvents/);
+    expect(src).toMatch(/export function getHostEvents/);
+    expect(src).toMatch(/export function setHostEventsForTest/);
+    expect(src).not.toMatch(/from\s+["']electron["']/);
+  });
+
+  it("removes leftover services shims that already live in shared", () => {
+    for (const rel of [
+      "src/main/services/permission-modes.ts",
+      "src/main/services/expert-permission-presets.ts",
+      "src/main/services/tool-permission-registry.ts",
+      "src/main/services/log-types.ts",
+      "src/main/services/agent-subagents.ts",
+      "src/main/services/context-constants.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("promotes literature to src/main/literature and drops Phase 3 shims", () => {
+    for (const rel of [
+      "src/main/literature/facade.ts",
+      "src/main/literature/papers.ts",
+      "src/main/literature/db.ts",
+      "src/main/literature/enrich.ts",
+      "src/main/literature/discovery/index.ts",
+      "src/main/literature/extract/literature-extract-queue.ts",
+      "src/main/literature/citation/citation-health.ts",
+      "src/main/literature/pdf/literature-pdf-resolve.ts",
+      "src/main/literature/pdf/url.ts",
+      "src/main/literature/ai-metadata/literature-ai-metadata.ts",
+      "src/main/literature/zotero/zotero-sync.ts",
+      "src/main/app/literature-pdf-protocol.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/literature",
+      "src/main/services/literature-service.ts",
+      "src/main/services/literature-enrich.ts",
+      "src/main/services/literature-broadcast.ts",
+      "src/main/services/logger.ts",
+      "src/main/services/zotero-sync.ts",
+      "src/main/services/citation-health.ts",
+      "src/main/services/literature-discovery/index.ts",
+      "src/main/literature/pdf/literature-pdf-protocol.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+    expect(sourceOf("src/main/literature/papers.ts")).toMatch(
+      /export function mapPaperForRenderer/,
+    );
+    expect(sourceOf("src/main/literature/facade.ts")).toMatch(
+      /export \* from "\.\/papers"/,
+    );
+    expect(sourceOf("src/main/literature/bibliography.ts")).toMatch(
+      /export async function bibliographyExportContent/,
+    );
+  });
+
+  it("keeps main/lib free of services imports", () => {
+    for (const file of walkTsFiles(join(REPO, "src/main/lib"))) {
+      expect(
+        importsFrom(file, /from\s+["'](?:\.\.\/)+services(?:\/|"|')/),
+        relative(REPO, file),
+      ).toEqual([]);
+    }
+  });
+
+  it("promotes experiment to src/main/experiment and drops the log-service monolith", () => {
+    for (const rel of [
+      "src/main/experiment/facade.ts",
+      "src/main/experiment/context.ts",
+      "src/main/experiment/venv.ts",
+      "src/main/experiment/crud.ts",
+      "src/main/experiment/runs.ts",
+      "src/main/experiment/experiment-run-executor.ts",
+      "src/main/experiment/provenance-service.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/experiment-log-service.ts",
+      "src/main/services/experiment-run-executor.ts",
+      "src/main/services/experiment-tool-dispatch.ts",
+      "src/main/services/provenance-service.ts",
+      "src/main/experiment/experiment-log-service.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("promotes compile to src/main/compile and drops the compiler monolith name", () => {
+    for (const rel of [
+      "src/main/compile/facade.ts",
+      "src/main/compile/orchestrate.ts",
+      "src/main/compile/log.ts",
+      "src/main/compile/tectonic-binary.ts",
+      "src/main/compile/tectonic-daemon.ts",
+      "src/main/compile/latex-service.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/compiler.ts",
+      "src/main/services/latex-service.ts",
+      "src/main/services/tectonic-daemon.ts",
+      "src/main/compile/compiler.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("promotes terminal and project out of services", () => {
+    for (const rel of [
+      "src/main/terminal/terminal.ts",
+      "src/main/terminal/ai-pty.ts",
+      "src/main/terminal/execution-registry.ts",
+      "src/main/project/filesystem.ts",
+      "src/main/project/workspace-config.ts",
+      "src/main/project/project-lifecycle-authority.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/terminal.ts",
+      "src/main/services/ai-pty.ts",
+      "src/main/services/filesystem.ts",
+      "src/main/services/workspace-config.ts",
+      "src/main/services/project-lifecycle-authority.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("keeps the terminal and project domains free of Electron, ipc, and agent", () => {
+    for (const dir of ["src/main/terminal", "src/main/project"]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        expect(sourceOf(relative(REPO, file)), relative(REPO, file)).not.toMatch(
+          /from\s+["']electron["']/,
+        );
+        expect(importsFrom(file, /from\s+["'](?:\.\.\/)+ipc\//)).toEqual([]);
+        expect(importsFrom(file, /from\s+["'](?:\.\.\/)+agent\//)).toEqual([]);
+      }
+    }
+  });
+
+  it("promotes git to src/main/git and drops the services monolith", () => {
+    for (const rel of [
+      "src/main/git/facade.ts",
+      "src/main/git/exec.ts",
+      "src/main/git/status.ts",
+      "src/main/git/stage.ts",
+      "src/main/git/branch.ts",
+      "src/main/git/log.ts",
+      "src/main/git/merge.ts",
+      "src/main/git/commit.ts",
+      "src/main/git/worktree.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/git.ts",
+      "src/main/services/worktree.ts",
+      "src/main/git/git.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+  });
+
+  it("keeps the git domain free of Electron, ipc, and agent", () => {
+    for (const file of walkTsFiles(join(REPO, "src/main/git"))) {
+      expect(sourceOf(relative(REPO, file)), relative(REPO, file)).not.toMatch(
+        /from\s+["']electron["']/,
+      );
+      expect(importsFrom(file, /from\s+["'](?:\.\.\/)+ipc\//)).toEqual([]);
+      expect(importsFrom(file, /from\s+["'](?:\.\.\/)+agent\//)).toEqual([]);
+    }
+  });
+
+  it("keeps the compile domain free of Electron, ipc, and agent", () => {
+    for (const file of walkTsFiles(join(REPO, "src/main/compile"))) {
+      if (file.endsWith(".mjs")) continue;
+      expect(sourceOf(relative(REPO, file)), relative(REPO, file)).not.toMatch(
+        /from\s+["']electron["']/,
+      );
+      expect(importsFrom(file, /from\s+["'](?:\.\.\/)+ipc\//)).toEqual([]);
+      expect(importsFrom(file, /from\s+["'](?:\.\.\/)+agent\//)).toEqual([]);
+    }
+  });
+
+  it("keeps the experiment domain free of Electron, ipc, and agent", () => {
+    for (const file of walkTsFiles(join(REPO, "src/main/experiment"))) {
+      expect(sourceOf(relative(REPO, file)), relative(REPO, file)).not.toMatch(
+        /from\s+["']electron["']/,
+      );
+      expect(importsFrom(file, /from\s+["'][^"']*\/ipc\//)).toEqual([]);
+      expect(importsFrom(file, /from\s+["'][^"']*\/agent\//)).toEqual([]);
+    }
+  });
+
+  it("keeps the literature domain free of Electron, ipc, and agent", () => {
+    for (const file of walkTsFiles(join(REPO, "src/main/literature"))) {
+      const src = sourceOf(relative(REPO, file));
+      expect(src, relative(REPO, file)).not.toMatch(/from\s+["']electron["']/);
+      expect(importsFrom(file, /from\s+["'][^"']*\/ipc\//)).toEqual([]);
+      expect(importsFrom(file, /from\s+["'][^"']*\/agent\//)).toEqual([]);
+    }
   });
 });

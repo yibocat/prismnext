@@ -11,7 +11,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { McpServerDef } from "../../shared/teams/types";
 import type { PermissionGate } from "./permission-gate";
 import type { ToolExecuteContext } from "./tool-host";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("mcp-host", "agent");
 

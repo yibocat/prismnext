@@ -22,7 +22,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");
@@ -35,16 +35,16 @@ vi.mock("node-pty", () => ({
   spawn: (...args: unknown[]) => spawn(...args),
 }));
 
-import { kickoffExperimentRun } from "../../src/main/services/experiment-run-executor";
+import { kickoffExperimentRun } from "../../src/main/experiment/experiment-run-executor";
 import {
   buildExperimentStorageContext,
   createExperiment,
-} from "../../src/main/services/experiment-log-service";
-import { getLibraryPaths, openLibraryDb } from "../../src/main/services/literature-service";
+} from "../../src/main/experiment/facade";
+import { getLibraryPaths, openLibraryDb } from "../../src/main/literature/facade";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
-import { createSession } from "../../src/main/services/terminal";
-import * as executionRegistry from "../../src/main/services/execution-registry";
-import type { ExecutionRegistry } from "../../src/main/services/execution-registry";
+import { createSession } from "../../src/main/terminal/terminal";
+import * as executionRegistry from "../../src/main/terminal/execution-registry";
+import type { ExecutionRegistry } from "../../src/main/terminal/execution-registry";
 
 const dirs: string[] = [];
 

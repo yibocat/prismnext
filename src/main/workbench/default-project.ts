@@ -18,7 +18,7 @@ import {
   projectSlotMetaRel,
   projectSlotRel,
 } from "../../shared/workbench/paths";
-import { replaceRegisteredRoots } from "../services/active-project-roots";
+import { replaceRegisteredRoots } from "../project/active-project-roots";
 import {
   ensureWorkbenchHome,
   isPathInsideWorkbenchHome,

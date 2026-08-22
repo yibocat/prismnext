@@ -4,14 +4,14 @@ vi.mock("../../src/main/services/settings", () => ({
   getSettings: vi.fn(() => ({ zoteroUserId: "12345", zoteroApiKey: "secret" })),
   updateSettings: vi.fn(),
 }));
-vi.mock("../../src/main/services/zotero-client", () => ({
+vi.mock("../../src/main/literature/zotero/zotero-client", () => ({
   findZoteroItemByIdentifier: vi.fn().mockResolvedValue(null),
   getItemPdfAttachmentKey: vi.fn().mockResolvedValue(null),
   resolveItemBibliographies: vi.fn().mockResolvedValue({}),
 }));
 
-import { paperNeedsCatalogEnrich } from "../../src/main/services/literature-enrich";
-import type { PaperRow } from "../../src/main/services/literature-service";
+import { paperNeedsCatalogEnrich } from "../../src/main/literature/enrich";
+import type { PaperRow } from "../../src/main/literature/facade";
 
 function stubPaper(overrides: Partial<PaperRow> = {}): PaperRow {
   return {

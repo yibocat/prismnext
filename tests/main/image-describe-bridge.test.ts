@@ -24,7 +24,7 @@ vi.mock("../../src/main/services/settings", () => ({
   getSettings: () => settingsState.current,
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
 }));
 

@@ -5,7 +5,7 @@ import { app, BrowserWindow, protocol, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
-import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
+import { registerLiteraturePdfProtocol } from "./app/literature-pdf-protocol";
 import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
 import { ensureUserTeamsRegistered } from "./services/user-teams";
 import { ensureMyContentTeam } from "./teams/my-content";
@@ -19,14 +19,15 @@ import {
 } from "./ipc/window";
 import { installApplicationMenu } from "./menu";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
-import { destroyAllAiPty } from "./services/ai-pty";
-import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
+import { destroyAllAiPty } from "./terminal/ai-pty";
+import { getExecutionRegistry, initExecutionRegistry } from "./terminal/execution-registry";
 import { startExecutionEventBroadcast } from "./ipc/execution";
-import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
-import { installMainProcessNetwork } from "./lib/main-network";
+import { disposeAllTectonicDaemonSessions } from "./compile/tectonic-daemon";
+import { mainNetFetch } from "./lib/main-network";
+import { setCatalogFetch } from "./literature/catalog";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
-import { createLogger } from "./services/logger";
+import { createLogger } from "./app/logger";
 import { HOME_JOBS_DIRNAME } from "../shared/workbench/paths";
 import { ensureWorkbenchHome } from "./workbench/home";
 import { ensureDefaultProject } from "./workbench/default-project";
@@ -330,7 +331,7 @@ app.whenReady().then(async () => {
     log.warn("default project ensure failed", { error: (err as Error).message });
   }
   registerLiteraturePdfProtocol();
-  installMainProcessNetwork();
+  setCatalogFetch(mainNetFetch as typeof fetch);
   // Always-on My Content + chat lead (safety net so Core can be offloaded).
   ensureMyContentTeam();
   // Temporary read compatibility for any legacy directory that could not be

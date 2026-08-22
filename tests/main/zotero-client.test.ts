@@ -24,8 +24,8 @@ import {
   collectDescendantCollectionKeys,
   listCollectionTreeItemRecords,
   parseZoteroItemRecordForTests,
-} from "../../src/main/services/zotero-client";
-import { buildZoteroPaperCslJson } from "../../src/main/services/zotero-csl";
+} from "../../src/main/literature/zotero/zotero-client";
+import { buildZoteroPaperCslJson } from "../../src/main/literature/zotero/zotero-csl";
 
 const mockFetch = vi.fn();
 

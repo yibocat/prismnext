@@ -14,12 +14,12 @@ import {
   listExperiments,
   readExperiment,
   restoreExperiment,
-} from "../../src/main/services/experiment-log-service";
-import { resolveExperimentDir } from "../../src/main/services/workspace-config";
+} from "../../src/main/experiment/facade";
+import { resolveExperimentDir } from "../../src/main/project/workspace-config";
 import {
   readProvenanceEvents,
   resolveRunForArtifact,
-} from "../../src/main/services/provenance-service";
+} from "../../src/main/experiment/provenance-service";
 import {
   EXPERIMENT_REGISTRY_REL,
   experimentEnvDisplayRows,
@@ -513,7 +513,7 @@ describe("experiment-log-service", () => {
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const provenance = await import("../../src/main/services/provenance-service");
+    const provenance = await import("../../src/main/experiment/provenance-service");
     const spy = vi.spyOn(provenance, "recordRunProvenance").mockReturnValue(null);
     try {
       const r = appendRun(c, created.id, {

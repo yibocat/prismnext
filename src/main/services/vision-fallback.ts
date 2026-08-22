@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 import { getSettings } from "./settings";
 import { piProviderBaseUrl } from "../../shared/providers/pi-catalog";
 

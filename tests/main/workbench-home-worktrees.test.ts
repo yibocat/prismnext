@@ -10,7 +10,7 @@ import {
 } from "../../src/main/workbench/home";
 import { writeWorkbenchJson } from "../../src/main/workbench/identity";
 import { writeProjectSlotMeta } from "../../src/main/workbench/default-project";
-import { createWorktree, listWorktrees, removeWorktree } from "../../src/main/services/worktree";
+import { createWorktree, listWorktrees, removeWorktree } from "../../src/main/git/worktree";
 
 vi.mock("electron", () => ({
   app: { getPath: () => "/tmp", on: vi.fn() },

@@ -11,11 +11,11 @@ import type {
   ExecutionRerunResult,
   TerminalExecutionEvent,
 } from "../../shared/execution";
-import { projectLifecycleAuthority } from "../services/project-lifecycle-authority";
+import { projectLifecycleAuthority } from "../project/project-lifecycle-authority";
 import {
   getExecutionRegistry,
   type ExecutionRegistry,
-} from "../services/execution-registry";
+} from "../terminal/execution-registry";
 
 export interface ExecutionIpcOptions {
   registry?: ExecutionRegistry;

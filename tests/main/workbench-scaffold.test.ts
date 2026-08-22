@@ -9,9 +9,9 @@ import {
   ensureWorkbenchProjectMeta,
 } from "../../src/main/workbench/scaffold";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
-import { readWorkspaceDirs } from "../../src/main/services/workspace-config";
-import { DEFAULT_PROJECT_GITIGNORE } from "../../src/main/services/git";
-import { listPapers } from "../../src/main/services/literature-service";
+import { readWorkspaceDirs } from "../../src/main/project/workspace-config";
+import { DEFAULT_PROJECT_GITIGNORE } from "../../src/main/git/facade";
+import { listPapers } from "../../src/main/literature/facade";
 import { tempWorkbenchHome } from "./helpers/temp-literature-project";
 
 const temps: string[] = [];

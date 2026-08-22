@@ -18,7 +18,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
 import { skillReadRootsFromDirs } from "../../shared/skills/read-roots";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 import type { AgentMcpHost } from "./mcp-host";
 
 const piRuntimeLog = createLogger("pi-runtime", "agent");

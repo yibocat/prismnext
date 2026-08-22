@@ -1,9 +1,9 @@
 import { ipcMain, BrowserWindow } from "electron";
-import * as terminalService from "../services/terminal";
-import * as terminalConfig from "../services/terminal-config";
-import { registerBashJobIntent } from "../services/ai-bash-runner";
-import { destroyAllAiPty } from "../services/ai-pty";
-import type { TerminalConfig } from "../services/terminal-config";
+import * as terminalService from "../terminal/terminal";
+import * as terminalConfig from "../terminal/terminal-config";
+import { registerBashJobIntent } from "../terminal/ai-bash-runner";
+import { destroyAllAiPty } from "../terminal/ai-pty";
+import type { TerminalConfig } from "../terminal/terminal-config";
 
 export function registerTerminalHandlers(): void {
   // ─── Session management ───

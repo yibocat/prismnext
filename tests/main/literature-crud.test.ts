@@ -12,7 +12,7 @@ import {
   listPapers,
   updatePaper,
   mapPaperForRenderer,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import { bibliographicToCslJson } from "../../src/shared/bibliographic-metadata/helpers";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 

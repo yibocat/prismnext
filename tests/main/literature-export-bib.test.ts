@@ -6,8 +6,8 @@ import {
   citeCheckLiterature,
   mergeLibraryIntoProjectBib,
   openLibraryDb,
-} from "../../src/main/services/literature-service";
-import { checkBibConsistency } from "../../src/main/services/latex-service";
+} from "../../src/main/literature/facade";
+import { checkBibConsistency } from "../../src/main/compile/latex-service";
 
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 

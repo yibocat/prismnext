@@ -1,7 +1,7 @@
 /**
  * experiment:* IPC — UI track for the Experiments RightArea mode (Sprint 0.7).
  *
- * Single source of truth: `experiment-log-service` + `kickoffExperimentRun`.
+ * Single source of truth: `experiment/facade` + `kickoffExperimentRun`.
  * Validates the project has a Workspace Experiment folder configured and
  * consults the current permission mode before kicking off a run.
  */
@@ -23,18 +23,18 @@ import {
   updateRunNotes,
   workspaceIslandPathForId,
   isExperimentCtxError,
-} from "../services/experiment-log-service";
+} from "../experiment/facade";
 import {
   cancelExperimentExecution,
   kickoffExperimentRun,
-} from "../services/experiment-run-executor";
-import { snapshotExperiment } from "../services/experiment-results-snapshot";
-import { broadcastExperimentChanged } from "../services/experiment-ui-events";
+} from "../experiment/experiment-run-executor";
+import { snapshotExperiment } from "../experiment/experiment-results-snapshot";
+import { broadcastExperimentChanged } from "../experiment/experiment-ui-events";
 import {
   buildPermissionRulesFromSettings,
   resolvePermissionAction,
   resolvePermissionMode,
-} from "../services/permission-modes";
+} from "../../shared/permissions/modes";
 import type { SessionAgent } from "../../shared/agent/session-agent";
 import {
   EXPERIMENT_REGISTRY_REL,

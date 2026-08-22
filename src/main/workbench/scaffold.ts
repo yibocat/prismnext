@@ -26,7 +26,7 @@ import {
   writeProjectIconImage,
   writeProjectSettings,
   writeWorkspaceDirs,
-} from "../services/workspace-config";
+} from "../project/workspace-config";
 import {
   ensureWorkbenchId,
   mintProjectId,

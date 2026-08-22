@@ -15,7 +15,7 @@ import type { NativeToolDefinition } from "./tools/types";
 import type { ResolvedPiRosterEntry } from "./team-binding";
 import { ALL_NATIVE_TOOLS } from "./tools/index";
 import type { HostSkillDir } from "./skill-loader";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("subagent", "agent");
 

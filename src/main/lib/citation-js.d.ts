@@ -3,7 +3,7 @@
  *
  * The package ships without `.d.ts` (JS-only), so `tsc` would otherwise report
  * `TS7016: Could not find a declaration file` for every importer. Only `Cite`
- * is used (in `lib/bibtex-parse.ts` and `services/literature-service.ts`), and
+ * is used (in `lib/bibtex-parse.ts` and `literature/bibliography.ts`), and
  * only a small slice of its API (parse + format). The shim mirrors just that;
  * `any` is intentional — the real Cite API is large and we only need it to be
  * callable + chainable for BibTeX parse/format round-trips.

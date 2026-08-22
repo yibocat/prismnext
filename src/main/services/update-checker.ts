@@ -4,12 +4,13 @@
 // electron-updater autoDownload stays false; Prism may background-download after check
 // when settings.autoDownloadUpdates is enabled (default true).
 
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
+import { getHostEvents } from "../app/event-sink";
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import path from "node:path";
 import { getSettings, updateSettings } from "./settings";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("update-checker", "general");
 
@@ -79,19 +80,11 @@ function setStatus(next: UpdaterStatus): UpdaterStatus {
 }
 
 function broadcastProgress(percent: number): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("update:progress", { percent });
-    }
-  }
+  getHostEvents().broadcast("update:progress", { percent });
 }
 
 function broadcastUpdaterChanged(status: UpdaterStatus): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("update:changed", status);
-    }
-  }
+  getHostEvents().broadcast("update:changed", status);
 }
 
 /** Default on — empty/undefined means auto-download after a successful check. */

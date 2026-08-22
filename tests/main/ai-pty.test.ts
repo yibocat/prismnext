@@ -6,7 +6,7 @@ import {
   _resetAiPtyForTests,
   _getActiveAiPtyCountForTests,
   _hasActiveAiPtyForSession,
-} from "../../src/main/services/ai-pty";
+} from "../../src/main/terminal/ai-pty";
 
 async function waitUntil(predicate: () => boolean, message: string, timeoutMs = 2_000): Promise<void> {
   const started = Date.now();

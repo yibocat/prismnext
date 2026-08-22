@@ -8,7 +8,7 @@ import {
   createPaper,
   findExistingByIdentifier,
   getPaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {

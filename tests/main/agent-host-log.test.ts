@@ -11,7 +11,7 @@ const { info, warn, debug, error } = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");

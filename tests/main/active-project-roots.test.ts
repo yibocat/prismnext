@@ -11,7 +11,7 @@ import {
   assertContained,
   assertUnderHome,
   _registeredRoots,
-} from "../../src/main/services/active-project-roots";
+} from "../../src/main/project/active-project-roots";
 
 const HOME = homedir();
 const projA = join(HOME, "prism-test-proj-A");

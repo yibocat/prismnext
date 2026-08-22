@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { app } from "electron";
-import { createLogger } from "./logger";
-import { extractPdfTextWithPdfJs } from "./literature-extract-pdfjs";
+import { createLogger } from "../app/logger";
+import { extractPdfTextWithPdfJs } from "../literature/extract/literature-extract-pdfjs";
 
 const log = createLogger("prompt-file-attachments", "agent");
 const execFileAsync = promisify(execFile);

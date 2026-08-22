@@ -11,8 +11,8 @@ vi.mock("electron", () => ({
 import {
   dispatchProvenanceQuery,
   type ExperimentToolRequest,
-} from "../../src/main/services/experiment-tool-dispatch";
-import { recordRunProvenance } from "../../src/main/services/provenance-service";
+} from "../../src/main/experiment/experiment-tool-dispatch";
+import { recordRunProvenance } from "../../src/main/experiment/provenance-service";
 import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 
 function makeRun(): ExperimentRunEntry {

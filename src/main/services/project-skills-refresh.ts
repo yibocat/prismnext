@@ -3,7 +3,7 @@
  * Pi sessions load skills through ClosedResourceLoader; this path no longer
  * writes OpenCode config or restarts an OpenCode child.
  */
-import { BrowserWindow } from "electron";
+import { getHostEvents } from "../app/event-sink";
 import {
   syncProjectSkillsIntegration,
   normalizeProjectRoot,
@@ -11,7 +11,7 @@ import {
   projectRootFromAgentPath,
   type SkillPermissionScope,
 } from "./skills-sync";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 /** Re-export path helpers — single source of truth lives in skills-sync. */
 export { isSkillsIntegrationPath, projectRootFromAgentPath };
@@ -36,11 +36,7 @@ function computeSkillsIntegrationKey(
 }
 
 export function notifySkillsIntegrationChanged(projectPath: string): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("skills:integrationChanged", { projectPath });
-    }
-  }
+  getHostEvents().broadcast("skills:integrationChanged", { projectPath });
 }
 
 export interface RefreshProjectSkillsResult {

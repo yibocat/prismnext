@@ -6,7 +6,7 @@ import {
   createExecutionRegistry,
   type ExecutionTransport,
   type ExecutionTransportHandlers,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 function createFakeTransport() {
   const handlers = new Map<string, ExecutionTransportHandlers>();

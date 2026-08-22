@@ -26,7 +26,7 @@ import {
   type SaveCustomSubagentPayload,
   type SaveCustomOrchestratorPayload,
   DEFAULT_ORCHESTRATOR_ID,
-} from "./agent-subagents";
+} from "../../shared/agent/subagents";
 import {
   resolveOrchestratorActiveModuleKeys,
   resolveActiveModuleKeys,
@@ -64,7 +64,7 @@ import {
   ensureProjectDefaultTeamDir,
 } from "../teams/migrate-project-content";
 import { purgeSubagentFromForeignRosters } from "../teams/lifecycle";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("subagents-sync", "agent");
 

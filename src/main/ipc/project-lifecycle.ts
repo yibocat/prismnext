@@ -1,13 +1,13 @@
 import { ipcMain } from "electron";
 import { basename } from "node:path";
-import * as filesystem from "../services/filesystem";
+import * as filesystem from "../project/filesystem";
 import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
-} from "../services/project-lifecycle-authority";
-import { clearRoots, replaceRegisteredRoots } from "../services/active-project-roots";
+} from "../project/project-lifecycle-authority";
+import { clearRoots, replaceRegisteredRoots } from "../project/active-project-roots";
 import { listWorkbenchMembers } from "../workbench/default-project";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("project-lifecycle", "startup");
 

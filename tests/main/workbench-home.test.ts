@@ -35,7 +35,7 @@ import {
   resolveWorkbenchHome,
   setWorkbenchUserHomeOverride,
 } from "../../src/main/workbench/home";
-import { findPrismProjectRoot } from "../../src/main/services/experiment-log-service";
+import { findPrismProjectRoot } from "../../src/main/experiment/facade";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
 import { userTeamsRootDir } from "../../src/main/services/user-teams";
 

@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { getCitationHealth } from "../../src/main/services/citation-health";
-import { checkBibConsistency } from "../../src/main/services/latex-service";
+import { getCitationHealth } from "../../src/main/literature/citation/citation-health";
+import { checkBibConsistency } from "../../src/main/compile/latex-service";
 
 describe("citation health handlers", () => {
   it("reports cite keys from .tex via library and bib checks", () => {

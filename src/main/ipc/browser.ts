@@ -2,7 +2,7 @@ import { BrowserWindow, app, ipcMain, session } from "electron";
 import type { WebContents } from "electron";
 import * as fs from "fs";
 import * as path from "path";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { ensureWorkbenchHome, homeBrowserDir } from "../workbench/home";
 
 const log = createLogger("browser-ipc", "ipc");

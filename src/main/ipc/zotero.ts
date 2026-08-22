@@ -4,19 +4,19 @@ import {
   listZoteroCollections,
   type ZoteroCollection,
   type ZoteroStatus,
-} from "../services/zotero-client";
+} from "../literature/zotero/zotero-client";
 import {
   getZoteroLastSync,
   syncBoundZoteroCollection,
   syncZoteroCollections,
   type ZoteroSyncResult,
-} from "../services/zotero-sync";
+} from "../literature/zotero/zotero-sync";
 import {
   readLiteratureProjectConfig,
   writeLiteratureProjectConfig,
   type LiteratureProjectConfig,
-} from "../services/workspace-config";
-import { projectHomeSlotDir } from "../services/literature-service";
+} from "../project/workspace-config";
+import { projectHomeSlotDir } from "../literature/facade";
 
 function prismDir(projectRoot: string): string {
   return projectHomeSlotDir(projectRoot);
@@ -50,7 +50,7 @@ export function registerZoteroHandlers(): void {
     ): Promise<LiteratureProjectConfig & { detached?: { papers: number; collections: number } }> => {
       if (!args.collectionId) {
         // Disconnecting — detach all Zotero mirrors so the library becomes fully local.
-        const { detachAllZoteroMirrors } = await import("../services/literature-service");
+        const { detachAllZoteroMirrors } = await import("../literature/facade");
         const detached = detachAllZoteroMirrors(args.projectRoot);
         const config = writeLiteratureProjectConfig(prismDir(args.projectRoot), {
           zoteroCollectionId: undefined,

@@ -23,7 +23,7 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyProjectTeamsState, normalizeProjectTeamsState } from "../../shared/teams/state";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("teams-state-project");
 

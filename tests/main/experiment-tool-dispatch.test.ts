@@ -17,12 +17,12 @@ import {
   dispatchExperimentLog,
   executeExperimentAction,
   type ExperimentToolRequest,
-} from "../../src/main/services/experiment-tool-dispatch";
+} from "../../src/main/experiment/experiment-tool-dispatch";
 import {
   buildExperimentStorageContext,
   createExperiment,
-} from "../../src/main/services/experiment-log-service";
-import * as experimentRunExecutor from "../../src/main/services/experiment-run-executor";
+} from "../../src/main/experiment/facade";
+import * as experimentRunExecutor from "../../src/main/experiment/experiment-run-executor";
 import {
   registerChatSession,
   _resetChatSessionRegistryForTests,

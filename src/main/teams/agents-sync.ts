@@ -27,7 +27,7 @@ import {
   renderSubagentMarkdown,
   type RosterRefMd,
 } from "./agents-render";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("teams-agents-sync");
 

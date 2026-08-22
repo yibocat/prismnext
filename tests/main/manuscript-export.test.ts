@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveCompilePdfAbsolutePath,
   shouldExcludeFromManuscriptZip,
-} from "../../src/main/services/manuscript-export";
+} from "../../src/main/compile/manuscript-export";
 
 describe("shouldExcludeFromManuscriptZip", () => {
   it("keeps normal source and figure PDFs", () => {

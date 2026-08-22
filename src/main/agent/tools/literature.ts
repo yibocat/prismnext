@@ -17,7 +17,7 @@ import {
   mapPaperSearchHitForAgent,
   mergeLibraryIntoProjectBib,
   searchPapers,
-} from "../../services/literature-service";
+} from "../../literature/facade";
 import { publicationDetailsFromPaperRow } from "../../../shared/bibliographic-metadata/helpers";
 import {
   addSessionIntensiveBibkey,
@@ -112,7 +112,7 @@ export const literatureDiscoverTool: NativeToolDefinition = {
     if (!query) return { ok: false, error: "missing_query" };
 
     const { getSettings } = await import("../../services/settings");
-    const { discoverLiterature } = await import("../../services/literature-discovery");
+    const { discoverLiterature } = await import("../../literature/discovery/index");
     const settings = getSettings();
     return discoverLiterature({
       query,
@@ -198,7 +198,7 @@ export const literatureReadPdfTool: NativeToolDefinition = {
     if (!bibkey) return { error: "Missing bibkey parameter." };
 
     const { getSettings } = await import("../../services/settings");
-    const { readPaperPdfContent } = await import("../../services/paper-extract-read");
+    const { readPaperPdfContent } = await import("../../literature/extract/paper-extract-read");
     const settings = getSettings();
     const token = settings.mineruApiToken;
     const tokenPresent = typeof token === "string" && token.trim().length > 0;
@@ -324,7 +324,7 @@ export const literatureStageTool: NativeToolDefinition = {
       ? (rawOrigin as (typeof allowed)[number])
       : "agent";
 
-    const { stageLiteratureCitation } = await import("../../services/literature-citation-staging");
+    const { stageLiteratureCitation } = await import("../../literature/citation/literature-citation-staging");
     // tabId is the product conversationId on the live send path.
     return stageLiteratureCitation(ctx.projectRoot, ctx.tabId || ctx.runtimeSessionId, {
       doi: doi || undefined,
@@ -364,7 +364,7 @@ export const literatureAddTool: NativeToolDefinition = {
     }
 
     try {
-      const { createPaperFromCatalog } = await import("../../services/literature-enrich");
+      const { createPaperFromCatalog } = await import("../../literature/enrich");
       const result = await createPaperFromCatalog(ctx.projectRoot, {
         doi: normDoi ?? undefined,
         arxivId: normArxiv ?? undefined,
@@ -464,8 +464,8 @@ export const citationHealthTool: NativeToolDefinition = {
   },
   async execute(args, ctx) {
     try {
-      const { getCitationHealth } = await import("../../services/citation-health");
-      const { resolveBibliographicMetadata } = await import("../../../shared/bibliographic-metadata");
+      const { getCitationHealth } = await import("../../literature/citation/citation-health");
+      const { resolveBibliographicMetadata } = await import("../../literature/catalog");
       const health = getCitationHealth(ctx.projectRoot);
       const verify = args.verify !== false;
       if (verify) {

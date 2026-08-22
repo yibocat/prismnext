@@ -1,7 +1,7 @@
 /**
  * Push Interaction open/focus events to renderer windows (Agent `interaction-open`).
  */
-import { BrowserWindow } from "electron";
+import { getHostEvents } from "../app/event-sink";
 
 export type InteractionChangedReason = "write" | "open";
 
@@ -24,12 +24,5 @@ export function broadcastInteractionChanged(event: InteractionChangedEvent): voi
     id,
     title: event.title?.trim() || undefined,
   };
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (win.isDestroyed()) continue;
-    try {
-      win.webContents.send("interaction:changed", payload);
-    } catch {
-      // Renderer may be reloading.
-    }
-  }
+  getHostEvents().broadcast("interaction:changed", payload);
 }

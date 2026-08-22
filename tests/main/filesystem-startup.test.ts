@@ -13,7 +13,7 @@ vi.mock("chokidar", () => ({
   watch: testState.watch,
 }));
 
-import { projectWatcherFs, startWatching, stopWatching } from "../../src/main/services/filesystem";
+import { projectWatcherFs, startWatching, stopWatching } from "../../src/main/project/filesystem";
 
 function fakeWatcher() {
   const watcher = {

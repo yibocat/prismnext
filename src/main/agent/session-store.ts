@@ -15,7 +15,7 @@ import type { RuntimeSessionId } from "../../shared/agent/runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import type { ContentBlock, ConversationSubagentRun, TurnMessageMeta } from "../../shared/agent/conversation";
 import type { SessionUsageTotals } from "../../shared/agent/context-usage";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("session-store", "agent");
 

@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolvePermissionAction,
   shouldPromptForPermission,
-} from "../../src/main/services/permission-modes";
+} from "../../src/shared/permissions/modes";
 import { shouldShowPermissionGate } from "../../src/renderer/components/modules/chat/permission-gate-panel";
 
 const ROOT = "/Users/me/paper";

@@ -11,7 +11,7 @@ import { resolveLatexRoot } from "../../lib/latex-root";
 import {
   compileManuscriptForAgent,
   compileStandaloneForAgent,
-} from "../../services/latex-service";
+} from "../../compile/latex-service";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

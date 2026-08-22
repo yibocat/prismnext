@@ -30,8 +30,8 @@ import { readWritableTeamMcpJson } from "../../src/main/services/team-mcp-files"
 import { buildProjectSubagentsAgentPlan } from "../../src/main/services/subagents-sync";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
 import { installProjectRule } from "../../src/main/services/rules-sync";
-import { appendProvenanceEvent } from "../../src/main/services/provenance-service";
-import { saveConfig as saveTerminalConfig } from "../../src/main/services/terminal-config";
+import { appendProvenanceEvent } from "../../src/main/experiment/provenance-service";
+import { saveConfig as saveTerminalConfig } from "../../src/main/terminal/terminal-config";
 import { ensureResearchPlansDir } from "../../src/main/services/research-plan-service";
 import { appendUserDisplay } from "../../src/main/services/session-display-store";
 import { persistSessionContext } from "../../src/main/services/session-context-store";
@@ -39,7 +39,7 @@ import { writeInteractionSpec } from "../../src/main/services/interaction-store"
 import {
   buildExperimentStorageContext,
   createExperiment,
-} from "../../src/main/services/experiment-log-service";
+} from "../../src/main/experiment/facade";
 import { INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction/spec";
 import { EXPERIMENT_REGISTRY_REL } from "../../src/shared/experiments/log";
 

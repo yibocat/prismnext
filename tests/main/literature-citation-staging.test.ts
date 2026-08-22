@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
   BrowserWindow: { getAllWindows: () => [] },
 }));
 
-vi.mock("../../src/main/services/literature-enrich", () => ({
+vi.mock("../../src/main/literature/enrich", () => ({
   createPaperFromCatalog: vi.fn(),
 }));
 
@@ -18,25 +18,25 @@ vi.mock("../../src/main/services/settings", () => ({
   getSettings: vi.fn(() => ({ literatureStrictIntensivePdf: true, mineruApiToken: "" })),
 }));
 
-vi.mock("../../src/main/services/paper-extract-read", () => ({
+vi.mock("../../src/main/literature/extract/paper-extract-read", () => ({
   readPaperPdfContent: vi.fn().mockResolvedValue({ markdown: "# Page 1\n\nHello" }),
 }));
 
-vi.mock("../../src/shared/bibliographic-metadata", () => ({
+vi.mock("../../src/main/literature/catalog", () => ({
   resolveBibliographicMetadata: vi.fn(),
 }));
 
-import { createPaperFromCatalog } from "../../src/main/services/literature-enrich";
-import { resolveBibliographicMetadata } from "../../src/shared/bibliographic-metadata";
-import { readPaperPdfContent } from "../../src/main/services/paper-extract-read";
+import { createPaperFromCatalog } from "../../src/main/literature/enrich";
+import { resolveBibliographicMetadata } from "../../src/main/literature/catalog";
+import { readPaperPdfContent } from "../../src/main/literature/extract/paper-extract-read";
 import type { BibliographicMetadata } from "../../src/shared/bibliographic-metadata";
 import {
   setSessionIntensiveBibkeys,
   setSessionScratchLookup,
   _resetChatSessionRegistryForTests,
 } from "../../src/main/services/chat-session-registry";
-import { stageLiteratureCitation } from "../../src/main/services/literature-citation-staging";
-import { createPaper, listPapers } from "../../src/main/services/literature-service";
+import { stageLiteratureCitation } from "../../src/main/literature/citation/literature-citation-staging";
+import { createPaper, listPapers } from "../../src/main/literature/facade";
 import { sessionCitationsDir } from "../../src/main/workbench/home";
 import {
   literatureAddTool,

@@ -16,7 +16,7 @@ import {
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { buildTaskPermissionBlock } from "../services/task-orchestrator-gate";
-import type { SubagentDefinition } from "../services/agent-subagents";
+import type { SubagentDefinition } from "../../shared/agent/subagents";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 
 // ── YAML serialization (byte-identical to the legacy renderer) ──

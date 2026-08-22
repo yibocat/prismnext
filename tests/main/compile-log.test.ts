@@ -6,7 +6,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { oneLineError, tectonicEngineId } from "../../src/main/services/compiler";
+import { oneLineError, tectonicEngineId } from "../../src/main/compile/facade";
 
 describe("compile log helpers", () => {
   it("oneLineError keeps the first non-empty line", () => {

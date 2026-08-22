@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import * as gitService from "../services/git";
+import * as gitService from "../git/facade";
 
 export function registerGitHandlers(): void {
   // ── git:warmup — directory-level warmup to absorb TCC / code-signing ──

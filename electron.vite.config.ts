@@ -20,7 +20,7 @@ export default defineConfig({
       {
         name: "copy-tectonic-daemon-worker",
         closeBundle() {
-          const src = resolve(__dirname, "src/main/services/tectonic-daemon-worker.mjs");
+          const src = resolve(__dirname, "src/main/compile/tectonic-daemon-worker.mjs");
           const dest = resolve(__dirname, "out/main/tectonic-daemon-worker.mjs");
           mkdirSync(dirname(dest), { recursive: true });
           copyFileSync(src, dest);

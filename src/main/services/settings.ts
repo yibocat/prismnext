@@ -7,9 +7,9 @@ import {
 import {
   migratePermissionModeSetting,
   PERMISSION_MODE_SCHEMA_VERSION,
-} from "./permission-modes";
-import { createLogger, setLogLevel, shortLogDetail } from "./logger";
-import { isLogLevel, type LogLevel } from "./log-types";
+} from "../../shared/permissions/modes";
+import { createLogger, setLogLevel, shortLogDetail } from "../app/logger";
+import { isLogLevel, type LogLevel } from "../../shared/platform/log-types";
 
 const log = createLogger("settings", "general");
 

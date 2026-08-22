@@ -1,15 +1,14 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import { basename, extname, join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { compileLatex } from "../services/compiler";
-import { detectTexlive, detectTectonic } from "../services/texlive-detect";
-import { createLogger } from "../services/logger";
+import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
+import { createLogger } from "../app/logger";
 import {
   fileExists,
   packManuscriptDirectory,
   resolveCompilePdfAbsolutePath,
   writeUint8File,
-} from "../services/manuscript-export";
+} from "../compile/manuscript-export";
 
 const log = createLogger("compile-ipc", "compile");
 

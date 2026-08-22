@@ -18,8 +18,8 @@ import {
   scoreOrphanMergeConfidence,
   updatePaper,
   resolveOrphanZoteroPaper,
-} from "../../src/main/services/literature-service";
-import { upsertPaperExtractState, getPaperExtractState } from "../../src/main/services/paper-extract-db";
+} from "../../src/main/literature/facade";
+import { upsertPaperExtractState, getPaperExtractState } from "../../src/main/literature/extract/paper-extract-db";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];

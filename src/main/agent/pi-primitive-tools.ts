@@ -24,7 +24,7 @@ import {
   type PiPrimitiveToolName,
 } from "./capability-matrix";
 import type { ToolExecuteContext } from "./tool-host";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 import {
   formatAmbiguousSkillPath,
   resolveSkillRelativePath,

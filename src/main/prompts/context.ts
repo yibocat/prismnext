@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import type { PromptContext } from "./types";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { readWorkbenchJson } from "../workbench/identity";
 import { projectAgentsMdRel } from "../../shared/workbench/paths";
 

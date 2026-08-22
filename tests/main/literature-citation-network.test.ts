@@ -14,7 +14,7 @@ import {
   closeLibraryDb,
   createPaper,
   updatePaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import {
   PAPER_CITATION_PAGE_SIZE,
   formatCitationFetchError,
@@ -24,8 +24,8 @@ import {
   __testing,
   getPaperCitationNetwork,
   getPaperCitationNetworkPage,
-} from "../../src/main/services/literature-citation-network";
-import { __s2Testing } from "../../src/main/services/literature-citation-s2";
+} from "../../src/main/literature/citation/literature-citation-network";
+import { __s2Testing } from "../../src/main/literature/citation/literature-citation-s2";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const { mapOpenAlexWorkToCitationEntry, extractOpenAlexWorkId } = __testing;

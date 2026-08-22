@@ -26,7 +26,7 @@ import {
 import { invalidateLicenseCache } from "./teams-license";
 import { notifyTeamsChanged } from "../teams/resolver";
 import { _registeredRoots } from "./active-project-roots";
-import { createLogger } from "./logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("pro-packs-discovery");
 
