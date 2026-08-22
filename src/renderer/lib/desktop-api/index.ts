@@ -16,6 +16,7 @@ export { compileDesktop } from "./compile";
 export { terminalDesktop } from "./terminal";
 export { logDesktop } from "./log";
 export { extractDesktop } from "./extract";
+export { interactionDesktop } from "./interaction";
 export { commandsDesktop } from "./commands";
 export { teamsDesktop } from "./teams";
 export { mcpDesktop } from "./mcp";

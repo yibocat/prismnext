@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
+import { interactionDesktop } from "@/lib/desktop-api/interaction";
 import { useDocumentStore } from "@/stores/document-store";
 import { kindDisplayLabel } from "../../../shared/interaction/spec";
 import type { InteractionSpec } from "../../../shared/interaction/spec";
@@ -41,7 +42,7 @@ export function ChatInteractionBlock({
       return;
     }
     let cancelled = false;
-    void window.electronAPI.interactionGet(projectRoot, id).then((res) => {
+    void interactionDesktop.interactionGet(projectRoot, id).then((res) => {
       if (cancelled) return;
       if (res.spec) {
         setSpec(res.spec);

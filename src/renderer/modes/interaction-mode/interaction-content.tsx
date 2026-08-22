@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
+import { interactionDesktop } from "@/lib/desktop-api/interaction";
 import { useDocumentStore } from "@/stores/document-store";
 import { resolveInteractionRenderer } from "@/lib/interaction/renderer-registry";
 import {
@@ -127,7 +128,7 @@ export function InteractionContent({
     setError(null);
     if (!projectRoot || !interactionId) return;
     let cancelled = false;
-    void window.electronAPI.interactionGet(projectRoot, interactionId).then((res) => {
+    void interactionDesktop.interactionGet(projectRoot, interactionId).then((res) => {
       if (cancelled) return;
       if (res.spec) setSpec(res.spec);
       else setError(res.error ?? "not found");

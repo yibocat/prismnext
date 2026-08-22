@@ -59,4 +59,5 @@ export const literatureDesktop = {
   literatureGetCitationNetwork: forwardDesktop("literatureGetCitationNetwork"),
   literatureGetCitationNetworkPage: forwardDesktop("literatureGetCitationNetworkPage"),
   zoteroListCollections: forwardDesktop("zoteroListCollections"),
+  literatureResolveAbs: forwardDesktop("literatureResolveAbs"),
 };

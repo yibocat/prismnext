@@ -1,3 +1,4 @@
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import type { InteractionSpec } from "../../../../shared/interaction/spec";
 import {
   csvRowsToPlotData,
@@ -40,7 +41,7 @@ export async function loadInteractionPlotData(
   const abs = resolveProjectAbsPath(projectRoot, csvPath);
   let content: string;
   try {
-    const res = await window.electronAPI.fsRead(abs);
+    const res = await fsDesktop.fsRead(abs);
     content = res.content;
   } catch {
     return { ok: false, error: `could not read "${csvPath}"` };

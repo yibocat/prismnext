@@ -844,6 +844,19 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps markdown, interaction helpers, and interaction-mode off window.electronAPI", () => {
+    for (const dir of [
+      "src/renderer/lib/markdown",
+      "src/renderer/lib/interaction",
+      "src/renderer/modes/interaction-mode",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+      }
+    }
+  });
+
   it("keeps literature helpers and literature-mode off window.electronAPI", () => {
     for (const dir of [
       "src/renderer/lib/literature",
@@ -900,6 +913,7 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/hooks/use-chat-composer.ts",
       "src/renderer/hooks/use-workspace-project-autosave.ts",
       "src/renderer/hooks/use-available-update.ts",
+      "src/renderer/components/modules/chat/tools/interaction-tool-widget.tsx",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }

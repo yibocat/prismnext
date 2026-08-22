@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
@@ -53,7 +55,7 @@ export async function resolveReadableProjectAbs(
 ): Promise<string | null> {
   const norm = rel.replace(/\\/g, "/").replace(/^\.\//, "");
   if (norm.startsWith("library/")) {
-    return window.electronAPI.literatureResolveAbs(projectRoot, norm);
+    return literatureDesktop.literatureResolveAbs(projectRoot, norm);
   }
   return resolveProjectRelativePath(projectRoot, rel);
 }
@@ -87,7 +89,7 @@ export function ExtractMarkdownImage({
           if (!cancelled) setDataUrl(null);
           return;
         }
-        return window.electronAPI.fsReadImage(abs);
+        return fsDesktop.fsReadImage(abs);
       })
       .then((result) => {
         if (cancelled || !result) return;
@@ -172,9 +174,9 @@ export function ChatProjectImage({
       const abs = await resolveReadableProjectAbs(projectRoot, rel);
       if (!abs) return null;
       try {
-        const exists = await window.electronAPI.fsExists(abs);
+        const exists = await fsDesktop.fsExists(abs);
         if (!exists) return null;
-        const { dataUrl: url, mtimeMs } = await window.electronAPI.fsReadImage(abs);
+        const { dataUrl: url, mtimeMs } = await fsDesktop.fsReadImage(abs);
         if (!url) return null;
         return { url, abs, mtimeMs: typeof mtimeMs === "number" ? mtimeMs : 0 };
       } catch {
@@ -196,7 +198,7 @@ export function ChatProjectImage({
       const base = artifactBasename(src);
       if (base && !cancelled) {
         try {
-          const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+          const found = await fsDesktop.fsFindByBasename(projectRoot, base);
           if (found && !cancelled) {
             const hit = await tryRead(found);
             if (hit && !cancelled) {
@@ -221,10 +223,10 @@ export function ChatProjectImage({
       const abs = loadedAbsRef.current;
       if (!abs || cancelled) return;
       try {
-        const st = await window.electronAPI.fsStat(abs);
+        const st = await fsDesktop.fsStat(abs);
         if (!st || cancelled) return;
         if (loadedMtimeRef.current != null && st.mtimeMs === loadedMtimeRef.current) return;
-        const { dataUrl: url, mtimeMs } = await window.electronAPI.fsReadImage(abs);
+        const { dataUrl: url, mtimeMs } = await fsDesktop.fsReadImage(abs);
         if (url && !cancelled) {
           loadedMtimeRef.current = typeof mtimeMs === "number" ? mtimeMs : st.mtimeMs;
           setDataUrl(url);

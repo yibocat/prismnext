@@ -1,3 +1,4 @@
+import { interactionDesktop } from "@/lib/desktop-api/interaction";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useDocumentStore } from "@/stores/document-store";
@@ -34,9 +35,9 @@ export function handleInteractionChanged(data: InteractionChangedPayload): void 
 const gChanged = globalThis as typeof globalThis & {
   __prismInteractionChangedUnsub?: (() => void) | null;
 };
-if (typeof window !== "undefined" && window.electronAPI?.onInteractionChanged) {
+if (typeof window !== "undefined") {
   gChanged.__prismInteractionChangedUnsub?.();
-  gChanged.__prismInteractionChangedUnsub = window.electronAPI.onInteractionChanged((data) => {
+  gChanged.__prismInteractionChangedUnsub = interactionDesktop.onInteractionChanged((data) => {
     handleInteractionChanged(data);
   });
 }
