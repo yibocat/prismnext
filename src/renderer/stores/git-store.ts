@@ -8,6 +8,7 @@ import type {
   GitBranchesData,
   GitFileDiffData,
 } from "@/types/electron";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitDiffPrefsStore } from "./git-diff-prefs-store";
@@ -286,7 +287,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     const id = ++get()._historyRequestId;
     set({ commitsLoading: true });
     try {
-      const commits = await window.electronAPI.gitLog(projectRoot);
+      const commits = await gitDesktop.gitLog(projectRoot);
       // Discard if a newer request was made while this one was in-flight
       if (get()._historyRequestId !== id) return;
       set({ commits, commitsLoading: false });
@@ -305,7 +306,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── checkRepo ──
   checkRepo: async (projectRoot: string) => {
     try {
-      const isRepo = await window.electronAPI.gitIsRepo(projectRoot);
+      const isRepo = await gitDesktop.gitIsRepo(projectRoot);
       if (isRepo) {
         set({ isGitRepo: true, checkingRepo: false });
         // Must be sequential: refreshStatus sets branch, refreshBranches refines it.
@@ -355,8 +356,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
       set({ loading: true, error: null });
       try {
         [data, stats] = await Promise.all([
-          window.electronAPI.gitStatus(projectRoot),
-          window.electronAPI.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
+          gitDesktop.gitStatus(projectRoot),
+          gitDesktop.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
         ]);
         _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
       } catch (err: unknown) {
@@ -507,7 +508,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── refreshBranches ──
   refreshBranches: async (projectRoot: string) => {
     try {
-      const data: GitBranchesData = await window.electronAPI.gitBranches(projectRoot);
+      const data: GitBranchesData = await gitDesktop.gitBranches(projectRoot);
       // Only overwrite branch if we got a meaningful value
       if (data.current && data.current !== "(no branch)") {
         set({ branches: data.branches, branch: data.current });
@@ -534,7 +535,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     try {
       // Use splitView as the primary view; fall back to filterMode
       const view = file.splitView ?? get().filterMode;
-      const diff: GitFileDiffData = await window.electronAPI.gitDiff(
+      const diff: GitFileDiffData = await gitDesktop.gitDiff(
         projectRoot,
         filePath,
         file.indexStatus,
@@ -580,7 +581,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── stageFile ──
   stageFile: async (projectRoot: string, filePath: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitStage(projectRoot, filePath);
+    const result = await gitDesktop.gitStage(projectRoot, filePath);
     if (!result.success) {
       log.warn("git.fail", { op: "stage", path: filePath, error: result.error });
       toast.error(result.error || "Stage failed");
@@ -593,7 +594,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── unstageFile ──
   unstageFile: async (projectRoot: string, filePath: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitUnstage(projectRoot, filePath);
+    const result = await gitDesktop.gitUnstage(projectRoot, filePath);
     if (!result.success) {
       log.warn("git.fail", { op: "unstage", path: filePath, error: result.error });
       toast.error(result.error || "Unstage failed");
@@ -608,7 +609,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    const result = await window.electronAPI.gitStageAll(projectRoot, paths);
+    const result = await gitDesktop.gitStageAll(projectRoot, paths);
     if (!result.success) {
       log.warn("git.fail", { op: "stageAll", error: result.error });
       // Don't toast — git may refuse to stage gitignored files, that's fine
@@ -621,7 +622,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    const result = await window.electronAPI.gitUnstageAll(projectRoot, paths);
+    const result = await gitDesktop.gitUnstageAll(projectRoot, paths);
     if (!result.success) {
       log.warn("git.fail", { op: "unstageAll", error: result.error });
     }
@@ -631,7 +632,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── discardFile ──
   discardFile: async (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
+    const result = await gitDesktop.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
     if (!result.success) {
       log.warn("git.fail", { op: "discard", path: filePath, error: result.error });
       toast.error(result.error || "Failed to discard changes");
@@ -650,7 +651,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── commitChanges ──
   commitChanges: async (projectRoot: string, message: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitCommit(projectRoot, message);
+    const result = await gitDesktop.gitCommit(projectRoot, message);
     if (!result.success) {
       log.warn("git.fail", { op: "commit", error: result.error });
       toast.error(result.error || "Commit failed");
@@ -670,12 +671,12 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
 
     const tWarmup = performance.now();
-    await window.electronAPI.gitWarmup?.(projectRoot).catch(() => {});
+    await gitDesktop.gitWarmup(projectRoot)?.catch(() => {});
     const wMs = Math.round(performance.now() - tWarmup);
     log.debug("switchBranch warmup", { durationMs: wMs, branch });
 
     const tCheckout = performance.now();
-    const result = await window.electronAPI.gitCheckout(projectRoot, branch);
+    const result = await gitDesktop.gitCheckout(projectRoot, branch);
     const cMs = Math.round(performance.now() - tCheckout);
     log.debug("gitCheckout", { durationMs: cMs, branch });
     if (!result.success) {
@@ -702,7 +703,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── createBranch ──
   createBranch: async (projectRoot: string, branchName: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitCreateBranch(projectRoot, branchName);
+    const result = await gitDesktop.gitCreateBranch(projectRoot, branchName);
     if (!result.success) {
       toast.error(result.error || "Failed to create branch");
       set({ error: result.error || "Failed to create branch" });
@@ -717,7 +718,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── pushRemote ──
   pushRemote: async (projectRoot: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitPush(projectRoot);
+    const result = await gitDesktop.gitPush(projectRoot);
     if (!result.success) {
       toast.error(result.error || "Push failed");
       set({ error: result.error || "Push failed" });
@@ -732,7 +733,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   mergeBranch: async (projectRoot: string, sourceBranch: string) => {
     invalidateStatusCache();
     const branch = get().branch;
-    const result = await window.electronAPI.gitMerge(projectRoot, sourceBranch);
+    const result = await gitDesktop.gitMerge(projectRoot, sourceBranch);
     if (!result.success) {
       // Merge conflicts or other failure
       const detail = result.output || result.error || i18n.t("git.toast.mergeFailed");
@@ -765,7 +766,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── abortMerge ──
   abortMerge: async (projectRoot: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitAbortMerge(projectRoot);
+    const result = await gitDesktop.gitAbortMerge(projectRoot);
     if (!result.success) {
       toast.error(result.error || i18n.t("git.toast.abortFailed"));
       set({ error: result.error || i18n.t("git.toast.abortFailed") });
@@ -781,7 +782,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── revertCommit ──
   revertCommit: async (projectRoot: string, hash: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitRevert(projectRoot, hash);
+    const result = await gitDesktop.gitRevert(projectRoot, hash);
     if (!result.success) {
       toast.error(result.error || "Failed to revert commit");
       set({ error: result.error || "Failed to revert commit" });
@@ -799,7 +800,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── resetToCommit ──
   resetToCommit: async (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitReset(projectRoot, hash, mode);
+    const result = await gitDesktop.gitReset(projectRoot, hash, mode);
     if (!result.success) {
       toast.error(result.error || "Failed to reset");
       set({ error: result.error || "Failed to reset" });
@@ -819,7 +820,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   initRepo: async (projectRoot: string) => {
     set({ loading: true, error: null });
     try {
-      const result = await window.electronAPI.gitInit(projectRoot);
+      const result = await gitDesktop.gitInit(projectRoot);
       if (!result.success) {
         toast.error(result.error || "Failed to initialize git repository");
         set({ error: result.error || "Failed to initialize git repository", loading: false });

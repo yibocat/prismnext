@@ -26,6 +26,7 @@ import { collectProjectTags } from "@/lib/literature/paper-tag-utils";
 import { paperTagKey } from "../../shared/literature/paper-tags";
 import { formatPdfDownloadFailure } from "../../shared/literature/pdf-download-messages";
 import { useDocumentStore } from "@/stores/document-store";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import type {
   LiteratureSortColumn,
   LiteratureSortDirection,
@@ -307,14 +308,14 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   dismissBbtBanner: () => set({ bbtBannerDismissed: true }),
 
   probeZotero: async () => {
-    const status = await window.electronAPI.zoteroProbe();
+    const status = await literatureDesktop.zoteroProbe();
     set({ zoteroStatus: status });
     return status;
   },
 
   loadProjectBinding: async (projectRoot) => {
-    const binding = await window.electronAPI.zoteroGetProjectBinding(projectRoot);
-    const { lastSyncAt } = await window.electronAPI.zoteroGetLastSync(projectRoot);
+    const binding = await literatureDesktop.zoteroGetProjectBinding(projectRoot);
+    const { lastSyncAt } = await literatureDesktop.zoteroGetLastSync(projectRoot);
     set({
       boundCollectionId: binding.zoteroCollectionId ?? null,
       boundCollectionName: binding.zoteroCollectionName ?? null,
@@ -348,7 +349,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   setBoundCollection: async (projectRoot, collectionId, collectionName) => {
-    const binding = await window.electronAPI.zoteroSetProjectBinding(
+    const binding = await literatureDesktop.zoteroSetProjectBinding(
       projectRoot,
       collectionId,
       collectionName,
@@ -379,8 +380,8 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     const silent = options?.silent ?? false;
     set({ pullingFromZotero: true, error: null });
     try {
-      const result = await window.electronAPI.zoteroPullCollection(projectRoot);
-      const { lastSyncAt } = await window.electronAPI.zoteroGetLastSync(projectRoot);
+      const result = await literatureDesktop.zoteroPullCollection(projectRoot);
+      const { lastSyncAt } = await literatureDesktop.zoteroGetLastSync(projectRoot);
       set({ lastZoteroSyncAt: lastSyncAt });
       await get().refresh(projectRoot);
       if (!silent) {
@@ -403,7 +404,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   pullZoteroCollections: async (projectRoot) => {
     set({ pullingFromZotero: true, error: null });
     try {
-      const result = await window.electronAPI.zoteroPullCollections(projectRoot);
+      const result = await literatureDesktop.zoteroPullCollections(projectRoot);
       await get().refreshCollections(projectRoot);
       const pruneNote =
         result.collectionsPruned > 0 ? `, removed ${result.collectionsPruned} stale` : "";
@@ -453,7 +454,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   refreshCollections: async (projectRoot) => {
-    const collections = await window.electronAPI.literatureListCollections(projectRoot);
+    const collections = await literatureDesktop.literatureListCollections(projectRoot);
     set({ collections });
     reconcileLibraryViewWithCollections(projectRoot, collections);
   },
@@ -465,11 +466,11 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       return;
     }
     if (libraryView.kind === "reading-list") {
-      const papers = await window.electronAPI.literatureReadingList(projectRoot);
+      const papers = await literatureDesktop.literatureReadingList(projectRoot);
       set({ viewPaperIds: papers.map((p) => p.id) });
       return;
     }
-    const ids = await window.electronAPI.literatureListCollectionPaperIds(
+    const ids = await literatureDesktop.literatureListCollectionPaperIds(
       projectRoot,
       libraryView.collectionId,
     );
@@ -478,7 +479,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   createCollection: async (projectRoot, name, parentId) => {
     return withCollectionWritePending(set, async () => {
-      const collection = await window.electronAPI.literatureCreateCollection(
+      const collection = await literatureDesktop.literatureCreateCollection(
         projectRoot,
         name,
         parentId,
@@ -491,7 +492,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   renameCollection: async (projectRoot, collectionId, name) => {
     await withCollectionWritePending(set, async () => {
-      await window.electronAPI.literatureUpdateCollection(projectRoot, collectionId, name);
+      await literatureDesktop.literatureUpdateCollection(projectRoot, collectionId, name);
       await get().refreshCollections(projectRoot);
       toast.success("Collection renamed");
     });
@@ -499,7 +500,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   deleteCollection: async (projectRoot, collectionId) => {
     await withCollectionWritePending(set, async () => {
-      await window.electronAPI.literatureDeleteCollection(projectRoot, collectionId);
+      await literatureDesktop.literatureDeleteCollection(projectRoot, collectionId);
       const { libraryView } = get();
       if (libraryView.kind === "collection" && libraryView.collectionId === collectionId) {
         set({ libraryView: { kind: "all" }, viewPaperIds: null });
@@ -512,7 +513,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   addPapersToCollection: async (projectRoot, collectionId, paperIds) => {
     if (!paperIds.length) return;
     await withCollectionWritePending(set, async () => {
-      const { added, skipped } = await window.electronAPI.literatureAddPapersToCollection(
+      const { added, skipped } = await literatureDesktop.literatureAddPapersToCollection(
         projectRoot,
         collectionId,
         paperIds,
@@ -542,7 +543,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     const { checkedPaperIds } = get();
     if (!checkedPaperIds.length) return;
     await withCollectionWritePending(set, async () => {
-      const { removed } = await window.electronAPI.literatureRemovePapersFromCollection(
+      const { removed } = await literatureDesktop.literatureRemovePapersFromCollection(
         projectRoot,
         collectionId,
         checkedPaperIds,
@@ -562,7 +563,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       return;
     }
     try {
-      const results = await window.electronAPI.literatureSearch(projectRoot, q, 100);
+      const results = await literatureDesktop.literatureSearch(projectRoot, q, 100);
       set({ searchResults: results });
     } catch (err) {
       console.warn("[literature] search failed:", err);
@@ -574,7 +575,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     if (!projectRoot) return;
     set({ loading: true, error: null });
     try {
-      const papers = await window.electronAPI.literatureList(projectRoot);
+      const papers = await literatureDesktop.literatureList(projectRoot);
       useCitationStagingStore.getState().reconcileWithLibrary(papers);
       let libraryTagFilter = get().libraryTagFilter;
       if (libraryTagFilter) {
@@ -598,7 +599,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   refreshPdfCacheStatus: async (projectRoot) => {
     if (!projectRoot) return;
     try {
-      const status = await window.electronAPI.literatureGetPdfCacheStatus(projectRoot);
+      const status = await literatureDesktop.literatureGetPdfCacheStatus(projectRoot);
       set({ pdfCacheStatus: status });
     } catch {
       // non-fatal — list UI degrades to no cache badges
@@ -632,7 +633,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   clearCheckedPapers: () => set({ checkedPaperIds: [] }),
 
   createPaper: async (projectRoot, input) => {
-    const { paper, created } = await window.electronAPI.literatureCreatePaper(projectRoot, input);
+    const { paper, created } = await literatureDesktop.literatureCreatePaper(projectRoot, input);
     await get().refresh(projectRoot);
     get().selectPaper(paper.id);
     if (created) toast.success("Entry created");
@@ -640,14 +641,14 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   updatePaper: async (projectRoot, paperId, patch, opts) => {
-    const paper = await window.electronAPI.literatureUpdatePaper(projectRoot, paperId, patch);
+    const paper = await literatureDesktop.literatureUpdatePaper(projectRoot, paperId, patch);
     await get().refresh(projectRoot);
     if (!opts?.silent) toast.success("Saved");
     return paper;
   },
 
   deletePaper: async (projectRoot, paperId) => {
-    await window.electronAPI.literatureDeletePaper(projectRoot, paperId);
+    await literatureDesktop.literatureDeletePaper(projectRoot, paperId);
     useRightPanelStore.getState().closeLiteraturePaperTabs(paperId);
     useCitationStagingStore.getState().unmarkByPaperIds([paperId]);
     const { selectedPaperId, checkedPaperIds } = get();
@@ -662,7 +663,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   importToLocal: async (projectRoot, paperId) => {
-    await window.electronAPI.literatureImportToLocal(projectRoot, paperId);
+    await literatureDesktop.literatureImportToLocal(projectRoot, paperId);
     await get().refresh(projectRoot);
     toast.success("Kept in project library.");
   },
@@ -673,19 +674,19 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
     let paper: LiteraturePaper;
     if (patch.doi) {
-      const result = await window.electronAPI.literatureCreateFromIdentifier(projectRoot, {
+      const result = await literatureDesktop.literatureCreateFromIdentifier(projectRoot, {
         doi: patch.doi,
       });
       paper = result.paper;
       if (!result.created) toast.info(duplicateIdentifierMessage(result.duplicateReason));
     } else if (patch.arxiv_id) {
-      const result = await window.electronAPI.literatureCreateFromIdentifier(projectRoot, {
+      const result = await literatureDesktop.literatureCreateFromIdentifier(projectRoot, {
         arxivId: patch.arxiv_id,
       });
       paper = result.paper;
       if (!result.created) toast.info(duplicateIdentifierMessage(result.duplicateReason));
     } else {
-      const result = await window.electronAPI.literatureCreatePaper(projectRoot, {
+      const result = await literatureDesktop.literatureCreatePaper(projectRoot, {
         ...patch,
         bibkey: patch.bibkey,
       });
@@ -710,7 +711,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   deletePapers: async (projectRoot, paperIds) => {
     if (!paperIds.length) return;
     for (const paperId of paperIds) {
-      await window.electronAPI.literatureDeletePaper(projectRoot, paperId);
+      await literatureDesktop.literatureDeletePaper(projectRoot, paperId);
       useRightPanelStore.getState().closeLiteraturePaperTabs(paperId);
     }
     useCitationStagingStore.getState().unmarkByPaperIds(paperIds);
@@ -725,7 +726,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   exportPapersBibTeX: async (projectRoot, paperIds) => {
     if (!paperIds.length) return false;
-    const { canceled, path } = await window.electronAPI.literatureExportBibToFile(
+    const { canceled, path } = await literatureDesktop.literatureExportBibToFile(
       projectRoot,
       paperIds,
       "references.bib",
@@ -736,7 +737,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   citePaperToManuscript: async (projectRoot, bibkey) => {
-    const result = await window.electronAPI.literatureCite(projectRoot, bibkey);
+    const result = await literatureDesktop.literatureCite(projectRoot, bibkey);
     toast.success(
       result.appended
         ? `Added @${bibkey} to manuscript .bib`
@@ -746,11 +747,11 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   fetchCitationHealth: async (projectRoot) => {
-    return window.electronAPI.literatureCitationHealth(projectRoot);
+    return literatureDesktop.literatureCitationHealth(projectRoot);
   },
 
   syncCitedLibraryToManuscriptBib: async (projectRoot) => {
-    const result = await window.electronAPI.literatureMergeIntoProjectBib(projectRoot, {
+    const result = await literatureDesktop.literatureMergeIntoProjectBib(projectRoot, {
       onlyCitedInTex: true,
     });
     if (result.appended.length > 0) {
@@ -764,7 +765,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   syncLibraryPapersToManuscriptBib: async (projectRoot, bibkeys) => {
-    const result = await window.electronAPI.literatureMergeIntoProjectBib(projectRoot, { bibkeys });
+    const result = await literatureDesktop.literatureMergeIntoProjectBib(projectRoot, { bibkeys });
     if (result.appended.length > 0) {
       toast.success(
         `Added ${result.appended.length} entr${result.appended.length === 1 ? "y" : "ies"} to manuscript .bib`,
@@ -776,7 +777,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   importMissingFromManuscriptBib: async (projectRoot, bibkeys) => {
-    const result = await window.electronAPI.literatureImportFromProjectBib(projectRoot, bibkeys);
+    const result = await literatureDesktop.literatureImportFromProjectBib(projectRoot, bibkeys);
     await get().refresh(projectRoot);
     if (result.imported > 0) {
       toast.success(
@@ -795,7 +796,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     set({ pdfImportBusyCount: get().pdfImportBusyCount + 1 });
     const fileName = pdfPath.split(/[/\\]/).pop() ?? "";
     try {
-      const result = await window.electronAPI.literatureIngestPdf(projectRoot, pdfPath);
+      const result = await literatureDesktop.literatureIngestPdf(projectRoot, pdfPath);
 
       if (!result.created && result.duplicateReason === "pdf") {
         await get().refresh(projectRoot);
@@ -815,16 +816,16 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
       if (result.created && !identifiersFound) {
         try {
-          const { pdfBytes } = await window.electronAPI.literatureReadPdfBytes(projectRoot, paper.id);
+          const { pdfBytes } = await literatureDesktop.literatureReadPdfBytes(projectRoot, paper.id);
           if (pdfBytes) {
             const ids = await extractIdsFromPdf(pdfBytes, fileName);
             if (ids.doi || ids.arxivId) {
-              const applied = await window.electronAPI.literatureApplyIdentifiers(projectRoot, paper.id, {
+              const applied = await literatureDesktop.literatureApplyIdentifiers(projectRoot, paper.id, {
                 doi: ids.doi,
                 arxivId: ids.arxivId,
               });
               if (applied.duplicatePaper) {
-                await window.electronAPI.literatureDeletePaper(projectRoot, paper.id);
+                await literatureDesktop.literatureDeletePaper(projectRoot, paper.id);
                 useRightPanelStore.getState().closeLiteraturePaperTabs(paper.id);
                 useCitationStagingStore.getState().unmarkByPaperIds([paper.id]);
                 paper = applied.duplicatePaper;
@@ -835,7 +836,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
                 identifiersFound = true;
                 identifiers = ids;
                 try {
-                  const fetchResult = await window.electronAPI.literatureFetchAndApplyMetadata(
+                  const fetchResult = await literatureDesktop.literatureFetchAndApplyMetadata(
                     projectRoot,
                     paper.id,
                   );
@@ -921,7 +922,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   addByIdentifier: async (projectRoot, ids) => {
     if (!ids.doi && !ids.arxivId && !ids.isbn && !ids.pmid && !ids.adsBibcode) return null;
     const { paper, created, duplicateReason, pdfAttached, pdfAttachError } =
-      await window.electronAPI.literatureCreateFromIdentifier(projectRoot, ids);
+      await literatureDesktop.literatureCreateFromIdentifier(projectRoot, ids);
     await get().refresh(projectRoot);
     get().selectPaper(paper.id);
     if (!created) {
@@ -934,7 +935,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   fetchMetadata: async (projectRoot, paperId) => {
-    const result = await window.electronAPI.literatureFetchAndApplyMetadata(projectRoot, paperId);
+    const result = await literatureDesktop.literatureFetchAndApplyMetadata(projectRoot, paperId);
     await get().refresh(projectRoot);
     toast.success("Metadata updated");
     toastPdfDownloadResult(result.pdfAttached, result.pdfAttachError);
@@ -942,14 +943,14 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   downloadPdf: async (projectRoot, paperId) => {
-    const result = await window.electronAPI.literatureDownloadPdf(projectRoot, paperId);
+    const result = await literatureDesktop.literatureDownloadPdf(projectRoot, paperId);
     await get().refresh(projectRoot);
     toastPdfDownloadResult(result.attached, result.attachError);
     return result.paper;
   },
 
   attachLocalPdf: async (projectRoot, paperId, pdfPath, opts) => {
-    const result = await window.electronAPI.literatureAttachLocalPdf(
+    const result = await literatureDesktop.literatureAttachLocalPdf(
       projectRoot,
       paperId,
       pdfPath,
@@ -960,7 +961,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   importBibTeX: async (projectRoot, bibContent, jsonContent) => {
-    const { imported, skipped, pdfsAttached } = await window.electronAPI.literatureImportBibTeX(
+    const { imported, skipped, pdfsAttached } = await literatureDesktop.literatureImportBibTeX(
       projectRoot,
       bibContent,
       jsonContent,
@@ -979,25 +980,25 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   loadAnnotations: async (projectRoot, paperId) => {
-    return await window.electronAPI.literatureGetAnnotations(projectRoot, paperId);
+    return await literatureDesktop.literatureGetAnnotations(projectRoot, paperId);
   },
 
   saveAnnotation: async (projectRoot, annotation) => {
-    await window.electronAPI.literatureSaveAnnotation(projectRoot, annotation);
+    await literatureDesktop.literatureSaveAnnotation(projectRoot, annotation);
   },
 
   deleteAnnotation: async (projectRoot, annotationId) => {
-    await window.electronAPI.literatureDeleteAnnotation(projectRoot, annotationId);
+    await literatureDesktop.literatureDeleteAnnotation(projectRoot, annotationId);
   },
 }));
 
-if (typeof window !== "undefined" && window.electronAPI?.onLiteraturePdfDownloadProgress) {
-  window.electronAPI.onLiteraturePdfDownloadProgress((data) => {
+if (typeof window !== "undefined" && literatureDesktop?.onLiteraturePdfDownloadProgress) {
+  literatureDesktop.onLiteraturePdfDownloadProgress((data) => {
     useLiteratureStore.getState().setPdfDownloadProgress(data);
   });
 }
-if (typeof window !== "undefined" && window.electronAPI?.onLiteraturePaperMaterialized) {
-  window.electronAPI.onLiteraturePaperMaterialized(({ projectRoot: root }) => {
+if (typeof window !== "undefined" && literatureDesktop?.onLiteraturePaperMaterialized) {
+  literatureDesktop.onLiteraturePaperMaterialized(({ projectRoot: root }) => {
     const current = useDocumentStore.getState().projectRoot;
     if (!current || current !== root) return;
     void useLiteratureStore.getState().refresh(root);
