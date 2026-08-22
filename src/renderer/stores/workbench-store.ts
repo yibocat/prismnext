@@ -4,6 +4,7 @@ import {
   type WorkbenchProjectMember,
   type WorkbenchState,
 } from "../../shared/workbench/api";
+import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
 export function sameProjectPath(
   a: string | null | undefined,
@@ -116,30 +117,30 @@ export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({
   focusProjectId: "",
   sessionProjectIds: {},
   hydrate: async () => {
-    const state = await window.electronAPI.workbenchGetState();
+    const state = await workbenchDesktop.workbenchGetState();
     set(applyState(state));
     return state;
   },
   setDefault: async (projectId) => {
-    const state = await window.electronAPI.workbenchSetDefault(projectId);
+    const state = await workbenchDesktop.workbenchSetDefault(projectId);
     set(applyState(state));
     return state;
   },
   setDefaultFromFolder: async (absPath) => {
-    const state = await window.electronAPI.workbenchSetDefaultFromFolder(absPath);
+    const state = await workbenchDesktop.workbenchSetDefaultFromFolder(absPath);
     set(applyState(state));
     return state;
   },
   // Membership only. Opening a folder from the UI goes through
   // document-store.openProject → switchWorkbenchFocus — do not reset here.
   openFolder: async (absPath) => {
-    const result = await window.electronAPI.workbenchOpenFolder(absPath);
+    const result = await workbenchDesktop.workbenchOpenFolder(absPath);
     const state = workbenchStateFromOpenResult(result);
     set(applyState(state));
     return state;
   },
   removeProject: async (projectId) => {
-    const state = await window.electronAPI.workbenchRemoveProject(projectId);
+    const state = await workbenchDesktop.workbenchRemoveProject(projectId);
     set(applyState(state));
     return state;
   },

@@ -1,7 +1,7 @@
 /**
  * Filesystem desktop port.
  * Forwards to `window.electronAPI` — do not redefine DTOs here.
- * Used by document-store.
+ * Used by document-store and changes-store.
  */
 
 import { forwardDesktop } from "./forward";

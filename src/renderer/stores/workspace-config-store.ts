@@ -10,6 +10,7 @@ import {
   createDefaultFolder,
   defaultWorkspaceDirs,
 } from "@/types/workspace";
+import { projectDesktop } from "@/lib/desktop-api/project";
 
 interface WorkspaceConfigState {
   workspaceDirs: WorkspaceFolder[];
@@ -44,7 +45,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
       set({ loaded: false, workspaceDirs: [], manuscriptConfig: null, error: null });
       try {
         const dirs =
-          await window.electronAPI.workspaceGetConfig(projectRoot);
+          await projectDesktop.workspaceGetConfig(projectRoot);
         set({
           workspaceDirs: dirs,
           manuscriptConfig: findManuscriptConfig(dirs),
@@ -66,7 +67,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
       const { workspaceDirs } = get();
       try {
         const result =
-          await window.electronAPI.workspaceUpdateConfig(
+          await projectDesktop.workspaceUpdateConfig(
             projectRoot,
             workspaceDirs,
           );

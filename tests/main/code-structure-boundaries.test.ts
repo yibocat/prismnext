@@ -695,6 +695,29 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("routes leftover Phase 4 stores through existing desktop-api ports", () => {
+    expect(sourceOf("src/renderer/stores/workbench-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/workbench["']/,
+    );
+    expect(sourceOf("src/renderer/stores/execution-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/execution["']/,
+    );
+    expect(sourceOf("src/renderer/stores/workspace-config-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/project["']/,
+    );
+    expect(sourceOf("src/renderer/stores/changes-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/fs["']/,
+    );
+    for (const rel of [
+      "src/renderer/stores/workbench-store.ts",
+      "src/renderer/stores/execution-store.ts",
+      "src/renderer/stores/workspace-config-store.ts",
+      "src/renderer/stores/changes-store.ts",
+    ]) {
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("makes RightTab a kind-discriminated union", () => {
     const src = sourceOf("src/renderer/lib/workspace/mode-registry.ts");
     expect(src).toMatch(/export type RightTab =/);
