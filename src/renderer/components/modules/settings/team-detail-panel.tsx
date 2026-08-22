@@ -16,6 +16,17 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
+  deleteTeam,
+  installTeam,
+  loadTeamDetail,
+  resetTeamProjectEnabled,
+  saveTeamAssetOverride,
+  setTeamAssetEnabled,
+  setTeamIconImage,
+  uninstallTeam,
+  updateTeamIcon,
+} from "@/lib/settings";
+import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
@@ -109,37 +120,16 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (!projectRoot) return;
     try {
       await useTeamsStore.getState().load(projectRoot, { force: true });
-      const [
-        nextContents,
-        nextSubagents,
-        nextSkills,
-        nextCommands,
-        nextMcps,
-        nextOrchs,
-        nextRoster,
-        nextSkillsRoster,
-        nextCommandsRoster,
-      ] =
-        await Promise.all([
-          window.electronAPI.teamsGetTeamContents(slot.teamId, projectRoot),
-          window.electronAPI.teamsListAssets(projectRoot, "subagent"),
-          window.electronAPI.teamsListAssets(projectRoot, "skill"),
-          window.electronAPI.teamsListAssets(projectRoot, "command"),
-          window.electronAPI.teamsListAssets(projectRoot, "mcp"),
-          window.electronAPI.teamsListAssets(projectRoot, "orchestrator"),
-          window.electronAPI.teamsGetRoster(projectRoot, slot.teamId),
-          window.electronAPI.teamsGetSkillsRoster(projectRoot, slot.teamId),
-          window.electronAPI.teamsGetCommandsRoster(projectRoot, slot.teamId),
-        ]);
-      setContents(nextContents);
-      setSubagents(nextSubagents);
-      setSkills(nextSkills);
-      setCommands(nextCommands);
-      setMcps(nextMcps);
-      setOrchestrators(nextOrchs);
-      setRoster(nextRoster);
-      setSkillsRoster(nextSkillsRoster);
-      setCommandsRoster(nextCommandsRoster);
+      const next = await loadTeamDetail(projectRoot, slot.teamId);
+      setContents(next.contents);
+      setSubagents(next.subagents);
+      setSkills(next.skills);
+      setCommands(next.commands);
+      setMcps(next.mcps);
+      setOrchestrators(next.orchestrators);
+      setRoster(next.roster);
+      setSkillsRoster(next.skillsRoster);
+      setCommandsRoster(next.commandsRoster);
     } catch {
       setContents([]);
       setSubagents([]);
@@ -404,7 +394,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (!projectRoot || !roster) return;
     setBusy(true);
     try {
-      await window.electronAPI.teamsSaveAssetOverride(
+      await saveTeamAssetOverride(
         projectRoot,
         roster.orchestratorFqid,
         { allowedExperts: members },
@@ -448,7 +438,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (!projectRoot || !skillsRoster) return;
     setBusy(true);
     try {
-      await window.electronAPI.teamsSaveAssetOverride(
+      await saveTeamAssetOverride(
         projectRoot,
         skillsRoster.orchestratorFqid,
         { allowedSkills: members },
@@ -493,7 +483,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (!projectRoot || !commandsRoster) return;
     setBusy(true);
     try {
-      await window.electronAPI.teamsSaveAssetOverride(
+      await saveTeamAssetOverride(
         projectRoot,
         commandsRoster.orchestratorFqid,
         { allowedCommands: members },
@@ -580,7 +570,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (!projectRoot) return;
     setBusy(true);
     try {
-      await window.electronAPI.teamsSetAssetEnabled(projectRoot, fqid, enabled, "project");
+      await setTeamAssetEnabled(projectRoot, fqid, enabled, "project");
       await load();
     } catch (err) {
       toast.error(String(err instanceof Error ? err.message : err));
@@ -610,7 +600,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     if (iconSpecEquals(normalizeIconSpec(pack.manifest.icon), next)) return;
     setBusy(true);
     try {
-      await window.electronAPI.teamsUpdateIcon(slot.teamId, next, projectRoot);
+      await updateTeamIcon(slot.teamId, next, projectRoot);
       await load();
       toast.success(t("settings.teams.toast.iconUpdated"));
     } catch (err) {
@@ -623,7 +613,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
   /** Write PNG bytes to `<teamDir>/icon.png` and update manifest. */
   const persistTeamImage = async (pngBase64: string): Promise<IconSpec> => {
     if (!projectRoot) throw new Error("No project");
-    await window.electronAPI.teamsSetIconImage(slot.teamId, pngBase64, projectRoot);
+    await setTeamIconImage(slot.teamId, pngBase64, projectRoot);
     await load();
     toast.success(t("settings.teams.toast.iconUpdated"));
     return { kind: "image", value: "icon.png" };
@@ -647,9 +637,9 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
     try {
       const userOwned = pack.manifest.publisher === "user" && pack.manifest.id !== MY_CONTENT_TEAM_ID;
       if (userOwned) {
-        await window.electronAPI.teamsDelete(pack.manifest.id, projectRoot);
+        await deleteTeam(pack.manifest.id, projectRoot);
       } else {
-        await window.electronAPI.teamsUninstall(pack.manifest.id);
+        await uninstallTeam(pack.manifest.id);
       }
       await useTeamsStore.getState().load(projectRoot, { force: true });
       closeSettingsPanel();
@@ -729,7 +719,7 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
                 void (async () => {
                   setBusy(true);
                   try {
-                    await window.electronAPI.teamsInstall(pack.manifest.id);
+                    await installTeam(pack.manifest.id);
                     await load();
                     toast.success(t("teamsCenter.toast.installed", { name: pack.manifest.name }));
                   } catch (err) {
@@ -1520,9 +1510,9 @@ export function TeamDetailPanel({ slot }: { slot: TeamDetailSlot }) {
                   appValue={pack.enabledApp}
                   onReset={() => {
                     if (!projectRoot) return;
-                    void window.electronAPI
-                      .teamsSetEnabled(projectRoot, pack.manifest.id, null, "project")
-                      .then(() => useTeamsStore.getState().load(projectRoot, { force: true }));
+                    void resetTeamProjectEnabled(projectRoot, pack.manifest.id).then(() =>
+                      useTeamsStore.getState().load(projectRoot, { force: true }),
+                    );
                   }}
                 />
               </div>

@@ -18,4 +18,12 @@ export const teamsDesktop = {
   teamsListAssets: forwardDesktop("teamsListAssets"),
   teamsListMcp: forwardDesktop("teamsListMcp"),
   teamsSaveAssetOverride: forwardDesktop("teamsSaveAssetOverride"),
+  teamsGetTeamContents: forwardDesktop("teamsGetTeamContents"),
+  teamsGetRoster: forwardDesktop("teamsGetRoster"),
+  teamsGetSkillsRoster: forwardDesktop("teamsGetSkillsRoster"),
+  teamsUpdateIcon: forwardDesktop("teamsUpdateIcon"),
+  teamsSetIconImage: forwardDesktop("teamsSetIconImage"),
+  teamsDelete: forwardDesktop("teamsDelete"),
+  teamsUninstall: forwardDesktop("teamsUninstall"),
+  teamsInstall: forwardDesktop("teamsInstall"),
 };

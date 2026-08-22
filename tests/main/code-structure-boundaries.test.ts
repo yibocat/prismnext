@@ -840,6 +840,7 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/system-font-picker.tsx",
       "src/renderer/components/modules/settings/about-settings.tsx",
       "src/renderer/components/modules/settings/shortcuts-settings.tsx",
+      "src/renderer/components/modules/settings/team-detail-panel.tsx",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }

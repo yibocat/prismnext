@@ -66,3 +66,15 @@ export {
   saveCustomSubagent,
   saveSubagentAssetOverride,
 } from "./subagents";
+export type { TeamDetailSnapshot } from "./teams";
+export {
+  deleteTeam,
+  installTeam,
+  loadTeamDetail,
+  resetTeamProjectEnabled,
+  saveTeamAssetOverride,
+  setTeamAssetEnabled,
+  setTeamIconImage,
+  uninstallTeam,
+  updateTeamIcon,
+} from "./teams";
