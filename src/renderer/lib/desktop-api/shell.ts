@@ -8,6 +8,17 @@ import { forwardDesktop } from "./forward";
 export const shellDesktop = {
   shellShowItemInFolder: forwardDesktop("shellShowItemInFolder"),
   shellOpenExternal: forwardDesktop("shellOpenExternal"),
+  shellSetTrayStatus: forwardDesktop("shellSetTrayStatus"),
+  shellSetTrayMenu: forwardDesktop("shellSetTrayMenu"),
+  onShellFocusChatTab: forwardDesktop("onShellFocusChatTab"),
+  onShellTrayNewChat: forwardDesktop("onShellTrayNewChat"),
+  onShellTrayOpenRecent: forwardDesktop("onShellTrayOpenRecent"),
+  onShellTrayOpenMode: forwardDesktop("onShellTrayOpenMode"),
+  windowIsMaximized: forwardDesktop("windowIsMaximized"),
+  windowIsFullscreen: forwardDesktop("windowIsFullscreen"),
+  windowClose: forwardDesktop("windowClose"),
+  onWindowStateChange: forwardDesktop("onWindowStateChange"),
+  onCloseTabRequest: forwardDesktop("onCloseTabRequest"),
 };
 
 export function desktopPlatform(): "darwin" | "win32" | "linux" {

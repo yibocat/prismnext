@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { compileDesktop } from "@/lib/desktop-api/compile";
 import { useCompileStore } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -12,7 +13,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
  */
 export function useAgentCompilePreview(): void {
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onCompileAgentComplete((data) => {
+    const unsubscribe = compileDesktop.onCompileAgentComplete((data) => {
       const projectRoot = useDocumentStore.getState().projectRoot;
       if (!projectRoot || projectRoot !== data.projectDir) return;
 

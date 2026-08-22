@@ -916,6 +916,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps renderer hooks off window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/hooks"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps lib/chat and chat modules off window.electronAPI", () => {
     for (const dir of [
       "src/renderer/lib/chat",

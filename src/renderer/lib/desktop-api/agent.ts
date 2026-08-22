@@ -56,4 +56,7 @@ export const agentDesktop = {
   agentDescribeImages: forwardDesktop("agentDescribeImages"),
   agentAnswerQuestion: forwardDesktop("agentAnswerQuestion"),
   agentCompact: forwardDesktop("agentCompact"),
+  agentListSessions: forwardDesktop("agentListSessions"),
+  onAgentEvent: forwardDesktop("onAgentEvent"),
+  onSkillsIntegrationChanged: forwardDesktop("onSkillsIntegrationChanged"),
 };

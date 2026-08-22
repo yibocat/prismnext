@@ -11,4 +11,5 @@ export const compileDesktop = {
   compileDetectTexlive: forwardDesktop("compileDetectTexlive"),
   compileExportPdf: forwardDesktop("compileExportPdf"),
   manuscriptPackZip: forwardDesktop("manuscriptPackZip"),
+  onCompileAgentComplete: forwardDesktop("onCompileAgentComplete"),
 };
