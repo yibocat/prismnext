@@ -6,6 +6,7 @@ import { App } from "./App";
 // them without fetching from the CDN (blocked by CSP). Must be imported
 // before any component that renders <Icon>.
 import "./lib/iconify-setup";
+import { desktopPlatform } from "./lib/desktop-api/shell";
 import { initI18n } from "./lib/i18n";
 import "./styles/globals.css";
 import "./styles/tokens.css";
@@ -18,9 +19,7 @@ import "./styles/tokens/shared.css";
 
 const i18n = initI18n();
 
-if (window.electronAPI?.platform) {
-  document.documentElement.dataset.platform = window.electronAPI.platform;
-}
+document.documentElement.dataset.platform = desktopPlatform();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

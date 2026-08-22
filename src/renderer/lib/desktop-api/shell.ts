@@ -16,6 +16,8 @@ export const shellDesktop = {
   onShellTrayOpenMode: forwardDesktop("onShellTrayOpenMode"),
   windowIsMaximized: forwardDesktop("windowIsMaximized"),
   windowIsFullscreen: forwardDesktop("windowIsFullscreen"),
+  windowMinimize: forwardDesktop("windowMinimize"),
+  windowMaximize: forwardDesktop("windowMaximize"),
   windowClose: forwardDesktop("windowClose"),
   onWindowStateChange: forwardDesktop("onWindowStateChange"),
   onCloseTabRequest: forwardDesktop("onCloseTabRequest"),

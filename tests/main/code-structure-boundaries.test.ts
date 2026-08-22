@@ -935,6 +935,17 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps title-bar window chrome off window.electronAPI", () => {
+    for (const rel of [
+      "src/renderer/main.tsx",
+      "src/renderer/components/layout/title-bar.tsx",
+      "src/renderer/components/layout/main-toolbar.tsx",
+      "src/renderer/components/layout/window-controls.tsx",
+    ]) {
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps leftover research, slash, and reveal helpers off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/lib/files/open-research-brief.ts",

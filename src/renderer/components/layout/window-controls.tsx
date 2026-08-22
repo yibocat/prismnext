@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useWindowState } from "@/hooks/use-window-state";
+import { shellDesktop } from "@/lib/desktop-api/shell";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import {
@@ -36,7 +37,7 @@ export function WindowControls({
         <button
           type="button"
           className={buttonClassName}
-          onClick={() => window.electronAPI?.windowMinimize()}
+          onClick={() => void shellDesktop.windowMinimize()}
           aria-label={t("shell.minimize")}
         >
           <MinusIcon className={iconSizeClassName} />
@@ -47,7 +48,7 @@ export function WindowControls({
         <button
           type="button"
           className={buttonClassName}
-          onClick={() => window.electronAPI?.windowMaximize()}
+          onClick={() => void shellDesktop.windowMaximize()}
           aria-label={isMaximized ? t("shell.restore") : t("shell.maximize")}
         >
           {isMaximized ? (
@@ -65,7 +66,7 @@ export function WindowControls({
             buttonClassName,
             "hover:bg-destructive hover:text-destructive-foreground active:bg-destructive/90",
           )}
-          onClick={() => window.electronAPI?.windowClose()}
+          onClick={() => void shellDesktop.windowClose()}
           aria-label={t("shell.close")}
         >
           <XIcon className={iconSizeClassName} />

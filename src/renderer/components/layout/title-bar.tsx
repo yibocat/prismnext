@@ -1,8 +1,9 @@
-import { useState, useEffect, type RefObject } from "react";
+import type { RefObject } from "react";
 import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWindowState } from "@/hooks/use-window-state";
 import { useLayoutStore } from "@/stores/layout-store";
 import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
 import { toggleLeftSidebarPanel } from "@/lib/workspace/left-sidebar-panel";
@@ -19,24 +20,6 @@ import {
   MonitorIcon,
 } from "lucide-react";
 import { WindowControls } from "@/components/layout/window-controls";
-
-function useWindowState() {
-  const platform = window.electronAPI?.platform ?? "darwin";
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    window.electronAPI?.windowIsMaximized().then(setIsMaximized);
-    window.electronAPI?.windowIsFullscreen().then(setIsFullscreen);
-
-    return window.electronAPI?.onWindowStateChange((state) => {
-      setIsMaximized(state.isMaximized);
-      setIsFullscreen(state.isFullscreen);
-    });
-  }, []);
-
-  return { platform, isMaximized, isFullscreen } as const;
-}
 
 interface TitleBarProps {
   leftSidebarRef: RefObject<PanelImperativeHandle | null>;

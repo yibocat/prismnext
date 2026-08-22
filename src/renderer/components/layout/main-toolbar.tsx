@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useTranslation } from "react-i18next";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import type { RefObject } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useWindowState } from "@/hooks/use-window-state";
 import { useLayoutStore } from "@/stores/layout-store";
 import { cn } from "@/lib/utils";
 import { openRightArea, closeRightArea } from "@/lib/workspace/right-area-layout";
@@ -16,24 +16,6 @@ import {
 } from "lucide-react";
 import { WindowControls } from "@/components/layout/window-controls";
 
-function useWindowState() {
-  const platform = window.electronAPI?.platform ?? "darwin";
-  const [isMaximized, setIsMaximized] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    window.electronAPI?.windowIsMaximized().then(setIsMaximized);
-    window.electronAPI?.windowIsFullscreen().then(setIsFullscreen);
-
-    return window.electronAPI?.onWindowStateChange((state) => {
-      setIsMaximized(state.isMaximized);
-      setIsFullscreen(state.isFullscreen);
-    });
-  }, []);
-
-  return { platform, isMaximized, isFullscreen } as const;
-}
-
 interface MainToolbarProps {
   rightAreaRef: RefObject<PanelImperativeHandle | null>;
   centerRef: RefObject<PanelImperativeHandle | null>;
@@ -41,7 +23,7 @@ interface MainToolbarProps {
 
 export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
   const { t } = useTranslation();
-  const { platform, isMaximized } = useWindowState();
+  const { platform } = useWindowState();
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const { theme, resolvedTheme, setTheme } = useTheme();
