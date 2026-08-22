@@ -226,21 +226,27 @@ describe("Pi-first agent core boundaries", () => {
 
   it("loads Settings model catalog and connection tests through the Agent API", () => {
     const editor = sourceOf("src/renderer/components/modules/settings/provider-editor-panel.tsx");
+    const connection = sourceOf("src/renderer/lib/providers/connection.ts");
     const catalog = sourceOf("src/renderer/lib/providers/pi-model-catalog.ts");
     const providers = sourceOf("src/renderer/lib/providers/index.ts");
     const settings = sourceOf("src/renderer/stores/settings-store.ts");
     const catalogModule = sourceOf("src/main/agent/model-catalog.ts");
 
-    expect(editor).toContain("agentTestConnection");
-    expect(editor).toContain("agentListModels");
+    expect(editor).toContain("testProviderConnection");
+    expect(editor).toContain("listProviderModels");
+    expect(editor).not.toContain("window.electronAPI");
     expect(editor).not.toContain("chatTestConnection");
     expect(editor).not.toContain("chatFetchProviderModels");
+    expect(connection).toContain("agentTestConnection");
+    expect(connection).toContain("agentListModels");
     expect(catalog).toContain("agentListModelsCatalog");
     expect(catalog).toContain("prefetchPiModelsCatalog");
+    expect(catalog).not.toContain("window.electronAPI");
     expect(catalog).not.toContain("chatGetOpenCodeModelsCatalog");
     expect(catalog).not.toContain("OpenCode");
     expect(providers).toContain("agentGetModelEffort");
     expect(providers).toContain("agentGetEffortCatalog");
+    expect(providers).not.toContain("window.electronAPI");
     expect(providers).not.toContain("chatGetModelEffort");
     expect(providers).not.toContain("chatGetEffortCatalog");
     expect(settings).toContain("agentGetModelEffort");

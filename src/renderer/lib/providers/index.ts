@@ -8,7 +8,10 @@ export {
   isUnknownContextWindowLabel,
 } from "./pi-model-catalog";
 export { ALL_PROVIDERS, PROVIDER_PRESETS, CUSTOM_PRESET, getPreset } from "./presets";
+export { listProviderModels, testProviderConnection } from "./connection";
 
+import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/providers/context-constants";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
 import {
@@ -16,7 +19,6 @@ import {
   isUnknownContextWindowLabel,
   mergeProviderWithPiCatalog,
 } from "./pi-model-catalog";
-import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/providers/context-constants";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
 export interface CustomProviderEntry {
@@ -454,7 +456,7 @@ export async function getModelEffortLevelsAsync(
   const fallback = getModelEffortLevels(providerId, modelId, customModels, customProviders);
   const fallbackIds = fallback?.map((l) => l.value);
   try {
-    const result = await window.electronAPI.agentGetModelEffort({
+    const result = await agentDesktop.agentGetModelEffort({
       provider: providerId,
       modelId,
       fallback: fallbackIds,
@@ -471,7 +473,7 @@ export async function prefetchEffortCatalog(): Promise<
   Record<string, string[]> | null
 > {
   try {
-    const snapshot = await window.electronAPI.agentGetEffortCatalog();
+    const snapshot = await agentDesktop.agentGetEffortCatalog();
     return snapshot.entries;
   } catch {
     return null;

@@ -5,6 +5,7 @@
  */
 
 import type { AgentModelRow } from "../../../shared/agent/api";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import type { ModelConfig, ProviderConfig } from "./types";
 
 /** Providers whose model lists are prefetched into the shared catalog cache. */
@@ -81,7 +82,7 @@ export async function prefetchPiModelsCatalog(): Promise<
   if (prefetchPromise) return prefetchPromise;
   prefetchPromise = (async () => {
     try {
-      const snapshot = await window.electronAPI.agentListModelsCatalog();
+      const snapshot = await agentDesktop.agentListModelsCatalog();
       catalogEntries = snapshot.entries;
       catalogFetchedAt = snapshot.fetchedAt;
       notifyPiModelsCatalogListeners();

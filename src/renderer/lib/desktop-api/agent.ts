@@ -48,4 +48,8 @@ export const agentDesktop = {
   subagentsDeleteCustom: forwardDesktop("subagentsDeleteCustom"),
   orchestratorsGetDetail: forwardDesktop("orchestratorsGetDetail"),
   orchestratorsSaveCustom: forwardDesktop("orchestratorsSaveCustom"),
+  agentListModels: forwardDesktop("agentListModels"),
+  agentListModelsCatalog: forwardDesktop("agentListModelsCatalog"),
+  agentTestConnection: forwardDesktop("agentTestConnection"),
+  agentGetEffortCatalog: forwardDesktop("agentGetEffortCatalog"),
 };

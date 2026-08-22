@@ -792,6 +792,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps lib/providers free of window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/lib/providers"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps prompt and backup settings panels off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/components/modules/settings/knowledge-modules-panel.tsx",
@@ -817,6 +824,8 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/skill-markdown-panel.tsx",
       "src/renderer/components/modules/settings/subagent-editor-panel.tsx",
       "src/renderer/components/modules/settings/orchestrator-editor-panel.tsx",
+      "src/renderer/components/modules/settings/provider-editor-panel.tsx",
+      "src/renderer/components/modules/settings/system-font-picker.tsx",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }

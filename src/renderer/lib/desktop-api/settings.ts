@@ -10,6 +10,7 @@ export const settingsDesktop = {
   settingsGet: forwardDesktop("settingsGet"),
   settingsSet: forwardDesktop("settingsSet"),
   themeSetGlassMode: forwardDesktop("themeSetGlassMode"),
+  themeListSystemFonts: forwardDesktop("themeListSystemFonts"),
   settingsGetKnowledgeModules: forwardDesktop("settingsGetKnowledgeModules"),
   settingsGetPromptStackPreview: forwardDesktop("settingsGetPromptStackPreview"),
   settingsGetBuiltinTools: forwardDesktop("settingsGetBuiltinTools"),

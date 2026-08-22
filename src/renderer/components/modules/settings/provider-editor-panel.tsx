@@ -38,8 +38,10 @@ import {
   getPreset,
   buildCustomModelEntry,
   buildRemoveCustomProviderPatch,
+  listProviderModels,
   modelIdTaken,
   modelSupportsVision,
+  testProviderConnection,
 } from "@/lib/providers";
 import type { ModelConfig } from "@/lib/providers";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
@@ -311,7 +313,7 @@ function BuiltinProviderKeyPanel({ providerId }: { providerId: string }) {
     setTestResult("idle");
     try {
       const preset = getPreset(providerId) || ALL_PROVIDERS.find((p) => p.id === providerId);
-      const result = await window.electronAPI.agentTestConnection({
+      const result = await testProviderConnection({
         provider: providerId,
         apiKey: apiKey.trim(),
         baseUrl: preset?.defaultBaseUrl,
@@ -611,7 +613,7 @@ function CustomProviderEditorPanel({
     if (!catalogProviderId) return;
     setLazyFetching(true);
     try {
-      const result = await window.electronAPI.agentListModels({
+      const result = await listProviderModels({
         providerId: catalogProviderId,
         apiKey: apiKey.trim() || undefined,
         baseUrl: baseUrl.trim() || currentPreset?.defaultBaseUrl,
@@ -759,7 +761,7 @@ function CustomProviderEditorPanel({
     const effectiveBaseUrl = baseUrl || currentPreset?.defaultBaseUrl || "";
 
     try {
-      const result = await window.electronAPI.agentTestConnection({
+      const result = await testProviderConnection({
         provider: presetId === "__custom__" ? "custom" : presetId,
         apiKey: apiKey.trim(),
         baseUrl: effectiveBaseUrl || undefined,
@@ -813,7 +815,7 @@ function CustomProviderEditorPanel({
 
     setSaving(true);
     try {
-      const r = await window.electronAPI.agentTestConnection({
+      const r = await testProviderConnection({
         provider: presetId === "__custom__" ? "custom" : presetId,
         apiKey: apiKey.trim(),
         baseUrl: effectiveBaseUrl || undefined,

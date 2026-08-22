@@ -17,9 +17,16 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { appMenuFontClass, appMenuItemClass } from "@/components/ui/app-menu";
 import { appSelectTriggerClass } from "@/components/ui/app-select";
-import { getFontById, migrateFontValue, resolveFontCssFamily } from "@/lib/theme/font-options";
+import {
+  getCachedSystemFonts,
+  getFontById,
+  listSystemFonts,
+  migrateFontValue,
+  resolveFontCssFamily,
+  type SystemFontEntry,
+} from "@/lib/theme/font-options";
 
-export type SystemFontEntry = { family: string; monospace: boolean };
+export type { SystemFontEntry };
 
 type Preset = { value: string; label: string };
 
@@ -32,27 +39,6 @@ type Props = {
   /** Trigger width class. */
   triggerClassName?: string;
 };
-
-let fontsCache: SystemFontEntry[] | null = null;
-let fontsPromise: Promise<SystemFontEntry[]> | null = null;
-
-function loadFonts(): Promise<SystemFontEntry[]> {
-  if (fontsCache) return Promise.resolve(fontsCache);
-  if (!fontsPromise) {
-    fontsPromise = window.electronAPI
-      .themeListSystemFonts()
-      .then((list) => {
-        fontsCache = list;
-        fontsPromise = null;
-        return list;
-      })
-      .catch((err) => {
-        fontsPromise = null;
-        throw err;
-      });
-  }
-  return fontsPromise;
-}
 
 function displayLabel(value: string, presets: Preset[]): string {
   const migrated = migrateFontValue(value, presets[0]?.value === "system-mono" ? "mono" : "sans");
@@ -72,8 +58,9 @@ export function SystemFontPicker({
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [fonts, setFonts] = useState<SystemFontEntry[]>(fontsCache ?? []);
-  const [loading, setLoading] = useState(!fontsCache);
+  const cachedFonts = getCachedSystemFonts();
+  const [fonts, setFonts] = useState<SystemFontEntry[]>(cachedFonts ?? []);
+  const [loading, setLoading] = useState(!cachedFonts);
   const [error, setError] = useState<string | null>(null);
 
   const presets: Preset[] = useMemo(
@@ -85,14 +72,15 @@ export function SystemFontPicker({
   );
 
   useEffect(() => {
-    if (fontsCache) {
-      setFonts(fontsCache);
+    const cached = getCachedSystemFonts();
+    if (cached) {
+      setFonts(cached);
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    loadFonts()
+    listSystemFonts()
       .then((list) => {
         if (cancelled) return;
         setFonts(list);
