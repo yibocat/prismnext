@@ -19,4 +19,5 @@ export const projectDesktop = {
   workspaceEnsureMainTex: forwardDesktop("workspaceEnsureMainTex"),
   projectSetIcon: forwardDesktop("projectSetIcon"),
   projectSetIconImage: forwardDesktop("projectSetIconImage"),
+  projectScaffoldAgentsMd: forwardDesktop("projectScaffoldAgentsMd"),
 };

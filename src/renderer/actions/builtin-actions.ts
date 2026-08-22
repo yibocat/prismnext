@@ -37,6 +37,10 @@
 //   - Do NOT import from main-process modules — this runs in the renderer.
 
 import { actionRegistry } from "./registry";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { projectDesktop } from "@/lib/desktop-api/project";
 import { compileCurrentDocument } from "@/stores/compile-store";
 import { formatCitationHealthReport } from "../../shared/literature/format-citation-health-report";
 
@@ -53,7 +57,7 @@ actionRegistry.register("bib-check", async () => {
   if (!projectRoot) {
     throw new Error("Open a project first.");
   }
-  const report = await window.electronAPI.literatureCitationHealth(projectRoot);
+  const report = await literatureDesktop.literatureCitationHealth(projectRoot);
   return formatCitationHealthReport(report);
 });
 
@@ -81,8 +85,8 @@ actionRegistry.register("setup-agents-md", async () => {
     throw new Error("Open a project first.");
   }
 
-  const result = await window.electronAPI.projectScaffoldAgentsMd(projectRoot);
-  await window.electronAPI.fsWrite(result.agentsMdPath, result.content);
+  const result = await projectDesktop.projectScaffoldAgentsMd(projectRoot);
+  await fsDesktop.fsWrite(result.agentsMdPath, result.content);
 
   const verb = result.updated ? "Updated" : "Created";
   return `${verb} .workbench/agent/AGENTS.md from a local project scan (${result.stats.dirsListed} dirs, ${result.stats.filesListed} files). Add text after /setup to ask AI to refine it.`;
@@ -101,7 +105,7 @@ actionRegistry.register("compact-context", async () => {
     throw new Error("No active session — start a conversation first.");
   }
 
-  const result = await window.electronAPI.agentCompact({ conversationId });
+  const result = await agentDesktop.agentCompact({ conversationId });
   if (!result.ok) {
     throw new Error(result.error || "Failed to compact context.");
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import type { IconSpec } from "@shared/platform/icon-spec";
 
 /** Join icon base dir + relative filename into an absolute path (POSIX-ish). */
@@ -42,7 +43,7 @@ export function useIconImageSrc(
       return;
     }
     let cancelled = false;
-    void window.electronAPI
+    void fsDesktop
       .fsReadImage(abs)
       .then((res) => {
         if (!cancelled) setSrc(res?.dataUrl ?? null);

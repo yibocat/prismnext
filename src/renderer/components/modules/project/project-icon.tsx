@@ -1,4 +1,5 @@
 import { icons, type LucideIcon } from "lucide-react";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { cn } from "@/lib/utils";
 import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
 import { normalizeIconSpec, type IconSpec } from "@shared/platform/icon-spec";
@@ -63,7 +64,7 @@ export function projectIconBaseDir(projectPath: string): string {
 export async function loadProjectIcon(projectPath: string): Promise<IconSpec | null> {
   const root = projectPath.replace(/[/\\]+$/, "");
   try {
-    const settingsRes = await window.electronAPI.fsRead(
+    const settingsRes = await fsDesktop.fsRead(
       `${root}/.workbench/settings.json`,
     );
     const raw = settingsRes?.content?.trim();

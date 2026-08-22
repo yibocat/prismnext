@@ -6,6 +6,7 @@ import {
   HoverCardContent,
 } from "@/components/ui/hover-card";
 import { CircleIcon, FileTypeIcon, SparklesIcon, TerminalIcon } from "lucide-react";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useCompileStore } from "@/stores/compile-store";
 import {
   isCompileEngineAvailable,
@@ -109,7 +110,7 @@ export function ServerStatusDot() {
 
   const refresh = useCallback(async () => {
     try {
-      const status = await window.electronAPI.agentStatus(
+      const status = await agentDesktop.agentStatus(
         projectRoot ? { projectRoot } : undefined,
       );
       setAgent({

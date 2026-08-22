@@ -23,6 +23,10 @@ import { useThemeStore } from "@/stores/theme-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
+import { gitDesktop } from "@/lib/desktop-api/git";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
 import type { LiteraturePaper } from "@/types/electron.d";
@@ -171,7 +175,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     }
     let cancelled = false;
     const paths = files.map((f) => f.relativePath);
-    window.electronAPI
+    gitDesktop
       .gitCheckIgnore(projectRoot, paths)
       .then((ignored) => {
         if (!cancelled) setIgnoredPaths(new Set(ignored));
@@ -280,7 +284,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     }
     setSessionsReady(false);
     let cancelled = false;
-    window.electronAPI
+    agentDesktop
       .agentListSessions(projectRoot)
       .then((list) => {
         if (!cancelled) {
@@ -577,7 +581,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     if (!hasQuery) {
       let cancelled = false;
       setPapersLoading(true);
-      window.electronAPI
+      literatureDesktop
         .literatureList(projectRoot)
         .then((list) => {
           if (!cancelled) {
@@ -603,7 +607,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     let cancelled = false;
     setPapersLoading(true);
     const timer = setTimeout(() => {
-      window.electronAPI
+      literatureDesktop
         .literatureSearch(projectRoot, query, 20)
         .then((list) => {
           if (!cancelled) {
@@ -707,7 +711,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   const createIsland = async (title: string) => {
     if (!projectRoot) return;
-    const res = await window.electronAPI.experimentCreate({ projectRoot, title });
+    const res = await experimentDesktop.experimentCreate({ projectRoot, title });
     if (!res?.ok) {
       if (res?.hint) toast.error(res.hint);
       return;

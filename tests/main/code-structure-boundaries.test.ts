@@ -944,6 +944,14 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps renderer off window.electronAPI except desktop-api", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer"))) {
+      const rel = relative(REPO, file).replace(/\\/g, "/");
+      if (rel.includes("/lib/desktop-api/")) continue;
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps leftover research, slash, and reveal helpers off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/lib/files/open-research-brief.ts",

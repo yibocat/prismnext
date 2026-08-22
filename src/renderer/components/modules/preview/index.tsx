@@ -65,6 +65,7 @@ import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-posi
 import { TabContext } from "@/lib/workspace/tab-context";
 import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useTranslation } from "react-i18next";
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
@@ -1155,7 +1156,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
     setFilePdfBytes(null);
     (async () => {
       try {
-        const { bytes } = await window.electronAPI.fsReadBytes(absolutePath);
+        const { bytes } = await fsDesktop.fsReadBytes(absolutePath);
         if (!cancelled) setFilePdfBytes(new Uint8Array(bytes));
       } catch (err) {
         if (!cancelled) {
