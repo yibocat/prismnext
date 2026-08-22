@@ -30,7 +30,7 @@ import type {
 } from "../../shared/teams/view";
 import { createLogger } from "../app/logger";
 import { _registeredRoots } from "../project/active-project-roots";
-import { licenseGrants, licenseStateVersion } from "../services/teams-license";
+import { licenseGrants, licenseStateVersion } from "./teams-license";
 import {
   appTeamsStateWriteCounter,
   onAppTeamsStateWritten,
@@ -450,7 +450,7 @@ export function notifyTeamsChanged(projectRoot?: string): void {
   const roots = projectRoot ? [projectRoot] : _registeredRoots();
   if (roots.length === 0) return;
   for (const root of roots) {
-    void import("../services/project-subagents-refresh")
+    void import("./project-subagents-refresh")
       .then((m) => m.scheduleSubagentsRefresh(root))
       .catch(() => {});
     void import("../skills/project-skills-refresh")

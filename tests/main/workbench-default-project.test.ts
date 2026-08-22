@@ -25,11 +25,11 @@ import {
   setDefaultProjectId,
 } from "../../src/main/workbench/default-project";
 import { ensureProjectContentMigrated } from "../../src/main/teams/migrate-project-content";
-import { ensureDefaultMcpServers } from "../../src/main/services/project-mcp-defaults";
-import { readWritableTeamMcpJson } from "../../src/main/services/team-mcp-files";
-import { buildProjectSubagentsAgentPlan } from "../../src/main/services/subagents-sync";
+import { ensureDefaultMcpServers } from "../../src/main/teams/project-mcp-defaults";
+import { readWritableTeamMcpJson } from "../../src/main/teams/team-mcp-files";
+import { buildProjectSubagentsAgentPlan } from "../../src/main/teams/subagents-sync";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
-import { installProjectRule } from "../../src/main/services/rules-sync";
+import { installProjectRule } from "../../src/main/prompts/rules-sync";
 import { appendProvenanceEvent } from "../../src/main/experiment/provenance-service";
 import { saveConfig as saveTerminalConfig } from "../../src/main/terminal/terminal-config";
 import { ensureResearchPlansDir } from "../../src/main/research/research-plan-service";

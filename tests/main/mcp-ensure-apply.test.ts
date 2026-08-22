@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { EnsureDefaultMcpResult } from "../../src/main/services/project-mcp-defaults";
+import type { EnsureDefaultMcpResult } from "../../src/main/teams/project-mcp-defaults";
 
 vi.mock("electron", () => ({
   ipcMain: {

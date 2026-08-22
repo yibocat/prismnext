@@ -13,7 +13,7 @@ import {
 import {
   shouldDenyOutsideTaskAllowlist,
   resolveTaskPermissionDenial,
-} from "../../src/main/services/task-orchestrator-gate";
+} from "../../src/main/agent/task-orchestrator-gate";
 import { formatTaskError } from "../../src/shared/agent/task-error-codes";
 
 describe("this-turn Task allowlist + must-invoke (@ experts)", () => {

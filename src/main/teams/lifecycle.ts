@@ -35,7 +35,7 @@ import {
 } from "../../shared/platform/icon-spec";
 import { createLogger } from "../app/logger";
 import { _registeredRoots } from "../project/active-project-roots";
-import { licenseGrants } from "../services/teams-license";
+import { licenseGrants } from "./teams-license";
 import { getTeamRecord, invalidateCatalog, scanAllTeams } from "./catalog";
 import {
   getAsset,

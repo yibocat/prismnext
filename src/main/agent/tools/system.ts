@@ -128,7 +128,7 @@ export const imageDescribeTool: NativeToolDefinition = {
     const rawPath = str(args.path) || str(args.imagePath);
     if (!rawPath) return { ok: false, error: "missing_image_path" };
 
-    const { resolveVisionHelperFromSettings, describeImagesWithConfiguredHelper } = await import("../../services/vision-fallback");
+    const { resolveVisionHelperFromSettings, describeImagesWithConfiguredHelper } = await import("../vision-fallback");
     const helper = resolveVisionHelperFromSettings();
     if (!helper) {
       return {

@@ -15,7 +15,7 @@ import {
   resolveSubagentProfileModuleKeysFor,
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
-import { buildTaskPermissionBlock } from "../services/task-orchestrator-gate";
+import { buildTaskPermissionBlock } from "../agent/task-orchestrator-gate";
 import type { SubagentDefinition } from "../../shared/agent/subagents";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 

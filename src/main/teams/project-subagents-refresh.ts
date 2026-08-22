@@ -4,7 +4,7 @@ import {
   buildAgentsPlan,
   getAgentsSyncState,
   syncAgentsToOpencode,
-} from "../teams/agents-sync";
+} from "./agents-sync";
 import { invalidateProjectChatPrewarm } from "../session/project-chat-prewarm";
 import { normalizeProjectRoot } from "../skills/skills-sync";
 import { PROJECT_META_DIR, projectTeamsRel } from "../../shared/workbench/paths";

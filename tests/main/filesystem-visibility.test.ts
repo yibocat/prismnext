@@ -19,7 +19,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/project-subagents-refresh", () => ({
+vi.mock("../../src/main/teams/project-subagents-refresh", () => ({
   scheduleExpertsRefreshFromPaths: refreshSpies.subagents,
 }));
 

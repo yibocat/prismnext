@@ -540,7 +540,7 @@ async function startWatchingExclusive(
             error: err instanceof Error ? err.message : String(err),
           });
         });
-        import("../services/project-subagents-refresh").then(({ scheduleExpertsRefreshFromPaths }) => {
+        import("../teams/project-subagents-refresh").then(({ scheduleExpertsRefreshFromPaths }) => {
           scheduleExpertsRefreshFromPaths(rootPath, paths);
         }).catch((err) => {
           log.error("fs-watch experts refresh scheduling failed", {

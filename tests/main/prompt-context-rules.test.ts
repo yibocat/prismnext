@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { installProjectRule } from "../../src/main/services/rules-sync";
+import { installProjectRule } from "../../src/main/prompts/rules-sync";
 import { buildPromptContext } from "../../src/main/prompts/context";
 import { projectAgentsMdRel } from "../../src/shared/workbench/paths";
 

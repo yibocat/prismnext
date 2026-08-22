@@ -69,7 +69,7 @@ export async function buildPromptContext(
     ctx.userCustomPrompt = userPrompt || undefined;
 
     if (projectRoot) {
-      const { getPromptProjectRules } = await import("../services/rules-sync");
+      const { getPromptProjectRules } = await import("./rules-sync");
       const allRules = getPromptProjectRules(projectRoot);
       if (allRules.length > 0) {
         ctx.customRules = allRules;

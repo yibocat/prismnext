@@ -28,7 +28,7 @@ import {
 } from "../skills/skills-registry";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import { toFqid } from "../../shared/teams/state";
-import { listCorePackSkills, readCoreSkillMd } from "../services/core-team-skills";
+import { listCorePackSkills, readCoreSkillMd } from "../teams/core-team-skills";
 
 function refreshProjectSkills(
   projectPath: string,

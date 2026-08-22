@@ -18,7 +18,7 @@ import {
 } from "../../shared/teams/types";
 import { emptyAppTeamsState, normalizeAppTeamsState } from "../../shared/teams/state";
 import { createLogger } from "../app/logger";
-import { listInstalledTeams } from "../services/teams-installed";
+import { listInstalledTeams } from "./teams-installed";
 import { homeTeamsStatePath } from "../workbench/home";
 
 const log = createLogger("teams-state-app");

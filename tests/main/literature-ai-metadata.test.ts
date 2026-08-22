@@ -10,7 +10,7 @@ import {
   updatePaper,
 } from "../../src/main/literature/facade";
 
-vi.mock("../../src/main/services/provider-chat", () => ({
+vi.mock("../../src/main/lib/provider-chat", () => ({
   completeChatJson: vi.fn().mockResolvedValue(
     JSON.stringify({
       summary: "World models enable sample-efficient planning.",

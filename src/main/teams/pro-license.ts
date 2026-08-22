@@ -1,4 +1,4 @@
-import { app } from "electron";
+import { getUserDataPath } from "../app/paths";
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ActivateLicenseResult, LicenseSnapshot } from "../../shared/pro";
@@ -8,11 +8,11 @@ import {
 } from "../../shared/pro";
 
 function licensePath(): string {
-  return join(app.getPath("userData"), "pro", "license.json");
+  return join(getUserDataPath(), "pro", "license.json");
 }
 
 function ensureDir(): void {
-  mkdirSync(join(app.getPath("userData"), "pro"), { recursive: true });
+  mkdirSync(join(getUserDataPath(), "pro"), { recursive: true });
 }
 
 export function readProLicense(): LicenseSnapshot | null {

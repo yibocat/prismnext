@@ -19,7 +19,7 @@ import {
   deleteCustomOrchestrator,
   saveCustomOrchestrator,
   saveCustomSubagent,
-} from "../../src/main/services/subagents-sync";
+} from "../../src/main/teams/subagents-sync";
 import { createTeam } from "../../src/main/teams/lifecycle";
 import {
   ensureProjectContentMigrated,

@@ -35,7 +35,7 @@ import {
   composeProfileModulePrompts,
 } from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
-import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
+import { buildTaskPermissionBlock } from "../agent/task-orchestrator-gate";
 import {
   CORE_TEAM_ID,
   MY_CONTENT_TEAM_ID,
@@ -45,7 +45,7 @@ import {
   type Fqid,
   type AssetKind,
 } from "../../shared/teams/types";
-import { ensureMyContentTeam, isMyContentLeadFqid, isMyContentTeamId } from "../teams/my-content";
+import { ensureMyContentTeam, isMyContentLeadFqid, isMyContentTeamId } from "./my-content";
 import { parseFqid, toFqid } from "../../shared/teams/state";
 import {
   getAsset,
@@ -56,19 +56,19 @@ import {
   resolveInvocation,
   resolveRoster,
   invalidateResolver,
-} from "../teams/resolver";
+} from "./resolver";
 import type { AssetViewV2, OrchestratorDefV2 } from "../../shared/teams/view";
-import { getTeamRecord, invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
+import { getTeamRecord, invalidateCatalog as invalidateCatalogV2 } from "./catalog";
 import {
   ensureProjectContentMigrated,
   ensureProjectDefaultTeamDir,
-} from "../teams/migrate-project-content";
-import { purgeSubagentFromForeignRosters } from "../teams/lifecycle";
+} from "./migrate-project-content";
+import { purgeSubagentFromForeignRosters } from "./lifecycle";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("subagents-sync", "agent");
 
-export { buildTaskPermissionBlock } from "./task-orchestrator-gate";
+export { buildTaskPermissionBlock } from "../agent/task-orchestrator-gate";
 
 // ── 裸 id / 文件名命名空间 ─────────────────────────────────
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createLogger } from "../app/logger";
-import { ensureProjectContentMigrated } from "../teams/migrate-project-content";
+import { ensureProjectContentMigrated } from "./migrate-project-content";
 
 const log = createLogger("project-mcp-defaults");
 

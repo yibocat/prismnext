@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
 import { registerLiteraturePdfProtocol } from "./app/literature-pdf-protocol";
-import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
-import { ensureUserTeamsRegistered } from "./services/user-teams";
+import { discoverAndRegisterProTeams } from "./teams/pro-teams-discovery";
+import { ensureUserTeamsRegistered } from "./teams/user-teams";
 import { ensureMyContentTeam } from "./teams/my-content";
 import { disposeChat, registerIpcHandlers } from "./ipc/index";
 import {

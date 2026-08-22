@@ -9,12 +9,12 @@ import {
   MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
 } from "../../shared/teams/types";
-import { getTeamRecord } from "../teams/catalog";
-import { ensureMyContentTeam } from "../teams/my-content";
+import { getTeamRecord } from "./catalog";
+import { ensureMyContentTeam } from "./my-content";
 import {
   ensureProjectDefaultTeamDir,
   projectDefaultTeamDir,
-} from "../teams/migrate-project-content";
+} from "./migrate-project-content";
 
 export function resolveWritableTeamDir(
   projectRoot: string,

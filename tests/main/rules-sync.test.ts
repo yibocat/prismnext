@@ -8,7 +8,7 @@ import {
   installProjectRule,
   listProjectRules,
   setProjectRuleEnabled,
-} from "../../src/main/services/rules-sync";
+} from "../../src/main/prompts/rules-sync";
 
 describe("rules-sync", () => {
   let root: string;

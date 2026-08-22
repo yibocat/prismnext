@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import {
   PAPER_SEARCH_MCP_ID,
   ensureDefaultMcpServers,
-} from "../../src/main/services/project-mcp-defaults";
+} from "../../src/main/teams/project-mcp-defaults";
 
 describe("ensureDefaultMcpServers", () => {
   let root: string;

@@ -14,8 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
-import { appTeamsDir, setAppTeamsDirForTests } from "../teams/scope";
-import { invalidateCatalog as invalidateCatalogV2 } from "../teams/catalog";
+import { appTeamsDir, setAppTeamsDirForTests } from "./scope";
+import { invalidateCatalog as invalidateCatalogV2 } from "./catalog";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("user-teams");

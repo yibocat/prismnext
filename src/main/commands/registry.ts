@@ -28,7 +28,7 @@ import {
   resolveRef,
 } from "../teams/resolver";
 import { setAppAssetEnabled } from "../teams/state-app";
-import { resolveWritableTeamDir } from "../services/team-mcp-files";
+import { resolveWritableTeamDir } from "../teams/team-mcp-files";
 
 /**
  * CommandRegistry — resolver facade for slash commands, per-project.

@@ -307,7 +307,7 @@ describe("Pi-first agent core boundaries", () => {
     const mcpIpc = sourceOf("src/main/ipc/mcp.ts");
     const host = sourceOf("src/main/agent/mcp-host.ts");
     const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
-    const experts = sourceOf("src/main/services/project-subagents-refresh.ts");
+    const experts = sourceOf("src/main/teams/project-subagents-refresh.ts");
 
     expect(mcpIpc).not.toMatch(/from\s+["'][^"']*acp\//);
     expect(mcpIpc).not.toContain("AcpService");
@@ -339,7 +339,7 @@ describe("Pi-first agent core boundaries", () => {
     const main = sourceOf("src/main/index.ts");
     const settings = sourceOf("src/main/ipc/settings.ts");
     const prewarm = sourceOf("src/main/session/project-chat-prewarm.ts");
-    const experts = sourceOf("src/main/services/project-subagents-refresh.ts");
+    const experts = sourceOf("src/main/teams/project-subagents-refresh.ts");
     const resolver = sourceOf("src/main/teams/resolver.ts");
     const experiment = sourceOf("src/main/ipc/experiment.ts");
     const registry = sourceOf("src/main/session/chat-session-registry.ts");

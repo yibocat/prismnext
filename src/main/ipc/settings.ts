@@ -33,7 +33,7 @@ export function registerSettingsHandlers(): void {
           const lastPath = getWorkbenchState().defaultLastPath?.trim();
           if (lastPath) {
             const { refreshProjectSubagentsIntegration } = await import(
-              "../services/project-subagents-refresh"
+              "../teams/project-subagents-refresh"
             );
             await refreshProjectSubagentsIntegration(lastPath);
           }

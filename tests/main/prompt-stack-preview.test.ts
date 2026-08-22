@@ -7,7 +7,7 @@ import {
   buildPromptStackPreview,
   formatPromptStackPreviewMarkdown,
 } from "../../src/main/prompts/stack-preview";
-import { installProjectRule } from "../../src/main/services/rules-sync";
+import { installProjectRule } from "../../src/main/prompts/rules-sync";
 
 vi.mock("../../src/main/services/settings", () => ({
   getSettings: () => ({}),

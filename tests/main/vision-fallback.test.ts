@@ -25,7 +25,7 @@ import {
   resolveAnthropicMessagesUrl,
   resolveVisionHelperFromSettings,
   usesAnthropicMessagesApi,
-} from "../../src/main/services/vision-fallback";
+} from "../../src/main/agent/vision-fallback";
 
 describe("vision-fallback URL routing", () => {
   it("routes OpenCode Go MiniMax/Qwen to Anthropic messages API", () => {

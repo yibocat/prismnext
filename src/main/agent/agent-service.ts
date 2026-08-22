@@ -594,7 +594,7 @@ export class AgentService {
   }
 
   async describeImages(input: AgentDescribeImagesInput): Promise<AgentDescribeImagesResult> {
-    const { describeImagesWithVisionFallback } = await import("../services/vision-fallback");
+    const { describeImagesWithVisionFallback } = await import("./vision-fallback");
     return {
       descriptions: await describeImagesWithVisionFallback(
         input.providerId,

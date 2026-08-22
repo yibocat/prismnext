@@ -15,17 +15,17 @@
  * license 不激活时**照常注册**（catalog 可见 → upsell），门控在 resolver（§8.3）。
  */
 
-import { app } from "electron";
+import { isAppPackaged } from "../app/paths";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   invalidateCatalog,
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
-} from "../teams/catalog";
+} from "./catalog";
 import { invalidateLicenseCache } from "./teams-license";
-import { notifyTeamsChanged } from "../teams/resolver";
-import { _registeredRoots } from "./active-project-roots";
+import { notifyTeamsChanged } from "./resolver";
+import { _registeredRoots } from "../project/active-project-roots";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("pro-packs-discovery");
@@ -83,7 +83,7 @@ export function resolveProPackageDir(env: string | undefined = process.env.PRISM
     log.warn("PRISM_PRO_PATH is set but the pro package directory was not found");
   }
   try {
-    if (app?.isPackaged) {
+    if (isAppPackaged()) {
       const packaged = getPackagedProPackageDir();
       if (existsSync(join(packaged, "package.json"))) return packaged;
     }

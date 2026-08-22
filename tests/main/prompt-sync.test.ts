@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promptManager } from "../../src/main/prompts";
-import { PRISM_AGENTS_REL, syncProjectPromptFile } from "../../src/main/services/prompt-sync";
+import { PRISM_AGENTS_REL, syncProjectPromptFile } from "../../src/main/prompts/prompt-sync";
 import { projectAgentsMdRel } from "../../src/shared/workbench/paths";
 
 describe("syncProjectPromptFile", () => {

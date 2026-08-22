@@ -422,6 +422,48 @@ describe("code structure host port (Phase 3)", () => {
     }
   });
 
+  it("promotes teams leftovers, agent neighbors, and prompt sync out of services", () => {
+    for (const rel of [
+      "src/main/teams/subagents-sync.ts",
+      "src/main/teams/user-teams.ts",
+      "src/main/teams/teams-installed.ts",
+      "src/main/teams/teams-license.ts",
+      "src/main/teams/pro-teams-discovery.ts",
+      "src/main/teams/pro-license.ts",
+      "src/main/teams/core-team-skills.ts",
+      "src/main/teams/team-mcp-files.ts",
+      "src/main/teams/project-mcp-defaults.ts",
+      "src/main/teams/project-subagents-refresh.ts",
+      "src/main/agent/task-orchestrator-gate.ts",
+      "src/main/agent/vision-fallback.ts",
+      "src/main/lib/provider-chat.ts",
+      "src/main/prompts/rules-sync.ts",
+      "src/main/prompts/prompt-sync.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    for (const rel of [
+      "src/main/services/subagents-sync.ts",
+      "src/main/services/user-teams.ts",
+      "src/main/services/teams-installed.ts",
+      "src/main/services/pro-license.ts",
+      "src/main/services/task-orchestrator-gate.ts",
+      "src/main/services/vision-fallback.ts",
+      "src/main/services/provider-chat.ts",
+      "src/main/services/rules-sync.ts",
+      "src/main/services/prompt-sync.ts",
+      "src/main/agent/provider-chat.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(false);
+    }
+    expect(sourceOf("src/main/teams/pro-license.ts")).not.toMatch(/from\s+["']electron["']/);
+    expect(sourceOf("src/main/teams/teams-installed.ts")).not.toMatch(/from\s+["']electron["']/);
+    expect(sourceOf("src/main/teams/pro-teams-discovery.ts")).not.toMatch(/from\s+["']electron["']/);
+    expect(sourceOf("src/main/literature/ai-metadata/literature-ai-metadata.ts")).toMatch(
+      /from\s+["'][^"']*lib\/provider-chat["']/,
+    );
+  });
+
   it("keeps session, skills, research, and interaction free of Electron, ipc, and agent", () => {
     for (const dir of [
       "src/main/session",

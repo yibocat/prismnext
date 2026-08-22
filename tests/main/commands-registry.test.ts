@@ -20,7 +20,7 @@ import { setTeamEnabled } from "../../src/main/teams/lifecycle";
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
-} from "../../src/main/services/teams-installed";
+} from "../../src/main/teams/teams-installed";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import {
   __resetTeamsResolverForTests,

@@ -12,7 +12,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import { parseFlatFrontmatter, fmString } from "../../shared/teams/frontmatter";
-import { getTeamRecord } from "../teams/catalog";
+import { getTeamRecord } from "./catalog";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("core-pack-skills");

@@ -14,7 +14,7 @@ import {
   resolvePaperTagDisplay,
 } from "../../../shared/literature/paper-tags";
 import { getSettings } from "../../services/settings";
-import { completeChatJson } from "../../services/provider-chat";
+import { completeChatJson } from "../../lib/provider-chat";
 import { heuristicAbstractAndKeywords } from "./literature-ai-metadata-heuristics";
 import {
   collectProjectTagDisplays,

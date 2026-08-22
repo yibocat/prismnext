@@ -19,7 +19,7 @@ import {
   buildProjectSubagentsAgentPlan,
   listSubagents,
   listOrchestrators,
-} from "../../src/main/services/subagents-sync";
+} from "../../src/main/teams/subagents-sync";
 import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
 import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";

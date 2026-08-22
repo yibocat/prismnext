@@ -31,7 +31,7 @@ import { setAppAssetEnabled, setAppTeamEnabled, setAppTeamsStateDataDir } from "
 import {
   addInstalledTeam,
   setTeamsInstalledDataDir,
-} from "../../src/main/services/teams-installed";
+} from "../../src/main/teams/teams-installed";
 import { __resetTeamsResolverForTests, listAssets as listAssetsV2 } from "../../src/main/teams/resolver";
 import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../src/shared/teams/types";
 import { homeSkillDir, homeSkillsDir, homeSkillsManifestPath, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";

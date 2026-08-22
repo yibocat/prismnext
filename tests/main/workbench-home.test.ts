@@ -37,7 +37,7 @@ import {
 } from "../../src/main/workbench/home";
 import { findPrismProjectRoot } from "../../src/main/experiment/facade";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
-import { userTeamsRootDir } from "../../src/main/services/user-teams";
+import { userTeamsRootDir } from "../../src/main/teams/user-teams";
 
 const temps: string[] = [];
 

@@ -7,11 +7,11 @@
  * teams.json (assetEnabled), and core/local packs are implicitly
  * installed and never recorded here.
  *
- * File: `app.getPath("userData")/packs-installed.json`
+ * File: `getUserDataPath()/packs-installed.json`
  * Writes are atomic (tmp + rename), same pattern as packs-state.ts.
  */
 
-import { app } from "electron";
+import { getUserDataPath } from "../app/paths";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createLogger } from "../app/logger";
@@ -42,7 +42,7 @@ export function setTeamsInstalledDataDir(dir: string | null): void {
 function filePath(): string {
   if (dataDirOverride) return join(dataDirOverride, TEAMS_INSTALLED_FILE);
   try {
-    return join(app.getPath("userData"), TEAMS_INSTALLED_FILE);
+    return join(getUserDataPath(), TEAMS_INSTALLED_FILE);
   } catch {
     // Non-Electron context (vitest without mock) → throwaway tmp dir.
     return join(app_less_fallback(), TEAMS_INSTALLED_FILE);

@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { ipcMain } from "electron";
-import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
+import { ensureDefaultMcpServers } from "../teams/project-mcp-defaults";
 import {
   readWritableTeamMcpJson,
   writeWritableTeamMcpJson,
-} from "../services/team-mcp-files";
+} from "../teams/team-mcp-files";
 import { invalidateCatalog } from "../teams/catalog";
 import { invalidateResolver } from "../teams/resolver";
 import { PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";

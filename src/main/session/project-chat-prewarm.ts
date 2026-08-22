@@ -6,7 +6,7 @@ import { buildPromptContext } from "../prompts/context";
 import { createLogger } from "../app/logger";
 import {
   refreshProjectSubagentsIntegrationIfNeeded,
-} from "../services/project-subagents-refresh";
+} from "../teams/project-subagents-refresh";
 import {
   refreshProjectSkillsIntegrationIfNeeded,
 } from "../skills/project-skills-refresh";
