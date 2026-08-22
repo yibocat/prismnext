@@ -7,3 +7,4 @@ export * from "./zotero";
 export * from "./collections";
 export * from "./annotations";
 export * from "./bibliography";
+export * from "./catalog";

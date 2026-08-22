@@ -1,23 +1,19 @@
 import { ipcMain } from "electron";
 import type { PaperExtractSource } from "../../shared/literature/paper-extract";
 import {
-  cancelPaperExtract,
-  enqueueBatchPaperExtract,
-  enqueueCollectionExtract,
-  enqueuePaperExtract,
-  resumeExtractQueues,
-  retryPaperExtract,
-} from "../literature/extract/literature-extract-queue";
-import {
-  getPaperExtractAbsPath,
-  getPaperExtractState,
+  cancelPaperExtractForRenderer,
+  enqueueBatchPaperExtractForRenderer,
+  enqueueCollectionExtractForRenderer,
+  enqueuePaperExtractForRenderer,
+  getExtractBlocksDocument,
+  getExtractDocument,
   listPaperExtractStates,
-  readExtractBlocks,
-  readExtractMarkdown,
-} from "../literature/extract/paper-extract-db";
-import { readPaperPdfContent } from "../literature/extract/paper-extract-read";
-import { testMineruConnection } from "../literature/extract/mineru-client";
-import { getSettings } from "../app/settings";
+  openExtractMarkdown,
+  readUserPaperPdfContent,
+  resumeExtractQueuesForRenderer,
+  retryPaperExtractForRenderer,
+  testMineruFromSettings,
+} from "../literature/host";
 
 export function registerLiteratureExtractHandlers(): void {
   ipcMain.handle(
@@ -26,10 +22,7 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source: PaperExtractSource; force?: boolean },
     ) => {
-      await enqueuePaperExtract(args.projectRoot, args.paperId, args.source, {
-        force: args.force,
-      });
-      return { ok: true };
+      return enqueuePaperExtractForRenderer(args.projectRoot, args.paperId, args.source, args.force);
     },
   );
 
@@ -39,8 +32,7 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source: PaperExtractSource },
     ) => {
-      cancelPaperExtract(args.projectRoot, args.paperId, args.source);
-      return { ok: true };
+      return cancelPaperExtractForRenderer(args.projectRoot, args.paperId, args.source);
     },
   );
 
@@ -57,14 +49,7 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source: PaperExtractSource },
     ) => {
-      const state = getPaperExtractState(args.projectRoot, args.paperId, args.source);
-      if (!state || state.status !== "ready" || !state.mdPath) {
-        return { state, markdown: null as string | null };
-      }
-      return {
-        state,
-        markdown: readExtractMarkdown(args.projectRoot, state),
-      };
+      return getExtractDocument(args.projectRoot, args.paperId, args.source);
     },
   );
 
@@ -74,13 +59,7 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source?: PaperExtractSource },
     ) => {
-      const source = args.source ?? "mineru";
-      const state = getPaperExtractState(args.projectRoot, args.paperId, source);
-      if (!state || state.status !== "ready") {
-        return { state, blocks: null };
-      }
-      const blocks = readExtractBlocks(args.projectRoot, args.paperId, source);
-      return { state, blocks };
+      return getExtractBlocksDocument(args.projectRoot, args.paperId, args.source);
     },
   );
 
@@ -90,26 +69,18 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source: PaperExtractSource },
     ) => {
-      const state = getPaperExtractState(args.projectRoot, args.paperId, args.source);
-      if (!state?.mdPath) return { relativePath: null as string | null };
-      const abs = getPaperExtractAbsPath(args.projectRoot, state.mdPath);
-      const relativePath = abs.startsWith(args.projectRoot)
-        ? abs.slice(args.projectRoot.length + 1)
-        : state.mdPath;
-      return { relativePath };
+      return openExtractMarkdown(args.projectRoot, args.paperId, args.source);
     },
   );
 
   ipcMain.handle("extract:testMineru", async (_event, args: { token?: string }) => {
-    const token = args.token ?? (getSettings().mineruApiToken as string | undefined) ?? "";
-    return testMineruConnection(token);
+    return testMineruFromSettings(args.token);
   });
 
   ipcMain.handle(
     "extract:resume",
     async (_event, args: { projectRoot: string }) => {
-      resumeExtractQueues(args.projectRoot);
-      return { ok: true };
+      return resumeExtractQueuesForRenderer(args.projectRoot);
     },
   );
 
@@ -119,8 +90,7 @@ export function registerLiteratureExtractHandlers(): void {
       _event,
       args: { projectRoot: string; paperId: string; source: PaperExtractSource },
     ) => {
-      retryPaperExtract(args.projectRoot, args.paperId, args.source);
-      return { ok: true };
+      return retryPaperExtractForRenderer(args.projectRoot, args.paperId, args.source);
     },
   );
 
@@ -135,9 +105,12 @@ export function registerLiteratureExtractHandlers(): void {
         force?: boolean;
       },
     ) => {
-      return enqueueBatchPaperExtract(args.projectRoot, args.paperIds, args.source, {
-        force: args.force,
-      });
+      return enqueueBatchPaperExtractForRenderer(
+        args.projectRoot,
+        args.paperIds,
+        args.source,
+        args.force,
+      );
     },
   );
 
@@ -152,9 +125,12 @@ export function registerLiteratureExtractHandlers(): void {
         force?: boolean;
       },
     ) => {
-      return enqueueCollectionExtract(args.projectRoot, args.collectionId, args.source, {
-        force: args.force,
-      });
+      return enqueueCollectionExtractForRenderer(
+        args.projectRoot,
+        args.collectionId,
+        args.source,
+        args.force,
+      );
     },
   );
 
@@ -171,13 +147,7 @@ export function registerLiteratureExtractHandlers(): void {
         force?: boolean;
       },
     ) => {
-      const settings = getSettings();
-      const token = settings.mineruApiToken;
-      const tokenPresent = typeof token === "string" && token.trim().length > 0;
-      return readPaperPdfContent(
-        { ...args, initiatedBy: "user", waitTimeoutMs: 5 * 60_000 },
-        tokenPresent,
-      );
+      return readUserPaperPdfContent(args);
     },
   );
 }

@@ -29,8 +29,13 @@ import {
   upsertZoteroPaperRow,
   resolveOrphanZoteroPaper,
   findProjectBibPath,
+  detachAllZoteroMirrors,
 } from "../facade";
-import { readLiteratureProjectConfig } from "../../project/workspace-config";
+import {
+  readLiteratureProjectConfig,
+  writeLiteratureProjectConfig,
+  type LiteratureProjectConfig,
+} from "../../project/workspace-config";
 import { getZoteroStatus } from "./zotero-client";
 
 /**
@@ -102,6 +107,41 @@ export function pruneOrphanZoteroPapers(
 
 function prismDir(projectRoot: string): string {
   return projectHomeSlotDir(projectRoot);
+}
+
+export function getZoteroProjectBinding(projectRoot: string): LiteratureProjectConfig {
+  return readLiteratureProjectConfig(prismDir(projectRoot));
+}
+
+export function setZoteroProjectBinding(
+  projectRoot: string,
+  collectionId: string | null,
+  collectionName?: string | null,
+): LiteratureProjectConfig & { detached?: { papers: number; collections: number } } {
+  if (!collectionId) {
+    const detached = detachAllZoteroMirrors(projectRoot);
+    const config = writeLiteratureProjectConfig(prismDir(projectRoot), {
+      zoteroCollectionId: undefined,
+      zoteroCollectionName: undefined,
+    });
+    return { ...config, detached };
+  }
+  return writeLiteratureProjectConfig(prismDir(projectRoot), {
+    zoteroCollectionId: collectionId,
+    zoteroCollectionName: collectionName ?? undefined,
+  });
+}
+
+export async function pullZoteroCollectionsForProject(projectRoot: string): Promise<{
+  collectionsUpserted: number;
+  collectionsPruned: number;
+}> {
+  const binding = getZoteroProjectBinding(projectRoot);
+  const { upserted, pruned } = await syncZoteroCollections(
+    projectRoot,
+    binding.zoteroCollectionId ?? null,
+  );
+  return { collectionsUpserted: upserted, collectionsPruned: pruned };
 }
 
 export async function syncZoteroCollections(

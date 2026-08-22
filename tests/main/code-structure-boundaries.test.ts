@@ -239,6 +239,30 @@ describe("code structure host port (Phase 3)", () => {
     expect(sourceOf("src/main/literature/bibliography.ts")).toMatch(
       /export async function bibliographyExportContent/,
     );
+    expect(existsSync(join(REPO, "src/main/literature/host.ts"))).toBe(true);
+    expect(sourceOf("src/main/literature/facade.ts")).not.toMatch(
+      /export \* from "\.\/host"/,
+    );
+  });
+
+  it("keeps literature ipc as host + dialog forwarding", () => {
+    for (const rel of [
+      "src/main/ipc/literature.ts",
+      "src/main/ipc/literature-extract.ts",
+      "src/main/ipc/zotero.ts",
+      "src/main/ipc/bibliography.ts",
+    ]) {
+      const src = sourceOf(rel);
+      expect(src, rel).not.toMatch(/from\s+["']\.\.\/services/);
+      expect(
+        importsFrom(join(REPO, rel), /from\s+["']\.\.\/literature\/(?!host)/),
+        rel,
+      ).toEqual([]);
+      expect(src, rel).not.toMatch(/zotero-sync|paper-extract-db|literature-enrich/);
+    }
+    expect(sourceOf("src/main/ipc/literature.ts")).toMatch(
+      /from\s+["']\.\.\/literature\/host["']/,
+    );
   });
 
   it("keeps main/lib free of services imports", () => {

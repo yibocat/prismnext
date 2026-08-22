@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { findWorkbenchProjectRoot, parseHomeWorktreeCheckout, resolveWorkbenchHome } from "../workbench/home";
 import { readProjectSlotMeta } from "../workbench/default-project";
-import { ensureWorkbenchId } from "../workbench/identity";
+import { ensureWorkbenchId, readWorkbenchJson } from "../workbench/identity";
 import { libraryRel, projectSlotRel } from "../../shared/workbench/paths";
 import type { LibraryPaths } from "./types";
 
@@ -53,4 +53,15 @@ export function libraryDisplayRel(libraryRelPath: string): string {
 export function ensureLibraryDirs(paths: LibraryPaths): void {
   fs.mkdirSync(paths.attachmentsDir, { recursive: true });
   fs.mkdirSync(paths.extractDir, { recursive: true });
+}
+
+/** Host dialog helper: selected folder must be a workbench project with a library slot. */
+export function inspectWorkbenchLibrary(
+  rootPath: string,
+): { ok: true } | { ok: false; error: string } {
+  const json = readWorkbenchJson(rootPath);
+  if (!json) return { ok: false, error: "No workbench project in selected folder" };
+  const libraryDb = path.join(resolveWorkbenchHome(), libraryRel(json.id), "library.db");
+  if (!fs.existsSync(libraryDb)) return { ok: false, error: "No library in the workbench project slot" };
+  return { ok: true };
 }
