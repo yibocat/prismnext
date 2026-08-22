@@ -12,26 +12,21 @@ let openProjectGeneration = 0;
 let projectOpenSupersededByClose = false;
 /** Monotonic id so a slower openFile cannot clobber a newer selection. */
 let fileOpenGeneration = 0;
-import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
-import { useLayoutStore } from "./layout-store";
 import { useWorktreeStore } from "./worktree-store";
-import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { externalFileId } from "@/lib/files/external-file";
 import {
   isLazyProjectFilePath,
   resolveProjectRelativePath,
 } from "@/lib/files/project-path";
-import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
-import { loadWorkbenchSessionUiPrefs } from "@/lib/chat/session-ui-prefs";
-import { applyWorkbenchFocusChange } from "@/lib/workspace/project-lifecycle";
+import { trackRecentOpenedFile } from "@/lib/files/recent-files";
+import { switchWorkbenchFocus } from "@/lib/workspace/project-lifecycle";
 import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import {
   focusPathAfterOpenFolder,
   workbenchStateFromOpenResult,
 } from "../../shared/workbench/api";
 import { fsDesktop } from "@/lib/desktop-api/fs";
-import { gitDesktop } from "@/lib/desktop-api/git";
 import { projectDesktop } from "@/lib/desktop-api/project";
 import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
@@ -295,99 +290,42 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     try {
       ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
       if (generation !== openProjectGeneration) return;
-      const t1 = performance.now();
-      await applyWorkbenchFocusChange();
-      if (generation !== openProjectGeneration) return;
-      log.debug("focusProject cleanup", { durationMs: Math.round(performance.now() - t1) });
 
-      const t2 = performance.now();
-      projectDesktop.projectEnsure(canonicalRoot).catch(() => {});
-
-      void import("./command-store").then(({ useCommandStore }) => {
-        useCommandStore.getState().reloadCommands();
-      });
-
-      const result = await fsDesktop.fsScanMetadata(canonicalRoot);
-      if (generation !== openProjectGeneration) return;
-      log.debug("focusProject fsScanMetadata", { durationMs: Math.round(performance.now() - t2) });
-      const files: ProjectFile[] = result.files.map((f) => ({
-        id: f.relativePath,
-        name: f.relativePath.split("/").pop() || f.relativePath,
-        relativePath: f.relativePath,
-        absolutePath: f.absolutePath,
-        type: f.type,
-        fileSize: f.fileSize,
-      }));
-
-      const fileMetadata = new Map<string, FileMeta>();
-      for (const file of files) {
-        fileMetadata.set(file.id, {
-          relativePath: file.relativePath,
-          absolutePath: file.absolutePath,
-          name: file.name,
-          type: file.type,
-          fileSize: file.fileSize,
-        });
-      }
-
-      gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
-
-      const workspaceStore = useWorkspaceConfigStore.getState();
-      await workspaceStore.loadConfig(canonicalRoot);
-      if (generation !== openProjectGeneration) return;
-
-      import("./literature-store").then(({ useLiteratureStore }) => {
-        if (generation !== openProjectGeneration) return;
-        void useLiteratureStore.getState().refresh(canonicalRoot);
-      });
-
-      const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
-      const expandedFolders = (() => {
-        if (!lastActiveFileId) return [] as string[];
-        const parts = lastActiveFileId.split("/");
-        const ancestors: string[] = [];
-        for (let i = 1; i < parts.length; i++) {
-          ancestors.push(parts.slice(0, i).join("/"));
-        }
-        return ancestors.filter((f) => result.folders.includes(f));
-      })();
-
-      import("./git-store").then(({ useGitStore }) => {
-        useGitStore.getState().clearAll();
-        useGitStore.getState().selectUnit(canonicalRoot);
-      });
-
-      if (generation !== openProjectGeneration) return;
-      await projectDesktop.projectActivate(canonicalRoot);
-      if (generation !== openProjectGeneration) {
-        if (projectOpenSupersededByClose) {
-          try {
-            await projectDesktop.projectClose();
-          } catch (revertError) {
-            log.warn("project.activate", { error: String(revertError), reason: "revoke_superseded" });
+      await switchWorkbenchFocus({
+        canonicalRoot,
+        shouldAbort: () => generation !== openProjectGeneration,
+        supersededByClose: () => projectOpenSupersededByClose,
+        applyDocumentTree: (scan) => {
+          const files: ProjectFile[] = scan.files.map((file) => ({
+            id: file.relativePath,
+            name: file.relativePath.split("/").pop() || file.relativePath,
+            relativePath: file.relativePath,
+            absolutePath: file.absolutePath,
+            type: file.type as ProjectFile["type"],
+            fileSize: file.fileSize,
+          }));
+          const fileMetadata = new Map<string, FileMeta>();
+          for (const file of files) {
+            fileMetadata.set(file.id, {
+              relativePath: file.relativePath,
+              absolutePath: file.absolutePath,
+              name: file.name,
+              type: file.type,
+              fileSize: file.fileSize,
+            });
           }
-        }
-        return;
-      }
-
-      useProjectStore.getState().addRecentProject(canonicalRoot);
-
-      set({
-        projectRoot: canonicalRoot,
-        checkoutRoot: canonicalRoot,
-        files,
-        folders: result.folders,
-        activeFileId: null,
-        fileMetadata,
-        openedContents: new Map(),
-        initialized: true,
+          set({
+            projectRoot: canonicalRoot,
+            checkoutRoot: canonicalRoot,
+            files,
+            folders: scan.folders,
+            activeFileId: null,
+            fileMetadata,
+            openedContents: new Map(),
+            initialized: true,
+          });
+        },
       });
-
-      const wb = useWorkbenchStore.getState();
-      const member = wb.members.find((item) => sameProjectPath(item.lastPath, canonicalRoot));
-      if (member) wb.setFocusProject(member.id);
-      loadWorkbenchSessionUiPrefs(wb.members.map((item) => item.lastPath));
-      useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
       if (generation === openProjectGeneration) {
         try {

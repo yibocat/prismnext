@@ -130,6 +130,8 @@ export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({
     set(applyState(state));
     return state;
   },
+  // Membership only. Opening a folder from the UI goes through
+  // document-store.openProject → switchWorkbenchFocus — do not reset here.
   openFolder: async (absPath) => {
     const result = await window.electronAPI.workbenchOpenFolder(absPath);
     const state = workbenchStateFromOpenResult(result);

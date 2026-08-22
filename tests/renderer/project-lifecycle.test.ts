@@ -145,4 +145,16 @@ describe("project switch lifecycle", () => {
     expect(executionApplyProjectSwitch).not.toHaveBeenCalled();
     expect(terminalDestroyAllAiPty).not.toHaveBeenCalled();
   });
+
+  it("keeps document-store file-tree writes and routes neighbor refresh through switchWorkbenchFocus", () => {
+    const openSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/stores/document-store.ts"),
+      "utf-8",
+    );
+    expect(openSrc).toContain("switchWorkbenchFocus");
+    expect(openSrc).toContain("applyDocumentTree");
+    expect(openSrc).not.toContain("reloadCommands");
+    expect(openSrc).not.toContain("literature-store");
+    expect(openSrc).not.toContain("gitWarmup");
+  });
 });
