@@ -632,13 +632,16 @@ describe("code structure host port (Phase 3)", () => {
     expect(sourceOf("src/renderer/stores/literature-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/experiment-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/git-store.ts")).not.toMatch(/window\.electronAPI/);
-    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(
+    expect(sourceOf("src/renderer/stores/chat/send.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/agent["']/,
     );
-    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(
+    expect(sourceOf("src/renderer/stores/chat/plan.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/research["']/,
     );
     expect(sourceOf("src/renderer/stores/chat-store.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/chat/send.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/chat/tabs.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/chat/plan.ts")).not.toMatch(/window\.electronAPI/);
   });
 });
 
@@ -659,11 +662,14 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(storeModeComponentImports(), JSON.stringify(storeModeComponentImports(), null, 2)).toEqual([]);
   });
 
-  // Phase 4 baseline (WP-4.1): chat-store.ts was 3358 lines. WP-4.7 must bring
-  // the compose root under 800 without renaming useChatStore / sendPrompt.
-  it("records the chat-store God-file baseline until WP-4.7", () => {
+  it("keeps chat-store as a thin compose root under 800 lines", () => {
     const lines = sourceOf("src/renderer/stores/chat-store.ts").split("\n").length;
-    expect(lines).toBeGreaterThan(800);
+    expect(lines).toBeLessThan(800);
+    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(/export const useChatStore/);
+    expect(sourceOf("src/renderer/stores/chat/send.ts")).toMatch(/sendPrompt:/);
+    expect(existsSync(join(REPO, "src/renderer/stores/chat/tabs.ts"))).toBe(true);
+    expect(existsSync(join(REPO, "src/renderer/stores/chat/plan.ts"))).toBe(true);
+    expect(existsSync(join(REPO, "src/renderer/stores/chat/composer-queue.ts"))).toBe(true);
   });
 });
 
