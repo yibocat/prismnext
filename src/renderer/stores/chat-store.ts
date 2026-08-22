@@ -3,6 +3,8 @@ import { toast } from "sonner";
 import { i18n } from "@/lib/i18n";
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import type { ChatStreamMessage, ContentBlock } from "@/lib/chat/types";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { researchDesktop } from "@/lib/desktop-api/research";
 import type {
   Conversation,
   TurnMessageMeta,
@@ -785,7 +787,7 @@ function persistTurnMetaToDisk(
   meta: TurnMessageMeta,
 ): void {
   if (!conversationId || turnIndex < 0) return;
-  void window.electronAPI
+  void agentDesktop
     .agentUpsertTurnMeta({ conversationId, turnIndex, meta })
     .catch(() => {});
 }
@@ -1106,8 +1108,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
       // Clean up agent session for this tab — cancel any running prompt
       if (isAgentRuntime(closingTab.runtime)) {
-        window.electronAPI.agentCancel({ conversationId: id }).catch(() => {});
-        window.electronAPI.agentDispose({ conversationId: id }).catch(() => {});
+        agentDesktop.agentCancel({ conversationId: id }).catch(() => {});
+        agentDesktop.agentDispose({ conversationId: id }).catch(() => {});
       }
       void import("./checkpoint-store").then(({ useCheckpointStore }) => {
         useCheckpointStore.getState().clearTab(id);
@@ -1124,7 +1126,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
     const nextTitle = title.trim();
-    await window.electronAPI.agentRenameSession({
+    await agentDesktop.agentRenameSession({
       conversationId: tabId,
       title: nextTitle,
     });
@@ -1142,7 +1144,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     if (previous === undefined) return;
     const tab = get().tabs.find((t) => t.id === tabId);
     if (!tab) return;
-    await window.electronAPI.agentRenameSession({
+    await agentDesktop.agentRenameSession({
       conversationId: tabId,
       title: previous,
     });
@@ -1319,7 +1321,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const sessionId = tab?.sessionId?.trim();
     if (!tab || !projectRoot || !sessionId) return false;
 
-    const pending = await window.electronAPI.researchPlanHasPendingDraft({
+    const pending = await researchDesktop.researchPlanHasPendingDraft({
       projectRoot,
       sessionId,
     });
@@ -1408,7 +1410,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (requestId) {
       const mapped = decision === "accepted" ? "accept" : "dismiss";
-      void window.electronAPI
+      void agentDesktop
         .agentResolvePlanSuggest({ requestId, decision: mapped })
         .catch(() => {});
     }
@@ -1476,7 +1478,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     const wasReady = tab?.planDraftFileReady ?? false;
 
-    const claimed = await window.electronAPI.researchPlanClaimDraft({
+    const claimed = await researchDesktop.researchPlanClaimDraft({
       projectRoot,
       sessionId,
     });
@@ -1486,7 +1488,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const draftPath = claimed.relativePath || sessionDraftPlanRel(sessionId);
     let summary: string | null = claimed.description?.trim() || null;
     if (ready && !summary) {
-      const draft = await window.electronAPI.researchPlanReadDraft({
+      const draft = await researchDesktop.researchPlanReadDraft({
         projectRoot,
         sessionId,
       });
@@ -1548,7 +1550,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       }),
     }));
     if (conversationId) {
-      void window.electronAPI.agentUpsertPlanArtifact({
+      void agentDesktop.agentUpsertPlanArtifact({
         conversationId,
         event: {
           kind: "plan-artifact",
@@ -1569,7 +1571,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     // Don't reopen a Deny-deleted draft from editor cache.
     if (isResearchPlanDraftPath(rel)) {
       const tab = get().tabs.find((t) => t.id === get().activeTabId);
-      const draft = await window.electronAPI.researchPlanReadDraft({
+      const draft = await researchDesktop.researchPlanReadDraft({
         projectRoot,
         sessionId: tab?.sessionId ?? undefined,
       });
@@ -1593,7 +1595,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === get().activeTabId);
     const sessionId = tab?.sessionId?.trim();
     if (!projectRoot || !sessionId) return;
-    const draft = await window.electronAPI.researchPlanReadDraft({
+    const draft = await researchDesktop.researchPlanReadDraft({
       projectRoot,
       sessionId,
     });
@@ -1633,7 +1635,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const projectRoot = useDocumentStore.getState().projectRoot;
     if (!tab || !projectRoot) return;
 
-    const promoted = await window.electronAPI.researchPlanPromoteDraft({
+    const promoted = await researchDesktop.researchPlanPromoteDraft({
       projectRoot,
       sessionId: tab.sessionId ?? undefined,
     });
@@ -1681,7 +1683,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     if (tab.sessionId) {
-      void window.electronAPI.agentAppendPlanDecision({
+      void agentDesktop.agentAppendPlanDecision({
         conversationId: conversationKey(tab),
         event: {
           kind: "plan-decision",
@@ -1716,7 +1718,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
 
     if (projectRoot) {
-      await window.electronAPI
+      await researchDesktop
         .researchPlanDiscardDraft({
           projectRoot,
           sessionId: tab.sessionId ?? undefined,
@@ -1756,8 +1758,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
     if (tab.sessionId) {
       const conversationId = conversationKey(tab);
-      void window.electronAPI.agentMarkPlanArtifactDiscarded(conversationId);
-      void window.electronAPI.agentAppendPlanDecision({
+      void agentDesktop.agentMarkPlanArtifactDiscarded(conversationId);
+      void agentDesktop.agentAppendPlanDecision({
         conversationId,
         event: {
           kind: "plan-decision",
@@ -1848,7 +1850,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           resolveWorktreePathForSend(get().tabs.find((t) => t.id === tabId), projectPath)
           ?? captureSessionCwd()
           ?? projectPath;
-        const result = await window.electronAPI.agentSend({
+        const result = await agentDesktop.agentSend({
           conversationId: tabId,
           turnId,
           projectRoot: projectPath,
@@ -1955,7 +1957,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return { tabs, ...projectActiveTab(tabs, s.activeTabId) };
     });
     try {
-      await window.electronAPI.agentCancelSubagent({
+      await agentDesktop.agentCancelSubagent({
         conversationId: tabId,
         toolCallId: taskToolUseId,
       });
@@ -1969,7 +1971,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     const turnId = tab?.conversation.live?.turnId;
     try {
-      await window.electronAPI.agentCancel({ conversationId: tabId });
+      await agentDesktop.agentCancel({ conversationId: tabId });
     } catch (err: any) {
       console.error("[chat] Cancel failed:", err);
     }
@@ -2136,7 +2138,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   clearAllSessions: () => {
     for (const tab of get().tabs) {
-      void window.electronAPI?.agentDispose?.({ conversationId: tab.id })?.catch(() => {});
+      void agentDesktop.agentDispose({ conversationId: tab.id })?.catch?.(() => {});
     }
     const id = newConversationId();
     const tab = makeDefaultTab(id);
@@ -2152,7 +2154,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === tabId);
     if (tab?.isStreaming) return; // Never clear a tab with an active agent
     if (isAgentRuntime(tab?.runtime)) {
-      window.electronAPI.agentDispose({ conversationId: tabId }).catch(() => {});
+      agentDesktop.agentDispose({ conversationId: tabId }).catch(() => {});
     }
     set((s) => {
       const tabs = s.tabs.map((t) =>
@@ -2275,7 +2277,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const projectPath = useDocumentStore.getState().projectRoot || "";
     const conversationId = tab?.conversation.conversationId || tab?.id;
     if (!tab || !conversationId || !projectPath) return;
-    const result = await window.electronAPI.agentLoadSession({
+    const result = await agentDesktop.agentLoadSession({
       conversationId,
       projectRoot: projectPath,
     });
@@ -2349,7 +2351,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     });
 
     try {
-      const result = await window.electronAPI.agentLoadSession({
+      const result = await agentDesktop.agentLoadSession({
         conversationId,
         projectRoot: projectPath,
       });

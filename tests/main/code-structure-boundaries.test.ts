@@ -608,7 +608,7 @@ describe("code structure host port (Phase 3)", () => {
     expect(existsSync(join(REPO, "src/main/services/literature-service.ts"))).toBe(false);
   });
 
-  it("routes literature, experiment, and git stores through desktop-api", () => {
+  it("routes literature, experiment, git, and chat stores through desktop-api", () => {
     for (const rel of [
       "src/renderer/lib/desktop-api/index.ts",
       "src/renderer/lib/desktop-api/literature.ts",
@@ -632,7 +632,13 @@ describe("code structure host port (Phase 3)", () => {
     expect(sourceOf("src/renderer/stores/literature-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/experiment-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/git-store.ts")).not.toMatch(/window\.electronAPI/);
-    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/agent["']/,
+    );
+    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/research["']/,
+    );
+    expect(sourceOf("src/renderer/stores/chat-store.ts")).not.toMatch(/window\.electronAPI/);
   });
 });
 
