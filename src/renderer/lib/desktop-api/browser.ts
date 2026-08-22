@@ -12,4 +12,5 @@ export const browserDesktop = {
   browserSaveRecent: forwardDesktop("browserSaveRecent"),
   browserClearCookies: forwardDesktop("browserClearCookies"),
   browserClearCache: forwardDesktop("browserClearCache"),
+  onBrowserOpenInTab: forwardDesktop("onBrowserOpenInTab"),
 };

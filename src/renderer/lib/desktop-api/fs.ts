@@ -23,4 +23,7 @@ export const fsDesktop = {
   getPathForFile: forwardDesktop("getPathForFile"),
   fsStat: forwardDesktop("fsStat"),
   fsFindByBasename: forwardDesktop("fsFindByBasename"),
+  fsWatchStart: forwardDesktop("fsWatchStart"),
+  fsWatchStop: forwardDesktop("fsWatchStop"),
+  onFileChanged: forwardDesktop("onFileChanged"),
 };

@@ -18,6 +18,8 @@ import { TabToolbar } from "@/components/layout/tab-toolbar";
 
 import { useBrowserStore } from "@/stores/browser-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { browserDesktop } from "@/lib/desktop-api/browser";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useGitStore } from "@/stores/git-store";
 import { scheduleGitStatusRefresh } from "@/lib/git/checkout-context";
@@ -234,7 +236,7 @@ function RightAreaWorkspace({
   }, [projectRoot]);
 
   useEffect(() => {
-    return window.electronAPI.onBrowserOpenInTab(({ url, newTab }) => {
+    return browserDesktop.onBrowserOpenInTab(({ url, newTab }) => {
       openUrlInBrowser(url, { newTab });
     });
   }, []);
@@ -263,12 +265,12 @@ function RightAreaWorkspace({
 
   useEffect(() => {
     if (checkoutRoot) {
-      window.electronAPI.fsWatchStart().catch((err) => {
+      fsDesktop.fsWatchStart().catch((err) => {
         console.error("[watcher] Failed to start file watcher:", err);
       });
     }
     return () => {
-      window.electronAPI.fsWatchStop().catch((err) => {
+      fsDesktop.fsWatchStop().catch((err) => {
         console.error("[watcher] Failed to stop file watcher:", err);
       });
     };
@@ -276,7 +278,7 @@ function RightAreaWorkspace({
 
   // ── File watcher: reload files AND refresh git when external changes detected ──
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onFileChanged(({ changedPaths }) => {
+    const unsubscribe = fsDesktop.onFileChanged(({ changedPaths }) => {
       if (changedPaths && changedPaths.length > 0) {
         // Incremental: only reload the specific files that changed
         useDocumentStore.getState().incrementalFileChanged(changedPaths);

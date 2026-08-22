@@ -935,13 +935,11 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
-  it("keeps title-bar window chrome off window.electronAPI", () => {
-    for (const rel of [
-      "src/renderer/main.tsx",
-      "src/renderer/components/layout/title-bar.tsx",
-      "src/renderer/components/layout/main-toolbar.tsx",
-      "src/renderer/components/layout/window-controls.tsx",
-    ]) {
+  it("keeps App shell and layout off window.electronAPI", () => {
+    expect(sourceOf("src/renderer/App.tsx")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/main.tsx")).not.toMatch(/window\.electronAPI/);
+    for (const file of walkTsFiles(join(REPO, "src/renderer/components/layout"))) {
+      const rel = relative(REPO, file);
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
   });

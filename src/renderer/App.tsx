@@ -26,6 +26,8 @@ import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
 import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
+import { executionDesktop } from "@/lib/desktop-api/execution";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
 import { useExecutionStore } from "@/stores/execution-store";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
@@ -126,7 +128,7 @@ export function App() {
   useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useProductShortcuts();
   useEffect(() => {
-    return window.electronAPI.onExecutionEvent((event) => {
+    return executionDesktop.onExecutionEvent((event) => {
       const store = useExecutionStore.getState();
       store.applyEvent(event);
       if (event.type !== "created" && event.type !== "started") return;
@@ -307,7 +309,7 @@ export function App() {
 
   useEffect(() => {
     if (glassEffect && resolvedTheme) {
-      window.electronAPI.themeSetGlassMode(
+      settingsDesktop.themeSetGlassMode(
         resolvedTheme as "light" | "dark" | "system"
       ).catch(() => {});
     }

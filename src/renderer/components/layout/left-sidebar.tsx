@@ -10,6 +10,8 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useWindowState } from "@/hooks/use-window-state";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import {
   PinIcon,
   PinOff,
@@ -283,7 +285,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     void Promise.all(
       members.map(async (member) => {
         try {
-          const ok = await window.electronAPI.fsExists(member.lastPath);
+          const ok = await fsDesktop.fsExists(member.lastPath);
           return [member.id, ok] as const;
         } catch {
           return [member.id, false] as const;
@@ -313,8 +315,8 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     try {
       const listed = await Promise.all(targets.map(async (member) => {
         const rows = member.id
-          ? await window.electronAPI.agentListSessionsByProjectId(member.id)
-          : await window.electronAPI.agentListSessions(member.lastPath);
+          ? await agentDesktop.agentListSessionsByProjectId(member.id)
+          : await agentDesktop.agentListSessions(member.lastPath);
         return rows.map((s) => ({
           id: s.conversationId,
           title: s.title,
@@ -608,7 +610,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (!projectRoot) return;
-                    const result = await window.electronAPI.agentDeleteSession({ conversationId: s.id });
+                    const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
                     if (result.ok) {
                       clearSessionUiPrefs(s.id);
                       setSessions((prev) => prev.filter((x) => x.id !== s.id));
@@ -619,7 +621,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                     if (e.key === "Enter" || e.key === " ") {
                       e.stopPropagation();
                       if (!projectRoot) return;
-                      const result = await window.electronAPI.agentDeleteSession({ conversationId: s.id });
+                      const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
                       if (result.ok) {
                         clearSessionUiPrefs(s.id);
                         setSessions((prev) => prev.filter((x) => x.id !== s.id));

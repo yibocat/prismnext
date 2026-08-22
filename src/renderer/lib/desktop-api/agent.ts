@@ -57,6 +57,8 @@ export const agentDesktop = {
   agentAnswerQuestion: forwardDesktop("agentAnswerQuestion"),
   agentCompact: forwardDesktop("agentCompact"),
   agentListSessions: forwardDesktop("agentListSessions"),
+  agentListSessionsByProjectId: forwardDesktop("agentListSessionsByProjectId"),
+  agentDeleteSession: forwardDesktop("agentDeleteSession"),
   onAgentEvent: forwardDesktop("onAgentEvent"),
   onSkillsIntegrationChanged: forwardDesktop("onSkillsIntegrationChanged"),
 };

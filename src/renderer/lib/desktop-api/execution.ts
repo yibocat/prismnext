@@ -12,4 +12,5 @@ export const executionDesktop = {
   executionGet: forwardDesktop("executionGet"),
   executionFindByToolCallId: forwardDesktop("executionFindByToolCallId"),
   executionCancel: forwardDesktop("executionCancel"),
+  onExecutionEvent: forwardDesktop("onExecutionEvent"),
 };
