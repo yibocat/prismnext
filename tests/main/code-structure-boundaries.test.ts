@@ -812,14 +812,19 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/commands-settings.tsx",
       "src/renderer/components/modules/settings/tools-mcp-settings.tsx",
       "src/renderer/components/modules/settings/mcp-server-editor-panel.tsx",
+      "src/renderer/components/modules/settings/skills-settings.tsx",
+      "src/renderer/components/modules/settings/skill-library-panel.tsx",
+      "src/renderer/components/modules/settings/skill-markdown-panel.tsx",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
   });
 
-  it("keeps research-brief and workspace autosave helpers off window.electronAPI", () => {
+  it("keeps leftover research, slash, and reveal helpers off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/lib/files/open-research-brief.ts",
+      "src/renderer/lib/files/reveal-project-path.ts",
+      "src/renderer/lib/chat/slash-catalog.ts",
       "src/renderer/hooks/use-workspace-project-autosave.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);

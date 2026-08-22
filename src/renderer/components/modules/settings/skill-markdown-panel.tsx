@@ -7,6 +7,14 @@ import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-s
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 import {
+  deleteProjectSkill,
+  installProjectSkill,
+  listProjectSkills,
+  readBundledSkillMd,
+  readSkillMdFile,
+  reinstallProjectSkill,
+} from "@/lib/settings";
+import {
   defaultNewSkillMarkdown,
   validateSkillMarkdown,
 } from "@/lib/agent/skills-markdown";
@@ -93,10 +101,9 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
         try {
           let text: string | null = null;
           if (slot.absPath) {
-            const result = await window.electronAPI.fsRead(slot.absPath);
-            text = result?.content ?? null;
+            text = await readSkillMdFile(slot.absPath);
           } else {
-            text = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
+            text = await readBundledSkillMd(slot.skillId);
           }
           if (text == null) throw new Error("pack skill not found");
           setContent(text);
@@ -117,8 +124,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
       }
       if (!silent) setLoading(true);
       try {
-        const result = await window.electronAPI.fsRead(skillPath);
-        const text = result?.content ?? "";
+        const text = await readSkillMdFile(skillPath);
         setContent(text);
         setSavedContent(text);
       } catch {
@@ -154,7 +160,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     let cancelled = false;
     void (async () => {
       try {
-        const bundled = await window.electronAPI.agentReadBundledSkillMd(slot.skillId);
+        const bundled = await readBundledSkillMd(slot.skillId);
         if (cancelled) return;
         if (bundled != null) {
           setBundledDefault(bundled);
@@ -162,7 +168,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
           return;
         }
         if (projectRoot) {
-          const list = await window.electronAPI.agentListSkills(projectRoot);
+          const list = await listProjectSkills(projectRoot);
           const info = list.find(
             (s) => s.fqid === `${targetTeamId}:${slot.skillId}` || s.id === slot.skillId,
           );
@@ -182,13 +188,13 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     setResetting(true);
     try {
       if (resetSource === "bundled") {
-        await window.electronAPI.agentDeleteSkill(projectRoot, `${targetTeamId}:${slot.skillId}`);
+        await deleteProjectSkill(projectRoot, `${targetTeamId}:${slot.skillId}`);
         bumpSkillsRefresh();
         toast.success(t("settings.editor.skillMd.toast.restored"));
         closePanel();
         return;
       }
-      await window.electronAPI.agentReinstallSkill(projectRoot, slot.skillId);
+      await reinstallProjectSkill(projectRoot, slot.skillId);
       bumpSkillsRefresh();
       toast.success(t("settings.editor.skillMd.toast.restored"));
       await loadContent({ silent: true });
@@ -212,7 +218,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
     }
 
     if (slot.mode === "new") {
-      const list = await window.electronAPI.agentListSkills(projectRoot);
+      const list = await listProjectSkills(projectRoot);
       if (list.some((s) => s.fqid === `${targetTeamId}:${validation.name}` || s.id === validation.name)) {
         toast.error(t("settings.editor.skillMd.toast.exists", { name: validation.name }));
         return;
@@ -221,7 +227,7 @@ export function SkillMarkdownPanel({ slot }: { slot: SkillMarkdownSlot }) {
 
     setSaving(true);
     try {
-      await window.electronAPI.agentInstallSkill(
+      await installProjectSkill(
         projectRoot,
         validation.name,
         content.trim(),

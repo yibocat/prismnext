@@ -36,3 +36,22 @@ export {
   listTemplateBackups,
   restoreTemplateBackup,
 } from "./template-backups";
+export type { InstalledSkill, SkillLibrarySource, SkillUpdateRow } from "./skills";
+export {
+  addSkillLibrarySource,
+  checkProjectSkillUpdates,
+  deleteProjectSkill,
+  fetchSkillLibraryCatalog,
+  installAllSkillsFromLibrarySource,
+  installProjectSkill,
+  installSkillLibraryItem,
+  listProjectSkills,
+  listSkillAssets,
+  listSkillLibrarySources,
+  readBundledSkillMd,
+  readSkillMdFile,
+  reinstallProjectSkill,
+  removeSkillLibrarySource,
+  revealHomeSkillsFolder,
+  setSkillLibrarySourceConnected,
+} from "./skills";

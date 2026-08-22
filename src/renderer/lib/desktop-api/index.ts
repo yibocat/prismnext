@@ -5,6 +5,7 @@ export { fsDesktop } from "./fs";
 export { templateDesktop } from "./template";
 export { projectDesktop } from "./project";
 export { dialogDesktop } from "./dialog";
+export { shellDesktop } from "./shell";
 export { workbenchDesktop } from "./workbench";
 export { executionDesktop } from "./execution";
 export { agentDesktop } from "./agent";
