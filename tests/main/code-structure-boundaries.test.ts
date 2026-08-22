@@ -720,6 +720,18 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(sourceOf("src/renderer/stores/checkpoint-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/agent["']/,
     );
+    expect(sourceOf("src/renderer/stores/theme-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/settings["']/,
+    );
+    expect(sourceOf("src/renderer/stores/compile-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/compile["']/,
+    );
+    expect(sourceOf("src/renderer/stores/terminal-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/terminal["']/,
+    );
+    expect(sourceOf("src/renderer/stores/log-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/log["']/,
+    );
     expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/settings.ts"))).toBe(true);
     for (const rel of [
       "src/renderer/stores/workbench-store.ts",
@@ -730,6 +742,12 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/stores/citation-staging-store.ts",
       "src/renderer/stores/settings-store.ts",
       "src/renderer/stores/checkpoint-store.ts",
+      "src/renderer/stores/theme-store.ts",
+      "src/renderer/stores/compile-store.ts",
+      "src/renderer/stores/terminal-store.ts",
+      "src/renderer/stores/log-store.ts",
+      "src/renderer/stores/right-panel-store.ts",
+      "src/renderer/stores/permission-actions.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }

@@ -8,3 +8,6 @@ export { executionDesktop } from "./execution";
 export { agentDesktop } from "./agent";
 export { researchDesktop } from "./research";
 export { settingsDesktop } from "./settings";
+export { compileDesktop } from "./compile";
+export { terminalDesktop } from "./terminal";
+export { logDesktop } from "./log";

@@ -4,6 +4,8 @@ import { AUTO_COMPILE_DEBOUNCE, AUTO_COMPILE_SPINNER_MIN_MS, COMPILE_SPINNER_MIN
 import { useDocumentStore } from "./document-store";
 import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
+import { compileDesktop } from "@/lib/desktop-api/compile";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
 
@@ -82,7 +84,7 @@ export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boo
 
     for (const abs of collectCompilePdfDiskCandidates(projectRoot)) {
       try {
-        const { bytes } = await window.electronAPI.fsReadBytes(abs);
+        const { bytes } = await fsDesktop.fsReadBytes(abs);
         if (!bytes || bytes.byteLength === 0) continue;
         const copy = new Uint8Array(bytes);
         _pdfBytesCache.set(projectRoot, copy);
@@ -248,7 +250,7 @@ export const useCompileStore = create<CompileState>()(
           let failed = false;
 
           try {
-            const result = await window.electronAPI.compileExecute(
+            const result = await compileDesktop.compileExecute(
               projectDir,
               mainFile,
               false,
@@ -283,7 +285,7 @@ export const useCompileStore = create<CompileState>()(
               });
               published = true;
             } else if ("pdfPath" in result && result.pdfPath) {
-              const { bytes } = await window.electronAPI.fsReadBytes(result.pdfPath);
+              const { bytes } = await fsDesktop.fsReadBytes(result.pdfPath);
               _pdfBytesCache.set(projectDir, new Uint8Array(bytes));
               _currentPdfRootId = projectDir;
               if (dirtyFiles.length > 0) {
@@ -367,7 +369,7 @@ export const useCompileStore = create<CompileState>()(
 
       detectCompilers: async () => {
         try {
-          const status = await window.electronAPI.compileDetectTexlive();
+          const status = await compileDesktop.compileDetectTexlive();
           set({ compilerStatus: status });
         } catch (error) {
           console.error("Failed to detect compilers:", error);

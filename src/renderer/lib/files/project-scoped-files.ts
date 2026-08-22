@@ -1,5 +1,6 @@
 import { MAX_RECENT_OPENED_FILES } from "@/styles/constants";
 import { useSettingsStore } from "@/stores/settings-store";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
 import { useDocumentStore } from "@/stores/document-store";
 import { isExternalFileId } from "./external-file";
 
@@ -31,7 +32,7 @@ export async function trackRecentOpenedFile(id: string, name: string): Promise<v
   useSettingsStore.setState((s) => ({
     settings: { ...s.settings, recentOpenedFilesByProject: map },
   }));
-  await window.electronAPI.settingsSet({ recentOpenedFilesByProject: map });
+  await settingsDesktop.settingsSet({ recentOpenedFilesByProject: map });
 }
 
 export function getProjectLastActiveFileId(projectRoot: string | null): string | null {
@@ -49,7 +50,7 @@ export async function setProjectLastActiveFileId(
   useSettingsStore.setState((s) => ({
     settings: { ...s.settings, lastActiveFileIdByProject: map },
   }));
-  await window.electronAPI.settingsSet({ lastActiveFileIdByProject: map });
+  await settingsDesktop.settingsSet({ lastActiveFileIdByProject: map });
 }
 
 /** Recent entries safe to show in the current project (no cross-project leakage). */

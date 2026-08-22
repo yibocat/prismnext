@@ -8,6 +8,7 @@ import {
   generateThemeCSS,
 } from "@/lib/theme/theme-generator";
 import { migrateToThemePackConfig } from "@/lib/theme/theme-migrate";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
 
 // Debounce state for _regenerate — batches rapid CSS injections (e.g. slider drags)
 // into at most one DOM update per frame to avoid style-recalc thrashing.
@@ -58,7 +59,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
 
   loadConfig: async () => {
     try {
-      const raw = await window.electronAPI.settingsGet();
+      const raw = await settingsDesktop.settingsGet();
       const saved = raw._themeConfig ?? {};
       const migrated = migrateToThemePackConfig({
         ...saved,
@@ -67,7 +68,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
       get()._regenerate(migrated);
 
       if (!raw._themePackMigrated) {
-        await window.electronAPI.settingsSet({
+        await settingsDesktop.settingsSet({
           _themeConfig: migrated,
           _themePackMigrated: true,
         });
@@ -82,7 +83,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
   saveConfig: async (config: ThemeConfig) => {
     get()._regenerate(config);
     try {
-      await window.electronAPI.settingsSet({ _themeConfig: config });
+      await settingsDesktop.settingsSet({ _themeConfig: config });
     } catch {
       // Persist failed — state is still applied in-memory
     }
@@ -96,7 +97,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
       const isDark = document.documentElement.classList.contains("dark");
       const effectiveMode = isDark ? "dark" : "light";
       try {
-        await window.electronAPI.themeSetGlassMode(
+        await settingsDesktop.themeSetGlassMode(
           effectiveMode as "light" | "dark" | "system",
         );
       } catch {
@@ -104,7 +105,7 @@ export const useThemeStore = create<ThemeState>()((set, get) => ({
       }
     } else {
       try {
-        await window.electronAPI.themeSetGlassMode("system");
+        await settingsDesktop.themeSetGlassMode("system");
       } catch {
         // Non-critical
       }

@@ -11,6 +11,7 @@ import type {
   TerminalProcessStatus,
   TerminalCommandBlock,
 } from "@/types/terminal";
+import { terminalDesktop } from "@/lib/desktop-api/terminal";
 
 // ─── Types ───
 
@@ -63,7 +64,7 @@ function getProjectRoot(): string | null {
 async function persist(commands: TerminalQuickCommand[]): Promise<void> {
   const root = getProjectRoot();
   if (root) {
-    await window.electronAPI.terminalSaveConfig(root, { quickCommands: commands });
+    await terminalDesktop.terminalSaveConfig(root, { quickCommands: commands });
   }
 }
 
@@ -79,7 +80,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   loadFromProject: async (projectRoot: string) => {
     if (!projectRoot) return;
     try {
-      const config = await window.electronAPI.terminalLoadConfig(projectRoot);
+      const config = await terminalDesktop.terminalLoadConfig(projectRoot);
       if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({
         quickCommands: config.quickCommands ?? [],
@@ -102,7 +103,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
 
   fetchEnvInfo: async () => {
     try {
-      const info = await window.electronAPI.terminalEnvInfo();
+      const info = await terminalDesktop.terminalEnvInfo();
       set({ envInfo: info });
       const label = shellDisplayName(info.shell);
       for (const tab of useRightPanelStore.getState().tabs) {
@@ -252,14 +253,14 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
   },
 
   destroyTab: (tabId) => {
-    window.electronAPI.terminalDestroyTab({ tabId });
+    terminalDesktop.terminalDestroyTab({ tabId });
     get().markSessionKilled(tabId);
     get().removeSession(tabId);
   },
 
   destroyAllTerminalTabs: (tabIds) => {
     if (tabIds.length === 0) return;
-    window.electronAPI.terminalDestroyTabs({ tabIds });
+    terminalDesktop.terminalDestroyTabs({ tabIds });
     for (const tabId of tabIds) {
       get().markSessionKilled(tabId);
       get().removeSession(tabId);
@@ -278,7 +279,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
 
   requestRestart: (tabId) => {
     // Kill the live PTY first — TerminalView unmount no longer destroys it.
-    window.electronAPI.terminalDestroyTab({ tabId });
+    terminalDesktop.terminalDestroyTab({ tabId });
     get().removeSession(tabId);
     set((s) => ({
       restartNonce: {

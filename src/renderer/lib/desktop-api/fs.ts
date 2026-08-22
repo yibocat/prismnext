@@ -10,6 +10,7 @@ export const fsDesktop = {
   fsScan: forwardDesktop("fsScan"),
   fsScanMetadata: forwardDesktop("fsScanMetadata"),
   fsRead: forwardDesktop("fsRead"),
+  fsReadBytes: forwardDesktop("fsReadBytes"),
   fsReadImage: forwardDesktop("fsReadImage"),
   fsExists: forwardDesktop("fsExists"),
   fsIsFile: forwardDesktop("fsIsFile"),

@@ -26,6 +26,8 @@ import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { selectExperimentProjectRoot } from "@/lib/experiments/project-root";
 import { useSettingsStore } from "@/stores/settings-store";
+import { executionDesktop } from "@/lib/desktop-api/execution";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 // ─── Re-exports ───
 
@@ -753,9 +755,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
             && readTerminalExecutionSettings().jobMonitorCloseCancels
           ) {
             if (closingTab.linkedExecutionId) {
-              void window.electronAPI.executionCancel(closingTab.linkedExecutionId);
+              void executionDesktop.executionCancel(closingTab.linkedExecutionId);
             } else if (closingTab.linkedChatTabId) {
-              void window.electronAPI.agentCancel({
+              void agentDesktop.agentCancel({
                 conversationId: closingTab.linkedChatTabId,
               });
             }

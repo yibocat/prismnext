@@ -8,6 +8,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { usesProposedChange } from "@/lib/chat/tool-proposed-change";
 import { createLogger } from "@/services/logger";
 import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permissions/timeouts";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 async function answerPermission(
   _tabId: string,
@@ -16,7 +17,7 @@ async function answerPermission(
   _toolCallId?: string,
   _always?: boolean,
 ): Promise<void> {
-  await window.electronAPI.agentResolvePermission({
+  await agentDesktop.agentResolvePermission({
     requestId: permissionId,
     decision: allow ? "allow" : "deny",
   });

@@ -1,5 +1,6 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
 
 export function getArchivedSessionIdsForProject(projectRoot: string | null): string[] {
   if (!projectRoot) return [];
@@ -41,7 +42,7 @@ async function persistSessionUiPrefs(
     }));
   }
 
-  await window.electronAPI.settingsSet(nextPatch);
+  await settingsDesktop.settingsSet(nextPatch);
 }
 
 export function loadSessionUiPrefsIntoLayout(projectRoot: string): void {

@@ -21,4 +21,5 @@ export const agentDesktop = {
   agentGetModelEffort: forwardDesktop("agentGetModelEffort"),
   agentTruncateToTurn: forwardDesktop("agentTruncateToTurn"),
   agentUndoTruncate: forwardDesktop("agentUndoTruncate"),
+  agentResolvePermission: forwardDesktop("agentResolvePermission"),
 };
