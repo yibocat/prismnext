@@ -10,7 +10,7 @@ import {
   ignoreVersion,
   quitAndInstall,
   unignoreVersion,
-} from "../services/update-checker";
+} from "../app/update-checker";
 
 export function registerUpdateHandlers(): void {
   ipcMain.handle("update:check", async () => {

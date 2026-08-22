@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createLogger } from "../app/logger";
-import { getSettings } from "../services/settings";
+import { getSettings } from "../app/settings";
 import { piProviderBaseUrl } from "../../shared/providers/pi-catalog";
 
 const log = createLogger("vision-fallback", "agent");

@@ -91,7 +91,7 @@ export function buildAgentsPlan(
   let defaultSubagentModel = options?.defaultSubagentModel ?? null;
   if (options?.defaultSubagentModel === undefined) {
     try {
-      const { getSettings } = require("../services/settings") as typeof import("../services/settings");
+      const { getSettings } = require("../app/settings") as typeof import("../app/settings");
       defaultSubagentModel =
         (getSettings() as { aiSubagentModel?: string | null }).aiSubagentModel ?? null;
     } catch {

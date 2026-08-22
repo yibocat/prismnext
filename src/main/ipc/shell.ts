@@ -1,6 +1,6 @@
 import { ipcMain, shell } from "electron";
-import { notifyDesktop } from "../services/desktop-notifications";
-import { setTrayMenuSnapshot, setTrayStatus } from "../services/tray";
+import { notifyDesktop } from "../app/desktop-notifications";
+import { setTrayMenuSnapshot, setTrayStatus } from "../app/tray";
 import type {
   DesktopNotifyKind,
   TrayMenuSnapshot,

@@ -32,14 +32,14 @@ import { HOME_JOBS_DIRNAME } from "../shared/workbench/paths";
 import { ensureWorkbenchHome } from "./workbench/home";
 import { ensureDefaultProject } from "./workbench/default-project";
 import { disposeLogger } from "./ipc/log";
-import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
+import { setDesktopNotificationWindowGetter } from "./app/desktop-notifications";
 import {
   getIsQuitting,
   isTrayIconEnabled,
   setIsQuitting,
   setTrayWindowGetter,
   syncTrayFromSettings,
-} from "./services/tray";
+} from "./app/tray";
 import { shouldHideOnClose } from "../shared/platform/desktop-shell";
 
 const log = createLogger("main", "startup");
@@ -354,7 +354,7 @@ app.whenReady().then(async () => {
   // Pi bash / experiment-run go through execution-registry (Job Monitor).
 
   try {
-    const { initAppUpdater } = await import("./services/update-checker");
+    const { initAppUpdater } = await import("./app/update-checker");
     initAppUpdater();
   } catch (err) {
     log.warn("App updater init failed", { error: (err as Error).message });
@@ -373,7 +373,7 @@ app.whenReady().then(async () => {
   // Initialize settings and prompt infrastructure. Agent runtimes stay lazy:
   // opening the app or a project must not spawn OpenCode.
   try {
-    const { getSettings, pruneOrphanProviderSettings } = await import("./services/settings");
+    const { getSettings, pruneOrphanProviderSettings } = await import("./app/settings");
 
     // GC leftovers from pre-v0.6.8 provider removals (orphan API keys etc.)
     // before anything below reads settings — orphans must not re-register.

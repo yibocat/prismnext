@@ -1,4 +1,4 @@
-// src/main/services/glass-vibrancy.ts
+// src/main/app/glass-vibrancy.ts
 // Maps app theme mode to native OS vibrancy/acrylic material.
 // Called from IPC handler whenever the user changes theme or glass settings.
 

@@ -2,8 +2,8 @@
 // IPC handler for theme → native vibrancy synchronization + system fonts.
 
 import { ipcMain, BrowserWindow } from "electron";
-import { setVibrancyForTheme, type VibrancyMode } from "../services/glass-vibrancy";
-import { listSystemFonts } from "../services/system-fonts";
+import { setVibrancyForTheme, type VibrancyMode } from "../app/glass-vibrancy";
+import { listSystemFonts } from "../app/system-fonts";
 
 export function registerThemeHandlers(): void {
   ipcMain.handle(

@@ -50,7 +50,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { updateSettings } from "../../src/main/services/settings";
+import { updateSettings } from "../../src/main/app/settings";
 import { installIpcHandlerErrorGuard } from "../../src/main/ipc/log";
 
 beforeEach(() => {

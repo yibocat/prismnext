@@ -1,4 +1,4 @@
-import { getSettings } from "../../services/settings";
+import { getSettings } from "../../app/settings";
 import { getPaper, openLibraryDb, upsertPaperAiMetadata } from "../facade";
 import { runAiMetadataForPaper } from "./literature-ai-metadata";
 import { broadcastToRenderer } from "../broadcast";

@@ -464,6 +464,23 @@ describe("code structure host port (Phase 3)", () => {
     );
   });
 
+  it("empties src/main/services of TypeScript sources", () => {
+    const dir = join(REPO, "src/main/services");
+    if (!existsSync(dir)) return;
+    const ts = readdirSync(dir).filter((name) => name.endsWith(".ts"));
+    expect(ts).toEqual([]);
+    for (const rel of [
+      "src/main/app/settings.ts",
+      "src/main/app/tray.ts",
+      "src/main/app/desktop-notifications.ts",
+      "src/main/app/update-checker.ts",
+      "src/main/app/glass-vibrancy.ts",
+      "src/main/app/system-fonts.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+  });
+
   it("keeps session, skills, research, and interaction free of Electron, ipc, and agent", () => {
     for (const dir of [
       "src/main/session",

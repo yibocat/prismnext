@@ -17,7 +17,7 @@ import {
 } from "../literature/extract/paper-extract-db";
 import { readPaperPdfContent } from "../literature/extract/paper-extract-read";
 import { testMineruConnection } from "../literature/extract/mineru-client";
-import { getSettings } from "../services/settings";
+import { getSettings } from "../app/settings";
 
 export function registerLiteratureExtractHandlers(): void {
   ipcMain.handle(

@@ -9,7 +9,7 @@ import {
 } from "../../src/main/prompts/stack-preview";
 import { installProjectRule } from "../../src/main/prompts/rules-sync";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: () => ({}),
 }));
 

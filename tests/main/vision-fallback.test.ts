@@ -11,7 +11,7 @@ vi.mock("electron-store", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: () => settingsState.current,
 }));
 

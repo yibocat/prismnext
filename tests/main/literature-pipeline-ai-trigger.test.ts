@@ -19,7 +19,7 @@ vi.mock("../../src/main/literature/ai-metadata/literature-ai-metadata", () => ({
   runAiMetadataForPaper: (...args: unknown[]) => runAiMetadataForPaper(...args),
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     literatureAutoAiMetadata: true,
     aiProvider: "openai",

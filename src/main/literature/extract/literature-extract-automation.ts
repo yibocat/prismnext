@@ -1,5 +1,5 @@
 import type { PaperExtractSource } from "../../../shared/literature/paper-extract";
-import { getSettings } from "../../services/settings";
+import { getSettings } from "../../app/settings";
 import { getPaper, type PaperRow } from "../facade";
 import {
   paperCanExtractPdf,

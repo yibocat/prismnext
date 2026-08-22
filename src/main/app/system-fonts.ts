@@ -1,4 +1,4 @@
-// src/main/services/system-fonts.ts
+// src/main/app/system-fonts.ts
 // Enumerate installed fonts for Appearance → Typography pickers.
 // Uses `font-list` (macOS helper binary / Windows PowerShell / Linux fc-list).
 

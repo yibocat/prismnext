@@ -1,12 +1,12 @@
 import { ipcMain } from "electron";
-import { getSettings, updateSettings } from "../services/settings";
+import { getSettings, updateSettings } from "../app/settings";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
 import { countPromptTokens } from "../lib/token-estimate";
 import { PROMPT_TOKEN_ENCODING } from "../../shared/providers/token-estimate";
 import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { refreshApplicationMenu } from "../menu";
-import { syncTrayFromSettings } from "../services/tray";
+import { syncTrayFromSettings } from "../app/tray";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {

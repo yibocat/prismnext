@@ -1,16 +1,16 @@
-// prism-next/src/main/services/update-checker.ts
+// prism-next/src/main/app/update-checker.ts
 // App updater — electron-updater (generic → R2 feed) when packaged;
 // JSON version.json / local path remains for unpackaged local QA.
 // electron-updater autoDownload stays false; Prism may background-download after check
 // when settings.autoDownloadUpdates is enabled (default true).
 
 import { app } from "electron";
-import { getHostEvents } from "../app/event-sink";
+import { getHostEvents } from "./event-sink";
 import { autoUpdater } from "electron-updater";
 import fs from "node:fs";
 import path from "node:path";
 import { getSettings, updateSettings } from "./settings";
-import { createLogger } from "../app/logger";
+import { createLogger } from "./logger";
 
 const log = createLogger("update-checker", "general");
 

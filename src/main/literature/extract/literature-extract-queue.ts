@@ -10,7 +10,7 @@ import {
 } from "../../../shared/literature/paper-extract";
 import { getHostEvents } from "../../app/event-sink";
 import { createLogger } from "../../app/logger";
-import { getSettings } from "../../services/settings";
+import { getSettings } from "../../app/settings";
 import { ensurePaperPdfAbsPath, type PdfResolveProgress } from "../pdf/literature-pdf-resolve";
 import { getPaper, openLibraryDb, type PaperRow, materializeZoteroPaperIfLinked } from "../facade";
 import { extractPdfTextWithPdfJs } from "./literature-extract-pdfjs";

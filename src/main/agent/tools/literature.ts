@@ -111,7 +111,7 @@ export const literatureDiscoverTool: NativeToolDefinition = {
     const query = str(args.query);
     if (!query) return { ok: false, error: "missing_query" };
 
-    const { getSettings } = await import("../../services/settings");
+    const { getSettings } = await import("../../app/settings");
     const { discoverLiterature } = await import("../../literature/discovery/index");
     const settings = getSettings();
     return discoverLiterature({
@@ -197,7 +197,7 @@ export const literatureReadPdfTool: NativeToolDefinition = {
     const bibkey = str(args.bibkey);
     if (!bibkey) return { error: "Missing bibkey parameter." };
 
-    const { getSettings } = await import("../../services/settings");
+    const { getSettings } = await import("../../app/settings");
     const { readPaperPdfContent } = await import("../../literature/extract/paper-extract-read");
     const settings = getSettings();
     const token = settings.mineruApiToken;

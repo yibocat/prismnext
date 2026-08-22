@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     literatureAutoExtractOnImport: false,
     literatureExtractEngineDefault: "pdfjs",

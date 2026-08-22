@@ -6,7 +6,7 @@ import { installProjectRule } from "../../src/main/prompts/rules-sync";
 import { buildPromptContext } from "../../src/main/prompts/context";
 import { projectAgentsMdRel } from "../../src/shared/workbench/paths";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: () => ({}),
 }));
 

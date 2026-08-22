@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { normalizeArxivId, normalizeDoi } from "../../../shared/literature/doi-utils";
-import { getSettings, updateSettings } from "../../services/settings";
+import { getSettings, updateSettings } from "../../app/settings";
 export { buildZoteroPaperCslJson } from "./zotero-csl";
 
 /** Zotero desktop local connector (default port 23119). */

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({ zoteroUserId: "12345", zoteroApiKey: "secret" })),
   updateSettings: vi.fn(),
 }));

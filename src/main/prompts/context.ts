@@ -63,7 +63,7 @@ export async function buildPromptContext(
   }
 
   try {
-    const { getSettings } = await import("../services/settings");
+    const { getSettings } = await import("../app/settings");
     const settings = getSettings() as Record<string, unknown>;
     const userPrompt = settings.agentSystemPrompt as string | undefined;
     ctx.userCustomPrompt = userPrompt || undefined;

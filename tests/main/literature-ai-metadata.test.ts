@@ -19,7 +19,7 @@ vi.mock("../../src/main/lib/provider-chat", () => ({
   ),
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     aiProvider: "openai",
     aiModel: "gpt-4o-mini",

@@ -8,7 +8,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { getSettings } from "../services/settings";
+import { getSettings } from "../app/settings";
 import {
   archiveExperiment,
   createExperiment,

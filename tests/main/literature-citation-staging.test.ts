@@ -14,7 +14,7 @@ vi.mock("../../src/main/literature/enrich", () => ({
   createPaperFromCatalog: vi.fn(),
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({ literatureStrictIntensivePdf: true, mineruApiToken: "" })),
 }));
 

@@ -1,5 +1,5 @@
 import { app, Menu, BrowserWindow } from "electron";
-import { getSettings } from "./services/settings";
+import { getSettings } from "./app/settings";
 import {
   normalizeAppLocalePreference,
   resolveAppLocale,

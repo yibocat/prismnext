@@ -1095,7 +1095,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
 export async function getAgentService(): Promise<AgentService> {
   if (singleton) return singleton;
   const { app } = await import("electron");
-  const { getSettings } = await import("../services/settings");
+  const { getSettings } = await import("../app/settings");
   const { promptManager } = await import("../prompts");
   const { buildPromptContext } = await import("../prompts/context");
 

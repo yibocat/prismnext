@@ -437,7 +437,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const created = createExperiment(c, { title: "Readonly" }, { ensureVenv: false });
     if (!created.ok) return;
 
-    const settingsModule = await import("../../src/main/services/settings");
+    const settingsModule = await import("../../src/main/app/settings");
     const baseSettings = settingsModule.getSettings() as Record<string, unknown>;
     const spy = vi.spyOn(settingsModule, "getSettings").mockReturnValue({
       ...baseSettings,
