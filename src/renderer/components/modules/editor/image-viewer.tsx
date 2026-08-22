@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { MinusIcon, PlusIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { tabFileId } from "@/lib/workspace/mode-registry";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -23,7 +24,7 @@ function clampScale(value: number): number {
 export function ImageViewer() {
   const { t } = useTranslation();
   const { tab } = useTabContext();
-  const fileId = tab.fileId;
+  const fileId = tabFileId(tab);
   const dataUrl = useDocumentStore((s) =>
     fileId ? s.openedContents.get(fileId)?.dataUrl : undefined,
   );

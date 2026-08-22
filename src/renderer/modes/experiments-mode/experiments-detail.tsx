@@ -251,7 +251,8 @@ export function ExperimentsDetail({
     }
   }, [projectRoot, selectExperiment, selectedId]);
 
-  const pane: DetailPane = tab?.experimentsDetailTab ?? "overview";
+  const pane: DetailPane =
+    tab?.kind === "experiments" ? tab.experimentsDetailTab ?? "overview" : "overview";
   const [resultsFocusRunId, setResultsFocusRunId] = useState<string | null>(null);
 
   const openResultsForRun = useCallback(

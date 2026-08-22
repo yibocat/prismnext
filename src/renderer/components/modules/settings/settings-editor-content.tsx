@@ -110,7 +110,7 @@ export function settingsSlotBodyClassName(slot: SettingsPanelSlot): string {
 /** Unified RightArea tab content for settings editors. */
 export function SettingsEditorContent({ tab, isActive }: { tab: RightTab; isActive: boolean }) {
   const { t } = useTranslation();
-  const slot = tab.settingsSlot;
+  const slot = tab.kind === "settings-editor" ? tab.settingsSlot : undefined;
   if (!slot) {
     return (
       <div className="flex flex-1 items-center justify-center text-[length:var(--font-size-12)] text-muted-foreground">

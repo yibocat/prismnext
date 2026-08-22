@@ -13,6 +13,7 @@ let projectOpenSupersededByClose = false;
 /** Monotonic id so a slower openFile cannot clobber a newer selection. */
 let fileOpenGeneration = 0;
 import { useRightPanelStore } from "./right-panel-store";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useWorktreeStore } from "./worktree-store";
 import { externalFileId } from "@/lib/files/external-file";
 import {
@@ -708,7 +709,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (deletedCleanIds.length > 0) {
         const rps = useRightPanelStore.getState();
         for (const tab of rps.tabs) {
-          if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+          const fileId = tabFileId(tab);
+          if (fileId && deletedCleanIds.includes(fileId)) {
             rps.closeTab(tab.id);
           }
         }
@@ -1008,7 +1010,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (deletedCleanIds.length > 0) {
       const rps = useRightPanelStore.getState();
       for (const tab of rps.tabs) {
-        if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+        const fileId = tabFileId(tab);
+        if (fileId && deletedCleanIds.includes(fileId)) {
           rps.closeTab(tab.id);
         }
       }
@@ -1332,9 +1335,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Update tab references
       const rps = useRightPanelStore.getState();
       for (const t of rps.tabs) {
-        if (t.fileId?.startsWith(oldPrefix)) {
-          const newId = newPrefix + t.fileId.slice(oldPrefix.length);
-          const newPath = newPrefix + (t.filePath ?? "").slice(oldPrefix.length);
+        const fileId = tabFileId(t);
+        if (fileId?.startsWith(oldPrefix)) {
+          const newId = newPrefix + fileId.slice(oldPrefix.length);
+          const newPath = newPrefix + (tabFilePath(t) ?? "").slice(oldPrefix.length);
           rps.updateTab(t.id, { fileId: newId, filePath: newPath });
         }
       }

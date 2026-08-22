@@ -7,6 +7,7 @@ import { TerminalView } from "./terminal-view";
 import { JobMonitorView } from "./job-monitor-view";
 
 function resolveMonitorExecutionId(tab: RightTab): string {
+  if (tab.kind !== "terminal") return "";
   if (tab.linkedExecutionId) return tab.linkedExecutionId;
   if (tab.linkedToolCallId) {
     return useExecutionStore.getState().findByToolCallId(tab.linkedToolCallId) ?? "";

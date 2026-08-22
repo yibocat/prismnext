@@ -5,18 +5,19 @@ import { useTerminalStore } from "./terminal-store";
 import { shellDisplayName } from "@/lib/terminal/shell-label";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import {
-  isEditableFileTabKind,
+  isFileBackedTab,
   isJobMonitorTab,
   modeRegistry,
   type RightTabKind,
   type RightTab,
+  type RightTabUpdate,
 } from "@/lib/workspace/mode-registry";
 import { useExecutionStore } from "./execution-store";
 import { isChatScopedExecution } from "../../shared/execution";
 import { notifyModeLifecycleTransitions } from "@/lib/workspace/modes-from-tabs";
 import { isResearchPlanFilePath } from "@/lib/chat/plan-artifact-ui";
 import { getTabCloseConfirmation, getBatchTabCloseConfirmation } from "@/lib/workspace/tab-close-confirmation";
-import { buildInitialTabShell } from "@/lib/workspace/tab-lifecycle";
+import { createHomeTab } from "@/lib/workspace/tab-lifecycle";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { readTerminalExecutionSettings } from "@/lib/terminal/ai-prefs";
 import { useChatStore } from "@/stores/chat-store";
@@ -130,7 +131,7 @@ interface RightPanelState {
   closeLiteraturePaperTabs: (paperId: string) => void;
   setActiveTab: (id: string) => void;
   setTabViewMode: (id: string, mode: string) => void;
-  updateTab: (id: string, partial: Partial<Pick<RightTab, "fileId" | "filePath" | "title" | "terminalSource" | "terminalCwd" | "linkedExecutionId" | "linkedChatTabId" | "linkedToolCallId" | "settingsSlot" | "settingsSlotKey" | "literaturePaperId" | "literatureView" | "experimentId" | "experimentsView" | "experimentsDetailTab" | "interactionId">>) => void;
+  updateTab: (id: string, partial: RightTabUpdate) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
 }
 
@@ -155,7 +156,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       }
     }
     const id = nextTabId();
-    const tab: RightTab = { id, kind, title: modeRegistry.findByTabKind(kind)?.initialTitle ?? kind, isInitial: true };
+    const tab = createHomeTab(kind, id);
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
   },
@@ -298,7 +299,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       tabs: s.tabs.map((t) =>
         t.id === homeId
           ? {
-              ...buildInitialTabShell(t, "Experiments"),
+              ...createHomeTab("experiments", t.id, "Experiments"),
               experimentsView: "list" as const,
               experimentId: undefined,
             }
@@ -338,7 +339,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     if (!texworkspaceTab) return;
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === texworkspaceTab.id ? { ...t, title: name, fileId, filePath, isInitial: false } : t,
+        t.id === texworkspaceTab.id && t.kind === "texworkspace"
+          ? { ...t, title: name, fileId, filePath, isInitial: false }
+          : t,
       ),
     }));
     useDocumentStore.getState().setActiveFile(fileId);
@@ -353,7 +356,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     const title = meta?.name ?? texworkspaceTab.title;
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === texworkspaceTab.id
+        t.id === texworkspaceTab.id && t.kind === "texworkspace"
           ? { ...t, fileId, filePath, title, isInitial: false }
           : t,
       ),
@@ -367,7 +370,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     if (existing) {
       set((s) => ({
         tabs: s.tabs.map((t) =>
-          t.id === existing.id ? { ...t, title: name, fileId, filePath, isInitial: false } : t,
+          t.id === existing.id && t.kind === "texworkspace"
+            ? { ...t, title: name, fileId, filePath, isInitial: false }
+            : t,
         ),
         activeTabId: existing.id,
       }));
@@ -530,7 +535,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     try { hostname = new URL(url).hostname; } catch { /* ignore */ }
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id
+        t.id === id && t.kind === "browser"
           ? { ...t, url, title: hostname || "New Tab", isInitial: false }
           : t,
       ),
@@ -540,7 +545,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   syncBrowserTabUrl: (id: string, url: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) => {
-        if (t.id !== id || t.url === url) return t;
+        if (t.id !== id || t.kind !== "browser" || t.url === url) return t;
         return { ...t, url, isInitial: false };
       }),
     }));
@@ -557,7 +562,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   setBrowserTabLoading: (id: string, isLoading: boolean) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id ? { ...t, isLoading } : t,
+        t.id === id && t.kind === "browser" ? { ...t, isLoading } : t,
       ),
     }));
   },
@@ -565,7 +570,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   reloadBrowserTab: (id: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id
+        t.id === id && t.kind === "browser"
           ? {
               ...t,
               isLoading: true,
@@ -580,7 +585,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
   setTabHibernated: (id: string, hibernated: boolean) => {
     set((s) => ({
       tabs: s.tabs.map((t) =>
-        t.id === id ? { ...t, hibernated } : t,
+        t.id === id && t.kind === "browser" ? { ...t, hibernated } : t,
       ),
     }));
   },
@@ -634,14 +639,14 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       if (t.linkedExecutionId === idValue) return true;
       return Boolean(chatScoped && chatTabId && t.linkedChatTabId === chatTabId);
     });
-    if (existing) {
+    if (existing?.kind === "terminal") {
       const dismissChat = existing.linkedChatTabId ?? chatTabId;
       if (dismissChat) useExecutionStore.getState().clearMonitorDismissed(dismissChat);
       useLayoutStore.getState().requestRightAreaExpand();
       set((s) => ({
         activeTabId: existing.id,
         tabs: s.tabs.map((t) =>
-          t.id === existing.id
+          t.id === existing.id && t.kind === "terminal"
             ? {
                 ...t,
                 linkedExecutionId: idValue,
@@ -683,7 +688,9 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     if (existing) {
       set({
         tabs: tabs.map((t) =>
-          t.id === existing.id ? { ...t, settingsSlot: slot, title } : t,
+          t.id === existing.id && t.kind === "settings-editor"
+            ? { ...t, settingsSlot: slot, title }
+            : t,
         ),
       });
       return existing.id;
@@ -767,7 +774,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     const tab = get().tabs.find((t) => t.id === id);
     set({ activeTabId: id });
     const fileId =
-      tab && isEditableFileTabKind(tab.kind) && tab.fileId ? tab.fileId : "";
+      tab && isFileBackedTab(tab) && tab.fileId ? tab.fileId : "";
     useDocumentStore.getState().setActiveFile(fileId);
     if (tab && isJobMonitorTab(tab) && tab.linkedChatTabId) {
       useTerminalAiStore.getState().touchSessionViewed(tab.linkedChatTabId);
@@ -782,7 +789,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   updateTab: (id: string, partial) => {
     set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...partial } : t)),
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, ...partial } as RightTab : t)),
     }));
   },
 
@@ -905,9 +912,7 @@ function performCloseTab(
     }
     const nextActiveTab = next.find((t) => t.id === nextActive);
     const nextFileId =
-      nextActiveTab
-      && isEditableFileTabKind(nextActiveTab.kind)
-      && nextActiveTab.fileId
+      nextActiveTab && isFileBackedTab(nextActiveTab) && nextActiveTab.fileId
         ? nextActiveTab.fileId
         : "";
     useDocumentStore.getState().setActiveFile(nextFileId);

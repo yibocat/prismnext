@@ -8,7 +8,7 @@ function BrowserToolbarWrapper({ tab }: { tab: RightTab }) {
   return (
     <BrowserToolbar
       tabId={tab.id}
-      tabUrl={tab.url ?? ""}
+      tabUrl={tab.kind === "browser" ? tab.url ?? "" : ""}
       tabTitle={tab.title}
     />
   );

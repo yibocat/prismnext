@@ -63,6 +63,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { TabContext } from "@/lib/workspace/tab-context";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
 import { useTranslation } from "react-i18next";
 
@@ -1101,8 +1102,8 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   // Prefer per-tab context (when rendered inside PaneContent); fall back to
   // global active tab (when rendered directly by RightMainArea for compiled PDFs).
   const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
-  const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab?.filePath);
-  const fileId = activeTab?.fileId ?? null;
+  const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab ? tabFilePath(activeTab) : undefined);
+  const fileId = activeTab ? tabFileId(activeTab) ?? null : null;
   const absolutePath = fileId
     ? (fileMetadata.get(fileId)?.absolutePath ?? null)
     : null;
@@ -1175,8 +1176,8 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   }, [filePdfBytes, compilePdfBytes]);
 
   const persistKey = useMemo(
-    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab?.fileId),
-    [projectRoot, sourceMode, activeTab?.fileId],
+    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab ? tabFileId(activeTab) : undefined),
+    [projectRoot, sourceMode, activeTab],
   );
 
   if (loadError && isPdfFile) {

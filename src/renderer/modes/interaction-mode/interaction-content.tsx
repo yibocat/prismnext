@@ -118,7 +118,7 @@ export function InteractionContent({
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const interactionId = tab.interactionId;
+  const interactionId = tab.kind === "interaction" ? tab.interactionId : undefined;
   const [spec, setSpec] = useState<InteractionSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
 

@@ -47,7 +47,7 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
     );
   }
 
-  if (tab.isInitial || !tab.filePath) {
+  if (tab.kind !== "texworkspace" || tab.isInitial || !tab.filePath) {
     return wrapTabContext(ctx, <NoFileOpen />);
   }
   return wrapTabContext(ctx, resolveViewer(tab.filePath));
@@ -56,6 +56,6 @@ export function TexworkspaceContent({ tab, isActive }: { tab: RightTab; isActive
 export function TexworkspaceToolbarWrapper({ tab }: { tab: RightTab }) {
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   // Block compile when no manuscript is configured
-  const compileFile = manuscriptConfig ? (tab.fileId ?? null) : null;
+  const compileFile = manuscriptConfig && tab.kind === "texworkspace" ? (tab.fileId ?? null) : null;
   return <TexworkspaceToolbar compileFile={compileFile} />;
 }

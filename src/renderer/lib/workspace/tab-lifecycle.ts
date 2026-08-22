@@ -1,9 +1,38 @@
-import type { RightTab } from "./mode-registry";
-import { modeRegistry } from "./mode-registry";
+import type { RightTab, RightTabKind } from "./mode-registry";
+import { isFileBackedTab, modeRegistry } from "./mode-registry";
 import { useDocumentStore } from "@/stores/document-store";
 import { literatureTabNotePath } from "@/lib/literature/literature-note-tab";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { i18n } from "@/lib/i18n";
+
+export function createHomeTab(kind: RightTabKind, id: string, title?: string): RightTab {
+  const resolvedTitle = title ?? modeRegistry.findByTabKind(kind)?.initialTitle ?? kind;
+  const base = { id, title: resolvedTitle, isInitial: true as const };
+  switch (kind) {
+    case "file":
+      return { ...base, kind: "file" };
+    case "research-plan":
+      return { ...base, kind: "research-plan" };
+    case "browser":
+      return { ...base, kind: "browser" };
+    case "git-overview":
+      return { ...base, kind: "git-overview" };
+    case "git-diff":
+      return { ...base, kind: "git-diff" };
+    case "texworkspace":
+      return { ...base, kind: "texworkspace" };
+    case "terminal":
+      return { ...base, kind: "terminal" };
+    case "settings-editor":
+      return { ...base, kind: "settings-editor" };
+    case "literature":
+      return { ...base, kind: "literature" };
+    case "experiments":
+      return { ...base, kind: "experiments" };
+    case "interaction":
+      return { ...base, kind: "interaction" };
+  }
+}
 
 export function isFileTabDirty(tab: RightTab): boolean {
   if ((tab.kind !== "file" && tab.kind !== "research-plan") || !tab.fileId) return false;
@@ -18,7 +47,7 @@ export function isTabDirty(tab: RightTab, dirtyFileIds?: Set<string>): boolean {
     const notePath = literatureTabNotePath(tab);
     return notePath ? (dirtyFileIds?.has(notePath) ?? useDocumentStore.getState().isFileDirty(notePath)) : false;
   }
-  if (tab.fileId && dirtyFileIds?.has(tab.fileId)) return true;
+  if (isFileBackedTab(tab) && tab.fileId && dirtyFileIds?.has(tab.fileId)) return true;
   return false;
 }
 
@@ -57,10 +86,5 @@ export function isExperimentsDetailTab(tab: RightTab): boolean {
 
 /** Strip mode-specific payload when resetting a persistent home tab. */
 export function buildInitialTabShell(tab: RightTab, initialTitle: string): RightTab {
-  return {
-    id: tab.id,
-    kind: tab.kind,
-    title: initialTitle,
-    isInitial: true,
-  };
+  return createHomeTab(tab.kind, tab.id, initialTitle);
 }

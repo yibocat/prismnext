@@ -5,7 +5,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { modeRegistry, type RightTab } from "@/lib/workspace/mode-registry";
+import { isFileBackedTab, modeRegistry, tabFilePath, type RightTab } from "@/lib/workspace/mode-registry";
 import { useWindowState } from "@/hooks/use-window-state";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
@@ -715,9 +715,13 @@ function RightAreaWorkspace({
       {showTabToolbar && (
         <TabToolbar
           onToggleSidebar={handleToggleSidebar}
-          filePath={activeTab.filePath}
-          projectName={activeTab.isExternal ? undefined : projectRoot?.split(/[/\\]/).pop()}
-          isExternal={activeTab.isExternal}
+          filePath={tabFilePath(activeTab)}
+          projectName={
+            isFileBackedTab(activeTab) && activeTab.isExternal
+              ? undefined
+              : projectRoot?.split(/[/\\]/).pop()
+          }
+          isExternal={isFileBackedTab(activeTab) ? activeTab.isExternal : undefined}
           hideSpacer={!isEditorKind}
           hideBreadcrumb={focusedMode === "texworkspace" || focusedMode === "literature"}
           hideSidebarToggle={modeRegistry.get(focusedMode)?.hideRightSidebar}

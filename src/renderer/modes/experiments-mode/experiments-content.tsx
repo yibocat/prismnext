@@ -33,8 +33,10 @@ function useExperimentsTabTitleSync(tab: RightTab) {
   const { t, i18n } = useTranslation();
   const updateTab = useRightPanelStore((s) => s.updateTab);
   const experiments = useExperimentStore((s) => s.experiments);
+  const experimentId = tab.kind === "experiments" ? tab.experimentId : undefined;
+  const experimentsView = tab.kind === "experiments" ? tab.experimentsView : undefined;
   const detailTitle = useExperimentStore((s) => {
-    if (!tab.experimentId || !s.detail || s.detail.meta.id !== tab.experimentId) {
+    if (!experimentId || !s.detail || s.detail.meta.id !== experimentId) {
       return null;
     }
     return s.detail.meta.title;
@@ -42,9 +44,9 @@ function useExperimentsTabTitleSync(tab: RightTab) {
 
   useEffect(() => {
     if (tab.kind !== "experiments") return;
-    if (!tab.experimentId) {
+    if (!experimentId) {
       const homeTitle = t("experiments.title");
-      if (tab.title !== homeTitle || tab.experimentsView !== "list") {
+      if (tab.title !== homeTitle || experimentsView !== "list") {
         updateTab(tab.id, {
           experimentId: undefined,
           experimentsView: "list",
@@ -53,11 +55,11 @@ function useExperimentsTabTitleSync(tab: RightTab) {
       }
       return;
     }
-    const fromList = experiments.find((e) => e.id === tab.experimentId)?.title;
+    const fromList = experiments.find((e) => e.id === experimentId)?.title;
     const title = (detailTitle ?? fromList ?? tab.title).slice(0, 48);
-    if (tab.title !== title || tab.experimentsView !== "detail") {
+    if (tab.title !== title || experimentsView !== "detail") {
       updateTab(tab.id, {
-        experimentId: tab.experimentId,
+        experimentId,
         experimentsView: "detail",
         title,
       });
@@ -66,8 +68,8 @@ function useExperimentsTabTitleSync(tab: RightTab) {
     tab.id,
     tab.kind,
     tab.title,
-    tab.experimentId,
-    tab.experimentsView,
+    experimentId,
+    experimentsView,
     experiments,
     detailTitle,
     updateTab,
@@ -154,6 +156,7 @@ export function ExperimentsContent({
   const showArchived = useExperimentStore((s) => s.showArchived);
 
   useExperimentsTabTitleSync(tab);
+  const experimentId = tab.kind === "experiments" ? tab.experimentId : undefined;
 
   useEffect(() => {
     if (!projectRoot) return;
@@ -162,10 +165,10 @@ export function ExperimentsContent({
 
   useEffect(() => {
     if (!projectRoot || !isActive) return;
-    if (!tab.experimentId) return;
-    if (selectedId === tab.experimentId && detail?.meta.id === tab.experimentId) return;
-    void selectExperiment(projectRoot, tab.experimentId);
-  }, [projectRoot, tab.experimentId, isActive, selectExperiment, selectedId, detail?.meta.id]);
+    if (!experimentId) return;
+    if (selectedId === experimentId && detail?.meta.id === experimentId) return;
+    void selectExperiment(projectRoot, experimentId);
+  }, [projectRoot, experimentId, isActive, selectExperiment, selectedId, detail?.meta.id]);
 
   if (!projectRoot) {
     return (
@@ -181,16 +184,16 @@ export function ExperimentsContent({
 
   const shellClass = cn("flex h-full min-h-0 flex-col font-sans", !isActive && "hidden");
 
-  if (tab.experimentId) {
+  if (experimentId) {
     if (error && !detail) {
       return (
         <ExperimentsLoadError
           error={error}
-          onRetry={() => void selectExperiment(projectRoot, tab.experimentId!)}
+          onRetry={() => void selectExperiment(projectRoot, experimentId)}
         />
       );
     }
-    if (detail && detail.meta.id === tab.experimentId) {
+    if (detail && detail.meta.id === experimentId) {
       return (
         <div className={shellClass}>
           <ExperimentsCorruptMetaBanner corruptIds={corruptIds} />

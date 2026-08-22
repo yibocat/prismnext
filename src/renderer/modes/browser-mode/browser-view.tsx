@@ -71,8 +71,8 @@ export function syncWebviewGuestSize(
 export function BrowserView() {
   const { tab, isActive } = useTabContext();
   const tabId = tab.id;
-  const url = tab.url ?? "";
-  const hibernated = tab.hibernated ?? false;
+  const url = tab.kind === "browser" ? tab.url ?? "" : "";
+  const hibernated = tab.kind === "browser" ? tab.hibernated ?? false : false;
 
   const webviewRef = useRef<HTMLWebViewElement>(null);
   const webviewElRef = useRef<HTMLDivElement>(null);
@@ -191,7 +191,8 @@ export function BrowserView() {
       if (!e.url) return;
       // Address bar only — never re-assign <webview src> for guest redirects.
       lastLoadedRef.current = e.url;
-      const current = useRightPanelStore.getState().tabs.find((t) => t.id === tabId)?.url;
+      const currentTab = useRightPanelStore.getState().tabs.find((t) => t.id === tabId);
+      const current = currentTab?.kind === "browser" ? currentTab.url : undefined;
       if (current === e.url) return;
       syncingFromWebviewRef.current = true;
       syncBrowserTabUrl(tabId, e.url);
@@ -293,12 +294,14 @@ export function BrowserView() {
     };
   }, [tabId, hibernated, loadError]);
 
-  const isLoading = useRightPanelStore(
-    (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
-  );
-  const reloadToken = useRightPanelStore(
-    (s) => s.tabs.find((t) => t.id === tabId)?.reloadToken ?? 0,
-  );
+  const isLoading = useRightPanelStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.kind === "browser" ? tab.isLoading ?? false : false;
+  });
+  const reloadToken = useRightPanelStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.kind === "browser" ? tab.reloadToken ?? 0 : 0;
+  });
   const omniboxOpen = useBrowserStore((s) => s.omniboxOpen);
   const omniboxAnchor = useBrowserStore((s) => s.omniboxAnchor);
   const appliedReloadTokenRef = useRef(reloadToken);

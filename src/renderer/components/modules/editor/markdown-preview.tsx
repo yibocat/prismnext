@@ -3,6 +3,7 @@ import type { Components } from "react-markdown";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { MarkdownDocumentPreview } from "@/components/modules/shared/markdown-document-preview";
 import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import {
@@ -59,12 +60,12 @@ const WIKILINK_COMPONENTS: Components = {
 
 export const MarkdownPreview = memo(function MarkdownPreview() {
   const { tab } = useTabContext();
-  const fileId = tab.fileId;
+  const fileId = tabFileId(tab);
   const entry = useDocumentStore((s) =>
     fileId ? s.openedContents.get(fileId) : undefined,
   );
   const content = entry?.content ?? "";
-  const filePath = tab.filePath ?? fileId ?? "";
+  const filePath = tabFilePath(tab) ?? fileId ?? "";
   const previewProfile = markdownPreviewProfileForPath(filePath);
 
   const markdownComponents = useMemo(() => {

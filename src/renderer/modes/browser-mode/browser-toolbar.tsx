@@ -60,7 +60,10 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
   const bookmarks = useBrowserStore((s) => s.bookmarks);
   const clearRecentVisits = useBrowserStore((s) => s.clearRecentVisits);
   const isLoading = useRightPanelStore(
-    (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
+    (s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      return tab?.kind === "browser" ? tab.isLoading ?? false : false;
+    },
   );
   const isBookmarked = bookmarks.some((b) => normalizeUrl(b.url) === normalizeUrl(tabUrl));
 

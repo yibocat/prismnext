@@ -40,7 +40,10 @@ export function TerminalView({ tabId }: TerminalViewProps) {
   // Sprint 0.7 "Open terminal in lab": a tab carrying `terminalCwd` spawns
   // the PTY there instead of the project-wide terminalRoot. Plain user/AI
   // terminals leave it undefined and fall back to terminalRoot (unchanged).
-  const terminalCwd = useRightPanelStore((s) => s.tabs.find((t) => t.id === tabId)?.terminalCwd);
+  const terminalCwd = useRightPanelStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.kind === "terminal" ? tab.terminalCwd : undefined;
+  });
   const spawnCwd = terminalCwd ?? terminalRoot;
   const xtermTheme = useTerminalTheme();
   const setSessionCommand = useTerminalStore((s) => s.setSessionCommand);

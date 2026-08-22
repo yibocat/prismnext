@@ -543,18 +543,19 @@ function LiteratureLibraryToolbar() {
 export function LiteratureToolbar({ tab }: { tab: RightTab }) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const papers = useLiteratureStore((s) => s.papers);
-  const paper = tab.literaturePaperId
-    ? papers.find((p) => p.id === tab.literaturePaperId)
+  const paperId = tab.kind === "literature" ? tab.literaturePaperId : undefined;
+  const paper = paperId
+    ? papers.find((p) => p.id === paperId)
     : null;
 
   const extractPaperIds = useMemo(() => {
-    if (tab.literaturePaperId) return [tab.literaturePaperId];
+    if (paperId) return [paperId];
     return papers.map((p) => p.id);
-  }, [tab.literaturePaperId, papers]);
+  }, [paperId, papers]);
 
   useLiteratureExtractSession(projectRoot, extractPaperIds);
 
-  if (tab.literaturePaperId && paper) {
+  if (paperId && paper) {
     return <LiteratureReaderToolbar paper={paper} tab={tab} />;
   }
 

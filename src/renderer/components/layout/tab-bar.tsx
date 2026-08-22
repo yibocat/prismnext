@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
-import type { RightTab } from "@/lib/workspace/mode-registry";
+import { tabFileId, tabFilePath, type RightTab } from "@/lib/workspace/mode-registry";
 import { XIcon, DotIcon, FoldersIcon, Terminal as TerminalIcon, SparklesIcon } from "lucide-react";
 import { Icon } from "@iconify/react/offline";
 import { getFileIconName } from "@/lib/files/file-icon-class";
@@ -34,8 +34,8 @@ function tabIcon(
 ) {
   const litNotePath = tab.kind === "literature" ? literatureTabNotePath(tab) : null;
   const isDirty =
-    dirtyFileIds?.has(tab.fileId ?? "")
-    || dirtyFileIds?.has(tab.filePath ?? "")
+    dirtyFileIds?.has(tabFileId(tab) ?? "")
+    || dirtyFileIds?.has(tabFilePath(tab) ?? "")
     || (litNotePath ? dirtyFileIds?.has(litNotePath) : false);
   if (isDirty) {
     return <DotIcon className="size-3.5 shrink-0 text-info" strokeWidth={4} />;
@@ -57,7 +57,7 @@ function tabIcon(
   if (tab.kind === "file" && tab.isInitial) {
     return <FoldersIcon className="size-3.5 shrink-0 text-muted-foreground" />;
   }
-  const fileName = tab.filePath ?? tab.title;
+  const fileName = tabFilePath(tab) ?? tab.title;
   const iconName = getFileIconName(fileName);
   return <Icon icon={iconName} className="size-3.5 shrink-0" />;
 }

@@ -17,7 +17,7 @@ export function ResearchPlanToolbar({ tab }: { tab: RightTab }) {
         viewMode={viewMode}
         onViewModeChange={(mode) => setTabViewMode(tab.id, mode)}
       />
-      <PlanDraftToolbar filePath={tab.filePath} />
+      <PlanDraftToolbar filePath={tab.kind === "research-plan" ? tab.filePath : undefined} />
     </div>
   );
 }

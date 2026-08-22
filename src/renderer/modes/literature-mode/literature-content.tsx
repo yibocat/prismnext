@@ -58,10 +58,11 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
     subview === "library" ? projectRoot : null,
   );
 
+  const paperId = tab.kind === "literature" ? tab.literaturePaperId : undefined;
   const paper = useMemo(
     () =>
-      tab.literaturePaperId ? papers.find((p) => p.id === tab.literaturePaperId) ?? null : null,
-    [papers, tab.literaturePaperId],
+      paperId ? papers.find((p) => p.id === paperId) ?? null : null,
+    [papers, paperId],
   );
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
     );
   }
 
-  if (tab.literaturePaperId && paper) {
+  if (paperId && paper) {
     return null;
   }
 
