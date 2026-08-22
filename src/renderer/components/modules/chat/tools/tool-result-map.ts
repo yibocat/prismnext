@@ -1,5 +1,5 @@
-import type { ChatStreamMessage, ContentBlock } from "@/lib/chat/types";
-export { contentBlocks } from "@/lib/chat/types";
+import { contentBlocks, type ChatStreamMessage, type ContentBlock } from "@/lib/chat/types";
+export { contentBlocks };
 
 const ACTIVE_TOOL_STATUSES = new Set([
   "",

@@ -17,12 +17,14 @@ export type { ChatStreamMessage, ContentBlock } from "@/lib/chat/types";
 export type { SubAgentRun } from "./chat/model";
 export { _msgCacheSetForTests, _msgCacheGetForTests, _msgCacheMaxForTests };
 
-export const useChatStore = create<ChatState>()((...a) => ({
-  ...createInitialChatData(),
-  ...createChatTabsSlice(...a),
-  ...createChatPlanSlice(...a),
-  ...createChatSendSlice(...a),
-  ...createChatComposerQueueSlice(...a),
-}));
+export const useChatStore = create<ChatState>()((...a) =>
+  ({
+    ...createInitialChatData(),
+    ...createChatTabsSlice(...a),
+    ...createChatPlanSlice(...a),
+    ...createChatSendSlice(...a),
+    ...createChatComposerQueueSlice(...a),
+  }) as ChatState,
+);
 
 (useChatStore as any)._msgCache = _msgCache;

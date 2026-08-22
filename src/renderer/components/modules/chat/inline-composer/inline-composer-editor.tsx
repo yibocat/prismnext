@@ -62,7 +62,11 @@ import type { CursorAnchor } from "./dropdown-position";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { compactComposerNeedsExpand } from "./compact-overflow";
 import { syncComposerQueryState } from "./composer-query-sync";
-import { loadDraftParts, type InlineComposerEditorHandle } from "@/lib/chat/composer-draft";
+import {
+  loadDraftParts,
+  type ComposerFileMentionTarget,
+  type InlineComposerEditorHandle,
+} from "@/lib/chat/composer-draft";
 import { useChatStore } from "@/stores/chat-store";
 import { requestOpenModelPicker } from "@/lib/chat/open-model-picker";
 import type { Extension } from "@codemirror/state";
@@ -1264,7 +1268,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           focus: () => view.focus(),
           getParts: () => readPartsFromView(view),
           replaceParts: (next) => applyPartsToEditorView(view, next),
-          insertFileMention: (file: ProjectFile) => {
+          insertFileMention: (file: ComposerFileMentionTarget) => {
             const filePath = mentionFileLabel(file);
             const pos = view.state.selection.main.head;
             insertComposerToken(
@@ -1380,7 +1384,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         const view = viewRef.current;
         if (view) applyPartsToEditorView(view, next);
       },
-      insertFileMention: (file: ProjectFile) => {
+      insertFileMention: (file: ComposerFileMentionTarget) => {
         const view = viewRef.current;
         if (!view) return;
         const filePath = mentionFileLabel(file);

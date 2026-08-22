@@ -23,6 +23,7 @@ import {
   extractPlanFrontmatterDescription,
   sessionDraftPlanRel,
 } from "../../../shared/research/plan";
+import { appendAssistantBlocksToLastTurn } from "@/lib/chat/conversation-reducer";
 
 export const createChatPlanSlice: StateCreator<ChatState, [], [], Partial<ChatState>> = (set, get) => ({
   showPlanSuggest: (tabId?: string, reason?: string | null, opts?) => {

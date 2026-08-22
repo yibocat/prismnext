@@ -40,10 +40,13 @@ import {
   markSubagentStopping,
 } from "@/lib/chat/conversation-reducer";
 import type { AgentEvent } from "../../../shared/agent/runtime";
-import type { Conversation } from "../../../shared/agent/conversation";
+import type { Conversation, TurnMessageMeta } from "../../../shared/agent/conversation";
 import { deriveSessionTitleForSend, extractSessionTitle, isGenericSessionTitle } from "@/lib/chat/session-title";
 import { resolveTurnModelLabel } from "@/lib/chat/turn-model-label";
-import { persistAndSyncIntensiveReading } from "@/lib/literature/sync-intensive-reading";
+import {
+  persistAndSyncIntensiveReading,
+  resolveIntensivePaperIdsForSession,
+} from "@/lib/literature/sync-intensive-reading";
 import { captureLiteratureStageFromToolResult } from "@/lib/literature/sync-citation-staging-from-messages";
 import type { ChatPreparePhase } from "../../../shared/chat/prepare-phases";
 import type { ContextUsageBreakdown } from "../../../shared/agent/context-usage";

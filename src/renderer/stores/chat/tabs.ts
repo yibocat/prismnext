@@ -13,6 +13,8 @@ import {
   syncCitationStagingForTab,
 } from "./model";
 import { toast } from "sonner";
+import { i18n } from "@/lib/i18n";
+import { truncateChatMessagesToTurn } from "@/lib/chat/chat-turns";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { researchDesktop } from "@/lib/desktop-api/research";
 import { emptyConversation, newConversationId } from "../../../shared/agent/conversation";
