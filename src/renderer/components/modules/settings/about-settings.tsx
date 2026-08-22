@@ -12,11 +12,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
 import {
   mapUpdaterStatus,
   type UpdateUiStatus,
 } from "@/lib/updates/map-updater-status";
 import { requestUpdateInstall } from "@/lib/updates/request-update-install";
+import {
+  checkForUpdate,
+  downloadUpdate,
+  getAboutVersions,
+  subscribeUpdateChanged,
+  subscribeUpdateProgress,
+} from "@/lib/updates/updater";
 import { toast } from "sonner";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
@@ -74,8 +82,7 @@ export function AboutSettings() {
   }, []);
 
   useEffect(() => {
-    window.electronAPI
-      .aboutGetVersions()
+    getAboutVersions()
       .then((info) => {
         setAppVersion(info.appVersion || "—");
       })
@@ -85,7 +92,7 @@ export function AboutSettings() {
   }, []);
 
   useEffect(() => {
-    const unsubProgress = window.electronAPI.onUpdateProgress(({ percent }) => {
+    const unsubProgress = subscribeUpdateProgress(({ percent }) => {
       setStatus((prev) => {
         if (
           prev.kind !== "downloading" &&
@@ -103,7 +110,7 @@ export function AboutSettings() {
         };
       });
     });
-    const unsubChanged = window.electronAPI.onUpdateChanged((raw) => {
+    const unsubChanged = subscribeUpdateChanged((raw) => {
       applyRaw(raw as UpdaterStatus);
     });
     return () => {
@@ -115,7 +122,7 @@ export function AboutSettings() {
   const doCheck = useCallback(async () => {
     setStatus({ kind: "checking" });
     try {
-      const result = await window.electronAPI.updateCheck();
+      const result = await checkForUpdate();
       applyRaw(result);
     } catch (err) {
       setStatus({
@@ -139,7 +146,7 @@ export function AboutSettings() {
         percent: 0,
         downloadPath: "downloadPath" in prev ? prev.downloadPath : undefined,
       }));
-      const result = await window.electronAPI.updateDownload();
+      const result = await downloadUpdate();
       applyRaw(result);
     } catch (err) {
       setStatus({
@@ -470,7 +477,7 @@ export function AboutSettings() {
                   size="xs"
                   className="shrink-0"
                   onClick={() => {
-                    void window.electronAPI.shellOpenExternal(page.url).catch(() => {
+                    void openExternalUrl(page.url).catch(() => {
                       toast.error(t("settings.about.openPageFailed"));
                     });
                   }}
