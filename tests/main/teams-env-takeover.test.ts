@@ -156,7 +156,7 @@ describe("skills.paths precedence order (D-9)", () => {
     expect(coreIdx).toBeGreaterThanOrEqual(0);
     expect(packIdx).toBeGreaterThanOrEqual(0);
     expect(coreIdx).toBeLessThan(packIdx);
-    expect(paths[paths.length - 1]).toBe(".prismnext/agent");
+    expect(paths[paths.length - 1]).toBe(".workbench/agent");
   });
 });
 

@@ -1,6 +1,6 @@
 /**
  * Unified icon spec for teams and projects — three optional forms the user can pick.
- * Stored as a small object in team.json / .prismnext/settings.json.
+ * Stored as a small object in team.json / `.workbench/settings.json`.
  *
  * - emoji:  a single glyph string ("🧊")
  * - lucide: a PascalCase lucide icon name ("Beaker")

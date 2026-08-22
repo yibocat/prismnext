@@ -4,8 +4,8 @@
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client";
-import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp";
+import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "@earendil-works/pi-ai";
 import type { McpServerDef } from "../../shared/teams/types";
