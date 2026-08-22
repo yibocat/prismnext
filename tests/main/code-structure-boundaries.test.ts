@@ -823,6 +823,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps terminal-mode off window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/modes/terminal-mode"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps git-mode off window.electronAPI", () => {
     for (const file of walkTsFiles(join(REPO, "src/renderer/modes/git-mode"))) {
       const rel = relative(REPO, file);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { terminalDesktop } from "@/lib/desktop-api/terminal";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTerminalTheme } from "@/hooks/use-terminal-theme";
 import { useTerminalStore } from "@/stores/terminal-store";
@@ -68,7 +69,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
       existingAlive && (!existing!.cwd || existing!.cwd === spawnCwd);
 
     if (existingAlive && !canReuse) {
-      window.electronAPI.terminalDestroy({ sessionId: existing!.sessionId });
+      terminalDesktop.terminalDestroy({ sessionId: existing!.sessionId });
       useTerminalStore.getState().removeSession(tabId);
     }
 
@@ -118,7 +119,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     if (!canReuse) {
       // ─── Spawn PTY ───
-      window.electronAPI
+      terminalDesktop
         .terminalCreate({
           sessionId,
           tabId,
@@ -161,11 +162,11 @@ export function TerminalView({ tabId }: TerminalViewProps) {
         useTerminalStore.getState().markCommandSubmitted(tabId);
       }
 
-      window.electronAPI.terminalWrite({ sessionId: activeSessionId, data });
+      terminalDesktop.terminalWrite({ sessionId: activeSessionId, data });
     });
 
     // ─── PTY output → display ───
-    const unsubData = window.electronAPI.onTerminalData(({ sessionId: sid, data }) => {
+    const unsubData = terminalDesktop.onTerminalData(({ sessionId: sid, data }) => {
       if (sid !== activeSessionId) return;
 
       term.write(data);
@@ -209,7 +210,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     });
 
     // ─── PTY exit ───
-    const unsubExit = window.electronAPI.onTerminalExit(({ sessionId: sid, exitCode }) => {
+    const unsubExit = terminalDesktop.onTerminalExit(({ sessionId: sid, exitCode }) => {
       if (sid !== activeSessionId) return;
       useTerminalStore.getState().markSessionExited(tabId, exitCode);
       term.write(`\r\n\x1b[1;33m[Process exited with code ${exitCode}]\x1b[0m\r\n`);
@@ -230,7 +231,7 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     resizeObserver.observe(container);
 
     const resizeDisposable = term.onResize(({ cols, rows }) => {
-      window.electronAPI.terminalResize({ sessionId: activeSessionId, cols, rows });
+      terminalDesktop.terminalResize({ sessionId: activeSessionId, cols, rows });
     });
 
     // ─── Cleanup (UI only — PTY survives until tab close / restart) ───
