@@ -635,3 +635,45 @@ describe("code structure host port (Phase 3)", () => {
     expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(/window\.electronAPI/);
   });
 });
+
+describe("code structure renderer direction (Phase 4)", () => {
+  /** WP-4.1 baseline: these seven stores still import modes/components. Wave 1 removes the list. */
+  const STORE_MODE_COMPONENT_ALLOWLIST = new Set([
+    "src/renderer/stores/literature-store.ts",
+    "src/renderer/stores/experiment-store.ts",
+    "src/renderer/stores/right-panel-store.ts",
+    "src/renderer/stores/chat-store.ts",
+    "src/renderer/stores/settings-store.ts",
+    "src/renderer/stores/permission-actions.ts",
+    "src/renderer/stores/composer-editor-store.ts",
+  ]);
+
+  const MODE_OR_COMPONENT_FROM = /from\s+["']@\/(?:modes|components)\//;
+
+  function storeModeComponentImports(): { rel: string; lines: string[] }[] {
+    const hits: { rel: string; lines: string[] }[] = [];
+    for (const file of walkTsFiles(join(REPO, "src/renderer/stores"))) {
+      const rel = relative(REPO, file);
+      const lines = importsFrom(file, MODE_OR_COMPONENT_FROM);
+      if (lines.length > 0) hits.push({ rel, lines });
+    }
+    return hits;
+  }
+
+  it("does not add store → modes/components imports beyond the Wave 1 allowlist", () => {
+    const hits = storeModeComponentImports();
+    const unexpected = hits.filter((h) => !STORE_MODE_COMPONENT_ALLOWLIST.has(h.rel));
+    expect(unexpected, JSON.stringify(unexpected, null, 2)).toEqual([]);
+    expect(new Set(hits.map((h) => h.rel)).size).toBeLessThanOrEqual(
+      STORE_MODE_COMPONENT_ALLOWLIST.size,
+    );
+  });
+
+  // Phase 4 baseline (WP-4.1): chat-store.ts was 3358 lines. WP-4.7 must bring
+  // the compose root under 800 without renaming useChatStore / sendPrompt.
+  it("records the chat-store God-file baseline until WP-4.7", () => {
+    const lines = sourceOf("src/renderer/stores/chat-store.ts").split("\n").length;
+    expect(lines).toBeGreaterThan(800);
+  });
+});
+
