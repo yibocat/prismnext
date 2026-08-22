@@ -24,7 +24,7 @@ import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { PackIcon } from "../teams/team-icon";
 import { IconPicker } from "../shared/icon-picker";
-import { normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/icon-spec";
+import { normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/platform/icon-spec";
 import { OriginChip } from "../teams/origin-chip";
 import { ProBadge } from "../teams/pro-badge";
 import { ScopeChip } from "../teams/scope-chip";

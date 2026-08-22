@@ -23,8 +23,8 @@ import {
   reconcileLibraryViewWithCollections,
 } from "@/lib/literature/library-ui-prefs";
 import { collectProjectTags } from "@/lib/literature/paper-tag-utils";
-import { paperTagKey } from "../../shared/paper-tags";
-import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
+import { paperTagKey } from "../../shared/literature/paper-tags";
+import { formatPdfDownloadFailure } from "../../shared/literature/pdf-download-messages";
 import { useDocumentStore } from "@/stores/document-store";
 import type {
   LiteratureSortColumn,

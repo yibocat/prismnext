@@ -6,9 +6,9 @@
  */
 
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent, AgentToolCallId, ToolOutcome } from "../../shared/agent-runtime";
-import { parseToolOutcome } from "../../shared/agent-runtime";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { AgentEvent, AgentToolCallId, ToolOutcome } from "../../shared/agent/runtime";
+import { parseToolOutcome } from "../../shared/agent/runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import {
   extractToolPathContext,
   type PermissionGate,

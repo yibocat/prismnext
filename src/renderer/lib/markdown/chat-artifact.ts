@@ -10,9 +10,9 @@ import {
   isImageArtifactPath,
   isPdfArtifactPath,
   normalizeArtifactSlash,
-} from "../../../shared/artifact-path";
-import { parseKeyedFenceBody } from "../../../shared/chat-fence-parse";
-import type { ToolOutcomeResource } from "../../../shared/agent-runtime";
+} from "../../../shared/interaction/artifact-path";
+import { parseKeyedFenceBody } from "../../../shared/chat/fence-parse";
+import type { ToolOutcomeResource } from "../../../shared/agent/runtime";
 
 export type ChatArtifactKind = "image" | "pdf" | "generic";
 

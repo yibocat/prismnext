@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import {
   buildLibraryIdentityIndex,
   findLibraryPaperInIdentityIndex,
-} from "../../../shared/staged-citation-library-match";
+} from "../../../shared/literature/staged-citation-library-match";
 import {
   PAPER_CITATION_UI_MAX_ROWS,
   type PaperCitationEntry,
@@ -22,7 +22,7 @@ import {
   type PaperCitationSectionKind,
   describePaperCitationIdentifier,
   paperCitationSourceLabel,
-} from "../../../shared/paper-citation-network";
+} from "../../../shared/literature/paper-citation-network";
 import type { LiteraturePaper, PaperCitationSection } from "@/types/electron.d";
 import { openUrlInBrowser } from "@/lib/browser-link/open-in-browser";
 import { openPaperInMainLibrary, openPaperPdfReader } from "@/lib/literature/open-paper-in-library";

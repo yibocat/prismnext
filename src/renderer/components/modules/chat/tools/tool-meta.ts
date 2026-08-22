@@ -2,18 +2,18 @@ export type {
   PermissionConfirmUx,
   PermissionGroup,
   ToolPermissionEntry,
-} from "@shared/tool-permission-registry";
+} from "@shared/permissions/tool-registry";
 export {
   TOOL_PERMISSION_REGISTRY,
   getToolPermissionEntry,
   buildPermissionRulesForMode,
-} from "@shared/tool-permission-registry";
+} from "@shared/permissions/tool-registry";
 
-import { getToolPermissionEntry } from "@shared/tool-permission-registry";
+import { getToolPermissionEntry } from "@shared/permissions/tool-registry";
 
 export interface ToolMeta {
-  permissionGroup?: import("@shared/tool-permission-registry").PermissionGroup;
-  confirmUx: import("@shared/tool-permission-registry").PermissionConfirmUx;
+  permissionGroup?: import("@shared/permissions/tool-registry").PermissionGroup;
+  confirmUx: import("@shared/permissions/tool-registry").PermissionConfirmUx;
   usesProposedChange?: boolean;
 }
 

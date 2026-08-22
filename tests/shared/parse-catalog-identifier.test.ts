@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCatalogIdentifier } from "../../src/shared/parse-catalog-identifier";
+import { parseCatalogIdentifier } from "../../src/shared/literature/parse-catalog-identifier";
 
 describe("parseCatalogIdentifier", () => {
   it("parses bare DOI", () => {

@@ -7,7 +7,7 @@ import {
   RESEARCH_BRIEF_TEMPLATE,
   resolveResearchBriefSection,
   type ResearchBriefSection,
-} from "../../shared/research-brief";
+} from "../../shared/research/brief";
 
 export function researchBriefAbsPath(projectRoot: string): string {
   return join(projectRoot.replace(/\\/g, "/"), RESEARCH_BRIEF_REL);

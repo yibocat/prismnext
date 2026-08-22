@@ -14,7 +14,7 @@ type RunCompleteHandler = (data: {
   runId: string;
   result: {
     ok: boolean;
-    run?: import("../../src/shared/experiment-log").ExperimentRunEntry;
+    run?: import("../../src/shared/experiments/log").ExperimentRunEntry;
     exitCode?: number;
     stdoutTail?: string;
     stderrTail?: string;
@@ -116,7 +116,7 @@ vi.mock("../../src/renderer/stores/right-panel-store", () => ({
 }));
 
 import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
-import type { ExperimentSummary } from "../../src/shared/experiment-log";
+import type { ExperimentSummary } from "../../src/shared/experiments/log";
 
 const PROJECT = "/projects/demo";
 

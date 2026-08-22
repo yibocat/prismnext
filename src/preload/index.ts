@@ -1,13 +1,13 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { WorkspaceFolder } from "../shared/workspace-folder";
-import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
+import type { WorkspaceFolder } from "../shared/workbench/workspace-folder";
+import type { PaperExtractState, PaperExtractProgress } from "../shared/literature/paper-extract";
 import type {
 	BranchInfo,
 	GitStatusData,
 	MergeStatus,
 	WorktreeInfo,
 } from "../shared/git";
-import type { IconSpec } from "../shared/icon-spec";
+import type { IconSpec } from "../shared/platform/icon-spec";
 import type {
 	ExecutionApplyProjectSwitchArgs,
 	ExecutionApplyProjectSwitchResult,
@@ -214,7 +214,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
 	researchPlanWrite: (args: {
 		projectRoot: string;
-		doc: import("../shared/research-plan").ResearchPlanDoc;
+		doc: import("../shared/research/plan").ResearchPlanDoc;
 	}) => ipcRenderer.invoke("researchPlan:write", args),
 	researchPlanReadDraft: (args: { projectRoot: string; sessionId?: string }) =>
 		ipcRenderer.invoke("researchPlan:readDraft", args),
@@ -300,7 +300,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("interaction:list", { projectRoot }),
 	interactionWrite: (args: {
 		projectRoot: string;
-		spec: import("../shared/interaction-spec").InteractionSpec;
+		spec: import("../shared/interaction/spec").InteractionSpec;
 	}) => ipcRenderer.invoke("interaction:write", args),
 	onInteractionChanged: (
 		callback: (data: {
@@ -345,31 +345,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		return () => ipcRenderer.removeListener("experiment:changed", handler);
 	},
 	onExperimentRunComplete: (
-		callback: (data: import("../shared/experiment-log").ExperimentRunCompleteEvent) => void,
+		callback: (data: import("../shared/experiments/log").ExperimentRunCompleteEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: import("../shared/experiment-log").ExperimentRunCompleteEvent,
+			data: import("../shared/experiments/log").ExperimentRunCompleteEvent,
 		) => callback(data);
 		ipcRenderer.on("experiment:runComplete", handler);
 		return () => ipcRenderer.removeListener("experiment:runComplete", handler);
 	},
 	onExperimentRunStarted: (
-		callback: (data: import("../shared/experiment-log").ExperimentRunStartedEvent) => void,
+		callback: (data: import("../shared/experiments/log").ExperimentRunStartedEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: import("../shared/experiment-log").ExperimentRunStartedEvent,
+			data: import("../shared/experiments/log").ExperimentRunStartedEvent,
 		) => callback(data);
 		ipcRenderer.on("experiment:runStarted", handler);
 		return () => ipcRenderer.removeListener("experiment:runStarted", handler);
 	},
 	onExperimentRunOutput: (
-		callback: (data: import("../shared/experiment-log").ExperimentRunOutputEvent) => void,
+		callback: (data: import("../shared/experiments/log").ExperimentRunOutputEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: import("../shared/experiment-log").ExperimentRunOutputEvent,
+			data: import("../shared/experiments/log").ExperimentRunOutputEvent,
 		) => callback(data);
 		ipcRenderer.on("experiment:runOutput", handler);
 		return () => ipcRenderer.removeListener("experiment:runOutput", handler);
@@ -535,16 +535,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	) => ipcRenderer.invoke("literature:createFromIdentifier", { projectRoot, ...ids }),
 	literatureCreateFromStagedCitation: (
 		projectRoot: string,
-		citation: import("../shared/citation-staging").StagedCitationImportInput,
+		citation: import("../shared/literature/citation-staging").StagedCitationImportInput,
 	) => ipcRenderer.invoke("literature:createFromStagedCitation", { projectRoot, citation }),
 	literatureCancelStagedCitationAdd: (stagedId: string) =>
 		ipcRenderer.invoke("literature:cancelStagedCitationAdd", { stagedId }),
 	onLiteratureStagedAddProgress: (
-		callback: (data: import("../shared/citation-staging").StagedAddProgressEvent) => void,
+		callback: (data: import("../shared/literature/citation-staging").StagedAddProgressEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: import("../shared/citation-staging").StagedAddProgressEvent,
+			data: import("../shared/literature/citation-staging").StagedAddProgressEvent,
 		) => callback(data);
 		ipcRenderer.on("literature:stagedAddProgress", handler);
 		return () => ipcRenderer.removeListener("literature:stagedAddProgress", handler);
@@ -905,7 +905,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:fetchSkillLibraryCatalog", { projectPath, sourceId }),
 	agentInstallLibraryCatalogItem: (
 		projectPath: string,
-		item: import("../shared/skill-library-types").LibraryCatalogItem,
+		item: import("../shared/skills/library-types").LibraryCatalogItem,
 	) => ipcRenderer.invoke("agent:installLibraryCatalogItem", { projectPath, item }),
 	agentInstallAllFromLibrarySource: (projectPath: string, sourceId: string) =>
 		ipcRenderer.invoke("agent:installAllFromLibrarySource", { projectPath, sourceId }),
@@ -982,7 +982,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("subagents:getDetail", { projectPath, expertId }),
 	subagentsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+		payload: import("@shared/agent/subagents").SaveCustomSubagentPayload,
 		targetTeamId?: string,
 	) => ipcRenderer.invoke("subagents:saveCustom", { projectPath, payload, targetTeamId }),
 	subagentsListRosterReferrers: (projectPath: string, expertId: string) =>
@@ -993,18 +993,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("orchestrators:getDetail", { projectPath, orchestratorId }),
 	orchestratorsSaveCustom: (
 		projectPath: string,
-		payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+		payload: import("@shared/agent/subagents").SaveCustomOrchestratorPayload,
 		targetTeamId?: string,
 	) => ipcRenderer.invoke("orchestrators:saveCustom", { projectPath, payload, targetTeamId }),
 	orchestratorsDeleteCustom: (projectPath: string, orchestratorId: string) =>
 		ipcRenderer.invoke("orchestrators:deleteCustom", { projectPath, orchestratorId }),
 	agentStatus: (args?: { projectRoot?: string }) =>
 		ipcRenderer.invoke("agent:status", args),
-	agentSend: (args: import("../shared/agent-api").AgentSendInput) =>
+	agentSend: (args: import("../shared/agent/api").AgentSendInput) =>
 		ipcRenderer.invoke("agent:send", args),
 	agentCancel: (args: { conversationId: string }) =>
 		ipcRenderer.invoke("agent:cancel", args),
-	agentCancelSubagent: (args: import("../shared/agent-api").AgentCancelSubagentInput) =>
+	agentCancelSubagent: (args: import("../shared/agent/api").AgentCancelSubagentInput) =>
 		ipcRenderer.invoke("agent:cancelSubagent", args),
 	agentDispose: (args?: { conversationId?: string }) =>
 		ipcRenderer.invoke("agent:dispose", args),
@@ -1014,50 +1014,50 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("agent:listSessions", { projectRoot }),
 	agentListSessionsByProjectId: (projectId: string) =>
 		ipcRenderer.invoke("agent:listSessionsByProjectId", { projectId }),
-	agentLoadSession: (args: import("../shared/agent-api").AgentLoadSessionInput) =>
+	agentLoadSession: (args: import("../shared/agent/api").AgentLoadSessionInput) =>
 		ipcRenderer.invoke("agent:loadSession", args),
-	agentRenameSession: (args: import("../shared/agent-api").AgentRenameSessionInput) =>
+	agentRenameSession: (args: import("../shared/agent/api").AgentRenameSessionInput) =>
 		ipcRenderer.invoke("agent:renameSession", args),
-	agentDeleteSession: (args: import("../shared/agent-api").AgentDeleteSessionInput) =>
+	agentDeleteSession: (args: import("../shared/agent/api").AgentDeleteSessionInput) =>
 		ipcRenderer.invoke("agent:deleteSession", args),
-	agentAnswerQuestion: (args: import("../shared/agent-api").AgentAnswerQuestionInput) =>
+	agentAnswerQuestion: (args: import("../shared/agent/api").AgentAnswerQuestionInput) =>
 		ipcRenderer.invoke("agent:answerQuestion", args),
-	agentResolvePlanSuggest: (args: import("../shared/agent-api").AgentResolvePlanSuggestInput) =>
+	agentResolvePlanSuggest: (args: import("../shared/agent/api").AgentResolvePlanSuggestInput) =>
 		ipcRenderer.invoke("agent:resolvePlanSuggest", args),
-	agentListModels: (args: import("../shared/agent-api").AgentListModelsInput) =>
+	agentListModels: (args: import("../shared/agent/api").AgentListModelsInput) =>
 		ipcRenderer.invoke("agent:listModels", args),
 	agentListModelsCatalog: () =>
 		ipcRenderer.invoke("agent:listModelsCatalog"),
-	agentTestConnection: (args: import("../shared/agent-api").AgentTestConnectionInput) =>
+	agentTestConnection: (args: import("../shared/agent/api").AgentTestConnectionInput) =>
 		ipcRenderer.invoke("agent:testConnection", args),
-	agentGetModelEffort: (args: import("../shared/agent-api").AgentModelEffortInput) =>
+	agentGetModelEffort: (args: import("../shared/agent/api").AgentModelEffortInput) =>
 		ipcRenderer.invoke("agent:getModelEffort", args),
 	agentGetEffortCatalog: () =>
 		ipcRenderer.invoke("agent:getEffortCatalog"),
-	agentCompact: (args: import("../shared/agent-api").AgentCompactInput) =>
+	agentCompact: (args: import("../shared/agent/api").AgentCompactInput) =>
 		ipcRenderer.invoke("agent:compact", args),
-	agentDescribeImages: (args: import("../shared/agent-api").AgentDescribeImagesInput) =>
+	agentDescribeImages: (args: import("../shared/agent/api").AgentDescribeImagesInput) =>
 		ipcRenderer.invoke("agent:describeImages", args),
-	agentTruncateToTurn: (args: import("../shared/agent-api").AgentTruncateInput) =>
+	agentTruncateToTurn: (args: import("../shared/agent/api").AgentTruncateInput) =>
 		ipcRenderer.invoke("agent:truncateToTurn", args),
-	agentUndoTruncate: (args: import("../shared/agent-api").AgentUndoTruncateInput) =>
+	agentUndoTruncate: (args: import("../shared/agent/api").AgentUndoTruncateInput) =>
 		ipcRenderer.invoke("agent:undoTruncate", args),
-	agentReassignDirectory: (args: import("../shared/agent-api").AgentReassignDirectoryInput) =>
+	agentReassignDirectory: (args: import("../shared/agent/api").AgentReassignDirectoryInput) =>
 		ipcRenderer.invoke("agent:reassignDirectory", args),
-	agentSyncIntensiveReading: (args: import("../shared/agent-api").AgentSyncIntensiveReadingInput) =>
+	agentSyncIntensiveReading: (args: import("../shared/agent/api").AgentSyncIntensiveReadingInput) =>
 		ipcRenderer.invoke("agent:syncIntensiveReading", args),
 	agentGetPlanEvents: (conversationId: string) =>
 		ipcRenderer.invoke("agent:getPlanEvents", { conversationId }),
-	agentUpsertPlanArtifact: (args: import("../shared/agent-api").AgentPlanArtifactInput) =>
+	agentUpsertPlanArtifact: (args: import("../shared/agent/api").AgentPlanArtifactInput) =>
 		ipcRenderer.invoke("agent:upsertPlanArtifact", args),
-	agentAppendPlanDecision: (args: import("../shared/agent-api").AgentPlanDecisionInput) =>
+	agentAppendPlanDecision: (args: import("../shared/agent/api").AgentPlanDecisionInput) =>
 		ipcRenderer.invoke("agent:appendPlanDecision", args),
 	agentMarkPlanArtifactDiscarded: (conversationId: string) =>
 		ipcRenderer.invoke("agent:markPlanArtifactDiscarded", { conversationId }),
-	agentUpsertTurnMeta: (args: import("../shared/agent-api").AgentTurnMetaInput) =>
+	agentUpsertTurnMeta: (args: import("../shared/agent/api").AgentTurnMetaInput) =>
 		ipcRenderer.invoke("agent:upsertTurnMeta", args),
-	onAgentEvent: (callback: (event: import("../shared/agent-runtime").AgentEvent) => void) => {
-		const handler = (_event: Electron.IpcRendererEvent, data: import("../shared/agent-runtime").AgentEvent) => callback(data);
+	onAgentEvent: (callback: (event: import("../shared/agent/runtime").AgentEvent) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, data: import("../shared/agent/runtime").AgentEvent) => callback(data);
 		ipcRenderer.on("agent:event", handler);
 		return () => ipcRenderer.removeListener("agent:event", handler);
 	},

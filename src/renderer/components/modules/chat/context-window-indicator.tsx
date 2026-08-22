@@ -7,13 +7,13 @@ import { Shrink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import {
   contextBarSegments,
   occupancyExceedsWindow,
   type ContextBreakdownKey,
   type ContextUsageBreakdown,
-} from "@shared/agent-context-usage";
+} from "@shared/agent/context-usage";
 
 /** Fixed categorical hues — not theme Brand (git/diff convention). */
 const BREAKDOWN_COLORS: Record<ContextBreakdownKey, string> = {

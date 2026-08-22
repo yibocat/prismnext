@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { runLiteratureDiscovery } from "../../src/main/services/literature-discovery/orchestrator";
 import type { DiscoveryAdapter } from "../../src/main/services/literature-discovery/types";
-import type { DiscoveryHit } from "../../src/shared/literature-discovery";
+import type { DiscoveryHit } from "../../src/shared/literature/discovery";
 
 function adapter(
   id: DiscoveryAdapter["id"],

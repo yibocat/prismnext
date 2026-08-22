@@ -1,5 +1,5 @@
 import type { WorktreeInfo } from "@/types/electron";
-import { isHomeWorktreeCheckoutPath, parseHomeWorktreeCheckoutPath } from "../../../shared/workbench-paths";
+import { isHomeWorktreeCheckoutPath, parseHomeWorktreeCheckoutPath } from "../../../shared/workbench/paths";
 
 /** Normalize checkout paths for stable equality checks (slashes, trailing slash). */
 export function normalizeCheckoutPath(path: string): string {

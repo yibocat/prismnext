@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import type { PaperExtractSource } from "../../shared/paper-extract";
+import type { PaperExtractSource } from "../../shared/literature/paper-extract";
 import {
   cancelPaperExtract,
   enqueueBatchPaperExtract,

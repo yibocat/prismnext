@@ -1,1 +1,1 @@
-export * from "../../shared/agent-subagents";
+export * from "../../shared/agent/subagents";

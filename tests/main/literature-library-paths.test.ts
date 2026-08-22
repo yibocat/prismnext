@@ -11,7 +11,7 @@ import {
 import { resolveWorkbenchHome } from "../../src/main/workbench/home";
 import { writeProjectSlotMeta } from "../../src/main/workbench/default-project";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
-import { libraryRel, worktreeCheckoutRel } from "../../src/shared/workbench-paths";
+import { libraryRel, worktreeCheckoutRel } from "../../src/shared/workbench/paths";
 import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 describe("getLibraryPaths (D-28)", () => {

@@ -20,7 +20,7 @@ import {
   researchPlanFileName,
   sessionDraftPlanRel,
   type ResearchPlanDoc,
-} from "../../src/shared/research-plan";
+} from "../../src/shared/research/plan";
 
 describe("research-plan-service", () => {
   let root: string;

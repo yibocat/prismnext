@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * External chat citations — papers not in the project library, cited as [n].

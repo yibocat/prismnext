@@ -7,7 +7,7 @@ import {
   occupancyExceedsWindow,
   occupancyFromPiUsage,
   usageTotalsFromTurns,
-} from "../../src/shared/agent-context-usage";
+} from "../../src/shared/agent/context-usage";
 
 describe("occupancyFromPiUsage", () => {
   it("prefers totalTokens when present", () => {

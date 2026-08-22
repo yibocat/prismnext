@@ -9,7 +9,7 @@ import {
   blockRegions,
   type ExtractBlockType,
   type PaperExtractBlock,
-} from "../../shared/paper-extract-block";
+} from "../../shared/literature/paper-extract-block";
 
 const AUXILIARY_TYPES = new Set([
   "header",

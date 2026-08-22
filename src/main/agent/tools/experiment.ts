@@ -6,13 +6,13 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { fileToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { fileToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   isExperimentCtxError,
   resolveExperimentCtx,
 } from "../../services/experiment-log-service";
-import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiment-log";
+import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiments/log";
 import { kickoffExperimentRun } from "../../services/experiment-run-executor";
 import {
   dispatchExperimentLog,

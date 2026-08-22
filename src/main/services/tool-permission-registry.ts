@@ -1,1 +1,1 @@
-export * from "../../shared/tool-permission-registry";
+export * from "../../shared/permissions/tool-registry";

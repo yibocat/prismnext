@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveSessionScratchKey } from "./chat-session-registry";
 import { sessionCitationsDir } from "../workbench/home";
-import { normalizeLibraryCiteMarkers } from "../../shared/normalize-library-cite-markers";
+import { normalizeLibraryCiteMarkers } from "../../shared/literature/normalize-library-cite-markers";
 import {
   buildLibraryTaskHitsAppendix,
   LIBRARY_TASK_APPENDIX_MARKER,

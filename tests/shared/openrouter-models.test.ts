@@ -4,7 +4,7 @@ import {
   migrateOpenRouterPreferenceKey,
   normalizeOpenRouterModelId,
   parseOpenRouterApiModels,
-} from "../../src/shared/openrouter-models";
+} from "../../src/shared/providers/openrouter-models";
 
 describe("openrouter-models", () => {
   it("normalizes legacy hyphen Anthropic / gemini IDs", () => {

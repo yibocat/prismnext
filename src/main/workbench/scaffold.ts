@@ -5,18 +5,18 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { WorkspaceFolder } from "../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   ICON_IMAGE_FILENAME,
   normalizeIconSpec,
   type IconSpec,
-} from "../../shared/icon-spec";
+} from "../../shared/platform/icon-spec";
 import {
   PROJECT_COMPILE_DIRNAME,
   PROJECT_META_DIR,
   WORKBENCH_JSON_FILENAME,
   workbenchJsonRel,
-} from "../../shared/workbench-paths";
+} from "../../shared/workbench/paths";
 import { ensureResearchBrief } from "../services/research-brief-service";
 import {
   createConfiguredFolders,

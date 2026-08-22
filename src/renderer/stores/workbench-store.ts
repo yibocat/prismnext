@@ -3,7 +3,7 @@ import {
   workbenchStateFromOpenResult,
   type WorkbenchProjectMember,
   type WorkbenchState,
-} from "../../shared/workbench-api";
+} from "../../shared/workbench/api";
 
 export function sameProjectPath(
   a: string | null | undefined,

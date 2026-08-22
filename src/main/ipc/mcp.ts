@@ -8,7 +8,7 @@ import {
 import { invalidateCatalog } from "../teams/catalog";
 import { invalidateResolver } from "../teams/resolver";
 import { PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
-import { PROJECT_AGENT_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench-paths";
+import { PROJECT_AGENT_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench/paths";
 
 function refreshMcpCatalog(projectPath: string): void {
   invalidateCatalog();

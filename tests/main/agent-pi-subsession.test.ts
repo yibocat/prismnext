@@ -7,7 +7,7 @@ import { ToolHost } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 import type { NativeToolDefinition } from "../../src/main/agent/tools/types";
 import type { ResolvedPiRosterEntry } from "../../src/main/agent/team-binding";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import type { AgentEvent } from "../../src/shared/agent/runtime";
 import {
   createTaskDelegationTool,
   PiSubsessionRuntime,

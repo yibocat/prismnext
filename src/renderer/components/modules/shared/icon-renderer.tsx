@@ -1,7 +1,7 @@
 import { icons, type LucideIcon, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
-import type { IconSpec } from "@shared/icon-spec";
+import type { IconSpec } from "@shared/platform/icon-spec";
 
 export type IconFallback = "package" | "letter";
 export type IconVariant = "badge" | "bare";

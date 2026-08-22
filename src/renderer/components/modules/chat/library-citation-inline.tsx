@@ -8,7 +8,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { inlineTokenClassName, INLINE_TOKEN_CLICKABLE } from "./inline-tokens/styles";
-import { formatPaperMentionLabel } from "../../../../shared/bibkey-utils";
+import { formatPaperMentionLabel } from "../../../../shared/literature/bibkey-utils";
 import {
   openPaperInMainLibrary,
   openPaperPdfReader,

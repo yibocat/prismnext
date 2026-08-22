@@ -8,7 +8,7 @@ import {
   readResearchBrief,
   updateResearchBriefSection,
 } from "../../src/main/services/research-brief-service";
-import { RESEARCH_BRIEF_TEMPLATE } from "../../src/shared/research-brief";
+import { RESEARCH_BRIEF_TEMPLATE } from "../../src/shared/research/brief";
 
 describe("research-brief-service", () => {
   let root: string;

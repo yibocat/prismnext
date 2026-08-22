@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { occupancyExceedsWindow } from "@shared/agent-context-usage";
+import { occupancyExceedsWindow } from "@shared/agent/context-usage";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -29,7 +29,7 @@ import {
   type ModelConfig,
   type ProviderConfig,
 } from "@/lib/providers";
-import { modelEffortKey } from "../../../../../shared/pi-provider-catalog";
+import { modelEffortKey } from "../../../../../shared/providers/pi-catalog";
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon, Settings2Icon, SparklesIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";

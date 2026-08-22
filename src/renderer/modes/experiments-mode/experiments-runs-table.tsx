@@ -31,7 +31,7 @@ import { artifactFullPath, openArtifactPathInFiles, resolveRunImagePathsForDispl
 import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
 import { useDocumentStore } from "@/stores/document-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
-import { isImageArtifactPath } from "../../../shared/artifact-path";
+import { isImageArtifactPath } from "../../../shared/interaction/artifact-path";
 import { ExperimentsProvenanceInspector } from "./experiments-provenance-inspector";
 import {
   experimentRunListTitle,
@@ -41,7 +41,7 @@ import {
 import {
   type ExperimentEnv,
   type ExperimentRunEntry,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import {
   experimentsCodeClass,
   experimentsMetadataLabelClass,

@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { zipSync, strToU8 } from "fflate";
-import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench-paths";
+import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench/paths";
 
 const TEX_AUX_EXT = new Set([
   ".aux",

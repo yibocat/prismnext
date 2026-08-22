@@ -1,5 +1,5 @@
-import { normalizeDoi, arxivIdFromDoi } from "../../doi-utils";
-import { normalizeIsbn } from "../../catalog-identifier-utils";
+import { normalizeDoi, arxivIdFromDoi } from "../../literature/doi-utils";
+import { normalizeIsbn } from "../../literature/catalog-identifier-utils";
 import { authorsJsonFromParts, normalizeCslPageRange, stripHtml } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";

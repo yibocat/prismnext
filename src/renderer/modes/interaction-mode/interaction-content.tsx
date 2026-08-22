@@ -7,7 +7,7 @@ import { resolveInteractionRenderer } from "@/lib/interaction/renderer-registry"
 import {
   kindDisplayLabel,
   type InteractionSpec,
-} from "../../../shared/interaction-spec";
+} from "../../../shared/interaction/spec";
 import { cn } from "@/lib/utils";
 
 function Badge({

@@ -35,7 +35,7 @@ import {
 import { __resetTeamsResolverForTests, listAssets as listAssetsV2 } from "../../src/main/teams/resolver";
 import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "../../src/shared/teams/types";
 import { homeSkillDir, homeSkillsDir, homeSkillsManifestPath, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
-import { HOME_SKILLS_DIRNAME } from "../../src/shared/workbench-paths";
+import { HOME_SKILLS_DIRNAME } from "../../src/shared/workbench/paths";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];

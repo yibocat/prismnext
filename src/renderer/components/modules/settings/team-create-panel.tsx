@@ -12,7 +12,7 @@ import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { IconPicker } from "../shared/icon-picker";
-import type { IconSpec } from "@shared/icon-spec";
+import type { IconSpec } from "@shared/platform/icon-spec";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SECTION,

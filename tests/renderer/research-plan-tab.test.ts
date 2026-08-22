@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isEditableFileTabKind } from "../../src/renderer/lib/workspace/mode-registry";
 import { isResearchPlanFilePath } from "../../src/renderer/lib/chat/plan-artifact-ui";
-import { sessionDraftPlanRel } from "../../src/shared/research-plan";
+import { sessionDraftPlanRel } from "../../src/shared/research/plan";
 
 describe("research-plan tab routing", () => {
   it("treats research-plan as an editable file tab kind", () => {

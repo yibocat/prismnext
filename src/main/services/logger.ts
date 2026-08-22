@@ -12,7 +12,7 @@ import {
   type LogEntry,
   type LogFetchParams,
   type LogFetchResult,
-} from "@shared/log-types";
+} from "@shared/platform/log-types";
 
 // ─── Config ───
 

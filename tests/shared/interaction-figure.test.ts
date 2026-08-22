@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import {
   resolveFigureAbsPath,
   validateFigureStaticSpec,
-} from "../../src/shared/interaction-figure-fs";
-import { pickFigureResourcePath } from "../../src/shared/interaction-figure";
-import type { InteractionSpec } from "../../src/shared/interaction-spec";
+} from "../../src/main/lib/interaction-figure-fs";
+import { pickFigureResourcePath } from "../../src/shared/interaction/figure";
+import type { InteractionSpec } from "../../src/shared/interaction/spec";
 
 const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",

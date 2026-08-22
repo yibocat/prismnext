@@ -14,7 +14,7 @@ import {
   useCitationStagingStore,
 } from "../../src/renderer/stores/citation-staging-store";
 import { useDocumentStore } from "../../src/renderer/stores/document-store";
-import type { StageResult } from "../../src/shared/citation-staging";
+import type { StageResult } from "../../src/shared/literature/citation-staging";
 
 const SESSION = "chat-tab-1";
 

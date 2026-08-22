@@ -23,11 +23,11 @@ import { cn } from "@/lib/utils";
 import { useExperimentStore } from "@/stores/experiment-store";
 import {
   type ExperimentRunEntry,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import {
   isImageArtifactPath,
   isPdfArtifactPath,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import {
   artifactFullPath,
   openArtifactPathInFiles,

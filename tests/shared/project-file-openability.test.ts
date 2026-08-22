@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isBinaryProjectFile,
   fileExtensionLower,
-} from "../../src/shared/project-file-openability";
+} from "../../src/shared/platform/project-file-openability";
 
 describe("project-file-openability", () => {
   it("flags database and archive extensions", () => {

@@ -6,7 +6,7 @@ import {
   type McpServerEntry,
 } from "@/lib/agent/mcp-config";
 import { MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
-import { projectTeamsRel } from "@shared/workbench-paths";
+import { projectTeamsRel } from "@shared/workbench/paths";
 
 interface McpServersState {
   /** Last loaded team’s entries (for the open editor / install panel). */

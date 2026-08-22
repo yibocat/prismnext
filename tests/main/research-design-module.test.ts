@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("RESEARCH_DESIGN_PROMPT", () => {
   it("covers research design activity — not experiment design or brief file semantics", () => {

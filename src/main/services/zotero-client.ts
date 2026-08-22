@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import { getSettings, updateSettings } from "./settings";
 export { buildZoteroPaperCslJson } from "./zotero-csl";
 

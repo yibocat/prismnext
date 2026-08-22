@@ -5,14 +5,14 @@ import {
   collectTaskRunsFromBlocks,
   deriveFlattenedAssistant,
   sealTurnBlockTimings,
-} from "../../src/shared/conversation-blocks";
+} from "../../src/shared/agent/conversation-blocks";
 import {
   entityToolOutcome,
   fileToolOutcome,
   parseToolOutcome,
   type AgentEvent,
-} from "../../src/shared/agent-runtime";
-import type { ContentBlock } from "../../src/shared/agent-conversation";
+} from "../../src/shared/agent/runtime";
+import type { ContentBlock } from "../../src/shared/agent/conversation";
 
 const ids = {
   runtimeSessionId: "rt-1",

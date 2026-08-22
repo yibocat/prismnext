@@ -2,7 +2,7 @@
 // model lists: every provider's models are fetched at runtime via `agent:listModels`.
 export type { ProviderConfig, ModelConfig } from "../types";
 
-import { PI_PRESET_PROVIDERS, type PiProviderMeta } from "../../../../shared/pi-provider-catalog";
+import { PI_PRESET_PROVIDERS, type PiProviderMeta } from "../../../../shared/providers/pi-catalog";
 import type { ProviderConfig } from "../types";
 
 /**

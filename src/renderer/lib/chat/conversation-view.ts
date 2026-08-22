@@ -7,8 +7,8 @@ import type {
   Conversation,
   ConversationTurn,
   TurnMessageMeta,
-} from "../../../shared/agent-conversation";
-import { isPlanControlUserText } from "../../../shared/research-plan";
+} from "../../../shared/agent/conversation";
+import { isPlanControlUserText } from "../../../shared/research/plan";
 import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-display";
 
 function visibleUserBlocks(blocks: ContentBlock[]): ContentBlock[] {

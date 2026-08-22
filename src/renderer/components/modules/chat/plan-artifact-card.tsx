@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { CheckIcon, ChevronRightIcon, FileTextIcon, XIcon } from "lucide-react";
 import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
-import { isResearchPlanDraftPath } from "../../../../shared/research-plan";
+import { isResearchPlanDraftPath } from "../../../../shared/research/plan";
 import {
   TOOL_INLINE_LABEL_CLASS,
   TOOL_INLINE_ROW_CLASS,

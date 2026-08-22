@@ -50,8 +50,8 @@ import { cn } from "@/lib/utils";
 import {
   EXPERIMENT_RUN_KINDS,
   type ExperimentRunKind,
-} from "../../../shared/experiment-log";
-import { EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS } from "../../../shared/permission-timeouts";
+} from "../../../shared/experiments/log";
+import { EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS } from "../../../shared/permissions/timeouts";
 import { experimentsCodeClass, experimentsUiValueClass } from "./experiments-detail-chrome";
 
 const KIND_UNTYPED = "__untyped__";

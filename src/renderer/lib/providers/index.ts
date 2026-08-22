@@ -16,7 +16,7 @@ import {
   isUnknownContextWindowLabel,
   mergeProviderWithPiCatalog,
 } from "./pi-model-catalog";
-import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
+import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/providers/context-constants";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
 export interface CustomProviderEntry {

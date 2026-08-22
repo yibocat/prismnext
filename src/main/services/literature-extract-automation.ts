@@ -1,4 +1,4 @@
-import type { PaperExtractSource } from "../../shared/paper-extract";
+import type { PaperExtractSource } from "../../shared/literature/paper-extract";
 import { getSettings } from "./settings";
 import { getPaper, type PaperRow } from "./literature-service";
 import {

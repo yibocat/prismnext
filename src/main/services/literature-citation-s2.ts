@@ -1,10 +1,10 @@
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import {
   PAPER_CITATION_PAGE_SIZE,
   PAPER_CITATION_UI_MAX_ROWS,
   type PaperCitationEntry,
   type PaperCitationSection,
-} from "../../shared/paper-citation-network";
+} from "../../shared/literature/paper-citation-network";
 import { mainNetFetch } from "../lib/main-network";
 
 const S2_PAPER_FIELDS = "referenceCount,citationCount";

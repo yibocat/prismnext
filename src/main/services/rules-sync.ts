@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { projectRulesRel } from "../../shared/workbench-paths";
+import { projectRulesRel } from "../../shared/workbench/paths";
 
 export const PRISM_RULES_REL = projectRulesRel();
 const RULE_FILE = "RULE.md";

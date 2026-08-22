@@ -6,7 +6,7 @@ import {
   encodeLibraryFigureHref,
   decodeLibraryFigureHref,
   resolveLibraryFigurePath,
-} from "../../src/shared/paper-extract-images";
+} from "../../src/shared/literature/paper-extract-images";
 
 describe("paper-extract-images", () => {
   it("rewrites MinerU images/ refs to project extract paths", () => {

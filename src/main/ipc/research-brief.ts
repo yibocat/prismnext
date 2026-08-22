@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import { RESEARCH_BRIEF_REL } from "../../shared/research-brief";
+import { RESEARCH_BRIEF_REL } from "../../shared/research/brief";
 import {
   ensureResearchBrief,
   readResearchBrief,

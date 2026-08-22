@@ -5,14 +5,14 @@
  * Narrow fallback: append fences for missing experiment-run / append_run
  * artifacts and latex-compile PDF output.
  */
-import type { ToolOutcome } from "../../../shared/agent-runtime";
+import type { ToolOutcome } from "../../../shared/agent/runtime";
 import type { ContentBlock } from "@/stores/chat-store";
 import {
   artifactBasename,
   isImageArtifactPath,
   normalizeArtifactSlash,
   resolveImageArtifactPathsForDisplay,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import {
   assistantTextEmbedsArtifactPath,
   buildArtifactFallbackMarkdown,

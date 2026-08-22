@@ -9,7 +9,7 @@ import { openUrlInBrowser } from "@/lib/browser-link";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 import { SKILL_CATEGORY_LABELS } from "@/lib/agent/skill-categories";
 import { GITHUB_SKILL_PRESETS } from "@/lib/agent/skill-libraries";
-import type { LibraryCatalogItem } from "../../../../shared/skill-library-types";
+import type { LibraryCatalogItem } from "../../../../shared/skills/library-types";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { cn } from "@/lib/utils";

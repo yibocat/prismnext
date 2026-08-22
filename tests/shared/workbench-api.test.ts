@@ -3,7 +3,7 @@ import {
   focusPathAfterOpenFolder,
   workbenchStateFromOpenResult,
   type WorkbenchOpenResult,
-} from "../../src/shared/workbench-api";
+} from "../../src/shared/workbench/api";
 
 describe("workbench open-folder helpers", () => {
   const state = {

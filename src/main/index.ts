@@ -27,7 +27,7 @@ import { installMainProcessNetwork } from "./lib/main-network";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
 import { createLogger } from "./services/logger";
-import { HOME_JOBS_DIRNAME } from "../shared/workbench-paths";
+import { HOME_JOBS_DIRNAME } from "../shared/workbench/paths";
 import { ensureWorkbenchHome } from "./workbench/home";
 import { ensureDefaultProject } from "./workbench/default-project";
 import { disposeLogger } from "./ipc/log";
@@ -39,7 +39,7 @@ import {
   setTrayWindowGetter,
   syncTrayFromSettings,
 } from "./services/tray";
-import { shouldHideOnClose } from "../shared/desktop-shell";
+import { shouldHideOnClose } from "../shared/platform/desktop-shell";
 
 const log = createLogger("main", "startup");
 

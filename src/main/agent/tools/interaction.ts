@@ -5,8 +5,8 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { entityToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { entityToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   listInteractionSummaries,
   readInteractionSpec,
@@ -20,7 +20,7 @@ import {
   explainInteractionSpecFailure,
   parseInteractionSpec,
   type InteractionSpec,
-} from "../../../shared/interaction-spec";
+} from "../../../shared/interaction/spec";
 import { broadcastInteractionChanged } from "../../services/interaction-ui-events";
 import type { NativeToolDefinition } from "./types";
 

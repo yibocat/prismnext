@@ -10,9 +10,9 @@ import {
   createNewPaperNote,
 } from "@/lib/literature/create-paper-note";
 import type { LiteraturePaper } from "@/types/electron.d";
-import { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
+import { rewritePaperExtractImageSrcs } from "@shared/literature/paper-extract-images";
 
-export { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
+export { rewritePaperExtractImageSrcs } from "@shared/literature/paper-extract-images";
 
 /** Markdown blockquote + page citation for a PDF excerpt. */
 export function formatPaperQuoteMarkdown(

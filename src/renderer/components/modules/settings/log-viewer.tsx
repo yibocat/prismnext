@@ -9,7 +9,7 @@ import {
   useLiteratureListMarquee,
   type MarqueeRect,
 } from "@/lib/literature/literature-list-marquee";
-import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
+import type { LogLevel, LogCategory, LogEntry } from "@shared/platform/log-types";
 import {
   AppSelect,
   AppSelectContent,

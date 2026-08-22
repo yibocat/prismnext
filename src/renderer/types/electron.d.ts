@@ -62,7 +62,7 @@ export type {
   PaperExtractState,
   PaperExtractStatesByPaper,
   PaperExtractStatus,
-} from "@shared/paper-extract";
+} from "@shared/literature/paper-extract";
 
 export type {
   BibFallbackEntry,
@@ -71,20 +71,20 @@ export type {
   CitationHealthReport,
   ImportFromManuscriptBibResult,
   MergeIntoManuscriptBibResult,
-} from "@shared/citation-health-types";
+} from "@shared/literature/citation-health-types";
 
 export type {
   LiteratureAttachLocalPdfConflict,
   LiteratureAttachLocalPdfResult,
   LiteraturePaper,
   PaperAiMetadataStatus,
-} from "@shared/literature-paper";
+} from "@shared/literature/paper";
 
 export type {
   PaperCitationEntry,
   PaperCitationNetworkResult,
   PaperCitationSection,
-} from "@shared/paper-citation-network";
+} from "@shared/literature/paper-citation-network";
 
 export interface LiteratureCollection {
   id: string;
@@ -371,13 +371,13 @@ export interface ElectronAPI {
     workspaceDirs?: import("./workspace").WorkspaceFolder[],
     options?: {
       initGit?: boolean;
-      projectIcon?: import("../../shared/icon-spec").IconSpec | string | null;
+      projectIcon?: import("../../shared/platform/icon-spec").IconSpec | string | null;
       projectIconImagePngBase64?: string;
     },
   ) => Promise<void>;
   projectSetIcon: (
     rootPath: string,
-    icon: import("../../shared/icon-spec").IconSpec | null,
+    icon: import("../../shared/platform/icon-spec").IconSpec | null,
   ) => Promise<void>;
   projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
   /** Validate a project path and return its canonical root without authorizing watchers. */
@@ -411,19 +411,19 @@ export interface ElectronAPI {
   ) => Promise<import("../../shared/pro").ActivateLicenseResult>;
   proClearLicense: () => Promise<{ ok: true }>;
   projectEnsure: (rootPath: string) => Promise<{ success: boolean }>;
-  workbenchGetState: () => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  workbenchGetState: () => Promise<import("../../shared/workbench/api").WorkbenchState>;
   workbenchSetDefault: (
     projectId: string,
-  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
   workbenchSetDefaultFromFolder: (
     absPath: string,
-  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
   workbenchOpenFolder: (
     absPath: string,
-  ) => Promise<import("../../shared/workbench-api").WorkbenchOpenResult>;
+  ) => Promise<import("../../shared/workbench/api").WorkbenchOpenResult>;
   workbenchRemoveProject: (
     projectId: string,
-  ) => Promise<import("../../shared/workbench-api").WorkbenchState>;
+  ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
     content: string;
@@ -452,7 +452,7 @@ export interface ElectronAPI {
 
   researchPlanWrite: (args: {
     projectRoot: string;
-    doc: import("../../shared/research-plan").ResearchPlanDoc;
+    doc: import("../../shared/research/plan").ResearchPlanDoc;
   }) => Promise<
     | { ok: true; relativePath: string; absolutePath: string }
     | { ok: false; error: string }
@@ -525,7 +525,7 @@ export interface ElectronAPI {
         ok: true;
         experimentRoot: string;
         registryRoot: string;
-        experiments: import("../../shared/experiment-log").ExperimentSummary[];
+        experiments: import("../../shared/experiments/log").ExperimentSummary[];
         /** Registry dirs with missing/corrupt meta.json (Bug #19). */
         corruptIds?: string[];
       }
@@ -534,8 +534,8 @@ export interface ElectronAPI {
   experimentRead: (args: { projectRoot: string; id: string; runsLimit?: number }) => Promise<
     | {
         ok: true;
-        meta: import("../../shared/experiment-log").ExperimentMeta;
-        runs: import("../../shared/experiment-log").ExperimentRunEntry[];
+        meta: import("../../shared/experiments/log").ExperimentMeta;
+        runs: import("../../shared/experiments/log").ExperimentRunEntry[];
         /** Total runs in jsonl (may exceed `runs.length` when limited). */
         runCount: number;
         lastRunAt: string | null;
@@ -545,7 +545,7 @@ export interface ElectronAPI {
     | { ok: false; error: string; hint?: string }
   >;
   experimentArchive: (args: { projectRoot: string; id: string }) => Promise<
-    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: true; meta: import("../../shared/experiments/log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }
   >;
   experimentCreate: (args: {
@@ -563,7 +563,7 @@ export interface ElectronAPI {
         ok: true;
         id: string;
         path: string;
-        meta: import("../../shared/experiment-log").ExperimentMeta;
+        meta: import("../../shared/experiments/log").ExperimentMeta;
       }
     | { ok: false; error: string; hint?: string }
   >;
@@ -579,7 +579,7 @@ export interface ElectronAPI {
       researchQuestionExcerpt?: string;
     } | null;
   }) => Promise<
-    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: true; meta: import("../../shared/experiments/log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }
   >;
   experimentUpdateRun: (args: {
@@ -588,11 +588,11 @@ export interface ElectronAPI {
     runId: string;
     notes: string;
   }) => Promise<
-    | { ok: true; run: import("../../shared/experiment-log").ExperimentRunEntry }
+    | { ok: true; run: import("../../shared/experiments/log").ExperimentRunEntry }
     | { ok: false; error: string; hint?: string }
   >;
   experimentRestore: (args: { projectRoot: string; id: string }) => Promise<
-    | { ok: true; meta: import("../../shared/experiment-log").ExperimentMeta }
+    | { ok: true; meta: import("../../shared/experiments/log").ExperimentMeta }
     | { ok: false; error: string; hint?: string }
   >;
   experimentDelete: (args: {
@@ -603,7 +603,7 @@ export interface ElectronAPI {
   experimentDetectEnv: (args: { projectRoot: string; id: string }) => Promise<
     | {
         ok: true;
-        env: import("../../shared/experiment-log").ExperimentEnv;
+        env: import("../../shared/experiments/log").ExperimentEnv;
         workspacePath: string;
       }
     | { ok: false; error: string; hint?: string }
@@ -619,7 +619,7 @@ export interface ElectronAPI {
     artifacts?: string[];
     notes?: string;
     /** Optional run classification (train/eval/…). Omit when unknown. */
-    kind?: import("../../shared/experiment-log").ExperimentRunKind;
+    kind?: import("../../shared/experiments/log").ExperimentRunKind;
     chatSessionId?: string | null;
   }) => Promise<
     | { ok: true; runId: string; executionId?: string; status: "started" }
@@ -636,18 +636,18 @@ export interface ElectronAPI {
   }) => Promise<
     | {
         ok: true;
-        snapshot: import("@shared/experiment-results-snapshot").ExperimentResultsSnapshot;
+        snapshot: import("@shared/experiments/results-snapshot").ExperimentResultsSnapshot;
       }
     | { ok: false; error: string; hint?: string }
   >;
   interactionGet: (
     projectRoot: string,
     id: string,
-  ) => Promise<{ spec: import("../../shared/interaction-spec").InteractionSpec | null; error?: string }>;
+  ) => Promise<{ spec: import("../../shared/interaction/spec").InteractionSpec | null; error?: string }>;
   interactionList: (projectRoot: string) => Promise<{ ids: string[] }>;
   interactionWrite: (args: {
     projectRoot: string;
-    spec: import("../../shared/interaction-spec").InteractionSpec;
+    spec: import("../../shared/interaction/spec").InteractionSpec;
   }) => Promise<{ ok: boolean; error?: string }>;
   onInteractionChanged: (
     callback: (data: {
@@ -668,13 +668,13 @@ export interface ElectronAPI {
     }) => void,
   ) => () => void;
   onExperimentRunComplete: (
-    callback: (data: import("../../shared/experiment-log").ExperimentRunCompleteEvent) => void,
+    callback: (data: import("../../shared/experiments/log").ExperimentRunCompleteEvent) => void,
   ) => () => void;
   onExperimentRunStarted: (
-    callback: (data: import("../../shared/experiment-log").ExperimentRunStartedEvent) => void,
+    callback: (data: import("../../shared/experiments/log").ExperimentRunStartedEvent) => void,
   ) => () => void;
   onExperimentRunOutput: (
-    callback: (data: import("../../shared/experiment-log").ExperimentRunOutputEvent) => void,
+    callback: (data: import("../../shared/experiments/log").ExperimentRunOutputEvent) => void,
   ) => () => void;
 
   // Provenance - trace a claimed artifact / run back to its generating command.
@@ -683,15 +683,15 @@ export interface ElectronAPI {
     artifactPath: string,
   ) => Promise<
     | {
-        run: import("../../shared/provenance").ProvenanceRunRecorded;
-        linkMethod: import("../../shared/provenance").ProvenanceLinkMethod;
+        run: import("../../shared/experiments/provenance").ProvenanceRunRecorded;
+        linkMethod: import("../../shared/experiments/provenance").ProvenanceLinkMethod;
       }
     | null
   >;
   provenanceGetForRun: (
     projectRoot: string,
     runId: string,
-  ) => Promise<import("../../shared/provenance").ProvenanceRunRecorded | null>;
+  ) => Promise<import("../../shared/experiments/provenance").ProvenanceRunRecorded | null>;
 
   // Platform
   platform: "darwin" | "win32" | "linux";
@@ -814,9 +814,9 @@ export interface ElectronAPI {
   }>;
   literatureCreateFromStagedCitation: (
     projectRoot: string,
-    citation: import("../../shared/citation-staging").StagedCitationImportInput,
+    citation: import("../../shared/literature/citation-staging").StagedCitationImportInput,
   ) => Promise<
-    | import("../../shared/citation-staging").StagedCitationCreateCancelledResult
+    | import("../../shared/literature/citation-staging").StagedCitationCreateCancelledResult
     | {
         paper: LiteraturePaper;
         created: boolean;
@@ -827,7 +827,7 @@ export interface ElectronAPI {
   >;
   literatureCancelStagedCitationAdd: (stagedId: string) => Promise<void>;
   onLiteratureStagedAddProgress: (
-    callback: (data: import("../../shared/citation-staging").StagedAddProgressEvent) => void,
+    callback: (data: import("../../shared/literature/citation-staging").StagedAddProgressEvent) => void,
   ) => () => void;
   literatureFindExisting: (
     projectRoot: string,
@@ -1029,7 +1029,7 @@ export interface ElectronAPI {
     source?: "mineru" | "pdfjs" | "html",
   ) => Promise<{
     state: PaperExtractState | null;
-    blocks: import("../../shared/paper-extract-block").PaperExtractBlock[] | null;
+    blocks: import("../../shared/literature/paper-extract-block").PaperExtractBlock[] | null;
   }>;
   extractOpenMd: (
     projectRoot: string,
@@ -1409,17 +1409,17 @@ export interface ElectronAPI {
   >;
   agentDeleteSkill: (projectPath: string, skillId: string) => Promise<{ skillsCount: number; configPath: string; registryUrls: string[] }>;
   agentHomeSkillsDir: () => Promise<string>;
-  subagentsList: (projectPath: string) => Promise<import("@shared/agent-subagents").SubagentInfo[]>;
-  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent-subagents").OrchestratorInfo[]>;
+  subagentsList: (projectPath: string) => Promise<import("@shared/agent/subagents").SubagentInfo[]>;
+  orchestratorsList: (projectPath: string) => Promise<import("@shared/agent/subagents").OrchestratorInfo[]>;
   subagentsGetDetail: (
     projectPath: string,
     expertId: string,
-  ) => Promise<(import("@shared/agent-subagents").SubagentInfo & { instructions: string }) | null>;
+  ) => Promise<(import("@shared/agent/subagents").SubagentInfo & { instructions: string }) | null>;
   subagentsSaveCustom: (
     projectPath: string,
-    payload: import("@shared/agent-subagents").SaveCustomSubagentPayload,
+    payload: import("@shared/agent/subagents").SaveCustomSubagentPayload,
     targetTeamId?: string,
-  ) => Promise<{ expert: import("@shared/agent-subagents").SubagentInfo; experts: import("@shared/agent-subagents").SubagentInfo[] }>;
+  ) => Promise<{ expert: import("@shared/agent/subagents").SubagentInfo; experts: import("@shared/agent/subagents").SubagentInfo[] }>;
   subagentsListRosterReferrers: (
     projectPath: string,
     expertId: string,
@@ -1427,94 +1427,94 @@ export interface ElectronAPI {
   subagentsDeleteCustom: (
     projectPath: string,
     expertId: string,
-  ) => Promise<{ experts: import("@shared/agent-subagents").SubagentInfo[] }>;
+  ) => Promise<{ experts: import("@shared/agent/subagents").SubagentInfo[] }>;
   orchestratorsGetDetail: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<(import("@shared/agent-subagents").OrchestratorInfo & { instructions: string }) | null>;
+  ) => Promise<(import("@shared/agent/subagents").OrchestratorInfo & { instructions: string }) | null>;
   orchestratorsSaveCustom: (
     projectPath: string,
-    payload: import("@shared/agent-subagents").SaveCustomOrchestratorPayload,
+    payload: import("@shared/agent/subagents").SaveCustomOrchestratorPayload,
     targetTeamId?: string,
   ) => Promise<{
-    orchestrator: import("@shared/agent-subagents").OrchestratorInfo;
-    orchestrators: import("@shared/agent-subagents").OrchestratorInfo[];
+    orchestrator: import("@shared/agent/subagents").OrchestratorInfo;
+    orchestrators: import("@shared/agent/subagents").OrchestratorInfo[];
   }>;
   orchestratorsDeleteCustom: (
     projectPath: string,
     orchestratorId: string,
-  ) => Promise<{ orchestrators: import("@shared/agent-subagents").OrchestratorInfo[] }>;
-  agentStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/agent-api").AgentStatus>;
-  agentSend: (args: import("../../shared/agent-api").AgentSendInput) => Promise<import("../../shared/agent-api").AgentSendResult>;
+  ) => Promise<{ orchestrators: import("@shared/agent/subagents").OrchestratorInfo[] }>;
+  agentStatus: (args?: { projectRoot?: string }) => Promise<import("../../shared/agent/api").AgentStatus>;
+  agentSend: (args: import("../../shared/agent/api").AgentSendInput) => Promise<import("../../shared/agent/api").AgentSendResult>;
   agentCancel: (args: { conversationId: string }) => Promise<{ ok: boolean }>;
   agentCancelSubagent: (
-    args: import("../../shared/agent-api").AgentCancelSubagentInput,
+    args: import("../../shared/agent/api").AgentCancelSubagentInput,
   ) => Promise<{ ok: boolean }>;
   agentDispose: (args?: { conversationId?: string }) => Promise<{ ok: boolean }>;
   agentResolvePermission: (args: {
     requestId: string;
     decision: "allow" | "deny";
   }) => Promise<{ ok: boolean }>;
-  agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent-api").AgentSessionSummary[]>;
-  agentListSessionsByProjectId: (projectId: string) => Promise<import("../../shared/agent-api").AgentSessionSummary[]>;
+  agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
+  agentListSessionsByProjectId: (projectId: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
   agentLoadSession: (
-    args: import("../../shared/agent-api").AgentLoadSessionInput,
-  ) => Promise<import("../../shared/agent-api").AgentLoadSessionResult>;
+    args: import("../../shared/agent/api").AgentLoadSessionInput,
+  ) => Promise<import("../../shared/agent/api").AgentLoadSessionResult>;
   agentRenameSession: (
-    args: import("../../shared/agent-api").AgentRenameSessionInput,
+    args: import("../../shared/agent/api").AgentRenameSessionInput,
   ) => Promise<{ ok: boolean }>;
   agentDeleteSession: (
-    args: import("../../shared/agent-api").AgentDeleteSessionInput,
+    args: import("../../shared/agent/api").AgentDeleteSessionInput,
   ) => Promise<{ ok: boolean }>;
   agentAnswerQuestion: (
-    args: import("../../shared/agent-api").AgentAnswerQuestionInput,
+    args: import("../../shared/agent/api").AgentAnswerQuestionInput,
   ) => Promise<{ ok: boolean }>;
   agentResolvePlanSuggest: (
-    args: import("../../shared/agent-api").AgentResolvePlanSuggestInput,
+    args: import("../../shared/agent/api").AgentResolvePlanSuggestInput,
   ) => Promise<{ ok: boolean }>;
   agentListModels: (
-    args: import("../../shared/agent-api").AgentListModelsInput,
-  ) => Promise<import("../../shared/agent-api").AgentListModelsResult>;
-  agentListModelsCatalog: () => Promise<import("../../shared/agent-api").AgentModelsCatalogSnapshot>;
+    args: import("../../shared/agent/api").AgentListModelsInput,
+  ) => Promise<import("../../shared/agent/api").AgentListModelsResult>;
+  agentListModelsCatalog: () => Promise<import("../../shared/agent/api").AgentModelsCatalogSnapshot>;
   agentTestConnection: (
-    args: import("../../shared/agent-api").AgentTestConnectionInput,
-  ) => Promise<import("../../shared/agent-api").AgentTestConnectionResult>;
+    args: import("../../shared/agent/api").AgentTestConnectionInput,
+  ) => Promise<import("../../shared/agent/api").AgentTestConnectionResult>;
   agentGetModelEffort: (
-    args: import("../../shared/agent-api").AgentModelEffortInput,
-  ) => Promise<import("../../shared/agent-api").AgentModelEffortResult>;
-  agentGetEffortCatalog: () => Promise<import("../../shared/agent-api").AgentEffortCatalogSnapshot>;
+    args: import("../../shared/agent/api").AgentModelEffortInput,
+  ) => Promise<import("../../shared/agent/api").AgentModelEffortResult>;
+  agentGetEffortCatalog: () => Promise<import("../../shared/agent/api").AgentEffortCatalogSnapshot>;
   agentCompact: (
-    args: import("../../shared/agent-api").AgentCompactInput,
-  ) => Promise<import("../../shared/agent-api").AgentCompactResult>;
+    args: import("../../shared/agent/api").AgentCompactInput,
+  ) => Promise<import("../../shared/agent/api").AgentCompactResult>;
   agentDescribeImages: (
-    args: import("../../shared/agent-api").AgentDescribeImagesInput,
-  ) => Promise<import("../../shared/agent-api").AgentDescribeImagesResult>;
+    args: import("../../shared/agent/api").AgentDescribeImagesInput,
+  ) => Promise<import("../../shared/agent/api").AgentDescribeImagesResult>;
   agentTruncateToTurn: (
-    args: import("../../shared/agent-api").AgentTruncateInput,
-  ) => Promise<import("../../shared/agent-api").AgentTruncateResult>;
+    args: import("../../shared/agent/api").AgentTruncateInput,
+  ) => Promise<import("../../shared/agent/api").AgentTruncateResult>;
   agentUndoTruncate: (
-    args: import("../../shared/agent-api").AgentUndoTruncateInput,
-  ) => Promise<import("../../shared/agent-api").AgentUndoTruncateResult>;
+    args: import("../../shared/agent/api").AgentUndoTruncateInput,
+  ) => Promise<import("../../shared/agent/api").AgentUndoTruncateResult>;
   agentReassignDirectory: (
-    args: import("../../shared/agent-api").AgentReassignDirectoryInput,
-  ) => Promise<import("../../shared/agent-api").AgentReassignDirectoryResult>;
+    args: import("../../shared/agent/api").AgentReassignDirectoryInput,
+  ) => Promise<import("../../shared/agent/api").AgentReassignDirectoryResult>;
   agentSyncIntensiveReading: (
-    args: import("../../shared/agent-api").AgentSyncIntensiveReadingInput,
+    args: import("../../shared/agent/api").AgentSyncIntensiveReadingInput,
   ) => Promise<{ ok: boolean }>;
   agentGetPlanEvents: (
     conversationId: string,
-  ) => Promise<import("../../shared/agent-api").AgentPlanEvent[]>;
+  ) => Promise<import("../../shared/agent/api").AgentPlanEvent[]>;
   agentUpsertPlanArtifact: (
-    args: import("../../shared/agent-api").AgentPlanArtifactInput,
+    args: import("../../shared/agent/api").AgentPlanArtifactInput,
   ) => Promise<{ ok: boolean }>;
   agentAppendPlanDecision: (
-    args: import("../../shared/agent-api").AgentPlanDecisionInput,
+    args: import("../../shared/agent/api").AgentPlanDecisionInput,
   ) => Promise<{ ok: boolean }>;
   agentMarkPlanArtifactDiscarded: (conversationId: string) => Promise<{ ok: boolean }>;
   agentUpsertTurnMeta: (
-    args: import("../../shared/agent-api").AgentTurnMetaInput,
+    args: import("../../shared/agent/api").AgentTurnMetaInput,
   ) => Promise<{ ok: boolean }>;
-  onAgentEvent: (callback: (event: import("../../shared/agent-runtime").AgentEvent) => void) => () => void;
+  onAgentEvent: (callback: (event: import("../../shared/agent/runtime").AgentEvent) => void) => () => void;
   // File watcher events (Main → Renderer)
   onFileChanged: (callback: (data: { projectRoot: string; changedPaths?: string[] }) => void) => () => void;
   onSkillsIntegrationChanged: (callback: (data: { projectPath: string }) => void) => () => void;
@@ -1556,7 +1556,7 @@ export interface ElectronAPI {
     orchestratorId?: string;
     orchestratorName?: string;
     markdown: string;
-    tokenEncoding: import("../../shared/token-estimate").PromptTokenEncoding;
+    tokenEncoding: import("../../shared/providers/token-estimate").PromptTokenEncoding;
     totalTokenCount: number;
     sections: Array<{
       id: string;
@@ -1568,7 +1568,7 @@ export interface ElectronAPI {
       content: string;
     }>;
   }>;
-  settingsCountPromptTokens: (text: string) => Promise<import("../../shared/token-estimate").PromptTokenEstimate>;
+  settingsCountPromptTokens: (text: string) => Promise<import("../../shared/providers/token-estimate").PromptTokenEstimate>;
   settingsComputePromptFingerprint: (projectRoot?: string) => Promise<string>;
   settingsGetDefaultPersona: () => Promise<string>;
 
@@ -1658,13 +1658,13 @@ export interface ElectronAPI {
       scope: "app" | "project";
       leadName?: string;
       leadInstructions?: string;
-      icon?: import("../../shared/icon-spec").IconSpec | null;
+      icon?: import("../../shared/platform/icon-spec").IconSpec | null;
       iconImagePngBase64?: string;
     },
   ) => Promise<{ teamId: string; dir: string }>;
   teamsUpdateIcon: (
     teamId: string,
-    icon: import("../../shared/icon-spec").IconSpec | null,
+    icon: import("../../shared/platform/icon-spec").IconSpec | null,
     projectRoot?: string | null,
   ) => Promise<void>;
   teamsSetIconImage: (
@@ -1779,7 +1779,7 @@ export interface ElectronAPI {
 
   // Git operations
   gitWarmup: (projectRoot: string) => Promise<{ ok: boolean }>;
-  logFetch: (params: import("@shared/log-types").LogFetchParams) => Promise<import("@shared/log-types").LogFetchResult>;
+  logFetch: (params: import("@shared/platform/log-types").LogFetchParams) => Promise<import("@shared/platform/log-types").LogFetchResult>;
   gitIsRepo: (projectRoot: string) => Promise<boolean>;
   gitStatus: (projectRoot: string) => Promise<GitStatusData>;
   gitBranches: (projectRoot: string) => Promise<GitBranchesData>;

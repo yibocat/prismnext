@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { PaperExtractSource } from "@/types/electron.d";
-import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/paper-extract";
+import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/literature/paper-extract";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 

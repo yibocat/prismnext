@@ -1,6 +1,6 @@
-import { normalizeDoi } from "../../../../shared/doi-utils";
+import { normalizeDoi } from "../../../../shared/literature/doi-utils";
 import { stripHtml } from "../../../../shared/bibliographic-metadata/helpers";
-import { truncateDiscoveryAbstract, type DiscoveryHit } from "../../../../shared/literature-discovery";
+import { truncateDiscoveryAbstract, type DiscoveryHit } from "../../../../shared/literature/discovery";
 import { catalogFetch } from "../../../../shared/bibliographic-metadata/catalog-fetch";
 import type { DiscoveryAdapter } from "../types";
 import { DISCOVERY_HEADERS } from "./http";

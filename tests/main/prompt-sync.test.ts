@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promptManager } from "../../src/main/prompts";
 import { PRISM_AGENTS_REL, syncProjectPromptFile } from "../../src/main/services/prompt-sync";
-import { projectAgentsMdRel } from "../../src/shared/workbench-paths";
+import { projectAgentsMdRel } from "../../src/shared/workbench/paths";
 
 describe("syncProjectPromptFile", () => {
   let projectRoot: string;

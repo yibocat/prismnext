@@ -12,7 +12,7 @@ import {
   type Fqid,
   type TeamScope,
 } from "../../shared/teams/types";
-import type { IconSpec } from "../../shared/icon-spec";
+import type { IconSpec } from "../../shared/platform/icon-spec";
 import {
   getAsset,
   getTeam,

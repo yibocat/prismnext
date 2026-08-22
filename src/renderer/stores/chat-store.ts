@@ -6,10 +6,10 @@ import type {
   ContentBlock as ConversationContentBlock,
   Conversation,
   TurnMessageMeta,
-} from "../../shared/agent-conversation";
-import { emptyConversation, newConversationId } from "../../shared/agent-conversation";
-import type { AgentEvent } from "../../shared/agent-runtime";
-import type { ContextUsageBreakdown } from "../../shared/agent-context-usage";
+} from "../../shared/agent/conversation";
+import { emptyConversation, newConversationId } from "../../shared/agent/conversation";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import type { ContextUsageBreakdown } from "../../shared/agent/context-usage";
 import {
   acknowledgeQuestionAnswer as applyQuestionAnswerToConversation,
   appendAssistantBlocksToLastTurn,
@@ -18,7 +18,7 @@ import {
   ensureTaskRunFromTranscript,
   markSubagentStopping,
 } from "@/lib/chat/conversation-reducer";
-import type { ConversationSubagentRun } from "../../shared/agent-conversation";
+import type { ConversationSubagentRun } from "../../shared/agent/conversation";
 import {
   combineComposerQueueItems,
   type ComposerQueueItem,
@@ -52,13 +52,13 @@ import {
   scheduleCitationStagingBackfillFromConversation,
 } from "@/lib/literature/sync-citation-staging-from-messages";
 import { useCitationStagingStore } from "./citation-staging-store";
-import type { ChatPreparePhase } from "../../shared/chat-prepare-phases";
-import type { SessionAgent } from "../../shared/session-agent";
+import type { ChatPreparePhase } from "../../shared/chat/prepare-phases";
+import type { SessionAgent } from "../../shared/agent/session-agent";
 import {
   isAgentRuntime,
   type ChatRuntimeKind,
-} from "../../shared/agent-api";
-import type { ResearchPlanStep } from "../../shared/research-plan";
+} from "../../shared/agent/api";
+import type { ResearchPlanStep } from "../../shared/research/plan";
 import {
   buildApprovedPlanExecutePrompt,
   checklistToTodoSeeds,
@@ -68,7 +68,7 @@ import {
   PLAN_REJECT_ACK_PROMPT,
   extractPlanFrontmatterDescription,
   sessionDraftPlanRel,
-} from "../../shared/research-plan";
+} from "../../shared/research/plan";
 
 function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
@@ -1032,7 +1032,7 @@ function persistableAttachmentsFromUserBlocks(
 function applyConversationToTab(
   tab: TabState,
   conversation: Conversation,
-  extras?: { planEvents?: import("@shared/agent-api").AgentPlanEvent[] },
+  extras?: { planEvents?: import("@shared/agent/api").AgentPlanEvent[] },
 ): TabState {
   const turnMeta = { ...tab.turnMeta };
   for (const turn of conversation.turns) {
@@ -1389,7 +1389,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   showPlanSuggest: (tabId?: string, reason?: string | null, opts?) => {
     const resolvedTabId = tabId ?? get().activeTabId;
     const clamped = (reason ?? "").trim();
-    void import("../../shared/plan-suggest").then(({ PLAN_SUGGEST_TIMEOUT_MS }) => {
+    void import("../../shared/research/plan-suggest").then(({ PLAN_SUGGEST_TIMEOUT_MS }) => {
       const deadlineAt = opts?.deadlineAt ?? Date.now() + PLAN_SUGGEST_TIMEOUT_MS;
       set((s) => ({
         tabs: s.tabs.map((t) => {

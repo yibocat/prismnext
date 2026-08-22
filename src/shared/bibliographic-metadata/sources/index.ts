@@ -6,8 +6,8 @@
  * 2. Import and add it to `SOURCE_REGISTRY` below.
  * 3. (optional) Add its id to `BibliographicSource` type in `types.ts`.
  */
-import { normalizeDoi, normalizeArxivId } from "../../doi-utils";
-import { normalizeIsbn, normalizePmid, normalizeAdsBibcode } from "../../catalog-identifier-utils";
+import { normalizeDoi, normalizeArxivId } from "../../literature/doi-utils";
+import { normalizeIsbn, normalizePmid, normalizeAdsBibcode } from "../../literature/catalog-identifier-utils";
 import type { BibliographicMetadata, BibliographicResolveResult } from "../types";
 import { mergeBibliographicMetadata, hasAnyAbstract } from "./resolver-helpers";
 import type { BibliographicSource } from "./types";

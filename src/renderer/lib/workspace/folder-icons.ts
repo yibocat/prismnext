@@ -1,6 +1,6 @@
 import { icons } from "lucide-react";
 import type { FolderFunction, WorkspaceFolder } from "@/types/workspace";
-import { FOLDER_FUNCTION_LUCIDE_ICON_NAMES } from "../../../shared/workspace-folder-icons";
+import { FOLDER_FUNCTION_LUCIDE_ICON_NAMES } from "../../../shared/workbench/workspace-folder-icons";
 
 export type LucideIconName = keyof typeof icons;
 

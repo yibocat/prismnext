@@ -10,7 +10,7 @@ import {
   extractAbsolutePythonPath,
   isExternalInterpreterCommand,
   PRISMNEXT_VENV_REL,
-} from "../../src/shared/experiment-log";
+} from "../../src/shared/experiments/log";
 import {
   gateExperimentPythonExecution,
   type ExperimentVenvRunner,

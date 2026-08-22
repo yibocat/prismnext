@@ -7,14 +7,14 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { HOME_RUNTIME_SESSIONS_DIRNAME } from "../../shared/workbench-paths";
+import { HOME_RUNTIME_SESSIONS_DIRNAME } from "../../shared/workbench/paths";
 import { resolveWorkbenchHome } from "../workbench/home";
 import { ensureWorkbenchId, mintProjectId, readWorkbenchJson } from "../workbench/identity";
-import type { AgentPlanEvent } from "../../shared/agent-api";
-import type { RuntimeSessionId } from "../../shared/agent-runtime";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import type { ContentBlock, ConversationSubagentRun, TurnMessageMeta } from "../../shared/agent-conversation";
-import type { SessionUsageTotals } from "../../shared/agent-context-usage";
+import type { AgentPlanEvent } from "../../shared/agent/api";
+import type { RuntimeSessionId } from "../../shared/agent/runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
+import type { ContentBlock, ConversationSubagentRun, TurnMessageMeta } from "../../shared/agent/conversation";
+import type { SessionUsageTotals } from "../../shared/agent/context-usage";
 import { createLogger } from "../services/logger";
 
 const log = createLogger("session-store", "agent");

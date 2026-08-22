@@ -10,14 +10,14 @@ import type {
   WorkbenchProjectMember,
   WorkbenchProjectMeta,
   WorkbenchState,
-} from "../../shared/workbench-api";
+} from "../../shared/workbench/api";
 import {
   BUILTIN_DEFAULT_PROJECT_DIRNAME,
   PROJECTS_DIRNAME,
   normalizeWorkbenchPath,
   projectSlotMetaRel,
   projectSlotRel,
-} from "../../shared/workbench-paths";
+} from "../../shared/workbench/paths";
 import { replaceRegisteredRoots } from "../services/active-project-roots";
 import {
   ensureWorkbenchHome,

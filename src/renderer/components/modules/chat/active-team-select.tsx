@@ -15,7 +15,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
-import { normalizeIconSpec } from "@shared/icon-spec";
+import { normalizeIconSpec } from "@shared/platform/icon-spec";
 import { IconRenderer } from "../shared/icon-renderer";
 import { useIconImageSrc } from "../shared/use-icon-image-src";
 import { COMPOSER_TOOLBAR_TRIGGER } from "./worktree-selector";

@@ -15,7 +15,7 @@ import { RuntimeRegistry } from "../../src/main/agent/runtime-registry";
 import { AgentSessionStore, resolvePiAgentRoot } from "../../src/main/agent/session-store";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 describe("agent auth and prompt assembly", () => {
   it("accepts opencode / opencode-go as first-class Pi providers", () => {

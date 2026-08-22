@@ -6,7 +6,7 @@ import { RuntimeRegistry } from "../../src/main/agent/runtime-registry";
 import { AgentSessionStore, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 function fakeRuntime(label: string): AgentRuntime & { disposed: string[] } {
   const disposed: string[] = [];

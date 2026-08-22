@@ -1,1 +1,1 @@
-export * from "../../shared/workspace-folder";
+export * from "../../shared/workbench/workspace-folder";

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { appMenuFontClass } from "@/components/ui/app-menu";
 import { appPopoverListClass } from "@/components/ui/app-popover";
 import { filterTagsByQuery, type ProjectTagEntry } from "@/lib/literature/paper-tag-utils";
-import { normalizePaperTag, paperTagDotClass, paperTagKey } from "../../../shared/paper-tags";
+import { normalizePaperTag, paperTagDotClass, paperTagKey } from "../../../shared/literature/paper-tags";
 import { cn } from "@/lib/utils";
 
 const tagInputClass = cn(

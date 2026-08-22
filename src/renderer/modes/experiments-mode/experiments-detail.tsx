@@ -35,7 +35,7 @@ import {
   experimentStatusOf,
   type ExperimentMeta,
   type ExperimentRunEntry,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import { ExperimentsBriefStrip } from "./experiments-brief-strip";
 import {
   ExperimentsEnvironmentPanel,

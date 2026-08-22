@@ -1,7 +1,7 @@
 import {
   planDraftMissingRedirectNote,
   sessionDraftPlanRel,
-} from "../../../shared/research-plan";
+} from "../../../shared/research/plan";
 
 export { planDraftMissingRedirectNote };
 

@@ -8,11 +8,11 @@ import {
   parsePermissionRuleLines,
   permissionRuleMatches,
   splitAllowRulesText,
-} from "../../src/shared/permission-rules";
+} from "../../src/shared/permissions/rules";
 import {
   explainSmartPermissionAction,
   resolveSmartPermissionAction,
-} from "../../src/shared/smart-permission-policy";
+} from "../../src/shared/permissions/smart-policy";
 
 const ROOT = "/Users/me/paper";
 

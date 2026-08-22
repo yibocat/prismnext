@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type {
   DiscoveryInstallOrigin,
   SkillPackageOption,
-} from "../../shared/skill-install-types";
+} from "../../shared/skills/install-types";
 import {
   fetchRegistryIndex,
   installRegistrySkill,
@@ -10,7 +10,7 @@ import {
   skillNameToFolderId,
   type RegistrySkillEntry,
 } from "./skills-registry";
-import { libraryCardForRegistryUrl } from "../../shared/skill-libraries";
+import { libraryCardForRegistryUrl } from "../../shared/skills/libraries";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 

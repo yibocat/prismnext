@@ -6,8 +6,8 @@ import {
   beginConversationTurn,
   emptyConversation,
 } from "@/lib/chat/conversation-reducer";
-import type { Conversation } from "../../src/shared/agent-conversation";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import type { Conversation } from "../../src/shared/agent/conversation";
+import type { AgentEvent } from "../../src/shared/agent/runtime";
 
 const ids = {
   runtimeSessionId: "rt-1",

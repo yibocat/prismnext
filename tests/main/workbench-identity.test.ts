@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { PROJECT_META_DIR, WORKBENCH_JSON_FILENAME } from "../../src/shared/workbench-paths";
+import { PROJECT_META_DIR, WORKBENCH_JSON_FILENAME } from "../../src/shared/workbench/paths";
 import {
   mintProjectId,
   readWorkbenchJson,

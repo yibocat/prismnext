@@ -6,7 +6,7 @@
  * API: https://dblp.org/search/publ/api?q=<query>&format=json
  * No API key required; rate limits are generous but please cache.
  */
-import { normalizeDoi } from "../../doi-utils";
+import { normalizeDoi } from "../../literature/doi-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";

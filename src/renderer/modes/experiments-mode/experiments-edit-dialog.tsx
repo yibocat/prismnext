@@ -18,11 +18,11 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { ExperimentsBriefSectionPicker } from "./experiments-brief-section-picker";
 import { openExperimentResearchBrief } from "./experiments-open-brief";
-import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
+import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiments/log";
 import {
   experimentExcerptsFromBriefSections,
   type ResearchBriefSection,
-} from "../../../shared/research-brief";
+} from "../../../shared/research/brief";
 
 export function ExperimentsBriefEditDialog({
   meta,

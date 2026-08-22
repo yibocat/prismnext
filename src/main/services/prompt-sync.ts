@@ -1,5 +1,5 @@
 import type { PromptContext } from "../prompts/types";
-import { projectAgentsMdRel } from "../../shared/workbench-paths";
+import { projectAgentsMdRel } from "../../shared/workbench/paths";
 
 export const PRISM_SYSTEM_FILE = "_prism-system.md";
 export const PRISM_AGENTS_REL = projectAgentsMdRel();

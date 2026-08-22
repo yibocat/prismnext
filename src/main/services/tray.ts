@@ -8,7 +8,7 @@ import {
   shouldOpenTrayMenuOnClick,
   type TrayMenuSnapshot,
   type TrayStatus,
-} from "../../shared/desktop-shell";
+} from "../../shared/platform/desktop-shell";
 
 let tray: Tray | null = null;
 let isQuitting = false;

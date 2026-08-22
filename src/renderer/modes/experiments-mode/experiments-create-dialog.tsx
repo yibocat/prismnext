@@ -21,7 +21,7 @@ import { ExperimentsBriefSectionPicker } from "./experiments-brief-section-picke
 import {
   experimentExcerptsFromBriefSections,
   type ResearchBriefSection,
-} from "../../../shared/research-brief";
+} from "../../../shared/research/brief";
 
 export function ExperimentsCreateDialog({
   open,

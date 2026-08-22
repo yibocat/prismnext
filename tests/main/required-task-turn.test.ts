@@ -14,7 +14,7 @@ import {
   shouldDenyOutsideTaskAllowlist,
   resolveTaskPermissionDenial,
 } from "../../src/main/services/task-orchestrator-gate";
-import { formatTaskError } from "../../src/shared/task-error-codes";
+import { formatTaskError } from "../../src/shared/agent/task-error-codes";
 
 describe("this-turn Task allowlist + must-invoke (@ experts)", () => {
   beforeEach(() => {

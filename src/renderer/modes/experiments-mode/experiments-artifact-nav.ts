@@ -16,7 +16,7 @@ import {
   isImageArtifactPath,
   resolveImageArtifactPathsForDisplay,
   toProjectRelativeArtifact,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 
 export { isImageArtifactPath, imagePathsForRunDisplay };
 

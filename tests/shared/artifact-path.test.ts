@@ -7,7 +7,7 @@ import {
   normalizeRunArtifactPaths,
   resolveImageArtifactPathsForDisplay,
   toProjectRelativeArtifact,
-} from "../../src/shared/artifact-path";
+} from "../../src/shared/interaction/artifact-path";
 
 describe("isPdfArtifactPath", () => {
   it("detects pdf extension", () => {

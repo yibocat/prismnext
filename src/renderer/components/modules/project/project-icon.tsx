@@ -1,7 +1,7 @@
 import { icons, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
-import { normalizeIconSpec, type IconSpec } from "@shared/icon-spec";
+import { normalizeIconSpec, type IconSpec } from "@shared/platform/icon-spec";
 import { useIconImageSrc } from "../shared/use-icon-image-src";
 
 export interface ProjectIconCategory {

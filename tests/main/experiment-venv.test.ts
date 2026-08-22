@@ -16,7 +16,7 @@ import {
   buildExperimentStorageContext,
   type ExperimentVenvRunner,
 } from "../../src/main/services/experiment-log-service";
-import { PRISMNEXT_VENV_REL } from "../../src/shared/experiment-log";
+import { PRISMNEXT_VENV_REL } from "../../src/shared/experiments/log";
 
 function makeProject(): string {
   const root = mkdtempSync(join(tmpdir(), "prism-exp-venv-proj-"));

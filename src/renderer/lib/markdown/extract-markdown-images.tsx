@@ -5,7 +5,7 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import { cn } from "@/lib/utils";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
-import { chatImagePathCandidates, artifactBasename } from "../../../shared/artifact-path";
+import { chatImagePathCandidates, artifactBasename } from "../../../shared/interaction/artifact-path";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
   CHAT_ARTIFACT_INLINE_IMAGE_FRAME_CLASS,

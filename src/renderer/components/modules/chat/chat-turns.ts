@@ -1,8 +1,8 @@
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 import { contentBlocks } from "./tools/tool-result-map";
 import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
-import { isBackgroundTaskInjectMessageText } from "@shared/chat-background-task";
-import { isPlanControlUserText } from "@shared/research-plan";
+import { isBackgroundTaskInjectMessageText } from "@shared/chat/background-task";
+import { isPlanControlUserText } from "@shared/research/plan";
 
 function userMessagePlainTextForDisplay(msg: ChatStreamMessage): string {
   const content = msg.message?.content;

@@ -145,7 +145,7 @@ describe("chat-store Agent routing", () => {
   });
 
   it("loads history through the Agent API", async () => {
-    const { emptyConversation } = await import("../../src/shared/agent-conversation");
+    const { emptyConversation } = await import("../../src/shared/agent/conversation");
     agentLoadSession.mockResolvedValue({
       ok: true,
       conversationId: "conv-hist",

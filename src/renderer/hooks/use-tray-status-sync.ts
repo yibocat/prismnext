@@ -18,7 +18,7 @@ import {
   type TrayModeId,
   type TrayRecentItem,
   type TrayStatus,
-} from "../../shared/desktop-shell";
+} from "../../shared/platform/desktop-shell";
 
 function projectDisplayName(projectRoot: string | null | undefined): string | null {
   if (!projectRoot) return null;

@@ -14,7 +14,7 @@ import {
   projectSessionsDisplayRel,
   projectSlotMetaRel,
   projectTerminalDirRel,
-} from "../../src/shared/workbench-paths";
+} from "../../src/shared/workbench/paths";
 import { resolveWorkbenchHome, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import {
   ensureDefaultProject,
@@ -40,8 +40,8 @@ import {
   buildExperimentStorageContext,
   createExperiment,
 } from "../../src/main/services/experiment-log-service";
-import { INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction-spec";
-import { EXPERIMENT_REGISTRY_REL } from "../../src/shared/experiment-log";
+import { INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction/spec";
+import { EXPERIMENT_REGISTRY_REL } from "../../src/shared/experiments/log";
 
 const temps: string[] = [];
 

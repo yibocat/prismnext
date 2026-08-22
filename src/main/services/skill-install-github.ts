@@ -16,7 +16,7 @@ import type {
   GitHubInstallOrigin,
   SkillPackageOption,
   SkillSharedBundleOption,
-} from "../../shared/skill-install-types";
+} from "../../shared/skills/install-types";
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 const CACHE_TTL_MS = 30 * 60 * 1000;

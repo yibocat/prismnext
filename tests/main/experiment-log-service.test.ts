@@ -24,7 +24,7 @@ import {
   EXPERIMENT_REGISTRY_REL,
   experimentEnvDisplayRows,
   slugBaseFromTitle,
-} from "../../src/shared/experiment-log";
+} from "../../src/shared/experiments/log";
 
 describe("experiment-log-service", () => {
   let root: string;
@@ -624,7 +624,7 @@ describe("tailBytes", () => {
     const originalBuffer = globalThis.Buffer;
     // @ts-expect-error test shim
     delete globalThis.Buffer;
-    const { tailBytes: tailBytesFresh } = await import("../../src/shared/experiment-log");
+    const { tailBytes: tailBytesFresh } = await import("../../src/shared/experiments/log");
     const long = "a".repeat(5000);
     const out = tailBytesFresh(long, 100);
     expect(new TextEncoder().encode(out).length).toBeLessThanOrEqual(100);

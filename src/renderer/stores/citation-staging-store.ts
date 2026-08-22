@@ -5,20 +5,20 @@ import type {
   StagedCitationPayload,
   StagedAddProgressEvent,
   StageResult,
-} from "../../shared/citation-staging";
+} from "../../shared/literature/citation-staging";
 import {
   buildLibraryIdentityIndex,
   findLibraryPaperInIdentityIndex,
   type LibraryPaperLinkTarget,
-} from "../../shared/staged-citation-library-match";
+} from "../../shared/literature/staged-citation-library-match";
 import { useLiteratureStore } from "./literature-store";
 import { useDocumentStore } from "./document-store";
 import { toast } from "sonner";
-import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
+import { formatPdfDownloadFailure } from "../../shared/literature/pdf-download-messages";
 import {
   isStagedCitationAddCancelledError,
   isStagedCitationCreateCancelledResult,
-} from "../../shared/citation-staging";
+} from "../../shared/literature/citation-staging";
 
 /** Stable empty list for zustand selectors (avoid `?? []` creating new refs). */
 export const EMPTY_STAGED_CITATIONS: StagedCitation[] = [];

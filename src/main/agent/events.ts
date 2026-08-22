@@ -3,9 +3,9 @@
  * Product turns settle only on `agent_end` — Pi `turn_end` is an agent-loop boundary.
  */
 
-import type { AgentEvent } from "../../shared/agent-runtime";
-import { isAgentEventType, toolArgsHaveContent } from "../../shared/agent-runtime";
-import { costFromPiUsage, occupancyFromPiUsage } from "../../shared/agent-context-usage";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import { isAgentEventType, toolArgsHaveContent } from "../../shared/agent/runtime";
+import { costFromPiUsage, occupancyFromPiUsage } from "../../shared/agent/context-usage";
 import { isPiPrimitiveToolName } from "./capability-matrix";
 
 export function assertAgentEvent(event: AgentEvent): AgentEvent {

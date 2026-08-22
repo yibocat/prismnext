@@ -4,8 +4,8 @@ import { countPromptTokens } from "../lib/token-estimate";
 import {
   libraryCardForRegistryUrl,
   PRISM_CURATED_SOURCE_ID,
-} from "../../shared/skill-libraries";
-import type { SkillInstallRecord } from "../../shared/skill-install-types";
+} from "../../shared/skills/libraries";
+import type { SkillInstallRecord } from "../../shared/skills/install-types";
 import {
   CORE_TEAM_ID,
   isProjectLocalTeamId,
@@ -15,7 +15,7 @@ import {
   type TeamSource,
 } from "../../shared/teams/types";
 import { parseFqid } from "../../shared/teams/state";
-import { homeSkillsRel } from "../../shared/workbench-paths";
+import { homeSkillsRel } from "../../shared/workbench/paths";
 import { parseGitHubInput, scanGitHubRepository } from "./skill-install-github";
 import { validateRegistryIndex } from "./skills-registry";
 import {
@@ -151,7 +151,7 @@ export interface InstalledSkillInfo {
   enabled: boolean;
   /** o200k_base BPE estimate of SKILL.md body */
   tokenCount: number;
-  installOrigin?: import("../../shared/skill-install-types").SkillInstallOrigin;
+  installOrigin?: import("../../shared/skills/install-types").SkillInstallOrigin;
   /**
    * 来源（§5.6.2）：local 且有 install 记录 → "registry"；local 无记录 →
    * "custom"；core pack → "bundled"；其余 pack → "plugin"（badge 显示 pack 名）。

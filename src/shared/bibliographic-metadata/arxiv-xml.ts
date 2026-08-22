@@ -1,4 +1,4 @@
-import { normalizeDoi } from "../doi-utils";
+import { normalizeDoi } from "../literature/doi-utils";
 
 /** Shared arXiv Atom `<entry>` parsers — used by bibliographic lookup and discovery. */
 

@@ -14,7 +14,7 @@ import { useCommandStore } from "@/stores/command-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
-import type { SubagentInfo } from "@shared/agent-subagents";
+import type { SubagentInfo } from "@shared/agent/subagents";
 import type { ContentBlock } from "@/stores/chat-store";
 import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/chat/vision-fallback-send";
 import {

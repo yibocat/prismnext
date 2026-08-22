@@ -7,8 +7,8 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import type { AgentEvent } from "../../shared/agent-runtime";
-import type { PermissionMode } from "../../shared/session-agent";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import type { PermissionMode } from "../../shared/agent/session-agent";
 import type { PermissionGate } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import type { NativeToolDefinition } from "./tools/types";

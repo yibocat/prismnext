@@ -3,7 +3,7 @@ import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
   wholeDiskSearchBlockMessage,
-} from "../../src/shared/project-escape-guard";
+} from "../../src/shared/permissions/project-escape-guard";
 
 const ROOT = "/proj";
 const HOME = "/home/u";

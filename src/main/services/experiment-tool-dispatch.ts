@@ -23,7 +23,7 @@ import {
   EXPERIMENT_REGISTRY_REL,
   parseExperimentRunKind,
   type ExperimentBriefLinks,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 import { kickoffExperimentRun } from "./experiment-run-executor";
 import { snapshotExperiment } from "./experiment-results-snapshot";
 import {

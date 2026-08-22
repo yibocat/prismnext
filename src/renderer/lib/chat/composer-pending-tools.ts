@@ -2,7 +2,7 @@
  * Pending interactive tools: Question (composer chrome) + TodoWrite (message drawer).
  */
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
-import type { Conversation } from "@shared/agent-conversation";
+import type { Conversation } from "@shared/agent/conversation";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
 import {
   conversationDisplayTurns,

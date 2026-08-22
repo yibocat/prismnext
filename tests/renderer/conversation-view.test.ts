@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyConversation, type Conversation } from "../../src/shared/agent-conversation";
+import { emptyConversation, type Conversation } from "../../src/shared/agent/conversation";
 import {
   collectConversationAssistantBlocks,
   conversationCompactedCount,

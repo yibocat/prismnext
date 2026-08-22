@@ -6,7 +6,7 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   addPapersToCollection,
   deletePaper,
@@ -24,7 +24,7 @@ import {
   getSessionIntensiveBibkeys,
   removeSessionIntensiveBibkey,
 } from "../../services/chat-session-registry";
-import { normalizeArxivId, normalizeDoi } from "../../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../../shared/literature/doi-utils";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

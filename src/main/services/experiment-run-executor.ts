@@ -31,7 +31,7 @@ import {
   type ExperimentRunEntry,
   type ExperimentRunKind,
   type ExperimentRunResult,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 import { createLogger, shortLogDetail } from "./logger";
 import {
   broadcastExperimentChanged,

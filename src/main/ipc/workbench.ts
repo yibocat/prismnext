@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import type { WorkbenchOpenResult, WorkbenchState } from "../../shared/workbench-api";
+import type { WorkbenchOpenResult, WorkbenchState } from "../../shared/workbench/api";
 import {
   getWorkbenchState,
   openWorkbenchFolder,

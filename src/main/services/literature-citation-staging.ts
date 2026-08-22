@@ -7,11 +7,11 @@ import { join } from "node:path";
 import { createLogger } from "./logger";
 import { resolveSessionScratchKey } from "./chat-session-registry";
 import { sessionCitationsDir } from "../workbench/home";
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import { findExistingByIdentifier } from "./literature-service";
 import { bibliographicToPaperPatch } from "../../shared/bibliographic-metadata/helpers";
 import { resolveBibliographicMetadata } from "../../shared/bibliographic-metadata";
-import type { StagedCitationPayload, StageResult } from "../../shared/citation-staging";
+import type { StagedCitationPayload, StageResult } from "../../shared/literature/citation-staging";
 
 const log = createLogger("literature-citation-staging", "agent");
 

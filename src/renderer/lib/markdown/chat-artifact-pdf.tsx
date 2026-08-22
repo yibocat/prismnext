@@ -18,7 +18,7 @@ import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   artifactBasename,
   chatImagePathCandidates,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import { cn } from "@/lib/utils";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,

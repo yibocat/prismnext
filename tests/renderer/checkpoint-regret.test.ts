@@ -3,7 +3,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { truncateChatMessagesToTurn } from "@/components/modules/chat/chat-turns";
-import { emptyConversation, type Conversation } from "../../src/shared/agent-conversation";
+import { emptyConversation, type Conversation } from "../../src/shared/agent/conversation";
 
 const PROJECT = "/proj";
 

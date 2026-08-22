@@ -1,4 +1,4 @@
-import { normalizeArxivId } from "../../doi-utils";
+import { normalizeArxivId } from "../../literature/doi-utils";
 import {
   parseArxivEntryAuthorNames,
   parseArxivEntryDoi,

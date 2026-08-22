@@ -8,7 +8,7 @@ import type {
   ExperimentRunCompleteEvent,
   ExperimentRunOutputEvent,
   ExperimentRunStartedEvent,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 
 export type ExperimentChangedReason =
   | "create"

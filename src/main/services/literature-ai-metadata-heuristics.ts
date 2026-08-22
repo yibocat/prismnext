@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { PaperExtractSource } from "../../shared/paper-extract";
-import { EXTRACT_SOURCE_PRIORITY } from "../../shared/paper-extract";
-import { AI_METADATA_KEYWORD_MAX } from "../../shared/literature-ai-metadata";
+import type { PaperExtractSource } from "../../shared/literature/paper-extract";
+import { EXTRACT_SOURCE_PRIORITY } from "../../shared/literature/paper-extract";
+import { AI_METADATA_KEYWORD_MAX } from "../../shared/literature/ai-metadata";
 import { getLibraryPaths } from "./literature-service";
 import { getPaper, updatePaper } from "./literature-service";
 import {

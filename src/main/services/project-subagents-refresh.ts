@@ -7,7 +7,7 @@ import {
 } from "../teams/agents-sync";
 import { invalidateProjectChatPrewarm } from "./project-chat-prewarm";
 import { normalizeProjectRoot } from "./skills-sync";
-import { PROJECT_META_DIR, projectTeamsRel } from "../../shared/workbench-paths";
+import { PROJECT_META_DIR, projectTeamsRel } from "../../shared/workbench/paths";
 
 const EXPERTS_REFRESH_DEBOUNCE_MS = 800;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();

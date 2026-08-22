@@ -1,1 +1,1 @@
-export * from "../../shared/expert-permission-presets";
+export * from "../../shared/permissions/expert-presets";

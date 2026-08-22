@@ -19,7 +19,7 @@ import {
   PAPER_CITATION_PAGE_SIZE,
   formatCitationFetchError,
   describePaperCitationIdentifier,
-} from "../../src/shared/paper-citation-network";
+} from "../../src/shared/literature/paper-citation-network";
 import {
   __testing,
   getPaperCitationNetwork,

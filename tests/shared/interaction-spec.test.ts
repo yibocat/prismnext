@@ -10,7 +10,7 @@ import {
   isAllowedInteractionKind,
   interactionSpecRelativePath,
   legacyInteractionSpecRelativePath,
-} from "../../src/shared/interaction-spec";
+} from "../../src/shared/interaction/spec";
 
 describe("isValidInteractionId", () => {
   it("accepts safe ids and rejects traversal", () => {

@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 import { createLogger, getEntries, flushAndCloseSync, shortLogDetail } from "../services/logger";
-import type { LogFetchParams } from "@shared/log-types";
+import type { LogFetchParams } from "@shared/platform/log-types";
 
 const log = createLogger("ipc-guard", "ipc");
 

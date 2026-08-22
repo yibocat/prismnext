@@ -14,7 +14,7 @@ import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-contex
 import { openSessionCitations } from "@/lib/literature/jump-to-staged-citation";
 import { InlineEditableField } from "@/modes/literature-mode/literature-inline-field";
 import { cn } from "@/lib/utils";
-import type { SessionAgent } from "../../../../shared/session-agent";
+import type { SessionAgent } from "../../../../shared/agent/session-agent";
 import {
   BookMarkedIcon,
   BookOpenIcon,

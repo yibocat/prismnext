@@ -3,12 +3,12 @@ import type {
   PaperExtractSource,
   PaperExtractState,
   PaperExtractProgress,
-} from "../../shared/paper-extract";
+} from "../../shared/literature/paper-extract";
 import {
   EXTRACT_BATCH_MAX_PAPERS,
   EXTRACT_MAX_AUTO_RETRIES,
   extractRetryDelayMs,
-} from "../../shared/paper-extract";
+} from "../../shared/literature/paper-extract";
 import { createLogger } from "./logger";
 import { getSettings } from "./settings";
 import { ensurePaperPdfAbsPath, type PdfResolveProgress } from "./literature-pdf-resolve";
@@ -200,7 +200,7 @@ async function runMineruExtract(
   meta: Record<string, unknown>;
   remoteJobId: string;
   images?: Array<{ relPath: string; data: Buffer }>;
-  blocks?: import("../../shared/paper-extract-block").PaperExtractBlock[];
+  blocks?: import("../../shared/literature/paper-extract-block").PaperExtractBlock[];
   layout?: { middle?: unknown; model?: unknown };
 }> {
   const pdfAbs = await resolvePdfForExtract(projectRoot, paper, emit);
@@ -301,7 +301,7 @@ async function executeJob(job: QueueJob): Promise<void> {
       meta: Record<string, unknown>;
       remoteJobId?: string;
       images?: Array<{ relPath: string; data: Buffer }>;
-      blocks?: import("../../shared/paper-extract-block").PaperExtractBlock[];
+      blocks?: import("../../shared/literature/paper-extract-block").PaperExtractBlock[];
       layout?: { middle?: unknown; model?: unknown };
     };
 

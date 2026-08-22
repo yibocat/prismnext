@@ -10,8 +10,8 @@
  * - 启停/可见性的唯一判定在 main 侧 PackResolver（§5），本文件只承载数据形状。
  */
 
-import type { IconSpec } from "../icon-spec";
-import { projectTeamsRel, projectTeamsStateRel } from "../workbench-paths";
+import type { IconSpec } from "../platform/icon-spec";
+import { projectTeamsRel, projectTeamsStateRel } from "../workbench/paths";
 
 // ── 基础枚举 ──────────────────────────────────────────────
 

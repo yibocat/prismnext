@@ -35,11 +35,11 @@ import {
   resolvePermissionAction,
   resolvePermissionMode,
 } from "../services/permission-modes";
-import type { SessionAgent } from "../../shared/session-agent";
+import type { SessionAgent } from "../../shared/agent/session-agent";
 import {
   EXPERIMENT_REGISTRY_REL,
   parseExperimentRunKind,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 
 interface ExperimentListArgs {
   projectRoot: string;

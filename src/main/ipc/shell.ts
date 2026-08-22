@@ -5,7 +5,7 @@ import type {
   DesktopNotifyKind,
   TrayMenuSnapshot,
   TrayStatus,
-} from "../../shared/desktop-shell";
+} from "../../shared/platform/desktop-shell";
 
 function isAllowedExternalUrl(url: string): boolean {
   try {

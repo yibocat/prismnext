@@ -6,17 +6,17 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { isFigureStaticKind } from "../../shared/interaction-figure";
-import { validateFigureStaticSpec } from "../../shared/interaction-figure-fs";
-import { isInteractionPlotKind } from "../../shared/interaction-plot";
-import { validatePlotSpec } from "../../shared/interaction-plot-fs";
+import { isFigureStaticKind } from "../../shared/interaction/figure";
+import { validateFigureStaticSpec } from "../lib/interaction-figure-fs";
+import { isInteractionPlotKind } from "../../shared/interaction/plot";
+import { validatePlotSpec } from "../lib/interaction-plot-fs";
 import {
   INTERACTION_SPEC_DIR_REL,
   isValidInteractionId,
   isAllowedInteractionKind,
   parseInteractionSpec,
   type InteractionSpec,
-} from "../../shared/interaction-spec";
+} from "../../shared/interaction/spec";
 
 /** Interaction spec root — NOT chat ```artifact fences (file paths). */
 export function interactionSpecsDir(projectRoot: string): string {

@@ -46,7 +46,7 @@ import { useExperimentProjectRoot } from "./experiments-project-root";
 import type {
   ProvenanceLinkMethod,
   ProvenanceRunRecorded,
-} from "../../../shared/provenance";
+} from "../../../shared/experiments/provenance";
 
 export interface ExperimentsProvenanceInspectorProps {
   open: boolean;

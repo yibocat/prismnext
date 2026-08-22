@@ -39,7 +39,7 @@ import {
   APP_LOCALE_PREFERENCES,
   normalizeAppLocalePreference,
   type AppLocalePreference,
-} from "../../../../shared/app-locale";
+} from "../../../../shared/platform/app-locale";
 import { fuzzyMatch } from "@/lib/search/fuzzy";
 import {
   getSearchHistory,

@@ -8,9 +8,9 @@ import {
   conversationHasCommittedTurn,
   snapshotConversation,
 } from "@/lib/chat/conversation-view";
-import type { Conversation } from "../../shared/agent-conversation";
+import type { Conversation } from "../../shared/agent/conversation";
 import { createLogger } from "@/services/logger";
-import { projectCheckpointsRel } from "@shared/workbench-paths";
+import { projectCheckpointsRel } from "@shared/workbench/paths";
 
 const log = createLogger("checkpoint-store", "agent");
 

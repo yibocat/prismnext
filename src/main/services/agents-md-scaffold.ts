@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
 import { IGNORED_DIRECTORY_NAMES } from "./filesystem";
-import { projectAgentsMdRel } from "../../shared/workbench-paths";
+import { projectAgentsMdRel } from "../../shared/workbench/paths";
 
 const SCAFFOLD_IGNORE_DIRS = new Set([
   ...IGNORED_DIRECTORY_NAMES,

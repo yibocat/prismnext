@@ -3,10 +3,10 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import type { PromptContext } from "./types";
-import type { WorkspaceFolder } from "../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { createLogger } from "../services/logger";
 import { readWorkbenchJson } from "../workbench/identity";
-import { projectAgentsMdRel } from "../../shared/workbench-paths";
+import { projectAgentsMdRel } from "../../shared/workbench/paths";
 
 const log = createLogger("prompt-context", "agent");
 

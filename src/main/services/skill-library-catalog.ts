@@ -1,4 +1,4 @@
-import type { LibraryCatalogItem } from "../../shared/skill-library-types";
+import type { LibraryCatalogItem } from "../../shared/skills/library-types";
 import {
   analyzeGitHubSkillSource,
   githubSourceToAnalyzeUrl,

@@ -32,7 +32,7 @@ import {
   iconSpecToJSON,
   normalizeIconSpec,
   type IconSpec,
-} from "../../shared/icon-spec";
+} from "../../shared/platform/icon-spec";
 import { createLogger } from "../services/logger";
 import { _registeredRoots } from "../services/active-project-roots";
 import { licenseGrants } from "../services/teams-license";

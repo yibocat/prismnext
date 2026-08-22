@@ -39,7 +39,7 @@ import {
   resendFromUserTurn,
 } from "@/lib/chat/user-message-resend";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
-import type { SubagentInfo } from "@shared/agent-subagents";
+import type { SubagentInfo } from "@shared/agent/subagents";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { InlineComposerEditor } from "./inline-composer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";

@@ -25,10 +25,10 @@ import {
   isImageArtifactPath,
   normalizeArtifactSlash,
   normalizeRunArtifactPaths,
-} from "../../shared/artifact-path";
+} from "../../shared/interaction/artifact-path";
 import { resolveExperimentDir } from "./workspace-config";
 import { generateProvenanceId, recordRunProvenance } from "./provenance-service";
-import { PROJECT_META_DIR } from "../../shared/workbench-paths";
+import { PROJECT_META_DIR } from "../../shared/workbench/paths";
 import {
   EXPERIMENT_META_FILENAME,
   EXPERIMENT_REGISTRY_REL,
@@ -54,8 +54,8 @@ import {
   type ExperimentRunEntry,
   type ExperimentRunInput,
   type ExperimentSummary,
-} from "../../shared/experiment-log";
-import { resolveResearchBriefSection } from "../../shared/research-brief";
+} from "../../shared/experiments/log";
+import { resolveResearchBriefSection } from "../../shared/research/brief";
 
 /** Hint surfaced to UI / agent when the project has no Workspace Experiment folder configured. */
 export const NO_EXPERIMENT_FOLDER_HINT =

@@ -16,7 +16,7 @@ import {
   APP_LOCALE_PREFERENCES,
   normalizeAppLocalePreference,
   type AppLocalePreference,
-} from "../../../../shared/app-locale";
+} from "../../../../shared/platform/app-locale";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,

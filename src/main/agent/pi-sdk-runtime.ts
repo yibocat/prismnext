@@ -17,7 +17,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
-import { skillReadRootsFromDirs } from "../../shared/skill-read-roots";
+import { skillReadRootsFromDirs } from "../../shared/skills/read-roots";
 import { createLogger, shortLogDetail } from "../services/logger";
 import type { AgentMcpHost } from "./mcp-host";
 
@@ -30,14 +30,14 @@ import type {
   CreateSessionResult,
   RuntimeSessionId,
   TurnInput,
-} from "../../shared/agent-runtime";
-import type { ContentBlock } from "../../shared/agent-conversation";
+} from "../../shared/agent/runtime";
+import type { ContentBlock } from "../../shared/agent/conversation";
 import {
   applyAssistantEventToBlocks,
   deriveFlattenedAssistant,
   sealTurnBlockTimings,
-} from "../../shared/conversation-blocks";
-import type { AgentCompactResult } from "../../shared/agent-api";
+} from "../../shared/agent/conversation-blocks";
+import type { AgentCompactResult } from "../../shared/agent/api";
 import type { AgentEventListener, AgentRuntime, AgentTruncateEngineResult } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import { mapPiSessionEvent, type PiLikeSessionEvent } from "./events";
@@ -52,7 +52,7 @@ import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
 import type { PermissionGate } from "./permission-gate";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
-import { TOOL_NAMES } from "../../shared/tool-names";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
 import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";

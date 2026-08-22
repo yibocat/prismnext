@@ -1,5 +1,5 @@
-import { normalizeDoi } from "../../doi-utils";
-import { normalizePmid } from "../../catalog-identifier-utils";
+import { normalizeDoi } from "../../literature/doi-utils";
+import { normalizePmid } from "../../literature/catalog-identifier-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";

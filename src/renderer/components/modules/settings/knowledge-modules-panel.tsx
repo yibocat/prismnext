@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";

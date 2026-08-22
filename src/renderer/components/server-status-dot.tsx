@@ -20,8 +20,8 @@ import type {
   AgentLifecyclePhase,
   AgentStatusSnapshot,
   ProjectWarmPhase,
-} from "../../shared/agent-status";
-import { isAgentLifecyclePhase, isProjectWarmPhase } from "../../shared/agent-status";
+} from "../../shared/agent/status";
+import { isAgentLifecyclePhase, isProjectWarmPhase } from "../../shared/agent/status";
 import { Button } from "@/components/ui/button";
 
 const AGENT_COLORS: Record<AgentLifecyclePhase, string> = {

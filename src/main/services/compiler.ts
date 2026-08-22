@@ -7,7 +7,7 @@ import { resolveTectonicBinary } from "./tectonic-binary";
 import { getTectonicDaemonSession } from "./tectonic-daemon";
 
 import { createLogger } from "./logger";
-import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR, projectCompileRel } from "../../shared/workbench-paths";
+import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR, projectCompileRel } from "../../shared/workbench/paths";
 
 const log = createLogger("compiler", "compile");
 

@@ -27,7 +27,7 @@ import {
 import { SettingsFormField } from "./settings-form-field";
 import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 import { MARKDOWN_TOOLBAR_TEXT_BTN } from "@/components/modules/editor/toolbars/markdown-toolbar";
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { Hint } from "@/components/ui/hint";
 
 const CARD_GRID = "grid grid-cols-1 @lg:grid-cols-2 gap-2";

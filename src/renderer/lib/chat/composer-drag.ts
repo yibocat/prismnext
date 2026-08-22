@@ -4,7 +4,7 @@
 import type { ContextInsertRequest, CodeSnippetRequest } from "@/lib/chat/context-insert";
 import type { GitDiffSnippetRequest } from "@/lib/chat/context-insert";
 import type { ExperimentRunSnippetRequest } from "@/lib/chat/context-insert";
-import type { ExtractBlockType } from "../../../shared/paper-extract-block";
+import type { ExtractBlockType } from "../../../shared/literature/paper-extract-block";
 import { applyComposerDragPreview } from "./composer-drag-preview";
 
 export const COMPOSER_INSERT_MIME = "application/vnd.prismnext.composer-insert+json";

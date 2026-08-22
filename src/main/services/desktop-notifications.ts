@@ -4,7 +4,7 @@ import {
   notifyDedupeKey,
   shouldSendDesktopNotification,
   type DesktopNotifyKind,
-} from "../../shared/desktop-shell";
+} from "../../shared/platform/desktop-shell";
 
 let getMainWindow: (() => BrowserWindow | null) | null = null;
 const recentKeys = new Map<string, number>();

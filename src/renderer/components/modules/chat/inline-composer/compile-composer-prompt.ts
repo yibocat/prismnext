@@ -26,7 +26,7 @@ import {
   PAPER_AGENT_CONTEXT_FOOTER,
   type PaperNoteAgentContext,
 } from "@/lib/literature/paper-agent-context";
-import { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
+import { rewritePaperExtractImageSrcs } from "@shared/literature/paper-extract-images";
 
 /** Max chars inlined per @-mentioned text file (rest truncated with a note). */
 const MAX_INLINE_ATTACHMENT_CHARS = 200_000;

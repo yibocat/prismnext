@@ -220,7 +220,7 @@ export function registerSkillsHandlers(): void {
       _event,
       args: {
         projectPath: string;
-        selection: import("../../shared/skill-install-types").SkillPackageInstallSelection;
+        selection: import("../../shared/skills/install-types").SkillPackageInstallSelection;
       },
     ) => {
       const { installedIds } = await installSkillPackages(args.projectPath, args.selection);
@@ -258,7 +258,7 @@ export function registerSkillsHandlers(): void {
       _event,
       args: {
         projectPath: string;
-        item: import("../../shared/skill-library-types").LibraryCatalogItem;
+        item: import("../../shared/skills/library-types").LibraryCatalogItem;
       },
     ) => {
       const { installedIds } = await installLibraryCatalogItem(args.projectPath, args.item);

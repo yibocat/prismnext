@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { GitHubInstallOrigin, SkillInstallRecord, SkillUpdateInfo } from "../../shared/skill-install-types";
+import type { GitHubInstallOrigin, SkillInstallRecord, SkillUpdateInfo } from "../../shared/skills/install-types";
 import { parseSha256Digest, sha256Hex, verifySha256Digest } from "./skill-install-digest";
 import { githubRawSkillMdUrl, parseSkillVersionFromMarkdown } from "./skill-install-github";
 import { fetchRegistryIndex, fetchSkillMarkdown, skillNameToFolderId } from "./skills-registry";

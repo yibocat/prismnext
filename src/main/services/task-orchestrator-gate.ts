@@ -4,7 +4,7 @@
  * reserved plan/build stay denied on orchestrator sessions.
  */
 
-import { formatTaskError, type TaskErrorCode } from "../../shared/task-error-codes";
+import { formatTaskError, type TaskErrorCode } from "../../shared/agent/task-error-codes";
 export const OPEN_BUILTIN_TASK_SUBAGENTS = [
   "general",
   "explore",
@@ -147,7 +147,7 @@ export {
   formatPlanModeExpertTaskDeniedMessage,
   isOpaqueTaskCancelledResult,
   resolveOpaqueTaskCancelledDisplay,
-} from "../../shared/task-deny-message";
+} from "../../shared/agent/task-deny-message";
 
 /** Orchestrator Task allowlist — deny wildcard + reserved; allow open built-ins + experts. */
 export function buildTaskPermissionBlock(allowedExpertIds: string[]): Record<string, string> {

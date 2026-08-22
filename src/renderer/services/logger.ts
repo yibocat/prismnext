@@ -1,5 +1,5 @@
-import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
-import { LOG_LEVEL_ORDER, LOG_RING_LIMIT, redactAbsolutePaths, redactLogValue } from "@shared/log-types";
+import type { LogLevel, LogCategory, LogEntry } from "@shared/platform/log-types";
+import { LOG_LEVEL_ORDER, LOG_RING_LIMIT, redactAbsolutePaths, redactLogValue } from "@shared/platform/log-types";
 
 // ─── Dev / prod toggle ───
 

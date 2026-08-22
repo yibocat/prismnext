@@ -4,8 +4,8 @@
 
 import { join } from "node:path";
 import type { WebContents } from "electron";
-import type { AgentEvent } from "../../shared/agent-runtime";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
 import {
   type AgentAnswerQuestionInput,
@@ -43,7 +43,7 @@ import {
   type AgentStatus,
   type AgentTestConnectionInput,
   type AgentTestConnectionResult,
-} from "../../shared/agent-api";
+} from "../../shared/agent/api";
 import {
   getAgentEffortCatalog,
   getAgentModelEffort,
@@ -52,8 +52,8 @@ import {
   testAgentConnection,
 } from "./model-catalog";
 import { hydrateSessionRecordToConversation } from "./session-hydrator";
-import { applySubagentEventToRuns } from "../../shared/conversation-blocks";
-import type { ConversationSubagentRun } from "../../shared/agent-conversation";
+import { applySubagentEventToRuns } from "../../shared/agent/conversation-blocks";
+import type { ConversationSubagentRun } from "../../shared/agent/conversation";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import { resolvePiAgentRoot, resolvePiRuntimeSessionDir, type AgentSessionRecord } from "./session-store";
@@ -84,7 +84,7 @@ import {
   selectMcpServers,
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
-import { buildLiveTaskRosterMarkdown } from "../../shared/subagent-roster";
+import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { createLogger, shortLogDetail } from "../services/logger";
 
 const log = createLogger("agent-service", "agent");

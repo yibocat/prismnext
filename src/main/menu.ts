@@ -3,8 +3,8 @@ import { getSettings } from "./services/settings";
 import {
   normalizeAppLocalePreference,
   resolveAppLocale,
-} from "../shared/app-locale";
-import { menuStrings } from "../shared/menu-i18n";
+} from "../shared/platform/app-locale";
+import { menuStrings } from "../shared/platform/menu-i18n";
 
 type MenuWindowApi = {
   getTargetWindow: () => BrowserWindow | null;

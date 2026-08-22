@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { emptyConversation, type Conversation } from "../../src/shared/agent-conversation";
+import { emptyConversation, type Conversation } from "../../src/shared/agent/conversation";
 
 const agentLoadSession = vi.fn();
 

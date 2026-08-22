@@ -1,4 +1,4 @@
-import type { StageResult } from "../../../shared/citation-staging";
+import type { StageResult } from "../../../shared/literature/citation-staging";
 import { toolResultPlainText } from "../chat/unwrap-tool-result";
 
 function asStageResult(value: unknown): StageResult | null {

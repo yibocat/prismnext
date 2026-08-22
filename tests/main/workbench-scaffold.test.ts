@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PROJECT_META_DIR, projectCompileRel, workbenchJsonRel } from "../../src/shared/workbench-paths";
+import { PROJECT_META_DIR, projectCompileRel, workbenchJsonRel } from "../../src/shared/workbench/paths";
 import {
   checkWorkbenchProject,
   createWorkbenchProjectOnDisk,

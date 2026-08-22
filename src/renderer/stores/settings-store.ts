@@ -4,7 +4,7 @@ import type { WorkspaceFolder } from "@/types/workspace";
 import {
   DEFAULT_PERMISSION_MODE,
   type PermissionMode,
-} from "@shared/permission-modes";
+} from "@shared/permissions/modes";
 import {
   DEFAULT_SEARCH_ENGINE,
   isSearchEngineId,
@@ -16,25 +16,25 @@ import {
   migrateOpenRouterPreferenceKey,
   normalizeOpenRouterModelId,
   OPENROUTER_PROVIDER_ID,
-} from "../../shared/openrouter-models";
+} from "../../shared/providers/openrouter-models";
 import {
   migrateGoogleEnabledModelIds,
   migrateGooglePreferenceKey,
   normalizeGoogleModelId,
   GOOGLE_PROVIDER_ID,
-} from "../../shared/google-models";
+} from "../../shared/providers/google-models";
 import {
   migrateAnthropicEnabledModelIds,
   migrateAnthropicPreferenceKey,
   normalizeAnthropicModelId,
   ANTHROPIC_PROVIDER_ID,
-} from "../../shared/anthropic-models";
-import { migrateLegacyBuiltinProviders } from "../../shared/lazy-provider-catalog";
+} from "../../shared/providers/anthropic-models";
+import { migrateLegacyBuiltinProviders } from "../../shared/providers/lazy-catalog";
 import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
 import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
 import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
 import type { ModelConfig } from "@/lib/providers";
-import type { LogLevel } from "@shared/log-types";
+import type { LogLevel } from "@shared/platform/log-types";
 
 const log = createLogger("settings-store");
 
@@ -339,7 +339,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       // become their Pi equivalents. Every settings key that names a provider
       // (or a `provider/model` key) must be rebased.
       {
-        const { LEGACY_PROVIDER_ID_MAP } = await import("../../shared/pi-provider-catalog");
+        const { LEGACY_PROVIDER_ID_MAP } = await import("../../shared/providers/pi-catalog");
         const legacyIds = Object.keys(LEGACY_PROVIDER_ID_MAP);
         if (legacyIds.length > 0) {
           let changed = false;

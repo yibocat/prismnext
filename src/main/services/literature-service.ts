@@ -22,12 +22,12 @@ import {
   resolveIncomingBibkey,
   resolveStoredBibkey,
   suggestBibkey,
-} from "../../shared/bibkey-utils";
-import { arxivIdFromDoi, normalizeArxivId, normalizeDoi, coerceStoredDoi } from "../../shared/doi-utils";
+} from "../../shared/literature/bibkey-utils";
+import { arxivIdFromDoi, normalizeArxivId, normalizeDoi, coerceStoredDoi } from "../../shared/literature/doi-utils";
 import {
   checkPdfMatchesEntry,
   normalizeLiteratureIdentifiers,
-} from "../../shared/literature-pdf-identity";
+} from "../../shared/literature/pdf-identity";
 import { extractIdsFromPdfFile } from "../lib/extract-pdf-identifiers";
 import {
   normalizePaperTagsWithCatalog,
@@ -36,7 +36,7 @@ import {
   isValidPaperTagKey,
   normalizePaperTag,
   serializePaperTagsJson,
-} from "../../shared/paper-tags";
+} from "../../shared/literature/paper-tags";
 import { cslEntryFromPaperRow } from "../../shared/bibliographic-metadata/helpers";
 import { broadcastToRenderer } from "./literature-broadcast";
 import { recordDownloadProvenance } from "./provenance-service";
@@ -45,10 +45,10 @@ import { createLogger, shortLogDetail } from "./logger";
 import { findWorkbenchProjectRoot, parseHomeWorktreeCheckout, resolveWorkbenchHome } from "../workbench/home";
 import { readProjectSlotMeta } from "../workbench/default-project";
 import { ensureWorkbenchId } from "../workbench/identity";
-import { libraryRel, projectSlotRel } from "../../shared/workbench-paths";
-import type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature-paper";
+import { libraryRel, projectSlotRel } from "../../shared/workbench/paths";
+import type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature/paper";
 
-export type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature-paper";
+export type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature/paper";
 
 const log = createLogger("literature", "general");
 

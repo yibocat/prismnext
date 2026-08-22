@@ -3,32 +3,32 @@
  * ToolHost must call decide() before any mutating / shell service.
  */
 
-import { matchReservedGateOp } from "../../shared/reserved-ops";
+import { matchReservedGateOp } from "../../shared/permissions/reserved-ops";
 import {
   isPathInsideProject,
   resolveSmartBashAction,
   resolveSmartPermissionAction,
-} from "../../shared/smart-permission-policy";
-import { isLatexCompileToolName } from "../../shared/tool-names";
-import { projectRulesRel } from "../../shared/workbench-paths";
+} from "../../shared/permissions/smart-policy";
+import { isLatexCompileToolName } from "../../shared/agent/tool-names";
+import { projectRulesRel } from "../../shared/workbench/paths";
 import {
   extractOutsideProjectPathArgs,
   isWholeDiskSearchBashCommand,
   wholeDiskSearchBlockMessage,
-} from "../../shared/project-escape-guard";
-import { bashCommandMatchesAnyPattern } from "../../shared/bash-allow-always";
+} from "../../shared/permissions/project-escape-guard";
+import { bashCommandMatchesAnyPattern } from "../../shared/permissions/bash-allow-always";
 import {
   isPathUnderAllowedPaths,
   matchAllowRules,
   matchDenyRules,
   type PermissionRuleContext,
-} from "../../shared/permission-rules";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import { getPlanPermissionOverride } from "../../shared/session-agent";
+} from "../../shared/permissions/rules";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
+import { getPlanPermissionOverride } from "../../shared/agent/session-agent";
 import {
   emptyPermissionRulesConfig,
   type PermissionRulesConfig,
-} from "../../shared/permission-rules";
+} from "../../shared/permissions/rules";
 import { isPiPrimitiveToolName } from "./capability-matrix";
 import { getNativeToolByName } from "./tools/index";
 import type { ToolPermissionCategory } from "./tools/types";

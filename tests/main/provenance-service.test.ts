@@ -11,7 +11,7 @@ import {
   resolveRunForArtifact,
   resolveRunById,
 } from "../../src/main/services/provenance-service";
-import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
+import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 
 function makeRun(overrides: Partial<ExperimentRunEntry> = {}): ExperimentRunEntry {
   return {

@@ -4,8 +4,8 @@ import {
   matchReservedGateOp,
   matchReservedOpRows,
   type ReservedOpRow,
-} from "../../src/shared/reserved-ops";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+} from "../../src/shared/permissions/reserved-ops";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("matchReservedBashOp", () => {
   it("hits the three host-owned verbs", () => {

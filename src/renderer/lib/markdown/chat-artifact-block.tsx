@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { CopyIcon, FileIcon, FolderOpenIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { openArtifactPathInFiles } from "@/modes/experiments-mode/experiments-artifact-nav";
-import { artifactBasename } from "../../../shared/artifact-path";
+import { artifactBasename } from "../../../shared/interaction/artifact-path";
 import { ChatProjectImage } from "./extract-markdown-images";
 import { ChatArtifactPdf } from "./chat-artifact-pdf";
 import {

@@ -1,1 +1,1 @@
-export * from "../../../shared/skill-libraries";
+export * from "../../../shared/skills/libraries";

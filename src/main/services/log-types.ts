@@ -1,1 +1,1 @@
-export * from "../../shared/log-types";
+export * from "../../shared/platform/log-types";

@@ -5,7 +5,7 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   readResearchBrief,
   updateResearchBriefSection,

@@ -23,7 +23,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { TeamPicker } from "../teams/team-picker";
-import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent-subagents";
+import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent/subagents";
 import { MY_CONTENT_TEAM_ID } from "@shared/teams/types";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
@@ -31,7 +31,7 @@ import {
   EXPERT_PERMISSION_PRESET_OPTIONS,
   permissionFromExpertPreset,
   type ExpertPermissionPreset,
-} from "@shared/expert-permission-presets";
+} from "@shared/permissions/expert-presets";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SHELL,

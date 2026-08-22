@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeAppLocalePreference,
   resolveAppLocale,
-} from "../../src/shared/app-locale";
+} from "../../src/shared/platform/app-locale";
 
 describe("app-locale", () => {
   it("normalizes unknown and legacy system to en", () => {

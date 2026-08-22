@@ -55,7 +55,7 @@ describe("code structure layer boundaries (Phase 0)", () => {
   });
 
   it("keeps shared literature-ai-metadata free of node:crypto", () => {
-    const src = sourceOf("src/shared/literature-ai-metadata.ts");
+    const src = sourceOf("src/shared/literature/ai-metadata.ts");
     expect(src).not.toMatch(/node:crypto/);
     expect(src).not.toMatch(/aiMetadataFingerprint/);
   });
@@ -81,8 +81,8 @@ describe("code structure layer boundaries (Phase 0)", () => {
   });
 
   it("defines PermissionMode in one shared module", () => {
-    const modes = sourceOf("src/shared/permission-modes.ts");
-    const session = sourceOf("src/shared/session-agent.ts");
+    const modes = sourceOf("src/shared/permissions/modes.ts");
+    const session = sourceOf("src/shared/agent/session-agent.ts");
     expect(modes).toMatch(/export type PermissionMode =/);
     expect(session).not.toMatch(/export type PermissionMode =/);
     expect(session).toMatch(/export type \{ PermissionMode/);
@@ -91,13 +91,13 @@ describe("code structure layer boundaries (Phase 0)", () => {
 
 describe("code structure contracts (Phase 1)", () => {
   it("keeps conversation-reducer in shared without Pi or Electron", () => {
-    const src = sourceOf("src/shared/conversation-reducer.ts");
+    const src = sourceOf("src/shared/agent/conversation-reducer.ts");
     expect(src).toMatch(/export function applyConversationEvent/);
     expect(src).not.toMatch(/from\s+["']electron["']/);
     expect(src).not.toMatch(/@earendil-works\/pi-/);
     expect(src).not.toMatch(/from\s+["'][^"']*\/renderer\//);
     expect(sourceOf("src/renderer/lib/chat/conversation-reducer.ts")).toMatch(
-      /from\s+["'][^"']*shared\/conversation-reducer["']/,
+      /from\s+["'][^"']*shared\/agent\/conversation-reducer["']/,
     );
   });
 
@@ -107,16 +107,59 @@ describe("code structure contracts (Phase 1)", () => {
     expect(dts).not.toMatch(/export interface LiteraturePaper \{/);
     expect(dts).not.toMatch(/export interface WorktreeInfo \{/);
     expect(dts).not.toMatch(/export interface CitationHealthReport \{/);
-    expect(dts).toContain('from "@shared/paper-extract"');
-    expect(dts).toContain('from "@shared/literature-paper"');
+    expect(dts).toContain('from "@shared/literature/paper-extract"');
+    expect(dts).toContain('from "@shared/literature/paper"');
     expect(dts).toContain('from "@shared/git"');
-    expect(dts).toContain('from "@shared/citation-health-types"');
-    expect(dts).toContain('from "@shared/paper-citation-network"');
+    expect(dts).toContain('from "@shared/literature/citation-health-types"');
+    expect(dts).toContain('from "@shared/literature/paper-citation-network"');
   });
 
   it("maps PaperRow to LiteraturePaper in one shared DTO", () => {
     const svc = sourceOf("src/main/services/literature-service.ts");
     expect(svc).toMatch(/function mapPaperForRenderer\(row: PaperRow\): LiteraturePaper/);
-    expect(sourceOf("src/shared/literature-paper.ts")).toMatch(/export interface LiteraturePaper/);
+    expect(sourceOf("src/shared/literature/paper.ts")).toMatch(/export interface LiteraturePaper/);
+  });
+});
+
+describe("code structure shared packages (Phase 2)", () => {
+  const domainDirs = [
+    "agent",
+    "permissions",
+    "chat",
+    "literature",
+    "experiments",
+    "research",
+    "interaction",
+    "workbench",
+    "execution",
+    "skills",
+    "providers",
+    "platform",
+    "git",
+  ];
+
+  it("keeps required domain folders", () => {
+    for (const dir of domainDirs) {
+      expect(existsSync(join(REPO, "src/shared", dir)), dir).toBe(true);
+    }
+    expect(existsSync(join(REPO, "src/shared/index.ts"))).toBe(false);
+  });
+
+  it("keeps shared root free of TypeScript modules", () => {
+    const root = join(REPO, "src/shared");
+    const rootTs = readdirSync(root).filter((name) => name.endsWith(".ts"));
+    expect(rootTs).toEqual([]);
+  });
+
+  it("keeps node:fs out of shared", () => {
+    for (const file of walkTsFiles(join(REPO, "src/shared"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel)).not.toMatch(/from\s+["']node:fs["']/);
+    }
+  });
+
+  it("does not nest bibliographic-metadata under literature this phase", () => {
+    expect(existsSync(join(REPO, "src/shared/bibliographic-metadata"))).toBe(true);
+    expect(existsSync(join(REPO, "src/shared/literature/bibliographic-metadata"))).toBe(false);
   });
 });

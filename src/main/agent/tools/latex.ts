@@ -5,8 +5,8 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { fileToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { fileToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import { resolveLatexRoot } from "../../lib/latex-root";
 import {
   compileManuscriptForAgent,

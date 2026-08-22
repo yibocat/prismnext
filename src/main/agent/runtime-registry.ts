@@ -6,9 +6,9 @@
 import {
   newConversationId,
   type ConversationBinding,
-} from "../../shared/agent-conversation";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
-import type { AgentTurnImage, TurnInput } from "../../shared/agent-runtime";
+} from "../../shared/agent/conversation";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
+import type { AgentTurnImage, TurnInput } from "../../shared/agent/runtime";
 import type { AgentRuntime } from "./runtime";
 import type { PermissionGate } from "./permission-gate";
 import type { InteractionBroker } from "./interaction-broker";

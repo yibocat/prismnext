@@ -1,9 +1,9 @@
 import { partsToPlainText } from "./composer-parts";
 import { conversationDisplayTurns } from "./conversation-view";
 import { isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
-import type { Conversation } from "@shared/agent-conversation";
+import type { Conversation } from "@shared/agent/conversation";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
-import { isPlanControlUserText } from "@shared/research-plan";
+import { isPlanControlUserText } from "@shared/research/plan";
 
 export function isGenericSessionTitle(title: string): boolean {
   if (title === "") return true;

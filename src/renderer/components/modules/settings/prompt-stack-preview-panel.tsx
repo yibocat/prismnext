@@ -18,7 +18,7 @@ import {
   SETTINGS_DETAIL_SHELL,
   SETTINGS_ROW_DESC,
 } from "./settings-tokens";
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
 
 const BADGE =

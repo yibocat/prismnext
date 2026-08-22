@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMem
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { emptyConversation } from "@shared/agent-conversation";
+import { emptyConversation } from "@shared/agent/conversation";
 import {
   collectConversationAssistantBlocks,
   conversationCompactedCount,

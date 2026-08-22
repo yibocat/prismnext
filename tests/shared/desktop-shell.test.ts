@@ -9,7 +9,7 @@ import {
   shouldHideOnClose,
   shouldOpenTrayMenuOnClick,
   shouldSendDesktopNotification,
-} from "../../src/shared/desktop-shell";
+} from "../../src/shared/platform/desktop-shell";
 
 describe("desktop-shell", () => {
   it("resolves tray status with attention over busy", () => {

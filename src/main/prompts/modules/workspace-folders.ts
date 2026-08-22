@@ -1,11 +1,11 @@
 // prism-next/src/main/prompts/modules/workspace-folders.ts
 
-import type { WorkspaceFolder } from "../../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../../shared/workbench/workspace-folder";
 import {
   FOLDER_FUNCTION_ICONS,
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
-} from "../../../shared/workspace-folder";
+} from "../../../shared/workbench/workspace-folder";
 
 /** Build the prompt section describing functional workspace folders. */
 export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {

@@ -3,7 +3,7 @@
  * Pi primitives stay Pi's. Host research / interactive tools are customTools.
  */
 
-import { TOOL_NAMES } from "../../shared/tool-names";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
 
 export type ToolCapabilityKind =
   | "pi_primitive"

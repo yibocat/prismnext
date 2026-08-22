@@ -4,14 +4,14 @@ import {
   isResearchPlansDirPath,
   resolveEffectivePermissionRule,
   resolveSessionAgent,
-} from "../../src/shared/session-agent";
-import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
+} from "../../src/shared/agent/session-agent";
+import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research/brief";
 import {
   DRAFT_PLAN_REL,
   isResearchPlanDraftPath,
   RESEARCH_PLAN_DRAFTS_DIR_REL,
   sessionDraftPlanRel,
-} from "../../src/shared/research-plan";
+} from "../../src/shared/research/plan";
 
 describe("session-agent (Plan / Build permission)", () => {
   it("defaults unknown to build", () => {

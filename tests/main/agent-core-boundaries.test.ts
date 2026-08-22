@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   emptyConversation,
   type ConversationBinding,
-} from "../../src/shared/agent-conversation";
-import type { SessionCreatedEvent } from "../../src/shared/agent-runtime";
+} from "../../src/shared/agent/conversation";
+import type { SessionCreatedEvent } from "../../src/shared/agent/runtime";
 
 const REPO = join(__dirname, "../..");
 
@@ -77,8 +77,8 @@ describe("Pi-first agent core boundaries", () => {
 
   it("keeps Conversation contracts free of Pi and ACP types", () => {
     const files = [
-      "src/shared/agent-conversation.ts",
-      "src/shared/conversation-reducer.ts",
+      "src/shared/agent/conversation.ts",
+      "src/shared/agent/conversation-reducer.ts",
     ];
     for (const rel of files) {
       expect(existsSync(join(REPO, rel)), rel).toBe(true);
@@ -323,7 +323,7 @@ describe("Pi-first agent core boundaries", () => {
     const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
     const runtime = sourceOf("src/main/agent/pi-subsession-runtime.ts");
     const factory = sourceOf("src/main/agent/pi-sdk-runtime.ts");
-    const reducer = sourceOf("src/shared/conversation-reducer.ts");
+    const reducer = sourceOf("src/shared/agent/conversation-reducer.ts");
 
     expect(chatStore).toContain("agentCancelSubagent");
     expect(chatStore).not.toContain("chatStopSubAgent");

@@ -15,8 +15,8 @@ import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   parseFlatMetricsJsonText,
   pickMetricsArtifactPaths,
-} from "../../../shared/experiment-metrics";
-import type { ExperimentRunEntry } from "../../../shared/experiment-log";
+} from "../../../shared/experiments/metrics";
+import type { ExperimentRunEntry } from "../../../shared/experiments/log";
 import { experimentRunListTitle } from "./experiments-runs-query";
 import { formatExperimentRelativeTime } from "./experiments-detail-chrome";
 import { artifactFullPath } from "./experiments-artifact-nav";

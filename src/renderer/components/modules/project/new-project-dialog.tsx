@@ -53,7 +53,7 @@ import {
   DEFAULT_PROJECT_ICON,
 } from "./project-icon";
 import { IconPicker } from "../shared/icon-picker";
-import type { IconSpec } from "@shared/icon-spec";
+import type { IconSpec } from "@shared/platform/icon-spec";
 
 type PresetId = "paper" | "research" | "minimal" | "custom";
 

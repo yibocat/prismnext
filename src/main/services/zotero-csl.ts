@@ -1,4 +1,4 @@
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import {
   bibliographicToCslJson,
   normalizeCslPageRange,

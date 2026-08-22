@@ -11,7 +11,7 @@ import {
 } from "@/lib/agent/rules-markdown";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
-import { projectRulesRel } from "@shared/workbench-paths";
+import { projectRulesRel } from "@shared/workbench/paths";
 
 type RuleMarkdownSlot = Extract<SettingsPanelSlot, { kind: "rule-markdown" }>;
 

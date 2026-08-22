@@ -10,7 +10,7 @@ import { ToolHost } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 import { PiSdkRuntime, type PiSessionFactory } from "../../src/main/agent/pi-sdk-runtime";
 import { InProcessAgentRuntime } from "../../src/main/agent/in-process-runtime";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import type { AgentEvent } from "../../src/shared/agent/runtime";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "@earendil-works/pi-ai";
 import type { NativeToolDefinition } from "../../src/main/agent/tools/types";

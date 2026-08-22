@@ -1,4 +1,4 @@
-import { STAGED_CITATION_ADD_CANCELLED } from "../../shared/citation-staging";
+import { STAGED_CITATION_ADD_CANCELLED } from "../../shared/literature/citation-staging";
 
 export class StagedCitationAddCancelledError extends Error {
   constructor() {

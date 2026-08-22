@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it, afterEach, vi } from "vitest";
 import { installProjectRule } from "../../src/main/services/rules-sync";
 import { buildPromptContext } from "../../src/main/prompts/context";
-import { projectAgentsMdRel } from "../../src/shared/workbench-paths";
+import { projectAgentsMdRel } from "../../src/shared/workbench/paths";
 
 vi.mock("../../src/main/services/settings", () => ({
   getSettings: () => ({}),

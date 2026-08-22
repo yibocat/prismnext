@@ -27,7 +27,7 @@ import {
 } from "./literature-list-chrome";
 import { formatLiteratureAuthorsShort } from "./literature-format";
 import { cn } from "@/lib/utils";
-import type { StagedCitation } from "../../../shared/citation-staging";
+import type { StagedCitation } from "../../../shared/literature/citation-staging";
 
 function StatusChip({
   c,

@@ -5,7 +5,7 @@ import {
   collectDeclaredArtifacts,
   groupDeclaredArtifactsByRun,
 } from "../../src/renderer/modes/experiments-mode/experiments-results-panel";
-import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
+import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 
 function run(partial: Partial<ExperimentRunEntry> & { runId: string }): ExperimentRunEntry {
   return {

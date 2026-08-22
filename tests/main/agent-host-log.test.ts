@@ -31,7 +31,7 @@ import {
 } from "../../src/main/agent/pi-subsession-runtime";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
 import type { ResolvedPiRosterEntry } from "../../src/main/agent/team-binding";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 const dirs: string[] = [];
 

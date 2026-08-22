@@ -12,7 +12,7 @@ import {
   RESEARCH_BRIEF_REL,
   findResearchBriefHeadingLine,
   resolveResearchBriefSection,
-} from "../../../shared/research-brief";
+} from "../../../shared/research/brief";
 
 export async function openResearchBrief(options?: {
   focusSection?: string;

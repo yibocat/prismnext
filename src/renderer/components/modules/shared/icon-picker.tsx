@@ -14,7 +14,7 @@ import {
 } from "@/lib/workspace/folder-icons";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import { PROJECT_ICON_CATEGORIES } from "@/components/modules/project/project-icon";
-import { ICON_IMAGE_FILENAME, type IconKind, type IconSpec } from "@shared/icon-spec";
+import { ICON_IMAGE_FILENAME, type IconKind, type IconSpec } from "@shared/platform/icon-spec";
 import { IconRenderer, type IconFallback } from "./icon-renderer";
 import { useIconImageSrc } from "./use-icon-image-src";
 

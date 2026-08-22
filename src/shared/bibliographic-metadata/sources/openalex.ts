@@ -1,6 +1,6 @@
-import { normalizeDoi, normalizeArxivId } from "../../doi-utils";
-import { openAlexWorkLookupUrl } from "../../openalex-lookup";
-import { normalizeAdsBibcode } from "../../catalog-identifier-utils";
+import { normalizeDoi, normalizeArxivId } from "../../literature/doi-utils";
+import { openAlexWorkLookupUrl } from "../../literature/openalex-lookup";
+import { normalizeAdsBibcode } from "../../literature/catalog-identifier-utils";
 import { authorsJsonFromParts, formatCslPageRange, reconstructInvertedAbstract } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";

@@ -1,1 +1,1 @@
-export * from "../../shared/context-constants";
+export * from "../../shared/providers/context-constants";

@@ -4,18 +4,18 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from "node:fs";
 import { dirname, extname, join, relative } from "node:path";
-import { toProjectRelativeArtifact } from "../../shared/artifact-path";
+import { toProjectRelativeArtifact } from "../../shared/interaction/artifact-path";
 import {
   isSafeExperimentId,
   type ExperimentMeta,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 import type {
   ExperimentResultsSnapshot,
   SnapshotExperimentOptions,
   SnapshotFigure,
   SnapshotMetrics,
   SnapshotTable,
-} from "../../shared/experiment-results-snapshot";
+} from "../../shared/experiments/results-snapshot";
 import {
   readExperiment,
   type ExperimentStorageContext,
@@ -28,7 +28,7 @@ export type {
   SnapshotFigure,
   SnapshotMetrics,
   SnapshotTable,
-} from "../../shared/experiment-results-snapshot";
+} from "../../shared/experiments/results-snapshot";
 
 const SKIP_DIR_NAMES = new Set([
   ".venv",

@@ -44,7 +44,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
-import { EXPERIMENT_RUN_KINDS } from "../../../shared/experiment-log";
+import { EXPERIMENT_RUN_KINDS } from "../../../shared/experiments/log";
 import {
   experimentsToolbarContextClass,
 } from "./experiments-detail-chrome";

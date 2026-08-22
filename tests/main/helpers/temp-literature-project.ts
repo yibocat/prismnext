@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setWorkbenchUserHomeOverride } from "../../../src/main/workbench/home";
 import { mintProjectId, writeWorkbenchJson } from "../../../src/main/workbench/identity";
-import { libraryRel } from "../../../src/shared/workbench-paths";
+import { libraryRel } from "../../../src/shared/workbench/paths";
 
 const temps: string[] = [];
 let home: string | null = null;

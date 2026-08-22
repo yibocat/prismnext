@@ -8,20 +8,20 @@ import {
   bibliographicToCslJson,
   resolveBibliographicMetadata,
 } from "../../shared/bibliographic-metadata";
-import { normalizeArxivId, normalizeDoi, arxivIdFromDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi, arxivIdFromDoi } from "../../shared/literature/doi-utils";
 import {
   normalizeAdsBibcode,
   normalizeIsbn,
   normalizePmid,
-} from "../../shared/catalog-identifier-utils";
+} from "../../shared/literature/catalog-identifier-utils";
 import { arxivPdfUrl, downloadPdfBytes, type PdfDownloadProgress } from "../lib/download-pdf";
 import * as fs from "node:fs";
 import {
   joinPdfAttachAttempts,
   PDF_ATTACH_NO_OA_URL,
   PDF_ATTACH_PAYWALL_FALLBACK,
-} from "../../shared/pdf-download-messages";
-import type { StagedCitationImportInput, StagedAddProgressPhase } from "../../shared/citation-staging";
+} from "../../shared/literature/pdf-download-messages";
+import type { StagedCitationImportInput, StagedAddProgressPhase } from "../../shared/literature/citation-staging";
 import {
   StagedCitationAddCancelledError,
   throwIfStagedCitationAddAborted,

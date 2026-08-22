@@ -4,7 +4,7 @@
  * and the model picker can show models without a round-trip.
  */
 
-import type { AgentModelRow } from "../../../shared/agent-api";
+import type { AgentModelRow } from "../../../shared/agent/api";
 import type { ModelConfig, ProviderConfig } from "./types";
 
 /** Providers whose model lists are prefetched into the shared catalog cache. */

@@ -4,7 +4,7 @@ import type {
   SkillInstallRecord,
   SkillPackageInstallSelection,
   SkillSourceAnalysis,
-} from "../../shared/skill-install-types";
+} from "../../shared/skills/install-types";
 import {
   readSkillsManifest,
   recordSkillInstalls,
@@ -29,7 +29,7 @@ import { checkSkillUpdate, checkSkillUpdates } from "./skill-install-updates";
 import { normalizeRegistryIndexUrl } from "./skills-registry";
 
 export { checkSkillUpdate, checkSkillUpdates };
-export type { SkillUpdateInfo } from "../../shared/skill-install-types";
+export type { SkillUpdateInfo } from "../../shared/skills/install-types";
 
 function isLikelyRegistryInput(input: string): boolean {
   const trimmed = input.trim();

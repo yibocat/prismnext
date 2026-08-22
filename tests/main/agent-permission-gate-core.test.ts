@@ -4,7 +4,7 @@ import {
   evaluateHardDeny,
   type PermissionGateRequest,
 } from "../../src/main/agent/permission-gate";
-import { buildPermissionRulesConfig } from "../../src/shared/smart-permission-policy";
+import { buildPermissionRulesConfig } from "../../src/shared/permissions/smart-policy";
 
 const ROOT = "/Users/me/paper-project";
 

@@ -3,7 +3,7 @@ import type {
   ExperimentRunCompleteEvent,
   ExperimentRunEntry,
   ExperimentRunResult,
-} from "../../src/shared/experiment-log";
+} from "../../src/shared/experiments/log";
 
 describe("ExperimentRunResult (shared)", () => {
   it("accepts the executor / IPC / store payload shape", () => {

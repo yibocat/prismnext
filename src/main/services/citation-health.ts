@@ -8,9 +8,9 @@ import {
   mergeLibraryIntoProjectBib,
   type MergeLibraryBibResult,
 } from "./literature-service";
-import type { BibFallbackEntry, CitationHealthReport } from "../../shared/citation-health-types";
+import type { BibFallbackEntry, CitationHealthReport } from "../../shared/literature/citation-health-types";
 
-export type { BibFallbackEntry, CitationHealthReport } from "../../shared/citation-health-types";
+export type { BibFallbackEntry, CitationHealthReport } from "../../shared/literature/citation-health-types";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

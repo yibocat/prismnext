@@ -38,7 +38,7 @@
 
 import { actionRegistry } from "./registry";
 import { compileCurrentDocument } from "@/stores/compile-store";
-import { formatCitationHealthReport } from "../../shared/format-citation-health-report";
+import { formatCitationHealthReport } from "../../shared/literature/format-citation-health-report";
 
 // ── compile-document ──
 actionRegistry.register("compile-document", async () => {

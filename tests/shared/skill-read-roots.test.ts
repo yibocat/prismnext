@@ -4,7 +4,7 @@ import {
   isPathUnderSkillReadRoots,
   resolveSkillRelativePath,
   skillReadRootsFromDirs,
-} from "../../src/shared/skill-read-roots";
+} from "../../src/shared/skills/read-roots";
 
 const PROJECT = "/Users/me/paper";
 const TIKZ = "/app/teams/core/skills/figure-tikz";

@@ -8,7 +8,7 @@ import {
   upsertInteractionSpec,
   interactionSpecPath,
 } from "../../src/main/services/interaction-store";
-import { LEGACY_INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction-spec";
+import { LEGACY_INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction/spec";
 
 /** Minimal valid 1×1 PNG */
 const TINY_PNG = Buffer.from(

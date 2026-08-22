@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("EXPERIMENTS_PROMPT", () => {
   it("owns experiment design with route/judgment — aligns with brief without frozen gate", () => {

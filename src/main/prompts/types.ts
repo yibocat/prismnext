@@ -1,6 +1,6 @@
 // prism-next/src/main/prompts/types.ts
 
-import type { WorkspaceFolder } from "../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 
 /** Context passed to dynamic prompt builders. */
 export interface PromptContext {

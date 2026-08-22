@@ -9,7 +9,7 @@ import {
 import { AgentSessionStore } from "../../src/main/agent/session-store";
 import { ToolHost } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import type { AgentEvent } from "../../src/shared/agent/runtime";
 
 const dirs: string[] = [];
 

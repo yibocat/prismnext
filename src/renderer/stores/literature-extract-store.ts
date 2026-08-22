@@ -6,7 +6,7 @@ import type {
   PaperExtractStatesByPaper,
   PaperExtractProgress,
 } from "@/types/electron.d";
-import { pickBestReadySource } from "../../shared/paper-extract";
+import { pickBestReadySource } from "../../shared/literature/paper-extract";
 import { useLiteratureStore } from "@/stores/literature-store";
 
 const EXTRACT_SOURCES: PaperExtractSource[] = ["mineru", "pdfjs", "html"];

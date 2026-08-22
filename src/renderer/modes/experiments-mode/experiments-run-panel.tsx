@@ -37,13 +37,13 @@ import { cn } from "@/lib/utils";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { buildPermissionRulesFromSettings, resolvePermissionMode } from "@shared/permission-modes";
+import { buildPermissionRulesFromSettings, resolvePermissionMode } from "@shared/permissions/modes";
 import { shouldShowPermissionGate } from "@/components/modules/chat/permission-gate-panel";
 import {
   EXPERIMENT_RUN_KINDS,
   parseExperimentRunKind,
   type ExperimentRunKind,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import { experimentsCodeClass } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import {

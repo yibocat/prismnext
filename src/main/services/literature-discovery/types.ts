@@ -2,7 +2,7 @@ import type {
   DiscoverLiteratureInput,
   DiscoveryHit,
   DiscoverySourceId,
-} from "../../../shared/literature-discovery";
+} from "../../../shared/literature/discovery";
 
 export interface DiscoverySearchOptions {
   limit: number;

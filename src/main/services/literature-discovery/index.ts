@@ -1,4 +1,4 @@
-import type { DiscoverLiteratureInput, DiscoverLiteratureResult } from "../../../shared/literature-discovery";
+import type { DiscoverLiteratureInput, DiscoverLiteratureResult } from "../../../shared/literature/discovery";
 import { runLiteratureDiscovery } from "./orchestrator";
 import { arxivDiscoveryAdapter } from "./sources/arxiv";
 import { crossrefDiscoveryAdapter } from "./sources/crossref";

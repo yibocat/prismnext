@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { projectSessionsDisplayRel } from "../../shared/workbench-paths";
+import { projectSessionsDisplayRel } from "../../shared/workbench/paths";
 
 /** Persisted user-message display payload (renderer ContentBlock[]). */
 export type UserDisplayContent = Record<string, unknown>[];

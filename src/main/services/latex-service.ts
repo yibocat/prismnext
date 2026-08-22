@@ -10,8 +10,8 @@ import {
 import { isStandaloneTexDocument, resolveLatexRoot, walkTexFiles } from "../lib/latex-root";
 import { citeCheckLiterature } from "./literature-service";
 import { notifyAgentCompilePreview } from "./compile-preview-notify";
-import { TOOL_NAMES } from "../../shared/tool-names";
-import { projectCompileRel } from "../../shared/workbench-paths";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
+import { projectCompileRel } from "../../shared/workbench/paths";
 
 export interface CompileErrorEntry {
   file?: string;

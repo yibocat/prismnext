@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { PaperExtractBlock } from "../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../shared/literature/paper-extract-block";
 import { parseMineruZipBuffer, type MineruZipImageAsset } from "./mineru-zip";
 
 const MINERU_BASE = "https://mineru.net";

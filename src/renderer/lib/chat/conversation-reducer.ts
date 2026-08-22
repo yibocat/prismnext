@@ -1,1 +1,1 @@
-export * from "../../../shared/conversation-reducer";
+export * from "../../../shared/agent/conversation-reducer";

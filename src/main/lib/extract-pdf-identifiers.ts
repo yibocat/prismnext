@@ -5,7 +5,7 @@ import {
   extractDoisFromText,
   normalizeArxivId,
   normalizeDoi,
-} from "../../shared/doi-utils";
+} from "../../shared/literature/doi-utils";
 
 export interface ExtractedPdfIdentifiers {
   doi: string | null;

@@ -4,7 +4,7 @@
  * Spec/kind validation and path checks live in main; args/examples on interaction-* tools.
  * Chat one-shot file peeks use ```artifact (Reply depth) — not this module.
  */
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export const INTERACTION_PROMPT = [
   "## Interaction (figures & plots)",

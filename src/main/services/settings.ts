@@ -3,7 +3,7 @@ import { safeStorage } from "electron";
 import {
   bashAlwaysPatternFromCommand,
   bashCommandMatchesAnyPattern,
-} from "../../shared/bash-allow-always";
+} from "../../shared/permissions/bash-allow-always";
 import {
   migratePermissionModeSetting,
   PERMISSION_MODE_SCHEMA_VERSION,

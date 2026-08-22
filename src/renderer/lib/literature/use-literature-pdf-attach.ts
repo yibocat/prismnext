@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState, type DragEventHandler } from 
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { formatPdfDownloadFailure } from "../../../shared/pdf-download-messages";
+import { formatPdfDownloadFailure } from "../../../shared/literature/pdf-download-messages";
 import {
   formatIdentifierBrief,
   normalizeLiteratureIdentifiers,
-} from "../../../shared/literature-pdf-identity";
+} from "../../../shared/literature/pdf-identity";
 import type {
   LiteratureAttachLocalPdfConflict,
   LiteratureAttachLocalPdfResult,

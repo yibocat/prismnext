@@ -6,7 +6,7 @@ import {
   stripPlanControlTurns,
   type PlanUiEvent,
 } from "../../src/renderer/lib/chat/plan-ui-events";
-import { PLAN_REJECT_ACK_PROMPT } from "../../src/shared/research-plan";
+import { PLAN_REJECT_ACK_PROMPT } from "../../src/shared/research/plan";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("plan-ui-events", () => {

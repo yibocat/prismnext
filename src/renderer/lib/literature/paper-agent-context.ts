@@ -6,7 +6,7 @@ import {
 import { publicationDetailRows } from "@/modes/literature-mode/literature-csl-fields";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { noteBodyWithoutFrontmatter } from "@/lib/literature/paper-notes";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export interface PaperNoteAgentContext {
   relativePath: string;

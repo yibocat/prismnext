@@ -17,7 +17,7 @@ import {
   worktreeSlotRel,
   isHomeWorktreeCheckoutPath,
   parseHomeWorktreeCheckoutPath,
-} from "../../src/shared/workbench-paths";
+} from "../../src/shared/workbench/paths";
 import {
   HOME_BROWSER_DIRNAME,
   HOME_JOBS_DIRNAME,
@@ -26,7 +26,7 @@ import {
   HOME_SETTINGS_FILENAME,
   HOME_SKILLS_DIRNAME,
   HOME_TEAMS_DIRNAME,
-} from "../../src/shared/workbench-paths";
+} from "../../src/shared/workbench/paths";
 import {
   ensureWorkbenchHome,
   findWorkbenchProjectRoot,

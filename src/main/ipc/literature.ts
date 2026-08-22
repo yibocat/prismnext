@@ -40,7 +40,7 @@ import {
 } from "../services/literature-service";
 import { readWorkbenchJson } from "../workbench/identity";
 import { resolveWorkbenchHome } from "../workbench/home";
-import { libraryRel } from "../../shared/workbench-paths";
+import { libraryRel } from "../../shared/workbench/paths";
 import {
   getCitationHealth,
   importProjectBibKeysIntoLibrary,
@@ -68,15 +68,15 @@ import {
   endStagedCitationAdd,
 } from "../services/staged-citation-add-abort";
 import { StagedCitationAddCancelledError } from "../lib/staged-citation-add-cancelled";
-import { STAGED_CITATION_CREATE_CANCELLED } from "../../shared/citation-staging";
+import { STAGED_CITATION_CREATE_CANCELLED } from "../../shared/literature/citation-staging";
 import { exportZoteroBibliography } from "../services/zotero-sync";
-import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/citation-staging";
+import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/literature/citation-staging";
 import { stageLiteratureCitation } from "../services/literature-citation-staging";
 import {
   getPaperCitationNetwork,
   getPaperCitationNetworkPage,
 } from "../services/literature-citation-network";
-import type { PaperCitationSectionKind } from "../../shared/paper-citation-network";
+import type { PaperCitationSectionKind } from "../../shared/literature/paper-citation-network";
 
 function mapPaperRow(row: PaperRow | null) {
   return row ? mapPaperForRenderer(row) : null;

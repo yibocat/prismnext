@@ -28,7 +28,7 @@ import { createLogger, shortLogDetail } from "../services/logger";
 import {
   formatAmbiguousSkillPath,
   resolveSkillRelativePath,
-} from "../../shared/skill-read-roots";
+} from "../../shared/skills/read-roots";
 
 const SKILL_RELATIVE_TOOLS = new Set(["read", "ls", "grep", "find"]);
 

@@ -34,7 +34,7 @@ import {
   composeOrchestratorProfileModulePrompts,
   composeProfileModulePrompts,
 } from "../prompts/resolve-active-modules";
-import { buildSubagentRosterMarkdown } from "../../shared/subagent-roster";
+import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { buildTaskPermissionBlock } from "./task-orchestrator-gate";
 import {
   CORE_TEAM_ID,

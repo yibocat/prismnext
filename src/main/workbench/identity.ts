@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { workbenchJsonRel, normalizeWorkbenchPath } from "../../shared/workbench-paths";
+import { workbenchJsonRel, normalizeWorkbenchPath } from "../../shared/workbench/paths";
 
 const ID_HEX_BYTES = 10;
 

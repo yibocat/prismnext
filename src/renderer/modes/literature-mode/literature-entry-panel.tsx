@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/literature/paper-extract";
 import {
   authorsForEditField,
   formatEntryType,
@@ -71,7 +71,7 @@ import type { LiteraturePaper } from "@/types/electron.d";
 import {
   isLiteratureAiMetadataConfigured,
   LITERATURE_AI_METADATA_SETUP_HINT,
-} from "../../../shared/literature-ai-metadata-model";
+} from "../../../shared/literature/ai-metadata-model";
 
 const DETAIL_BADGE_CLASS = literatureDetailBadgeClass;
 

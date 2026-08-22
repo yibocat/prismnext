@@ -28,8 +28,8 @@ import {
   type ProvenanceEvent,
   type ProvenanceLinkMethod,
   type ProvenanceRunRecorded,
-} from "../../shared/provenance";
-import type { ExperimentRunEntry } from "../../shared/experiment-log";
+} from "../../shared/experiments/provenance";
+import type { ExperimentRunEntry } from "../../shared/experiments/log";
 
 function provenancePath(projectRoot: string): string {
   return join(projectRoot.replace(/\\/g, "/"), PROVENANCE_REL);

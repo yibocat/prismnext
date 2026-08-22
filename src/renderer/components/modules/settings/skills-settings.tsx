@@ -1,7 +1,7 @@
 // Skills settings — flat SETTINGS_CARD list (name · tokens · team · description).
 // Core / store skills are browse-only; self-created / self-installed can be deleted.
 // No per-skill enable Switch — availability is team Skills allowlist / presence.
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

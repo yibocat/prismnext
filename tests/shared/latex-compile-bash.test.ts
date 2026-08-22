@@ -3,7 +3,7 @@ import {
   isDirectLatexCompileBashCommand,
   latexCompileBashBlockMessage,
   latexCompileBashRedirectNote,
-} from "../../src/shared/latex-compile-bash";
+} from "../../src/shared/permissions/latex-compile-bash";
 
 describe("isDirectLatexCompileBashCommand", () => {
   it("detects common engines", () => {

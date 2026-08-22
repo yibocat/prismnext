@@ -8,7 +8,7 @@
  * viridis. Background stays transparent so the panel theme shows through.
  */
 
-import type { PlotDataResult } from "../../../../shared/interaction-plot";
+import type { PlotDataResult } from "../../../../shared/interaction/plot";
 
 type PlotNS = typeof import("@observablehq/plot");
 type Markish = import("@observablehq/plot").Markish;

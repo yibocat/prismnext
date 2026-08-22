@@ -20,7 +20,7 @@ import type { LiteratureStorageStats, ZoteroStatus } from "@/types/electron.d";
 import {
   isLiteratureAiMetadataConfigured,
   literatureAiMetadataModelLabel,
-} from "../../../../shared/literature-ai-metadata-model";
+} from "../../../../shared/literature/ai-metadata-model";
 
 const CARD = "rounded-lg border border-border px-4 divide-y divide-border";
 const ROW = "flex items-center justify-between py-2.5 group";

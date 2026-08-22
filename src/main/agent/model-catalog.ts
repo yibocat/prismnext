@@ -6,7 +6,7 @@
 
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
-import { migrateProviderIdToPi } from "../../shared/pi-provider-catalog";
+import { migrateProviderIdToPi } from "../../shared/providers/pi-catalog";
 import type {
   AgentEffortCatalogSnapshot,
   AgentListModelsInput,
@@ -17,7 +17,7 @@ import type {
   AgentModelsCatalogSnapshot,
   AgentTestConnectionInput,
   AgentTestConnectionResult,
-} from "../../shared/agent-api";
+} from "../../shared/agent/api";
 
 export interface AgentPiModelCostLike {
   input?: number;

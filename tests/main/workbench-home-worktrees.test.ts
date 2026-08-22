@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { worktreeCheckoutRel } from "../../src/shared/workbench-paths";
+import { worktreeCheckoutRel } from "../../src/shared/workbench/paths";
 import {
   homeBrowserDir,
   resolveWorkbenchHome,

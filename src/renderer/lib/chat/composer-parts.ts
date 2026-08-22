@@ -104,7 +104,7 @@ export type ComposerPart =
       annotationId?: string;
       sourceTabId?: string;
       blockId?: string;
-      blockType?: import("../../../shared/paper-extract-block").ExtractBlockType;
+      blockType?: import("../../../shared/literature/paper-extract-block").ExtractBlockType;
       extractSource?: "mineru";
     }
   | {

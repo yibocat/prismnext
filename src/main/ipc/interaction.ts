@@ -4,7 +4,7 @@ import {
   readInteractionSpec,
   writeInteractionSpec,
 } from "../services/interaction-store";
-import type { InteractionSpec } from "../../shared/interaction-spec";
+import type { InteractionSpec } from "../../shared/interaction/spec";
 
 export function registerInteractionHandlers(): void {
   ipcMain.handle(

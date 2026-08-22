@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { normalizeArxivId, normalizeDoi } from "../../shared/doi-utils";
+import { normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import {
   PAPER_CITATION_CACHE_TTL_MS,
   PAPER_CITATION_PAGE_SIZE,
@@ -12,9 +12,9 @@ import {
   type PaperCitationSection,
   type PaperCitationSectionKind,
   paperCitationSourceLabel,
-} from "../../shared/paper-citation-network";
+} from "../../shared/literature/paper-citation-network";
 import { mainNetFetch } from "../lib/main-network";
-import { openAlexWorkLookupUrl } from "../../shared/openalex-lookup";
+import { openAlexWorkLookupUrl } from "../../shared/literature/openalex-lookup";
 import { getLibraryPaths, getPaper } from "./literature-service";
 import {
   fetchS2CitedByPage,

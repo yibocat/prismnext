@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchBashException } from "../../src/shared/bash-intent";
+import { matchBashException } from "../../src/shared/permissions/bash-intent";
 
 describe("matchBashException", () => {
   it("only names install and delete — ordinary commands are unlisted", () => {

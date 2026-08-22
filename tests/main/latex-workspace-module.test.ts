@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getNativeToolByName } from "../../src/main/agent/tools/index";
 import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 import type { PromptContext } from "../../src/main/prompts/types";
 
 describe("buildLatexWorkspacePrompt", () => {

@@ -12,7 +12,7 @@ import {
 } from "./project-skills-refresh";
 import { getAgentsSyncState } from "../teams/agents-sync";
 import { normalizeProjectRoot } from "./skills-sync";
-import type { ProjectWarmPhase } from "../../shared/agent-status";
+import type { ProjectWarmPhase } from "../../shared/agent/status";
 
 const log = createLogger("project-chat-prewarm", "agent");
 

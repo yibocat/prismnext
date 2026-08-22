@@ -1,4 +1,4 @@
-import type { InteractionSpec } from "../../../../shared/interaction-spec";
+import type { InteractionSpec } from "../../../../shared/interaction/spec";
 import {
   csvRowsToPlotData,
   isInteractionPlotKind,
@@ -8,7 +8,7 @@ import {
   pickCsvResourcePath,
   type InteractionPlotKind,
   type PlotDataResult,
-} from "../../../../shared/interaction-plot";
+} from "../../../../shared/interaction/plot";
 
 function resolveProjectAbsPath(projectRoot: string, relPath: string): string {
   const p = relPath.replace(/\\/g, "/").replace(/^\.\//, "");

@@ -5,19 +5,19 @@ import {
   type PaperExtractSource,
   type PaperExtractSourcePreference,
   type PaperExtractState,
-} from "../../shared/paper-extract";
+} from "../../shared/literature/paper-extract";
 import {
   filterMarkdownByQuery,
   parsePageSpec,
   sliceMarkdownByPages,
   truncateMarkdown,
-} from "../../shared/paper-extract-slice";
+} from "../../shared/literature/paper-extract-slice";
 import {
   listExtractFigurePaths,
   markdownHasExtractFigures,
   resolveLibraryFigurePath,
   rewritePaperExtractImageSrcs,
-} from "../../shared/paper-extract-images";
+} from "../../shared/literature/paper-extract-images";
 import { getPaperByBibkey } from "./literature-service";
 import {
   enqueuePaperExtract,

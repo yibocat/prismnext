@@ -13,7 +13,7 @@ import {
   type ExperimentToolRequest,
 } from "../../src/main/services/experiment-tool-dispatch";
 import { recordRunProvenance } from "../../src/main/services/provenance-service";
-import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
+import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 
 function makeRun(): ExperimentRunEntry {
   return {

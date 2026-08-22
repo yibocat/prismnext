@@ -2,17 +2,17 @@ import {
   AI_METADATA_KEYWORD_MAX,
   buildAiMetadataPrompt,
   parseAiMetadataLlmJson,
-} from "../../shared/literature-ai-metadata";
+} from "../../shared/literature/ai-metadata";
 import { aiMetadataFingerprint } from "./literature-ai-metadata-fingerprint";
 import {
   LITERATURE_AI_METADATA_SETUP_HINT,
   resolveLiteratureAiMetadataModel,
-} from "../../shared/literature-ai-metadata-model";
+} from "../../shared/literature/ai-metadata-model";
 import {
   normalizePaperTagsWithCatalog,
   parsePaperTagsJson,
   resolvePaperTagDisplay,
-} from "../../shared/paper-tags";
+} from "../../shared/literature/paper-tags";
 import { getSettings } from "./settings";
 import { completeChatJson } from "./provider-chat";
 import { heuristicAbstractAndKeywords } from "./literature-ai-metadata-heuristics";

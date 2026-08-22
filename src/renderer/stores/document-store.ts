@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
-import { isBinaryProjectFile } from "../../shared/project-file-openability";
+import { isBinaryProjectFile } from "../../shared/platform/project-file-openability";
 
 const log = createLogger("document-store", "startup");
 
@@ -29,7 +29,7 @@ import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import {
   focusPathAfterOpenFolder,
   workbenchStateFromOpenResult,
-} from "../../shared/workbench-api";
+} from "../../shared/workbench/api";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 

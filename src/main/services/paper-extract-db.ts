@@ -10,8 +10,8 @@ import type {
   PaperExtractState,
   PaperExtractStatus,
   PaperExtractStatesByPaper,
-} from "../../shared/paper-extract";
-import type { PaperExtractBlock } from "../../shared/paper-extract-block";
+} from "../../shared/literature/paper-extract";
+import type { PaperExtractBlock } from "../../shared/literature/paper-extract-block";
 import { getLibraryPaths, openLibraryDb, getZoteroMirrorByPaperId, type PaperRow } from "./literature-service";
 
 const ALL_EXTRACT_SOURCES: PaperExtractSource[] = ["mineru", "pdfjs", "html"];

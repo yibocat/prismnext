@@ -20,7 +20,7 @@ import {
   serializeResearchPlan,
   sessionDraftPlanRel,
   type ResearchPlanDoc,
-} from "../../shared/research-plan";
+} from "../../shared/research/plan";
 
 function shortHex(len = 4): string {
   return randomBytes(Math.ceil(len / 2)).toString("hex").slice(0, len);

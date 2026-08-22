@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
-import { LOG_RING_LIMIT, redactLogValue, sanitizeLogEntry } from "@shared/log-types";
+import type { LogLevel, LogCategory, LogEntry } from "@shared/platform/log-types";
+import { LOG_RING_LIMIT, redactLogValue, sanitizeLogEntry } from "@shared/platform/log-types";
 import { logBuffer } from "@/services/logger";
 
 interface LogState {

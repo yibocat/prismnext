@@ -1,5 +1,5 @@
-import { normalizeArxivId } from "../../../../shared/doi-utils";
-import { truncateDiscoveryAbstract, type DiscoveryHit } from "../../../../shared/literature-discovery";
+import { normalizeArxivId } from "../../../../shared/literature/doi-utils";
+import { truncateDiscoveryAbstract, type DiscoveryHit } from "../../../../shared/literature/discovery";
 import { catalogFetch } from "../../../../shared/bibliographic-metadata/catalog-fetch";
 import {
   parseArxivEntryAuthorNames,

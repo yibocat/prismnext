@@ -7,7 +7,7 @@ import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore } from "@/stores/chat-store";
 import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
 import { createLogger } from "@/services/logger";
-import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
+import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permissions/timeouts";
 
 async function answerPermission(
   _tabId: string,
@@ -128,7 +128,7 @@ export async function finalizePermissionAllow(opts: {
         };
         const command = String(input.command ?? input.cmd ?? "").trim();
         if (command) {
-          const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
+          const { bashAlwaysPatternFromCommand } = await import("../../shared/permissions/bash-allow-always");
           const pattern = bashAlwaysPatternFromCommand(command);
           if (pattern) {
             const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];

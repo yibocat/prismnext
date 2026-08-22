@@ -23,7 +23,7 @@ import type {
   AgentSendInput,
   AgentCancelSubagentInput,
   AgentTestConnectionInput,
-} from "../../shared/agent-api";
+} from "../../shared/agent/api";
 import { getAgentService } from "../agent/agent-service";
 
 export function registerAgentHandlers(): void {

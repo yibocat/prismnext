@@ -1,1 +1,1 @@
-export * from "../../shared/permission-modes";
+export * from "../../shared/permissions/modes";

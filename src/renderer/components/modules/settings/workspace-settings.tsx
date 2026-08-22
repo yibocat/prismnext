@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadProjectIcon, projectIconBaseDir } from "@/components/modules/project/project-icon";
 import { IconPicker } from "@/components/modules/shared/icon-picker";
-import { ICON_IMAGE_FILENAME, normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/icon-spec";
+import { ICON_IMAGE_FILENAME, normalizeIconSpec, iconSpecEquals, type IconSpec } from "@shared/platform/icon-spec";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,

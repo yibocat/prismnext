@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
+import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 import {
   experimentRunListTitle,
   queryExperimentRuns,

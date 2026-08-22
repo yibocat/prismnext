@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { LiteraturePaper, PaperCitationNetworkResult } from "@/types/electron.d";
-import type { PaperCitationSectionKind } from "../../../shared/paper-citation-network";
-import type { PaperCitationSection } from "../../../shared/paper-citation-network";
+import type { PaperCitationSectionKind } from "../../../shared/literature/paper-citation-network";
+import type { PaperCitationSection } from "../../../shared/literature/paper-citation-network";
 
 function mergeSection(
   prev: PaperCitationSection | undefined,

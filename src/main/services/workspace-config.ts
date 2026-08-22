@@ -1,18 +1,18 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import type { WorkspaceFolder } from "../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   FOLDER_FUNCTION_ICONS,
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   findExperimentConfig,
-} from "../../shared/workspace-folder";
+} from "../../shared/workbench/workspace-folder";
 import {
   ICON_IMAGE_FILENAME,
   normalizeIconSpec,
   iconSpecToJSON,
   type IconSpec,
-} from "../../shared/icon-spec";
+} from "../../shared/platform/icon-spec";
 import {
   readWorkbenchJson,
   writeWorkbenchJson,

@@ -9,14 +9,14 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, renameSync, writeFileS
 import { dirname, isAbsolute, join, relative, extname } from "node:path";
 import { execSync } from "node:child_process";
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
-import { resolveFigureAbsPath } from "../../../shared/interaction-figure-fs";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { resolveFigureAbsPath } from "../../lib/interaction-figure-fs";
 import {
   resolveProjectRuleWrite,
   type ProjectRuleWriteMode,
-} from "../../../shared/project-rule-md";
+} from "../../../shared/workbench/project-rule-md";
 import type { NativeToolDefinition } from "./types";
-import { projectRulesRel } from "../../../shared/workbench-paths";
+import { projectRulesRel } from "../../../shared/workbench/paths";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";

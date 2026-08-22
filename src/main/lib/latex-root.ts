@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveMainTexRelativePath } from "./bib-path-resolve";
 import { detectBibTool, detectTexEngine } from "../services/compiler";
-import { projectCompileRel } from "../../shared/workbench-paths";
+import { projectCompileRel } from "../../shared/workbench/paths";
 
 /** Parse % !TEX root magic comment from content. */
 export function parseTexRootMagicComment(content: string): string | null {

@@ -8,7 +8,7 @@ import {
   isGenericSessionTitle,
   resolveSessionTitle,
 } from "../../src/renderer/lib/chat/session-title";
-import { emptyConversation } from "../../src/shared/agent-conversation";
+import { emptyConversation } from "../../src/shared/agent/conversation";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("session-title", () => {

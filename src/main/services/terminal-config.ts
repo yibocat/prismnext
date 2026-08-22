@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { projectTerminalDirRel } from "../../shared/workbench-paths";
+import { projectTerminalDirRel } from "../../shared/workbench/paths";
 
 // ─── Types ───
 

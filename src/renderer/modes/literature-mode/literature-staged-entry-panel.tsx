@@ -25,7 +25,7 @@ import {
 } from "@/lib/literature/open-paper-in-library";
 import { paperHasReadablePdf } from "./literature-format";
 import { useLiteratureStore } from "@/stores/literature-store";
-import type { StagedCitation } from "../../../shared/citation-staging";
+import type { StagedCitation } from "../../../shared/literature/citation-staging";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 const DETAIL_BADGE_CLASS =

@@ -28,7 +28,7 @@ import {
   decodeLibraryFigureHref,
   LiteratureFigureInline,
 } from "./literature-figure-inline";
-import { isLibraryExtractFigurePath } from "@shared/paper-extract-images";
+import { isLibraryExtractFigurePath } from "@shared/literature/paper-extract-images";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { ChatFileInline, resolveChatFilePath } from "./chat-file-inline";

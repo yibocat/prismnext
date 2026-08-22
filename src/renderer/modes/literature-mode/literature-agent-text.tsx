@@ -11,7 +11,7 @@ import { openHiddenProjectFile } from "@/lib/files/open-project-path";
 import {
   EXTRACT_MAX_AUTO_RETRIES,
   pickBestReadySource,
-} from "../../../shared/paper-extract";
+} from "../../../shared/literature/paper-extract";
 import type { LiteraturePaper, PaperExtractSource } from "@/types/electron.d";
 import { paperHasReadablePdf } from "./literature-format";
 import { MetadataRow } from "./literature-inline-field";

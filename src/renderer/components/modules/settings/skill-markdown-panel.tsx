@@ -11,7 +11,7 @@ import {
   validateSkillMarkdown,
 } from "@/lib/agent/skills-markdown";
 import { PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
-import { projectTeamsRel } from "@shared/workbench-paths";
+import { projectTeamsRel } from "@shared/workbench/paths";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";

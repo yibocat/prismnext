@@ -5,7 +5,7 @@ import {
   redactLogValue,
   sanitizeLogEntry,
   type LogEntry,
-} from "@shared/log-types";
+} from "@shared/platform/log-types";
 
 describe("log path redaction", () => {
   it("keeps only the last segment of a home path", () => {

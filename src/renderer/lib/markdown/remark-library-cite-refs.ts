@@ -9,8 +9,8 @@
  *
  * Skips text inside link/code/math nodes (except vetted inlineCode bibkeys).
  */
-import { normalizeLibraryCiteMarkers } from "../../../shared/normalize-library-cite-markers";
-import { encodeLibraryFigureHref } from "@shared/paper-extract-images";
+import { normalizeLibraryCiteMarkers } from "../../../shared/literature/normalize-library-cite-markers";
+import { encodeLibraryFigureHref } from "@shared/literature/paper-extract-images";
 export interface RemarkLibraryCiteRefsOptions {
   /** When set, bare `@bibkey` and `` `bibkey` `` only link for keys in the library. */
   knownBibkeys?: ReadonlySet<string>;

@@ -8,11 +8,11 @@ import {
 } from "./execution-registry";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../shared/execution";
 import { createLogger } from "./logger";
-import { matchReservedBashOp } from "../../shared/reserved-ops";
+import { matchReservedBashOp } from "../../shared/permissions/reserved-ops";
 import {
   isWholeDiskSearchBashCommand,
   wholeDiskSearchBlockMessage,
-} from "../../shared/project-escape-guard";
+} from "../../shared/permissions/project-escape-guard";
 import { gateExperimentPythonExecution } from "./experiment-log-service";
 
 const log = createLogger("ai-bash-runner", "agent");

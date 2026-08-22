@@ -12,7 +12,7 @@ import {
   fitBreakdownToOccupancy,
   type ContextUsageBreakdown,
   type SessionUsageTotals,
-} from "../../shared/agent-context-usage";
+} from "../../shared/agent/context-usage";
 
 const SUBAGENT_HEADING = "## Available subagents (via Task)";
 

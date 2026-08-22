@@ -13,7 +13,7 @@ import {
   paperTagKey,
   resolvePaperTagDisplay,
   paperTagToneClass,
-} from "../../../shared/paper-tags";
+} from "../../../shared/literature/paper-tags";
 import { LiteratureTagSuggestInput } from "./literature-tag-suggest-input";
 import { cn } from "@/lib/utils";
 

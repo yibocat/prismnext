@@ -8,9 +8,9 @@ import type {
   SubagentInfo,
   OrchestratorInfo,
   SaveCustomOrchestratorPayload,
-} from "@shared/agent-subagents";
+} from "@shared/agent/subagents";
 import { FALLBACK_ORCHESTRATOR_FQID } from "@shared/teams/types";
-import { buildSubagentRosterMarkdown } from "@shared/subagent-roster";
+import { buildSubagentRosterMarkdown } from "@shared/agent/subagent-roster";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { SETTINGS_DETAIL_SHELL, SETTINGS_ROW_DESC } from "./settings-tokens";
 import {

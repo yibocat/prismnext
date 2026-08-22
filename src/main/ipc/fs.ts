@@ -3,12 +3,12 @@ import * as fs from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "../services/logger";
-import type { WorkspaceFolder } from "../../shared/workspace-folder";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   writeProjectIcon,
   writeProjectIconImage,
 } from "../services/workspace-config";
-import type { IconSpec } from "../../shared/icon-spec";
+import type { IconSpec } from "../../shared/platform/icon-spec";
 import {
   createWorkbenchProjectOnDisk,
   ensureWorkbenchProjectMeta,

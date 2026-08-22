@@ -7,7 +7,7 @@ import {
   type DiscoverLiteratureResult,
   type DiscoveryHit,
   type DiscoverySourceId,
-} from "../../../shared/literature-discovery";
+} from "../../../shared/literature/discovery";
 import type { DiscoveryAdapter, OrchestratorOptions } from "./types";
 
 const DEFAULT_WALL_CLOCK_MS = 14_000;

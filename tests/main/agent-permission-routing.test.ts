@@ -10,7 +10,7 @@ import type { AgentRuntime } from "../../src/main/agent/runtime";
 import { AgentSessionStore } from "../../src/main/agent/session-store";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import type { PermissionGateRequest } from "../../src/main/agent/permission-gate";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 const ROOT = "/Users/me/paper";
 

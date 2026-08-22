@@ -10,7 +10,7 @@ import {
   libraryCardForRegistryUrl,
   REMOTE_SKILL_LIBRARY_PRESETS,
   SKILL_LIBRARY_CARDS,
-} from "../../src/shared/skill-libraries";
+} from "../../src/shared/skills/libraries";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";

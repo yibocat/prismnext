@@ -10,7 +10,7 @@ import {
   scheduleGitStatusRefresh,
   refreshGitStatusNow,
 } from "./git-refresh-root";
-import { isHomeWorktreeCheckoutPath } from "../../../shared/workbench-paths";
+import { isHomeWorktreeCheckoutPath } from "../../../shared/workbench/paths";
 
 export { resolveGitRefreshRoot, scheduleGitStatusRefresh, refreshGitStatusNow };
 export { isPendingNewWorktree };

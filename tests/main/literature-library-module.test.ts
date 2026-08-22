@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("LITERATURE_LIBRARY_PROMPT", () => {
   it("is library-citation workflow only — not external staging or tool catalog", () => {

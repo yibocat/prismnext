@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTaskError } from "../../src/shared/task-error-codes";
+import { formatTaskError } from "../../src/shared/agent/task-error-codes";
 
 describe("formatTaskError", () => {
   it("formats reserved deny for plan", () => {

@@ -10,7 +10,7 @@ import {
   resolveWorkbenchHome,
 } from "../workbench/home";
 import { ensureWorkbenchId, readWorkbenchJson } from "../workbench/identity";
-import { PROJECTS_DIRNAME, WORKTREES_DIRNAME } from "../../shared/workbench-paths";
+import { PROJECTS_DIRNAME, WORKTREES_DIRNAME } from "../../shared/workbench/paths";
 import type { BranchInfo, MergeStatus, WorktreeInfo } from "../../shared/git";
 export type { BranchInfo, MergeStatus, WorktreeInfo } from "../../shared/git";
 

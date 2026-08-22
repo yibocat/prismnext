@@ -21,12 +21,12 @@ import { useSettingsStore } from "@/stores/settings-store";
 import {
   extractPermissionToolName,
   buildPermissionRulesFromSettings,
-} from "@shared/permission-modes";
+} from "@shared/permissions/modes";
 import {
   resolveSmartPermissionAction,
   type SmartPermissionContext,
   type PermissionRulesConfig,
-} from "@shared/smart-permission-policy";
+} from "@shared/permissions/smart-policy";
 import { finalizePermissionAllow, finalizePermissionDeny } from "@/stores/permission-actions";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { isBashToolName } from "@/lib/terminal/ai-bridge";

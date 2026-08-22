@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { PaperExtractBlock } from "../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../shared/literature/paper-extract-block";
 import {
   buildMineruExtractBlocks,
   findContentListEntryName,

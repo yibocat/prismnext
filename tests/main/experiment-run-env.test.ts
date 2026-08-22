@@ -6,7 +6,7 @@ vi.mock("electron", () => ({
 }));
 
 import { buildPythonEnvExtra } from "../../src/main/services/experiment-run-executor";
-import type { ExperimentEnv } from "../../src/shared/experiment-log";
+import type { ExperimentEnv } from "../../src/shared/experiments/log";
 
 const baseEnv: ExperimentEnv = {
   python: null,

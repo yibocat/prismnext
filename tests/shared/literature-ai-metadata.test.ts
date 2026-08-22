@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAiMetadataLlmJson } from "../../src/shared/literature-ai-metadata";
+import { parseAiMetadataLlmJson } from "../../src/shared/literature/ai-metadata";
 import { aiMetadataFingerprint } from "../../src/main/services/literature-ai-metadata-fingerprint";
 
 describe("literature-ai-metadata", () => {

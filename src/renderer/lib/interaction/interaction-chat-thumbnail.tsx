@@ -6,16 +6,16 @@ import { useTranslation } from "react-i18next";
 import { ChartLineIcon, ImageIcon } from "lucide-react";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
-import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction-figure";
+import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction/figure";
 import { ChatArtifactPdf } from "@/lib/markdown/chat-artifact-pdf";
-import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction-plot";
+import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction/plot";
 import { buildPlotOptions } from "./plot/build-plot-spec";
-import type { InteractionSpec } from "../../../shared/interaction-spec";
+import type { InteractionSpec } from "../../../shared/interaction/spec";
 import {
   artifactBasename,
   chatImagePathCandidates,
   isPdfArtifactPath,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
   CHAT_ARTIFACT_PEEK_BODY_CLASS,

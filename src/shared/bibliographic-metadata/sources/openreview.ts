@@ -5,7 +5,7 @@
  * API v2: https://api2.openreview.net/notes?content.title=<title>
  * No API key required for public content.
  */
-import { normalizeDoi } from "../../doi-utils";
+import { normalizeDoi } from "../../literature/doi-utils";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
