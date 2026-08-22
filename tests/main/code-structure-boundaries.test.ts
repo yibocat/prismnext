@@ -265,6 +265,53 @@ describe("code structure host port (Phase 3)", () => {
     );
   });
 
+  it("splits preload by domain and keeps the electronAPI method names", () => {
+    const index = sourceOf("src/preload/index.ts");
+    expect(index).toMatch(/exposeInMainWorld\(\s*["']electronAPI["']/);
+    expect(index).not.toMatch(/ipcRenderer\.invoke/);
+    expect(index).not.toMatch(/ipcRenderer\.on/);
+
+    for (const rel of [
+      "src/preload/fs.ts",
+      "src/preload/dialog.ts",
+      "src/preload/project.ts",
+      "src/preload/template.ts",
+      "src/preload/literature.ts",
+      "src/preload/experiment.ts",
+      "src/preload/git.ts",
+      "src/preload/agent.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+
+    const keys: string[] = [];
+    for (const file of walkTsFiles(join(REPO, "src/preload"))) {
+      if (file.endsWith("/index.ts")) continue;
+      const src = readFileSync(file, "utf-8");
+      keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
+    }
+    expect(keys).toHaveLength(392);
+    expect(new Set(keys).size).toBe(392);
+    expect(keys).toEqual(expect.arrayContaining([
+      "fsScan",
+      "dialogOpenFolder",
+      "projectCreate",
+      "templateApply",
+      "literatureList",
+      "experimentList",
+      "gitStatus",
+      "agentSend",
+      "templateBackup",
+      "updateCheck",
+      "aboutGetVersions",
+      "gitDeleteBranch",
+    ]));
+    expect(keys).not.toEqual(expect.arrayContaining([
+      "chatSend",
+      "sessionLoad",
+    ]));
+  });
+
   it("keeps main/lib free of services imports", () => {
     for (const file of walkTsFiles(join(REPO, "src/main/lib"))) {
       expect(

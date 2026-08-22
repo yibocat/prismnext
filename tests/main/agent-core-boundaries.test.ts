@@ -26,6 +26,12 @@ function sourceOf(rel: string): string {
   return readFileSync(join(REPO, rel), "utf-8");
 }
 
+function preloadSources(): string {
+  return walkTsFiles(join(REPO, "src/preload"))
+    .map((file) => readFileSync(file, "utf-8"))
+    .join("\n");
+}
+
 describe("Pi-first agent core boundaries", () => {
   it("keeps conversationId independent from session_created.sessionId", () => {
     const binding: ConversationBinding = {
@@ -93,7 +99,7 @@ describe("Pi-first agent core boundaries", () => {
 
   it("exposes the production runtime through agent IPC without Lab channels", () => {
     const ipc = sourceOf("src/main/ipc/agent.ts");
-    const preload = sourceOf("src/preload/index.ts");
+    const preload = preloadSources();
 
     expect(ipc).toContain("\"agent:send\"");
     expect(ipc).toContain("\"agent:cancel\"");
@@ -132,7 +138,7 @@ describe("Pi-first agent core boundaries", () => {
 
   it("does not start OpenCode file-bridge pollers or expose dead chat/session APIs", () => {
     const main = sourceOf("src/main/index.ts");
-    const preload = sourceOf("src/preload/index.ts");
+    const preload = preloadSources();
     const types = sourceOf("src/renderer/types/electron.d.ts");
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
 
