@@ -1,6 +1,8 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { mergeAdjacentText } from "@/lib/chat/composer-parts";
 
+export { draftToJson, parseDraftJson } from "@/lib/chat/composer-draft";
+
 /** One doc character per inline token — atomic, same index as visual chip. */
 export const TOKEN_OBJECT = "\uFFFC";
 
@@ -243,23 +245,6 @@ export function splitPartsAtPlainRange(
   }
 
   return { before: mergeAdjacentText(before), after: mergeAdjacentText(after) };
-}
-
-export function parseDraftJson(raw: string | undefined): ComposerPart[] {
-  if (!raw) return [{ type: "text", text: "" }];
-  try {
-    const parsed = JSON.parse(raw) as { parts?: ComposerPart[] };
-    if (Array.isArray(parsed.parts) && parsed.parts.length > 0) {
-      return mergeAdjacentText(parsed.parts);
-    }
-  } catch {
-    // legacy plain string
-  }
-  return [{ type: "text", text: raw }];
-}
-
-export function draftToJson(parts: ComposerPart[]): string {
-  return JSON.stringify({ parts: mergeAdjacentText(parts) });
 }
 
 function tokenDocSpan(doc: string, pos: number): number {

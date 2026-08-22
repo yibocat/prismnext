@@ -5,7 +5,7 @@ import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore } from "@/stores/chat-store";
-import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
+import { usesProposedChange } from "@/lib/chat/tool-proposed-change";
 import { createLogger } from "@/services/logger";
 import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permissions/timeouts";
 

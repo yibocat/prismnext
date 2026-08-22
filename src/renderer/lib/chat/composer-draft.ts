@@ -1,6 +1,5 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { createTokenId, mergeAdjacentText, partsToPlainText } from "@/lib/chat/composer-parts";
-import { parseDraftJson } from "./serialize";
 
 export interface ComposerTabDraft {
   input: string;
@@ -8,6 +7,46 @@ export interface ComposerTabDraft {
   chips?: { id: string; commandName: string; action?: string; source: string }[];
   /** @deprecated legacy expert/profile chip — migrated on load */
   profileChip?: { id: string; profileId: string; profileName: string } | null;
+}
+
+/**
+ * File mention target for the composer handle. Structural so lib does not
+ * import `ProjectFile` from document-store.
+ */
+export interface ComposerFileMentionTarget {
+  id: string;
+  name: string;
+  relativePath: string;
+  absolutePath: string;
+}
+
+export interface InlineComposerEditorHandle {
+  focus: () => void;
+  getParts: () => ComposerPart[];
+  /** Replace editor document immediately (send/clear — bypasses debounced draft persist). */
+  replaceParts: (parts: ComposerPart[]) => void;
+  insertFileMention: (file: ComposerFileMentionTarget) => void;
+  /** Insert a context token from RightArea (terminal, editor, git diff, …). */
+  insertContextPart: (part: Exclude<ComposerPart, { type: "text" }>) => boolean;
+  /** @deprecated Use insertContextPart */
+  insertTerminalSnippet: (part: ComposerPart) => void;
+}
+
+export function parseDraftJson(raw: string | undefined): ComposerPart[] {
+  if (!raw) return [{ type: "text", text: "" }];
+  try {
+    const parsed = JSON.parse(raw) as { parts?: ComposerPart[] };
+    if (Array.isArray(parsed.parts) && parsed.parts.length > 0) {
+      return mergeAdjacentText(parsed.parts);
+    }
+  } catch {
+    // legacy plain string
+  }
+  return [{ type: "text", text: raw }];
+}
+
+export function draftToJson(parts: ComposerPart[]): string {
+  return JSON.stringify({ parts: mergeAdjacentText(parts) });
 }
 
 function normalizeLegacyMention(part: ComposerPart): ComposerPart {

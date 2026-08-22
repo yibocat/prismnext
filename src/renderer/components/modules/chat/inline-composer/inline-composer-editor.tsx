@@ -62,10 +62,12 @@ import type { CursorAnchor } from "./dropdown-position";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { compactComposerNeedsExpand } from "./compact-overflow";
 import { syncComposerQueryState } from "./composer-query-sync";
-import { loadDraftParts } from "./draft-utils";
+import { loadDraftParts, type InlineComposerEditorHandle } from "@/lib/chat/composer-draft";
 import { useChatStore } from "@/stores/chat-store";
 import { requestOpenModelPicker } from "@/lib/chat/open-model-picker";
 import type { Extension } from "@codemirror/state";
+
+export type { InlineComposerEditorHandle };
 
 /** Clear the `/…` query without inserting a command chip. */
 function clearSlashQuery(view: EditorView, q: ComposerQuery): void {
@@ -272,18 +274,6 @@ function applyPartsToEditorView(view: EditorView, parts: ComposerPart[]): void {
   } else {
     syncTokenMapFromParts(view, parts);
   }
-}
-
-export interface InlineComposerEditorHandle {
-  focus: () => void;
-  getParts: () => ComposerPart[];
-  /** Replace editor document immediately (send/clear — bypasses debounced draft persist). */
-  replaceParts: (parts: ComposerPart[]) => void;
-  insertFileMention: (file: ProjectFile) => void;
-  /** Insert a context token from RightArea (terminal, editor, git diff, …). */
-  insertContextPart: (part: Exclude<ComposerPart, { type: "text" }>) => boolean;
-  /** @deprecated Use insertContextPart */
-  insertTerminalSnippet: (part: ComposerPart) => void;
 }
 
 export interface InlineComposerEditorProps {

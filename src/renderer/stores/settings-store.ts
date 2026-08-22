@@ -33,7 +33,7 @@ import {
 import { migrateLegacyBuiltinProviders } from "../../shared/providers/lazy-catalog";
 import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
 import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
-import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
+import { parseModelPreferenceKey } from "@/lib/providers/model-keys";
 import type { ModelConfig } from "@/lib/providers";
 import type { LogLevel } from "@shared/platform/log-types";
 

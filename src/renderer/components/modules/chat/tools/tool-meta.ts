@@ -10,6 +10,9 @@ export {
 } from "@shared/permissions/tool-registry";
 
 import { getToolPermissionEntry } from "@shared/permissions/tool-registry";
+import { usesProposedChange } from "@/lib/chat/tool-proposed-change";
+
+export { usesProposedChange };
 
 export interface ToolMeta {
   permissionGroup?: import("@shared/permissions/tool-registry").PermissionGroup;
@@ -27,10 +30,6 @@ export function getToolMeta(toolName: string): ToolMeta {
     confirmUx: entry.confirmUx,
     usesProposedChange: entry.usesProposedChange,
   };
-}
-
-export function usesProposedChange(toolName: string): boolean {
-  return getToolMeta(toolName).usesProposedChange === true;
 }
 
 export function isFileWriteTool(toolName: string): boolean {

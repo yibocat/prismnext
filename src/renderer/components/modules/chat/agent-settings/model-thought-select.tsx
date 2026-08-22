@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon, Settings2Icon, SparklesIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
-import { modelPreferenceKey } from "./model-keys";
+import { modelPreferenceKey } from "@/lib/providers/model-keys";
 import {
   useModelMenuPlacement,
   MODEL_MENU_MIN_WIDTH,

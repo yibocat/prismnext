@@ -637,17 +637,6 @@ describe("code structure host port (Phase 3)", () => {
 });
 
 describe("code structure renderer direction (Phase 4)", () => {
-  /** WP-4.1 baseline: these seven stores still import modes/components. Wave 1 removes the list. */
-  const STORE_MODE_COMPONENT_ALLOWLIST = new Set([
-    "src/renderer/stores/literature-store.ts",
-    "src/renderer/stores/experiment-store.ts",
-    "src/renderer/stores/right-panel-store.ts",
-    "src/renderer/stores/chat-store.ts",
-    "src/renderer/stores/settings-store.ts",
-    "src/renderer/stores/permission-actions.ts",
-    "src/renderer/stores/composer-editor-store.ts",
-  ]);
-
   const MODE_OR_COMPONENT_FROM = /from\s+["']@\/(?:modes|components)\//;
 
   function storeModeComponentImports(): { rel: string; lines: string[] }[] {
@@ -660,13 +649,8 @@ describe("code structure renderer direction (Phase 4)", () => {
     return hits;
   }
 
-  it("does not add store → modes/components imports beyond the Wave 1 allowlist", () => {
-    const hits = storeModeComponentImports();
-    const unexpected = hits.filter((h) => !STORE_MODE_COMPONENT_ALLOWLIST.has(h.rel));
-    expect(unexpected, JSON.stringify(unexpected, null, 2)).toEqual([]);
-    expect(new Set(hits.map((h) => h.rel)).size).toBeLessThanOrEqual(
-      STORE_MODE_COMPONENT_ALLOWLIST.size,
-    );
+  it("keeps stores free of modes/components imports", () => {
+    expect(storeModeComponentImports(), JSON.stringify(storeModeComponentImports(), null, 2)).toEqual([]);
   });
 
   // Phase 4 baseline (WP-4.1): chat-store.ts was 3358 lines. WP-4.7 must bring

@@ -1,6 +1,9 @@
 import { create } from "zustand";
-import type { InlineComposerEditorHandle } from "@/components/modules/chat/inline-composer";
-import { loadDraftParts, saveDraftFromParts } from "@/components/modules/chat/inline-composer/draft-utils";
+import {
+  loadDraftParts,
+  saveDraftFromParts,
+  type InlineComposerEditorHandle,
+} from "@/lib/chat/composer-draft";
 import {
   contextInsertToComposerPart,
   useComposerInsertStore,

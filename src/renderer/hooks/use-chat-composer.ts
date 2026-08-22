@@ -28,9 +28,8 @@ import {
   compileComposerPrompt,
   shouldSendPromptToAgent,
   buildComposerDisplayBlocks,
-  loadDraftParts,
-  type InlineComposerEditorHandle,
 } from "@/components/modules/chat/inline-composer";
+import { loadDraftParts, type InlineComposerEditorHandle } from "@/lib/chat/composer-draft";
 
 function offsetToLineCol(
   text: string,
