@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { PlusIcon, TerminalIcon } from "lucide-react";
+import { listTeamAssets } from "@/stores/teams-store";
 import { useCommandStore } from "@/stores/command-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
@@ -91,7 +92,7 @@ export default function CommandsSettings({
         return;
       }
       const [assetList] = await Promise.all([
-        window.electronAPI.teamsListAssets(projectRoot, "command"),
+        listTeamAssets(projectRoot, "command"),
         loadCommands(),
       ]);
       setAssets(assetList);

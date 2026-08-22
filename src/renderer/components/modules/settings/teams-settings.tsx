@@ -10,7 +10,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { useTeamsStore, type TeamCardView } from "@/stores/teams-store";
+import { listTeamAssets, useTeamsStore, type TeamCardView } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
@@ -102,7 +102,7 @@ export function TeamsAgentsSettings({
       if (!options?.silent) setLoading(true);
       try {
         const [orchestratorList] = await Promise.all([
-          window.electronAPI.teamsListAssets(projectRoot, "orchestrator"),
+          listTeamAssets(projectRoot, "orchestrator"),
           useTeamsStore.getState().load(projectRoot, { force: true }),
         ]);
         setOrchestrators(sortAssets(orchestratorList));

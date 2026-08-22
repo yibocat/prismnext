@@ -12,4 +12,7 @@ export const researchDesktop = {
   researchPlanReadDraft: forwardDesktop("researchPlanReadDraft"),
   researchPlanPromoteDraft: forwardDesktop("researchPlanPromoteDraft"),
   researchPlanDiscardDraft: forwardDesktop("researchPlanDiscardDraft"),
+  researchBriefEnsure: forwardDesktop("researchBriefEnsure"),
+  researchBriefRead: forwardDesktop("researchBriefRead"),
+  researchBriefGetPath: forwardDesktop("researchBriefGetPath"),
 };

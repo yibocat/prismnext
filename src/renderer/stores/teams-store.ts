@@ -8,7 +8,7 @@
 // T5: the catalog is TeamViewV2[] (new resolver). A derived `kind` / `locked`
 // compatibility field keeps the pre-T5 UI working until each page is reworked.
 import { create } from "zustand";
-import type { Fqid } from "@shared/teams/types";
+import type { AssetKind, Fqid } from "@shared/teams/types";
 import type { AssetViewV2, TeamViewV2 } from "@shared/teams/view";
 import { CORE_TEAM_ID } from "@shared/teams/types";
 import { teamsDesktop } from "@/lib/desktop-api/teams";
@@ -68,7 +68,18 @@ interface TeamsStoreState {
   /** Persist active team, update store immediately, then reconcile. */
   setActiveTeam: (projectRoot: string, teamId: string) => Promise<void>;
   setTeamMcps: (mcps: AssetViewV2[]) => void;
+  createTeam: (
+    projectRoot: string,
+    input: Parameters<typeof teamsDesktop.teamsCreate>[1],
+  ) => Promise<string>;
   clear: () => void;
+}
+
+export async function listTeamAssets(
+  projectRoot: string,
+  kind: AssetKind,
+): Promise<AssetViewV2[]> {
+  return teamsDesktop.teamsListAssets(projectRoot, kind);
 }
 
 export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
@@ -173,6 +184,12 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
   },
 
   setTeamMcps: (teamMcps) => set({ teamMcps }),
+
+  createTeam: async (projectRoot, input) => {
+    const { teamId } = await teamsDesktop.teamsCreate(projectRoot, input);
+    await get().load(projectRoot, { force: true });
+    return teamId;
+  },
 
   clear: () =>
     set({ catalog: [], teamMcps: [], activeTeamId: null, loadedRoot: null, loading: false }),

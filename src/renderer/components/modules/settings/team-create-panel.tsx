@@ -60,7 +60,7 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
     if (!projectRoot || !name.trim()) return;
     setSaving(true);
     try {
-      const { teamId } = await window.electronAPI.teamsCreate(projectRoot, {
+      const teamId = await useTeamsStore.getState().createTeam(projectRoot, {
         name: name.trim(),
         description: description.trim() || undefined,
         longDescription: longDescription.trim() || undefined,
@@ -71,7 +71,6 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
         icon: icon?.kind === "image" ? undefined : icon,
         iconImagePngBase64: pendingIconPngBase64 ?? undefined,
       });
-      await useTeamsStore.getState().load(projectRoot, { force: true });
       toast.success(t("settings.teams.toast.teamCreated"));
       openSettingsPanel({
         kind: "team-detail",

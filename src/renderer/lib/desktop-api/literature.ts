@@ -50,4 +50,6 @@ export const literatureDesktop = {
   onLiteraturePdfDownloadProgress: forwardDesktop("onLiteraturePdfDownloadProgress"),
   onLiteraturePaperMaterialized: forwardDesktop("onLiteraturePaperMaterialized"),
   onLiteratureAiMetadataChanged: forwardDesktop("onLiteratureAiMetadataChanged"),
+  literatureGetStorageStats: forwardDesktop("literatureGetStorageStats"),
+  literaturePruneOrphanAttachments: forwardDesktop("literaturePruneOrphanAttachments"),
 };

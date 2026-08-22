@@ -12,6 +12,7 @@ export type {
   ProjectAgentsMd,
 } from "./prompt-stack";
 export {
+  countPromptTokens,
   fetchBuiltinTools,
   fetchDefaultPersona,
   fetchPromptInternalsSummary,

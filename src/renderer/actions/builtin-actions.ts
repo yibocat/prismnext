@@ -64,7 +64,8 @@ actionRegistry.register("ensure-research-brief", async () => {
   if (!projectRoot) {
     throw new Error("Open a project first.");
   }
-  const result = await window.electronAPI.researchBriefEnsure(projectRoot);
+  const { ensureResearchBrief } = await import("@/lib/files/open-research-brief");
+  const result = await ensureResearchBrief(projectRoot);
   const verb = result.created ? "Created" : "Loaded";
   return (
     `${verb} ${result.path}. ` +

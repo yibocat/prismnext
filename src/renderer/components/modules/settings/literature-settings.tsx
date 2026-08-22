@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { LiteratureStorageStats, ZoteroStatus } from "@/types/electron.d";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { extractDesktop } from "@/lib/desktop-api/extract";
 import {
   isLiteratureAiMetadataConfigured,
   literatureAiMetadataModelLabel,
@@ -85,7 +87,7 @@ export function LiteratureSettings() {
     }
     setStorageLoading(true);
     try {
-      const stats = await window.electronAPI.literatureGetStorageStats(projectRoot);
+      const stats = await literatureDesktop.literatureGetStorageStats(projectRoot);
       setStorageStats(stats);
     } catch {
       setStorageStats(null);
@@ -101,7 +103,7 @@ export function LiteratureSettings() {
   const handleTestMineru = async () => {
     setTestingMineru(true);
     try {
-      const result = await window.electronAPI.extractTestMineru(settings.mineruApiToken as string | undefined);
+      const result = await extractDesktop.extractTestMineru(settings.mineruApiToken as string | undefined);
       setMineruStatus(result.message);
       setMineruTestOk(true);
       toast.success(result.message);
@@ -118,7 +120,7 @@ export function LiteratureSettings() {
   const handleTestConnection = async () => {
     setTesting(true);
     try {
-      const result = await window.electronAPI.zoteroProbe();
+      const result = await literatureDesktop.zoteroProbe();
       setStatus(result);
     } catch (err) {
       setStatus({
@@ -138,7 +140,7 @@ export function LiteratureSettings() {
     if (!projectRoot) return;
     setPruning(true);
     try {
-      const result = await window.electronAPI.literaturePruneOrphanAttachments(projectRoot);
+      const result = await literatureDesktop.literaturePruneOrphanAttachments(projectRoot);
       await loadStorageStats();
       await refreshPdfCacheStatus(projectRoot);
       if (result.deletedFiles === 0) {

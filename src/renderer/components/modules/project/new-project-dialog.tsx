@@ -8,6 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
+import { projectDesktop } from "@/lib/desktop-api/project";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -291,7 +293,7 @@ export function NewProjectPane({
   };
 
   const handleSelectParent = async () => {
-    const result = await window.electronAPI?.dialogOpenFolder?.();
+    const result = await dialogDesktop.dialogOpenFolder();
     if (result && !result.canceled && result.path) setParentPath(result.path);
   };
 
@@ -301,7 +303,7 @@ export function NewProjectPane({
     try {
       const workspaceDirs = toCreateDirs(workspaceFolders);
       const icon = projectIcon ?? { kind: "emoji", value: DEFAULT_PROJECT_ICON };
-      await window.electronAPI?.projectCreate?.(fullPath, workspaceDirs, {
+      await projectDesktop.projectCreate(fullPath, workspaceDirs, {
         initGit,
         projectIcon: icon.kind === "image" ? undefined : icon,
         projectIconImagePngBase64: pendingIconPngBase64 ?? undefined,

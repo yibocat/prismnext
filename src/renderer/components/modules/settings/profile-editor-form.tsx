@@ -28,6 +28,7 @@ import { SettingsFormField } from "./settings-form-field";
 import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 import { MARKDOWN_TOOLBAR_TEXT_BTN } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { formatTokenCount } from "@shared/providers/token-estimate";
+import { countPromptTokens } from "@/lib/settings";
 import { Hint } from "@/components/ui/hint";
 
 const CARD_GRID = "grid grid-cols-1 @lg:grid-cols-2 gap-2";
@@ -410,8 +411,8 @@ export function ProfileEditorForm({
       return;
     }
     const timer = window.setTimeout(() => {
-      void window.electronAPI.settingsCountPromptTokens(text).then((result) => {
-        setInstructionTokenCount(result.tokenCount);
+      void countPromptTokens(text).then((tokenCount) => {
+        setInstructionTokenCount(tokenCount);
       });
     }, 200);
     return () => window.clearTimeout(timer);

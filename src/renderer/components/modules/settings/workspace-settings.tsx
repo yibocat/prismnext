@@ -15,6 +15,8 @@ import {
 } from "@/types/workspace";
 import { resolveFolderIconName } from "@/lib/workspace/folder-icons";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { projectDesktop } from "@/lib/desktop-api/project";
 import { appDefaultWorkspaceTemplate } from "@/lib/settings/workspace-template";
 import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
 import { cn } from "@/lib/utils";
@@ -68,7 +70,7 @@ function useFolderOnDisk(projectRoot: string | null, folderName: string, enabled
     }
     let cancelled = false;
     const abs = `${projectRoot.replace(/[/\\]+$/, "")}/${folderName}`;
-    window.electronAPI
+    fsDesktop
       .fsExists(abs)
       .then((exists) => {
         if (!cancelled) setOnDisk(exists);
@@ -196,7 +198,7 @@ export function WorkspaceSettings() {
     if (iconSpecEquals(normalizeIconSpec(projectIcon), next)) return;
     setProjectIcon(next);
     try {
-      await window.electronAPI.projectSetIcon(projectRoot, next);
+      await projectDesktop.projectSetIcon(projectRoot, next);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
       // Revert to the on-disk value on failure.
@@ -206,7 +208,7 @@ export function WorkspaceSettings() {
 
   const persistProjectImage = async (pngBase64: string): Promise<IconSpec> => {
     if (!projectRoot) throw new Error("No project");
-    await window.electronAPI.projectSetIconImage(projectRoot, pngBase64);
+    await projectDesktop.projectSetIconImage(projectRoot, pngBase64);
     const next: IconSpec = { kind: "image", value: ICON_IMAGE_FILENAME };
     setProjectIcon(next);
     return next;

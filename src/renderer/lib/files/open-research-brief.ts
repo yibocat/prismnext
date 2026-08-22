@@ -4,6 +4,7 @@
  */
 import { toast } from "sonner";
 import { i18n } from "@/lib/i18n";
+import { researchDesktop } from "@/lib/desktop-api/research";
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -13,6 +14,15 @@ import {
   findResearchBriefHeadingLine,
   resolveResearchBriefSection,
 } from "../../../shared/research/brief";
+
+export async function ensureResearchBrief(projectRoot: string) {
+  return researchDesktop.researchBriefEnsure(projectRoot);
+}
+
+export async function readResearchBrief(projectRoot: string) {
+  await researchDesktop.researchBriefEnsure(projectRoot);
+  return researchDesktop.researchBriefRead(projectRoot);
+}
 
 export async function openResearchBrief(options?: {
   focusSection?: string;
@@ -31,7 +41,7 @@ export async function openResearchBrief(options?: {
   }
 
   try {
-    await window.electronAPI.researchBriefEnsure(projectRoot);
+    await ensureResearchBrief(projectRoot);
   } catch {
     toast.error(i18n.t("experiments.brief.openFailed"));
     return false;
@@ -49,7 +59,7 @@ export async function openResearchBrief(options?: {
   if (!section) return true;
 
   try {
-    const brief = await window.electronAPI.researchBriefRead(projectRoot);
+    const brief = await researchDesktop.researchBriefRead(projectRoot);
     const line = findResearchBriefHeadingLine(brief.raw ?? "", section);
     if (line == null) return true;
     window.setTimeout(() => {

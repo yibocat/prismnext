@@ -33,6 +33,17 @@ interface WorkspaceConfigState {
   updateFolder: (index: number, patch: Partial<WorkspaceFolder>) => string | null;
 }
 
+export async function createWorkspaceFolders(
+  projectRoot: string,
+  dirs?: WorkspaceFolder[],
+) {
+  return projectDesktop.workspaceCreateFolders(projectRoot, dirs);
+}
+
+export async function ensureWorkspaceMainTex(projectRoot: string) {
+  return projectDesktop.workspaceEnsureMainTex(projectRoot);
+}
+
 export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
   subscribeWithSelector((set, get) => ({
     workspaceDirs: [],

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useProjectStore } from "@/stores/project-store";
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { useProjectOpen } from "@/hooks/use-project-open";
 import {
   AppMenu,
@@ -35,7 +36,7 @@ export function WorkbenchAddMenu() {
   };
 
   const handleOpenProjectDialog = async () => {
-    const result = await window.electronAPI.dialogOpenFolder();
+    const result = await dialogDesktop.dialogOpenFolder();
     if (result.canceled || !result.path) return;
     await handleOpenProjectPath(result.path);
   };

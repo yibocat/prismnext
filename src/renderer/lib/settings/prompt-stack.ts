@@ -100,6 +100,11 @@ export async function fetchDefaultPersona(): Promise<string> {
   }
 }
 
+export async function countPromptTokens(text: string): Promise<number> {
+  const result = await settingsDesktop.settingsCountPromptTokens(text);
+  return result.tokenCount;
+}
+
 export async function readProjectAgentsMd(
   projectRoot: string | null | undefined,
 ): Promise<ProjectAgentsMd> {

@@ -19,4 +19,5 @@ export const extractDesktop = {
   onExtractProgressClear: forwardDesktop("onExtractProgressClear"),
   onExtractPdfCached: forwardDesktop("onExtractPdfCached"),
   onExtractAgentRequested: forwardDesktop("onExtractAgentRequested"),
+  extractTestMineru: forwardDesktop("extractTestMineru"),
 };

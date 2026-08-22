@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/app-select";
 import { Switch } from "@/components/ui/switch";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useWorkbenchStore } from "@/stores/workbench-store";
 import {
@@ -163,7 +164,7 @@ export function GeneralSettings() {
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-[length:var(--font-size-12)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                   onClick={() => {
                     void (async () => {
-                      const result = await window.electronAPI.dialogOpenFolder();
+                      const result = await dialogDesktop.dialogOpenFolder();
                       if (result.canceled || !result.path) return;
                       await setDefaultFromFolder(result.path);
                     })();

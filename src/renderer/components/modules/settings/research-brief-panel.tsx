@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { useSettingsEditorSlotOfKind } from "@/hooks/use-settings-editor";
-import { openResearchBrief } from "@/lib/files/open-research-brief";
+import { openResearchBrief, readResearchBrief } from "@/lib/files/open-research-brief";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 import { SETTINGS_ROW_DESC } from "./settings-tokens";
@@ -33,10 +33,8 @@ export function ResearchBriefPanel() {
       }
       if (!silent) setLoading(true);
       try {
-        await window.electronAPI.researchBriefEnsure(projectRoot);
-        const { absolutePath } = await window.electronAPI.researchBriefGetPath(projectRoot);
-        const result = await window.electronAPI.fsRead(absolutePath);
-        setContent(result?.content ?? "");
+        const brief = await readResearchBrief(projectRoot);
+        setContent(brief.raw ?? "");
       } catch {
         toast.error(t("settings.editor.brief.toast.loadFailed"));
         closePanel();

@@ -801,6 +801,26 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/backups-settings-panel.tsx",
       "src/renderer/components/modules/settings/prompt-markdown-panel.tsx",
       "src/renderer/components/modules/settings/rule-markdown-panel.tsx",
+      "src/renderer/components/modules/settings/profile-editor-form.tsx",
+      "src/renderer/components/modules/settings/research-brief-panel.tsx",
+      "src/renderer/components/modules/settings/literature-settings.tsx",
+      "src/renderer/components/modules/settings/workspace-settings.tsx",
+      "src/renderer/components/modules/settings/texworkspace-settings.tsx",
+      "src/renderer/components/modules/settings/general-settings.tsx",
+      "src/renderer/components/modules/settings/team-create-panel.tsx",
+      "src/renderer/components/modules/settings/teams-settings.tsx",
+      "src/renderer/components/modules/settings/commands-settings.tsx",
+      "src/renderer/components/modules/settings/tools-mcp-settings.tsx",
+      "src/renderer/components/modules/settings/mcp-server-editor-panel.tsx",
+    ]) {
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
+  it("keeps research-brief and workspace autosave helpers off window.electronAPI", () => {
+    for (const rel of [
+      "src/renderer/lib/files/open-research-brief.ts",
+      "src/renderer/hooks/use-workspace-project-autosave.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
