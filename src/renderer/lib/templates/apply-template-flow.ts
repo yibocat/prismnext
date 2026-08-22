@@ -8,6 +8,8 @@ import {
 } from "@/lib/templates/template-merge";
 import { clearPdfCache } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { templateDesktop } from "@/lib/desktop-api/template";
 import { toast } from "sonner";
 
 export interface TemplateSwitchDialogState {
@@ -44,7 +46,7 @@ async function findOverlappingFiles(
   for (const file of files) {
     const absPath = `${projectRoot}/${manuscriptDir}/${file.path}`;
     try {
-      const exists = await window.electronAPI.fsExists(absPath);
+      const exists = await fsDesktop.fsExists(absPath);
       if (exists) overlapping.push(file.path);
     } catch {
       // skip
@@ -58,7 +60,7 @@ async function applyFiles(
   template: TemplateFull,
   files: { path: string; content: string }[],
 ): Promise<ProjectTemplateState | null> {
-  const result = await window.electronAPI.templateApply({
+  const result = await templateDesktop.templateApply({
     rootPath: ctx.projectRoot,
     manuscriptDir: ctx.manuscriptDir,
     files,
@@ -85,7 +87,7 @@ export async function requestApplyTemplate(
   templateMeta: { id: string; name: string; category: string },
   ctx: ApplyTemplateFlowContext,
 ): Promise<ApplyTemplateFlowResult> {
-  const full = await window.electronAPI.templateGet(templateMeta.id);
+  const full = await templateDesktop.templateGet(templateMeta.id);
   if (!full) {
     toast.error("Template could not be loaded.");
     return { type: "noop" };
@@ -125,7 +127,7 @@ export async function requestApplyTemplate(
   }
 
   if (current.id === full.id) {
-    const changes = await window.electronAPI.templateDetectChanges({
+    const changes = await templateDesktop.templateDetectChanges({
       rootPath: ctx.projectRoot,
       manuscriptDir: ctx.manuscriptDir,
       appliedFiles: current.appliedFiles,
@@ -157,7 +159,7 @@ export async function requestApplyTemplate(
     };
   }
 
-  const changes = await window.electronAPI.templateDetectChanges({
+  const changes = await templateDesktop.templateDetectChanges({
     rootPath: ctx.projectRoot,
     manuscriptDir: ctx.manuscriptDir,
     appliedFiles: current.appliedFiles,
@@ -176,7 +178,7 @@ export async function requestApplyTemplate(
     isFirstUse: false,
   });
 
-  const oldFull = await window.electronAPI.templateGet(current.id);
+  const oldFull = await templateDesktop.templateGet(current.id);
 
   return {
     type: "dialog",
@@ -211,7 +213,7 @@ export async function confirmApplyTemplate(
   if (level === "firstUse") {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupLabel = `${timestamp}_first_use_${newTemplate.id}`;
-    await window.electronAPI.templateBackup({
+    await templateDesktop.templateBackup({
       rootPath: ctx.projectRoot,
       manuscriptDir: ctx.manuscriptDir,
       files: changedFiles,
@@ -235,7 +237,7 @@ export async function confirmApplyTemplate(
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupLabel = `${timestamp}_${current.id}_to_${newTemplate.id}`;
-  await window.electronAPI.templateBackup({
+  await templateDesktop.templateBackup({
     rootPath: ctx.projectRoot,
     manuscriptDir: ctx.manuscriptDir,
     files: allTemplateFiles,
@@ -254,7 +256,7 @@ export async function confirmApplyTemplate(
       let oldContent = "";
       if (isChanged) {
         try {
-          const oldResult = await window.electronAPI.fsRead(
+          const oldResult = await fsDesktop.fsRead(
             `${ctx.projectRoot}/${ctx.manuscriptDir}/${newFile.path}`,
           );
           oldContent = oldResult?.content || "";
@@ -276,7 +278,7 @@ export async function confirmApplyTemplate(
     for (const oldPath of Object.keys(current.appliedFiles)) {
       if (!newFilePaths.has(oldPath)) {
         try {
-          const readResult = await window.electronAPI.fsRead(
+          const readResult = await fsDesktop.fsRead(
             `${ctx.projectRoot}/${ctx.manuscriptDir}/${oldPath}`,
           );
           if (readResult?.content) {

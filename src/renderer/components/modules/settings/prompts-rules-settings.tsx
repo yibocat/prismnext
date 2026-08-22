@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { formatTokenCount } from "@shared/providers/token-estimate";
-import { projectAgentsMdRel } from "@shared/workbench/paths";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
 import { Button } from "@/components/ui/button";
@@ -12,6 +11,16 @@ import { cn } from "@/lib/utils";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { notifyPromptConfigChanged } from "@/lib/settings/prompt-config-notify";
+import {
+  deleteProjectRule,
+  fetchPromptInternalsSummary,
+  fetchPromptStackSummary,
+  listProjectRules,
+  readProjectAgentsMd,
+  setProjectRuleEnabled,
+  subscribeExpertsIntegrationChanged,
+  type ProjectRuleInfo,
+} from "@/lib/settings";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1";
@@ -29,9 +38,7 @@ const BADGE =
 function ProjectRulesSection() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const [rules, setRules] = useState<
-    Awaited<ReturnType<typeof window.electronAPI.agentListRules>>
-  >([]);
+  const [rules, setRules] = useState<ProjectRuleInfo[]>([]);
   const [busy, setBusy] = useState(false);
   const deleteConfirm = useInlineDeleteConfirm();
 
@@ -40,11 +47,7 @@ function ProjectRulesSection() {
       setRules([]);
       return;
     }
-    try {
-      setRules(await window.electronAPI.agentListRules(projectRoot));
-    } catch {
-      setRules([]);
-    }
+    setRules(await listProjectRules(projectRoot));
   }, [projectRoot]);
 
   useEffect(() => {
@@ -61,7 +64,7 @@ function ProjectRulesSection() {
     setRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled } : r)));
     setBusy(true);
     try {
-      await window.electronAPI.agentSetRuleEnabled(projectRoot, id, enabled);
+      await setProjectRuleEnabled(projectRoot, id, enabled);
       notifyPromptConfigChanged();
     } catch {
       await loadRules();
@@ -75,7 +78,7 @@ function ProjectRulesSection() {
     deleteConfirm.clearPending();
     setBusy(true);
     try {
-      await window.electronAPI.agentDeleteRule(projectRoot, id);
+      await deleteProjectRule(projectRoot, id);
       setRules((prev) => prev.filter((r) => r.id !== id));
       notifyPromptConfigChanged();
     } finally {
@@ -182,59 +185,17 @@ export function PromptsRulesSettings() {
     toolCount: number;
   } | null>(null);
 
-  const agentsMdPath = projectRoot
-    ? `${projectRoot.replace(/[/\\]+$/, "")}/${projectAgentsMdRel()}`
-    : "";
-
   const refreshSummaries = useCallback(async () => {
-    try {
-      const stack = await window.electronAPI.settingsGetPromptStackPreview(
-        projectRoot ?? undefined,
-        agentSystemPrompt || undefined,
-      );
-      setStackSummary({
-        totalTokens: stack.totalTokenCount,
-        sectionCount: stack.sections.length,
-        orchestratorName: stack.orchestratorName,
-      });
-    } catch {
-      setStackSummary(null);
-    }
-
-    if (!projectRoot) {
-      setAgentsMdLength(0);
-      setHasAgentsMd(false);
-      return;
-    }
-    try {
-      const exists = await window.electronAPI.fsExists(agentsMdPath);
-      if (!exists) {
-        setAgentsMdLength(0);
-        setHasAgentsMd(false);
-        return;
-      }
-      const r = await window.electronAPI.fsRead(agentsMdPath);
-      const content = r?.content || "";
-      setAgentsMdLength(content.length);
-      setHasAgentsMd(content.trim().length > 0);
-    } catch {
-      setAgentsMdLength(0);
-      setHasAgentsMd(false);
-    }
-
-    try {
-      const [modules, tools] = await Promise.all([
-        window.electronAPI.settingsGetKnowledgeModules(projectRoot ?? undefined),
-        window.electronAPI.settingsGetBuiltinTools(),
-      ]);
-      setInternalsSummary({
-        moduleCount: modules.length,
-        toolCount: tools.length,
-      });
-    } catch {
-      setInternalsSummary(null);
-    }
-  }, [projectRoot, agentSystemPrompt, agentsMdPath]);
+    const [stack, agentsMd, internals] = await Promise.all([
+      fetchPromptStackSummary(projectRoot, agentSystemPrompt || undefined),
+      readProjectAgentsMd(projectRoot),
+      fetchPromptInternalsSummary(projectRoot),
+    ]);
+    setStackSummary(stack);
+    setAgentsMdLength(agentsMd.charCount);
+    setHasAgentsMd(agentsMd.hasContent);
+    setInternalsSummary(internals);
+  }, [projectRoot, agentSystemPrompt]);
 
   useEffect(() => {
     void refreshSummaries();
@@ -244,11 +205,9 @@ export function PromptsRulesSettings() {
   // agent changed) — otherwise the base-agent summary stays stale until the
   // page is reopened or a settings editor closes.
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onExpertsIntegrationChanged(({ projectPath }) => {
-      if (!projectRoot || projectPath !== projectRoot) return;
+    return subscribeExpertsIntegrationChanged(projectRoot, () => {
       void refreshSummaries();
     });
-    return unsubscribe;
   }, [projectRoot, refreshSummaries]);
 
   useOnSettingsEditorKindsClosed(["prompt-markdown", "prompt-stack-preview", "rule-markdown"], () => {

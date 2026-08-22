@@ -6,7 +6,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { notifyPromptConfigChanged } from "@/lib/settings/prompt-config-notify";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
-import { projectAgentsMdRel } from "@shared/workbench/paths";
+import {
+  fetchDefaultPersona,
+  readProjectAgentsMd,
+  writeProjectAgentsMd,
+} from "@/lib/settings";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
@@ -25,10 +29,6 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "preview">("preview");
 
-  const agentsMdPath = projectRoot
-    ? `${projectRoot.replace(/[/\\]+$/, "")}/${projectAgentsMdRel()}`
-    : "";
-
   const loadContent = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
@@ -38,7 +38,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
           let text = useSettingsStore.getState().settings.agentSystemPrompt ?? "";
           if (!text.trim()) {
             try {
-              text = await window.electronAPI.settingsGetDefaultPersona();
+              text = await fetchDefaultPersona();
             } catch {
               text = "";
             }
@@ -51,16 +51,9 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
             setSavedContent("");
             return;
           }
-          const exists = await window.electronAPI.fsExists(agentsMdPath);
-          if (exists) {
-            const r = await window.electronAPI.fsRead(agentsMdPath);
-            const text = r?.content || "";
-            setContent(text);
-            setSavedContent(text);
-          } else {
-            setContent("");
-            setSavedContent("");
-          }
+          const agentsMd = await readProjectAgentsMd(projectRoot);
+          setContent(agentsMd.content);
+          setSavedContent(agentsMd.content);
         }
       } catch {
         toast.error(t("settings.editor.prompt.toast.loadFailed"));
@@ -69,7 +62,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
         if (!silent) setLoading(false);
       }
     },
-    [slot.doc, projectRoot, agentsMdPath, closePanel, t],
+    [slot.doc, projectRoot, closePanel, t],
   );
 
   useEffect(() => {
@@ -87,7 +80,7 @@ export function PromptMarkdownPanel({ slot }: { slot: PromptMarkdownSlot }) {
         toast.success(t("settings.editor.prompt.toast.saved"));
       } else if (slot.doc === "agents-md") {
         if (!projectRoot) return;
-        await window.electronAPI.fsWrite(agentsMdPath, content);
+        await writeProjectAgentsMd(projectRoot, content);
         setSavedContent(content);
         notifyPromptConfigChanged();
         toast.success(t("settings.editor.prompt.toast.agentsSaved"));

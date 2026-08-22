@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { isExternalFileId } from "./external-file";
 
 /** Project files plus any open external files for @mention picker. */
@@ -64,7 +65,7 @@ export function useMentionableFiles(
     }
     let cancelled = false;
     const paths = projectOnly.map((f) => f.relativePath);
-    window.electronAPI
+    gitDesktop
       .gitCheckIgnore(projectRoot, paths)
       .then((ignored) => {
         if (!cancelled) setIgnoredPaths(new Set(ignored));

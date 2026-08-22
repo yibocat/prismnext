@@ -22,4 +22,9 @@ export const agentDesktop = {
   agentTruncateToTurn: forwardDesktop("agentTruncateToTurn"),
   agentUndoTruncate: forwardDesktop("agentUndoTruncate"),
   agentResolvePermission: forwardDesktop("agentResolvePermission"),
+  agentReassignDirectory: forwardDesktop("agentReassignDirectory"),
+  agentListRules: forwardDesktop("agentListRules"),
+  agentSetRuleEnabled: forwardDesktop("agentSetRuleEnabled"),
+  agentDeleteRule: forwardDesktop("agentDeleteRule"),
+  agentInstallRule: forwardDesktop("agentInstallRule"),
 };

@@ -20,6 +20,12 @@ import {
 } from "./settings-tokens";
 import { formatTokenCount } from "@shared/providers/token-estimate";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
+import {
+  fetchPromptStackPreview,
+  subscribeExpertsIntegrationChanged,
+  type PromptStackPreview,
+  type PromptStackSection,
+} from "@/lib/settings";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
@@ -32,8 +38,8 @@ const SECTION_ROLE_KEY: Record<string, "opencode" | "eachTurn" | "orchestrator">
   "orchestrator-agent": "orchestrator",
 };
 
-type StackPreview = Awaited<ReturnType<typeof window.electronAPI.settingsGetPromptStackPreview>>;
-type StackSection = StackPreview["sections"][number];
+type StackPreview = PromptStackPreview;
+type StackSection = PromptStackSection;
 
 function SectionContentPreview({ content }: { content: string }) {
   const body = useMemo(() => prepareDocumentMarkdown(content, "default"), [content]);
@@ -151,8 +157,8 @@ export function PromptStackPreviewPanel() {
       const silent = options?.silent ?? false;
       if (!silent) setLoading(true);
       try {
-        const data = await window.electronAPI.settingsGetPromptStackPreview(
-          projectRoot ?? undefined,
+        const data = await fetchPromptStackPreview(
+          projectRoot,
           agentSystemPrompt || undefined,
         );
         setPreview(data);
@@ -179,11 +185,9 @@ export function PromptStackPreviewPanel() {
   // orchestrator content changed) — keeps the stack preview in sync with the
   // configured base agent without a manual refresh.
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onExpertsIntegrationChanged(({ projectPath }) => {
-      if (!projectRoot || projectPath !== projectRoot) return;
+    return subscribeExpertsIntegrationChanged(projectRoot, () => {
       void loadPreview({ silent: true });
     });
-    return unsubscribe;
   }, [projectRoot, loadPreview]);
 
   const handleRefresh = async () => {

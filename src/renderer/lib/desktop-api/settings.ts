@@ -10,4 +10,10 @@ export const settingsDesktop = {
   settingsGet: forwardDesktop("settingsGet"),
   settingsSet: forwardDesktop("settingsSet"),
   themeSetGlassMode: forwardDesktop("themeSetGlassMode"),
+  settingsGetKnowledgeModules: forwardDesktop("settingsGetKnowledgeModules"),
+  settingsGetPromptStackPreview: forwardDesktop("settingsGetPromptStackPreview"),
+  settingsGetBuiltinTools: forwardDesktop("settingsGetBuiltinTools"),
+  settingsCountPromptTokens: forwardDesktop("settingsCountPromptTokens"),
+  settingsGetDefaultPersona: forwardDesktop("settingsGetDefaultPersona"),
+  onExpertsIntegrationChanged: forwardDesktop("onExpertsIntegrationChanged"),
 };

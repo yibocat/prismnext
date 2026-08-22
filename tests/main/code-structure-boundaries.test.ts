@@ -771,5 +771,39 @@ describe("code structure renderer direction (Phase 4)", () => {
       existsSync(join(REPO, "src/renderer/components/modules/chat/permission-ask-surface.tsx")),
     ).toBe(true);
   });
+
+  it("keeps lib/git free of window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/lib/git"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
+  it("keeps apply-template-flow on desktop-api ports", () => {
+    const src = sourceOf("src/renderer/lib/templates/apply-template-flow.ts");
+    expect(src).toMatch(/from\s+["']@\/lib\/desktop-api\/(fs|template)["']/);
+    expect(src).not.toMatch(/window\.electronAPI/);
+  });
+
+  it("keeps lib/settings free of window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/lib/settings"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
+  it("keeps prompt and backup settings panels off window.electronAPI", () => {
+    for (const rel of [
+      "src/renderer/components/modules/settings/knowledge-modules-panel.tsx",
+      "src/renderer/components/modules/settings/prompt-stack-preview-panel.tsx",
+      "src/renderer/components/modules/settings/prompts-rules-settings.tsx",
+      "src/renderer/components/modules/settings/agent-tools-panel.tsx",
+      "src/renderer/components/modules/settings/backups-settings-panel.tsx",
+      "src/renderer/components/modules/settings/prompt-markdown-panel.tsx",
+      "src/renderer/components/modules/settings/rule-markdown-panel.tsx",
+    ]) {
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
 });
 
