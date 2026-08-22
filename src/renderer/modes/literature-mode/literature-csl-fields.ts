@@ -1,4 +1,4 @@
-import { formatLiteratureAuthors } from "./literature-format";
+import { formatLiteratureAuthors } from "@/lib/literature/literature-format";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 /** Parsed subset of CSL-JSON stored on `papers.csl_json`. */

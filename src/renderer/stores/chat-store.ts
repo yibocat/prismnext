@@ -28,7 +28,7 @@ import { lastPathForSession, sameProjectPath, useWorkbenchStore } from "./workbe
 import { applyCheckoutTransition, attachWorktreeForSessionDirectory, captureSessionCwd, isPendingNewWorktree, isWorktreeCheckoutPath, resolveWorktreePathForSend } from "@/lib/git/checkout-context";
 import { useWorktreeStore } from "./worktree-store";
 import { useSettingsStore } from "./settings-store";
-import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn, isToolResultUserMessage, countUserTurns } from "@/lib/chat/chat-turns";
 import { reconcileBackgroundSubAgentRunsFromMessages } from "@/lib/chat/reconcile-background-tasks";
 import {
   planArtifactCardFromEvents,

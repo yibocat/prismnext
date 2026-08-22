@@ -37,7 +37,7 @@ import {
   experimentRunListTitle,
   queryExperimentRuns,
   stepFocusIndex,
-} from "./experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 import {
   type ExperimentEnv,
   type ExperimentRunEntry,

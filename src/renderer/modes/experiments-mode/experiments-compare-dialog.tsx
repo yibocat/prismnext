@@ -17,7 +17,7 @@ import {
   pickMetricsArtifactPaths,
 } from "../../../shared/experiments/metrics";
 import type { ExperimentRunEntry } from "../../../shared/experiments/log";
-import { experimentRunListTitle } from "./experiments-runs-query";
+import { experimentRunListTitle } from "@/lib/experiments/runs-query";
 import { formatExperimentRelativeTime } from "./experiments-detail-chrome";
 import { artifactFullPath } from "./experiments-artifact-nav";
 import { useExperimentProjectRoot } from "./experiments-project-root";

@@ -5,7 +5,7 @@
 import type {
   ExperimentRunEntry,
   ExperimentRunKind,
-} from "../../../shared/experiments/log";
+} from "@shared/experiments/log";
 
 export type RunsStatusFilter = "all" | "success" | "failed" | "cancelled";
 export type RunsSortOrder = "newest" | "oldest";

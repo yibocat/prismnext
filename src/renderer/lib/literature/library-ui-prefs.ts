@@ -2,7 +2,7 @@ import type { LiteratureCollection, LiteratureLibraryView } from "@/types/electr
 import type {
   LiteratureSortColumn,
   LiteratureSortDirection,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 

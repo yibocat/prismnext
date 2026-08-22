@@ -30,7 +30,7 @@ import { literatureDesktop } from "@/lib/desktop-api/literature";
 import type {
   LiteratureSortColumn,
   LiteratureSortDirection,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 
 export type LiteraturePaperPatch = Partial<
   Pick<

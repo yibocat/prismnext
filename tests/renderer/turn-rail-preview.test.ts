@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractTurnUserPreview } from "@/components/modules/chat/chat-turns";
+import { extractTurnUserPreview } from "@/lib/chat/chat-turns";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
 function userMsg(content: ContentBlock[] | string): ChatStreamMessage {

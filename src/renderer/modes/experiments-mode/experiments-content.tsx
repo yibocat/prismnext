@@ -26,7 +26,7 @@ import {
 import {
   filterRecentExperimentsForDisplay,
   getRecentOpenedExperimentsForProject,
-} from "./experiments-recent";
+} from "@/lib/experiments/recent";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 
 function useExperimentsTabTitleSync(tab: RightTab) {
@@ -85,7 +85,7 @@ function ExperimentsHome({ projectRoot }: { projectRoot: string }) {
 
   const recent = useMemo(() => {
     const known = new Set(experiments.map((e) => e.id));
-    const entries = getRecentOpenedExperimentsForProject(projectRoot);
+    const entries = getRecentOpenedExperimentsForProject(projectRoot, recentByProject);
     return filterRecentExperimentsForDisplay(entries, known).slice(0, 8);
   }, [projectRoot, recentByProject, experiments]);
 

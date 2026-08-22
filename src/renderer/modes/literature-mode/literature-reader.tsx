@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { i18n } from "@/lib/i18n";
 import type { LiteraturePaper } from "@/types/electron.d";
 import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { LiteratureBlockProvider } from "./literature-block-context";
 import { LiteratureBlockPageOverlay } from "./literature-block-overlay";
 import { LiteratureBlockPointerCapture } from "./literature-block-pointer";

@@ -10,7 +10,7 @@ import {
   formatEntryType,
   formatLiteratureAuthors,
   formatMetadataSource,
-} from "./literature-format";
+} from "@/lib/literature/literature-format";
 import { publicationDetailRows } from "./literature-csl-fields";
 import {
   literaturePrimaryActionBtnClass,
@@ -23,7 +23,7 @@ import {
   openPaperInMainLibrary,
   openPaperPdfReader,
 } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { useLiteratureStore } from "@/stores/literature-store";
 import type { StagedCitation } from "../../../shared/literature/citation-staging";
 import type { LiteraturePaper } from "@/types/electron.d";

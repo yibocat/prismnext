@@ -6,7 +6,7 @@ import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteraturePdfDrop } from "@/lib/literature/use-literature-pdf-drop";
 import { LiteratureLibrary } from "./literature-library";
 import { LiteratureSessionCitations } from "./literature-session-citations";
-import { BETTER_BIBTEX_URL } from "./literature-format";
+import { BETTER_BIBTEX_URL } from "@/lib/literature/literature-format";
 import { cn } from "@/lib/utils";
 import { literatureLibraryPdfDropZoneClass } from "./literature-list-chrome";
 

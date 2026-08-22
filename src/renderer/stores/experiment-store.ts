@@ -37,7 +37,7 @@ import "@/modes/experiments-mode/open-experiment";
 import {
   DEFAULT_RUNS_QUERY,
   type RunsQuery,
-} from "@/modes/experiments-mode/experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 
 /**
  * Max runs loaded per experiment detail. The service default is 20 (tail-newest);

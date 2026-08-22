@@ -2,7 +2,7 @@ import {
   formatEntryType,
   formatLiteratureAuthors,
   formatPaperProvenance,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { publicationDetailRows } from "@/modes/literature-mode/literature-csl-fields";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { noteBodyWithoutFrontmatter } from "@/lib/literature/paper-notes";

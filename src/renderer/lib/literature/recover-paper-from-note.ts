@@ -1,4 +1,4 @@
-import { parseAuthorsInput } from "@/modes/literature-mode/literature-format";
+import { parseAuthorsInput } from "@/lib/literature/literature-format";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
 import type { LiteraturePaperPatch } from "@/stores/literature-store";

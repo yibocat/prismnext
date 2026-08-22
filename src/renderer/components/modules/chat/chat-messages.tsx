@@ -30,7 +30,7 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { extractTurnUserPreviewFromBlocks } from "./chat-turns";
+import { extractTurnUserPreviewFromBlocks } from "@/lib/chat/chat-turns";
 import { TurnRail } from "./turn-rail";
 import { buildToolResultMapFromBlocks } from "./tools/tool-result-map";
 import { MessageTodoDrawer } from "./todo-plan-bar";

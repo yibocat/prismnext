@@ -32,7 +32,7 @@ import { SETTINGS_GROUPS } from "@/components/modules/settings/settings-sidebar"
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { openRightArea, toggleRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { openPaperPdfReader, openPaperInMainLibrary } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { LiteratureExtractBadge } from "@/modes/literature-mode/literature-extract-badge";
 import { useLiteratureExtractStore, useLiteratureExtractSession } from "@/stores/literature-extract-store";
 import {

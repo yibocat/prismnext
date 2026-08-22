@@ -23,7 +23,8 @@ import { useChatStore } from "@/stores/chat-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { settingsPanelSlotKey } from "@/lib/settings/settings-panel-slot-key";
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
-import { trackRecentOpenedExperiment } from "@/modes/experiments-mode/experiments-recent";
+import { selectExperimentProjectRoot } from "@/lib/experiments/project-root";
+import { useSettingsStore } from "@/stores/settings-store";
 
 // ─── Re-exports ───
 
@@ -34,6 +35,12 @@ export type { RightTabKind, RightTab } from "@/lib/workspace/mode-registry";
 let _tabSeq = 0;
 function nextTabId(): string {
   return `right-tab-${++_tabSeq}`;
+}
+
+function trackOpenedExperiment(experimentId: string, title: string): void {
+  const projectRoot = selectExperimentProjectRoot(useDocumentStore.getState());
+  if (!projectRoot) return;
+  void useSettingsStore.getState().trackRecentOpenedExperiment(projectRoot, experimentId, title);
 }
 
 // ─── Store ───
@@ -207,7 +214,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     );
     if (existing) {
       set({ activeTabId: existing.id });
-      void trackRecentOpenedExperiment(experimentId, title);
+      trackOpenedExperiment(experimentId, title);
       return existing.id;
     }
 
@@ -227,13 +234,13 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
         tabs: s.tabs.map((t) => (t.id === active.id ? makeDetailTab(active.id) : t)),
         activeTabId: active.id,
       }));
-      void trackRecentOpenedExperiment(experimentId, title);
+      trackOpenedExperiment(experimentId, title);
       return active.id;
     }
 
     const id = nextTabId();
     set((s) => ({ tabs: [makeDetailTab(id), ...s.tabs], activeTabId: id }));
-    void trackRecentOpenedExperiment(experimentId, title);
+    trackOpenedExperiment(experimentId, title);
     return id;
   },
 

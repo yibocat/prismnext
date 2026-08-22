@@ -60,7 +60,7 @@ import type {
   RunsKindFilter,
   RunsSortOrder,
   RunsStatusFilter,
-} from "./experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 
 /** Match Git/Literature; Execution has more controls so we collapse earlier. */
 const EXPERIMENTS_TOOLBAR_COMPACT_WIDTH = 520;

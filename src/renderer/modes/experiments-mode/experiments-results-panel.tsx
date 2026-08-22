@@ -42,7 +42,7 @@ import {
   experimentsUiValueClass,
   formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
-import { experimentRunListTitle } from "./experiments-runs-query";
+import { experimentRunListTitle } from "@/lib/experiments/runs-query";
 
 /** icon · title · status · time · count — aligned with Execution list density */
 const RESULTS_RUN_GRID =

@@ -4,7 +4,7 @@
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 
 function activateLiteratureListTab(): void {
   const layout = useLayoutStore.getState();

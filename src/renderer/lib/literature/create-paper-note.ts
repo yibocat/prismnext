@@ -5,7 +5,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveNotebookDir } from "@/types/workspace";
-import { formatLiteratureAuthors } from "@/modes/literature-mode/literature-format";
+import { formatLiteratureAuthors } from "@/lib/literature/literature-format";
 import {
   hasNotebookConfigured,
   listPaperNotes,

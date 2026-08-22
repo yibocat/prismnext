@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { messageIdsAfterTurn } from "../../src/shared/chat/turns";
-import { truncateChatMessagesToTurn } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn } from "@/lib/chat/chat-turns";
 import type { ChatStreamMessage } from "@/stores/chat-store";
 
 describe("messageIdsAfterTurn", () => {

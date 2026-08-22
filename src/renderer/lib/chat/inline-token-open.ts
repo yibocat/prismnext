@@ -3,7 +3,7 @@ import {
   openPaperInMainLibrary,
   openPaperPdfReader,
 } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { openExperimentInPanel } from "@/modes/experiments-mode/open-experiment";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";

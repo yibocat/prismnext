@@ -13,7 +13,7 @@ import {
   pickBestReadySource,
 } from "../../../shared/literature/paper-extract";
 import type { LiteraturePaper, PaperExtractSource } from "@/types/electron.d";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { MetadataRow } from "./literature-inline-field";
 import {
   AppMenu,

@@ -8,7 +8,7 @@ import {
   formatPaperProvenance,
   paperHasReadablePdf,
   sortLiteraturePapers,
-} from "../../src/renderer/modes/literature-mode/literature-format";
+} from "../../src/renderer/lib/literature/literature-format";
 import type { LiteraturePaper } from "../../src/renderer/types/electron.d";
 
 describe("literature-format", () => {

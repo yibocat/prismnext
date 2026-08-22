@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyUserDisplaySnapshots } from "../../src/renderer/components/modules/chat/chat-turns";
+import { applyUserDisplaySnapshots } from "../../src/renderer/lib/chat/chat-turns";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 function user(text: string): ChatStreamMessage {

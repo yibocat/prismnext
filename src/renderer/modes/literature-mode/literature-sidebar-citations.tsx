@@ -26,7 +26,7 @@ import {
 import type { LiteraturePaper, PaperCitationSection } from "@/types/electron.d";
 import { openUrlInBrowser } from "@/lib/browser-link/open-in-browser";
 import { openPaperInMainLibrary, openPaperPdfReader } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { useLiteratureCitationNetwork } from "./use-literature-citation-network";
 
 const headerBtn = cn(

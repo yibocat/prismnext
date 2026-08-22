@@ -41,7 +41,7 @@ import {
   paperHasReadablePdf,
   parseAuthorsInput,
   zoteroSelectItemUrl,
-} from "./literature-format";
+} from "@/lib/literature/literature-format";
 import {
   InlineEditableField,
   InlineEditableSelect,

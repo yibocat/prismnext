@@ -10,7 +10,7 @@ import {
 import {
   isHiddenToolResultCarrier,
   isToolResultUserMessage,
-} from "@/components/modules/chat/chat-turns";
+} from "@/lib/chat/chat-turns";
 
 export type ComposerPendingQuestion = {
   toolUse: ContentBlock;

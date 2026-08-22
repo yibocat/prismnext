@@ -13,8 +13,12 @@ vi.stubGlobal("window", {
   },
 });
 
-vi.mock("@/modes/experiments-mode/experiments-recent", () => ({
-  trackRecentOpenedExperiment: vi.fn(),
+vi.mock("@/stores/settings-store", () => ({
+  useSettingsStore: {
+    getState: () => ({
+      trackRecentOpenedExperiment: vi.fn(),
+    }),
+  },
 }));
 
 beforeAll(() => {

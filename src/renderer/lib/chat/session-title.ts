@@ -1,6 +1,6 @@
 import { partsToPlainText } from "./composer-parts";
 import { conversationDisplayTurns } from "./conversation-view";
-import { isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import { isToolResultUserMessage } from "@/lib/chat/chat-turns";
 import type { Conversation } from "@shared/agent/conversation";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 import { isPlanControlUserText } from "@shared/research/plan";

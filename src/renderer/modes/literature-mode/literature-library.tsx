@@ -15,7 +15,7 @@ import {
   sortLiteraturePapers,
   type LiteratureSortColumn,
   type LiteratureSortDirection,
-} from "./literature-format";
+} from "@/lib/literature/literature-format";
 import { LiteratureEntryPanel } from "./literature-entry-panel";
 import { LiteratureExtractBadge } from "./literature-extract-badge";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";

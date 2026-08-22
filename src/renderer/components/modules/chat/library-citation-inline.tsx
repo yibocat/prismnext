@@ -16,7 +16,7 @@ import {
 import {
   formatLiteratureAuthorsShort,
   paperHasReadablePdf,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { cn } from "@/lib/utils";
 

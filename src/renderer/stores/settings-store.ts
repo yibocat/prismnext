@@ -10,6 +10,7 @@ import {
   isSearchEngineId,
   type SearchEngineId,
 } from "@/lib/browser/search-engines";
+import { nextRecentOpenedExperimentsByProject } from "@/lib/experiments/recent";
 import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
 import {
   migrateOpenRouterEnabledModelIds,
@@ -305,6 +306,7 @@ interface SettingsState {
 
   loadSettings: () => Promise<void>;
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  trackRecentOpenedExperiment: (projectRoot: string, id: string, name: string) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
@@ -702,5 +704,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     } catch (err) {
       log.error("Failed to persist settings", err);
     }
+  },
+
+  trackRecentOpenedExperiment: async (projectRoot, id, name) => {
+    if (!projectRoot || !id.trim()) return;
+    const map = nextRecentOpenedExperimentsByProject(
+      get().settings.recentOpenedExperimentsByProject,
+      projectRoot,
+      id,
+      name,
+    );
+    await get().updateSettings({ recentOpenedExperimentsByProject: map });
   },
 }));
