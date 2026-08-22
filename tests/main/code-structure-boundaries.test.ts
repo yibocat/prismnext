@@ -667,9 +667,47 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(lines).toBeLessThan(800);
     expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(/export const useChatStore/);
     expect(sourceOf("src/renderer/stores/chat/send.ts")).toMatch(/sendPrompt:/);
+    expect(sourceOf("src/renderer/stores/chat/tabs.ts")).toMatch(/loadSession:/);
+    expect(sourceOf("src/renderer/stores/chat/plan.ts")).toMatch(/approveAndExecutePlan:/);
     expect(existsSync(join(REPO, "src/renderer/stores/chat/tabs.ts"))).toBe(true);
     expect(existsSync(join(REPO, "src/renderer/stores/chat/plan.ts"))).toBe(true);
     expect(existsSync(join(REPO, "src/renderer/stores/chat/composer-queue.ts"))).toBe(true);
+  });
+
+  it("does not add a second chat zustand store", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/stores/chat"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/export const use\w+Store = create/);
+    }
+  });
+
+  it("keeps chat-turns free of chat-store", () => {
+    expect(sourceOf("src/renderer/lib/chat/chat-turns.ts")).not.toMatch(/chat-store/);
+  });
+
+  it("keeps project focus files off window.electronAPI", () => {
+    for (const rel of [
+      "src/renderer/stores/document-store.ts",
+      "src/renderer/lib/workspace/project-lifecycle.ts",
+      "src/renderer/hooks/use-project-open.ts",
+    ]) {
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
+  it("makes RightTab a kind-discriminated union", () => {
+    const src = sourceOf("src/renderer/lib/workspace/mode-registry.ts");
+    expect(src).toMatch(/export type RightTab =/);
+    expect(src).not.toMatch(/export interface RightTab \{/);
+  });
+
+  it("removes the private experiment run confirm modal", () => {
+    expect(
+      existsSync(join(REPO, "src/renderer/modes/experiments-mode/experiments-run-confirm-modal.tsx")),
+    ).toBe(false);
+    expect(
+      existsSync(join(REPO, "src/renderer/components/modules/chat/permission-ask-surface.tsx")),
+    ).toBe(true);
   });
 });
 

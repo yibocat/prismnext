@@ -192,18 +192,20 @@ describe("Pi-first agent core boundaries", () => {
   });
 
   it("lists and loads product history through the Agent API, not OpenCode ACP", () => {
+    const chatTabs = sourceOf("src/renderer/stores/chat/tabs.ts");
     const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
     const palette = sourceOf("src/renderer/components/modules/shared/command-palette.tsx");
     const tray = sourceOf("src/renderer/hooks/use-tray-status-sync.ts");
 
-    expect(chatStore).toContain("agentLoadSession");
-    expect(chatStore).toContain("agentRenameSession");
+    expect(chatTabs).toContain("agentLoadSession");
+    expect(chatTabs).toContain("agentRenameSession");
     expect(sidebar).toContain("agentListSessions");
     expect(palette).toContain("agentListSessions");
     expect(tray).toContain("agentListSessions");
 
     for (const [name, src] of [
+      ["chat-tabs", chatTabs],
       ["chat-store", chatStore],
       ["left-sidebar", sidebar],
       ["command-palette", palette],
@@ -213,13 +215,13 @@ describe("Pi-first agent core boundaries", () => {
       expect(src, name).not.toContain("electronAPI.sessionLoad");
     }
 
-    expect(chatStore).not.toContain("electronAPI.chatRegisterTab");
-    expect(chatStore).not.toContain("electronAPI.chatSetSessionAgent");
-    expect(chatStore).not.toContain("electronAPI.chatGetSubAgentActivity");
-    expect(chatStore).not.toContain("electronAPI.chatStopSubAgent");
-    expect(chatStore).not.toContain("electronAPI.sessionRename");
-    expect(chatStore).not.toContain("electronAPI.sessionGetDirectory");
-    expect(chatStore).not.toContain("electronAPI.sessionGetUserDisplays");
+    expect(chatTabs).not.toContain("electronAPI.chatRegisterTab");
+    expect(chatTabs).not.toContain("electronAPI.chatSetSessionAgent");
+    expect(chatTabs).not.toContain("electronAPI.chatGetSubAgentActivity");
+    expect(chatTabs).not.toContain("electronAPI.chatStopSubAgent");
+    expect(chatTabs).not.toContain("electronAPI.sessionRename");
+    expect(chatTabs).not.toContain("electronAPI.sessionGetDirectory");
+    expect(chatTabs).not.toContain("electronAPI.sessionGetUserDisplays");
   });
 
   it("loads Settings model catalog and connection tests through the Agent API", () => {
@@ -268,6 +270,9 @@ describe("Pi-first agent core boundaries", () => {
     const lifecycle = sourceOf("src/renderer/lib/workspace/project-lifecycle.ts");
     const checkpoint = sourceOf("src/renderer/stores/checkpoint-store.ts");
     const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const chatTabs = sourceOf("src/renderer/stores/chat/tabs.ts");
+    const chatPlan = sourceOf("src/renderer/stores/chat/plan.ts");
+    const chatModel = sourceOf("src/renderer/stores/chat/model.ts");
     const intensive = sourceOf("src/renderer/lib/literature/sync-intensive-reading.ts");
     const worktree = sourceOf("src/renderer/lib/git/worktree-sessions.ts");
     const question = sourceOf("src/renderer/hooks/use-question-prompt.ts");
@@ -276,17 +281,18 @@ describe("Pi-first agent core boundaries", () => {
 
     expect(lifecycle).not.toMatch(/agentDispose\(\s*\)/);
     expect(lifecycle).not.toContain("chatDispose");
-    expect(chatStore).toContain("agentDispose");
+    expect(chatTabs).toContain("agentDispose");
     expect(checkpoint).toContain("agentTruncateToTurn");
     expect(checkpoint).toContain("agentUndoTruncate");
     expect(checkpoint).not.toContain("sessionTruncateToTurn");
     expect(checkpoint).not.toContain("sessionUndoTruncate");
-    expect(chatStore).toContain("agentUpsertPlanArtifact");
-    expect(chatStore).toContain("agentAppendPlanDecision");
-    expect(chatStore).toContain("agentUpsertTurnMeta");
+    expect(chatPlan).toContain("agentUpsertPlanArtifact");
+    expect(chatPlan).toContain("agentAppendPlanDecision");
+    expect(chatModel).toContain("agentUpsertTurnMeta");
     expect(chatStore).not.toContain("sessionGetPlanEvents");
-    expect(chatStore).not.toContain("sessionUpsertPlanArtifact");
-    expect(chatStore).not.toContain("sessionUpsertTurnMeta");
+    expect(chatPlan).not.toContain("sessionGetPlanEvents");
+    expect(chatPlan).not.toContain("sessionUpsertPlanArtifact");
+    expect(chatModel).not.toContain("sessionUpsertTurnMeta");
     expect(intensive).toContain("agentSyncIntensiveReading");
     expect(intensive).not.toContain("chatSyncIntensiveReading");
     expect(worktree).toContain("agentReassignDirectory");
@@ -312,7 +318,7 @@ describe("Pi-first agent core boundaries", () => {
   it("hosts MCP on Pi and does not push mcp.json through AcpService", () => {
     const mcpIpc = sourceOf("src/main/ipc/mcp.ts");
     const host = sourceOf("src/main/agent/mcp-host.ts");
-    const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const chatSend = sourceOf("src/renderer/stores/chat/send.ts");
     const experts = sourceOf("src/main/teams/project-subagents-refresh.ts");
 
     expect(mcpIpc).not.toMatch(/from\s+["'][^"']*acp\//);
@@ -321,19 +327,19 @@ describe("Pi-first agent core boundaries", () => {
     expect(mcpIpc).not.toContain("applyProjectMcpConfig");
     expect(host).not.toMatch(/from\s+["'][^"']*acp\//);
     expect(host).toContain("selectMcpServers");
-    expect(chatStore).toContain("mcpServerAllowlist");
+    expect(chatSend).toContain("mcpServerAllowlist");
     expect(experts).not.toContain("applyProjectMcpConfig");
   });
 
   it("stops a Pi subagent through the Agent API, not OpenCode Task", () => {
-    const chatStore = sourceOf("src/renderer/stores/chat-store.ts");
+    const chatSend = sourceOf("src/renderer/stores/chat/send.ts");
     const runtime = sourceOf("src/main/agent/pi-subsession-runtime.ts");
     const factory = sourceOf("src/main/agent/pi-sdk-runtime.ts");
     const reducer = sourceOf("src/shared/agent/conversation-reducer.ts");
 
-    expect(chatStore).toContain("agentCancelSubagent");
-    expect(chatStore).not.toContain("chatStopSubAgent");
-    expect(chatStore).not.toContain("chatGetSubAgentActivity");
+    expect(chatSend).toContain("agentCancelSubagent");
+    expect(chatSend).not.toContain("chatStopSubAgent");
+    expect(chatSend).not.toContain("chatGetSubAgentActivity");
     expect(runtime).toContain("cancelByParentToolCallId");
     expect(factory).toContain("createPiSubagentRunnerFactory");
     expect(reducer).toContain("applySubagentEvent");
