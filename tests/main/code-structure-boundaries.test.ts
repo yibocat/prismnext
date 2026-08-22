@@ -823,6 +823,18 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps leftover mode toolbars and lib/files off window.electronAPI", () => {
+    for (const dir of [
+      "src/renderer/modes",
+      "src/renderer/lib/files",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+      }
+    }
+  });
+
   it("keeps terminal-mode off window.electronAPI", () => {
     for (const file of walkTsFiles(join(REPO, "src/renderer/modes/terminal-mode"))) {
       const rel = relative(REPO, file);

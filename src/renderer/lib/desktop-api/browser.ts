@@ -10,4 +10,6 @@ export const browserDesktop = {
   browserInit: forwardDesktop("browserInit"),
   browserSaveBookmarks: forwardDesktop("browserSaveBookmarks"),
   browserSaveRecent: forwardDesktop("browserSaveRecent"),
+  browserClearCookies: forwardDesktop("browserClearCookies"),
+  browserClearCache: forwardDesktop("browserClearCache"),
 };

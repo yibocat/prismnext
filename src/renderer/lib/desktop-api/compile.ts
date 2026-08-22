@@ -9,4 +9,6 @@ import { forwardDesktop } from "./forward";
 export const compileDesktop = {
   compileExecute: forwardDesktop("compileExecute"),
   compileDetectTexlive: forwardDesktop("compileDetectTexlive"),
+  compileExportPdf: forwardDesktop("compileExportPdf"),
+  manuscriptPackZip: forwardDesktop("manuscriptPackZip"),
 };

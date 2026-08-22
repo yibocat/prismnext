@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
+import { shellDesktop } from "@/lib/desktop-api/shell";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
@@ -475,7 +476,7 @@ export function FilesSidebar() {
       onRenameFolder: openFolderRenameDialog,
       onRevealInFinder: (pathOrRel: string) => {
         const abs = toAbsPath(pathOrRel);
-        if (abs) void window.electronAPI.shellShowItemInFolder(abs);
+        if (abs) void shellDesktop.shellShowItemInFolder(abs);
       },
       onCopyPath: (text: string) => void navigator.clipboard.writeText(text),
       onCopyRelativePath: (rel: string) => void navigator.clipboard.writeText(rel),
