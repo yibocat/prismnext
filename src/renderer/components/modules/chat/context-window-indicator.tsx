@@ -5,6 +5,7 @@ import { CircularProgress } from "@/components/ui/circular-progress";
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import { Shrink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { formatTokenCount } from "@shared/providers/token-estimate";
@@ -80,7 +81,7 @@ export function ContextWindowIndicator({
     }
     setCompacting(true);
     try {
-      const result = await window.electronAPI.agentCompact({ conversationId });
+      const result = await agentDesktop.agentCompact({ conversationId });
       if (!result.ok) {
         throw new Error(result.error || "Failed to compact context.");
       }

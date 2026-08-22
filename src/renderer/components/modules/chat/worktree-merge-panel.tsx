@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2Icon, AlertTriangleIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { useDocumentStore } from "@/stores/document-store";
 import { cn } from "@/lib/utils";
 import {
@@ -49,7 +50,7 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
     setError(null);
     setMergeStep(0);
 
-    const currentBranch = await window.electronAPI.gitStatus(projectRoot)
+    const currentBranch = await gitDesktop.gitStatus(projectRoot)
       .then((s) => s.branch)
       .catch(() => "");
     const labels = buildMergeToBranchStepLabels(baseBranch, currentBranch === baseBranch);

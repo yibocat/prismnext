@@ -7,4 +7,5 @@ import { forwardDesktop } from "./forward";
 
 export const dialogDesktop = {
   dialogOpenFolder: forwardDesktop("dialogOpenFolder"),
+  dialogOpenFile: forwardDesktop("dialogOpenFile"),
 };

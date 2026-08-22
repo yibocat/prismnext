@@ -916,6 +916,18 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps lib/chat and chat modules off window.electronAPI", () => {
+    for (const dir of [
+      "src/renderer/lib/chat",
+      "src/renderer/components/modules/chat",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+      }
+    }
+  });
+
   it("keeps leftover research, slash, and reveal helpers off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/lib/files/open-research-brief.ts",

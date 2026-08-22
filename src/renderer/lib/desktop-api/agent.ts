@@ -53,4 +53,7 @@ export const agentDesktop = {
   agentTestConnection: forwardDesktop("agentTestConnection"),
   agentGetEffortCatalog: forwardDesktop("agentGetEffortCatalog"),
   agentSyncIntensiveReading: forwardDesktop("agentSyncIntensiveReading"),
+  agentDescribeImages: forwardDesktop("agentDescribeImages"),
+  agentAnswerQuestion: forwardDesktop("agentAnswerQuestion"),
+  agentCompact: forwardDesktop("agentCompact"),
 };
