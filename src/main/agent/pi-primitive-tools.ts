@@ -11,7 +11,6 @@ import {
   createLsToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
-  defineTool,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { existsSync } from "node:fs";
@@ -79,7 +78,14 @@ export function wrapPiPrimitiveTools(input: {
     : null;
   return PI_PRIMITIVE_TOOL_NAMES.filter((name) => !allow || allow.has(name)).map((name: PiPrimitiveToolName) => {
     const original = defs[name];
-    return defineTool({
+    const execute = original.execute as (
+      toolCallId: string,
+      params: Record<string, unknown>,
+      signal?: AbortSignal,
+      onUpdate?: (...update: never[]) => void,
+      ctx?: unknown,
+    ) => ReturnType<typeof original.execute>;
+    return {
       ...original,
       execute: async (toolCallId, params, signal, onUpdate, ctx) => {
         const turn = input.getContext();
@@ -123,7 +129,7 @@ export function wrapPiPrimitiveTools(input: {
         const startedAt = Date.now();
         log.info("tool.execute.start", { toolName: name, toolCallId });
         try {
-          const result = await original.execute(toolCallId, args, signal, onUpdate, ctx);
+          const result = await execute(toolCallId, args, signal, onUpdate, ctx);
           log.info("tool.execute.end", {
             toolName: name,
             toolCallId,
@@ -146,6 +152,6 @@ export function wrapPiPrimitiveTools(input: {
           throw err;
         }
       },
-    });
+    } as ToolDefinition;
   });
 }

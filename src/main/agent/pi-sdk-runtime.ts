@@ -1120,6 +1120,7 @@ export class PiSdkRuntime implements AgentRuntime {
       activeTurn: null,
       cancelled: false,
     });
+    const modelRef = handle.getModelRef?.() ?? undefined;
     this.opts.store.createSession({
       conversationId,
       runtimeSessionId,
@@ -1130,7 +1131,7 @@ export class PiSdkRuntime implements AgentRuntime {
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
       piSessionFile: handle.sessionFile,
-      ...(handle.getModelRef?.() ? { modelRef: handle.getModelRef() } : {}),
+      ...(modelRef ? { modelRef } : {}),
     });
     if (persist.mode !== "open") {
       piRuntimeLog.info("session.create", {

@@ -4,30 +4,23 @@
  * Used by experiment-store.
  */
 
-type DesktopApi = typeof window.electronAPI;
-
-function forward<K extends keyof DesktopApi>(name: K): DesktopApi[K] {
-  return ((...args: Parameters<DesktopApi[K]>) => {
-    const fn = window.electronAPI?.[name];
-    return typeof fn === "function" ? (fn as DesktopApi[K])(...args) : undefined;
-  }) as DesktopApi[K];
-}
+import { forwardDesktop } from "./forward";
 
 export const experimentDesktop = {
-  experimentList: forward("experimentList"),
-  experimentArchive: forward("experimentArchive"),
-  experimentRestore: forward("experimentRestore"),
-  experimentDelete: forward("experimentDelete"),
-  experimentCreate: forward("experimentCreate"),
-  experimentUpdate: forward("experimentUpdate"),
-  experimentUpdateRun: forward("experimentUpdateRun"),
-  experimentRead: forward("experimentRead"),
-  experimentDetectEnv: forward("experimentDetectEnv"),
-  experimentRun: forward("experimentRun"),
-  experimentCancelRun: forward("experimentCancelRun"),
-  experimentSnapshot: forward("experimentSnapshot"),
-  experimentGetPaths: forward("experimentGetPaths"),
-  onExperimentRunComplete: forward("onExperimentRunComplete"),
-  onExperimentRunStarted: forward("onExperimentRunStarted"),
-  onExperimentRunOutput: forward("onExperimentRunOutput"),
+  experimentList: forwardDesktop("experimentList"),
+  experimentArchive: forwardDesktop("experimentArchive"),
+  experimentRestore: forwardDesktop("experimentRestore"),
+  experimentDelete: forwardDesktop("experimentDelete"),
+  experimentCreate: forwardDesktop("experimentCreate"),
+  experimentUpdate: forwardDesktop("experimentUpdate"),
+  experimentUpdateRun: forwardDesktop("experimentUpdateRun"),
+  experimentRead: forwardDesktop("experimentRead"),
+  experimentDetectEnv: forwardDesktop("experimentDetectEnv"),
+  experimentRun: forwardDesktop("experimentRun"),
+  experimentCancelRun: forwardDesktop("experimentCancelRun"),
+  experimentSnapshot: forwardDesktop("experimentSnapshot"),
+  experimentGetPaths: forwardDesktop("experimentGetPaths"),
+  onExperimentRunComplete: forwardDesktop("onExperimentRunComplete"),
+  onExperimentRunStarted: forwardDesktop("onExperimentRunStarted"),
+  onExperimentRunOutput: forwardDesktop("onExperimentRunOutput"),
 };

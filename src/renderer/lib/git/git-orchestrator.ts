@@ -1,3 +1,4 @@
+import type { GitFileStatusData } from "@shared/git/types";
 import type { WorktreeInfo } from "@/types/electron";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
@@ -144,8 +145,8 @@ export async function loadWorktreeChangedFiles(worktreeRoot: string): Promise<Wo
     const result = await window.electronAPI.gitStatus(worktreeRoot);
     if (!result.files) return [];
     return result.files
-      .filter((f) => f.staged || f.unstaged || f.untracked)
-      .map((f) => ({
+      .filter((f: GitFileStatusData) => f.staged || f.unstaged || f.untracked)
+      .map((f: GitFileStatusData) => ({
         path: f.path,
         status: f.untracked ? "?" : f.staged ? f.indexStatus : f.worktreeStatus,
       }));

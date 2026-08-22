@@ -215,6 +215,8 @@ export class RuntimeRegistry {
     conversationId: string;
     runtimeSessionId: string;
     runtime: AgentRuntime;
+    gate?: PermissionGate;
+    interactions?: InteractionBroker;
   } | null {
     for (const [conversationId, live] of this.live) {
       if (live.runtimeSessionId === runtimeSessionId) {
@@ -222,6 +224,8 @@ export class RuntimeRegistry {
           conversationId,
           runtimeSessionId: live.runtimeSessionId,
           runtime: live.runtime,
+          gate: live.gate,
+          interactions: live.interactions,
         };
       }
     }

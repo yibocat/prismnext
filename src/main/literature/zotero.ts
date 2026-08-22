@@ -12,7 +12,7 @@ import {
   isPaperLocallyMaterialized,
   paperHasReadyExtract,
 } from "./papers";
-import type { CollectionRow, PaperRow } from "./types";
+import type { CollectionRow, LibraryDb, PaperRow } from "./types";
 
 const ORPHAN_MERGE_MIN_SCORE = 40;
 const ORPHAN_MERGE_WIN_MARGIN = 20;

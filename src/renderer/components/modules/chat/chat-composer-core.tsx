@@ -198,7 +198,7 @@ export function ChatComposerCore({
     <Hint label={t("chat.composer.stop")}>
       <button
         type="button"
-        onClick={composer.cancelExecution}
+        onClick={() => void composer.cancelExecution()}
         aria-label={t("chat.composer.stop")}
         className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
       >

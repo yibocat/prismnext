@@ -10,6 +10,7 @@ import {
   validateRuleMarkdown,
 } from "@/lib/agent/rules-markdown";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
+import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
 import { MarkdownContentPreview } from "./markdown-content-preview";
 import { projectRulesRel } from "@shared/workbench/paths";
 

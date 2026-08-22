@@ -509,7 +509,8 @@ export class AgentSessionStore {
     const matches: AgentSessionRecord[] = [];
     for (const id of this.sessionFileIds()) {
       const session = this.getSession(id);
-      if ((session?.conversationId || session?.runtimeSessionId) === conversationId) {
+      if (!session) continue;
+      if ((session.conversationId || session.runtimeSessionId) === conversationId) {
         matches.push(session);
       }
     }

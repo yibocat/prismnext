@@ -484,7 +484,7 @@ export function buildProjectSubagentsAgentPlan(
   if (options?.defaultSubagentModel === undefined) {
     // Lazy require — keep module importable in unit tests without electron-store.
     try {
-      const { getSettings } = require("./settings") as typeof import("./settings");
+      const { getSettings } = require("../app/settings") as typeof import("../app/settings");
       defaultSubagentModel =
         (getSettings() as { aiSubagentModel?: string | null }).aiSubagentModel ?? null;
     } catch {

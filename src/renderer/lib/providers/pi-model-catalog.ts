@@ -25,7 +25,7 @@ const CATALOG_PROVIDER_IDS = [
 
 let catalogEntries: Record<string, AgentModelRow[]> | null = null;
 let catalogFetchedAt = 0;
-let prefetchPromise: Promise<Record<string, CatalogModelRow[]> | null> | null = null;
+let prefetchPromise: Promise<Record<string, AgentModelRow[]> | null> | null = null;
 const catalogListeners = new Set<() => void>();
 
 /** Subscribe to cache fill / invalidate (e.g. context ring denominator). */

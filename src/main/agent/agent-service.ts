@@ -392,9 +392,7 @@ export class AgentService {
               conversationId,
               tabId: this.activeTabId,
               projectRoot,
-              boundCheckoutPath: input.boundCheckoutPath?.trim()
-                || existing?.boundCheckoutPath
-                || projectRoot,
+              boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
             });
       }
       this.updateDefaultTitle(conversationId, text);

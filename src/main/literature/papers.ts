@@ -4,7 +4,7 @@ import {
   patchRawBibtexKey,
   resolveIncomingBibkey,
 } from "../../shared/literature/bibkey-utils";
-import { coerceStoredDoi, normalizeArxivId } from "../../shared/literature/doi-utils";
+import { coerceStoredDoi, normalizeArxivId, normalizeDoi } from "../../shared/literature/doi-utils";
 import type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature/paper";
 import {
   normalizePaperTag,
