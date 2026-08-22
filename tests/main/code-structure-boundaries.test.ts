@@ -464,6 +464,25 @@ describe("code structure host port (Phase 3)", () => {
     );
   });
 
+  it("splits ipc/fs into fs, dialog, project-scaffold, and template", () => {
+    const index = sourceOf("src/main/ipc/index.ts");
+    expect(index).toMatch(/registerFsHandlers/);
+    expect(index).toMatch(/registerDialogHandlers/);
+    expect(index).toMatch(/registerProjectScaffoldHandlers/);
+    expect(index).toMatch(/registerTemplateHandlers/);
+
+    const fsSrc = sourceOf("src/main/ipc/fs.ts");
+    expect(fsSrc).not.toMatch(/ipcMain\.handle\(\s*["']dialog:/);
+    expect(fsSrc).not.toMatch(/ipcMain\.handle\(\s*["']template:/);
+    expect(fsSrc).not.toMatch(/ipcMain\.handle\(\s*["']project:/);
+
+    expect(sourceOf("src/main/ipc/dialog.ts")).toMatch(/ipcMain\.handle\(\s*["']dialog:/);
+    expect(sourceOf("src/main/ipc/project-scaffold.ts")).toMatch(
+      /ipcMain\.handle\(\s*\n?\s*["']project:create["']/,
+    );
+    expect(sourceOf("src/main/ipc/template.ts")).toMatch(/ipcMain\.handle\(\s*["']template:/);
+  });
+
   it("empties src/main/services of TypeScript sources", () => {
     const dir = join(REPO, "src/main/services");
     if (!existsSync(dir)) return;
