@@ -732,23 +732,27 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(sourceOf("src/renderer/stores/log-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/log["']/,
     );
+    expect(sourceOf("src/renderer/stores/literature-extract-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/extract["']/,
+    );
+    expect(sourceOf("src/renderer/stores/command-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/commands["']/,
+    );
+    expect(sourceOf("src/renderer/stores/teams-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/teams["']/,
+    );
+    expect(sourceOf("src/renderer/stores/mcp-servers-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/mcp["']/,
+    );
+    expect(sourceOf("src/renderer/stores/browser-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/browser["']/,
+    );
+    expect(sourceOf("src/renderer/stores/pro-license-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/pro["']/,
+    );
     expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/settings.ts"))).toBe(true);
-    for (const rel of [
-      "src/renderer/stores/workbench-store.ts",
-      "src/renderer/stores/execution-store.ts",
-      "src/renderer/stores/workspace-config-store.ts",
-      "src/renderer/stores/changes-store.ts",
-      "src/renderer/stores/worktree-store.ts",
-      "src/renderer/stores/citation-staging-store.ts",
-      "src/renderer/stores/settings-store.ts",
-      "src/renderer/stores/checkpoint-store.ts",
-      "src/renderer/stores/theme-store.ts",
-      "src/renderer/stores/compile-store.ts",
-      "src/renderer/stores/terminal-store.ts",
-      "src/renderer/stores/log-store.ts",
-      "src/renderer/stores/right-panel-store.ts",
-      "src/renderer/stores/permission-actions.ts",
-    ]) {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/stores"))) {
+      const rel = relative(REPO, file);
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
   });

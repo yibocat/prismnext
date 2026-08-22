@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useDocumentStore } from "@/stores/document-store";
 import type { BrowserBookmark, BrowserRecentVisit } from "@/types/electron";
 import type { OmniboxAnchor } from "@/lib/browser/omnibox";
+import { browserDesktop } from "@/lib/desktop-api/browser";
 
 /** Normalize URL for comparison: strip trailing slash, fragment, www prefix */
 function normalizeUrl(url: string): string {
@@ -46,11 +47,11 @@ function getProjectRoot(): string | null {
 }
 
 function persistBookmarks(bookmarks: BrowserBookmark[]): void {
-  void window.electronAPI.browserSaveBookmarks(getProjectRoot() ?? "", bookmarks);
+  void browserDesktop.browserSaveBookmarks(getProjectRoot() ?? "", bookmarks);
 }
 
 function persistRecent(recent: BrowserRecentVisit[]): void {
-  void window.electronAPI.browserSaveRecent(getProjectRoot() ?? "", recent);
+  void browserDesktop.browserSaveRecent(getProjectRoot() ?? "", recent);
 }
 
 export const useBrowserStore = create<BrowserState>()((set, get) => ({
@@ -65,7 +66,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   omniboxAnchor: null,
 
   loadFromProject: async (projectRoot?: string) => {
-    const data = await window.electronAPI.browserInit(projectRoot ?? "");
+    const data = await browserDesktop.browserInit(projectRoot ?? "");
     set({
       bookmarks: data.bookmarks,
       recentVisits: data.recent,

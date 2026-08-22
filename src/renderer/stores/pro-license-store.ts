@@ -11,6 +11,7 @@ import { i18n } from "@/lib/i18n";
 import { tryLoadPro } from "@/lib/pro/load-pro";
 import { proContributions } from "@/lib/pro/contributions";
 import type { ProContributionsSnapshot } from "@/lib/pro/contribution-types";
+import { proDesktop } from "@/lib/desktop-api/pro";
 
 interface ProLicenseState {
   license: LicenseSnapshot | null;
@@ -99,7 +100,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
     hydrateInFlight = (async () => {
       try {
         const prev = get().license;
-        const license = (await window.electronAPI.proGetLicense()) ?? null;
+        const license = (await proDesktop.proGetLicense()) ?? null;
         set({ license, hydrated: true });
         if (!sameLicense(prev, license) || get().loadStatus === "idle") {
           await get().reloadProModule();
@@ -120,7 +121,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   },
 
   activate: async (rawKey) => {
-    const result = await window.electronAPI.proActivate(rawKey);
+    const result = await proDesktop.proActivate(rawKey);
     if (result.ok) {
       set({ license: result.license });
       await get().reloadProModule();
@@ -131,7 +132,7 @@ export const useProLicenseStore = create<ProLicenseState>((set, get) => ({
   },
 
   clear: async () => {
-    await window.electronAPI.proClearLicense();
+    await proDesktop.proClearLicense();
     proContributions.clear();
     set({
       license: null,

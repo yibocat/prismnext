@@ -11,6 +11,8 @@ import type {
 } from "@commands/export-import";
 import { APP_COMMANDS_OWNER_ID } from "@shared/teams/types";
 import { useTeamsStore } from "./teams-store";
+import { commandsDesktop } from "@/lib/desktop-api/commands";
+import { teamsDesktop } from "@/lib/desktop-api/teams";
 
 interface CommandState {
   commands: CommandDef[];
@@ -53,7 +55,7 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
     try {
       const { useDocumentStore } = await import("./document-store");
       const projectRoot = useDocumentStore.getState().projectRoot;
-      const commands = await window.electronAPI.commandsList(projectRoot);
+      const commands = await commandsDesktop.commandsList(projectRoot);
       set({ commands, loaded: true });
       await get().refreshSlashAllow();
     } catch (err) {
@@ -72,7 +74,7 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
       }
       const activeTeamId = useTeamsStore.getState().activeTeamId;
       const roster = activeTeamId
-        ? await window.electronAPI.teamsGetCommandsRoster(projectRoot, activeTeamId)
+        ? await teamsDesktop.teamsGetCommandsRoster(projectRoot, activeTeamId)
         : null;
       const allow = new Set<string>();
       for (const c of get().commands) {
@@ -108,26 +110,26 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
 
   expandCommand: async (name: string, rawInput: string) => {
     const projectRoot = await getProjectRoot();
-    return window.electronAPI.commandsExpand(name, rawInput, projectRoot);
+    return commandsDesktop.commandsExpand(name, rawInput, projectRoot);
   },
 
   createCommand: async (payload) => {
     const projectRoot = await getProjectRoot();
-    const created = await window.electronAPI.commandsCreate(projectRoot, payload);
+    const created = await commandsDesktop.commandsCreate(projectRoot, payload);
     await get().reloadCommands();
     return created;
   },
 
   updateCommand: async (id, payload) => {
     const projectRoot = await getProjectRoot();
-    const updated = await window.electronAPI.commandsUpdate(projectRoot, id, payload);
+    const updated = await commandsDesktop.commandsUpdate(projectRoot, id, payload);
     await get().reloadCommands();
     return updated;
   },
 
   deleteCommand: async (id) => {
     const projectRoot = await getProjectRoot();
-    await window.electronAPI.commandsDelete(projectRoot, id);
+    await commandsDesktop.commandsDelete(projectRoot, id);
     await get().reloadCommands();
   },
 
@@ -138,7 +140,7 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
     });
     try {
       const projectRoot = await getProjectRoot();
-      const updated = await window.electronAPI.commandsToggle(projectRoot, id, enabled);
+      const updated = await commandsDesktop.commandsToggle(projectRoot, id, enabled);
       set({ commands: updated });
       await get().refreshSlashAllow();
     } catch {
@@ -149,19 +151,19 @@ export const useCommandStore = create<CommandState>()((set, get) => ({
   reloadCommands: async () => {
     const { useDocumentStore } = await import("./document-store");
     const projectRoot = useDocumentStore.getState().projectRoot;
-    const commands = await window.electronAPI.commandsReload(projectRoot);
+    const commands = await commandsDesktop.commandsReload(projectRoot);
     set({ commands });
     await get().refreshSlashAllow();
   },
 
   previewImport: (projectRoot, pack) =>
-    window.electronAPI.commandsPreviewImport(projectRoot, pack),
+    commandsDesktop.commandsPreviewImport(projectRoot, pack),
 
   importPack: (projectRoot, pack, strategy) =>
-    window.electronAPI.commandsImportPack(projectRoot, pack, strategy),
+    commandsDesktop.commandsImportPack(projectRoot, pack, strategy),
 
   writeExportFile: (filePath, projectRoot) =>
-    window.electronAPI.commandsWriteExportFile(filePath, projectRoot),
+    commandsDesktop.commandsWriteExportFile(filePath, projectRoot),
 
-  readImportFile: (filePath) => window.electronAPI.commandsReadImportFile(filePath),
+  readImportFile: (filePath) => commandsDesktop.commandsReadImportFile(filePath),
 }));
