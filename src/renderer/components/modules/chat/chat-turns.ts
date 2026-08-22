@@ -1,5 +1,4 @@
-import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
-import { contentBlocks } from "./tools/tool-result-map";
+import { contentBlocks, type ChatStreamMessage, type ContentBlock } from "@/lib/chat/types";
 import { partsToPlainText, type ComposerPart } from "@/lib/chat/composer-parts";
 import { isBackgroundTaskInjectMessageText } from "@shared/chat/background-task";
 import { isPlanControlUserText } from "@shared/research/plan";
