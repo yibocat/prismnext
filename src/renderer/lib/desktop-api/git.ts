@@ -1,7 +1,7 @@
 /**
  * Git desktop port.
  * Forwards to `window.electronAPI` — do not redefine DTOs here.
- * Used by git-store. git-diff-prefs-store is not on this port yet.
+ * Used by git-store and worktree-store. git-diff-prefs-store is not on this port yet.
  */
 
 import { forwardDesktop } from "./forward";
@@ -28,4 +28,9 @@ export const gitDesktop = {
   gitRevert: forwardDesktop("gitRevert"),
   gitReset: forwardDesktop("gitReset"),
   gitInit: forwardDesktop("gitInit"),
+  worktreeList: forwardDesktop("worktreeList"),
+  worktreeCreate: forwardDesktop("worktreeCreate"),
+  worktreeRemove: forwardDesktop("worktreeRemove"),
+  worktreeMoveSessions: forwardDesktop("worktreeMoveSessions"),
+  worktreeBranches: forwardDesktop("worktreeBranches"),
 };

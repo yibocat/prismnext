@@ -1,7 +1,7 @@
 /**
  * Literature / Zotero / citation desktop port.
  * Forwards to `window.electronAPI` — do not redefine DTOs here.
- * Used by literature-store. extract / reader stores are not on this port yet.
+ * Used by literature-store and citation-staging-store. extract / reader stores are not on this port yet.
  */
 
 import { forwardDesktop } from "./forward";
@@ -29,6 +29,9 @@ export const literatureDesktop = {
   literatureDeletePaper: forwardDesktop("literatureDeletePaper"),
   literatureImportToLocal: forwardDesktop("literatureImportToLocal"),
   literatureCreateFromIdentifier: forwardDesktop("literatureCreateFromIdentifier"),
+  literatureCreateFromStagedCitation: forwardDesktop("literatureCreateFromStagedCitation"),
+  literatureCancelStagedCitationAdd: forwardDesktop("literatureCancelStagedCitationAdd"),
+  onLiteratureStagedAddProgress: forwardDesktop("onLiteratureStagedAddProgress"),
   literatureExportBibToFile: forwardDesktop("literatureExportBibToFile"),
   literatureCite: forwardDesktop("literatureCite"),
   literatureCitationHealth: forwardDesktop("literatureCitationHealth"),

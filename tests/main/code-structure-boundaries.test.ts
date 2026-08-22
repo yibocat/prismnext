@@ -708,11 +708,19 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(sourceOf("src/renderer/stores/changes-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/fs["']/,
     );
+    expect(sourceOf("src/renderer/stores/worktree-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/git["']/,
+    );
+    expect(sourceOf("src/renderer/stores/citation-staging-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/literature["']/,
+    );
     for (const rel of [
       "src/renderer/stores/workbench-store.ts",
       "src/renderer/stores/execution-store.ts",
       "src/renderer/stores/workspace-config-store.ts",
       "src/renderer/stores/changes-store.ts",
+      "src/renderer/stores/worktree-store.ts",
+      "src/renderer/stores/citation-staging-store.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
