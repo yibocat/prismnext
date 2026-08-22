@@ -34,6 +34,8 @@ export const gitDesktop = {
   gitMergeNoCommit: forwardDesktop("gitMergeNoCommit"),
   gitDeleteBranch: forwardDesktop("gitDeleteBranch"),
   gitCheckIgnore: forwardDesktop("gitCheckIgnore"),
+  gitCommitFiles: forwardDesktop("gitCommitFiles"),
+  gitCommitFileDiff: forwardDesktop("gitCommitFileDiff"),
   worktreeList: forwardDesktop("worktreeList"),
   worktreeCreate: forwardDesktop("worktreeCreate"),
   worktreeRemove: forwardDesktop("worktreeRemove"),

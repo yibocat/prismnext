@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { useDocumentStore } from "@/stores/document-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { cn } from "@/lib/utils";
 import {
   buildMergeToBranchStepLabels,
@@ -61,7 +62,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
     setError(null);
     setMergeStep(0);
 
-    const currentBranch = await window.electronAPI.gitStatus(projectRoot)
+    const currentBranch = await gitDesktop.gitStatus(projectRoot)
       .then((s) => s.branch)
       .catch(() => "");
     const labels = buildMergeToBranchStepLabels(baseBranch, currentBranch === baseBranch);
