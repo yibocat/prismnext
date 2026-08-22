@@ -36,6 +36,8 @@ import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
 import { parseModelPreferenceKey } from "@/lib/providers/model-keys";
 import type { ModelConfig } from "@/lib/providers";
 import type { LogLevel } from "@shared/platform/log-types";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 const log = createLogger("settings-store");
 
@@ -70,7 +72,7 @@ async function sanitizePersistedModelThoughtLevels(
       customProviders,
     );
     try {
-      const result = await window.electronAPI.agentGetModelEffort({
+      const result = await agentDesktop.agentGetModelEffort({
         provider: parsed.providerId,
         modelId: parsed.modelId,
         fallback,
@@ -316,7 +318,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   loadSettings: async () => {
     const t0 = performance.now();
     try {
-      const remote = await window.electronAPI.settingsGet();
+      const remote = await settingsDesktop.settingsGet();
 
       // Migrate: old manuscriptDir → defaultWorkspaceDirs
       if (
@@ -329,7 +331,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           { function: "manuscript", name: migratedDir, mainTex: "main.tex" },
         ];
         // Persist immediately so migration only happens once
-        window.electronAPI.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});
+        settingsDesktop.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});
         log.info("Migrated manuscriptDir → defaultWorkspaceDirs", { from: migratedDir });
       }
 
@@ -451,7 +453,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           }
 
           if (changed) {
-            window.electronAPI
+            settingsDesktop
               .settingsSet({
                 aiProvider: r.aiProvider,
                 aiApiKeys: r.aiApiKeys,
@@ -488,7 +490,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           }));
         }
         r.aiCustomModelsData = migrated;
-        window.electronAPI.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
+        settingsDesktop.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
         log.info("Migrated aiCustomModels → aiCustomModelsData");
       }
 
@@ -500,7 +502,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
             migrated.length !== raw.length || migrated.some((id, i) => id !== raw[i]);
           if (changed) {
             r.aiEnabledModels = { ...r.aiEnabledModels, [catalogId]: migrated };
-            window.electronAPI
+            settingsDesktop
               .settingsSet({ aiEnabledModels: r.aiEnabledModels })
               .catch(() => {});
             log.info(`Migrated ${catalogId} aiEnabledModels to canonical IDs`);
@@ -511,7 +513,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           if (normalized !== r.aiModel) {
             const previous = r.aiModel;
             r.aiModel = normalized;
-            window.electronAPI.settingsSet({ aiModel: normalized }).catch(() => {});
+            settingsDesktop.settingsSet({ aiModel: normalized }).catch(() => {});
             log.info(`Migrated aiModel to canonical ${catalogId} id`, {
               from: previous,
               to: normalized,
@@ -539,7 +541,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         if (migrated) {
           r.aiCustomProviders = migrated.aiCustomProviders;
           r.legacyBuiltinProvidersMigrated = true;
-          window.electronAPI
+          settingsDesktop
             .settingsSet({
               aiCustomProviders: migrated.aiCustomProviders,
               legacyBuiltinProvidersMigrated: true,
@@ -644,7 +646,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         }
 
         if (providerPatch) {
-          window.electronAPI.settingsSet(providerPatch).catch(() => {});
+          settingsDesktop.settingsSet(providerPatch).catch(() => {});
           log.info("Migrated provider model IDs to canonical catalog ids");
         }
       }
@@ -699,7 +701,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
 
     try {
-      await window.electronAPI.settingsSet(patch);
+      await settingsDesktop.settingsSet(patch);
       log.info("Settings updated", patch);
     } catch (err) {
       log.error("Failed to persist settings", err);

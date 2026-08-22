@@ -11,6 +11,8 @@ import {
 import type { Conversation } from "../../shared/agent/conversation";
 import { createLogger } from "@/services/logger";
 import { projectCheckpointsRel } from "@shared/workbench/paths";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 const log = createLogger("checkpoint-store", "agent");
 
@@ -169,9 +171,9 @@ function checkpointReferencesWorktree(
 async function listCheckpointSessionIds(projectRoot: string): Promise<string[]> {
   const dir = `${projectRoot}/${projectCheckpointsRel()}`;
   try {
-    const exists = await window.electronAPI.fsExists(dir);
+    const exists = await fsDesktop.fsExists(dir);
     if (!exists) return [];
-    const { files } = await window.electronAPI.fsScan(dir);
+    const { files } = await fsDesktop.fsScan(dir);
     return files
       .filter((f) => f.relativePath.endsWith(".json"))
       .map((f) => f.relativePath.replace(/\.json$/, "").split("/").pop() || "");
@@ -196,9 +198,9 @@ async function readFileSnapshot(
     if (content != null) return content;
   }
   try {
-    const exists = await window.electronAPI.fsExists(absolutePath);
+    const exists = await fsDesktop.fsExists(absolutePath);
     if (!exists) return "";
-    const result = await window.electronAPI.fsRead(absolutePath);
+    const result = await fsDesktop.fsRead(absolutePath);
     return result?.content ?? "";
   } catch {
     return "";
@@ -213,8 +215,8 @@ async function persistCheckpoints(
   const path = checkpointPath(projectRoot, sessionId);
   const dir = path.slice(0, path.lastIndexOf("/"));
   try {
-    await window.electronAPI.fsMkdir(dir);
-    await window.electronAPI.fsWrite(
+    await fsDesktop.fsMkdir(dir);
+    await fsDesktop.fsWrite(
       path,
       JSON.stringify({ sessionId, checkpoints, updatedAt: Date.now() }, null, 2),
     );
@@ -229,9 +231,9 @@ async function loadCheckpointsFromDisk(
 ): Promise<TurnCheckpoint[]> {
   const path = checkpointPath(projectRoot, sessionId);
   try {
-    const exists = await window.electronAPI.fsExists(path);
+    const exists = await fsDesktop.fsExists(path);
     if (!exists) return [];
-    const result = await window.electronAPI.fsRead(path);
+    const result = await fsDesktop.fsRead(path);
     const data = result?.content ? JSON.parse(result.content) : {};
     return Array.isArray(data.checkpoints) ? data.checkpoints : [];
   } catch {
@@ -243,9 +245,9 @@ async function applyCheckpointFiles(files: CheckpointFile[]): Promise<void> {
   const docState = useDocumentStore.getState();
   for (const file of files) {
     try {
-      const exists = await window.electronAPI.fsExists(file.absolutePath);
+      const exists = await fsDesktop.fsExists(file.absolutePath);
       if (file.content === "" && !exists) continue;
-      await window.electronAPI.fsWrite(file.absolutePath, file.content);
+      await fsDesktop.fsWrite(file.absolutePath, file.content);
     } catch (err) {
       log.warn(`Failed to restore ${file.relativePath}`, { error: (err as Error).message });
     }
@@ -272,9 +274,9 @@ async function deleteCheckpointOrphans(
       ?? docState.files.find((f) => f.relativePath === rel)?.absolutePath
       ?? `${projectRoot}/${rel}`;
     try {
-      const exists = await window.electronAPI.fsExists(absolutePath);
+      const exists = await fsDesktop.fsExists(absolutePath);
       if (!exists) continue;
-      await window.electronAPI.fsDelete(absolutePath);
+      await fsDesktop.fsDelete(absolutePath);
       log.info(`Rollback deleted created file: ${rel}`);
     } catch (err) {
       log.warn(`Failed to delete orphan ${rel}`, { error: (err as Error).message });
@@ -318,8 +320,8 @@ function snapshotFromCheckpoints(checkpoints: TurnCheckpoint[]): CheckpointFile[
 async function deleteCheckpointsOnDisk(projectRoot: string, sessionId: string): Promise<void> {
   const path = checkpointPath(projectRoot, sessionId);
   try {
-    const exists = await window.electronAPI.fsExists(path);
-    if (exists) await window.electronAPI.fsDelete(path);
+    const exists = await fsDesktop.fsExists(path);
+    if (exists) await fsDesktop.fsDelete(path);
   } catch {
     // Best-effort
   }
@@ -711,7 +713,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
       || chatTab?.sessionId
       || null;
     if (conversationId) {
-      const truncated = await window.electronAPI.agentTruncateToTurn({
+      const truncated = await agentDesktop.agentTruncateToTurn({
         conversationId,
         turnIndex,
       });
@@ -803,7 +805,7 @@ export const useCheckpointStore = create<CheckpointStoreState>()((set, get) => (
     let sessionRestored = false;
     if (conversationId) {
       try {
-        const undone = await window.electronAPI.agentUndoTruncate({ conversationId });
+        const undone = await agentDesktop.agentUndoTruncate({ conversationId });
         sessionRestored = undone.ok;
         if (undone.ok) {
           await useChatStore.getState().resyncTabMessagesFromDisk(tabId);

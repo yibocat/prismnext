@@ -7,3 +7,4 @@ export { workbenchDesktop } from "./workbench";
 export { executionDesktop } from "./execution";
 export { agentDesktop } from "./agent";
 export { researchDesktop } from "./research";
+export { settingsDesktop } from "./settings";

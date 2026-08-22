@@ -714,6 +714,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(sourceOf("src/renderer/stores/citation-staging-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/literature["']/,
     );
+    expect(sourceOf("src/renderer/stores/settings-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/settings["']/,
+    );
+    expect(sourceOf("src/renderer/stores/checkpoint-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/agent["']/,
+    );
+    expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/settings.ts"))).toBe(true);
     for (const rel of [
       "src/renderer/stores/workbench-store.ts",
       "src/renderer/stores/execution-store.ts",
@@ -721,6 +728,8 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/stores/changes-store.ts",
       "src/renderer/stores/worktree-store.ts",
       "src/renderer/stores/citation-staging-store.ts",
+      "src/renderer/stores/settings-store.ts",
+      "src/renderer/stores/checkpoint-store.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }

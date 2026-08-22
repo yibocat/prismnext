@@ -1,12 +1,13 @@
 /**
  * Filesystem desktop port.
  * Forwards to `window.electronAPI` — do not redefine DTOs here.
- * Used by document-store and changes-store.
+ * Used by document-store, changes-store, and checkpoint-store.
  */
 
 import { forwardDesktop } from "./forward";
 
 export const fsDesktop = {
+  fsScan: forwardDesktop("fsScan"),
   fsScanMetadata: forwardDesktop("fsScanMetadata"),
   fsRead: forwardDesktop("fsRead"),
   fsReadImage: forwardDesktop("fsReadImage"),
