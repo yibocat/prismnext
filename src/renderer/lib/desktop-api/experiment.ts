@@ -23,4 +23,7 @@ export const experimentDesktop = {
   onExperimentRunComplete: forwardDesktop("onExperimentRunComplete"),
   onExperimentRunStarted: forwardDesktop("onExperimentRunStarted"),
   onExperimentRunOutput: forwardDesktop("onExperimentRunOutput"),
+  onExperimentChanged: forwardDesktop("onExperimentChanged"),
+  provenanceGetForArtifact: forwardDesktop("provenanceGetForArtifact"),
+  provenanceGetForRun: forwardDesktop("provenanceGetForRun"),
 };

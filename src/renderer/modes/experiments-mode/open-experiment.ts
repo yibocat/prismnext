@@ -5,6 +5,7 @@
  * Deep-links from Chat / Agent open Experiments in RightArea and select the island.
  * Preserves maximize when RightArea is already maximized (does not force split).
  */
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
@@ -108,9 +109,9 @@ export function handleExperimentChanged(data: ExperimentChangedPayload): void {
 const gChanged = globalThis as typeof globalThis & {
   __prismExperimentChangedUnsub?: (() => void) | null;
 };
-if (typeof window !== "undefined" && window.electronAPI?.onExperimentChanged) {
+if (typeof window !== "undefined") {
   gChanged.__prismExperimentChangedUnsub?.();
-  gChanged.__prismExperimentChangedUnsub = window.electronAPI.onExperimentChanged((data) => {
+  gChanged.__prismExperimentChangedUnsub = experimentDesktop.onExperimentChanged((data) => {
     handleExperimentChanged(data);
   });
 }

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -100,7 +101,7 @@ export function ExperimentsProvenanceInspector({
     let cancelled = false;
     setLoading(true);
     setResolved(null);
-    window.electronAPI
+    experimentDesktop
       .provenanceGetForArtifact(projectRoot, artifactPath)
       .then((result) => {
         if (cancelled) return;

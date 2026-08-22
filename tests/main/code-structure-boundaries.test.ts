@@ -811,6 +811,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps experiments-mode off window.electronAPI", () => {
+    for (const file of walkTsFiles(join(REPO, "src/renderer/modes/experiments-mode"))) {
+      const rel = relative(REPO, file);
+      expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
   it("keeps literature helpers and literature-mode off window.electronAPI", () => {
     for (const dir of [
       "src/renderer/lib/literature",

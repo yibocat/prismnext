@@ -20,6 +20,7 @@ import {
   SquareArrowOutUpRightIcon,
 } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { cn } from "@/lib/utils";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import {
@@ -399,7 +400,7 @@ function RunDetailPanel({
         const abs = resolveProjectRelativePath(docRoot, artifactFullPath(art, workspacePath));
         if (!abs) continue;
         try {
-          const st = await window.electronAPI.fsStat(abs);
+          const st = await fsDesktop.fsStat(abs);
           if (st && st.mtimeMs > finishedMs + 1000) {
             if (!cancelled) setWorkingCopyNewer(true);
             return;

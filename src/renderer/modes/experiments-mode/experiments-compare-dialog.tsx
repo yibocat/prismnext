@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   parseFlatMetricsJsonText,
@@ -62,9 +63,9 @@ async function loadMetricsForRun(
     const abs = resolveProjectRelativePath(projectRoot, rel);
     if (!abs) continue;
     try {
-      const exists = await window.electronAPI.fsExists(abs);
+      const exists = await fsDesktop.fsExists(abs);
       if (!exists) continue;
-      const { content } = await window.electronAPI.fsRead(abs);
+      const { content } = await fsDesktop.fsRead(abs);
       const values = parseFlatMetricsJsonText(content ?? "");
       if (values) return values;
     } catch {

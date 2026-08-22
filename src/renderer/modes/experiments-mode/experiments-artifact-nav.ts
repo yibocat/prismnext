@@ -4,6 +4,7 @@
  * Extracted so the "reveal + open an artifact in Files mode" sequence stays in
  * one place (chip click and the inspector's "Open in Files" button agree).
  */
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
@@ -73,7 +74,7 @@ export async function resolveExistingArtifactRel(
     const abs = resolveProjectRelativePath(projectRoot, cand);
     if (!abs) continue;
     try {
-      const ok = await window.electronAPI.fsExists(abs);
+      const ok = await fsDesktop.fsExists(abs);
       if (ok) return cand;
     } catch {
       // keep trying
@@ -82,7 +83,7 @@ export async function resolveExistingArtifactRel(
   const base = artifactBasename(path);
   if (base) {
     try {
-      const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+      const found = await fsDesktop.fsFindByBasename(projectRoot, base);
       if (found) return found;
     } catch {
       // ignore
