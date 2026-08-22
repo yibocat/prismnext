@@ -587,4 +587,51 @@ describe("code structure host port (Phase 3)", () => {
       }
     }
   });
+
+  it("keeps required main domain folders and does not invent src/domains", () => {
+    for (const dir of [
+      "src/main/app",
+      "src/main/literature",
+      "src/main/experiment",
+      "src/main/compile",
+      "src/main/git",
+      "src/main/terminal",
+      "src/main/project",
+      "src/main/session",
+      "src/main/skills",
+      "src/main/research",
+      "src/main/interaction",
+    ]) {
+      expect(existsSync(join(REPO, dir)), dir).toBe(true);
+    }
+    expect(existsSync(join(REPO, "src/domains"))).toBe(false);
+    expect(existsSync(join(REPO, "src/main/services/literature-service.ts"))).toBe(false);
+  });
+
+  it("routes literature, experiment, and git stores through desktop-api", () => {
+    for (const rel of [
+      "src/renderer/lib/desktop-api/index.ts",
+      "src/renderer/lib/desktop-api/literature.ts",
+      "src/renderer/lib/desktop-api/experiment.ts",
+      "src/renderer/lib/desktop-api/git.ts",
+    ]) {
+      expect(existsSync(join(REPO, rel)), rel).toBe(true);
+    }
+    expect(sourceOf("src/renderer/lib/desktop-api/index.ts")).toMatch(
+      /export \{ literatureDesktop \} from "\.\/literature"/,
+    );
+    expect(sourceOf("src/renderer/stores/literature-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/literature["']/,
+    );
+    expect(sourceOf("src/renderer/stores/experiment-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/experiment["']/,
+    );
+    expect(sourceOf("src/renderer/stores/git-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/git["']/,
+    );
+    expect(sourceOf("src/renderer/stores/literature-store.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/experiment-store.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/git-store.ts")).not.toMatch(/window\.electronAPI/);
+    expect(sourceOf("src/renderer/stores/chat-store.ts")).toMatch(/window\.electronAPI/);
+  });
 });
