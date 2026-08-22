@@ -8,6 +8,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTabCloseConfirmStore } from "@/stores/tab-close-confirm-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import { executionDesktop } from "@/lib/desktop-api/execution";
 import { i18n } from "@/lib/i18n";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
 
@@ -37,7 +38,7 @@ export async function confirmProjectSwitchIfNeeded(
 
   let runningIds = listRunningExperimentIds(projectId);
   try {
-    const listed = await window.electronAPI.executionListRunning?.();
+    const listed = await executionDesktop.executionListRunning();
     if (listed?.ok) {
       runningIds = listed.summaries
         .filter((summary) =>
