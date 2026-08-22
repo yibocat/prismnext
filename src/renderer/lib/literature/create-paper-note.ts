@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { ensureRightAreaVisibleForFiles } from "@/lib/files/open-project-file";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
 import { useDocumentStore } from "@/stores/document-store";
@@ -131,7 +132,7 @@ export async function createNewPaperNote(
 
   const content = options?.initialContent ?? buildPaperNoteTemplate(paper);
   try {
-    await window.electronAPI.fsCreate(checkoutRoot, relativePath, content);
+    await fsDesktop.fsCreate(checkoutRoot, relativePath, content);
     await doc.reloadMetadataFromDisk(true);
     if (activateFilesMode) {
       await openPaperNote(relativePath, filename);

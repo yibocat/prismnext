@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileTextIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
+import { extractDesktop } from "@/lib/desktop-api/extract";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureExtractStore, selectExtractProgressForPaper } from "@/stores/literature-extract-store";
 import { Progress } from "@/components/ui/progress";
@@ -106,7 +107,7 @@ export function useLiteratureAgentTextActions(paper: LiteraturePaper) {
     if (!projectRoot) return;
     const src = pickBestReadySource(states, "auto");
     if (!src) return;
-    const { relativePath } = await window.electronAPI.extractOpenMd(projectRoot, paper.id, src);
+    const { relativePath } = await extractDesktop.extractOpenMd(projectRoot, paper.id, src);
     if (!relativePath) {
       toast.error("Text file not found");
       return;

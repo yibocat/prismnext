@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type DragEventHandler } from "react";
 import { toast } from "sonner";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { formatPdfDownloadFailure } from "../../../shared/literature/pdf-download-messages";
@@ -78,7 +80,7 @@ export function useLiteraturePdfAttach(targetPaperId: string) {
   );
 
   const pickAndAttach = useCallback(async () => {
-    const { path } = await window.electronAPI.literaturePickPdf();
+    const { path } = await literatureDesktop.literaturePickPdf();
     if (!path) return;
     await attachPdfPath(path);
   }, [attachPdfPath]);
@@ -128,7 +130,7 @@ export function useLiteraturePdfAttach(targetPaperId: string) {
         toast.info("Drop a PDF file");
         return;
       }
-      void attachPdfPath(window.electronAPI.getPathForFile(file));
+      void attachPdfPath(fsDesktop.getPathForFile(file));
     },
     [attachPdfPath, projectRoot, resetDrag],
   );
@@ -342,7 +344,7 @@ export function useLiteratureRowPdfDropTarget(
         toast.info("Drop a PDF file");
         return;
       }
-      void attachPdfPath(window.electronAPI.getPathForFile(file));
+      void attachPdfPath(fsDesktop.getPathForFile(file));
     },
     [attachPdfPath, paper.id, session],
   );

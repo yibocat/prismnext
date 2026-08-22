@@ -811,6 +811,18 @@ describe("code structure renderer direction (Phase 4)", () => {
     }
   });
 
+  it("keeps literature helpers and literature-mode off window.electronAPI", () => {
+    for (const dir of [
+      "src/renderer/lib/literature",
+      "src/renderer/modes/literature-mode",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+      }
+    }
+  });
+
   it("keeps prompt and backup settings panels off window.electronAPI", () => {
     for (const rel of [
       "src/renderer/components/modules/settings/knowledge-modules-panel.tsx",

@@ -20,4 +20,6 @@ export const extractDesktop = {
   onExtractPdfCached: forwardDesktop("onExtractPdfCached"),
   onExtractAgentRequested: forwardDesktop("onExtractAgentRequested"),
   extractTestMineru: forwardDesktop("extractTestMineru"),
+  extractGetBlocks: forwardDesktop("extractGetBlocks"),
+  extractOpenMd: forwardDesktop("extractOpenMd"),
 };

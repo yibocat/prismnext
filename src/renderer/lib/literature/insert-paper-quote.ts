@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -68,7 +69,7 @@ async function resolveNotePathForPaper(
   if (stored) {
     const content = doc.openedContents.has(stored)
       ? doc.getAsset(stored)
-      : (await window.electronAPI.fsRead(
+      : (await fsDesktop.fsRead(
           doc.fileMetadata.get(stored)?.absolutePath ?? "",
         ).catch(() => ({ content: "" }))).content;
     return {
@@ -83,7 +84,7 @@ async function resolveNotePathForPaper(
     const content = doc.openedContents.has(notePath)
       ? doc.getAsset(notePath)
       : meta
-        ? (await window.electronAPI.fsRead(meta.absolutePath).catch(() => ({ content: "" }))).content
+        ? (await fsDesktop.fsRead(meta.absolutePath).catch(() => ({ content: "" }))).content
         : "";
     return {
       notePath,
@@ -128,7 +129,7 @@ export async function insertPaperQuoteIntoNote(
   // Persist before opening UI so NotesPane cannot race and overwrite with template-only disk.
   const meta = doc.fileMetadata.get(notePath);
   if (meta) {
-    await window.electronAPI.fsWrite(meta.absolutePath, content);
+    await fsDesktop.fsWrite(meta.absolutePath, content);
   }
 
   const reader = useLiteratureReaderStore.getState();

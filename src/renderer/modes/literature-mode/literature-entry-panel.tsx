@@ -8,6 +8,8 @@ import {
   MoreHorizontalIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -205,7 +207,7 @@ export function LiteratureEntryPanel({
 
   const handleOpenInZotero = () => {
     if (!paper.zotero_key) return;
-    void window.electronAPI.shellOpenExternal(zoteroSelectItemUrl(paper.zotero_key));
+    void openExternalUrl(zoteroSelectItemUrl(paper.zotero_key));
   };
 
   const handleGenerateAiMetadata = useCallback(() => {
@@ -214,7 +216,7 @@ export function LiteratureEntryPanel({
       toast.error(LITERATURE_AI_METADATA_SETUP_HINT);
       return;
     }
-    void window.electronAPI.literatureRegenerateAiMetadata(projectRoot, paper.id);
+    void literatureDesktop.literatureRegenerateAiMetadata(projectRoot, paper.id);
   }, [paper.id, projectRoot, settings]);
 
   const handleAddToManuscriptBib = async () => {

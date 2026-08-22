@@ -52,4 +52,5 @@ export const agentDesktop = {
   agentListModelsCatalog: forwardDesktop("agentListModelsCatalog"),
   agentTestConnection: forwardDesktop("agentTestConnection"),
   agentGetEffortCatalog: forwardDesktop("agentGetEffortCatalog"),
+  agentSyncIntensiveReading: forwardDesktop("agentSyncIntensiveReading"),
 };

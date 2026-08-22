@@ -52,4 +52,11 @@ export const literatureDesktop = {
   onLiteratureAiMetadataChanged: forwardDesktop("onLiteratureAiMetadataChanged"),
   literatureGetStorageStats: forwardDesktop("literatureGetStorageStats"),
   literaturePruneOrphanAttachments: forwardDesktop("literaturePruneOrphanAttachments"),
+  literaturePickPdf: forwardDesktop("literaturePickPdf"),
+  literaturePickBibTeX: forwardDesktop("literaturePickBibTeX"),
+  literatureRegenerateAiMetadata: forwardDesktop("literatureRegenerateAiMetadata"),
+  literatureEnsurePaperPdf: forwardDesktop("literatureEnsurePaperPdf"),
+  literatureGetCitationNetwork: forwardDesktop("literatureGetCitationNetwork"),
+  literatureGetCitationNetworkPage: forwardDesktop("literatureGetCitationNetworkPage"),
+  zoteroListCollections: forwardDesktop("zoteroListCollections"),
 };

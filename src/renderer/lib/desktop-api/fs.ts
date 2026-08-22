@@ -20,4 +20,5 @@ export const fsDesktop = {
   fsDelete: forwardDesktop("fsDelete"),
   fsDeleteFolder: forwardDesktop("fsDeleteFolder"),
   fsRename: forwardDesktop("fsRename"),
+  getPathForFile: forwardDesktop("getPathForFile"),
 };

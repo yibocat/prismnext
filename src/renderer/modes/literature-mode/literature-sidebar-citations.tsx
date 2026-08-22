@@ -6,6 +6,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { Button } from "@/components/ui/button";
@@ -316,7 +317,7 @@ export function LiteratureSidebarCitationPanel({
       const rowKey = entry.openAlexId || entry.doi || entry.title;
       setAddingKey(rowKey);
       try {
-        const created = await window.electronAPI.literatureCreateFromIdentifier(projectRoot, {
+        const created = await literatureDesktop.literatureCreateFromIdentifier(projectRoot, {
           doi: entry.doi ?? undefined,
           arxivId: entry.arxivId ?? undefined,
         });
