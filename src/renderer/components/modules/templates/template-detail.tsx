@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { templateDesktop } from "@/lib/desktop-api/template";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -89,8 +90,8 @@ export function DetailView({
   useEffect(() => {
     let cancelled = false;
     setPdfBytes(null);
-    window.electronAPI.templatePreview(template.id).then(setPreviewUrl);
-    void window.electronAPI.templateGetPdfData(template.id).then((dataUrl) => {
+    templateDesktop.templatePreview(template.id).then(setPreviewUrl);
+    void templateDesktop.templateGetPdfData(template.id).then((dataUrl) => {
       if (cancelled) return;
       if (!dataUrl) {
         setPdfBytes(null);

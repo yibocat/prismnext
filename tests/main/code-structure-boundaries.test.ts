@@ -785,6 +785,18 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(src).not.toMatch(/window\.electronAPI/);
   });
 
+  it("keeps template helpers and Template Center off window.electronAPI", () => {
+    for (const dir of [
+      "src/renderer/lib/templates",
+      "src/renderer/components/modules/templates",
+    ]) {
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+      }
+    }
+  });
+
   it("keeps lib/settings free of window.electronAPI", () => {
     for (const file of walkTsFiles(join(REPO, "src/renderer/lib/settings"))) {
       const rel = relative(REPO, file);
