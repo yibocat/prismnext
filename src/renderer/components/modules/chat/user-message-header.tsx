@@ -34,6 +34,7 @@ import {
   type SlashCatalogMcp,
   type SlashCatalogSkill,
 } from "@/lib/chat/slash-catalog";
+import { listProjectSubagents } from "@/lib/settings";
 import {
   extractUserMessageEditParts,
   resendFromUserTurn,
@@ -127,7 +128,7 @@ export const UserMessageHeader = memo(function UserMessageHeader({
     void (async () => {
       try {
         const [expertList, catalog] = await Promise.all([
-          window.electronAPI.subagentsList(projectRoot),
+          listProjectSubagents(projectRoot),
           loadSlashCatalog(projectRoot),
         ]);
         if (cancelled) return;

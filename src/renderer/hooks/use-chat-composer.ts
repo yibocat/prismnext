@@ -5,6 +5,7 @@ import { useMentionableFiles } from "@/lib/files/mentionable-files";
 import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
 import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
+import { listProjectSubagents } from "@/lib/settings";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
@@ -168,7 +169,7 @@ export function useChatComposer() {
     }
     const loadMentions = async () => {
       try {
-        const expertList = await window.electronAPI.subagentsList(projectRoot);
+        const expertList = await listProjectSubagents(projectRoot);
         setExperts(expertList.filter((e) => e.enabled));
       } catch {
         setExperts([]);

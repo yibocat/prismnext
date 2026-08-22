@@ -17,4 +17,5 @@ export const teamsDesktop = {
   teamsCreate: forwardDesktop("teamsCreate"),
   teamsListAssets: forwardDesktop("teamsListAssets"),
   teamsListMcp: forwardDesktop("teamsListMcp"),
+  teamsSaveAssetOverride: forwardDesktop("teamsSaveAssetOverride"),
 };

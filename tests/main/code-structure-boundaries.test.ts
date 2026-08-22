@@ -815,6 +815,8 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/skills-settings.tsx",
       "src/renderer/components/modules/settings/skill-library-panel.tsx",
       "src/renderer/components/modules/settings/skill-markdown-panel.tsx",
+      "src/renderer/components/modules/settings/subagent-editor-panel.tsx",
+      "src/renderer/components/modules/settings/orchestrator-editor-panel.tsx",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
     }
@@ -825,6 +827,8 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/lib/files/open-research-brief.ts",
       "src/renderer/lib/files/reveal-project-path.ts",
       "src/renderer/lib/chat/slash-catalog.ts",
+      "src/renderer/components/modules/chat/user-message-header.tsx",
+      "src/renderer/hooks/use-chat-composer.ts",
       "src/renderer/hooks/use-workspace-project-autosave.ts",
     ]) {
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);

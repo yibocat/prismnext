@@ -55,3 +55,14 @@ export {
   revealHomeSkillsFolder,
   setSkillLibrarySourceConnected,
 } from "./skills";
+export type { ProjectSubagent } from "./subagents";
+export {
+  deleteCustomSubagent,
+  getOrchestratorDetail,
+  getSubagentDetail,
+  listProjectSubagents,
+  listSubagentRosterReferrers,
+  saveCustomOrchestrator,
+  saveCustomSubagent,
+  saveSubagentAssetOverride,
+} from "./subagents";

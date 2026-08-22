@@ -41,4 +41,11 @@ export const agentDesktop = {
   agentAddSkillLibrarySource: forwardDesktop("agentAddSkillLibrarySource"),
   agentSetSkillLibrarySourceConnected: forwardDesktop("agentSetSkillLibrarySourceConnected"),
   agentRemoveSkillLibrarySource: forwardDesktop("agentRemoveSkillLibrarySource"),
+  subagentsList: forwardDesktop("subagentsList"),
+  subagentsGetDetail: forwardDesktop("subagentsGetDetail"),
+  subagentsSaveCustom: forwardDesktop("subagentsSaveCustom"),
+  subagentsListRosterReferrers: forwardDesktop("subagentsListRosterReferrers"),
+  subagentsDeleteCustom: forwardDesktop("subagentsDeleteCustom"),
+  orchestratorsGetDetail: forwardDesktop("orchestratorsGetDetail"),
+  orchestratorsSaveCustom: forwardDesktop("orchestratorsSaveCustom"),
 };
