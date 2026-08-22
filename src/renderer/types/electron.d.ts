@@ -55,191 +55,36 @@ export interface CompilerStatus {
   tectonic: boolean;
 }
 
-export type PaperExtractSource = "mineru" | "pdfjs" | "html";
-export type PaperExtractStatus = "idle" | "queued" | "extracting" | "ready" | "failed";
+export type {
+  ExtractProgressPhase,
+  PaperExtractProgress,
+  PaperExtractSource,
+  PaperExtractState,
+  PaperExtractStatesByPaper,
+  PaperExtractStatus,
+} from "@shared/paper-extract";
 
-export interface PaperExtractState {
-  paperId: string;
-  source: PaperExtractSource;
-  status: PaperExtractStatus;
-  queuedAt?: number;
-  startedAt?: number;
-  finishedAt?: number;
-  error?: string;
-  mdPath?: string;
-  pages?: number;
-  remoteJobId?: string;
-  retryCount?: number;
-  nextRetryAt?: number;
-}
+export type {
+  BibFallbackEntry,
+  CitationHealthBibCheck,
+  CitationHealthLibraryCheck,
+  CitationHealthReport,
+  ImportFromManuscriptBibResult,
+  MergeIntoManuscriptBibResult,
+} from "@shared/citation-health-types";
 
-export type ExtractProgressPhase =
-  | "queued"
-  | "resolving_pdf"
-  | "caching_pdf"
-  | "reading_pdf"
-  | "uploading"
-  | "cloud_extracting"
-  | "fetching_html"
-  | "writing";
+export type {
+  LiteratureAttachLocalPdfConflict,
+  LiteratureAttachLocalPdfResult,
+  LiteraturePaper,
+  PaperAiMetadataStatus,
+} from "@shared/literature-paper";
 
-export interface PaperExtractProgress {
-  paperId: string;
-  source: PaperExtractSource;
-  phase: ExtractProgressPhase;
-  message: string;
-  percent?: number;
-  receivedBytes?: number;
-  totalBytes?: number | null;
-  queuePosition?: number;
-  queueTotal?: number;
-}
-
-export type PaperExtractStatesByPaper = Record<
-  string,
-  Partial<Record<PaperExtractSource, PaperExtractState>>
->;
-
-export interface BibFallbackEntry {
-  bibkey: string;
-  title: string | null;
-  doi: string | null;
-  arxivId: string | null;
-  canImportFromBib: boolean;
-}
-
-export interface CitationHealthLibraryCheck {
-  texFilesScanned: number;
-  citeKeysInTex: string[];
-  knownKeys: string[];
-  missingKeys: string[];
-  unusedKeys: string[];
-}
-
-export interface CitationHealthBibCheck {
-  texFilesScanned: number;
-  bibPath: string | null;
-  citeKeysInTex: string[];
-  keysInBib: string[];
-  missingKeys: string[];
-  unusedKeys: string[];
-  duplicateKeys: string[];
-  libraryCheck?: CitationHealthLibraryCheck;
-}
-
-export interface CitationHealthReport {
-  bibCheck: CitationHealthBibCheck;
-  libraryCheck: CitationHealthLibraryCheck;
-  bibFallback: BibFallbackEntry[];
-  bibKeysNotInLibrary: string[];
-}
-
-export interface MergeIntoManuscriptBibResult {
-  bibPath: string;
-  appended: string[];
-  skipped: string[];
-  notFound: string[];
-  papersProcessed: number;
-}
-
-export interface ImportFromManuscriptBibResult {
-  imported: number;
-  skipped: number;
-  notInBib: string[];
-  importedPaperIds: string[];
-}
-
-export interface LiteraturePaper {
-  id: string;
-  bibkey: string;
-  title: string;
-  authors: string | null;
-  year: number | null;
-  abstract: string | null;
-  doi: string | null;
-  arxiv_id: string | null;
-  isbn: string | null;
-  venue: string | null;
-  type: string | null;
-  pdf_path: string | null;
-  pdf_sha: string | null;
-  origin: string | null;
-  metadata_source: string | null;
-  csl_json: string | null;
-  /** @deprecated Use `origin` instead */
-  source: string | null;
-  raw_bibtex: string | null;
-  zotero_key?: string | null;
-  zotero_version?: number | null;
-  zotero_attach_key?: string | null;
-  /** User-defined project tags (not synced to Zotero). */
-  tags: string[];
-  ai_summary?: string | null;
-  ai_metadata_at?: number | null;
-  ai_metadata_sha?: string | null;
-  ai_metadata_status?: "idle" | "queued" | "running" | "ready" | "failed" | "skipped";
-  ai_metadata_error?: string | null;
-  created_at: number;
-  updated_at: number;
-}
-
-export type PaperCitationEntry = {
-  openAlexId: string;
-  title: string;
-  authors: string | null;
-  year: number | null;
-  venue: string | null;
-  doi: string | null;
-  arxivId: string | null;
-  citedByCount: number | null;
-};
-
-export type PaperCitationSection = {
-  totalCount: number;
-  items: PaperCitationEntry[];
-  hasMore: boolean;
-  nextCursor: string | null;
-};
-
-export type PaperCitationNetworkResult = {
-  ok: boolean;
-  error?: string;
-  openAlexWorkId?: string;
-  references?: PaperCitationSection;
-  citedBy?: PaperCitationSection;
-  cachedAt?: number;
-  source: "openalex" | "semantic-scholar";
-  sourceNote?: string;
-};
-
-export type LiteratureAttachLocalPdfConflict =
-  | { kind: "sha_duplicate"; otherPaper: LiteraturePaper }
-  | {
-      kind: "identifier_duplicate";
-      otherPaper: LiteraturePaper;
-      doi?: string | null;
-      arxivId?: string | null;
-    }
-  | {
-      kind: "target_mismatch";
-      entryDoi?: string | null;
-      entryArxivId?: string | null;
-      pdfDoi?: string | null;
-      pdfArxivId?: string | null;
-    }
-  | {
-      kind: "target_unverified";
-      entryDoi?: string | null;
-      entryArxivId?: string | null;
-    };
-
-export interface LiteratureAttachLocalPdfResult {
-  paper: LiteraturePaper;
-  attached: boolean;
-  replaced: boolean;
-  conflict?: LiteratureAttachLocalPdfConflict;
-  attachError?: string;
-}
+export type {
+  PaperCitationEntry,
+  PaperCitationNetworkResult,
+  PaperCitationSection,
+} from "@shared/paper-citation-network";
 
 export interface LiteratureCollection {
   id: string;
@@ -360,75 +205,17 @@ export interface TerminalEnvInfo {
   home: string;
 }
 
-// ── Git types ──
-
-export interface GitFileStatusData {
-  path: string;
-  oldPath: string | null;
-  indexStatus: string;
-  worktreeStatus: string;
-  staged: boolean;
-  unstaged: boolean;
-  untracked: boolean;
-}
-
-export interface GitStatusData {
-  branch: string;
-  files: GitFileStatusData[];
-}
-
-export interface GitBranchesData {
-  current: string;
-  branches: string[];
-}
-
-export interface GitFileDiffData {
-  path: string;
-  oldContent: string;
-  newContent: string;
-  indexStatus: string;
-  worktreeStatus: string;
-  staged: boolean;
-  unstaged: boolean;
-  untracked: boolean;
-}
-
-export interface GitResultData {
-  success: boolean;
-  error?: string;
-}
-
-export interface GitMergeResultData {
-  success: boolean;
-  error?: string;
-  output?: string;
-}
-
-// ── Worktree types ──
-
-export interface WorktreeInfo {
-  name: string;
-  path: string;
-  branch: string;
-  baseBranch: string;
-  head: string;
-  aheadCount: number;
-  behindCount: number;
-}
-
-export interface MergeStatus {
-  branch: string;
-  mainBranch: string;
-  aheadCount: number;
-  behindCount: number;
-  commits: { hash: string; message: string }[];
-}
-
-export interface BranchInfo {
-  name: string;
-  isLocked: boolean;
-  lockedBy: string | null;
-}
+export type {
+  BranchInfo,
+  GitBranchesData,
+  GitFileDiffData,
+  GitFileStatusData,
+  GitMergeResultData,
+  GitResultData,
+  GitStatusData,
+  MergeStatus,
+  WorktreeInfo,
+} from "@shared/git";
 
 
 export interface ElectronAPI {
@@ -849,7 +636,7 @@ export interface ElectronAPI {
   }) => Promise<
     | {
         ok: true;
-        snapshot: import("../../main/services/experiment-results-snapshot").ExperimentResultsSnapshot;
+        snapshot: import("@shared/experiment-results-snapshot").ExperimentResultsSnapshot;
       }
     | { ok: false; error: string; hint?: string }
   >;

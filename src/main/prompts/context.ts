@@ -3,7 +3,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import type { PromptContext } from "./types";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import type { WorkspaceFolder } from "../../shared/workspace-folder";
 import { createLogger } from "../services/logger";
 import { readWorkbenchJson } from "../workbench/identity";
 import { projectAgentsMdRel } from "../../shared/workbench-paths";

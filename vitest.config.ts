@@ -42,6 +42,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src/renderer"),
+      "@commands": path.resolve(__dirname, "src/shared/commands"),
       "@prismnext/pro": path.resolve(
         __dirname,
         "src/renderer/lib/pro/absent-module.ts",

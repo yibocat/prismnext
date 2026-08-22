@@ -5,7 +5,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import type { WorkspaceFolder } from "../../shared/workspace-folder";
 import {
   ICON_IMAGE_FILENAME,
   normalizeIconSpec,

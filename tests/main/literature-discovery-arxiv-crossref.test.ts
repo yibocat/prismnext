@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  parseArxivEntryAuthorNames,
+  parseArxivEntryDoi,
+  parseArxivEntryTitle,
+} from "../../src/shared/bibliographic-metadata/arxiv-xml";
+import {
   resetCatalogFetchForTests,
   setCatalogFetch,
 } from "../../src/shared/bibliographic-metadata/catalog-fetch";
@@ -7,6 +12,19 @@ import { arxivDiscoveryAdapter } from "../../src/main/services/literature-discov
 import { crossrefDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/crossref";
 
 afterEach(() => resetCatalogFetchForTests());
+
+describe("arxiv-xml shared parser", () => {
+  const entry = `
+    <title>Cool Paper</title>
+    <author><name>Ada Lovelace</name></author>
+    <arxiv:doi>10.1234/foo</arxiv:doi>
+  `;
+  it("reads title, authors, and doi from one entry", () => {
+    expect(parseArxivEntryTitle(entry)).toBe("Cool Paper");
+    expect(parseArxivEntryAuthorNames(entry)).toEqual(["Ada Lovelace"]);
+    expect(parseArxivEntryDoi(entry)).toBe("10.1234/foo");
+  });
+});
 
 describe("arxivDiscoveryAdapter", () => {
   it("parses atom entries from search API", async () => {

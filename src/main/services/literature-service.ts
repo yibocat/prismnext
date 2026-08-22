@@ -46,6 +46,9 @@ import { findWorkbenchProjectRoot, parseHomeWorktreeCheckout, resolveWorkbenchHo
 import { readProjectSlotMeta } from "../workbench/default-project";
 import { ensureWorkbenchId } from "../workbench/identity";
 import { libraryRel, projectSlotRel } from "../../shared/workbench-paths";
+import type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature-paper";
+
+export type { LiteraturePaper, PaperAiMetadataStatus } from "../../shared/literature-paper";
 
 const log = createLogger("literature", "general");
 
@@ -714,14 +717,6 @@ export function collectProjectTagDisplays(db: LibraryDb): string[] {
   return catalog;
 }
 
-export type PaperAiMetadataStatus =
-  | "idle"
-  | "queued"
-  | "running"
-  | "ready"
-  | "failed"
-  | "skipped";
-
 export function upsertPaperAiMetadata(
   db: LibraryDb,
   paperId: string,
@@ -752,7 +747,7 @@ export function upsertPaperAiMetadata(
   );
 }
 
-export function mapPaperForRenderer(row: PaperRow) {
+export function mapPaperForRenderer(row: PaperRow): LiteraturePaper {
   const {
     tags: tagsJson,
     ai_metadata_status: aiMetadataStatus,

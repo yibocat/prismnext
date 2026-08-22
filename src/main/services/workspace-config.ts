@@ -1,12 +1,12 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import type { WorkspaceFolder } from "../../shared/workspace-folder";
 import {
   FOLDER_FUNCTION_ICONS,
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   findExperimentConfig,
-} from "../../renderer/types/workspace";
+} from "../../shared/workspace-folder";
 import {
   ICON_IMAGE_FILENAME,
   normalizeIconSpec,

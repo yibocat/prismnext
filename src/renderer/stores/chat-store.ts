@@ -1032,7 +1032,7 @@ function persistableAttachmentsFromUserBlocks(
 function applyConversationToTab(
   tab: TabState,
   conversation: Conversation,
-  extras?: { planEvents?: import("../../../shared/agent-api").AgentPlanEvent[] },
+  extras?: { planEvents?: import("@shared/agent-api").AgentPlanEvent[] },
 ): TabState {
   const turnMeta = { ...tab.turnMeta };
   for (const turn of conversation.turns) {

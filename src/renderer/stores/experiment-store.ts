@@ -26,7 +26,7 @@ import type {
   ExperimentSummary,
 } from "../../shared/experiment-log";
 import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
-import type { ExperimentResultsSnapshot } from "../../main/services/experiment-results-snapshot";
+import type { ExperimentResultsSnapshot } from "@shared/experiment-results-snapshot";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";

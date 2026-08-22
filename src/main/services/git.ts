@@ -3,6 +3,20 @@ import { existsSync } from "node:fs";
 import { readFile, unlink, readdir, writeFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "./logger";
+import type {
+  GitBranchesResult,
+  GitFileDiff,
+  GitFileEntry,
+  GitResult,
+  GitStatusResult,
+} from "../../shared/git";
+export type {
+  GitBranchesData as GitBranchesResult,
+  GitFileDiffData as GitFileDiff,
+  GitFileStatusData as GitFileEntry,
+  GitResultData as GitResult,
+  GitStatusData as GitStatusResult,
+} from "../../shared/git";
 
 const log = createLogger("git", "git");
 
@@ -118,44 +132,6 @@ function sh(projectRoot: string, gitArgs: string[]): Promise<string> {
   const task = _pending.then(run, run);
   _pending = task.catch(() => {}).then(() => {});
   return task;
-}
-
-// ─── Types ───
-
-export interface GitFileEntry {
-  path: string;
-  oldPath: string | null;
-  indexStatus: string;
-  worktreeStatus: string;
-  staged: boolean;
-  unstaged: boolean;
-  untracked: boolean;
-}
-
-export interface GitStatusResult {
-  branch: string;
-  files: GitFileEntry[];
-}
-
-export interface GitBranchesResult {
-  current: string;
-  branches: string[];
-}
-
-export interface GitFileDiff {
-  path: string;
-  oldContent: string;
-  newContent: string;
-  indexStatus: string;
-  worktreeStatus: string;
-  staged: boolean;
-  unstaged: boolean;
-  untracked: boolean;
-}
-
-export interface GitResult {
-  success: boolean;
-  error?: string;
 }
 
 // ─── Constants ───

@@ -1,23 +1,20 @@
-import { normalizeArxivId, normalizeDoi } from "../../doi-utils";
+import { normalizeArxivId } from "../../doi-utils";
+import {
+  parseArxivEntryAuthorNames,
+  parseArxivEntryDoi,
+  parseArxivEntrySummary,
+  parseArxivEntryTitle,
+  parseArxivEntryYear,
+} from "../arxiv-xml";
 import { authorsJsonFromParts } from "../helpers";
 import type { BibliographicMetadata } from "../types";
 import type { BibliographicSource } from "./types";
 import { catalogFetch } from "../catalog-fetch";
 
 function parseArxivEntryAuthors(xml: string): string | null {
-  const names = [...xml.matchAll(/<author>\s*<name>([^<]+)<\/name>/gi)].map((m) =>
-    m[1].replace(/\s+/g, " ").trim(),
-  );
+  const names = parseArxivEntryAuthorNames(xml);
   if (!names.length) return null;
   return authorsJsonFromParts(names.map((name) => ({ name })));
-}
-
-function parseArxivEntryDoi(xml: string): string | null {
-  const tagged = xml.match(/<arxiv:doi[^>]*>([^<]+)<\/arxiv:doi>/i)?.[1]?.trim();
-  if (tagged) return normalizeDoi(tagged);
-  const linkDoi = xml.match(/<link[^>]+title="doi"[^>]+href="([^"]+)"/i)?.[1];
-  if (linkDoi) return normalizeDoi(linkDoi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, ""));
-  return null;
 }
 
 const ARXIV_FETCH_TIMEOUT_MS = 15_000;
@@ -54,17 +51,14 @@ async function resolveByArxiv(rawArxiv: string): Promise<BibliographicMetadata |
       }
       const entryBlock = xml.match(/<entry>[\s\S]*?<\/entry>/i)?.[0];
       if (!entryBlock) return null;
-      const entryTitle = entryBlock.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
-      const summary = entryBlock.match(/<summary>([\s\S]*?)<\/summary>/i)?.[1]?.replace(/\s+/g, " ").trim();
-      const published = entryBlock.match(/<published>([^<]+)<\/published>/i)?.[1];
-      const year = published ? Number.parseInt(published.slice(0, 4), 10) : null;
-      if (!entryTitle || entryTitle === "Title") return null;
+      const entryTitle = parseArxivEntryTitle(entryBlock);
+      if (!entryTitle) return null;
       const arxivDoi = parseArxivEntryDoi(entryBlock);
       return {
         title: entryTitle,
         authors: parseArxivEntryAuthors(entryBlock),
-        abstract: summary ?? null,
-        year: Number.isFinite(year) ? year : null,
+        abstract: parseArxivEntrySummary(entryBlock),
+        year: parseArxivEntryYear(entryBlock),
         doi: arxivDoi,
         arxiv_id: id,
         venue: "arXiv",

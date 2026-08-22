@@ -1,32 +1,16 @@
-import { normalizeArxivId, normalizeDoi } from "../../../../shared/doi-utils";
+import { normalizeArxivId } from "../../../../shared/doi-utils";
 import { truncateDiscoveryAbstract, type DiscoveryHit } from "../../../../shared/literature-discovery";
 import { catalogFetch } from "../../../../shared/bibliographic-metadata/catalog-fetch";
+import {
+  parseArxivEntryAuthorNames,
+  parseArxivEntryDoi,
+  parseArxivEntryPdfUrl,
+  parseArxivEntrySummary,
+  parseArxivEntryTitle,
+  parseArxivEntryYear,
+} from "../../../../shared/bibliographic-metadata/arxiv-xml";
 import type { DiscoveryAdapter } from "../types";
 import { DISCOVERY_XML_HEADERS } from "./http";
-
-function parseArxivEntryAuthors(entryXml: string): string[] {
-  return [...entryXml.matchAll(/<author>\s*<name>([^<]+)<\/name>/gi)].map((m) =>
-    m[1].replace(/\s+/g, " ").trim(),
-  );
-}
-
-function parseArxivEntryDoi(entryXml: string): string | undefined {
-  const tagged = entryXml.match(/<arxiv:doi[^>]*>([^<]+)<\/arxiv:doi>/i)?.[1]?.trim();
-  if (tagged) return normalizeDoi(tagged) ?? undefined;
-  const linkDoi = entryXml.match(/<link[^>]+title="doi"[^>]+href="([^"]+)"/i)?.[1];
-  if (linkDoi) {
-    return normalizeDoi(linkDoi.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "")) ?? undefined;
-  }
-  return undefined;
-}
-
-function parseArxivEntryPdfUrl(entryXml: string, arxivId: string): string | undefined {
-  const pdfLink = entryXml.match(
-    /<link[^>]+title="pdf"[^>]+href="([^"]+)"/i,
-  )?.[1]?.trim();
-  if (pdfLink) return pdfLink;
-  return `https://arxiv.org/pdf/${arxivId}.pdf`;
-}
 
 function buildArxivSearchQuery(query: string, author?: string): string {
   const parts = [`all:${query.replace(/\s+/g, "+")}`];
@@ -69,19 +53,17 @@ export const arxivDiscoveryAdapter: DiscoveryAdapter = {
       const arxivIdRaw = normalizeArxivId(rawId);
       const arxivId = arxivIdRaw?.replace(/v\d+$/i, "") ?? null;
       if (!arxivId) continue;
-      const title = entry.match(/<title>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
-      if (!title || title === "Title") continue;
-      const summary = entry.match(/<summary>([\s\S]*?)<\/summary>/i)?.[1]?.replace(/\s+/g, " ").trim();
-      const published = entry.match(/<published>([^<]+)<\/published>/i)?.[1];
-      const year = published ? Number.parseInt(published.slice(0, 4), 10) : undefined;
+      const title = parseArxivEntryTitle(entry);
+      if (!title) continue;
+      const year = parseArxivEntryYear(entry);
       hits.push({
         id: `arxiv:${arxivId}`,
         title,
-        authors: parseArxivEntryAuthors(entry),
-        year: Number.isFinite(year) ? year : undefined,
-        doi: parseArxivEntryDoi(entry),
+        authors: parseArxivEntryAuthorNames(entry),
+        year: year ?? undefined,
+        doi: parseArxivEntryDoi(entry) ?? undefined,
         arxivId,
-        abstract: truncateDiscoveryAbstract(summary),
+        abstract: truncateDiscoveryAbstract(parseArxivEntrySummary(entry) ?? undefined),
         url: `https://arxiv.org/abs/${arxivId}`,
         pdfUrl: parseArxivEntryPdfUrl(entry, arxivId),
         source: "arxiv",

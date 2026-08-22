@@ -3,7 +3,7 @@ import * as fs from "../services/filesystem";
 import { buildAgentsMdScaffold } from "../services/agents-md-scaffold";
 import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "../services/logger";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import type { WorkspaceFolder } from "../../shared/workspace-folder";
 import {
   writeProjectIcon,
   writeProjectIconImage,

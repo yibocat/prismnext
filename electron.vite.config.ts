@@ -46,7 +46,7 @@ export default defineConfig({
     resolve: {
       alias: {
         "@": resolve("src/renderer"),
-        "@commands": resolve("src/main/commands"),
+        "@commands": resolve("src/shared/commands"),
         // Open-core: OSS → no-op stub. Dev/official: `PRISM_PRO_PATH=../prism-next-pro/src`
         "@prismnext/pro": process.env.PRISM_PRO_PATH
           ? resolve(process.env.PRISM_PRO_PATH)

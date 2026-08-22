@@ -1,7 +1,8 @@
 import {
   buildPermissionRulesForMode,
   getToolPermissionEntry,
-} from "../main/services/tool-permission-registry";
+} from "./tool-permission-registry";
+import type { PermissionMode, PermissionRule } from "./permission-modes";
 import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "./research-brief";
 import {
   isCanonicalSessionDraftPath,
@@ -15,10 +16,7 @@ import { projectRulesRel } from "./workbench-paths";
 /** OpenCode primary agent identity for a chat tab. */
 export type SessionAgent = "build" | "plan";
 
-/** Chat permission modes (mirrors permission-modes.ts). */
-export type PermissionMode = "ask" | "edit_auto" | "auto" | "readonly";
-
-export type PermissionRule = "allow" | "ask" | "deny";
+export type { PermissionMode, PermissionRule };
 
 export function resolveSessionAgent(value?: string | null): SessionAgent {
   return value === "plan" ? "plan" : "build";

@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 export type AiMetadataLlmResult = {
   summary: string;
   keywords: string[];
@@ -9,15 +7,6 @@ export const AI_METADATA_KEYWORD_MIN = 3;
 export const AI_METADATA_KEYWORD_MAX = 6;
 /** Prompt guidance only — not enforced on stored/displayed summary. */
 export const AI_METADATA_SUMMARY_MAX_LENGTH = 180;
-
-export function aiMetadataFingerprint(input: {
-  abstractText: string;
-  pdfSha: string | null;
-  model: string;
-}): string {
-  const payload = `${input.model}\n${input.pdfSha ?? ""}\n${input.abstractText.trim()}`;
-  return createHash("sha256").update(payload, "utf8").digest("hex").slice(0, 32);
-}
 
 export function buildAiMetadataPrompt(
   title: string,

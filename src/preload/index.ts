@@ -1,6 +1,12 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { WorkspaceFolder } from "../renderer/types/workspace";
+import type { WorkspaceFolder } from "../shared/workspace-folder";
 import type { PaperExtractState, PaperExtractProgress } from "../shared/paper-extract";
+import type {
+	BranchInfo,
+	GitStatusData,
+	MergeStatus,
+	WorktreeInfo,
+} from "../shared/git";
 import type { IconSpec } from "../shared/icon-spec";
 import type {
 	ExecutionApplyProjectSwitchArgs,
@@ -1312,7 +1318,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("git:warmup", { projectRoot }),
 	gitIsRepo: (projectRoot: string) =>
 		ipcRenderer.invoke("git:isRepo", { projectRoot }),
-	gitStatus: (projectRoot: string) =>
+	gitStatus: (projectRoot: string): Promise<GitStatusData> =>
 		ipcRenderer.invoke("git:status", { projectRoot }),
 	gitBranches: (projectRoot: string) =>
 		ipcRenderer.invoke("git:branches", { projectRoot }),
@@ -1370,15 +1376,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.invoke("git:checkIgnore", { projectRoot, relativePaths }),
 
 	// Worktree operations
-	worktreeList: (projectRoot: string) =>
+	worktreeList: (projectRoot: string): Promise<WorktreeInfo[]> =>
 		ipcRenderer.invoke("worktree:list", { projectRoot }),
 	worktreeCreate: (projectRoot: string, name?: string, baseBranch?: string) =>
 		ipcRenderer.invoke("worktree:create", { projectRoot, name, baseBranch }),
-	worktreeBranches: (projectRoot: string) =>
+	worktreeBranches: (projectRoot: string): Promise<BranchInfo[]> =>
 		ipcRenderer.invoke("worktree:branches", { projectRoot }),
 	worktreeRemove: (projectRoot: string, name: string) =>
 		ipcRenderer.invoke("worktree:remove", { projectRoot, name }),
-	worktreeMergeStatus: (projectRoot: string, name: string) =>
+	worktreeMergeStatus: (projectRoot: string, name: string): Promise<MergeStatus> =>
 		ipcRenderer.invoke("worktree:mergeStatus", { projectRoot, name }),
 	worktreeMoveSessions: (projectRoot: string, worktreeName: string) =>
 		ipcRenderer.invoke("worktree:moveSessions", { projectRoot, worktreeName }),

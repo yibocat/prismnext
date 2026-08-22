@@ -11,34 +11,10 @@ import {
 } from "../workbench/home";
 import { ensureWorkbenchId, readWorkbenchJson } from "../workbench/identity";
 import { PROJECTS_DIRNAME, WORKTREES_DIRNAME } from "../../shared/workbench-paths";
+import type { BranchInfo, MergeStatus, WorktreeInfo } from "../../shared/git";
+export type { BranchInfo, MergeStatus, WorktreeInfo } from "../../shared/git";
 
 const log = createLogger("worktree", "git");
-
-// ─── Types ───
-
-export interface WorktreeInfo {
-  name: string;
-  path: string;        // absolute path to worktree root
-  branch: string;      // "wt-calm-owl"
-  baseBranch: string;  // the branch this worktree was created from
-  head: string;        // latest commit SHA (short)
-  aheadCount: number;  // commits ahead of main
-  behindCount: number; // commits behind main (stale worktree)
-}
-
-export interface MergeStatus {
-  branch: string;
-  mainBranch: string;
-  aheadCount: number;
-  behindCount: number;
-  commits: { hash: string; message: string }[];
-}
-
-export interface BranchInfo {
-  name: string;
-  isLocked: boolean;
-  lockedBy: string | null;  // worktree name or "main"
-}
 
 // ─── Constants ───
 

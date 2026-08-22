@@ -13,7 +13,9 @@ export interface WorkbenchWorkspaceFolder {
   function: string;
   name: string;
   mainTex?: string;
-  [key: string]: unknown;
+  description?: string;
+  icon?: string;
+  customLabel?: string;
 }
 
 export interface WorkbenchWorkspace {

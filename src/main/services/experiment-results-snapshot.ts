@@ -9,11 +9,26 @@ import {
   isSafeExperimentId,
   type ExperimentMeta,
 } from "../../shared/experiment-log";
+import type {
+  ExperimentResultsSnapshot,
+  SnapshotExperimentOptions,
+  SnapshotFigure,
+  SnapshotMetrics,
+  SnapshotTable,
+} from "../../shared/experiment-results-snapshot";
 import {
   readExperiment,
   type ExperimentStorageContext,
   workspaceIslandPathForId,
 } from "./experiment-log-service";
+
+export type {
+  ExperimentResultsSnapshot,
+  SnapshotExperimentOptions,
+  SnapshotFigure,
+  SnapshotMetrics,
+  SnapshotTable,
+} from "../../shared/experiment-results-snapshot";
 
 const SKIP_DIR_NAMES = new Set([
   ".venv",
@@ -28,42 +43,6 @@ const FIGURE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg", ".pdf"]);
 const DEFAULT_MAX_DEPTH = 4;
 const DEFAULT_MAX_FILES = 80;
 const TEXT_SUMMARY_MAX = 2048;
-
-export interface SnapshotFigure {
-  path: string;
-  kind: string;
-}
-
-export interface SnapshotTable {
-  path: string;
-  columns: string[];
-  rowCount: number;
-}
-
-export interface SnapshotMetrics {
-  path: string;
-  values: Record<string, number | string>;
-}
-
-export interface ExperimentResultsSnapshot {
-  id: string;
-  workspacePath: string;
-  figures: SnapshotFigure[];
-  tables: SnapshotTable[];
-  metrics: SnapshotMetrics[];
-  /** Compact markdown ≤ 2KB for agent context. */
-  textSummary: string;
-  /** Files seen but not classified — agent may `read` them. */
-  unparsed: string[];
-  warnings: string[];
-}
-
-export interface SnapshotExperimentOptions {
-  scanDirs?: string[];
-  metricsFiles?: string[];
-  maxFiles?: number;
-  maxDepth?: number;
-}
 
 function labRel(islandAbs: string, abs: string): string {
   return relative(islandAbs, abs).replace(/\\/g, "/");

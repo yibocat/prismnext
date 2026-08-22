@@ -1,9 +1,9 @@
 import {
   AI_METADATA_KEYWORD_MAX,
-  aiMetadataFingerprint,
   buildAiMetadataPrompt,
   parseAiMetadataLlmJson,
 } from "../../shared/literature-ai-metadata";
+import { aiMetadataFingerprint } from "./literature-ai-metadata-fingerprint";
 import {
   LITERATURE_AI_METADATA_SETUP_HINT,
   resolveLiteratureAiMetadataModel,

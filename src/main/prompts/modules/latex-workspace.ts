@@ -1,5 +1,5 @@
 import type { PromptContext } from "../types";
-import type { ManuscriptFolder } from "../../../renderer/types/workspace";
+import type { ManuscriptFolder } from "../../../shared/workspace-folder";
 import { TOOL_NAMES } from "../../../shared/tool-names";
 
 function manuscriptFolder(ctx: PromptContext): ManuscriptFolder | null {

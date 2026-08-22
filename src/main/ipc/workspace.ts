@@ -9,7 +9,7 @@ import {
   validateWorkspaceDirs,
   createConfiguredFolders,
 } from "../services/workspace-config";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+import type { WorkspaceFolder } from "../../shared/workspace-folder";
 import { promptManager } from "../prompts";
 
 export function registerWorkspaceHandlers(): void {
