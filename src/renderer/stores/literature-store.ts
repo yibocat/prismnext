@@ -78,6 +78,8 @@ interface LiteratureState {
   bbtBannerDismissed: boolean;
   /** Session guard — auto Zotero pull once per project root (manual Refresh still pulls). */
   zoteroAutoPullDoneForRoot: string | null;
+  /** Last project root that finished `bootstrapLiterature`. */
+  bootstrappedRoot: string | null;
   /** Latest PDF highlight excerpt in the reader — for Add to Chat. */
   readerExcerpt: {
     paperId: string;
@@ -253,6 +255,17 @@ async function withCollectionWritePending<T>(
 /** Serializes drag/menu PDF imports so enrich/scan steps do not overlap. */
 let pdfImportSerial = Promise.resolve();
 
+const refreshInFlight = new Map<string, Promise<void>>();
+const bootstrapInFlight = new Map<string, Promise<void>>();
+
+/** First paint belongs to `bootstrapLiterature`; later activates may refresh. */
+export function shouldRefreshLiteratureOnActivate(
+  bootstrappedRoot: string | null,
+  projectRoot: string | null | undefined,
+): boolean {
+  return Boolean(projectRoot && bootstrappedRoot === projectRoot);
+}
+
 export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   papers: [],
   selectedPaperId: null,
@@ -278,6 +291,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   pdfCacheStatus: {},
   bbtBannerDismissed: false,
   zoteroAutoPullDoneForRoot: null,
+  bootstrappedRoot: null,
   readerExcerpt: null,
   pdfImportBusyCount: 0,
   pdfImportQueuedCount: 0,
@@ -324,27 +338,40 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   },
 
   bootstrapLiterature: async (projectRoot) => {
-    applyLiteratureUiPrefs(projectRoot);
-    if (get().libraryView.kind === "reading-list") {
-      set({ libraryView: { kind: "all" }, viewPaperIds: null });
-      void persistLiteratureUiPrefs(projectRoot, { libraryView: { kind: "all" } });
-    }
-    void get().probeZotero();
-    await get().loadProjectBinding(projectRoot);
-    const bound = get().boundCollectionId;
-    if (!bound) {
-      await get().refresh(projectRoot);
-      return;
-    }
-    if (get().zoteroAutoPullDoneForRoot === projectRoot) {
-      await get().refresh(projectRoot);
-      return;
-    }
+    const existing = bootstrapInFlight.get(projectRoot);
+    if (existing) return existing;
+    const run = (async () => {
+      applyLiteratureUiPrefs(projectRoot);
+      if (get().libraryView.kind === "reading-list") {
+        set({ libraryView: { kind: "all" }, viewPaperIds: null });
+        void persistLiteratureUiPrefs(projectRoot, { libraryView: { kind: "all" } });
+      }
+      void get().probeZotero();
+      await get().loadProjectBinding(projectRoot);
+      const bound = get().boundCollectionId;
+      if (!bound) {
+        await get().refresh(projectRoot);
+        set({ bootstrappedRoot: projectRoot });
+        return;
+      }
+      if (get().zoteroAutoPullDoneForRoot === projectRoot) {
+        await get().refresh(projectRoot);
+        set({ bootstrappedRoot: projectRoot });
+        return;
+      }
+      try {
+        await get().pullFromZotero(projectRoot, { silent: true });
+        set({ zoteroAutoPullDoneForRoot: projectRoot, bootstrappedRoot: projectRoot });
+      } catch {
+        // Manual Refresh can retry; avoid blocking auto-pull on transient Zotero errors.
+        set({ bootstrappedRoot: projectRoot });
+      }
+    })();
+    bootstrapInFlight.set(projectRoot, run);
     try {
-      await get().pullFromZotero(projectRoot, { silent: true });
-      set({ zoteroAutoPullDoneForRoot: projectRoot });
-    } catch {
-      // Manual Refresh can retry; avoid blocking auto-pull on transient Zotero errors.
+      await run;
+    } finally {
+      if (bootstrapInFlight.get(projectRoot) === run) bootstrapInFlight.delete(projectRoot);
     }
   },
 
@@ -573,26 +600,36 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   refresh: async (projectRoot) => {
     if (!projectRoot) return;
-    set({ loading: true, error: null });
-    try {
-      const papers = await literatureDesktop.literatureList(projectRoot);
-      useCitationStagingStore.getState().reconcileWithLibrary(papers);
-      let libraryTagFilter = get().libraryTagFilter;
-      if (libraryTagFilter) {
-        const stillExists = collectProjectTags(papers).some(
-          (e) => paperTagKey(e.tag) === paperTagKey(libraryTagFilter!),
-        );
-        if (!stillExists) {
-          libraryTagFilter = null;
-          void persistLiteratureUiPrefs(projectRoot, { libraryTagFilter: null });
+    const existing = refreshInFlight.get(projectRoot);
+    if (existing) return existing;
+    const run = (async () => {
+      set({ loading: true, error: null });
+      try {
+        const papers = await literatureDesktop.literatureList(projectRoot);
+        useCitationStagingStore.getState().reconcileWithLibrary(papers);
+        let libraryTagFilter = get().libraryTagFilter;
+        if (libraryTagFilter) {
+          const stillExists = collectProjectTags(papers).some(
+            (e) => paperTagKey(e.tag) === paperTagKey(libraryTagFilter!),
+          );
+          if (!stillExists) {
+            libraryTagFilter = null;
+            void persistLiteratureUiPrefs(projectRoot, { libraryTagFilter: null });
+          }
         }
+        set({ papers, loading: false, libraryTagFilter });
+        await get().refreshPdfCacheStatus(projectRoot);
+        await get().refreshCollections(projectRoot);
+        await get().loadViewPaperIds(projectRoot);
+      } catch (err) {
+        set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       }
-      set({ papers, loading: false, libraryTagFilter });
-      await get().refreshPdfCacheStatus(projectRoot);
-      await get().refreshCollections(projectRoot);
-      await get().loadViewPaperIds(projectRoot);
-    } catch (err) {
-      set({ loading: false, error: err instanceof Error ? err.message : String(err) });
+    })();
+    refreshInFlight.set(projectRoot, run);
+    try {
+      await run;
+    } finally {
+      if (refreshInFlight.get(projectRoot) === run) refreshInFlight.delete(projectRoot);
     }
   },
 

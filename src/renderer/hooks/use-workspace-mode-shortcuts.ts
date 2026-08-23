@@ -18,6 +18,7 @@ import {
   openModeInSplit,
 } from "@/lib/workspace/toolbar-mode-open";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useLayoutStore } from "@/stores/layout-store";
 
 function matchesShortcut(id: string, e: KeyboardEvent): boolean {
   const overrides = useSettingsStore.getState().settings.shortcutOverrides;
@@ -63,6 +64,7 @@ export function useWorkspaceModeShortcuts(
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !e.metaKey && !e.ctrlKey) return;
+      if (useLayoutStore.getState().leftSidebarView === "settings") return;
 
       // LeftNav modes (Shift before bare).
       if (matchesShortcut("workspace.openTexWorkspaceMaximize", e)) {

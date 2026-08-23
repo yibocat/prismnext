@@ -175,6 +175,11 @@ export interface ModeDefinition {
    * Default true. Set false for settings-editor / interaction / research-plan.
    */
   showInAddMenu?: boolean;
+  /**
+   * Whether the mode appears in the left sidebar module Nav (and Customize Sidebar).
+   * Default: same as the workspace「+」menu. Set false to keep a mode in「+」only.
+   */
+  showInLeftNav?: boolean;
   /** home / initial tab 默认标题（英文回退；UI 优先用 initialTitleKey） */
   initialTitle: string;
   /** i18n key for initial / home tab title */
@@ -247,6 +252,14 @@ export const modeRegistry = {
       if (modeSurface === "any") return true;
       return modeSurface === surface;
     });
+  },
+
+  /**
+   * Workspace modes that get a left-sidebar Nav slot.
+   * New `modeRegistry.register` entries appear here unless opted out.
+   */
+  getLeftNavModes(): ModeDefinition[] {
+    return modeRegistry.getAddMenuModes("workspace").filter((def) => def.showInLeftNav !== false);
   },
 
   /** Add-menu entries after applying singleton hide-when-open rules. */

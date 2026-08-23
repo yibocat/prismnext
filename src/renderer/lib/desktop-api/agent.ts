@@ -13,6 +13,8 @@ export const agentDesktop = {
   agentDispose: forwardDesktop("agentDispose"),
   agentLoadSession: forwardDesktop("agentLoadSession"),
   agentRenameSession: forwardDesktop("agentRenameSession"),
+  agentGenerateSessionTitle: forwardDesktop("agentGenerateSessionTitle"),
+  agentReassignSessionProject: forwardDesktop("agentReassignSessionProject"),
   agentUpsertTurnMeta: forwardDesktop("agentUpsertTurnMeta"),
   agentUpsertPlanArtifact: forwardDesktop("agentUpsertPlanArtifact"),
   agentAppendPlanDecision: forwardDesktop("agentAppendPlanDecision"),

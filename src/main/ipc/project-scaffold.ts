@@ -2,11 +2,6 @@ import { ipcMain } from "electron";
 import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "../app/logger";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
-import {
-  writeProjectIcon,
-  writeProjectIconImage,
-} from "../project/workspace-config";
-import type { IconSpec } from "../../shared/platform/icon-spec";
 import { buildAgentsMdScaffold } from "../project/agents-md-scaffold";
 import {
   createWorkbenchProjectOnDisk,
@@ -26,9 +21,6 @@ export function registerProjectScaffoldHandlers(): void {
         rootPath: string;
         workspaceDirs?: WorkspaceFolder[];
         initGit?: boolean;
-        projectIcon?: IconSpec | string | null;
-        /** Optional PNG bytes (base64) written to `.workbench/icon.png`. */
-        projectIconImagePngBase64?: string;
       },
     ) => {
     let failLogged = false;
@@ -37,8 +29,6 @@ export function registerProjectScaffoldHandlers(): void {
     createWorkbenchProjectOnDisk({
       rootPath: args.rootPath,
       workspaceDirs: args.workspaceDirs,
-      projectIcon: args.projectIcon,
-      projectIconImagePngBase64: args.projectIconImagePngBase64,
     });
 
     if (args.initGit) {
@@ -64,20 +54,6 @@ export function registerProjectScaffoldHandlers(): void {
       throw err;
     }
   });
-
-  ipcMain.handle(
-    "project:setIcon",
-    async (_event, args: { rootPath: string; icon: IconSpec | null }) => {
-      writeProjectIcon(projectMetaAbs(args.rootPath), args.icon);
-    },
-  );
-
-  ipcMain.handle(
-    "project:setIconImage",
-    async (_event, args: { rootPath: string; pngBase64: string }) => {
-      writeProjectIconImage(projectMetaAbs(args.rootPath), Buffer.from(args.pngBase64, "base64"));
-    },
-  );
 
   ipcMain.handle("project:ensure", async (_event, args: { rootPath: string }) => {
     ensureWorkbenchProjectMeta(args.rootPath);

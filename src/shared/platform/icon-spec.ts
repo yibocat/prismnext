@@ -1,15 +1,15 @@
 /**
- * Unified icon spec for teams and projects — three optional forms the user can pick.
- * Stored as a small object in team.json / `.workbench/settings.json`.
+ * Unified icon spec for teams — three optional forms the user can pick.
+ * Stored as a small object in team.json.
  *
  * - emoji:  a single glyph string ("🧊")
  * - lucide: a PascalCase lucide icon name ("Beaker")
- * - image:  a relative filename under the team dir / `.prismnext/` ("icon.png")
+ * - image:  a relative filename under the team dir ("icon.png")
  *
  * Image bytes live on disk next to the manifest — never inline Base64 in JSON.
  *
- * Backward compat: a bare string (legacy `projectIcon`) is read as an emoji.
- * A legacy `image` with a `data:` URL is rejected by normalize (re-pick to migrate).
+ * A bare string is read as an emoji. A legacy `image` with a `data:` URL is
+ * rejected by normalize (re-pick to migrate).
  */
 export type IconKind = "emoji" | "lucide" | "image";
 
@@ -18,7 +18,7 @@ export type IconSpec =
   | { kind: "lucide"; value: string }
   | { kind: "image"; value: string };
 
-/** Canonical on-disk filename for team / project image icons. */
+/** Canonical on-disk filename for team image icons. */
 export const ICON_IMAGE_FILENAME = "icon.png";
 
 /** Normalize arbitrary stored data into an IconSpec, or null when absent/invalid. */
@@ -27,8 +27,7 @@ export function normalizeIconSpec(input: unknown): IconSpec | null {
   if (typeof input === "string") {
     const value = input.trim();
     if (!value) return null;
-    // Legacy `projectIcon` was always an emoji glyph; team `icon` was never
-    // written. Treat bare strings as emoji so existing projects keep rendering.
+    // Treat bare strings as emoji so older team manifests keep rendering.
     if (value.length <= 16) return { kind: "emoji", value };
     return null;
   }

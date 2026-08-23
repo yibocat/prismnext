@@ -32,6 +32,11 @@ export interface AppSettings {
   /** Projects currently on the workbench (P3/P4). */
   workbenchProjectIds?: string[];
   lastActiveFileId?: string | null;
+  /** Project + chat tabs to reopen on the next launch. Not lastProjectPath. */
+  lastFocusProjectId?: string | null;
+  lastFocusConversationId?: string | null;
+  lastOpenConversationIds?: string[];
+  lastSessionProjectIds?: Record<string, string>;
   zoteroApiKey?: string;
   zoteroUserId?: string;
   /** Last probe saw Better BibTeX on the local Zotero connector. */

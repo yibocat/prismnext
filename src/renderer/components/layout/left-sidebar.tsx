@@ -9,7 +9,6 @@ import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
-import { useWindowState } from "@/hooks/use-window-state";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import {
@@ -24,43 +23,88 @@ import {
   Trash2Icon,
   WorkflowIcon,
   ListFilter,
-  ArrowUpDown,
-  ChevronDown,
-  ChevronRight,
-  Minus,
+  Clock,
+  Folder,
   CircleAlert,
   Square,
-  FolderIcon,
+  ChevronRight,
   PlusIcon,
+  Pencil,
+  SlidersHorizontal,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
-import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { SidebarHitChrome } from "@/components/layout/sidebar-controls";
 import { WorkbenchAddMenu } from "@/components/layout/workbench-add-menu";
-import { LeftNavButton, LeftNavButtonBar, leftNavPanelRefs } from "@/components/layout/left-nav-button";
+import {
+  LeftNavButtonBar,
+  LeftNavIconButton,
+  LEFT_SIDEBAR_FOOTER_ICON,
+  LEFT_SIDEBAR_ROW,
+  LEFT_SIDEBAR_ROW_ACTION,
+  LEFT_SIDEBAR_ROW_ACTIVE,
+  LEFT_SIDEBAR_ROW_HOVER,
+  LEFT_SIDEBAR_SECTION_ACTION,
+  LEFT_SIDEBAR_SECTION_ACTION_ICON,
+  LEFT_SIDEBAR_SECTION_HEADER,
+  LEFT_SIDEBAR_SECTION_LABEL,
+  LEFT_SIDEBAR_STACK,
+  LEFT_SIDEBAR_AFTER_COLLAPSE,
+  LEFT_SIDEBAR_AFTER_EXPAND,
+  LeftSidebarReveal,
+  DefaultProjectBadge,
+  WorkbenchFolderGlyph,
+  leftNavPanelRefs,
+} from "@/components/layout/left-nav-button";
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
-import { leftNavRegistry } from "@/lib/workspace/left-nav";
+import { SessionContextCard } from "@/components/layout/content-top-bar/session-context-card";
+import {
+  isLeftNavRequired,
+  leftNavRegistry,
+  resolvePrimaryNavItems,
+} from "@/lib/workspace/left-nav";
+import { useSettingsStore } from "@/stores/settings-store";
+import { CustomizeSidebarDialog } from "@/components/layout/customize-sidebar-dialog";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import {
+  archiveSessionsForProject,
   toggleArchiveSessionForProject,
   togglePinSessionForProject,
 } from "@/lib/chat/session-ui-prefs";
+import { EditProjectDialog } from "@/components/modules/project/edit-project-dialog";
+import {
+  AppContextMenu,
+  AppContextMenuContent,
+  AppContextMenuDestructiveItem,
+  AppContextMenuItem,
+  AppContextMenuTrigger,
+} from "@/components/ui/app-context-menu";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   ensureWorkbenchProjectExpanded,
+  anyWorkbenchProjectExpanded,
+  applyVisibleIdReorder,
   groupSessionsByProject,
+  groupSessionsByUpdatedAt,
   isWorkbenchProjectExpanded,
+  moveListItem,
+  type SessionDateBucket,
   sameProjectPath,
   toggleWorkbenchProjectExpanded,
   useWorkbenchStore,
   type WorkbenchSessionRow,
 } from "@/stores/workbench-store";
+import { useVerticalListReorder } from "@/lib/workspace/vertical-list-reorder";
 import { hasPendingPermission, usePermissionStore } from "@/stores/permission-store";
 import {
   AppMenu,
   AppMenuCheckItem,
   AppMenuContent,
+  AppMenuItem,
+  AppMenuSub,
+  AppMenuSubContent,
+  AppMenuSubTrigger,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
 import { Hint } from "@/components/ui/hint";
@@ -68,10 +112,8 @@ import {
   SidebarProvider,
   Sidebar,
   SidebarFooter,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
 } from "@/components/ui/sidebar";
+
 interface SessionInfo {
   id: string;
   title: string;
@@ -106,6 +148,42 @@ function sessionsListEqual(a: SessionInfo[], b: SessionInfo[]): boolean {
   }
   return true;
 }
+
+function shortProjectPath(lastPath: string): string {
+  const normalized = lastPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 2) return parts.join("/") || normalized;
+  return parts.slice(-2).join("/");
+}
+
+function projectMetaForSession(
+  session: SessionInfo,
+  members: { id: string; lastPath: string; displayName: string }[],
+): { id?: string; name: string; path: string; lastPath: string } | null {
+  const member =
+    (session.projectId
+      ? members.find((item) => item.id === session.projectId)
+      : undefined)
+    ?? members.find((item) => sameProjectPath(item.lastPath, session.projectLastPath));
+  if (member) {
+    return {
+      id: member.id,
+      name: member.displayName,
+      path: shortProjectPath(member.lastPath),
+      lastPath: member.lastPath,
+    };
+  }
+  if (!session.projectLastPath) return null;
+  const folder =
+    session.projectLastPath.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)
+    ?? session.projectLastPath;
+  return {
+    name: folder,
+    path: shortProjectPath(session.projectLastPath),
+    lastPath: session.projectLastPath,
+  };
+}
+
 
 /** Stable store selector — only changes when streaming session ids change. */
 function selectStreamingSessionKey(state: { tabs: { isStreaming: boolean; sessionId: string | null }[] }): string {
@@ -186,11 +264,7 @@ interface LeftSidebarProps {
 
 export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef, rightAreaRef }: LeftSidebarProps) {
   const { t } = useTranslation();
-  const { platform, isFullscreen } = useWindowState();
-  const isMac = platform === "darwin";
-  const showMacSpacer = isMac && !isFullscreen;
 
-  const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
@@ -203,8 +277,11 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const showArchived = useLayoutStore((s) => s.showArchived);
   const toggleShowArchived = useLayoutStore((s) => s.toggleShowArchived);
+  const pinnedExpanded = useLayoutStore((s) => s.pinnedExpanded);
+  const togglePinnedExpanded = useLayoutStore((s) => s.togglePinnedExpanded);
   const sessionSort = useLayoutStore((s) => s.sessionSort);
-  const setSessionSort = useLayoutStore((s) => s.setSessionSort);
+  const sessionGroupBy = useLayoutStore((s) => s.sessionGroupBy);
+  const setSessionGroupBy = useLayoutStore((s) => s.setSessionGroupBy);
 
   const sessionId = useChatStore((s) => s.sessionId);
   const streamingSessionKey = useChatStore(selectStreamingSessionKey);
@@ -236,6 +313,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const members = useWorkbenchStore((s) => s.members);
+  const workbenchProjectIds = useWorkbenchStore((s) => s.workbenchProjectIds);
   const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
   const focusProjectId = useWorkbenchStore((s) => s.focusProjectId);
   const expandedWorkbenchProjectIds = useLayoutStore((s) => s.expandedWorkbenchProjectIds);
@@ -245,6 +323,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   const [missingProjectIds, setMissingProjectIds] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [customizeSidebarOpen, setCustomizeSidebarOpen] = useState(false);
+  const leftNavHiddenIds = useSettingsStore((s) => s.settings.leftNavHiddenIds);
+  const leftNavOrder = useSettingsStore((s) => s.settings.leftNavOrder);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
@@ -427,13 +509,23 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   }, []);
 
   const primaryNavItems = useMemo(
-    () => leftNavRegistry.getBySection("primary"),
-    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
+    () =>
+      resolvePrimaryNavItems(leftNavRegistry.getBySection("primary"), {
+        hiddenIds: leftNavHiddenIds,
+        order: leftNavOrder,
+      }),
+    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab, leftNavHiddenIds, leftNavOrder],
+  );
+  const hubNavItems = useMemo(
+    () => leftNavRegistry.getBySection("hub"),
+    [leftSidebarView],
   );
   const footerNavItems = useMemo(
     () => leftNavRegistry.getBySection("footer"),
     [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
   );
+  const settingsNavItem = footerNavItems.find((item) => item.id === "settings");
+  const extraFooterNavItems = footerNavItems.filter((item) => item.id !== "settings");
   const navPanelRefs = leftNavPanelRefs({ centerRef, rightAreaRef });
   const dismissOverlay = () => setLeftSidebarOverlay(false);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
@@ -468,20 +560,91 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     [members, sortedSessions],
   );
 
+  const updatedSessionGroups = useMemo(() => {
+    const visible = sortedSessions.filter(
+      (s) => !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id),
+    );
+    return groupSessionsByUpdatedAt(visible);
+  }, [archivedSessionIds, pinnedSessionIds, sortedSessions]);
+
+  const anyProjectExpanded = anyWorkbenchProjectExpanded(
+    members.map((member) => member.id),
+    expandedWorkbenchProjectIds,
+    focusProjectId,
+  );
+
+  const expandOrCollapseAllProjects = useCallback(() => {
+    setExpandedWorkbenchProjectIds(
+      anyProjectExpanded ? [] : members.map((member) => member.id),
+    );
+  }, [anyProjectExpanded, members, setExpandedWorkbenchProjectIds]);
+
+  const dateBucketLabel = (bucket: SessionDateBucket) => {
+    if (bucket === "today") return t("nav.sessions.today");
+    if (bucket === "yesterday") return t("nav.sessions.yesterday");
+    if (bucket === "week") return t("nav.sessions.last7Days");
+    if (bucket === "month") return t("nav.sessions.last30Days");
+    return t("nav.sessions.older");
+  };
+
+  const pinnedSessions = useMemo(
+    () =>
+      sortedSessions.filter(
+        (s) => pinnedSessionIds.includes(s.id) && !archivedSessionIds.includes(s.id),
+      ),
+    [archivedSessionIds, pinnedSessionIds, sortedSessions],
+  );
+
+  const archivedSessions = useMemo(
+    () => sortedSessions.filter((s) => archivedSessionIds.includes(s.id)),
+    [archivedSessionIds, sortedSessions],
+  );
+
   const removeFromWorkbench = useCallback(async (projectId: string) => {
     const removed = members.find((member) => member.id === projectId);
     const next = await useWorkbenchStore.getState().removeProject(projectId);
-    if (removed && sameProjectPath(removed.lastPath, projectRoot)) {
+    // Stay on the folder we just dropped from the list when it is still the
+    // default role. Refocusing it would call project open and can remount the
+    // trigger while the context menu is closing.
+    if (
+      removed
+      && sameProjectPath(removed.lastPath, projectRoot)
+      && next.defaultLastPath
+      && !sameProjectPath(removed.lastPath, next.defaultLastPath)
+    ) {
       await useDocumentStore.getState().focusProject(next.defaultLastPath);
     }
     void fetchSessionsRef.current({ silent: true });
   }, [members, projectRoot]);
+
+  const archiveAllInProject = useCallback((lastPath: string, sessionIds: string[]) => {
+    if (sessionIds.length === 0) return;
+    void archiveSessionsForProject(lastPath, sessionIds);
+  }, []);
 
   const toggleProjectExpanded = useCallback((projectId: string) => {
     setExpandedWorkbenchProjectIds(
       toggleWorkbenchProjectExpanded(projectId, expandedWorkbenchProjectIds, focusProjectId),
     );
   }, [expandedWorkbenchProjectIds, focusProjectId, setExpandedWorkbenchProjectIds]);
+
+  const reorderProjects = useCallback((fromIndex: number, toIndex: number) => {
+    const nextVisible = moveListItem(members.map((member) => member.id), fromIndex, toIndex);
+    const fullIds = workbenchProjectIds.length >= nextVisible.length
+      ? workbenchProjectIds
+      : nextVisible;
+    void useWorkbenchStore.getState().reorderProjects(
+      applyVisibleIdReorder(fullIds, nextVisible),
+    );
+  }, [members, workbenchProjectIds]);
+
+  const canReorderProjects = members.length > 1;
+  const projectReorder = useVerticalListReorder(
+    members.length,
+    canReorderProjects,
+    reorderProjects,
+    { ignoreSelector: "[data-project-drag-ignore]" },
+  );
 
   const newSessionInProject = useCallback(async (projectId: string, lastPath: string) => {
     setExpandedWorkbenchProjectIds(
@@ -499,7 +662,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     setLeftSidebarOverlay,
   ]);
 
-  const renderSessionItem = (s: SessionInfo) => {
+  const renderSessionItem = (s: SessionInfo, opts?: { archivedRow?: boolean; showProject?: boolean }) => {
+    const archivedRow = opts?.archivedRow ?? showArchived;
+    const showProject = opts?.showProject === true;
+    const project = showProject ? projectMetaForSession(s, members) : null;
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
@@ -510,9 +676,115 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       worktrees,
     );
     const isWorktreeSession = checkoutContext.kind !== "local";
+    const sessionTrailing = (
+      <>
+        {isSessionStreaming ? (
+          <Hint label={t("nav.sessions.stopSession")}>
+            <span
+              role="button"
+              tabIndex={0}
+              className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                void cancelExecution(s.id);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  void cancelExecution(s.id);
+                }
+              }}
+            >
+              <Square className="size-3" />
+            </span>
+          </Hint>
+        ) : (
+          <span className="hidden group-hover/session:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
+            {relativeTime(s.lastModified, t)}
+          </span>
+        )}
+        {archivedRow ? (
+          <>
+            <Hint label={t("nav.sessions.restoreFromArchive")}>
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
+              >
+                <ArchiveRestore className="size-3" />
+              </span>
+            </Hint>
+            <Hint label={t("nav.sessions.delete")}>
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!projectRoot) return;
+                  const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
+                  if (result.ok) {
+                    clearSessionUiPrefs(s.id);
+                    setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                    if (s.id === sessionId) clearCurrentTab();
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    if (!projectRoot) return;
+                    const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
+                    if (result.ok) {
+                      clearSessionUiPrefs(s.id);
+                      setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                      if (s.id === sessionId) clearCurrentTab();
+                    }
+                  }
+                }}
+              >
+                <Trash2Icon className="size-3" />
+              </span>
+            </Hint>
+          </>
+        ) : (
+          <Hint label={t("nav.sessions.archive")}>
+            <span
+              role="button"
+              tabIndex={0}
+              className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                archiveSession(s.id);
+                if (s.id === sessionId) clearCurrentTab();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  archiveSession(s.id);
+                  if (s.id === sessionId) clearCurrentTab();
+                }
+              }}
+            >
+              <Archive className="size-3" />
+            </span>
+          </Hint>
+        )}
+      </>
+    );
     return (
-      <SidebarMenuItem key={s.id} data-workbench-session={s.id}>
-        <SidebarMenuButton
+      <SessionContextCard
+        key={s.id}
+        title={displayChatTitle(s.title, t)}
+        sessionId={s.id}
+        sessionDirectory={s.directory ?? s.projectLastPath}
+        side="right"
+        align="start"
+      >
+      <button
+          type="button"
+          data-workbench-session={s.id}
           onClick={() => {
             if (s.projectId) {
               setExpandedWorkbenchProjectIds(
@@ -526,21 +798,35 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             loadSession(s.id, s.directory, s.projectLastPath);
             setLeftSidebarOverlay(false);
           }}
-          isActive={isActive}
-          size="sm"
+          className={cn(
+            LEFT_SIDEBAR_ROW,
+            LEFT_SIDEBAR_ROW_HOVER,
+            "group/session",
+            showProject && "items-start",
+            isActive && LEFT_SIDEBAR_ROW_ACTIVE,
+          )}
         >
-          <span className="relative size-3.5 shrink-0 flex items-center justify-center">
-            {isWaitingPermission ? (
-              <CircleAlert className="absolute size-3.5 text-warning" strokeWidth={2.5} />
-            ) : isWorktreeSession ? (
-              <WorkflowIcon className="absolute size-3 text-primary/70 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2} />
-            ) : isSessionStreaming ? (
-              <CircleDotDashed className="absolute size-3.5 text-primary transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
-            ) : isAiTerminalRunning ? (
-              <CircleDotDashed className="absolute size-3.5 text-warning transition-opacity group-hover/menu-item:opacity-0" strokeWidth={2.5} />
-            ) : (
-              <Dot className="absolute size-3.5 text-muted-foreground/30 transition-opacity group-hover/menu-item:opacity-0" strokeWidth={5.5} />
+          <span
+            className={cn(
+              "relative flex size-3.5 shrink-0 items-center justify-center",
+              showProject && "h-[1lh] w-3.5",
             )}
+          >
+            {isWaitingPermission ? (
+              <CircleAlert className="size-3.5 text-warning" strokeWidth={2.5} />
+            ) : isSessionStreaming ? (
+              <CircleDotDashed className="size-3.5 text-primary transition-opacity group-hover/session:opacity-0" strokeWidth={2.5} />
+            ) : isAiTerminalRunning ? (
+              <CircleDotDashed className="size-3.5 text-warning transition-opacity group-hover/session:opacity-0" strokeWidth={2.5} />
+            ) : archivedRow ? (
+              <Archive className="size-3.5 text-muted-foreground/70" />
+            ) : isWorktreeSession ? (
+              <WorkflowIcon className="size-3 text-primary/70 transition-opacity group-hover/session:opacity-0" strokeWidth={2} />
+            ) : (
+              <Dot className="size-3.5 text-muted-foreground/30 transition-opacity group-hover/session:opacity-0" strokeWidth={5.5} />
+            )}
+            {archivedRow ? null : (
+            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/session:opacity-100">
             <Hint
               label={
                 pinnedSessionIds.includes(s.id)
@@ -551,7 +837,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               <span
                 role="button"
                 tabIndex={0}
-                className="absolute opacity-0 group-hover/menu-item:opacity-100 transition-opacity text-muted-foreground hover:text-foreground cursor-pointer"
+                className="flex size-full items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
               >
@@ -562,103 +848,111 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 )}
               </span>
             </Hint>
+            </span>
+            )}
           </span>
-          <span className="truncate text-[length:var(--font-session-item)] flex-1">{displayChatTitle(s.title, t)}</span>
-          {isSessionStreaming ? (
-            <Hint label={t("nav.sessions.stopSession")}>
+          <span className="min-w-0 flex-1 text-left">
+            <span className={cn(showProject && "flex min-w-0 items-center gap-2")}>
+              <span className={cn(showProject ? "min-w-0 flex-1 truncate" : "block truncate")}>
+                {displayChatTitle(s.title, t)}
+              </span>
+              {showProject ? sessionTrailing : null}
+            </span>
+            {showProject && project ? (
+              <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[length:var(--font-hint)] text-muted-foreground/70">
+                <span className="min-w-0 truncate">{project.name}</span>
+                {project.id === defaultProjectId ? <DefaultProjectBadge /> : null}
+              </span>
+            ) : null}
+          </span>
+          {showProject ? null : sessionTrailing}
+        </button>
+      </SessionContextCard>
+    );
+  };
+
+  const renderArchivedSessionItem = (s: SessionInfo) => {
+    const isActive = s.id === sessionId;
+    const project = projectMetaForSession(s, members);
+    return (
+      <SessionContextCard
+        key={s.id}
+        title={displayChatTitle(s.title, t)}
+        sessionId={s.id}
+        sessionDirectory={s.directory ?? s.projectLastPath}
+        side="right"
+        align="start"
+      >
+      <button
+        type="button"
+        data-workbench-session={s.id}
+        onClick={() => {
+          loadSession(s.id, s.directory, s.projectLastPath);
+          setLeftSidebarOverlay(false);
+        }}
+        className={cn(
+          LEFT_SIDEBAR_ROW,
+          LEFT_SIDEBAR_ROW_HOVER,
+          "items-start group/session",
+          isActive && LEFT_SIDEBAR_ROW_ACTIVE,
+        )}
+      >
+        <span className="min-w-0 flex-1 text-left">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate">{displayChatTitle(s.title, t)}</span>
+            <Hint label={t("nav.sessions.restoreFromArchive")}>
               <span
                 role="button"
                 tabIndex={0}
-                className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void cancelExecution(s.id);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    void cancelExecution(s.id);
-                  }
-                }}
+                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
               >
-                <Square className="size-3" />
+                <ArchiveRestore className="size-3" />
               </span>
             </Hint>
-          ) : (
-            <span className="hidden group-hover/menu-item:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
-              {relativeTime(s.lastModified, t)}
-            </span>
-          )}
-          {showArchived ? (
-            <>
-              <Hint label={t("nav.sessions.restoreFromArchive")}>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
-                >
-                  <ArchiveRestore className="size-3" />
-                </span>
-              </Hint>
-              <Hint label={t("nav.sessions.delete")}>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
-                  onClick={async (e) => {
+            <Hint label={t("nav.sessions.delete")}>
+              <span
+                role="button"
+                tabIndex={0}
+                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
+                  if (result.ok) {
+                    clearSessionUiPrefs(s.id);
+                    setSessions((prev) => prev.filter((x) => x.id !== s.id));
+                    if (s.id === sessionId) clearCurrentTab();
+                  }
+                }}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
                     e.stopPropagation();
-                    if (!projectRoot) return;
                     const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
                     if (result.ok) {
                       clearSessionUiPrefs(s.id);
                       setSessions((prev) => prev.filter((x) => x.id !== s.id));
                       if (s.id === sessionId) clearCurrentTab();
                     }
-                  }}
-                  onKeyDown={async (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.stopPropagation();
-                      if (!projectRoot) return;
-                      const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
-                      if (result.ok) {
-                        clearSessionUiPrefs(s.id);
-                        setSessions((prev) => prev.filter((x) => x.id !== s.id));
-                        if (s.id === sessionId) clearCurrentTab();
-                      }
-                    }
-                  }}
-                >
-                  <Trash2Icon className="size-3" />
-                </span>
-              </Hint>
-            </>
-          ) : (
-            <Hint label={t("nav.sessions.archive")}>
-              <span
-                role="button"
-                tabIndex={0}
-                className="hidden group-hover/menu-item:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  archiveSession(s.id);
-                  if (s.id === sessionId) clearCurrentTab();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.stopPropagation();
-                    archiveSession(s.id);
-                    if (s.id === sessionId) clearCurrentTab();
                   }
                 }}
               >
-                <Archive className="size-3" />
+                <Trash2Icon className="size-3" />
               </span>
             </Hint>
-          )}
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+          </span>
+          {project ? (
+            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[length:var(--font-hint)] text-muted-foreground/70">
+              <WorkbenchFolderGlyph />
+              <span className="min-w-0 truncate">
+                {project.path}
+                {project.name !== project.path.split("/").at(-1) ? ` ${project.name}` : ""}
+              </span>
+            </span>
+          ) : null}
+        </span>
+      </button>
+      </SessionContextCard>
     );
   };
 
@@ -677,80 +971,148 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
       defaultOpen
       className="contents"
     >
-      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full" data-surface="sidebar">
-        {/* SidebarTopBar — pseudo-titlebar. Always preserves height to avoid layout jump,
-            but only renders controls when sidebar is expanded (ContentTopBar handles collapsed state). */}
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0" data-surface="sidebar" data-left-sidebar-slab="">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
-          {!sidebarFullyCollapsed && (
-            <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
-          )}
+          <SidebarHitChrome leftSidebarRef={leftSidebarRef!} />
         </div>
+        <AppContextMenu>
+          <AppContextMenuTrigger asChild>
+            <div className="flex min-h-0 flex-1 flex-col">
         {/* ── Fixed function buttons (do not scroll) ── */}
-        <div className="shrink-0 px-2 flex flex-col gap-1">
-          {/* 导航按钮由 leftNavRegistry 驱动，新增入口见 left-nav/items.tsx */}
+        <div className={cn("shrink-0 px-2", LEFT_SIDEBAR_STACK)}>
           <LeftNavButtonBar
-            items={primaryNavItems}
+            items={primaryNavItems.filter(isLeftNavRequired)}
             panelRefs={navPanelRefs}
             onPressed={dismissOverlay}
           />
+          <LeftNavButtonBar
+            items={hubNavItems}
+            panelRefs={navPanelRefs}
+            onPressed={dismissOverlay}
+          />
+          {primaryNavItems.some((item) => !isLeftNavRequired(item)) ? (
+            <>
+              <div role="separator" className="mx-2 my-1 h-px bg-border" />
+              <LeftNavButtonBar
+                items={primaryNavItems.filter((item) => !isLeftNavRequired(item))}
+                panelRefs={navPanelRefs}
+                onPressed={dismissOverlay}
+              />
+            </>
+          ) : null}
         </div>
 
         {/* ── Scrollable workbench tree ── */}
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
-          <div className="pt-2 pb-1 flex items-center justify-between">
-            <span className="text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50">
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-2">
+          {!showArchived && pinnedSessions.length > 0 ? (
+            <div className={LEFT_SIDEBAR_STACK}>
+              <Hint label={pinnedExpanded ? t("nav.sessions.collapsePinned") : t("nav.sessions.expandPinned")}>
+              <button
+                type="button"
+                className={cn(LEFT_SIDEBAR_SECTION_HEADER, "justify-start gap-1")}
+                onClick={togglePinnedExpanded}
+                aria-expanded={pinnedExpanded}
+              >
+                <span className={LEFT_SIDEBAR_SECTION_LABEL}>
+                  {t("nav.sessions.pinned")}
+                </span>
+                <ChevronRight
+                  className={cn(
+                    LEFT_SIDEBAR_SECTION_ACTION_ICON,
+                    "shrink-0 text-muted-foreground/50 transition-transform duration-200 ease-out",
+                    pinnedExpanded && "rotate-90",
+                  )}
+                />
+              </button>
+              </Hint>
+              <LeftSidebarReveal open={pinnedExpanded}>
+                {pinnedSessions.map((s) => renderSessionItem(s, { archivedRow: false }))}
+              </LeftSidebarReveal>
+            </div>
+          ) : null}
+          <div className={LEFT_SIDEBAR_SECTION_HEADER}>
+            <span className={LEFT_SIDEBAR_SECTION_LABEL}>
               {showArchived ? t("nav.sessions.archived") : t("nav.workbench.title")}
             </span>
-            <div className="flex items-center gap-0.5">
-              <Hint
-                label={showArchived ? t("nav.sessions.showActive") : t("nav.sessions.showArchived")}
-              >
-                <button
-                  type="button"
-                  className={cn(
-                    "flex size-4 items-center justify-center rounded transition-colors",
-                    showArchived ? "text-muted-foreground" : "text-muted-foreground/50 hover:text-muted-foreground",
-                  )}
-                  onClick={toggleShowArchived}
-                >
-                  <Archive className="size-3" />
-                </button>
-              </Hint>
-              <Hint label={t("nav.sessions.filter")}>
-                <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                  <ListFilter className="size-3" />
-                </button>
-              </Hint>
+            <div className="flex items-center gap-1">
               <AppMenu>
-                <Hint label={t("nav.sessions.sort")}>
+                <Hint label={t("nav.sessions.filter")}>
                   <AppMenuTrigger asChild>
-                    <button type="button" className="flex size-4 items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                      <ArrowUpDown className="size-3" />
+                    <button
+                      type="button"
+                      className={LEFT_SIDEBAR_SECTION_ACTION}
+                    >
+                      <ListFilter className={LEFT_SIDEBAR_SECTION_ACTION_ICON} />
                     </button>
                   </AppMenuTrigger>
                 </Hint>
-                <AppMenuContent align="end" className="min-w-[8.5rem]">
-                  <AppMenuCheckItem
-                    selected={sessionSort === "updated"}
-                    onClick={() => setSessionSort("updated")}
-                  >
-                    {t("nav.sessions.lastUpdated")}
-                  </AppMenuCheckItem>
-                  <AppMenuCheckItem
-                    selected={sessionSort === "created"}
-                    onClick={() => setSessionSort("created")}
-                  >
-                    {t("nav.sessions.dateCreated")}
-                  </AppMenuCheckItem>
+                <AppMenuContent
+                  align="start"
+                  collisionPadding={16}
+                  className="min-w-[10.5rem] w-max max-w-[min(16rem,var(--radix-dropdown-menu-content-available-width))]"
+                >
+                  <AppMenuSub>
+                    <AppMenuSubTrigger
+                      trailing={
+                        <span className="text-muted-foreground">
+                          {sessionGroupBy === "updated"
+                            ? t("nav.sessions.groupUpdated")
+                            : t("nav.sessions.groupWorkbench")}
+                        </span>
+                      }
+                    >
+                      {t("nav.sessions.grouping")}
+                    </AppMenuSubTrigger>
+                    <AppMenuSubContent>
+                      <AppMenuCheckItem
+                        selected={sessionGroupBy === "workbench"}
+                        leading={<Folder className="size-3.5 shrink-0 opacity-70" />}
+                        onClick={() => setSessionGroupBy("workbench")}
+                      >
+                        {t("nav.sessions.groupWorkbench")}
+                      </AppMenuCheckItem>
+                      <AppMenuCheckItem
+                        selected={sessionGroupBy === "updated"}
+                        leading={<Clock className="size-3.5 shrink-0 opacity-70" />}
+                        onClick={() => setSessionGroupBy("updated")}
+                      >
+                        {t("nav.sessions.groupUpdated")}
+                      </AppMenuCheckItem>
+                    </AppMenuSubContent>
+                  </AppMenuSub>
+                  <AppMenuSub>
+                    <AppMenuSubTrigger>{t("nav.sessions.status")}</AppMenuSubTrigger>
+                    <AppMenuSubContent>
+                      <AppMenuItem disabled>{t("nav.sessions.statusSoon")}</AppMenuItem>
+                    </AppMenuSubContent>
+                  </AppMenuSub>
+                  <AppMenuItem onClick={expandOrCollapseAllProjects}>
+                    {anyProjectExpanded
+                      ? t("nav.sessions.collapseAll")
+                      : t("nav.sessions.expandAll")}
+                  </AppMenuItem>
                 </AppMenuContent>
               </AppMenu>
-              <WorkbenchAddMenu />
+              {showArchived ? null : <WorkbenchAddMenu />}
             </div>
           </div>
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2Icon className="size-3.5 animate-spin text-muted-foreground" />
             </div>
+          ) : showArchived ? (
+            archivedSessions.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-4">
+                <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
+                  <Archive className="size-5 mx-auto mb-2 opacity-30" />
+                  {t("nav.sessions.noArchived")}
+                </p>
+              </div>
+            ) : (
+              <div className={LEFT_SIDEBAR_STACK}>
+                {archivedSessions.map(renderArchivedSessionItem)}
+              </div>
+            )
           ) : members.length === 0 ? (
             <div className="flex flex-1 items-center justify-center px-4">
               <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
@@ -761,111 +1123,237 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 </span>
               </p>
             </div>
+          ) : sessionGroupBy === "updated" ? (
+            updatedSessionGroups.length === 0 && pinnedSessions.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-4">
+                <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
+                  <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
+                  {t("nav.sessions.noSessions")}
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                {updatedSessionGroups.map(({ bucket, sessions: groupSessions }, index) => (
+                  <div
+                    key={bucket}
+                    className={cn(LEFT_SIDEBAR_STACK, index > 0 && LEFT_SIDEBAR_AFTER_EXPAND)}
+                  >
+                    <div className="px-2 pb-1 pt-1">
+                      <span className={LEFT_SIDEBAR_SECTION_LABEL}>
+                        {dateBucketLabel(bucket)}
+                      </span>
+                    </div>
+                    {groupSessions.map((s) => renderSessionItem(s, { showProject: true }))}
+                  </div>
+                ))}
+              </div>
+            )
           ) : (
-            sessionGroups.map(({ member, sessions: groupSessions }) => {
+            <div
+              ref={projectReorder.listRef}
+              className="relative flex flex-col"
+              {...projectReorder.listProps}
+            >
+              {sessionGroups.map(({ member, sessions: groupSessions }, index) => {
               const missing = missingProjectIds.has(member.id);
               const expanded = isWorkbenchProjectExpanded(
                 member.id,
                 expandedWorkbenchProjectIds,
                 focusProjectId,
               );
-              const pinned = groupSessions.filter((s) => {
-                if (showArchived) return false;
-                return pinnedSessionIds.includes(s.id) && !archivedSessionIds.includes(s.id);
-              });
-              const rest = groupSessions.filter((s) => {
-                if (showArchived) return archivedSessionIds.includes(s.id);
-                return !archivedSessionIds.includes(s.id) && !pinnedSessionIds.includes(s.id);
-              });
-              const visible = [...pinned, ...rest];
+              const prevMember = index > 0 ? sessionGroups[index - 1]?.member : undefined;
+              const afterExpanded = Boolean(
+                prevMember &&
+                  isWorkbenchProjectExpanded(
+                    prevMember.id,
+                    expandedWorkbenchProjectIds,
+                    focusProjectId,
+                  ),
+              );
+              const visible = groupSessions.filter((s) => !archivedSessionIds.includes(s.id));
+              const activeSessionIds = groupSessions
+                .filter((s) => !archivedSessionIds.includes(s.id))
+                .map((s) => s.id);
+              const item = projectReorder.itemProps(index);
               return (
-                <div key={member.id}>
-                  <div className="group/project flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      data-workbench-project={member.id}
-                      className="flex min-w-0 flex-1 items-center gap-1 rounded-md px-1 py-1 text-left hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      onClick={() => toggleProjectExpanded(member.id)}
-                    >
-                      {expanded ? (
-                        <ChevronDown className="size-3 shrink-0 text-muted-foreground/50" />
-                      ) : (
-                        <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />
-                      )}
-                      <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                      <span className="truncate text-[length:var(--font-session-item)] font-medium">
-                        {member.displayName}
-                      </span>
-                      {missing ? (
-                        <span className="truncate text-[length:var(--font-hint)] text-muted-foreground/70">
-                          {t("nav.workbench.missingFolder")}
-                        </span>
-                      ) : null}
-                    </button>
-                    {missing ? null : (
-                      <Hint label={t("nav.workbench.newSessionInProject")}>
+                <div
+                  key={member.id}
+                  ref={item.ref}
+                  className={cn(
+                    LEFT_SIDEBAR_STACK,
+                    index > 0 &&
+                      (afterExpanded ? LEFT_SIDEBAR_AFTER_EXPAND : LEFT_SIDEBAR_AFTER_COLLAPSE),
+                    projectReorder.draggingIndex === index && "opacity-50",
+                  )}
+                >
+                  <div
+                    className={cn(
+                      LEFT_SIDEBAR_ROW,
+                      LEFT_SIDEBAR_ROW_HOVER,
+                      "group/project cursor-pointer select-none",
+                      projectReorder.draggingIndex === index && "cursor-grabbing",
+                    )}
+                  >
+                    <AppContextMenu>
+                      <AppContextMenuTrigger asChild>
                         <button
                           type="button"
-                          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity hover:text-muted-foreground group-hover/project:opacity-100"
+                          data-workbench-project={member.id}
+                          className="flex min-w-0 flex-1 items-center gap-2 bg-transparent text-left"
+                          {...item.dragHandleProps}
+                          onClick={() => {
+                            if (projectReorder.consumeSkipClick()) return;
+                            toggleProjectExpanded(member.id);
+                          }}
+                        >
+                          <WorkbenchFolderGlyph open={expanded} muted={missing} />
+                          <span className="flex min-w-0 flex-1 items-center gap-1">
+                            <span className="min-w-0 truncate font-medium">
+                              {member.displayName}
+                            </span>
+                            {member.id === defaultProjectId ? <DefaultProjectBadge /> : null}
+                          </span>
+                          {missing ? (
+                            <span className="truncate text-[length:var(--font-hint)] text-muted-foreground/70">
+                              {t("nav.workbench.missingFolder")}
+                            </span>
+                          ) : null}
+                        </button>
+                      </AppContextMenuTrigger>
+                      <AppContextMenuContent>
+                        <AppContextMenuItem
+                          leading={<Pencil className="size-3.5" />}
+                          onSelect={() => setEditingProjectId(member.id)}
+                        >
+                          {t("nav.project.editProject")}
+                        </AppContextMenuItem>
+                        <AppContextMenuItem
+                          leading={<Archive className="size-3.5" />}
+                          disabled={activeSessionIds.length === 0}
+                          onSelect={() => archiveAllInProject(member.lastPath, activeSessionIds)}
+                        >
+                          {t("nav.project.archiveAll")}
+                        </AppContextMenuItem>
+                        <AppContextMenuDestructiveItem
+                          leading={<Trash2Icon className="size-3.5" />}
+                          onSelect={() => {
+                            window.setTimeout(() => {
+                              void removeFromWorkbench(member.id);
+                            }, 0);
+                          }}
+                        >
+                          {t("nav.project.removeFromWorkbench")}
+                        </AppContextMenuDestructiveItem>
+                      </AppContextMenuContent>
+                    </AppContextMenu>
+                    {missing ? null : (
+                      <Hint label={t("nav.workbench.newSessionInProject")}>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          data-project-drag-ignore
+                          className={LEFT_SIDEBAR_ROW_ACTION}
                           onClick={(e) => {
                             e.stopPropagation();
                             void newSessionInProject(member.id, member.lastPath);
                           }}
-                        >
-                          <PlusIcon className="size-3" />
-                        </button>
-                      </Hint>
-                    )}
-                    {member.id !== defaultProjectId ? (
-                      <Hint label={t("nav.project.removeFromWorkbench")}>
-                        <button
-                          type="button"
-                          className="flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground/50 opacity-0 transition-opacity hover:text-muted-foreground group-hover/project:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void removeFromWorkbench(member.id);
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.stopPropagation();
+                              void newSessionInProject(member.id, member.lastPath);
+                            }
                           }}
                         >
-                          <Minus className="size-3" />
-                        </button>
+                          <PlusIcon className="size-3" />
+                        </span>
                       </Hint>
-                    ) : null}
+                    )}
                   </div>
-                  {expanded ? (
-                    missing ? (
-                      <p className="pl-6 pr-1 pb-1 text-[length:var(--font-hint)] text-muted-foreground/70">
-                        {t("nav.workbench.missingFolder")}
+                  <LeftSidebarReveal open={expanded}>
+                    {missing ? (
+                      <p className={cn(LEFT_SIDEBAR_ROW, "cursor-default text-muted-foreground/70")}>
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {t("nav.workbench.missingFolder")}
+                        </span>
                       </p>
                     ) : visible.length === 0 ? (
-                      <p className="pl-6 pr-1 pb-1 text-[length:var(--font-hint)] text-muted-foreground/70">
-                        {t("nav.workbench.emptyProject")}
+                      <p className={cn(LEFT_SIDEBAR_ROW, "cursor-default text-muted-foreground/70")}>
+                        <span className="min-w-0 flex-1 truncate text-left">
+                          {t("nav.workbench.emptyProject")}
+                        </span>
                       </p>
                     ) : (
-                      <SidebarMenu className="pl-3">
-                        {visible.map(renderSessionItem)}
-                      </SidebarMenu>
-                    )
-                  ) : null}
+                      visible.map((s) => renderSessionItem(s))
+                    )}
+                  </LeftSidebarReveal>
                 </div>
               );
-            })
+              })}
+              {projectReorder.indicatorTop != null ? (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute right-2 left-2 z-10 h-0.5 rounded-full bg-primary"
+                  style={{ top: projectReorder.indicatorTop }}
+                />
+              ) : null}
+            </div>
           )}
         </div>
-        <SidebarFooter className="px-2 pb-2">
+        <SidebarFooter className="px-2 pb-2 pt-1">
           <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              {footerNavItems.map((item) => (
-                <LeftNavButton
-                  key={item.id}
-                  item={item}
-                  panelRefs={navPanelRefs}
-                  onPressed={dismissOverlay}
+            {settingsNavItem ? (
+              <LeftNavIconButton
+                item={settingsNavItem}
+                panelRefs={navPanelRefs}
+                onPressed={dismissOverlay}
+              />
+            ) : null}
+            <Hint label={t("nav.sessions.archived")} side="top">
+              <button
+                type="button"
+                aria-label={t("nav.sessions.archived")}
+                aria-pressed={showArchived}
+                className={cn(
+                  LEFT_SIDEBAR_FOOTER_ICON,
+                  showArchived ? LEFT_SIDEBAR_ROW_ACTIVE : LEFT_SIDEBAR_ROW_HOVER,
+                )}
+                onClick={() => {
+                  toggleShowArchived();
+                  dismissOverlay();
+                }}
+              >
+                <Archive
+                  className={cn(
+                    "size-3.5 shrink-0",
+                    showArchived ? "text-primary" : "text-muted-foreground",
+                  )}
                 />
-              ))}
+              </button>
+            </Hint>
+            {extraFooterNavItems.map((item) => (
+              <LeftNavIconButton
+                key={item.id}
+                item={item}
+                panelRefs={navPanelRefs}
+                onPressed={dismissOverlay}
+              />
+            ))}
+            <div className="ml-auto">
+              <SidebarUpdateButton />
             </div>
-            <SidebarUpdateButton />
           </div>
         </SidebarFooter>
+            </div>
+          </AppContextMenuTrigger>
+          <AppContextMenuContent>
+            <AppContextMenuItem
+              leading={<SlidersHorizontal className="size-3.5" />}
+              onSelect={() => setCustomizeSidebarOpen(true)}
+            >
+              {t("nav.customizeSidebar.menu")}
+            </AppContextMenuItem>
+          </AppContextMenuContent>
+        </AppContextMenu>
       </Sidebar>
     </SidebarProvider>
   );
@@ -874,12 +1362,24 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content" data-left-sidebar-overlay="">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
           </div>,
           document.body,
         )}
       {sidebarContent}
+      <CustomizeSidebarDialog
+        open={customizeSidebarOpen}
+        onOpenChange={setCustomizeSidebarOpen}
+        panelRefs={navPanelRefs}
+      />
+      <EditProjectDialog
+        projectId={editingProjectId}
+        open={editingProjectId !== null}
+        onOpenChange={(next) => {
+          if (!next) setEditingProjectId(null);
+        }}
+      />
     </>
   );
 });

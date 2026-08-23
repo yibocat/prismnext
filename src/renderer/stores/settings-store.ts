@@ -121,6 +121,11 @@ export interface AppSettings {
   >;
   /** Last opened file per project root */
   lastActiveFileIdByProject?: Record<string, string | null>;
+  /** Project + chat tabs to reopen on the next launch. */
+  lastFocusProjectId?: string | null;
+  lastFocusConversationId?: string | null;
+  lastOpenConversationIds?: string[];
+  lastSessionProjectIds?: Record<string, string>;
   /** Archived chat session ids per project root */
   archivedSessionIdsByProject?: Record<string, string[]>;
   /** Pinned chat session ids per project root */
@@ -171,6 +176,10 @@ export interface AppSettings {
   aiModelThoughtLevels?: Record<string, string>;
   /** Pinned model keys (`providerId/modelId`) — shown at top of chat model picker. */
   aiPinnedModelKeys?: string[];
+  /** Hidden left-nav primary ids (New Chat cannot be hidden). */
+  leftNavHiddenIds?: string[];
+  /** Left-nav primary id order. Required items stay first. */
+  leftNavOrder?: string[];
   /** Providers whose API keys have been verified */
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | edit_auto | auto | readonly */

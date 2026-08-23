@@ -108,6 +108,10 @@ export const agentApi = {
 		ipcRenderer.invoke("agent:loadSession", args),
 	agentRenameSession: (args: import("../shared/agent/api").AgentRenameSessionInput) =>
 		ipcRenderer.invoke("agent:renameSession", args),
+	agentGenerateSessionTitle: (args: import("../shared/agent/api").AgentGenerateSessionTitleInput) =>
+		ipcRenderer.invoke("agent:generateSessionTitle", args),
+	agentReassignSessionProject: (args: import("../shared/agent/api").AgentReassignSessionProjectInput) =>
+		ipcRenderer.invoke("agent:reassignSessionProject", args),
 	agentDeleteSession: (args: import("../shared/agent/api").AgentDeleteSessionInput) =>
 		ipcRenderer.invoke("agent:deleteSession", args),
 	agentAnswerQuestion: (args: import("../shared/agent/api").AgentAnswerQuestionInput) =>

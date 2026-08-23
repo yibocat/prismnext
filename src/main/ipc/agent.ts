@@ -19,6 +19,8 @@ import type {
   AgentLoadSessionInput,
   AgentModelEffortInput,
   AgentRenameSessionInput,
+  AgentGenerateSessionTitleInput,
+  AgentReassignSessionProjectInput,
   AgentResolvePlanSuggestInput,
   AgentSendInput,
   AgentCancelSubagentInput,
@@ -86,6 +88,16 @@ export function registerAgentHandlers(): void {
   ipcMain.handle("agent:renameSession", async (_event, args: AgentRenameSessionInput) => {
     const agent = await getAgentService();
     return agent.renameSession(args);
+  });
+
+  ipcMain.handle("agent:generateSessionTitle", async (_event, args: AgentGenerateSessionTitleInput) => {
+    const agent = await getAgentService();
+    return agent.generateSessionTitle(args);
+  });
+
+  ipcMain.handle("agent:reassignSessionProject", async (_event, args: AgentReassignSessionProjectInput) => {
+    const agent = await getAgentService();
+    return agent.reassignSessionProject(args);
   });
 
   ipcMain.handle("agent:deleteSession", async (_event, args: AgentDeleteSessionInput) => {

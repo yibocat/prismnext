@@ -122,6 +122,7 @@ describe("Pi-first agent core boundaries", () => {
     expect(ipc).toContain("\"agent:truncateToTurn\"");
     expect(ipc).toContain("\"agent:undoTruncate\"");
     expect(ipc).toContain("\"agent:reassignDirectory\"");
+    expect(ipc).toContain("\"agent:reassignSessionProject\"");
     expect(ipc).toContain("\"agent:syncIntensiveReading\"");
     expect(ipc).toContain("\"agent:upsertPlanArtifact\"");
     expect(ipc).toContain("\"agent:appendPlanDecision\"");

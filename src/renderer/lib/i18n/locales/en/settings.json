@@ -39,8 +39,8 @@
     "appLanguageDesc": "Language for the prismnext interface — settings, menus, and dialogs.",
     "workbench": "Workbench",
     "defaultProject": "Default project",
-    "defaultProjectDesc": "The project the app opens into. Changing this role does not move the old project's files or chats.",
-    "defaultProjectFolder": "Use another folder…",
+    "defaultProjectDesc": "Fallback folder when the app has no other project to open. Click to choose a directory. Existing files and chats stay where they are.",
+    "defaultProjectChoose": "Choose a folder…",
     "notifications": "Notifications",
     "desktopNotifications": "Desktop notifications",
     "desktopNotificationsDesc": "Show system notifications when a reply finishes or needs your action, while the window is in the background.",
@@ -127,7 +127,7 @@
     "borderRadius": "Border Radius",
     "borderRadiusDesc": "Corner roundness for cards, buttons, and panels.",
     "glassBackground": "Glass Background",
-    "glassBackgroundDesc": "Translucent vibrancy behind sidebars and chrome.",
+    "glassBackgroundDesc": "Translucent vibrancy behind the left sidebar.",
     "glassIntensity": "Glass Intensity",
     "glassIntensityDesc": "How strong the glass blur and tint appear.",
     "chatLayout": "Chat Layout",
@@ -1552,7 +1552,7 @@
       "iconUpdated": "Team icon updated",
       "defaultMovedToBuiltin": "This team's default lead was disabled — the active team moved to the safety-net lead (Common Team or Core).",
       "lastLead": "This is the last team with a lead agent. Enable or create another lead team before uninstalling or disabling it.",
-      "myContentLocked": "Common Team and the project team are always on and cannot be disabled, uninstalled, or deleted."
+      "myContentLocked": "Common Team is always on and cannot be disabled, uninstalled, or deleted."
     },
     "scope": {
       "app": "Global",

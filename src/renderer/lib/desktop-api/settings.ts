@@ -9,7 +9,7 @@ import { forwardDesktop } from "./forward";
 export const settingsDesktop = {
   settingsGet: forwardDesktop("settingsGet"),
   settingsSet: forwardDesktop("settingsSet"),
-  themeSetGlassMode: forwardDesktop("themeSetGlassMode"),
+  themeApplyGlass: forwardDesktop("themeApplyGlass"),
   themeListSystemFonts: forwardDesktop("themeListSystemFonts"),
   settingsGetKnowledgeModules: forwardDesktop("settingsGetKnowledgeModules"),
   settingsGetPromptStackPreview: forwardDesktop("settingsGetPromptStackPreview"),

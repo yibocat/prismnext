@@ -39,8 +39,8 @@
     "appLanguageDesc": "prismnext 界面语言 — 设置、菜单与对话框。",
     "workbench": "工作台",
     "defaultProject": "默认项目",
-    "defaultProjectDesc": "打开应用时落到的项目。改的是兜底角色，不会把旧项目的文件或对话挪走。",
-    "defaultProjectFolder": "改用其他文件夹…",
+    "defaultProjectDesc": "没有其他项目可打开时落到的工作目录。点击选择文件夹。不会挪走已有文件或对话。",
+    "defaultProjectChoose": "选择文件夹…",
     "notifications": "通知",
     "desktopNotifications": "系统通知",
     "desktopNotificationsDesc": "窗口在后台时，回复完成或需要你操作会显示系统通知。",
@@ -127,7 +127,7 @@
     "borderRadius": "圆角",
     "borderRadiusDesc": "卡片、按钮与面板的圆角大小。",
     "glassBackground": "毛玻璃背景",
-    "glassBackgroundDesc": "侧栏与外壳背后的半透明效果。",
+    "glassBackgroundDesc": "左侧栏背后的半透明效果。",
     "glassIntensity": "毛玻璃强度",
     "glassIntensityDesc": "模糊与着色的强度。",
     "chatLayout": "聊天布局",
@@ -1552,7 +1552,7 @@
       "iconUpdated": "团队图标已更新",
       "defaultMovedToBuiltin": "该团队的默认主 Agent 已停用，活动团队已切到安全兜底（通用团队或 Core）。",
       "lastLead": "这是最后一个带主 Agent 的团队。请先启用或新建另一个带主 Agent 的团队，再卸载/停用。",
-      "myContentLocked": "「通用团队」与「本项目团队」始终可用，不能关闭、卸载或删除。"
+      "myContentLocked": "「通用团队」始终可用，不能关闭、卸载或删除。"
     },
     "scope": {
       "app": "全局",

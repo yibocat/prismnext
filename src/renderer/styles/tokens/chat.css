@@ -93,3 +93,27 @@ html[data-message-width="wide"]     { --chat-max-w: 64rem; }
   --composer-selection-focused: color-mix(in oklch, var(--primary) 24%, var(--background));
   --chat-tool-panel: color-mix(in oklch, var(--card) 45%, var(--background));
 }
+
+/*
+ * Empty-chat composer: docked below @xl, optically centered at @xl+.
+ * The two states are a trailing flex-grow (0 / 1) plus titlebar
+ * padding — not justify-end / justify-center, which cannot interpolate.
+ * Motion is armed after the first paint (data-homepage-composer-motion)
+ * so an unmatched @xl class does not slide the composer on mount.
+ * Same 220ms / --lsb-toggle-ease as the shell panel toggles.
+ *
+ * Crossing @xl interpolates the trail and padding in one 220ms ease —
+ * the same beat as the RightArea panel, not a second staged move.
+ */
+[data-homepage-composer][data-homepage-composer-motion] {
+  transition: padding-bottom 220ms var(--lsb-toggle-ease);
+}
+[data-homepage-composer][data-homepage-composer-motion] [data-homepage-composer-trail] {
+  transition: flex-grow 220ms var(--lsb-toggle-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-homepage-composer][data-homepage-composer-motion],
+  [data-homepage-composer][data-homepage-composer-motion] [data-homepage-composer-trail] {
+    transition: none;
+  }
+}

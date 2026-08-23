@@ -422,6 +422,19 @@ export class AgentSessionStore {
     );
   }
 
+  reassignProject(conversationId: string, projectId: string, projectRoot: string): boolean {
+    const record = this.getByConversationId(conversationId.trim());
+    if (!record) return false;
+    const root = normalizePath(projectRoot);
+    this.put({
+      ...record,
+      projectId: projectId.trim(),
+      projectRoot: root,
+      boundCheckoutPath: root,
+    });
+    return true;
+  }
+
   rebindCheckout(fromPath: string, toPath: string): number {
     const normFrom = normalizePath(fromPath);
     const normTo = normalizePath(toPath);

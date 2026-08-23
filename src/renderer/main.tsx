@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { App } from "./App";
+import { TooltipProvider } from "./components/ui/tooltip";
 // Pre-register material-icon-theme icons so @iconify/react/offline can resolve
 // them without fetching from the CDN (blocked by CSP). Must be imported
 // before any component that renders <Icon>.
@@ -24,7 +25,9 @@ document.documentElement.dataset.platform = desktopPlatform();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <I18nextProvider i18n={i18n}>
-      <App />
+      <TooltipProvider>
+        <App />
+      </TooltipProvider>
     </I18nextProvider>
   </React.StrictMode>,
 );

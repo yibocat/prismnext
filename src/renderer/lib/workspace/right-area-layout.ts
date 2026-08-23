@@ -16,9 +16,95 @@ import {
 import {
   PANEL_COLLAPSE_THRESHOLD_PX,
   RESIZE_FILL_PX,
+  RIGHT_AREA_TOGGLE_MS,
   SPLIT_MARGIN_PX,
 } from "@/lib/workspace/layout-constants";
 import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
+
+/** Click/shortcut toggle: ease flex-grow on #center-right only. */
+export const RIGHT_AREA_ANIMATING_ATTR = "data-right-area-animating";
+
+/** Live open mark — pinned + / maximize ease against this, not the last panel frame. */
+export const RIGHT_AREA_OPEN_ATTR = "data-right-area-open";
+
+export function syncRightAreaOpenMark(open: boolean): void {
+  document.documentElement.toggleAttribute(RIGHT_AREA_OPEN_ATTR, open);
+}
+
+/**
+ * Sash / leftover-pixel commit. Chrome follows this mark, not a React
+ * effect on the store — that second clock re-opened + / maximize after close.
+ * Programmatic toggle holds `isRightAreaToggleAnimating` so this is a no-op.
+ */
+export function commitRightAreaExpandedFromPixels(inPixels: number): boolean {
+  if (isRightAreaToggleAnimating()) return useLayoutStore.getState().rightAreaExpanded;
+  const open = inPixels >= PANEL_COLLAPSE_THRESHOLD_PX;
+  syncRightAreaOpenMark(open);
+  const st = useLayoutStore.getState();
+  if (st.rightAreaExpanded !== open) st.setRightAreaExpanded(open);
+  return open;
+}
+
+let toggleAnimating = false;
+let toggleGeneration = 0;
+let toggleTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function isRightAreaToggleAnimating(): boolean {
+  return toggleAnimating;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function stopRightAreaToggleAnimation(generation?: number): void {
+  if (generation != null && generation !== toggleGeneration) return;
+  toggleAnimating = false;
+  if (toggleTimer != null) {
+    clearTimeout(toggleTimer);
+    toggleTimer = undefined;
+  }
+  document.documentElement.removeAttribute(RIGHT_AREA_ANIMATING_ATTR);
+}
+
+function startRightAreaToggleAnimation(): number {
+  toggleGeneration += 1;
+  const generation = toggleGeneration;
+  toggleAnimating = true;
+  document.documentElement.setAttribute(RIGHT_AREA_ANIMATING_ATTR, "");
+  if (toggleTimer != null) clearTimeout(toggleTimer);
+  toggleTimer = setTimeout(() => {
+    stopRightAreaToggleAnimation(generation);
+  }, RIGHT_AREA_TOGGLE_MS);
+  return generation;
+}
+
+function runRightAreaSizeChange(apply: () => void, animate = true): void {
+  if (!animate || prefersReducedMotion()) {
+    stopRightAreaToggleAnimation();
+    apply();
+    return;
+  }
+  const generation = startRightAreaToggleAnimation();
+  requestAnimationFrame(() => {
+    if (generation !== toggleGeneration) return;
+    apply();
+  });
+}
+
+/** Sash drag must stay 1:1 — drop the click-toggle transition. */
+export function watchRightAreaToggleAnimation(): () => void {
+  const onDown = (event: PointerEvent) => {
+    if (event.isPrimary === false) return;
+    stopRightAreaToggleAnimation();
+  };
+  window.addEventListener("pointerdown", onDown, true);
+  return () => {
+    window.removeEventListener("pointerdown", onDown, true);
+    stopRightAreaToggleAnimation();
+  };
+}
 
 export type RightAreaPanelRefs = {
   centerRef: PanelImperativeHandle | null | undefined;
@@ -90,42 +176,55 @@ function saveSplitRightWidth(rightAreaRef: PanelImperativeHandle | null | undefi
   }
 }
 
-function applyMaximizePanels(refs: RightAreaPanelRefs): void {
-  runWithProgrammaticCenterResize(() => {
-    refs.centerRef?.collapse();
-    if (refs.rightAreaRef?.isCollapsed()) {
-      refs.rightAreaRef.expand();
-    }
-    refs.rightAreaRef?.resize(RESIZE_FILL_PX);
-  });
+function applyMaximizePanels(refs: RightAreaPanelRefs, animate = true): void {
+  runRightAreaSizeChange(() => {
+    runWithProgrammaticCenterResize(() => {
+      refs.centerRef?.collapse();
+      if (refs.rightAreaRef?.isCollapsed()) {
+        refs.rightAreaRef.expand();
+      }
+      refs.rightAreaRef?.resize(RESIZE_FILL_PX);
+    });
+  }, animate);
 }
 
 function applySplitPanels(
   refs: RightAreaPanelRefs,
   widthPx: number = useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT,
+  animate = true,
 ): void {
   const main = measureMainAreaWidthPx(refs.leftSidebarRef);
   const w = fitSplitRightWidthPx(main, widthPx);
-  runWithProgrammaticCenterResize(() => {
-    if (refs.rightAreaRef?.isCollapsed()) {
-      refs.rightAreaRef.expand();
-    }
-    refs.centerRef?.expand();
-    refs.rightAreaRef?.resize(w);
-  });
+  runRightAreaSizeChange(() => {
+    runWithProgrammaticCenterResize(() => {
+      if (refs.rightAreaRef?.isCollapsed()) {
+        refs.rightAreaRef.expand();
+      }
+      refs.centerRef?.expand();
+      refs.rightAreaRef?.resize(w);
+    });
+  }, animate);
 }
 
-function applyClosedPanels(refs: RightAreaPanelRefs): void {
-  runWithProgrammaticCenterResize(() => {
-    refs.rightAreaRef?.collapse();
-    refs.centerRef?.resize(RESIZE_FILL_PX);
-  });
+function applyClosedPanels(refs: RightAreaPanelRefs, animate = true): void {
+  runRightAreaSizeChange(() => {
+    runWithProgrammaticCenterResize(() => {
+      refs.rightAreaRef?.collapse();
+      refs.centerRef?.resize(RESIZE_FILL_PX);
+    });
+  }, animate);
 }
 
-/** Open RightArea already maximized (toolbar / mode shortcuts with Shift). */
+function isSettingsShell(): boolean {
+  return useLayoutStore.getState().leftSidebarView === "settings";
+}
+
+/** Open RightArea already maximized (⌃⌘B / toolbar maximize from closed). */
 export function openRightAreaMaximized(ctx: RightAreaLayoutCtx): void {
+  if (isSettingsShell()) return;
   if (!ctx.rightAreaRef) return;
   const st = useLayoutStore.getState();
+  syncRightAreaOpenMark(true);
   st.setRightAreaExpanded(true);
   st.setEditorMaximized(true);
   applyMaximizePanels(ctx);
@@ -138,6 +237,7 @@ export function openRightAreaMaximized(ctx: RightAreaLayoutCtx): void {
  *  still-collapsed panel — those must still apply split/maximize.
  */
 export function openRightArea({ centerRef, rightAreaRef, leftSidebarRef, isMobile }: RightAreaLayoutCtx): void {
+  if (isSettingsShell()) return;
   const r = rightAreaRef;
   if (!r) return;
 
@@ -149,6 +249,7 @@ export function openRightArea({ centerRef, rightAreaRef, leftSidebarRef, isMobil
 
   const canSplit = !isMobile && computeCanSplitRightArea(leftSidebarRef);
 
+  syncRightAreaOpenMark(true);
   st.setRightAreaExpanded(true);
 
   if (canSplit) {
@@ -173,32 +274,67 @@ export function openRightAreaForDeepLink(ctx: RightAreaLayoutCtx): void {
     return;
   }
   if (st.editorMaximized) {
-    applyMaximizePanels(ctx);
+    applyMaximizePanels(ctx, false);
     return;
   }
   // Split — mode/tab focus only; do not re-run openRightArea (would reset drag width).
 }
 
 /** Close RightArea — center fills main-area; preserve last split width when not maximized. */
-export function closeRightArea({ centerRef, rightAreaRef }: RightAreaPanelRefs): void {
+export function closeRightArea(
+  { centerRef, rightAreaRef }: RightAreaPanelRefs,
+  animate = true,
+): void {
   saveSplitRightWidth(rightAreaRef);
   const st = useLayoutStore.getState();
+  syncRightAreaOpenMark(false);
   st.setEditorMaximized(false);
   st.setRightAreaExpanded(false);
   st.clearPendingRightAreaRestore();
-  applyClosedPanels({ centerRef, rightAreaRef });
+  applyClosedPanels({ centerRef, rightAreaRef }, animate);
+}
+
+/** Click / shortcut — open split (or maximize if too narrow) or close. */
+export function toggleRightArea(ctx: RightAreaLayoutCtx): void {
+  if (isSettingsShell()) return;
+  const r = ctx.rightAreaRef;
+  if (!r) return;
+  if (r.isCollapsed()) {
+    openRightArea(ctx);
+    return;
+  }
+  closeRightArea(ctx);
 }
 
 /**
- * Toolbar / ⌘⇧J maximize control:
+ * ⌃⌘B — open or close maximized RightArea (does not restore split).
+ */
+export function toggleMaximizedRightArea(ctx: RightAreaLayoutCtx): void {
+  if (isSettingsShell()) return;
+  const st = useLayoutStore.getState();
+  const open = st.rightAreaExpanded && !(ctx.rightAreaRef?.isCollapsed() ?? true);
+  if (open && st.editorMaximized) {
+    closeRightArea(ctx);
+    return;
+  }
+  if (open && !st.editorMaximized) {
+    saveSplitRightWidth(ctx.rightAreaRef);
+  }
+  openRightAreaMaximized(ctx);
+}
+
+/**
+ * Toolbar maximize control:
  * - closed → open already maximized
  * - split ↔ maximize when canSplit
  * - maximize → close when !canSplit or mobile
  */
 export function toggleRightAreaMaximize(ctx: RightAreaLayoutCtx): void {
+  if (isSettingsShell()) return;
   const st = useLayoutStore.getState();
   if (!st.rightAreaExpanded) {
     if (!ctx.rightAreaRef) return;
+    syncRightAreaOpenMark(true);
     st.setRightAreaExpanded(true);
     st.setEditorMaximized(true);
     applyMaximizePanels(ctx);
@@ -235,19 +371,20 @@ export function reconcileRightAreaOnMainAreaResize(ctx: RightAreaLayoutCtx): voi
   if (canSplit) return;
 
   if (st.editorMaximized) {
-    applyMaximizePanels(ctx);
+    applyMaximizePanels(ctx, false);
     return;
   }
 
-  closeRightArea(ctx);
+  closeRightArea(ctx, false);
 }
 
 /** Reset RightArea when opening a project (spec A12). */
 export function resetRightAreaForProjectOpen(refs: RightAreaPanelRefs): void {
   const st = useLayoutStore.getState();
+  syncRightAreaOpenMark(false);
   st.setRightAreaExpanded(false);
   st.setEditorMaximized(false);
-  applyClosedPanels(refs);
+  applyClosedPanels(refs, false);
 }
 
 /** Clamp persisted sidebar defaults on read (legacy 220 < min 280). */

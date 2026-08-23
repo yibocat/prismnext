@@ -51,6 +51,7 @@
     "closeDisabledStreaming": "Cannot close while the agent is running",
     "unsavedSession": "Not saved as a session yet",
     "mergesInto": "Merges into {{branch}}",
+    "noBranch": "No git branch",
     "worktreeRemoved": "Worktree removed — session kept on project",
     "citationsCount": "{{count}} staged citation",
     "citationsCount_plural": "{{count}} staged citations",
@@ -154,6 +155,10 @@
     "noBranches": "No branches",
     "next": "next",
     "current": "current"
+  },
+  "project": {
+    "select": "Project",
+    "locked": "Cannot change project while the agent is running."
   },
   "model": {
     "selectModel": "Select model",

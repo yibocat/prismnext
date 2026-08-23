@@ -29,6 +29,19 @@ export interface AgentRenameSessionInput {
   title: string;
 }
 
+export interface AgentGenerateSessionTitleInput {
+  conversationId: string;
+  userText?: string;
+  assistantText?: string;
+}
+
+export interface AgentGenerateSessionTitleResult {
+  ok: boolean;
+  title?: string;
+  skipped?: boolean;
+  error?: string;
+}
+
 export interface AgentDeleteSessionInput {
   conversationId: string;
 }
@@ -82,6 +95,18 @@ export interface AgentUndoTruncateResult {
 export interface AgentReassignDirectoryInput {
   fromDirectory: string;
   toDirectory: string;
+}
+
+export interface AgentReassignSessionProjectInput {
+  conversationId: string;
+  projectId: string;
+  projectRoot: string;
+}
+
+export interface AgentReassignSessionProjectResult {
+  ok: boolean;
+  existed?: boolean;
+  error?: string;
 }
 
 export interface AgentReassignDirectoryResult {

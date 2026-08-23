@@ -152,6 +152,9 @@ interface LayoutState {
   sessionSort: "updated" | "created";
   setSessionSort: (sort: "updated" | "created") => void;
 
+  sessionGroupBy: "workbench" | "updated";
+  setSessionGroupBy: (groupBy: "workbench" | "updated") => void;
+
   archivedSessionIds: string[];
   showArchived: boolean;
   toggleArchiveSession: (sessionId: string) => void;
@@ -344,6 +347,8 @@ export const useLayoutStore = create<LayoutState>()(
 
       sessionSort: "updated",
       setSessionSort: (sessionSort) => set({ sessionSort }),
+      sessionGroupBy: "workbench",
+      setSessionGroupBy: (sessionGroupBy) => set({ sessionGroupBy }),
 
       modeEditorTabs: {
         all: [],
@@ -421,6 +426,8 @@ export const useLayoutStore = create<LayoutState>()(
         rightAreaWidth: state.rightAreaWidth,
         settingsDetailWidth: state.settingsDetailWidth,
         sessionSort: state.sessionSort,
+        sessionGroupBy: state.sessionGroupBy,
+        pinnedExpanded: state.pinnedExpanded,
         expandedWorkbenchProjectIds: state.expandedWorkbenchProjectIds,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
         texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,

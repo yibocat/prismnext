@@ -42,10 +42,12 @@ function AppContextMenuContent({
 function AppContextMenuItem({
   className,
   children,
+  leading,
   trailing,
   variant,
   ...props
 }: React.ComponentProps<typeof ContextMenuItem> & {
+  leading?: React.ReactNode;
   trailing?: React.ReactNode;
 }) {
   return (
@@ -54,7 +56,10 @@ function AppContextMenuItem({
       className={cn(appMenuItemClass, className)}
       {...props}
     >
-      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {leading}
+      <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden [&>svg]:shrink-0 [&>svg]:opacity-70">
+        <span className="min-w-0 flex-1 truncate">{children}</span>
+      </span>
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </ContextMenuItem>
   );

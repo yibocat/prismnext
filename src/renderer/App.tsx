@@ -9,7 +9,7 @@ import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-g
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useWorkbenchStore } from "@/stores/workbench-store";
+import { restoreWorkbenchLaunch } from "@/lib/workspace/project-lifecycle";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
@@ -27,7 +27,6 @@ import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
 import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
 import { executionDesktop } from "@/lib/desktop-api/execution";
-import { settingsDesktop } from "@/lib/desktop-api/settings";
 import { useExecutionStore } from "@/stores/execution-store";
 import { useAiTerminalSweep } from "@/hooks/use-ai-terminal-sweep";
 import { useSkillsIntegrationEvents } from "@/hooks/use-skills-integration-events";
@@ -35,6 +34,7 @@ import { useAgentCompilePreview } from "@/hooks/use-agent-compile-preview";
 import { LocaleSync } from "@/lib/i18n/locale-sync";
 
 import { ContentTopBar } from "@/components/layout/content-top-bar";
+import { LeftSidebarPinnedChrome, RightAreaPinnedChrome, StatusDotPinnedChrome } from "@/components/layout/sidebar-controls";
 import {
   expandSettingsDetailPanel,
   enforceSettingsSplitLayout,
@@ -51,8 +51,8 @@ import {
   CENTER_MAXIMIZE_THRESHOLD_PX,
   PANEL_COLLAPSE_THRESHOLD_PX,
   PANEL_RESIZE_HIT,
+  LEFT_SIDEBAR_RESIZE_HIT,
   RESIZE_FILL_PX,
-  SIDEBAR_FULLY_COLLAPSED_PX,
   PANEL_SASH_SEPARATOR_CLASS,
   LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
   SHELL_SASH_SHADOW_RIGHT_CLASS,
@@ -61,12 +61,22 @@ import {
 import { isProgrammaticCenterResize, isWindowLayoutResizing, runDuringWindowLayoutResize } from "@/lib/workspace/layout-resize-guard";
 import {
   fitSplitRightWidthPx,
+  commitRightAreaExpandedFromPixels,
+  isRightAreaToggleAnimating,
   measureMainAreaWidthPx,
   openRightArea,
   reconcileRightAreaOnMainAreaResize,
   resetRightAreaForProjectOpen,
+  watchRightAreaToggleAnimation,
 } from "@/lib/workspace/right-area-layout";
 import { setLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
+import {
+  syncSettingsLeftSidebar,
+  isLeftSidebarToggleAnimating,
+  onLeftSidebarPanelResize,
+  syncLeftSidebarWidthVar,
+  watchLeftSidebarResizeChrome,
+} from "@/lib/workspace/left-sidebar-panel";
 import {
   SIDEBAR_LEFT_MIN,
   SIDEBAR_LEFT_DEFAULT,
@@ -78,9 +88,23 @@ import {
   RIGHT_AREA_DEFAULT,
 } from "@/styles/constants";
 
-// 左侧栏导航注册（与右侧 mode 注册并列）。新入口见 left-nav/items.tsx
+// 左侧栏 chrome 注册。RightArea 模块 Nav 由 modeRegistry 投影，见 left-nav/mode-nav.ts
 registerAllModes();
 registerLeftNavItems();
+
+/** Inside ThemeProvider — reapplies native glass when light/dark class settles.
+ *  Wait until disk theme is loaded so the in-memory default (glass off) cannot
+ *  flip native vibrancy off and back on. */
+function GlassNativeSync() {
+  const { resolvedTheme } = useTheme();
+  const glassEffect = useThemeStore((s) => s.config.glassEffect);
+  const themeHydrated = useThemeStore((s) => s.hydrated);
+  useEffect(() => {
+    if (!themeHydrated) return;
+    useThemeStore.getState().syncNativeGlass();
+  }, [resolvedTheme, glassEffect, themeHydrated]);
+  return null;
+}
 
 export function App() {
   const isMobile = useIsMobile();
@@ -104,6 +128,10 @@ export function App() {
   );
   const settingsDetailOpen = inSettings && hasSettingsEditorTab;
   const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
+  const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
+  const [sidebarUsesOverlay, setSidebarUsesOverlay] = useState(
+    () => window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD,
+  );
 
   const leftSidebarRef = usePanelRef();
   const centerRef = usePanelRef();
@@ -124,6 +152,11 @@ export function App() {
   }, []);
 
   useAppCloseTab();
+  useEffect(() => watchLeftSidebarResizeChrome(), []);
+  useEffect(() => watchRightAreaToggleAnimation(), []);
+  useLayoutEffect(() => {
+    syncLeftSidebarWidthVar(sidebarWidth);
+  }, [sidebarWidth]);
   useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
   useProductShortcuts();
@@ -236,6 +269,7 @@ export function App() {
         const st = useLayoutStore.getState();
         const left = leftSidebarRef.current;
 
+        setSidebarUsesOverlay(narrow);
         if (narrow && !belowOverlayThreshold.current) {
           // Crossed below threshold: collapse panel, close any overlay
           if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
@@ -303,18 +337,6 @@ export function App() {
     injectDiffOverrides();
   }, []);
 
-  // Sync native vibrancy to next-themes resolved theme
-  const { resolvedTheme } = useTheme();
-  const glassEffect = useThemeStore((s) => s.config.glassEffect);
-
-  useEffect(() => {
-    if (glassEffect && resolvedTheme) {
-      settingsDesktop.themeSetGlassMode(
-        resolvedTheme as "light" | "dark" | "system"
-      ).catch(() => {});
-    }
-  }, [resolvedTheme, glassEffect]);
-
   // Reflect chat message-width tier on <html> so [data-chat-width] containers can react.
   // CSS rules live in styles/tokens/chat.css. Effect runs once settings load; falls back
   // to "balanced" (the pre-feature default) when the value is missing.
@@ -370,6 +392,12 @@ export function App() {
       }
     }
   }, [leftSidebarView]);
+
+  // Settings: inline category rail when wide; overlay list when the window is too narrow.
+  useLayoutEffect(() => {
+    if (!inSettings) return;
+    syncSettingsLeftSidebar(leftSidebarRef);
+  }, [inSettings]);
 
   // Settings: keep list visible in split mode; collapse detail pane when no editor is open.
   useEffect(() => {
@@ -475,7 +503,7 @@ export function App() {
   }, [inSettings]);
 
   // ── Startup loading screen lifecycle ──
-  // Stay on splash until the workbench default project is focused.
+  // Stay on splash until the last project (or default) is focused.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const [autoOpenChecked, setAutoOpenChecked] = useState(false);
 
@@ -484,12 +512,8 @@ export function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const state = await useWorkbenchStore.getState().hydrate();
+        await restoreWorkbenchLaunch();
         if (cancelled) return;
-        const current = useDocumentStore.getState().projectRoot;
-        if (!current && state.defaultLastPath) {
-          await useDocumentStore.getState().openProject(state.defaultLastPath);
-        }
       } catch (err) {
         console.error("[app] workbench launch failed", err);
       } finally {
@@ -518,6 +542,7 @@ export function App() {
     <GlobalErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <LocaleSync />
+        <GlassNativeSync />
         <ProjectSetupDialog />
         <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
         <Toaster />
@@ -546,18 +571,24 @@ export function App() {
           </div>
         ) : null}
         {projectRoot ? (
-          <div className="flex h-full flex-col">
+          <div className="relative flex h-full flex-col">
+            <LeftSidebarPinnedChrome leftSidebarRef={leftSidebarRef} />
+            <RightAreaPinnedChrome
+              leftSidebarRef={leftSidebarRef}
+              centerRef={centerRef}
+              rightAreaRef={rightAreaRef}
+            />
             <Group
               id="main-layout"
               orientation="horizontal"
               className="flex-1 min-h-0"
-              resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+              resizeTargetMinimumSize={LEFT_SIDEBAR_RESIZE_HIT}
               disableCursor
             >
               <Panel
                 id="left-sidebar"
                 panelRef={leftSidebarRef}
-                collapsible
+                collapsible={!inSettings || sidebarUsesOverlay}
                 collapsedSize={0}
                 minSize={SIDEBAR_LEFT_MIN}
                 maxSize={SIDEBAR_LEFT_MAX}
@@ -565,8 +596,9 @@ export function App() {
                 defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : Math.min(useLayoutStore.getState().sidebarWidth, SIDEBAR_LEFT_MAX)}
                 groupResizeBehavior="preserve-pixel-size"
                 onResize={(s) => {
+                  onLeftSidebarPanelResize(s.inPixels);
+                  if (isLeftSidebarToggleAnimating()) return;
                   const st = useLayoutStore.getState();
-                  st.setSidebarFullyCollapsed(s.inPixels <= SIDEBAR_FULLY_COLLAPSED_PX);
                   // Only save width when panel is expanded (>= threshold)
                   // to prevent collapse animation from polluting sidebarWidth
                   if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) setSidebarWidth(s.inPixels);
@@ -590,6 +622,8 @@ export function App() {
               />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
+                <div className="relative h-full min-w-0" data-surface="content">
+                <StatusDotPinnedChrome leftSidebarRef={leftSidebarRef} />
                 <Group
                   id="center-right"
                   orientation="horizontal"
@@ -606,6 +640,7 @@ export function App() {
                     className="overflow-hidden"
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
+                      if (isRightAreaToggleAnimating()) return;
                       const st = useLayoutStore.getState();
                       if (inSettings) {
                         if (!st.settingsDetailStacked) {
@@ -676,6 +711,7 @@ export function App() {
                     defaultSize={0}
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
+                      if (isRightAreaToggleAnimating()) return;
                       const st = useLayoutStore.getState();
                       const r = rightAreaRef.current;
                       if (inSettings && !hasOpenSettingsEditor()) {
@@ -684,7 +720,7 @@ export function App() {
                         }
                         if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
                           r?.collapse();
-                          st.setRightAreaExpanded(false);
+                          commitRightAreaExpandedFromPixels(0);
                         }
                         return;
                       }
@@ -692,7 +728,7 @@ export function App() {
                       const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
 
                       if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
-                        if (st.rightAreaExpanded) st.setRightAreaExpanded(false);
+                        commitRightAreaExpandedFromPixels(s.inPixels);
                         if (r && !r.isCollapsed()) {
                           r.collapse();
                         }
@@ -706,7 +742,7 @@ export function App() {
                           setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
                         }
                       }
-                      if (!st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      commitRightAreaExpandedFromPixels(s.inPixels);
                       if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
                         enforceSettingsSplitLayout(
                           centerRef.current,
@@ -722,23 +758,30 @@ export function App() {
                     />
                   </Panel>
                 </Group>
+                </div>
               </Panel>
             </Group>
 
           </div>
         ) : (
-          <div className="flex h-full flex-col">
+          <div className="relative flex h-full flex-col">
+            <LeftSidebarPinnedChrome leftSidebarRef={leftSidebarRef} />
+            <RightAreaPinnedChrome
+              leftSidebarRef={leftSidebarRef}
+              centerRef={centerRef}
+              rightAreaRef={rightAreaRef}
+            />
             <Group
               id="main-layout"
               orientation="horizontal"
               className="flex-1 min-h-0"
-              resizeTargetMinimumSize={PANEL_RESIZE_HIT}
+              resizeTargetMinimumSize={LEFT_SIDEBAR_RESIZE_HIT}
               disableCursor
             >
               <Panel
                 id="left-sidebar"
                 panelRef={leftSidebarRef}
-                collapsible
+                collapsible={!inSettings || sidebarUsesOverlay}
                 collapsedSize={0}
                 minSize={SIDEBAR_LEFT_MIN}
                 maxSize={SIDEBAR_LEFT_MAX}
@@ -746,8 +789,9 @@ export function App() {
                 defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : Math.min(useLayoutStore.getState().sidebarWidth, SIDEBAR_LEFT_MAX)}
                 groupResizeBehavior="preserve-pixel-size"
                 onResize={(s) => {
+                  onLeftSidebarPanelResize(s.inPixels);
+                  if (isLeftSidebarToggleAnimating()) return;
                   const st = useLayoutStore.getState();
-                  st.setSidebarFullyCollapsed(s.inPixels <= SIDEBAR_FULLY_COLLAPSED_PX);
                   if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) setSidebarWidth(s.inPixels);
                   if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX && st.sidebarExpanded) st.setSidebarExpanded(false);
                   if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX && !st.sidebarExpanded) st.setSidebarExpanded(true);
@@ -765,6 +809,8 @@ export function App() {
               />
 
               <Panel id="main-area" minSize={MAIN_AREA_MIN}>
+                <div className="relative h-full min-w-0" data-surface="content">
+                <StatusDotPinnedChrome leftSidebarRef={leftSidebarRef} />
                 <Group
                   id="center-right"
                   orientation="horizontal"
@@ -781,6 +827,7 @@ export function App() {
                     className="overflow-hidden"
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
+                      if (isRightAreaToggleAnimating()) return;
                       const st = useLayoutStore.getState();
                       if (inSettings && !st.settingsDetailStacked) {
                         enforceSettingsSplitLayout(
@@ -830,6 +877,7 @@ export function App() {
                     defaultSize={0}
                     groupResizeBehavior="preserve-pixel-size"
                     onResize={(s) => {
+                      if (isRightAreaToggleAnimating()) return;
                       const st = useLayoutStore.getState();
                       const r = rightAreaRef.current;
                       if (inSettings && !hasOpenSettingsEditor()) {
@@ -838,7 +886,7 @@ export function App() {
                         }
                         if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
                           r?.collapse();
-                          st.setRightAreaExpanded(false);
+                          commitRightAreaExpandedFromPixels(0);
                         }
                         return;
                       }
@@ -846,7 +894,7 @@ export function App() {
                       const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
 
                       if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
-                        if (st.rightAreaExpanded) st.setRightAreaExpanded(false);
+                        commitRightAreaExpandedFromPixels(s.inPixels);
                         if (r && !r.isCollapsed()) {
                           r.collapse();
                         }
@@ -860,7 +908,7 @@ export function App() {
                           setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
                         }
                       }
-                      if (!st.rightAreaExpanded) st.setRightAreaExpanded(true);
+                      commitRightAreaExpandedFromPixels(s.inPixels);
                       if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
                         enforceSettingsSplitLayout(
                           centerRef.current,
@@ -876,6 +924,7 @@ export function App() {
                     />
                   </Panel>
                 </Group>
+                </div>
               </Panel>
             </Group>
 

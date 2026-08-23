@@ -5,10 +5,15 @@ import type { Conversation } from "@shared/agent/conversation";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 import { isPlanControlUserText } from "@shared/research/plan";
 
-export function isGenericSessionTitle(title: string): boolean {
-  if (title === "") return true;
-  return title === "New Chat" || title.startsWith("New session");
-}
+export {
+  countCompletedContentTurns,
+  firstCompletedTurnExcerpts,
+  isGenericSessionTitle,
+  isProvisionalSessionTitle,
+  sanitizeGeneratedSessionTitle,
+  shouldOfferAutoSessionTitle,
+} from "@shared/agent/session-title";
+import { isGenericSessionTitle } from "@shared/agent/session-title";
 
 /** Strip agent/system wrappers from raw prompt text before using as title. */
 export function cleanSessionTitleText(text: string): string {

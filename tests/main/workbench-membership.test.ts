@@ -9,6 +9,8 @@ import {
   getWorkbenchState,
   openWorkbenchFolder,
   removeWorkbenchProject,
+  reorderWorkbenchProjects,
+  setProjectDisplayName,
 } from "../../src/main/workbench/default-project";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
 
@@ -125,13 +127,55 @@ describe("openWorkbenchFolder — five steps persist", () => {
   });
 });
 
+describe("setProjectDisplayName", () => {
+  it("renames the workbench label and keeps it after reopening the folder", () => {
+    const { userHome, documentsDir } = setupHome();
+    const paper = path.join(tmpRoot(), "paper-rename");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+
+    const renamed = setProjectDisplayName(opened.projectId, "  你好  ", {
+      homeDir: userHome,
+      documentsDir,
+    });
+    expect(renamed.members.find((m) => m.id === opened.projectId)?.displayName).toBe("你好");
+
+    openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    expect(
+      getWorkbenchState({ homeDir: userHome, documentsDir })
+        .members.find((m) => m.id === opened.projectId)?.displayName,
+    ).toBe("你好");
+  });
+
+  it("clears a custom name back to the folder basename", () => {
+    const { userHome, documentsDir } = setupHome();
+    const paper = path.join(tmpRoot(), "paper-clear");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    setProjectDisplayName(opened.projectId, "Custom", { homeDir: userHome, documentsDir });
+    const cleared = setProjectDisplayName(opened.projectId, "   ", { homeDir: userHome, documentsDir });
+    expect(cleared.members.find((m) => m.id === opened.projectId)?.displayName).toBe("paper-clear");
+  });
+});
+
 describe("removeWorkbenchProject", () => {
-  it("refuses to remove the default project", () => {
+  it("can remove the default project from the workbench without dropping the role", () => {
     const { userHome, documentsDir, def } = setupHome();
-    expect(() => removeWorkbenchProject(def.projectId, { homeDir: userHome, documentsDir }))
-      .toThrow(/cannot_remove_default/);
-    expect(getWorkbenchState({ homeDir: userHome, documentsDir }).workbenchProjectIds)
-      .toEqual([def.projectId]);
+    const paper = path.join(tmpRoot(), "paper-keep");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    const opts = { homeDir: userHome, documentsDir };
+
+    const after = removeWorkbenchProject(def.projectId, opts);
+    expect(after.defaultProjectId).toBe(def.projectId);
+    expect(after.defaultLastPath).toBe(def.lastPath);
+    expect(after.workbenchProjectIds).toEqual([opened.projectId]);
+    expect(after.members.map((m) => m.id)).toEqual([opened.projectId]);
+    expect(getWorkbenchState(opts).workbenchProjectIds).toEqual([opened.projectId]);
+
+    const rejoined = openWorkbenchFolder(def.lastPath, opts);
+    expect(rejoined.projectId).toBe(def.projectId);
+    expect(getWorkbenchState(opts).workbenchProjectIds).toEqual([opened.projectId, def.projectId]);
   });
 
   it("drops only the member list; the repo and home slot stay", () => {
@@ -166,5 +210,21 @@ describe("removeWorkbenchProject", () => {
     expect(remapped.lastPath).toBe(norm(paper));
     expect(getWorkbenchState({ homeDir: userHome, documentsDir }).workbenchProjectIds)
       .toEqual([def.projectId, opened.projectId]);
+  });
+
+  it("reorders workbench projects including the default", () => {
+    const { userHome, documentsDir, def } = setupHome();
+    const paper = path.join(tmpRoot(), "paper-order");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    const opts = { homeDir: userHome, documentsDir };
+
+    const next = reorderWorkbenchProjects([opened.projectId, def.projectId], opts);
+    expect(next.workbenchProjectIds).toEqual([opened.projectId, def.projectId]);
+    expect(next.members.map((m) => m.id)).toEqual([opened.projectId, def.projectId]);
+    expect(next.defaultProjectId).toBe(def.projectId);
+    expect(getWorkbenchState(opts).workbenchProjectIds).toEqual([opened.projectId, def.projectId]);
+
+    expect(() => reorderWorkbenchProjects([opened.projectId], opts)).toThrow("workbench_order_mismatch");
   });
 });

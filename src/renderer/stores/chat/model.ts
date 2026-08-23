@@ -110,6 +110,8 @@ export interface TabState {
   /** True once the user has explicitly renamed this tab. Blocks OpenCode auto-overwrite
    *  in left-sidebar's fetchSessions sync so user-set titles stick. */
   userTitleSet: boolean;
+  /** First-turn auto title already tried (success or fail). */
+  autoTitleAttempted?: boolean;
   sessionId: string | null;
   /** Default Pi. OpenCode only when opening an old history session. */
   runtime: ChatRuntimeKind;
@@ -261,6 +263,7 @@ export function makeDefaultTab(id: string): TabState {
     id,
     title: "New Chat",
     userTitleSet: false,
+    autoTitleAttempted: false,
     sessionId: id,
     runtime: "pi",
     legacyReadOnly: false,
@@ -650,7 +653,9 @@ export interface ChatState {
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => void;
   _upsertLastMessage: (tabId: string, msg: ChatStreamMessage, messageId?: string) => void;
   _setSessionId: (tabId: string, id: string) => void;
+  _setSessionCwd: (tabId: string, cwd: string | null) => void;
   _setTitle: (tabId: string, title: string) => void;
+  _markAutoTitleAttempted: (tabId: string) => void;
   _setStreaming: (tabId: string, streaming: boolean) => void;
   _setAwaitingBackgroundJoin: (tabId: string, awaiting: boolean) => void;
   _setPreparePhase: (tabId: string, phase: ChatPreparePhase | null) => void;

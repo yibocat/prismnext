@@ -4,6 +4,10 @@ import {
   type WorkbenchProjectMember,
   type WorkbenchState,
 } from "../../shared/workbench/api";
+export {
+  applyVisibleIdReorder,
+  moveListItem,
+} from "../../shared/workbench/api";
 import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
 export function sameProjectPath(
@@ -69,6 +73,147 @@ export function ensureWorkbenchProjectExpanded(
   return [...current, projectId];
 }
 
+export function anyWorkbenchProjectExpanded(
+  memberIds: readonly string[],
+  expandedIds: readonly string[] | null | undefined,
+  focusProjectId: string,
+): boolean {
+  return memberIds.some((id) => isWorkbenchProjectExpanded(id, expandedIds, focusProjectId));
+}
+
+export type SessionDateBucket = "today" | "yesterday" | "week" | "month" | "older";
+
+const DAY_MS = 86_400_000;
+
+export const SESSION_DATE_BUCKET_ORDER: SessionDateBucket[] = [
+  "today",
+  "yesterday",
+  "week",
+  "month",
+  "older",
+];
+
+export function sessionDateBucket(ts: number, now = Date.now()): SessionDateBucket {
+  const day = new Date(now);
+  const today = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+  if (ts >= today) return "today";
+  if (ts >= today - DAY_MS) return "yesterday";
+  if (ts >= today - 7 * DAY_MS) return "week";
+  if (ts >= today - 30 * DAY_MS) return "month";
+  return "older";
+}
+
+export function groupSessionsByUpdatedAt<T extends { lastModified: number }>(
+  sessions: readonly T[],
+  now = Date.now(),
+): Array<{ bucket: SessionDateBucket; sessions: T[] }> {
+  const buckets = new Map<SessionDateBucket, T[]>();
+  for (const session of sessions) {
+    const bucket = sessionDateBucket(session.lastModified, now);
+    const list = buckets.get(bucket);
+    if (list) list.push(session);
+    else buckets.set(bucket, [session]);
+  }
+  return SESSION_DATE_BUCKET_ORDER.flatMap((bucket) => {
+    const list = buckets.get(bucket);
+    return list?.length ? [{ bucket, sessions: list }] : [];
+  });
+}
+
+export function displayNameFromPath(lastPath: string): string {
+  const parts = lastPath.replace(/\\/g, "/").replace(/\/+$/, "").split("/").filter(Boolean);
+  return parts.at(-1) || lastPath;
+}
+
+/** Stable fallback while the default is off the workbench — Zustand selectors must not allocate every snapshot. */
+let cachedDefaultFallback: WorkbenchProjectMember | null = null;
+let cachedSelectableOffList: {
+  members: WorkbenchProjectMember[];
+  fallback: WorkbenchProjectMember;
+  list: WorkbenchProjectMember[];
+} | null = null;
+
+/** Default role as a member — even when it is not on the workbench list. */
+export function defaultProjectAsMember(state: {
+  defaultProjectId: string;
+  defaultLastPath: string;
+  members: WorkbenchProjectMember[];
+}): WorkbenchProjectMember | null {
+  const id = state.defaultProjectId.trim();
+  const lastPath = state.defaultLastPath.trim();
+  if (!id || !lastPath) {
+    cachedDefaultFallback = null;
+    return null;
+  }
+  const listed = state.members.find((member) => member.id === id);
+  if (listed) return listed;
+  const displayName = displayNameFromPath(lastPath);
+  if (
+    cachedDefaultFallback
+    && cachedDefaultFallback.id === id
+    && cachedDefaultFallback.lastPath === lastPath
+    && cachedDefaultFallback.displayName === displayName
+  ) {
+    return cachedDefaultFallback;
+  }
+  cachedDefaultFallback = { id, lastPath, displayName };
+  return cachedDefaultFallback;
+}
+
+export function resolveWorkbenchMember(
+  state: {
+    defaultProjectId: string;
+    defaultLastPath: string;
+    members: WorkbenchProjectMember[];
+  },
+  projectId: string,
+): WorkbenchProjectMember | null {
+  const id = projectId.trim();
+  if (!id) return null;
+  const member = state.members.find((item) => item.id === id);
+  if (member?.lastPath.trim()) return member;
+  const fallback = defaultProjectAsMember(state);
+  return fallback?.id === id ? fallback : null;
+}
+
+/** Workbench member or off-list default at this folder. */
+export function resolveWorkbenchMemberByPath(
+  state: {
+    defaultProjectId: string;
+    defaultLastPath: string;
+    members: WorkbenchProjectMember[];
+  },
+  path: string,
+): WorkbenchProjectMember | null {
+  const folder = path.trim();
+  if (!folder) return null;
+  const member = state.members.find((item) => sameProjectPath(item.lastPath, folder));
+  if (member?.lastPath.trim()) return member;
+  const fallback = defaultProjectAsMember(state);
+  return fallback && sameProjectPath(fallback.lastPath, folder) ? fallback : null;
+}
+
+/** Workbench members, plus the default project when it is not on the list. */
+export function selectableWorkbenchProjects(state: {
+  defaultProjectId: string;
+  defaultLastPath: string;
+  members: WorkbenchProjectMember[];
+}): WorkbenchProjectMember[] {
+  const fallback = defaultProjectAsMember(state);
+  if (!fallback) return state.members;
+  if (state.members.some((member) => member.id === fallback.id)) return state.members;
+  if (
+    cachedSelectableOffList
+    && cachedSelectableOffList.members === state.members
+    && cachedSelectableOffList.fallback === fallback
+  ) {
+    return cachedSelectableOffList.list;
+  }
+  const list = [fallback, ...state.members];
+  cachedSelectableOffList = { members: state.members, fallback, list };
+  return list;
+}
+
 export function lastPathForSession(conversationId: string): string | null {
   const state = useWorkbenchStore.getState();
   const projectId = state.sessionProjectIds[conversationId];
@@ -93,6 +238,8 @@ interface WorkbenchStoreState extends WorkbenchState {
   setDefaultFromFolder: (absPath: string) => Promise<WorkbenchState>;
   openFolder: (absPath: string) => Promise<WorkbenchState>;
   removeProject: (projectId: string) => Promise<WorkbenchState>;
+  updateDisplayName: (projectId: string, displayName: string) => Promise<WorkbenchState>;
+  reorderProjects: (projectIds: string[]) => Promise<WorkbenchState>;
   setFocusConversation: (id: string | null) => void;
   setFocusProject: (projectId: string) => void;
   recordSessionProject: (conversationId: string, projectId: string) => void;
@@ -141,6 +288,25 @@ export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({
   },
   removeProject: async (projectId) => {
     const state = await workbenchDesktop.workbenchRemoveProject(projectId);
+    set(applyState(state));
+    return state;
+  },
+  updateDisplayName: async (projectId, displayName) => {
+    const state = await workbenchDesktop.workbenchUpdateDisplayName(projectId, displayName);
+    set(applyState(state));
+    return state;
+  },
+  reorderProjects: async (projectIds) => {
+    set((state) => {
+      const byId = new Map(state.members.map((member) => [member.id, member]));
+      return {
+        workbenchProjectIds: projectIds,
+        members: projectIds
+          .map((id) => byId.get(id))
+          .filter((member): member is WorkbenchProjectMember => Boolean(member)),
+      };
+    });
+    const state = await workbenchDesktop.workbenchReorderProjects(projectIds);
     set(applyState(state));
     return state;
   },

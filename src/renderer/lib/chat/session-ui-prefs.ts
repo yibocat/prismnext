@@ -78,6 +78,26 @@ export async function toggleArchiveSessionForProject(
   });
 }
 
+/** Archive every listed chat in one project. Also drops those ids from that project's pins. */
+export async function archiveSessionsForProject(
+  projectRoot: string,
+  sessionIds: readonly string[],
+): Promise<void> {
+  const ids = [...new Set(sessionIds.filter((id) => id.trim()))];
+  if (ids.length === 0) return;
+  const archived = new Set(getArchivedSessionIdsForProject(projectRoot));
+  for (const id of ids) archived.add(id);
+  const pinned = getPinnedSessionIdsForProject(projectRoot).filter((id) => !archived.has(id));
+  useLayoutStore.setState((s) => ({
+    archivedSessionIds: [...new Set([...s.archivedSessionIds, ...ids])],
+    pinnedSessionIds: s.pinnedSessionIds.filter((id) => !ids.includes(id)),
+  }));
+  await persistSessionUiPrefs(projectRoot, {
+    archivedSessionIds: [...archived],
+    pinnedSessionIds: pinned,
+  });
+}
+
 export async function togglePinSessionForProject(
   projectRoot: string,
   sessionId: string,

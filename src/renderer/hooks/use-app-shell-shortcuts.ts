@@ -6,7 +6,7 @@ import { saveActiveWorkspaceFile } from "@/lib/workspace/save-active-workspace-f
 import {
   openRightArea,
   closeRightArea,
-  toggleRightAreaMaximize,
+  toggleMaximizedRightArea,
 } from "@/lib/workspace/right-area-layout";
 import {
   chordMatchesEvent,
@@ -74,15 +74,17 @@ export function useAppShellShortcuts(
         return;
       }
 
-      // Check maximize (⌘⇧J) before toggle (⌘J).
+      // Check maximize (⌃⌘B) before split toggle (⌥⌘B).
       if (matchesShortcut("shell.toggleRightAreaMaximize", e)) {
         e.preventDefault();
-        toggleRightAreaMaximize(layoutCtx());
+        if (useLayoutStore.getState().leftSidebarView === "settings") return;
+        toggleMaximizedRightArea(layoutCtx());
         return;
       }
 
       if (matchesShortcut("shell.toggleRightArea", e)) {
         e.preventDefault();
+        if (useLayoutStore.getState().leftSidebarView === "settings") return;
         const r = rightAreaRef.current;
         if (!r) return;
         if (r.isCollapsed()) {

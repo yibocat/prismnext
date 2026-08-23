@@ -9,6 +9,8 @@
   "updateToVersion": "Update to {{version}}",
   "sessions": {
     "pinned": "Pinned",
+    "collapsePinned": "Collapse pinned",
+    "expandPinned": "Expand pinned",
     "sessions": "Sessions",
     "archived": "Archived",
     "showArchived": "Show archived",
@@ -16,6 +18,19 @@
     "sort": "Sort",
     "lastUpdated": "Last updated",
     "dateCreated": "Date created",
+    "grouping": "Grouping",
+    "groupWorkbench": "Workbench",
+    "groupUpdated": "Updated",
+    "status": "Status",
+    "statusSoon": "No status filters yet",
+    "expandAll": "Expand All",
+    "collapseAll": "Collapse All",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "last7Days": "Last 7 Days",
+    "last30Days": "Last 30 Days",
+    "older": "Older",
+    "noArchived": "No archived chats",
     "noSessions": "No sessions yet",
     "openProjectHint": "Open a project to start",
     "pin": "Pin session",
@@ -39,7 +54,12 @@
     "addProject": "Add project",
     "newSessionInProject": "New chat in this project",
     "missingFolder": "Folder not found",
-    "emptyProject": "No chats yet"
+    "emptyProject": "No chats yet",
+    "searchProjects": "Search projects...",
+    "recents": "Recents",
+    "more": "More",
+    "openFolder": "Open Folder",
+    "defaultBadge": "Default"
   },
   "project": {
     "noProject": "No Project Open",
@@ -47,7 +67,14 @@
     "newProject": "New Project...",
     "openProject": "Open Project...",
     "closeProject": "Close Project",
+    "editProject": "Edit",
+    "archiveAll": "Archive All",
     "removeFromWorkbench": "Remove from Workbench"
   },
-  "teams": "Teams"
+  "teams": "Teams",
+  "customizeSidebar": {
+    "menu": "Customize Sidebar",
+    "title": "Customize Sidebar",
+    "description": "Choose which workspace modules appear, and drag to change their order. TeX Workspace and Library are on by default. Templates and Teams stay under New Chat."
+  }
 }

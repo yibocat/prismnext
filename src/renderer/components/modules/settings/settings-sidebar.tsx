@@ -4,14 +4,20 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
-import { useWindowState } from "@/hooks/use-window-state";
 import {
   SidebarProvider,
   Sidebar,
-  SidebarFooter,
 } from "@/components/ui/sidebar";
-import { SidebarControls } from "@/components/layout/sidebar-controls";
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
+import { SidebarHitChrome } from "@/components/layout/sidebar-controls";
+import {
+  LEFT_SIDEBAR_ROW,
+  LEFT_SIDEBAR_ROW_ACTIVE,
+  LEFT_SIDEBAR_ROW_HOVER,
+  LEFT_SIDEBAR_SECTION_HEADER,
+  LEFT_SIDEBAR_SECTION_LABEL,
+  LEFT_SIDEBAR_STACK,
+} from "@/components/layout/left-nav-button";
 import {
   ArrowLeftIcon,
   Settings2Icon,
@@ -29,9 +35,6 @@ import {
 } from "lucide-react";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { isAgentAssetsCategory } from "./agent-assets-shared";
-
-const SECTION_LABEL =
-  "text-[length:var(--font-hint)] font-medium uppercase tracking-wider text-muted-foreground/50";
 
 export const SETTINGS_GROUPS = [
   {
@@ -76,31 +79,39 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarRef }: SettingsSidebarProps) {
   const { t } = useTranslation();
-  const { platform, isFullscreen } = useWindowState();
-  const isMac = platform === "darwin";
-  const showMacSpacer = isMac && !isFullscreen;
 
-  const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
   const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
   const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
   const sidebarContent = (
     <SidebarProvider defaultOpen className="contents">
-      <Sidebar collapsible="none" className="relative shrink-0 border-r-0 !w-full" data-surface="sidebar">
+      <Sidebar collapsible="none" className="relative shrink-0 border-r-0" data-surface="sidebar" data-left-sidebar-slab="">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
-          {!sidebarFullyCollapsed && (
-            <SidebarControls leftSidebarRef={leftSidebarRef!} showMacSpacer={showMacSpacer} showNewAgent={false} />
-          )}
+          {leftSidebarRef ? <SidebarHitChrome leftSidebarRef={leftSidebarRef} /> : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
+          <div className="flex items-center gap-1 pt-1">
+            <button
+              type="button"
+              className={cn(LEFT_SIDEBAR_ROW, "min-w-0 flex-1", LEFT_SIDEBAR_ROW_HOVER)}
+              onClick={() => {
+                useLayoutStore.getState().setLeftSidebarView("sessions");
+                setLeftSidebarOverlay(false);
+              }}
+            >
+              <ArrowLeftIcon className="size-3.5 shrink-0 text-muted-foreground" />
+              <span>{t("common.back")}</span>
+            </button>
+            <SidebarUpdateButton />
+          </div>
           {SETTINGS_GROUPS.map((group) => (
             <div key={group.labelKey}>
-              <div className="pt-2 pb-1">
-                <span className={SECTION_LABEL}>{t(group.labelKey)}</span>
+              <div className={LEFT_SIDEBAR_SECTION_HEADER}>
+                <span className={LEFT_SIDEBAR_SECTION_LABEL}>{t(group.labelKey)}</span>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className={LEFT_SIDEBAR_STACK}>
                 {group.items.map((cat) => {
                   const selected =
                     cat.id === "teams-agents"
@@ -111,10 +122,8 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
                       key={cat.id}
                       type="button"
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
-                        selected
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        LEFT_SIDEBAR_ROW,
+                        selected ? LEFT_SIDEBAR_ROW_ACTIVE : LEFT_SIDEBAR_ROW_HOVER,
                       )}
                       onClick={() => {
                         if (cat.id === "teams-agents" && isAgentAssetsCategory(activeCategory)) {
@@ -124,7 +133,12 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
                         onSelectCategory(cat.id);
                       }}
                     >
-                      <cat.icon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <cat.icon
+                        className={cn(
+                          "size-3.5 shrink-0",
+                          selected ? "text-primary" : "text-muted-foreground",
+                        )}
+                      />
                       <span className="flex-1 text-left">{t(cat.labelKey)}</span>
                     </button>
                   );
@@ -134,10 +148,10 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
           ))}
           {proSettings.length > 0 ? (
             <div>
-              <div className="pt-2 pb-1">
-                <span className={SECTION_LABEL}>{t("settings.nav.pro")}</span>
+              <div className={LEFT_SIDEBAR_SECTION_HEADER}>
+                <span className={LEFT_SIDEBAR_SECTION_LABEL}>{t("settings.nav.pro")}</span>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className={LEFT_SIDEBAR_STACK}>
                 {proSettings.map((item) => {
                   const label = item.sectionLabelKey
                     ? t(item.sectionLabelKey, { defaultValue: item.sectionLabel })
@@ -147,14 +161,19 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
                       key={item.id}
                       type="button"
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] transition-colors",
+                        LEFT_SIDEBAR_ROW,
                         activeCategory === item.id
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                          ? LEFT_SIDEBAR_ROW_ACTIVE
+                          : LEFT_SIDEBAR_ROW_HOVER,
                       )}
                       onClick={() => onSelectCategory(item.id)}
                     >
-                      <SparklesIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                      <SparklesIcon
+                        className={cn(
+                          "size-3.5 shrink-0",
+                          activeCategory === item.id ? "text-primary" : "text-muted-foreground",
+                        )}
+                      />
                       <span className="flex-1 text-left">{label}</span>
                     </button>
                   );
@@ -163,23 +182,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
             </div>
           ) : null}
         </div>
-
-        <SidebarFooter className="px-2 pb-2">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-[length:var(--font-session-item)] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
-              onClick={() => {
-                useLayoutStore.getState().setLeftSidebarView("sessions");
-                setLeftSidebarOverlay(false);
-              }}
-            >
-              <ArrowLeftIcon className="size-3.5 shrink-0" />
-              <span>{t("common.back")}</span>
-            </button>
-            <SidebarUpdateButton />
-          </div>
-        </SidebarFooter>
       </Sidebar>
     </SidebarProvider>
   );
@@ -188,7 +190,7 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
     <>
       {leftSidebarOverlay &&
         createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content">
+          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content" data-left-sidebar-overlay="">
             <div className="flex-1 min-h-0">{sidebarContent}</div>
             <button
               type="button"

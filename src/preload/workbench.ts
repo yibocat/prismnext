@@ -10,4 +10,8 @@ export const workbenchApi = {
 		ipcRenderer.invoke("workbench:openFolder", { absPath }),
 	workbenchRemoveProject: (projectId: string) =>
 		ipcRenderer.invoke("workbench:removeProject", { projectId }),
+	workbenchUpdateDisplayName: (projectId: string, displayName: string) =>
+		ipcRenderer.invoke("workbench:updateDisplayName", { projectId, displayName }),
+	workbenchReorderProjects: (projectIds: string[]) =>
+		ipcRenderer.invoke("workbench:reorderProjects", { projectIds }),
 };

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   clampClientXToTabRange,
+  clampClientYToStackRange,
   computeInsertIndex,
+  computeVerticalInsertIndex,
   isNoOpReorder,
   reorderIndex,
+  shouldSuppressClickAfterDrag,
 } from "../../src/renderer/lib/workspace/sortable-tab-strip";
 
 describe("computeInsertIndex", () => {
@@ -55,11 +58,42 @@ describe("reorderIndex", () => {
   });
 });
 
+describe("computeVerticalInsertIndex", () => {
+  const rects = [
+    { top: 0, height: 40 },
+    { top: 40, height: 40 },
+    { top: 80, height: 40 },
+  ];
+
+  it("returns slots by vertical midpoint", () => {
+    expect(computeVerticalInsertIndex(10, rects)).toBe(0);
+    expect(computeVerticalInsertIndex(50, rects)).toBe(1);
+    expect(computeVerticalInsertIndex(130, rects)).toBe(3);
+    expect(computeVerticalInsertIndex(clampClientYToStackRange(-20, rects), rects)).toBe(0);
+  });
+
+  it("snaps past or onto the first/last row with edge slack", () => {
+    expect(computeVerticalInsertIndex(-80, rects, 36)).toBe(0);
+    expect(computeVerticalInsertIndex(30, rects, 36)).toBe(0);
+    expect(computeVerticalInsertIndex(95, rects, 36)).toBe(3);
+    expect(computeVerticalInsertIndex(400, rects, 36)).toBe(3);
+  });
+});
+
 describe("isNoOpReorder", () => {
   it("detects slots that keep the same order", () => {
     expect(isNoOpReorder(1, 1)).toBe(true);
     expect(isNoOpReorder(1, 2)).toBe(true);
     expect(isNoOpReorder(1, 0)).toBe(false);
     expect(isNoOpReorder(1, 3)).toBe(false);
+  });
+});
+
+describe("shouldSuppressClickAfterDrag", () => {
+  it("swallows only the ghost click right after a drag, not the next real click", () => {
+    expect(shouldSuppressClickAfterDrag(1_000, null)).toBe(false);
+    expect(shouldSuppressClickAfterDrag(1_000, 1_000)).toBe(true);
+    expect(shouldSuppressClickAfterDrag(1_200, 1_000)).toBe(true);
+    expect(shouldSuppressClickAfterDrag(1_500, 1_000)).toBe(false);
   });
 });

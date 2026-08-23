@@ -1,9 +1,8 @@
 import { ipcRenderer } from "electron";
 
 export const themeApi = {
-	// Theme — glass vibrancy synchronization
-	themeSetGlassMode: (mode: "light" | "dark" | "system") =>
-		ipcRenderer.invoke("theme:setGlassMode", mode),
+	themeApplyGlass: (payload: { enabled: boolean; opaqueBackground?: string }) =>
+		ipcRenderer.invoke("theme:applyGlass", payload),
 	themeListSystemFonts: () =>
 		ipcRenderer.invoke("theme:listSystemFonts") as Promise<
 			{ family: string; monospace: boolean }[]

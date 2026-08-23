@@ -175,9 +175,7 @@ export function writeWorkbenchHomeSettings(
     `${JSON.stringify({
       ...extra,
       defaultProjectId,
-      workbenchProjectIds: defaultProjectId && !ids.includes(defaultProjectId)
-        ? [defaultProjectId, ...ids]
-        : ids,
+      workbenchProjectIds: ids,
     }, null, 2)}\n`,
     "utf-8",
   );

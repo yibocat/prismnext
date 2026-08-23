@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent/runtime";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
+import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
 import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
 import {
   type AgentAnswerQuestionInput,
@@ -30,6 +31,10 @@ import {
   type AgentUndoTruncateInput,
   type AgentUndoTruncateResult,
   type AgentRenameSessionInput,
+  type AgentGenerateSessionTitleInput,
+  type AgentGenerateSessionTitleResult,
+  type AgentReassignSessionProjectInput,
+  type AgentReassignSessionProjectResult,
   type AgentResolvePlanSuggestInput,
   type AgentEffortCatalogSnapshot,
   type AgentListModelsInput,
@@ -673,6 +678,22 @@ export class AgentService {
     return { count: this.registry.store.rebindCheckout(fromDirectory, toDirectory) };
   }
 
+  async reassignSessionProject(
+    input: AgentReassignSessionProjectInput,
+  ): Promise<AgentReassignSessionProjectResult> {
+    const conversationId = input.conversationId.trim();
+    const projectId = input.projectId.trim();
+    const projectRoot = input.projectRoot.trim();
+    if (!conversationId || !projectId || !projectRoot) {
+      return { ok: false, error: "missing_args" };
+    }
+    const existed = this.registry.store.reassignProject(conversationId, projectId, projectRoot);
+    if (this.registry.getBinding(conversationId)) {
+      await this.resetSession(conversationId);
+    }
+    return { ok: true, existed };
+  }
+
   async syncIntensiveReading(input: AgentSyncIntensiveReadingInput): Promise<{ ok: boolean }> {
     const conversationId = input.conversationId.trim();
     const projectRoot = input.projectRoot.trim();
@@ -736,6 +757,30 @@ export class AgentService {
     if (!record) return { ok: true };
     this.registry.store.put({ ...record, title });
     return { ok: true };
+  }
+
+  async generateSessionTitle(
+    input: AgentGenerateSessionTitleInput,
+  ): Promise<AgentGenerateSessionTitleResult> {
+    const conversationId = input.conversationId.trim();
+    if (!conversationId) return { ok: false, error: "missing_conversation" };
+    const record = this.registry.store.getByConversationId(conversationId);
+    if (!record) return { ok: false, error: "unknown_conversation" };
+    const { generateSessionTitleFromRecord } = await import("./session-title");
+    const result = await generateSessionTitleFromRecord(
+      record,
+      input,
+      this.deps.getSettings(),
+    );
+    if (!result.ok || !result.title || result.skipped) return result;
+    const latest = this.registry.store.getByConversationId(conversationId);
+    if (!latest) return result;
+    const firstUser = (input.userText || latest.turns.find((turn) => turn.status === "completed")?.user.text || "").trim();
+    if (!isProvisionalSessionTitle(latest.title, firstUser)) {
+      return { ok: true, title: latest.title, skipped: true };
+    }
+    this.registry.store.put({ ...latest, title: result.title });
+    return result;
   }
 
   attachOwner(contents: WebContents): void {

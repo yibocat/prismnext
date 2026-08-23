@@ -1067,6 +1067,11 @@ export class PiSdkRuntime implements AgentRuntime {
         this.persistActiveTurn(session, "completed");
         break;
       case "turn_failed":
+        piRuntimeLog.warn("turn.fail", {
+          runtimeSessionId: session.runtimeSessionId,
+          turnId: event.turnId,
+          error: shortLogDetail(event.error),
+        });
         this.persistActiveTurn(session, "failed", event.error);
         break;
       case "turn_cancelled":

@@ -27,6 +27,7 @@ describe("resolveSessionWorktreeContext", () => {
   it("labels active worktree sessions with branch target", () => {
     const ctx = resolveSessionWorktreeContext(WT_PATH, PROJECT, activeWorktrees);
     expect(ctx.kind).toBe("worktree");
+    expect(ctx.gitBranch).toBe("wt-calm-owl");
     expect(ctx.shortLabel).toBe("calm-owl · feature-auth");
     expect(ctx.label).toBe("calm-owl → feature-auth");
   });

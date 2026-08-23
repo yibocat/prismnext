@@ -1,5 +1,5 @@
 /**
- * Left-nav / shortcut helpers for TeX · Library · Experiments in RightArea.
+ * Left-nav helpers for any RightArea workspace mode.
  * Opening a mode focuses it in parallel with other modes (no sibling teardown).
  * Dismissing a mode closes only that mode’s tabs; RightArea collapses only when empty.
  */
@@ -11,42 +11,36 @@ import { modeRegistry } from "@/lib/workspace/mode-registry";
 import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { closeModeTabs } from "@/lib/workspace/close-mode-tabs";
 import {
-  openRightArea,
   openRightAreaMaximized,
   openRightAreaForDeepLink,
   type RightAreaLayoutCtx,
 } from "@/lib/workspace/right-area-layout";
 
-export type LeftNavWorkspaceMode = "texworkspace" | "literature" | "experiments";
+export type LeftNavWorkspaceMode = string;
 
-export function isTexWorkspaceOpen(): boolean {
+/** True when this RightArea mode is focused and the panel is expanded. */
+export function isWorkspaceModeOpen(modeId: string): boolean {
+  const def = modeRegistry.get(modeId);
+  if (!def) return false;
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
   return (
-    rps.tabs.some((t) => t.kind === "texworkspace")
+    rps.tabs.some((t) => def.tabKinds.includes(t.kind))
     && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "texworkspace"
+    && focusedModeId(rps.tabs, rps.activeTabId) === modeId
   );
+}
+
+export function isTexWorkspaceOpen(): boolean {
+  return isWorkspaceModeOpen("texworkspace");
 }
 
 export function isLiteraturePanelOpen(): boolean {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  return (
-    rps.tabs.some((t) => t.kind === "literature")
-    && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "literature"
-  );
+  return isWorkspaceModeOpen("literature");
 }
 
 export function isExperimentsPanelOpen(): boolean {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  return (
-    rps.tabs.some((t) => t.kind === "experiments")
-    && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "experiments"
-  );
+  return isWorkspaceModeOpen("experiments");
 }
 
 function rightAreaCtxFromLeftNav(
@@ -85,6 +79,9 @@ export function focusModeInRightArea(
     layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">;
   },
 ): void {
+  const def = modeRegistry.get(modeId);
+  if (!def) return;
+
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
 
@@ -92,12 +89,12 @@ export function focusModeInRightArea(
     useLiteratureStore.getState().setLibrarySubview("library");
   }
 
-  rps.ensureTab(modeId);
+  const kind = def.tabKinds[0];
+  if (kind) rps.ensureTab(kind);
   st.setLeftSidebarView("sessions");
 
-  const def = modeRegistry.get(modeId);
   // Modes with a list sidebar (Files / Literature / Experiments / …) open it by default.
-  if (def?.Sidebar && !def.hideRightSidebar) {
+  if (def.Sidebar && !def.hideRightSidebar) {
     st.revealRightSidebar();
   }
 

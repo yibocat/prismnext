@@ -1,18 +1,19 @@
-// src/main/ipc/theme.ts
-// IPC handler for theme → native vibrancy synchronization + system fonts.
+// Theme IPC — native glass apply + system fonts.
 
 import { ipcMain, BrowserWindow } from "electron";
-import { setVibrancyForTheme, type VibrancyMode } from "../app/glass-vibrancy";
+import {
+  applyNativeGlass,
+  type ApplyGlassPayload,
+} from "../app/glass-vibrancy";
 import { listSystemFonts } from "../app/system-fonts";
 
 export function registerThemeHandlers(): void {
   ipcMain.handle(
-    "theme:setGlassMode",
-    (_event, mode: VibrancyMode) => {
+    "theme:applyGlass",
+    (_event, payload: ApplyGlassPayload) => {
       const win = BrowserWindow.fromWebContents(_event.sender);
-      if (win) {
-        setVibrancyForTheme(win, mode);
-      }
+      if (!win || !payload || typeof payload.enabled !== "boolean") return;
+      applyNativeGlass(win, payload);
     },
   );
 

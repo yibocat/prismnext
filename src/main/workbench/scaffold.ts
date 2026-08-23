@@ -7,11 +7,6 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
-  ICON_IMAGE_FILENAME,
-  normalizeIconSpec,
-  type IconSpec,
-} from "../../shared/platform/icon-spec";
-import {
   PROJECT_COMPILE_DIRNAME,
   PROJECT_META_DIR,
   WORKBENCH_JSON_FILENAME,
@@ -22,8 +17,6 @@ import {
   createConfiguredFolders,
   DEFAULT_WORKSPACE_FOLDERS,
   validateWorkspaceDirs,
-  writeProjectIcon,
-  writeProjectIconImage,
   writeProjectSettings,
   writeWorkspaceDirs,
 } from "../project/workspace-config";
@@ -95,8 +88,6 @@ export function projectMetaAbs(projectRoot: string): string {
 export interface CreateWorkbenchProjectArgs {
   rootPath: string;
   workspaceDirs?: WorkspaceFolder[];
-  projectIcon?: IconSpec | string | null;
-  projectIconImagePngBase64?: string;
 }
 
 export interface WorkbenchProjectRef {
@@ -144,12 +135,11 @@ function ensureAgentDir(metaDir: string): void {
 
 function writeLocalSettings(
   metaDir: string,
-  patch: { compiler?: string; projectIcon?: IconSpec | string },
+  patch: { compiler?: string },
 ): void {
   writeProjectSettings(metaDir, {
     version: 1,
     compiler: patch.compiler ?? "tectonic",
-    ...(patch.projectIcon ? { projectIcon: patch.projectIcon } : {}),
   });
 }
 
@@ -193,15 +183,6 @@ export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): 
 
   const metaDir = projectMetaAbs(root);
   writeLocalSettings(metaDir, { compiler: "tectonic" });
-  const iconSpec = normalizeIconSpec(args.projectIcon);
-  if (args.projectIconImagePngBase64) {
-    const png = Buffer.from(args.projectIconImagePngBase64, "base64");
-    if (png.length > 0 && png.length <= 256 * 1024) {
-      writeProjectIconImage(metaDir, png);
-    }
-  } else if (iconSpec && iconSpec.kind !== "image") {
-    writeProjectIcon(metaDir, iconSpec);
-  }
 
   ensureAgentDir(metaDir);
   createConfiguredFolders(root, workspaceDirs);

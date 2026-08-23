@@ -8,12 +8,6 @@ import {
   findExperimentConfig,
 } from "../../shared/workbench/workspace-folder";
 import {
-  ICON_IMAGE_FILENAME,
-  normalizeIconSpec,
-  iconSpecToJSON,
-  type IconSpec,
-} from "../../shared/platform/icon-spec";
-import {
   readWorkbenchJson,
   writeWorkbenchJson,
   ensureWorkbenchId,
@@ -26,8 +20,6 @@ interface ProjectSettings {
   version?: number;
   compiler?: string;
   workspaceDirs?: WorkspaceFolder[];
-  /** Project visual identity (emoji / lucide / image); legacy string = emoji. */
-  projectIcon?: IconSpec | string;
   [key: string]: unknown;
 }
 
@@ -70,51 +62,6 @@ export function writeWorkspaceDirs(
       folders: dirs,
     },
   });
-}
-
-/** Read the project's visual identity (emoji / lucide / image); null when unset. */
-export function readProjectIcon(prismDir: string): IconSpec | null {
-  const settings = readProjectSettings(prismDir);
-  return normalizeIconSpec(settings.projectIcon);
-}
-
-function removeProjectIconImageFile(prismDir: string): void {
-  const iconPath = path.join(prismDir, ICON_IMAGE_FILENAME);
-  if (fs.existsSync(iconPath)) {
-    try {
-      fs.unlinkSync(iconPath);
-    } catch {
-      /* best-effort */
-    }
-  }
-}
-
-/**
- * Rewrite the project's visual identity in `.workbench/settings.json`.
- * Non-image icons also remove a leftover `icon.png`.
- */
-export function writeProjectIcon(prismDir: string, icon: IconSpec | null): void {
-  const normalized = normalizeIconSpec(icon);
-  if (normalized?.kind === "image") {
-    throw new Error("Use writeProjectIconImage to write image icons");
-  }
-  removeProjectIconImageFile(prismDir);
-  const settings = readProjectSettings(prismDir);
-  const json = iconSpecToJSON(normalized);
-  if (json) settings.projectIcon = json;
-  else delete settings.projectIcon;
-  writeProjectSettings(prismDir, settings);
-}
-
-/** Write PNG bytes to `.workbench/icon.png` and set projectIcon to image relative path. */
-export function writeProjectIconImage(prismDir: string, pngBytes: Buffer): void {
-  if (!pngBytes || pngBytes.length === 0) throw new Error("Empty icon image");
-  if (pngBytes.length > 256 * 1024) throw new Error("Icon image is too large");
-  if (!fs.existsSync(prismDir)) fs.mkdirSync(prismDir, { recursive: true });
-  fs.writeFileSync(path.join(prismDir, ICON_IMAGE_FILENAME), pngBytes);
-  const settings = readProjectSettings(prismDir);
-  settings.projectIcon = { kind: "image", value: ICON_IMAGE_FILENAME };
-  writeProjectSettings(prismDir, settings);
 }
 
 export function validateWorkspaceDirs(dirs: WorkspaceFolder[]): string[] {

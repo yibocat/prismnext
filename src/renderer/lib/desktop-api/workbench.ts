@@ -12,4 +12,6 @@ export const workbenchDesktop = {
   workbenchSetDefault: forwardDesktop("workbenchSetDefault"),
   workbenchSetDefaultFromFolder: forwardDesktop("workbenchSetDefaultFromFolder"),
   workbenchRemoveProject: forwardDesktop("workbenchRemoveProject"),
+  workbenchUpdateDisplayName: forwardDesktop("workbenchUpdateDisplayName"),
+  workbenchReorderProjects: forwardDesktop("workbenchReorderProjects"),
 };

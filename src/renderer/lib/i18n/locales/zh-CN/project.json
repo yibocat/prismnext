@@ -10,8 +10,6 @@
     "title": "新建项目",
     "description": "配置项目名称、存储路径与工作区预设架构。",
     "projectName": "项目名称",
-    "chooseIcon": "选择项目图标",
-    "pasteEmoji": "粘贴表情…",
     "location": "存储位置",
     "chooseParent": "选择父文件夹…",
     "template": "工作区模板",
@@ -42,5 +40,12 @@
     "needManuscript": "必须包含一个 manuscript（手稿）文件夹。",
     "removeFolder": "移除文件夹",
     "createFailed": "创建项目失败"
+  },
+  "edit": {
+    "title": "编辑项目",
+    "description": "修改工作台里显示的名称。",
+    "nameHint": "显示在工作台列表中，不会重命名磁盘上的文件夹。",
+    "save": "保存",
+    "saveFailed": "无法保存项目"
   }
 }

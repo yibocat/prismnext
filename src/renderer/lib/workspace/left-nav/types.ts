@@ -2,7 +2,8 @@ import type { RefObject, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 
-export type LeftNavSection = "primary" | "footer";
+/** primary = customizable workspace modules; hub = Templates/Teams; footer = Settings. */
+export type LeftNavSection = "primary" | "hub" | "footer";
 
 export type LeftNavPanelRefs = {
   centerRef?: RefObject<PanelImperativeHandle | null>;
@@ -16,13 +17,14 @@ export type LeftNavContext = {
 /**
  * 左侧栏导航注册表 — 类型定义
  *
- * 新增入口时实现 LeftNavDefinition，在 items.tsx（或功能模块）里 register 即可。
+ * Chrome 入口（New Chat / Templates / Teams / Settings）在 items.tsx register。
+ * RightArea 模块由 modeRegistry 投影，勿再手写一份。
  * 侧边栏按钮由 leftNavRegistry 自动渲染，勿在 LeftSidebar 里硬编码按钮。
  */
 export interface LeftNavDefinition {
   /** 全局唯一 id，pressLeftNav(id) 使用 */
   id: string;
-  /** primary = 顶部固定区；footer = 底部（如 Settings） */
+  /** primary = 模块 Nav；hub = 模板/团队（Pinned 上方，不可自定义）；footer = Settings */
   section: LeftNavSection;
   /** Fallback English label (also used when labelKey is absent). */
   label: string;
@@ -31,6 +33,8 @@ export interface LeftNavDefinition {
   icon: LucideIcon;
   /** 同 section 内升序排列 */
   order: number;
+  /** Primary item that cannot be hidden or reordered (New Chat). */
+  required?: boolean;
   /** 当前项是否处于激活态（控制高亮） */
   isActive: () => boolean;
   /** 从其他项切换过来时调用 */
@@ -59,4 +63,6 @@ export interface LeftNavDefinition {
   immersive?: boolean;
   /** 行尾附加 UI（如快捷键 Kbd） */
   trailing?: ReactNode;
+  /** Footer icon buttons show this chord inside the Hint tooltip. */
+  shortcutId?: string;
 }

@@ -84,7 +84,7 @@ function normalizeSnapshot(raw: unknown): AgentStatusSnapshot {
  * Compact Agent-first status. Outer dot = OpenCode ACP lifecycle.
  * Project tools warm should already be done by open time; the row reflects that.
  */
-export function ServerStatusDot() {
+export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
@@ -213,6 +213,30 @@ export function ServerStatusDot() {
     || agent.phase === "stopped"
     || warmPhase === "error";
 
+  const glyph = (
+    <>
+      <CircleIcon
+        className={`size-2.5 ${AGENT_COLORS[agent.phase]} fill-current ${
+          layer === "paint" ? "" : "hover:scale-125 transition-transform duration-200"
+        }`}
+        aria-label={t("shell.status.agentAria", { status: agentDetail })}
+      />
+      {terminalAttention ? (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-warning text-[9px] font-medium text-background flex items-center justify-center tabular-nums">
+          {activity.aiRunning + activity.userBusy}
+        </span>
+      ) : null}
+    </>
+  );
+
+  if (layer === "paint") {
+    return (
+      <span className="relative inline-flex items-center justify-center size-5 shrink-0" aria-hidden>
+        {glyph}
+      </span>
+    );
+  }
+
   return (
     <HoverCard openDelay={400} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -220,15 +244,7 @@ export function ServerStatusDot() {
           type="button"
           className="relative inline-flex items-center justify-center size-5 shrink-0 rounded-full"
         >
-          <CircleIcon
-            className={`size-2.5 ${AGENT_COLORS[agent.phase]} fill-current hover:scale-125 transition-transform duration-200`}
-            aria-label={t("shell.status.agentAria", { status: agentDetail })}
-          />
-          {terminalAttention ? (
-            <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-warning text-[9px] font-medium text-background flex items-center justify-center tabular-nums">
-              {activity.aiRunning + activity.userBusy}
-            </span>
-          ) : null}
+          {glyph}
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="bottom" align="start" className="w-56 p-3">

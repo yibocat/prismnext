@@ -104,13 +104,15 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
 
   renameSession: async (tabId, title) => {
     const tab = get().tabs.find((t) => t.id === tabId);
-    if (!tab) return;
     const nextTitle = title.trim();
+    if (!nextTitle) return;
+    const conversationId = tab?.id || tabId;
     await agentDesktop.agentRenameSession({
-      conversationId: tabId,
+      conversationId,
       title: nextTitle,
     });
     refreshAgentSessionList();
+    if (!tab) return;
     set((s) => ({
       tabs: s.tabs.map((t) =>
         t.id === tabId ? { ...t, title: nextTitle, userTitleSet: true } : t,
@@ -366,6 +368,7 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
               sessionCwd: null,
               title: "New Chat",
               userTitleSet: false,
+              autoTitleAttempted: false,
               error: null,
               isStreaming: false,
               promptStale: false,
@@ -566,6 +569,7 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       const hydratedTab: TabState = {
         ...applyConversationToTab(loadingTab, conversation, { planEvents: result.planEvents }),
         title: result.title || conversation.title || "New Chat",
+        autoTitleAttempted: true,
         sessionCwd: directory,
         isLoadingSession: false,
         composerToolsSuppressed: true,

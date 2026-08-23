@@ -71,9 +71,18 @@ export function IconRenderer({
   // Bare variant: inline glyph / icon for toolbar triggers (no chip box).
   if (variant === "bare") {
     if (spec?.kind === "emoji" && spec.value) {
+      // Emoji is a font glyph (Apple Color Emoji sits low in the em-box).
+      // Put it in the same SIZE_ICON flex box as Lucide so items-center rows line up.
       return (
-        <span className={cn("leading-none", SIZE_GLYPH[size], className)} aria-hidden>
-          {spec.value}
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center leading-none",
+            SIZE_ICON[size],
+            className,
+          )}
+          aria-hidden
+        >
+          <span className={cn("leading-none", SIZE_GLYPH[size])}>{spec.value}</span>
         </span>
       );
     }

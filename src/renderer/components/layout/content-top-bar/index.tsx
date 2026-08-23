@@ -2,20 +2,14 @@ import { type RefObject } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { useWindowState } from "@/hooks/use-window-state";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useLayoutStore } from "@/stores/layout-store";
 import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
 import { useChatStore } from "@/stores/chat-store";
 import { useSessionTitle } from "@/hooks/use-session-title";
-import { SidebarControls } from "@/components/layout/sidebar-controls";
+import { ContentRightAreaSpacer, ContentSidebarSpacer } from "@/components/layout/sidebar-controls";
 import { SessionTitle } from "./session-title";
 import { ChatOpenTabs, shouldShowChatOpenTabs } from "./chat-open-tabs";
 import { ServerStatusDot } from "@/components/server-status-dot";
-import { cn } from "@/lib/utils";
-import {
-  PanelRight,
-} from "lucide-react";
-import { openRightArea } from "@/lib/workspace/right-area-layout";
 import { Hint } from "@/components/ui/hint";
 import { WindowControls } from "@/components/layout/window-controls";
 import { listBackgroundPending, usePermissionStore } from "@/stores/permission-store";
@@ -29,10 +23,7 @@ interface ContentTopBarProps {
 
 export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: ContentTopBarProps) {
   const { t } = useTranslation();
-  const { platform, isMaximized, isFullscreen } = useWindowState();
-  const isMobile = useIsMobile();
-  const sidebarFullyCollapsed = useLayoutStore((s) => s.sidebarFullyCollapsed);
-  const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
+  const { platform } = useWindowState();
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
 
@@ -60,24 +51,10 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
   });
 
   const isMac = platform === "darwin";
-  const showSidebarControls = sidebarFullyCollapsed;
-  const showMacSpacer = isMac && !isFullscreen && sidebarFullyCollapsed;
 
   const inSettings = leftSidebarView === "settings";
   const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
   const settingsPanelOpen = hasOpenSettingsEditor();
-
-  const expandRightPanel = () => {
-    if (inSettings) {
-      return;
-    }
-    openRightArea({
-      centerRef: centerRef?.current,
-      rightAreaRef: rightAreaRef?.current,
-      leftSidebarRef: leftSidebarRef.current,
-      isMobile,
-    });
-  };
 
   // Hide center top bar only when stacked editor is open (list hidden, right chrome active).
   const hideContentTopBar =
@@ -87,18 +64,16 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
 
   return (
     <div className="drag-region flex h-[var(--height-titlebar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden px-2 select-none" data-surface="content">
-      {/* ── Left: traffic lights spacer + sidebar controls ── */}
+      {/* Pinned overlay owns the buttons; this spacer eases the status dot beside them. */}
       <div className="flex items-center gap-0.5 shrink-0">
-        {showSidebarControls ? (
-          <SidebarControls leftSidebarRef={leftSidebarRef} showMacSpacer={showMacSpacer} className="-ml-[1px]" />
-        ) : (
-          showMacSpacer && <div className="w-[68px]" />
-        )}
+        <ContentSidebarSpacer leftSidebarRef={leftSidebarRef} />
       </div>
 
       {/* Status dot + open chat tabs (≥2) or single session title */}
       <div className="flex min-w-0 flex-1 items-center gap-1 ml-0.5">
-        <ServerStatusDot />
+        <div data-status-dot-hit="">
+          <ServerStatusDot />
+        </div>
         {showOpenTabs ? (
           <ChatOpenTabs />
         ) : (
@@ -130,21 +105,15 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
         ) : null}
       </div>
 
-      {/* ── Right: expand right panel (RightArea or Settings detail) + Window controls ── */}
+      {/* Pinned overlay owns the glyphs; this spacer keeps the hit target on the window edge. */}
       <div className="flex items-center gap-0.5 shrink-0">
-        {!rightAreaExpanded && rightAreaRef && !inSettings ? (
+        {rightAreaRef && centerRef && !inSettings ? (
           <>
-            <Hint shortcutId="shell.toggleRightArea">
-              <button
-                type="button"
-                className={cn(
-                  "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
-                )}
-                onClick={expandRightPanel}
-              >
-                <PanelRight className="size-3.5" />
-              </button>
-            </Hint>
+            <ContentRightAreaSpacer
+              leftSidebarRef={leftSidebarRef}
+              centerRef={centerRef}
+              rightAreaRef={rightAreaRef}
+            />
             {!isMac && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
           </>
         ) : null}

@@ -41,6 +41,11 @@ import {
   syncTrayFromSettings,
 } from "./app/tray";
 import { shouldHideOnClose } from "../shared/platform/desktop-shell";
+import {
+  applyNativeGlass,
+  opaqueWindowBackgroundFromSettings,
+  readPersistedGlassEffect,
+} from "./app/glass-vibrancy";
 
 const log = createLogger("main", "startup");
 
@@ -73,6 +78,22 @@ protocol.registerSchemesAsPrivileged([
 const isMac = process.platform === "darwin";
 
 let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Native macOS traffic lights vs our 38px title bar (`--height-titlebar`).
+ *
+ * `hiddenInset` without this uses Electron's legacy inset `(12, 11)` — sized
+ * for a ~28–34pt system titlebar, not our chrome. Electron 43 / macOS Tahoe
+ * can also re-layout that container and leave the cluster high. x stays at
+ * the hiddenInset 12 so the sidebar's 68px spacer still clears the buttons.
+ * y = (38 − 14) / 2 centers the 14pt NSWindow buttons in that 38px bar.
+ */
+const MAC_TRAFFIC_LIGHT_POSITION = { x: 12, y: 12 } as const;
+
+function applyMacTrafficLightPosition(win: BrowserWindow): void {
+  if (!isMac || win.isDestroyed()) return;
+  win.setWindowButtonPosition({ ...MAC_TRAFFIC_LIGHT_POSITION });
+}
 
 // ─── Window size persistence ───
 
@@ -201,6 +222,8 @@ function disposeGlobalsWhenNoWindows(): void {
 function createWindow(): BrowserWindow {
   const existing = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
   const savedBounds = restoreWindowBounds();
+  const glassEnabled = readPersistedGlassEffect();
+  const opaqueBackground = opaqueWindowBackgroundFromSettings();
   const windowConfig: Electron.BrowserWindowConstructorOptions = {
     width: savedBounds.width ?? 1400,
     height: savedBounds.height ?? 900,
@@ -210,7 +233,9 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     title: "prismnext",
     show: false,
-    backgroundColor: "#00000000",
+    // `transparent` is constructor-only (Electron 43). Glass off still uses
+    // this path so the setting can turn vibrancy on later without recreate.
+    backgroundColor: glassEnabled ? "#00000000" : opaqueBackground,
     transparent: true,
     hasShadow: true,
     webPreferences: {
@@ -234,27 +259,32 @@ function createWindow(): BrowserWindow {
 
   if (isMac) {
     // macOS: hiddenInset gives native traffic lights, no titlebar
-    // vibrancy + transparent = native desktop-blur glass effect
     windowConfig.titleBarStyle = "hiddenInset";
-    windowConfig.vibrancy = "under-window";
-    windowConfig.visualEffectState = "active";
+    windowConfig.trafficLightPosition = { ...MAC_TRAFFIC_LIGHT_POSITION };
+    if (glassEnabled) {
+      windowConfig.vibrancy = "sidebar";
+      windowConfig.visualEffectState = "active";
+    }
   } else {
     // Windows/Linux: frameless so our custom titlebar is the only one
     windowConfig.frame = false;
     windowConfig.autoHideMenuBar = true;
-    // Windows: acrylic blur effect for desktop transparency
-    if (process.platform === "win32") {
-      windowConfig.backgroundMaterial = "acrylic";
+    if (process.platform === "win32" && glassEnabled) {
+      windowConfig.backgroundMaterial = "mica";
     }
     const winIcon = brandIconPath("app-icon-dark.png");
     if (existsSync(winIcon)) windowConfig.icon = winIcon;
   }
 
   const win = new BrowserWindow(windowConfig);
+  applyNativeGlass(win, { enabled: glassEnabled, opaqueBackground });
   mainWindow = win;
   setMainWindow(win);
   attachWindowStateEmitter(win);
   attachWindowBoundsPersistence(win);
+  applyMacTrafficLightPosition(win);
+  // AppKit rebuilds the titlebar container when leaving fullscreen (Tahoe).
+  win.on("leave-full-screen", () => applyMacTrafficLightPosition(win));
 
   // Re-warm child_process after macOS App Nap / background suspension.
   win.on("focus", () => {
@@ -266,6 +296,7 @@ function createWindow(): BrowserWindow {
   });
 
   win.on("ready-to-show", () => {
+    applyMacTrafficLightPosition(win);
     if (!win.isDestroyed()) win.show();
   });
 

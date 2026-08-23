@@ -61,7 +61,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           <button
             type="button"
             className={cn(
-              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]",
               sidebarExpanded && "bg-muted text-foreground",
             )}
             onClick={() =>
@@ -79,7 +79,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <Hint shortcutId="shell.commandPalette">
           <button
             type="button"
-            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[length:var(--font-toolbar-label)] text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]"
             onClick={() => setCommandPaletteOpen(true)}
           >
             <SearchIcon className="size-3.5" />
@@ -99,7 +99,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
         <Hint label={t("common.theme", { theme })}>
           <button
             type="button"
-            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]"
             onClick={cycleTheme}
           >
             {theme === "system" ? (
@@ -117,7 +117,7 @@ export function TitleBar({ leftSidebarRef, centerRef, rightAreaRef }: TitleBarPr
           <button
             type="button"
             className={cn(
-              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+              "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]",
               rightAreaExpanded && "bg-muted text-foreground",
             )}
             onClick={() => {

@@ -23,7 +23,7 @@ interface WindowControlsProps {
  */
 export function WindowControls({
   className,
-  buttonClassName = "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+  buttonClassName = "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]",
   iconSizeClassName = "size-3.5",
 }: WindowControlsProps) {
   const { t } = useTranslation();

@@ -371,15 +371,8 @@ export interface ElectronAPI {
     workspaceDirs?: import("./workspace").WorkspaceFolder[],
     options?: {
       initGit?: boolean;
-      projectIcon?: import("../../shared/platform/icon-spec").IconSpec | string | null;
-      projectIconImagePngBase64?: string;
     },
   ) => Promise<void>;
-  projectSetIcon: (
-    rootPath: string,
-    icon: import("../../shared/platform/icon-spec").IconSpec | null,
-  ) => Promise<void>;
-  projectSetIconImage: (rootPath: string, pngBase64: string) => Promise<void>;
   /** Validate a project path and return its canonical root without authorizing watchers. */
   projectOpen: (rootPath: string) => Promise<{ rootPath: string }>;
   /** Authorize the current project after the UI commits it; returns its canonical root. */
@@ -423,6 +416,13 @@ export interface ElectronAPI {
   ) => Promise<import("../../shared/workbench/api").WorkbenchOpenResult>;
   workbenchRemoveProject: (
     projectId: string,
+  ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
+  workbenchUpdateDisplayName: (
+    projectId: string,
+    displayName: string,
+  ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
+  workbenchReorderProjects: (
+    projectIds: string[],
   ) => Promise<import("../../shared/workbench/api").WorkbenchState>;
   projectScaffoldAgentsMd: (rootPath: string) => Promise<{
     agentsMdPath: string;
@@ -1463,6 +1463,9 @@ export interface ElectronAPI {
   agentRenameSession: (
     args: import("../../shared/agent/api").AgentRenameSessionInput,
   ) => Promise<{ ok: boolean }>;
+  agentGenerateSessionTitle: (
+    args: import("../../shared/agent/api").AgentGenerateSessionTitleInput,
+  ) => Promise<import("../../shared/agent/api").AgentGenerateSessionTitleResult>;
   agentDeleteSession: (
     args: import("../../shared/agent/api").AgentDeleteSessionInput,
   ) => Promise<{ ok: boolean }>;
@@ -1498,6 +1501,9 @@ export interface ElectronAPI {
   agentReassignDirectory: (
     args: import("../../shared/agent/api").AgentReassignDirectoryInput,
   ) => Promise<import("../../shared/agent/api").AgentReassignDirectoryResult>;
+  agentReassignSessionProject: (
+    args: import("../../shared/agent/api").AgentReassignSessionProjectInput,
+  ) => Promise<import("../../shared/agent/api").AgentReassignSessionProjectResult>;
   agentSyncIntensiveReading: (
     args: import("../../shared/agent/api").AgentSyncIntensiveReadingInput,
   ) => Promise<{ ok: boolean }>;
@@ -1813,8 +1819,8 @@ export interface ElectronAPI {
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
   gitCheckIgnore: (projectRoot: string, relativePaths: string[]) => Promise<string[]>;
 
-  // Theme — glass vibrancy synchronization
-  themeSetGlassMode: (mode: "light" | "dark" | "system") => Promise<void>;
+  // Theme — native glass (Electron 43 vibrancy / mica)
+  themeApplyGlass: (payload: { enabled: boolean; opaqueBackground?: string }) => Promise<void>;
   themeListSystemFonts: () => Promise<{ family: string; monospace: boolean }[]>;
 
   // Worktree operations

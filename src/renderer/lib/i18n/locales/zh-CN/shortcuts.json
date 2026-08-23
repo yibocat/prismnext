@@ -6,7 +6,7 @@
     "saveFile": "保存当前工作区文件",
     "toggleLeftSidebar": "切换左侧边栏",
     "toggleRightArea": "切换 RightArea",
-    "toggleRightAreaMaximize": "最大化 RightArea（再按还原或关闭）",
+    "toggleRightAreaMaximize": "打开或关闭最大化 RightArea",
     "openSettings": "打开设置",
     "commandPalette": "打开命令面板"
   },

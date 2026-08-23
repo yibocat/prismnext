@@ -45,11 +45,23 @@ function DialogOverlay({
   );
 }
 
+/** Prefer a text field; never dump focus onto the first icon (that opens a tooltip). */
+export function preferFieldOnOpenAutoFocus(event: Event) {
+  event.preventDefault();
+  const root = event.currentTarget;
+  if (!(root instanceof HTMLElement)) return;
+  const field = root.querySelector<HTMLElement>(
+    "input:not([type=hidden]):not([type=button]):not([type=submit]):not([type=reset]):not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable='true']",
+  );
+  field?.focus({ preventScroll: true });
+}
+
 function DialogContent({
   className,
   children,
   showCloseButton = true,
   overlayClassName,
+  onOpenAutoFocus = preferFieldOnOpenAutoFocus,
   // Desktop UI: don't restore focus to the opener after Esc/close (avoids sticky focus rings).
   onCloseAutoFocus = (event) => event.preventDefault(),
   ...props
@@ -67,6 +79,7 @@ function DialogContent({
           className,
         )}
         {...props}
+        onOpenAutoFocus={onOpenAutoFocus}
         onCloseAutoFocus={onCloseAutoFocus}
       >
         {children}

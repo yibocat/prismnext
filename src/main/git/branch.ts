@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { GitBranchesResult, GitResult } from "./types";
 import { execGit, execGitOrNull } from "./exec";
 
@@ -5,6 +7,9 @@ import { execGit, execGitOrNull } from "./exec";
  * List all local branches.
  */
 export async function getBranches(projectRoot: string): Promise<GitBranchesResult> {
+  if (!existsSync(join(projectRoot, ".git"))) {
+    return { current: "", branches: [] };
+  }
   const output = await execGit(projectRoot, ["branch", "--list"]);
 
   const lines = output.split("\n").filter((l) => l.trim().length > 0);

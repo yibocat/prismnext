@@ -17,7 +17,5 @@ export const projectDesktop = {
   workspaceUpdateConfig: forwardDesktop("workspaceUpdateConfig"),
   workspaceCreateFolders: forwardDesktop("workspaceCreateFolders"),
   workspaceEnsureMainTex: forwardDesktop("workspaceEnsureMainTex"),
-  projectSetIcon: forwardDesktop("projectSetIcon"),
-  projectSetIconImage: forwardDesktop("projectSetIconImage"),
   projectScaffoldAgentsMd: forwardDesktop("projectScaffoldAgentsMd"),
 };

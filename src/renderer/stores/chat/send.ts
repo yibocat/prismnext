@@ -41,7 +41,14 @@ import {
 } from "@/lib/chat/conversation-reducer";
 import type { AgentEvent } from "../../../shared/agent/runtime";
 import type { Conversation, TurnMessageMeta } from "../../../shared/agent/conversation";
-import { deriveSessionTitleForSend, extractSessionTitle, isGenericSessionTitle } from "@/lib/chat/session-title";
+import {
+  countCompletedContentTurns,
+  deriveSessionTitleForSend,
+  extractSessionTitle,
+  firstCompletedTurnExcerpts,
+  isGenericSessionTitle,
+  shouldOfferAutoSessionTitle,
+} from "@/lib/chat/session-title";
 import { resolveTurnModelLabel } from "@/lib/chat/turn-model-label";
 import {
   persistAndSyncIntensiveReading,
@@ -340,6 +347,9 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
         void useCheckpointStore.getState().finalizeTurn(tabId, event.type === "turn_finished");
       });
     }
+    if (event.type === "turn_finished") {
+      void maybeGenerateSessionTitle(tabId, get);
+    }
   },
 
   _appendMessage: (tabId: string, msg: ChatStreamMessage) => {
@@ -568,6 +578,13 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
     });
   },
 
+  _setSessionCwd: (tabId: string, cwd: string | null) => {
+    set((s) => {
+      const tabs = s.tabs.map((t) => (t.id === tabId ? { ...t, sessionCwd: cwd } : t));
+      return { tabs };
+    });
+  },
+
   _setSessionId: (tabId: string, sessionId: string) => {
     const sessionCwd = captureSessionCwd();
     const prior = get().tabs.find((t) => t.id === tabId);
@@ -597,6 +614,12 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
   _setTitle: (tabId: string, title: string) => {
     set((s) => ({
       tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
+    }));
+  },
+
+  _markAutoTitleAttempted: (tabId: string) => {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, autoTitleAttempted: true } : t)),
     }));
   },
 
@@ -1181,3 +1204,35 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
   },
 
 });
+
+async function maybeGenerateSessionTitle(
+  tabId: string,
+  getState: () => ChatState,
+): Promise<void> {
+  const tab = getState().tabs.find((item) => item.id === tabId);
+  if (!tab) return;
+  if (!shouldOfferAutoSessionTitle({
+    userTitleSet: tab.userTitleSet,
+    autoTitleAttempted: tab.autoTitleAttempted,
+    completedUserTurns: countCompletedContentTurns(tab.conversation),
+  })) return;
+
+  const excerpts = firstCompletedTurnExcerpts(tab.conversation);
+  if (!excerpts?.assistant.trim()) return;
+
+  getState()._markAutoTitleAttempted(tabId);
+  try {
+    const result = await agentDesktop.agentGenerateSessionTitle({
+      conversationId: tab.sessionId || tab.id,
+      userText: excerpts?.user,
+      assistantText: excerpts?.assistant,
+    });
+    if (!result.ok || !result.title || result.skipped) return;
+    const latest = getState().tabs.find((item) => item.id === tabId);
+    if (!latest || latest.userTitleSet) return;
+    getState()._setTitle(tabId, result.title);
+    refreshAgentSessionList();
+  } catch {
+    /* keep the first-message title */
+  }
+}

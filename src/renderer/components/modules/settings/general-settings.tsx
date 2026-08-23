@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRightIcon, InfoIcon } from "lucide-react";
+import { ChevronRightIcon, FolderOpenIcon, InfoIcon } from "lucide-react";
 import {
   AppSelect,
   AppSelectContent,
@@ -29,6 +29,13 @@ const CARD = SETTINGS_CARD;
 const CATEGORY_HEADER = SETTINGS_CATEGORY_HEADER;
 const ROW_LABEL = SETTINGS_ROW_LABEL;
 const ROW_DESC = SETTINGS_ROW_DESC;
+
+function folderName(absPath: string): string {
+  const trimmed = absPath.replace(/[\\/]+$/, "").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || trimmed;
+}
 
 function localeOptionLabel(value: AppLocalePreference, t: (key: string) => string): string {
   switch (value) {
@@ -80,10 +87,8 @@ export function GeneralSettings() {
   );
   const trayIconEnabled = useSettingsStore((s) => s.settings.trayIconEnabled !== false);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
-  const members = useWorkbenchStore((s) => s.members);
+  const defaultLastPath = useWorkbenchStore((s) => s.defaultLastPath);
   const hydrateWorkbench = useWorkbenchStore((s) => s.hydrate);
-  const setDefault = useWorkbenchStore((s) => s.setDefault);
   const setDefaultFromFolder = useWorkbenchStore((s) => s.setDefaultFromFolder);
 
   useEffect(() => {
@@ -139,40 +144,23 @@ export function GeneralSettings() {
                 <p className={ROW_LABEL}>{t("settings.general.defaultProject")}</p>
                 <p className={ROW_DESC}>{t("settings.general.defaultProjectDesc")}</p>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {members.length > 0 ? (
-                  <AppSelect
-                    value={defaultProjectId}
-                    onValueChange={(id) => {
-                      void setDefault(id);
-                    }}
-                  >
-                    <AppSelectTrigger className="w-52 shrink-0">
-                      <AppSelectValue />
-                    </AppSelectTrigger>
-                    <AppSelectContent>
-                      {members.map((member) => (
-                        <AppSelectItem key={member.id} value={member.id}>
-                          {member.displayName}
-                        </AppSelectItem>
-                      ))}
-                    </AppSelectContent>
-                  </AppSelect>
-                ) : null}
-                <button
-                  type="button"
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[length:var(--font-size-12)] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                  onClick={() => {
-                    void (async () => {
-                      const result = await dialogDesktop.dialogOpenFolder();
-                      if (result.canceled || !result.path) return;
-                      await setDefaultFromFolder(result.path);
-                    })();
-                  }}
-                >
-                  {t("settings.general.defaultProjectFolder")}
-                </button>
-              </div>
+              <button
+                type="button"
+                title={defaultLastPath || undefined}
+                className="flex h-8 w-36 min-w-0 shrink items-center gap-1.5 rounded-md border border-input bg-background px-2 text-left text-[length:var(--font-size-12)] transition-colors hover:bg-muted"
+                onClick={() => {
+                  void (async () => {
+                    const result = await dialogDesktop.dialogOpenFolder();
+                    if (result.canceled || !result.path) return;
+                    await setDefaultFromFolder(result.path);
+                  })();
+                }}
+              >
+                <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate">
+                  {folderName(defaultLastPath) || t("settings.general.defaultProjectChoose")}
+                </span>
+              </button>
             </div>
           </div>
         </div>

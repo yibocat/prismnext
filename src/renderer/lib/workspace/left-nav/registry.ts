@@ -1,14 +1,26 @@
+import { workspaceModeNavItems } from "./mode-nav";
 import type { LeftNavDefinition, LeftNavSection } from "./types";
 
 export const LEFT_NAV_DEFAULT_ID = "new-agent";
 
 const registry = new Map<string, LeftNavDefinition>();
 
+function chromeItems(): LeftNavDefinition[] {
+  return Array.from(registry.values());
+}
+
+function mergedItems(): LeftNavDefinition[] {
+  return [...chromeItems(), ...workspaceModeNavItems()].sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 /**
  * 左侧栏导航注册表。
  *
- * 使用 leftNavRegistry.register(def) 注册新入口；
- * LeftSidebar 通过 getBySection("primary" | "footer") 自动渲染，无需改 UI 组件。
+ * Chrome（New Chat / Templates / Teams / Settings）用 register。
+ * RightArea 模块由 modeRegistry 投影，无需在 items.tsx 再写一份。
  */
 export const leftNavRegistry = {
   /** 注册一项导航；id 重复会抛错 */
@@ -22,15 +34,15 @@ export const leftNavRegistry = {
   },
 
   get(id: string): LeftNavDefinition | undefined {
-    return registry.get(id);
+    return registry.get(id) ?? workspaceModeNavItems().find((d) => d.id === id);
   },
 
   getAll(): LeftNavDefinition[] {
-    return Array.from(registry.values()).sort((a, b) => a.order - b.order);
+    return mergedItems();
   },
 
   getBySection(section: LeftNavSection): LeftNavDefinition[] {
-    return this.getAll().filter((d) => d.section === section);
+    return mergedItems().filter((d) => d.section === section);
   },
 
   getByCenterView(view: string): LeftNavDefinition | undefined {
@@ -41,6 +53,6 @@ export const leftNavRegistry = {
   },
 
   isImmersiveCenterView(view: string): boolean {
-    return this.getAll().some((d) => d.centerView === view && d.immersive);
+    return chromeItems().some((d) => d.centerView === view && d.immersive);
   },
 };

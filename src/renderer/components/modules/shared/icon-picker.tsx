@@ -13,8 +13,26 @@ import {
   type LucideIconName,
 } from "@/lib/workspace/folder-icons";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
-import { PROJECT_ICON_CATEGORIES } from "@/components/modules/project/project-icon";
 import { ICON_IMAGE_FILENAME, type IconKind, type IconSpec } from "@shared/platform/icon-spec";
+
+const EMOJI_ICON_CATEGORIES: Array<{ label: string; icons: string[] }> = [
+  {
+    label: "Academic",
+    icons: ["📄", "📚", "📝", "📖", "📰", "📑", "🧾", "✏️", "🖊️", "✒️", "📌", "📎"],
+  },
+  {
+    label: "Research",
+    icons: ["🧪", "🔬", "🧬", "🔭", "🧠", "💡", "📊", "📈", "🧮", "🛰️", "⚛️", "🧲"],
+  },
+  {
+    label: "Work",
+    icons: ["📁", "🗂️", "💼", "🖥️", "💻", "⌨️", "🛠️", "⚙️", "📦", "🚀", "🎯", "✨"],
+  },
+  {
+    label: "Nature",
+    icons: ["🌿", "🌱", "🌸", "🌊", "⭐", "🌙", "☀️", "🔥", "❄️", "🌈", "🪐", "🌍"],
+  },
+];
 import { IconRenderer, type IconFallback } from "./icon-renderer";
 import { useIconImageSrc } from "./use-icon-image-src";
 
@@ -38,7 +56,7 @@ export interface IconPickerProps {
   triggerLabel?: string;
   /**
    * Directory that holds `icon.png` for an existing image icon
-   * (team dir, or `<project>/.workbench`).
+   * (team dir).
    */
   imageBaseDir?: string | null;
   /**
@@ -234,7 +252,7 @@ export function IconPicker({
               </button>
             </div>
             <div className="max-h-[300px] overflow-y-auto overscroll-contain">
-              {PROJECT_ICON_CATEGORIES.map((cat) => (
+              {EMOJI_ICON_CATEGORIES.map((cat) => (
                 <div key={cat.label}>
                   <div className="sticky top-0 z-10 border-b border-border/50 bg-popover px-3 py-1 text-[length:var(--font-size-12)] font-medium text-muted-foreground">
                     {cat.label}

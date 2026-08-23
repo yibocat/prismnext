@@ -59,7 +59,15 @@ export interface PiLikeSessionEvent {
     cost?: { total?: number };
   };
   error?: string;
-  message?: string;
+  errorMessage?: string;
+  message?: string | PiLikeAssistantMessage;
+  messages?: PiLikeAssistantMessage[];
+}
+
+interface PiLikeAssistantMessage {
+  role?: string;
+  stopReason?: string;
+  errorMessage?: string;
 }
 
 export interface PiEventMapContext {
@@ -112,6 +120,62 @@ function usageToEvent(
     cacheWriteTokens: u.cacheWrite,
     ...(costUsd != null ? { costUsd } : {}),
   };
+}
+
+/** Provider 500 bodies look like `500 {"type":"error","error":{"message":"…"}}`. */
+export function formatProviderError(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "Provider returned an error.";
+  const match = trimmed.match(/^(\d{3})\s+([\s\S]+)$/);
+  if (!match) return trimmed;
+  const status = match[1];
+  const rest = match[2].trim();
+  try {
+    const parsed = JSON.parse(rest) as {
+      error?: { message?: string; error?: { message?: string } };
+      message?: string;
+    };
+    const message =
+      parsed.error?.error?.message
+      ?? parsed.error?.message
+      ?? parsed.message;
+    if (typeof message === "string" && message.trim()) {
+      return `${message.trim()} (${status})`;
+    }
+  } catch {
+    // keep a short status label
+  }
+  return `Provider error (${status})`;
+}
+
+function assistantMessageFailure(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const rec = value as PiLikeAssistantMessage;
+  if (rec.role != null && rec.role !== "assistant") return null;
+  if (rec.stopReason !== "error") return null;
+  return formatProviderError(
+    typeof rec.errorMessage === "string" ? rec.errorMessage : "",
+  );
+}
+
+function lastAssistantFailure(messages: unknown): string | null {
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const fail = assistantMessageFailure(messages[i]);
+    if (fail) return fail;
+  }
+  return null;
+}
+
+/** Pi encodes API failures on the assistant message, then still emits `agent_end`. */
+export function piTurnFailure(event: PiLikeSessionEvent): string | null {
+  if (typeof event.error === "string" && event.error.trim()) {
+    return formatProviderError(event.error);
+  }
+  if (typeof event.errorMessage === "string" && event.errorMessage.trim()) {
+    return formatProviderError(event.errorMessage);
+  }
+  return lastAssistantFailure(event.messages) ?? assistantMessageFailure(event.message);
 }
 
 /**
@@ -207,9 +271,14 @@ export function mapPiSessionEvent(
     // tool-call round(s) that precede the final reply. Mapping every `turn_end`
     // to `turn_finished` prematurely commits the live turn (before the final
     // text arrives) and later text_deltas get dropped as "late". Only
-    // `agent_end` marks the real end of the whole prompt.
-    case "agent_end":
+    // `agent_end` marks the real end of the whole prompt. Pi still emits it
+    // after a provider 500 — the assistant message then has stopReason "error"
+    // and empty content. Mapping that to turn_finished hid the failure.
+    case "agent_end": {
+      const error = piTurnFailure(event);
+      if (error) return [{ ...base, type: "turn_failed", error }];
       return [{ ...base, type: "turn_finished" }];
+    }
     default:
       if (event.usage) {
         const usageEvent = usageToEvent(base, event.usage);

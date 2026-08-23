@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { mapPiSessionEvent } from "../../src/main/agent/events";
+import { formatProviderError, mapPiSessionEvent } from "../../src/main/agent/events";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 import {
   ClosedResourceLoader,
@@ -278,6 +278,10 @@ describe("pi sdk spike", () => {
       args: { path: "README.md" },
     }, ctx);
     const end = mapPiSessionEvent({ type: "agent_end" }, ctx);
+    const formatted = formatProviderError(
+      "500 {\"type\":\"error\",\"error\":{\"type\":\"error\",\"message\":\"Internal server error\"}}",
+    );
+    expect(formatted).toBe("Internal server error (500)");
     expect(text[0]).toMatchObject({ type: "text_delta", text: "Hello", tabId: "tab-1" });
     expect(think[0]).toMatchObject({ type: "thinking_delta", text: "hmm" });
     expect(hostTool).toEqual([]);
@@ -285,7 +289,21 @@ describe("pi sdk spike", () => {
       type: "tool_started",
       toolName: "read",
       toolCallId: "c2",
-    });    expect(end[0]).toMatchObject({ type: "turn_finished" });
+    });
+    expect(end[0]).toMatchObject({ type: "turn_finished" });
+    const providerFail = mapPiSessionEvent({
+      type: "agent_end",
+      messages: [{
+        role: "assistant",
+        stopReason: "error",
+        errorMessage: "500 {\"type\":\"error\",\"error\":{\"type\":\"error\",\"message\":\"Internal server error\"}}",
+      }],
+    }, ctx);
+    expect(providerFail).toMatchObject([{
+      type: "turn_failed",
+      error: "Internal server error (500)",
+      turnId: "turn-1",
+    }]);
     const preparingWrite = mapPiSessionEvent({
       type: "message_update",
       assistantMessageEvent: {

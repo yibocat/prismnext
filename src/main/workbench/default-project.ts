@@ -1,15 +1,18 @@
 /**
  * Built-in default project (D-8 / D-18 / D-19).
  * Default is a role (defaultProjectId), not a special folder.
+ * Membership is optional: the default folder can leave the workbench list
+ * and still be the fallback for new chats.
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import type {
-  WorkbenchProjectMember,
-  WorkbenchProjectMeta,
-  WorkbenchState,
+import {
+  sameIdSet,
+  type WorkbenchProjectMember,
+  type WorkbenchProjectMeta,
+  type WorkbenchState,
 } from "../../shared/workbench/api";
 import {
   BUILTIN_DEFAULT_PROJECT_DIRNAME,
@@ -121,16 +124,17 @@ function rememberMember(
   lastPath: string,
   opts?: DefaultProjectOpts,
   defaultId?: string | null,
+  join = true,
 ): void {
+  const existing = readProjectSlotMeta(projectId, opts);
   writeProjectSlotMeta(projectId, {
     lastPath,
-    displayName: displayNameFor(lastPath),
+    displayName: displayNameFor(lastPath, existing?.displayName),
   }, opts);
   const current = readWorkbenchHomeSettings(opts);
   const ids = [...current.workbenchProjectIds];
-  if (!ids.includes(projectId)) ids.push(projectId);
+  if (join && !ids.includes(projectId)) ids.push(projectId);
   const nextDefault = defaultId ?? current.defaultProjectId ?? projectId;
-  if (nextDefault && !ids.includes(nextDefault)) ids.unshift(nextDefault);
   writeWorkbenchHomeSettings({
     defaultProjectId: nextDefault,
     workbenchProjectIds: [...new Set(ids)],
@@ -140,12 +144,22 @@ function rememberMember(
 export function ensureDefaultProject(opts?: DefaultProjectOpts): DefaultProjectRef {
   ensureWorkbenchHome(opts);
   const settings = readWorkbenchHomeSettings(opts);
+  const joinExisting = Boolean(
+    settings.defaultProjectId
+    && settings.workbenchProjectIds.includes(settings.defaultProjectId),
+  );
   if (settings.defaultProjectId) {
     const meta = readProjectSlotMeta(settings.defaultProjectId, opts);
     if (meta?.lastPath) {
       mkdirSync(meta.lastPath, { recursive: true });
       scaffoldWorkbenchProject(meta.lastPath, settings.defaultProjectId);
-      rememberMember(settings.defaultProjectId, meta.lastPath, opts, settings.defaultProjectId);
+      rememberMember(
+        settings.defaultProjectId,
+        meta.lastPath,
+        opts,
+        settings.defaultProjectId,
+        joinExisting,
+      );
       return { projectId: settings.defaultProjectId, lastPath: meta.lastPath };
     }
     const rebound = resolveBuiltinDefaultProjectPath(opts);
@@ -158,7 +172,13 @@ export function ensureDefaultProject(opts?: DefaultProjectOpts): DefaultProjectR
       writeWorkbenchJson(rebound, { id: settings.defaultProjectId });
     }
     scaffoldWorkbenchProject(rebound, settings.defaultProjectId);
-    rememberMember(settings.defaultProjectId, rebound, opts, settings.defaultProjectId);
+    rememberMember(
+      settings.defaultProjectId,
+      rebound,
+      opts,
+      settings.defaultProjectId,
+      joinExisting,
+    );
     return { projectId: settings.defaultProjectId, lastPath: rebound };
   }
 
@@ -235,11 +255,41 @@ export function openWorkbenchFolder(absPath: string, opts?: DefaultProjectOpts):
   return { projectId: decision.id, lastPath };
 }
 
+export function setProjectDisplayName(
+  projectId: string,
+  displayName: string,
+  opts?: DefaultProjectOpts,
+): WorkbenchState {
+  const id = projectId.trim();
+  if (!id) throw new Error("missing_project_id");
+  const meta = readProjectSlotMeta(id, opts);
+  if (!meta?.lastPath) throw new Error(`unknown_project:${id}`);
+  writeProjectSlotMeta(id, {
+    lastPath: meta.lastPath,
+    displayName: displayName.trim() || undefined,
+  }, opts);
+  return getWorkbenchState(opts);
+}
+
+export function reorderWorkbenchProjects(
+  projectIds: readonly string[],
+  opts?: DefaultProjectOpts,
+): WorkbenchState {
+  const settings = readWorkbenchHomeSettings(opts);
+  const current = [...new Set(settings.workbenchProjectIds.map((id) => id.trim()).filter(Boolean))];
+  const next = [...new Set(projectIds.map((id) => id.trim()).filter(Boolean))];
+  if (!sameIdSet(current, next)) throw new Error("workbench_order_mismatch");
+  writeWorkbenchHomeSettings({
+    defaultProjectId: settings.defaultProjectId,
+    workbenchProjectIds: next,
+  }, opts);
+  return getWorkbenchState(opts);
+}
+
 export function removeWorkbenchProject(projectId: string, opts?: DefaultProjectOpts): WorkbenchState {
   const id = projectId.trim();
   if (!id) throw new Error("missing_project_id");
   const settings = readWorkbenchHomeSettings(opts);
-  if (id === settings.defaultProjectId) throw new Error("cannot_remove_default");
   writeWorkbenchHomeSettings({
     defaultProjectId: settings.defaultProjectId,
     workbenchProjectIds: settings.workbenchProjectIds.filter((item) => item !== id),
@@ -272,20 +322,11 @@ export function listWorkbenchMembers(opts?: DefaultProjectOpts): WorkbenchProjec
 
 export function getWorkbenchState(opts?: DefaultProjectOpts): WorkbenchState {
   const ref = ensureDefaultProject(opts);
-  const members = listWorkbenchMembers(opts);
   const settings = readWorkbenchHomeSettings(opts);
   return {
     defaultProjectId: ref.projectId,
     defaultLastPath: ref.lastPath,
-    workbenchProjectIds: settings.workbenchProjectIds.length > 0
-      ? settings.workbenchProjectIds
-      : [ref.projectId],
-    members: members.length > 0
-      ? members
-      : [{
-          id: ref.projectId,
-          lastPath: ref.lastPath,
-          displayName: displayNameFor(ref.lastPath),
-        }],
+    workbenchProjectIds: settings.workbenchProjectIds,
+    members: listWorkbenchMembers(opts),
   };
 }

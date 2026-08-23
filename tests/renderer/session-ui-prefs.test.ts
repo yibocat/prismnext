@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  archiveSessionsForProject,
   getArchivedSessionIdsForProject,
   getPinnedSessionIdsForProject,
   loadSessionUiPrefsIntoLayout,
@@ -67,5 +68,26 @@ describe("session-ui-prefs", () => {
         [PROJECT_A]: ["sess-archived-a", "sess-new"],
       },
     });
+  });
+
+  it("archives every listed chat in a project and unpins those ids", async () => {
+    loadSessionUiPrefsIntoLayout(PROJECT_A);
+    await archiveSessionsForProject(PROJECT_A, ["sess-pinned-a", "sess-new"]);
+
+    expect(useLayoutStore.getState().archivedSessionIds).toEqual([
+      "sess-archived-a",
+      "sess-pinned-a",
+      "sess-new",
+    ]);
+    expect(useLayoutStore.getState().pinnedSessionIds).toEqual([]);
+    expect(useSettingsStore.getState().settings.archivedSessionIdsByProject?.[PROJECT_A]).toEqual([
+      "sess-archived-a",
+      "sess-pinned-a",
+      "sess-new",
+    ]);
+    expect(useSettingsStore.getState().settings.pinnedSessionIdsByProject?.[PROJECT_A]).toEqual([]);
+    expect(useSettingsStore.getState().settings.pinnedSessionIdsByProject?.[PROJECT_B]).toEqual([
+      "sess-pinned-b",
+    ]);
   });
 });

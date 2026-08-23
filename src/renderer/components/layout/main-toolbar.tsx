@@ -41,7 +41,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
       <Hint label={t("common.theme", { theme })}>
         <button
           type="button"
-          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]"
           onClick={cycleTheme}
         >
           {theme === "system" ? (
@@ -58,7 +58,7 @@ export function MainToolbar({ rightAreaRef, centerRef }: MainToolbarProps) {
         <button
           type="button"
           className={cn(
-            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors",
+            "flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]",
             rightAreaExpanded && "bg-muted text-foreground",
           )}
           onClick={() => {

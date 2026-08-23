@@ -6,6 +6,16 @@ import {
   PROJECT_DEFAULT_TEAM_ID,
 } from "@shared/teams/types";
 
+/** Settings → Teams cards. project.local is a write hangar, not a listed team. */
+export function isSettingsTeamsListId(teamId: string): boolean {
+  return teamId !== PROJECT_DEFAULT_TEAM_ID;
+}
+
+/** Always-on hangar in Settings — Common Team only after the workbench refactor. */
+export function isSettingsHangarTeamId(teamId: string): boolean {
+  return teamId === MY_CONTENT_TEAM_ID;
+}
+
 /** Localized label for reserved teams / app owner; others use on-disk / catalog name. */
 export function teamDisplayName(
   teamId: string,

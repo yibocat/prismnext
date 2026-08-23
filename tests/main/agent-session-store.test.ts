@@ -228,6 +228,27 @@ describe("AgentSessionStore Worktree Isolation & Queries", () => {
     expect(mainCheckoutSessions).toHaveLength(2);
     expect(store.getSession("ses-proj-wt")?.boundCheckoutPath).toBe("/repo/main");
   });
+
+  it("reassigns a session to another project and resets checkout to the new root", () => {
+    store.createSession({
+      conversationId: "conv-move",
+      runtimeSessionId: "ses-move",
+      tabId: "tab-move",
+      title: "Move me",
+      projectId: "p_old",
+      projectRoot: "/repo/old",
+      boundCheckoutPath: "/repo/old/worktrees/feat",
+    });
+
+    expect(store.reassignProject("conv-move", "p_new", "/repo/new/")).toBe(true);
+    const moved = store.getByConversationId("conv-move");
+    expect(moved?.projectId).toBe("p_new");
+    expect(moved?.projectRoot).toBe("/repo/new");
+    expect(moved?.boundCheckoutPath).toBe("/repo/new");
+    expect(store.listSessionsByProjectId("p_old")).toHaveLength(0);
+    expect(store.listSessionsByProjectId("p_new").map((s) => s.conversationId)).toEqual(["conv-move"]);
+    expect(store.reassignProject("missing", "p_new", "/repo/new")).toBe(false);
+  });
 });
 
 describe("AgentSessionStore Checkpoint Rollback & Regret Synchronization", () => {

@@ -4,8 +4,10 @@ import {
   getWorkbenchState,
   openWorkbenchFolder,
   removeWorkbenchProject,
+  reorderWorkbenchProjects,
   setDefaultFromFolder,
   setDefaultProjectId,
+  setProjectDisplayName,
   syncWorkbenchRegisteredRoots,
 } from "../workbench/default-project";
 
@@ -51,6 +53,23 @@ export function registerWorkbenchHandlers(): void {
     "workbench:removeProject",
     async (_event, args: { projectId: string }): Promise<WorkbenchState> => {
       const state = removeWorkbenchProject(args.projectId);
+      syncWorkbenchRegisteredRoots();
+      return state;
+    },
+  );
+
+  ipcMain.handle(
+    "workbench:updateDisplayName",
+    async (_event, args: { projectId: string; displayName: string }): Promise<WorkbenchState> => {
+      const state = setProjectDisplayName(args.projectId, args.displayName);
+      return state;
+    },
+  );
+
+  ipcMain.handle(
+    "workbench:reorderProjects",
+    async (_event, args: { projectIds: string[] }): Promise<WorkbenchState> => {
+      const state = reorderWorkbenchProjects(args.projectIds);
       syncWorkbenchRegisteredRoots();
       return state;
     },
