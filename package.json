@@ -33,7 +33,9 @@
     "dist:win": "pnpm build && electron-builder --win --publish never",
     "dist:linux": "pnpm build && electron-builder --linux --publish never",
     "dist:dir": "pnpm build && electron-builder --dir --publish never",
-    "dist:pro:dir": "bash -c 'export PRISM_PRO_PATH=\"$PWD/../prism-next-pro/src/index.ts\" && pnpm dist:dir'"
+    "dist:pro:dir": "bash -c 'export PRISM_PRO_PATH=\"$PWD/../prism-next-pro/src/index.ts\" && pnpm dist:dir'",
+    "release:changelog": "node scripts/release/summarize-changelog-release.mjs --write",
+    "release:changelog:extract": "node scripts/release/extract-changelog-section.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.22.1",

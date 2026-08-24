@@ -1,8 +1,12 @@
 # Changelog
 
-> Per-minor-series changelogs live in [`changelog/`](./):
-> - [`changelog/0.6.x.md`](./0.6.x.md) — 0.6.* (current)
-> - [`changelog/0.5.x.md`](./0.5.x.md) — 0.5.*
+> Per-minor-series changelogs live under [`changelog/`](./):
+> - [`changelog/series/0.8.x.md`](./series/0.8.x.md) — 0.8.* (current dev)
+> - [`changelog/series/0.7.x.md`](./series/0.7.x.md) — 0.7.*
+> - [`changelog/series/0.6.x.md`](./series/0.6.x.md) — 0.6.*
+> - [`changelog/series/0.5.x.md`](./series/0.5.x.md) — 0.5.*
+>
+> GitHub Release summaries: [`changelog/releases/`](./releases/)
 >
 > This file retains 0.4.x and earlier.
 

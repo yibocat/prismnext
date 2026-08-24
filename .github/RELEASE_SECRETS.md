@@ -113,14 +113,20 @@ an internal build record. R2 remains the updater feed and website source.
 
 **Release notes** come from the changelog (not a hardcoded blurb):
 
-1. Version `X.Y.Z` → series file `changelog/X.Y.x.md`  
-   (e.g. `0.5.14` → `0.5.x.md`, `0.6.0` → `0.6.x.md`, `2.1.3` → `2.1.x.md`)
-2. Extract the `## X.Y.Z …` section (`— date` or `(Unreleased)` headings both work)
-3. If the series file is missing, fall back to `changelog/CHANGELOG.md`
+1. **Preferred:** `changelog/releases/X.Y.Z.md` — summarized user-facing notes  
+2. **Fallback:** `## X.Y.Z …` section in `changelog/series/X.Y.x.md`  
+   (e.g. `0.5.14` → `series/0.5.x.md`, `0.8.0` → `series/0.8.x.md`)
+3. Legacy fallback: `changelog/X.Y.x.md` at repo root, then `changelog/CHANGELOG.md`
 4. Append a short Downloads / R2 footer
 
-Before tagging: ensure that section exists. Dry-run locally:
+Before tagging: ensure release notes exist. Regenerate from the detailed series log:
 
 ```bash
-node scripts/release/extract-changelog-section.mjs 0.5.14
+pnpm release:changelog 0.8.0
+```
+
+Dry-run extraction:
+
+```bash
+pnpm release:changelog:extract 0.8.0
 ```

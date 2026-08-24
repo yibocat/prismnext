@@ -30,7 +30,7 @@ Package manager is **pnpm**. Prefer matching the existing layout under `src/main
 
 1. Keep the diff scoped to one concern.
 2. Prefer user-facing behavior and tests over drive-by refactors.
-3. If the change is user-facing or otherwise noteworthy, append a short bullet under the next `## X.Y.Z (Unreleased)` section in `changelog/{major}.{minor}.x.md` (see `.cursor/rules/changelog-next-version.mdc`). Do **not** edit the section that already matches `package.json` version.
+3. If the change is user-facing or otherwise noteworthy, append a short bullet under the next `## X.Y.Z (Unreleased)` section in `changelog/series/{major}.{minor}.x.md` (see `.cursor/rules/changelog-next-version.mdc`). Do **not** edit the section that already matches `package.json` version.
 4. Fill out the PR template.
 
 ## Issues
