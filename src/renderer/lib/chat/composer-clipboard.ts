@@ -1,6 +1,6 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { mergeAdjacentText, partsToPlainText } from "@/lib/chat/composer-parts";
-import { draftToJson, parseDraftJson } from "@/components/modules/chat/inline-composer/serialize";
+import { draftToJson, parseDraftJson } from "@/lib/chat/composer-draft";
 
 /** Structured clipboard payload — round-trip paste inside PrismNext composer. */
 export const COMPOSER_CLIPBOARD_MIME = "application/vnd.prismnext.composer+json";

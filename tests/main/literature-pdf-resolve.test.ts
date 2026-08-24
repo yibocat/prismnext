@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/main/services/zotero-client", () => ({
+vi.mock("../../src/main/literature/zotero/zotero-client", () => ({
   getItemPdfAttachmentKey: vi.fn(),
   fetchItemPdfBytes: vi.fn(),
 }));
@@ -11,25 +11,24 @@ vi.mock("../../src/main/services/zotero-client", () => ({
 import {
   derivePaperPdfSource,
   resolvePaperPdfBytes,
-} from "../../src/main/services/literature-pdf-resolve";
+} from "../../src/main/literature/pdf/literature-pdf-resolve";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 import {
   createPaper,
   upsertZoteroPaperRow,
   getLibraryPaths,
   openLibraryDb,
   type PaperRow,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import {
   fetchItemPdfBytes,
   getItemPdfAttachmentKey,
-} from "../../src/main/services/zotero-client";
+} from "../../src/main/literature/zotero/zotero-client";
 
 const SAMPLE_PDF = Buffer.from("%PDF-1.4 cached");
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-pdf-resolve-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library", "attachments"), { recursive: true });
-  return dir;
+  return tempLiteratureProject();
 }
 
 describe("literature-pdf-resolve", () => {

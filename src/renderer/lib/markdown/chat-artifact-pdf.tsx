@@ -12,13 +12,15 @@ import { Hint } from "@/components/ui/hint";
 import { PdfDocumentView } from "@/components/modules/preview";
 import { PDFJS_DOCUMENT_OPTIONS } from "@/components/modules/preview/pdf-config";
 import { openArtifactPathInFiles } from "@/modes/experiments-mode/experiments-artifact-nav";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   artifactBasename,
   chatImagePathCandidates,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import { cn } from "@/lib/utils";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
@@ -38,10 +40,12 @@ async function resolveArtifactAbsPath(
 ): Promise<string | null> {
   const candidates = chatImagePathCandidates(src, workspaceHints);
   for (const rel of candidates) {
-    const abs = resolveProjectRelativePath(projectRoot, rel);
+    const abs = rel.replace(/\\/g, "/").startsWith("library/")
+      ? await literatureDesktop.literatureResolveAbs(projectRoot, rel)
+      : resolveProjectRelativePath(projectRoot, rel);
     if (!abs) continue;
     try {
-      if (await window.electronAPI.fsExists(abs)) return abs;
+      if (await fsDesktop.fsExists(abs)) return abs;
     } catch {
       // try next
     }
@@ -49,7 +53,7 @@ async function resolveArtifactAbsPath(
   const base = artifactBasename(src);
   if (!base) return null;
   try {
-    const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+    const found = await fsDesktop.fsFindByBasename(projectRoot, base);
     if (!found) return null;
     return resolveProjectRelativePath(projectRoot, found);
   } catch {
@@ -159,7 +163,7 @@ export function ChatArtifactPdf({
           }
           return;
         }
-        const { bytes } = await window.electronAPI.fsReadBytes(abs);
+        const { bytes } = await fsDesktop.fsReadBytes(abs);
         if (cancelled) return;
         const u8 = new Uint8Array(bytes);
         loadedAbsRef.current = abs;

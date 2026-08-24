@@ -20,6 +20,7 @@ import {
   SquareArrowOutUpRightIcon,
 } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { cn } from "@/lib/utils";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import {
@@ -31,17 +32,17 @@ import { artifactFullPath, openArtifactPathInFiles, resolveRunImagePathsForDispl
 import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
 import { useDocumentStore } from "@/stores/document-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
-import { isImageArtifactPath } from "../../../shared/artifact-path";
+import { isImageArtifactPath } from "../../../shared/interaction/artifact-path";
 import { ExperimentsProvenanceInspector } from "./experiments-provenance-inspector";
 import {
   experimentRunListTitle,
   queryExperimentRuns,
   stepFocusIndex,
-} from "./experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 import {
   type ExperimentEnv,
   type ExperimentRunEntry,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import {
   experimentsCodeClass,
   experimentsMetadataLabelClass,
@@ -399,7 +400,7 @@ function RunDetailPanel({
         const abs = resolveProjectRelativePath(docRoot, artifactFullPath(art, workspacePath));
         if (!abs) continue;
         try {
-          const st = await window.electronAPI.fsStat(abs);
+          const st = await fsDesktop.fsStat(abs);
           if (st && st.mtimeMs > finishedMs + 1000) {
             if (!cancelled) setWorkingCopyNewer(true);
             return;

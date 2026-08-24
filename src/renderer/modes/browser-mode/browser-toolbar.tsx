@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { browserDesktop } from "@/lib/desktop-api/browser";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -60,7 +61,10 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
   const bookmarks = useBrowserStore((s) => s.bookmarks);
   const clearRecentVisits = useBrowserStore((s) => s.clearRecentVisits);
   const isLoading = useRightPanelStore(
-    (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
+    (s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      return tab?.kind === "browser" ? tab.isLoading ?? false : false;
+    },
   );
   const isBookmarked = bookmarks.some((b) => normalizeUrl(b.url) === normalizeUrl(tabUrl));
 
@@ -202,12 +206,12 @@ export function BrowserToolbar({ tabId, tabUrl, tabTitle }: BrowserToolbarProps)
   };
 
   const handleClearCookies = async () => {
-    await window.electronAPI.browserClearCookies();
+    await browserDesktop.browserClearCookies();
     setMenuOpen(false);
   };
 
   const handleClearCache = async () => {
-    await window.electronAPI.browserClearCache();
+    await browserDesktop.browserClearCache();
     setMenuOpen(false);
   };
 

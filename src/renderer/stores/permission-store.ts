@@ -6,6 +6,39 @@ export type PermissionOption = {
   name?: string;
 };
 
+export function pickActivePermission(
+  tabId: string,
+  permissions: PendingPermission[],
+): PendingPermission | undefined {
+  const tabPerms = permissions.filter((p) => p.tabId === tabId);
+  if (tabPerms.length === 0) return undefined;
+  const withToolId = tabPerms.filter((p) => p.toolCallId);
+  return withToolId[0] ?? tabPerms[0];
+}
+
+/** Filter only. Always returns a new array — do not use as a Zustand selector. */
+export function listBackgroundPending(
+  permissions: PendingPermission[],
+  activeTabId: string,
+): PendingPermission[] {
+  const seen = new Set<string>();
+  const out: PendingPermission[] = [];
+  for (const permission of permissions) {
+    if (!permission.tabId || permission.tabId === activeTabId) continue;
+    if (seen.has(permission.tabId)) continue;
+    seen.add(permission.tabId);
+    out.push(permission);
+  }
+  return out;
+}
+
+export function hasPendingPermission(
+  permissions: PendingPermission[],
+  tabId: string,
+): boolean {
+  return permissions.some((permission) => permission.tabId === tabId);
+}
+
 export interface PendingPermission {
   id: string;
   tabId: string;

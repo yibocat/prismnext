@@ -10,8 +10,6 @@
     "title": "新建專案",
     "description": "設定專案名稱、儲存路徑與工作區預設架構。",
     "projectName": "專案名稱",
-    "chooseIcon": "選擇專案圖示",
-    "pasteEmoji": "貼上表情…",
     "location": "儲存位置",
     "chooseParent": "選擇父資料夾…",
     "template": "工作區模板",
@@ -42,5 +40,12 @@
     "needManuscript": "必須包含一個 manuscript（手稿）資料夾。",
     "removeFolder": "移除資料夾",
     "createFailed": "建立專案失敗"
+  },
+  "edit": {
+    "title": "編輯專案",
+    "description": "修改工作臺裡顯示的名稱。",
+    "nameHint": "顯示在工作臺列表中，不會重新命名磁碟上的資料夾。",
+    "save": "儲存",
+    "saveFailed": "無法儲存專案"
   }
 }

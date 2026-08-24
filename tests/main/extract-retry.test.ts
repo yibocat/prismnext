@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EXTRACT_MAX_AUTO_RETRIES,
   extractRetryDelayMs,
-} from "../../src/shared/paper-extract";
+} from "../../src/shared/literature/paper-extract";
 
 describe("extractRetryDelayMs", () => {
   it("uses exponential backoff from 30s base", () => {

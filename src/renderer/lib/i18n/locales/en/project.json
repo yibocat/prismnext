@@ -10,8 +10,6 @@
     "title": "New Project",
     "description": "Configure project name, location, and workspace architecture.",
     "projectName": "Project name",
-    "chooseIcon": "Choose project icon",
-    "pasteEmoji": "Paste emoji…",
     "location": "Location",
     "chooseParent": "Choose parent folder…",
     "template": "Workspace Template",
@@ -42,5 +40,12 @@
     "needManuscript": "A manuscript folder is required.",
     "removeFolder": "Remove folder",
     "createFailed": "Failed to create project"
+  },
+  "edit": {
+    "title": "Edit project",
+    "description": "Change the name shown in the workbench.",
+    "nameHint": "Shown in the workbench. The folder name on disk does not change.",
+    "save": "Save",
+    "saveFailed": "Could not save project"
   }
 }

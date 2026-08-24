@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { shellDesktop } from "@/lib/desktop-api/shell";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import {
   openExperimentsPanel,
   openLiteratureLibrary,
@@ -18,7 +19,7 @@ import {
   type TrayModeId,
   type TrayRecentItem,
   type TrayStatus,
-} from "../../shared/desktop-shell";
+} from "../../shared/platform/desktop-shell";
 
 function projectDisplayName(projectRoot: string | null | undefined): string | null {
   if (!projectRoot) return null;
@@ -55,7 +56,7 @@ async function buildRecentItems(
 
   if (projectRoot) {
     try {
-      const listed = await window.electronAPI.agentListSessions(projectRoot);
+      const listed = await agentDesktop.agentListSessions(projectRoot);
       const sessions = listed.map((s) => ({
         id: s.conversationId,
         title: s.title,
@@ -113,7 +114,7 @@ export function useTrayStatusSync(): void {
       const key = `${status}\n${tooltip}\n${runningCount}`;
       if (key === lastStatusKey) return;
       lastStatusKey = key;
-      void window.electronAPI.shellSetTrayStatus(status, tooltip, runningCount);
+      void shellDesktop.shellSetTrayStatus(status, tooltip, runningCount);
     };
 
     const pushMenu = () => {
@@ -140,7 +141,7 @@ export function useTrayStatusSync(): void {
                 ]
               : [],
           };
-          void window.electronAPI.shellSetTrayMenu(snapshot);
+          void shellDesktop.shellSetTrayMenu(snapshot);
           // Menu update does not change status, but project rename/open should
           // refresh the hover tooltip immediately.
           pushStatus();
@@ -166,15 +167,15 @@ export function useTrayStatusSync(): void {
     const onSessionRefresh = () => pushMenu();
     window.addEventListener("prism:session-list-refresh", onSessionRefresh);
 
-    const unsubFocus = window.electronAPI.onShellFocusChatTab(({ tabId }) => {
+    const unsubFocus = shellDesktop.onShellFocusChatTab(({ tabId }) => {
       useChatStore.getState().setActiveTab(tabId);
     });
 
-    const unsubNewChat = window.electronAPI.onShellTrayNewChat(() => {
+    const unsubNewChat = shellDesktop.onShellTrayNewChat(() => {
       useChatStore.getState().newSession();
     });
 
-    const unsubOpenRecent = window.electronAPI.onShellTrayOpenRecent((args) => {
+    const unsubOpenRecent = shellDesktop.onShellTrayOpenRecent((args) => {
       const chat = useChatStore.getState();
       if (args.tabId && chat.tabs.some((tab) => tab.id === args.tabId)) {
         chat.setActiveTab(args.tabId);
@@ -189,7 +190,7 @@ export function useTrayStatusSync(): void {
       }
     });
 
-    const unsubOpenMode = window.electronAPI.onShellTrayOpenMode(({ modeId }) => {
+    const unsubOpenMode = shellDesktop.onShellTrayOpenMode(({ modeId }) => {
       openTrayModeMaximized(modeId);
     });
 
@@ -209,16 +210,15 @@ export function useTrayStatusSync(): void {
 
 function openTrayModeMaximized(modeId: TrayModeId): void {
   if (!useDocumentStore.getState().projectRoot) return;
-  const ctx = { panelRefs: getLeftNavPanelRefs() };
   if (modeId === "texworkspace") {
-    openTexWorkspaceMaximized(ctx);
+    openTexWorkspaceMaximized();
     return;
   }
   if (modeId === "literature") {
-    openLiteratureLibrary(ctx);
+    openLiteratureLibrary();
     return;
   }
   if (modeId === "experiments") {
-    openExperimentsPanel(ctx);
+    openExperimentsPanel();
   }
 }

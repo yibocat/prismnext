@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isDisplayRasterBashCommand,
   displayRasterBashBlockMessage,
-} from "../../src/shared/display-raster-bash";
+} from "../../src/shared/permissions/display-raster-bash";
 
 describe("isDisplayRasterBashCommand", () => {
   it("blocks PIL resize/save one-liners", () => {

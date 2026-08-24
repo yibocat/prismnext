@@ -2,13 +2,13 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { bibTeXEntryFromPaperRow, createPaper } from "../../src/main/services/literature-service";
+import { bibTeXEntryFromPaperRow, createPaper } from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-bibtex-export-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

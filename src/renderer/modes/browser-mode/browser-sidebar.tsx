@@ -179,7 +179,8 @@ export function BrowserSidebar() {
 
   const handleEditCancel = () => setEditing(null);
 
-  const isCurrentPage = (url: string) => activeTab?.url === url;
+  const isCurrentPage = (url: string) =>
+    activeTab?.kind === "browser" && activeTab.url === url;
 
   const formatTime = (ts: number): string => {
     const diff = Date.now() - ts;

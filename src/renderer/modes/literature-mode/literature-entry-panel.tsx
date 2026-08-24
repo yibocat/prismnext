@@ -8,6 +8,8 @@ import {
   MoreHorizontalIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -30,7 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/literature/paper-extract";
 import {
   authorsForEditField,
   formatEntryType,
@@ -41,7 +43,7 @@ import {
   paperHasReadablePdf,
   parseAuthorsInput,
   zoteroSelectItemUrl,
-} from "./literature-format";
+} from "@/lib/literature/literature-format";
 import {
   InlineEditableField,
   InlineEditableSelect,
@@ -71,7 +73,7 @@ import type { LiteraturePaper } from "@/types/electron.d";
 import {
   isLiteratureAiMetadataConfigured,
   LITERATURE_AI_METADATA_SETUP_HINT,
-} from "../../../shared/literature-ai-metadata-model";
+} from "../../../shared/literature/ai-metadata-model";
 
 const DETAIL_BADGE_CLASS = literatureDetailBadgeClass;
 
@@ -205,7 +207,7 @@ export function LiteratureEntryPanel({
 
   const handleOpenInZotero = () => {
     if (!paper.zotero_key) return;
-    void window.electronAPI.shellOpenExternal(zoteroSelectItemUrl(paper.zotero_key));
+    void openExternalUrl(zoteroSelectItemUrl(paper.zotero_key));
   };
 
   const handleGenerateAiMetadata = useCallback(() => {
@@ -214,7 +216,7 @@ export function LiteratureEntryPanel({
       toast.error(LITERATURE_AI_METADATA_SETUP_HINT);
       return;
     }
-    void window.electronAPI.literatureRegenerateAiMetadata(projectRoot, paper.id);
+    void literatureDesktop.literatureRegenerateAiMetadata(projectRoot, paper.id);
   }, [paper.id, projectRoot, settings]);
 
   const handleAddToManuscriptBib = async () => {

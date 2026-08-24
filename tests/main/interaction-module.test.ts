@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { INTERACTION_PROMPT } from "../../src/main/prompts/modules/interaction";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("INTERACTION_PROMPT", () => {
   it("teaches when to create Interaction cards — no UI chrome jargon", () => {

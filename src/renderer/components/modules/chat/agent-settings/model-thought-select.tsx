@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { occupancyExceedsWindow } from "@shared/agent-context-usage";
+import { occupancyExceedsWindow } from "@shared/agent/context-usage";
 import { useChatStore } from "@/stores/chat-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -29,12 +29,12 @@ import {
   type ModelConfig,
   type ProviderConfig,
 } from "@/lib/providers";
-import { modelEffortKey } from "../../../../../shared/pi-provider-catalog";
+import { modelEffortKey } from "../../../../../shared/providers/pi-catalog";
 import { cn } from "@/lib/utils";
 import { CheckIcon, ChevronDownIcon, Settings2Icon, SparklesIcon } from "lucide-react";
 import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
-import { modelPreferenceKey } from "./model-keys";
+import { modelPreferenceKey } from "@/lib/providers/model-keys";
 import {
   useModelMenuPlacement,
   MODEL_MENU_MIN_WIDTH,
@@ -48,7 +48,6 @@ import {
 import { COMPOSER_TOOLBAR_TRIGGER } from "../worktree-selector";
 import { useLayoutStore } from "@/stores/layout-store";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import {
   MODEL_PICKER_EVENT,
   setModelPickerOpenState,
@@ -899,7 +898,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
                   e.stopPropagation();
                   setMenuOpen(false);
                   useLayoutStore.getState().setSettingsCategory("models");
-                  pressLeftNav("settings", { panelRefs: getLeftNavPanelRefs() });
+                  pressLeftNav("settings");
                 }}
               >
                 <Settings2Icon className="size-3.5" />

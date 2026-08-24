@@ -3,7 +3,7 @@ import {
   parseFlatMetricsJsonText,
   parseFlatMetricsObject,
   pickMetricsArtifactPaths,
-} from "../../src/shared/experiment-metrics";
+} from "../../src/shared/experiments/metrics";
 
 describe("experiment-metrics", () => {
   it("parseFlatMetricsObject keeps numbers and short strings", () => {

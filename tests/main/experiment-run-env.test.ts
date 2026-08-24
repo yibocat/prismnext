@@ -5,8 +5,8 @@ vi.mock("electron", () => ({
   app: { getPath: () => "/tmp/prism-experiment-run-env-test" },
 }));
 
-import { buildPythonEnvExtra } from "../../src/main/services/experiment-run-executor";
-import type { ExperimentEnv } from "../../src/shared/experiment-log";
+import { buildPythonEnvExtra } from "../../src/main/experiment/experiment-run-executor";
+import type { ExperimentEnv } from "../../src/shared/experiments/log";
 
 const baseEnv: ExperimentEnv = {
   python: null,
@@ -27,13 +27,13 @@ describe("buildPythonEnvExtra", () => {
   it("prepends the venv bin to PATH and sets VIRTUAL_ENV when a venv exists", () => {
     const env: ExperimentEnv = {
       ...baseEnv,
-      python: "/tmp/proj/.prismnext/.venv/bin/python",
+      python: "/tmp/proj/.workbench/.venv/bin/python",
       pythonVersion: "3.12",
-      venvPath: ".prismnext/.venv",
+      venvPath: ".workbench/.venv",
     };
     const extra = buildPythonEnvExtra(env);
-    expect(extra.VIRTUAL_ENV).toBe("/tmp/proj/.prismnext/.venv");
-    expect(extra.PATH?.startsWith("/tmp/proj/.prismnext/.venv/bin")).toBe(true);
+    expect(extra.VIRTUAL_ENV).toBe("/tmp/proj/.workbench/.venv");
+    expect(extra.PATH?.startsWith("/tmp/proj/.workbench/.venv/bin")).toBe(true);
     expect(extra.PATH).toContain(process.env.PATH ?? "");
   });
 
@@ -43,11 +43,11 @@ describe("buildPythonEnvExtra", () => {
     try {
       const env: ExperimentEnv = {
         ...baseEnv,
-        python: "/tmp/proj/.prismnext/.venv/bin/python",
-        venvPath: ".prismnext/.venv",
+        python: "/tmp/proj/.workbench/.venv/bin/python",
+        venvPath: ".workbench/.venv",
       };
       const extra = buildPythonEnvExtra(env);
-      expect(extra.PATH).toBe("/tmp/proj/.prismnext/.venv/bin");
+      expect(extra.PATH).toBe("/tmp/proj/.workbench/.venv/bin");
     } finally {
       if (previous !== undefined) process.env.PATH = previous;
     }

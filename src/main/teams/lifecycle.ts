@@ -32,10 +32,10 @@ import {
   iconSpecToJSON,
   normalizeIconSpec,
   type IconSpec,
-} from "../../shared/icon-spec";
-import { createLogger } from "../services/logger";
-import { _registeredRoots } from "../services/active-project-roots";
-import { licenseGrants } from "../services/teams-license";
+} from "../../shared/platform/icon-spec";
+import { createLogger } from "../app/logger";
+import { _registeredRoots } from "../project/active-project-roots";
+import { licenseGrants } from "./teams-license";
 import { getTeamRecord, invalidateCatalog, scanAllTeams } from "./catalog";
 import {
   getAsset,
@@ -57,9 +57,7 @@ import {
 import {
   readProjectTeamsState,
   saveProjectAssetOverride,
-  setProjectAssetEnabled,
   setProjectDefaultTeam,
-  setProjectTeamEnabled,
   writeProjectTeamsState,
 } from "./state-project";
 import { appTeamsDir, canReference, projectTeamsDir } from "./scope";
@@ -318,23 +316,18 @@ export function setTeamEnabled(
     );
   }
 
-  if (scope === "app") {
-    setAppTeamEnabled(teamId, value);
-  } else {
-    if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
-    setProjectTeamEnabled(projectRoot, teamId, value);
-    // Disabling the active team's pack → move default to My Content / Core.
-    if (value === false) {
-      const current = readProjectTeamsState(projectRoot).defaultTeam;
-      if (current === teamId) {
-        const next = fallbackLeadTeamId(teamId);
-        setProjectDefaultTeam(projectRoot, next ?? null);
-        defaultMovedTo = next;
-      }
+  setAppTeamEnabled(teamId, value);
+  // Disabling the active team's pack → move that project's default lead.
+  if (value === false && projectRoot) {
+    const current = readProjectTeamsState(projectRoot).defaultTeam;
+    if (current === teamId) {
+      const next = fallbackLeadTeamId(teamId);
+      setProjectDefaultTeam(projectRoot, next ?? null);
+      defaultMovedTo = next;
     }
   }
 
-  notifyTeamsChanged(scope === "project" ? projectRoot : undefined);
+  notifyTeamsChanged();
   return {
     suggestedActiveTeam: value === true ? activeTeamSuggestion(teamId, projectRoot) : undefined,
     defaultMovedTo,
@@ -351,13 +344,8 @@ export function setAssetEnabled(
   if (value === false && isMyContentLeadFqid(fqid)) {
     throw new Error("Common Team's chat lead cannot be disabled.");
   }
-  if (scope === "app") {
-    setAppAssetEnabled(fqid, value);
-  } else {
-    if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
-    setProjectAssetEnabled(projectRoot, fqid, value);
-  }
-  notifyTeamsChanged(scope === "project" ? projectRoot : undefined);
+  setAppAssetEnabled(fqid, value);
+  notifyTeamsChanged();
 }
 
 /** Save an asset override at the given layer (all-undefined patch removes the key). */

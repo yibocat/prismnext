@@ -10,10 +10,14 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { useTeamsStore, type TeamCardView } from "@/stores/teams-store";
+import { listTeamAssets, useTeamsStore, type TeamCardView } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
-import { teamDisplayName } from "@/lib/teams/team-display-name";
+import {
+  isSettingsHangarTeamId,
+  isSettingsTeamsListId,
+  teamDisplayName,
+} from "@/lib/teams/team-display-name";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -27,13 +31,12 @@ import { PackIcon } from "../teams/team-icon";
 import { ProBadge } from "../teams/pro-badge";
 import { ScopeChip } from "../teams/scope-chip";
 import type { AssetViewV2 } from "@shared/teams/view";
-import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import { CORE_TEAM_ID, MY_CONTENT_TEAM_ID } from "@shared/teams/types";
 import {
   matchesAgentAssetQuery,
   type AgentAssetPaneProps,
 } from "./agent-assets-shared";
 
-const HANGAR_TEAM_IDS = new Set([MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID]);
 /** Team row click — label matches other Settings rows; hover only brightens text (no fill). */
 const TEAM_ROW_BTN =
   "group flex flex-1 min-w-0 items-center gap-2 py-0.5 text-left transition-colors";
@@ -44,11 +47,7 @@ const TEAM_ROW_DESC =
 
 function packIdOf(fqid: string): string {
   const idx = fqid.indexOf(":");
-  return idx > 0 ? fqid.slice(0, idx) : PROJECT_DEFAULT_TEAM_ID;
-}
-
-function isHangarTeamId(teamId: string): boolean {
-  return HANGAR_TEAM_IDS.has(teamId);
+  return idx > 0 ? fqid.slice(0, idx) : MY_CONTENT_TEAM_ID;
 }
 
 function sortAssets(list: AssetViewV2[]): AssetViewV2[] {
@@ -81,7 +80,7 @@ export function TeamsAgentsSettings({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Always show Common + project.local hangars (even when still empty of extras).
+  // Common Team is the only always-on hangar. project.local is not a card.
   const packs = useMemo(
     () => catalog.filter((p) => p.installed),
     [catalog],
@@ -102,7 +101,7 @@ export function TeamsAgentsSettings({
       if (!options?.silent) setLoading(true);
       try {
         const [orchestratorList] = await Promise.all([
-          window.electronAPI.teamsListAssets(projectRoot, "orchestrator"),
+          listTeamAssets(projectRoot, "orchestrator"),
           useTeamsStore.getState().load(projectRoot, { force: true }),
         ]);
         setOrchestrators(sortAssets(orchestratorList));
@@ -124,17 +123,14 @@ export function TeamsAgentsSettings({
 
   const { installedRows: installedRowsAll, hangarRows: hangarRowsAll } = useMemo(() => {
     // Settings list = installed teams only (uninstalled Core/bundled go to Browse).
-    // Hangars always appear — even before any user content is created — in their own section.
+    // Common Team always appears. project.local is a write hangar, not a card.
     const pids = new Set<string>(packs.map((p) => p.manifest.id));
     pids.add(MY_CONTENT_TEAM_ID);
-    pids.add(PROJECT_DEFAULT_TEAM_ID);
     for (const o of orchestrators) {
       const pid = packIdOf(o.fqid);
       if (packById.get(pid)?.installed !== false) pids.add(pid);
     }
-    const hangarRank = (pid: string) =>
-      pid === MY_CONTENT_TEAM_ID ? 0 : pid === PROJECT_DEFAULT_TEAM_ID ? 1 : 2;
-    const rows = [...pids].map((teamId) => {
+    const rows = [...pids].filter(isSettingsTeamsListId).map((teamId) => {
       const pack = packById.get(teamId);
       if (pack && !pack.installed) return null;
       const lead = orchestrators.find((o) => packIdOf(o.fqid) === teamId);
@@ -147,15 +143,13 @@ export function TeamsAgentsSettings({
     }).filter((row): row is TeamRow => row !== null);
 
     const installed = rows
-      .filter((r) => !isHangarTeamId(r.teamId))
+      .filter((r) => !isSettingsHangarTeamId(r.teamId))
       .sort((a, b) => {
         if (a.teamId === CORE_TEAM_ID) return -1;
         if (b.teamId === CORE_TEAM_ID) return 1;
         return a.label.localeCompare(b.label);
       });
-    const hangars = rows
-      .filter((r) => isHangarTeamId(r.teamId))
-      .sort((a, b) => hangarRank(a.teamId) - hangarRank(b.teamId));
+    const hangars = rows.filter((r) => isSettingsHangarTeamId(r.teamId));
     return { installedRows: installed, hangarRows: hangars };
   }, [orchestrators, packs, packById, t]);
 

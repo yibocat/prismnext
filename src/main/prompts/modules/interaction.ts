@@ -4,13 +4,13 @@
  * Spec/kind validation and path checks live in main; args/examples on interaction-* tools.
  * Chat one-shot file peeks use ```artifact (Reply depth) — not this module.
  */
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export const INTERACTION_PROMPT = [
   "## Interaction (figures & plots)",
   "",
   "An **Interaction** is a project-persisted research object: a static figure or a CSV-backed",
-  "plot under `.prismnext/interactions/<id>/`. After write, embed the tool's `fenceMarkdown`",
+  "plot under `.workbench/interactions/<id>/`. After write, embed the tool's `fenceMarkdown`",
   "(`interaction` fence with `id`) in your reply so the user gets a **clickable card** and can",
   "reopen the same view later.",
   "",

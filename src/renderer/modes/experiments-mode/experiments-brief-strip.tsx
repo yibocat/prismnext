@@ -9,7 +9,7 @@ import { BookOpenIcon, PencilIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
+import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiments/log";
 import {
   experimentsBriefBoxClass,
   experimentsBriefSectionPillClass,

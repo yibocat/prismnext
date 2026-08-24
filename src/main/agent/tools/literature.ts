@@ -6,7 +6,7 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   addPapersToCollection,
   deletePaper,
@@ -17,14 +17,14 @@ import {
   mapPaperSearchHitForAgent,
   mergeLibraryIntoProjectBib,
   searchPapers,
-} from "../../services/literature-service";
+} from "../../literature/facade";
 import { publicationDetailsFromPaperRow } from "../../../shared/bibliographic-metadata/helpers";
 import {
   addSessionIntensiveBibkey,
   getSessionIntensiveBibkeys,
   removeSessionIntensiveBibkey,
-} from "../../services/chat-session-registry";
-import { normalizeArxivId, normalizeDoi } from "../../../shared/doi-utils";
+} from "../../session/chat-session-registry";
+import { normalizeArxivId, normalizeDoi } from "../../../shared/literature/doi-utils";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -47,7 +47,7 @@ export const literatureSearchTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureSearch,
   label: "Search Literature",
   description:
-    "Search papers in the current project's local literature library (.prismnext/library/library.db). " +
+    "Search papers in the current project's literature library (workbench home `projects/<id>/library/`). " +
     "Searches title, abstract, authors, bibkey, tags, and AI summary. " +
     "Does NOT search external catalogs (use literature-discover for external search).",
   promptGuidelines: [
@@ -111,8 +111,8 @@ export const literatureDiscoverTool: NativeToolDefinition = {
     const query = str(args.query);
     if (!query) return { ok: false, error: "missing_query" };
 
-    const { getSettings } = await import("../../services/settings");
-    const { discoverLiterature } = await import("../../services/literature-discovery");
+    const { getSettings } = await import("../../app/settings");
+    const { discoverLiterature } = await import("../../literature/discovery/index");
     const settings = getSettings();
     return discoverLiterature({
       query,
@@ -159,7 +159,7 @@ export const literatureReadTool: NativeToolDefinition = {
       note: a.note,
       color: a.color,
     }));
-    const pdfRel = paper.pdf_path ? `.prismnext/library/${paper.pdf_path.replace(/\\/g, "/")}` : null;
+    const pdfRel = paper.pdf_path ? `library/${paper.pdf_path.replace(/\\/g, "/")}` : null;
     return {
       paper: {
         ...mapPaperForAgent(paper),
@@ -197,8 +197,8 @@ export const literatureReadPdfTool: NativeToolDefinition = {
     const bibkey = str(args.bibkey);
     if (!bibkey) return { error: "Missing bibkey parameter." };
 
-    const { getSettings } = await import("../../services/settings");
-    const { readPaperPdfContent } = await import("../../services/paper-extract-read");
+    const { getSettings } = await import("../../app/settings");
+    const { readPaperPdfContent } = await import("../../literature/extract/paper-extract-read");
     const settings = getSettings();
     const token = settings.mineruApiToken;
     const tokenPresent = typeof token === "string" && token.trim().length > 0;
@@ -324,7 +324,8 @@ export const literatureStageTool: NativeToolDefinition = {
       ? (rawOrigin as (typeof allowed)[number])
       : "agent";
 
-    const { stageLiteratureCitation } = await import("../../services/literature-bridge");
+    const { stageLiteratureCitation } = await import("../../literature/citation/literature-citation-staging");
+    // tabId is the product conversationId on the live send path.
     return stageLiteratureCitation(ctx.projectRoot, ctx.tabId || ctx.runtimeSessionId, {
       doi: doi || undefined,
       arxivId: arxivId || undefined,
@@ -349,7 +350,7 @@ export const literatureAddTool: NativeToolDefinition = {
   }),
   permission: {
     category: "safe_write",
-    extractPath: () => ".prismnext/library/library.db",
+    extractPath: () => "library/library.db",
   },
   async execute(args, ctx) {
     const normDoi = str(args.doi) ? normalizeDoi(str(args.doi)) : null;
@@ -363,7 +364,7 @@ export const literatureAddTool: NativeToolDefinition = {
     }
 
     try {
-      const { createPaperFromCatalog } = await import("../../services/literature-enrich");
+      const { createPaperFromCatalog } = await import("../../literature/enrich");
       const result = await createPaperFromCatalog(ctx.projectRoot, {
         doi: normDoi ?? undefined,
         arxivId: normArxiv ?? undefined,
@@ -423,7 +424,7 @@ export const literatureDeleteTool: NativeToolDefinition = {
   }),
   permission: {
     category: "destructive",
-    extractPath: () => ".prismnext/library/library.db",
+    extractPath: () => "library/library.db",
   },
   async execute(args, ctx) {
     const bibkey = str(args.bibkey);
@@ -463,8 +464,8 @@ export const citationHealthTool: NativeToolDefinition = {
   },
   async execute(args, ctx) {
     try {
-      const { getCitationHealth } = await import("../../services/citation-health");
-      const { resolveBibliographicMetadata } = await import("../../../shared/bibliographic-metadata");
+      const { getCitationHealth } = await import("../../literature/citation/citation-health");
+      const { resolveBibliographicMetadata } = await import("../../literature/catalog");
       const health = getCitationHealth(ctx.projectRoot);
       const verify = args.verify !== false;
       if (verify) {

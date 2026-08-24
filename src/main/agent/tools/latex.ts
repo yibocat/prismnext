@@ -5,13 +5,13 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { fileToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { fileToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import { resolveLatexRoot } from "../../lib/latex-root";
 import {
   compileManuscriptForAgent,
   compileStandaloneForAgent,
-} from "../../services/latex-service";
+} from "../../compile/latex-service";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -33,7 +33,7 @@ export const latexRootTool: NativeToolDefinition = {
   description: "Find the active root document, engine, and build directory for the manuscript.",
   promptGuidelines: [
     "Call this before compiling the paper or before reasoning about paper build paths; `mainFile` is optional and auto-detected when omitted.",
-    "The returned `buildDir` is `.prismnext/compile/` for the paper. Standalone figures do not use this cache — their PDF sits next to the source.",
+    "The returned `buildDir` is `.workbench/compile/` for the paper. Standalone figures do not use this cache — their PDF sits next to the source.",
   ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),
@@ -62,9 +62,9 @@ export const latexRootTool: NativeToolDefinition = {
 export const latexCompileTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompile,
   label: "Compile LaTeX",
-  description: "Compile the TeX workspace manuscript into `.prismnext/compile/`.",
+  description: "Compile the TeX workspace manuscript into `.workbench/compile/`.",
   promptGuidelines: [
-    "This compiles the paper — the workspace manuscript root — into `.prismnext/compile/`.",
+    "This compiles the paper — the workspace manuscript root — into `.workbench/compile/`.",
     `Do not pass a \\documentclass{standalone} figure here. That file uses \`${TOOL_NAMES.latexCompileStandalone}\` and compiles in place next to the source.`,
     "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool.",
   ],
@@ -88,7 +88,7 @@ export const latexCompileStandaloneTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompileStandalone,
   label: "Compile standalone figure",
   description:
-    "Compile a standalone / TikZ figure `.tex` in place. The PDF is written next to the source, not under `.prismnext/compile/`.",
+    "Compile a standalone / TikZ figure `.tex` in place. The PDF is written next to the source, not under `.workbench/compile/`.",
   promptGuidelines: [
     "Use this when the user wants to compile a standalone / TikZ figure — a `.tex` whose document class is `standalone`.",
     "`mainFile` is required: the figure path they named or you found. Do not guess the paper root.",

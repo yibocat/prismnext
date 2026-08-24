@@ -3,7 +3,7 @@ import {
   bashAlwaysPatternFromCommand,
   bashCommandMatchesAnyPattern,
   bashCommandMatchesPattern,
-} from "../../src/shared/bash-allow-always";
+} from "../../src/shared/permissions/bash-allow-always";
 
 describe("bash-allow-always", () => {
   it("derives prefix patterns from commands", () => {

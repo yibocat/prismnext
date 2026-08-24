@@ -1,4 +1,4 @@
-import type { Conversation } from "@shared/agent-conversation";
+import type { Conversation } from "@shared/agent/conversation";
 import { collectConversationAssistantBlocks } from "@/lib/chat/conversation-view";
 import type { ChatStreamMessage, ContentBlock, SubAgentRun } from "@/stores/chat-store";
 import {
@@ -8,7 +8,7 @@ import {
 } from "@/components/modules/chat/tools/tool-result-map";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { parseStageToolResult } from "./parse-stage-tool-result";
-import type { StageResult } from "@shared/citation-staging";
+import type { StageResult } from "@shared/literature/citation-staging";
 
 /** Sessions already backfilled from transcript this app run (live capture handles new stages). */
 const backfilledFromTranscript = new Set<string>();

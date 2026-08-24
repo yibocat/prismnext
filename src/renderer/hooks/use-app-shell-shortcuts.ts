@@ -1,12 +1,10 @@
-import { useEffect, type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useEffect } from "react";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { toggleLeftSidebarPanel } from "@/lib/workspace/left-sidebar-panel";
 import { saveActiveWorkspaceFile } from "@/lib/workspace/save-active-workspace-file";
 import {
-  openRightArea,
-  closeRightArea,
-  toggleRightAreaMaximize,
+  toggleRightArea,
+  toggleMaximizedRightArea,
 } from "@/lib/workspace/right-area-layout";
 import {
   chordMatchesEvent,
@@ -33,25 +31,10 @@ function matchesShortcut(id: string, e: KeyboardEvent): boolean {
  * - shell.commandPalette
  * - shell.saveFile
  */
-export function useAppShellShortcuts(
-  panelRefs: {
-    leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-    centerRef: RefObject<PanelImperativeHandle | null>;
-    rightAreaRef: RefObject<PanelImperativeHandle | null>;
-  },
-  options?: { isMobile?: boolean },
-) {
-  const { leftSidebarRef, centerRef, rightAreaRef } = panelRefs;
+export function useAppShellShortcuts(options?: { isMobile?: boolean }) {
   const isMobile = options?.isMobile;
 
   useEffect(() => {
-    const layoutCtx = () => ({
-      centerRef: centerRef.current,
-      rightAreaRef: rightAreaRef.current,
-      leftSidebarRef: leftSidebarRef.current,
-      isMobile,
-    });
-
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !e.metaKey && !e.ctrlKey) return;
 
@@ -66,41 +49,28 @@ export function useAppShellShortcuts(
       if (matchesShortcut("shell.toggleLeftSidebar", e)) {
         if (eventTargetInCodeMirror(e.target)) return;
         e.preventDefault();
-        toggleLeftSidebarPanel(leftSidebarRef, {
-          centerRef,
-          rightAreaRef,
-          isMobile,
-        });
+        toggleLeftSidebarPanel();
         return;
       }
 
-      // Check maximize (⌘⇧J) before toggle (⌘J).
+      // Check maximize (⌃⌘B) before split toggle (⌥⌘B).
       if (matchesShortcut("shell.toggleRightAreaMaximize", e)) {
         e.preventDefault();
-        toggleRightAreaMaximize(layoutCtx());
+        if (useLayoutStore.getState().leftSidebarView === "settings") return;
+        toggleMaximizedRightArea();
         return;
       }
 
       if (matchesShortcut("shell.toggleRightArea", e)) {
         e.preventDefault();
-        const r = rightAreaRef.current;
-        if (!r) return;
-        if (r.isCollapsed()) {
-          openRightArea(layoutCtx());
-        } else {
-          closeRightArea({
-            centerRef: centerRef.current,
-            rightAreaRef: r,
-          });
-        }
+        if (useLayoutStore.getState().leftSidebarView === "settings") return;
+        toggleRightArea({ isMobile });
         return;
       }
 
       if (matchesShortcut("shell.openSettings", e)) {
         e.preventDefault();
-        pressLeftNav("settings", {
-          panelRefs: { centerRef, rightAreaRef },
-        });
+        pressLeftNav("settings");
         return;
       }
 
@@ -113,5 +83,5 @@ export function useAppShellShortcuts(
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [leftSidebarRef, centerRef, rightAreaRef, isMobile]);
+  }, [isMobile]);
 }

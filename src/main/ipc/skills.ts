@@ -11,24 +11,24 @@ import {
   setSkillContentEnabled,
   type InstalledSkillInfo,
   type SkillLibrarySourceInfo,
-} from "../services/skills-sync";
+} from "../skills/skills-sync";
 import {
   fetchLibraryCatalog,
   installAllFromLibrarySource,
   installLibraryCatalogItem,
   uninstallAllFromLibrarySource,
-} from "../services/skill-library-catalog";
-import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../services/project-skills-refresh";
-import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../services/skill-install";
+} from "../skills/skill-library-catalog";
+import { refreshProjectSkillsIntegration, refreshProjectSkillsIntegrationWithReload } from "../skills/project-skills-refresh";
+import { analyzeSkillSource, checkSkillUpdates, installSkillPackages, reinstallSkill } from "../skills/skill-install";
 import {
   fetchRegistryIndex,
   installRegistrySkill,
   validateRegistryIndex,
   type RegistrySkillEntry,
-} from "../services/skills-registry";
+} from "../skills/skills-registry";
 import { CORE_TEAM_ID } from "../../shared/teams/types";
 import { toFqid } from "../../shared/teams/state";
-import { listCorePackSkills, readCoreSkillMd } from "../services/core-team-skills";
+import { listCorePackSkills, readCoreSkillMd } from "../teams/core-team-skills";
 
 function refreshProjectSkills(
   projectPath: string,
@@ -171,7 +171,7 @@ export function registerSkillsHandlers(): void {
         targetTeamId?: string;
       },
     ) => {
-      const { installProjectSkill } = await import("../services/skills-sync");
+      const { installProjectSkill } = await import("../skills/skills-sync");
       installProjectSkill(
         args.projectPath,
         args.skillId,
@@ -220,7 +220,7 @@ export function registerSkillsHandlers(): void {
       _event,
       args: {
         projectPath: string;
-        selection: import("../../shared/skill-install-types").SkillPackageInstallSelection;
+        selection: import("../../shared/skills/install-types").SkillPackageInstallSelection;
       },
     ) => {
       const { installedIds } = await installSkillPackages(args.projectPath, args.selection);
@@ -258,7 +258,7 @@ export function registerSkillsHandlers(): void {
       _event,
       args: {
         projectPath: string;
-        item: import("../../shared/skill-library-types").LibraryCatalogItem;
+        item: import("../../shared/skills/library-types").LibraryCatalogItem;
       },
     ) => {
       const { installedIds } = await installLibraryCatalogItem(args.projectPath, args.item);
@@ -292,4 +292,12 @@ export function registerSkillsHandlers(): void {
       return refreshProjectSkills(args.projectPath);
     },
   );
+
+  ipcMain.handle("agent:homeSkillsDir", async () => {
+    const { homeSkillsDir } = await import("../workbench/home");
+    const { mkdirSync } = await import("node:fs");
+    const dir = homeSkillsDir();
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  });
 }

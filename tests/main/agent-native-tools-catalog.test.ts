@@ -125,7 +125,7 @@ describe("unified native tools catalog", () => {
         mode: "create",
       }, localCtx) as any;
       expect(ruleRes.success).toBe(true);
-      const rulePath = join(projectDir, ".prismnext/agent/rules/clean-arch/RULE.md");
+      const rulePath = join(projectDir, ".workbench/agent/rules/clean-arch/RULE.md");
       expect(readFileSync(rulePath, "utf-8")).toContain("name: clean-arch");
     } finally {
       rmSync(projectDir, { recursive: true, force: true });

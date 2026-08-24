@@ -2,12 +2,13 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
+import { interactionDesktop } from "@/lib/desktop-api/interaction";
 import { useDocumentStore } from "@/stores/document-store";
 import { resolveInteractionRenderer } from "@/lib/interaction/renderer-registry";
 import {
   kindDisplayLabel,
   type InteractionSpec,
-} from "../../../shared/interaction-spec";
+} from "../../../shared/interaction/spec";
 import { cn } from "@/lib/utils";
 
 function Badge({
@@ -118,7 +119,7 @@ export function InteractionContent({
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const interactionId = tab.interactionId;
+  const interactionId = tab.kind === "interaction" ? tab.interactionId : undefined;
   const [spec, setSpec] = useState<InteractionSpec | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,7 +128,7 @@ export function InteractionContent({
     setError(null);
     if (!projectRoot || !interactionId) return;
     let cancelled = false;
-    void window.electronAPI.interactionGet(projectRoot, interactionId).then((res) => {
+    void interactionDesktop.interactionGet(projectRoot, interactionId).then((res) => {
       if (cancelled) return;
       if (res.spec) setSpec(res.spec);
       else setError(res.error ?? "not found");

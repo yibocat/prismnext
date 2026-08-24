@@ -13,7 +13,7 @@ import { i18n } from "@/lib/i18n";
 import {
   formatIdentifierBrief,
   normalizeLiteratureIdentifiers,
-} from "../../../shared/literature-pdf-identity";
+} from "../../../shared/literature/pdf-identity";
 import type { LiteratureAttachLocalPdfConflict } from "@/types/electron.d";
 import {
   identifierLabel,

@@ -48,7 +48,8 @@
     "allow": "Allow",
     "alwaysBash": "Always allow similar commands (prefix match)",
     "alwaysTool": "Always allow {{tool}} without asking again",
-    "alwaysGeneric": "Always allow this tool"
+    "alwaysGeneric": "Always allow this tool",
+    "autoDeny": "Auto-deny in {{seconds}}s"
   },
   "worktree": {
     "discardTitle": "Discard unmerged work?",

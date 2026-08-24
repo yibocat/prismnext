@@ -2,11 +2,11 @@ import {
   formatEntryType,
   formatLiteratureAuthors,
   formatPaperProvenance,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { publicationDetailRows } from "@/modes/literature-mode/literature-csl-fields";
 import type { LiteraturePaper } from "@/types/electron.d";
 import { noteBodyWithoutFrontmatter } from "@/lib/literature/paper-notes";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export interface PaperNoteAgentContext {
   relativePath: string;
@@ -24,7 +24,7 @@ function line(label: string, value: string | null | undefined): string | null {
 export function libraryPdfRelativePath(paper: LiteraturePaper): string | null {
   if (!paper.pdf_path?.trim()) return null;
   const normalized = paper.pdf_path.replace(/\\/g, "/");
-  return `.prismnext/library/${normalized}`;
+  return `library/${normalized}`;
 }
 
 /**
@@ -100,7 +100,7 @@ export function buildPaperAgentContextBlock(
 
 export const PAPER_AGENT_CONTEXT_FOOTER = [
   "",
-  "**Instructions:** Bibliographic metadata above is already loaded from the project literature library (`.prismnext/library/library.db`). " +
+  "**Instructions:** Bibliographic metadata above is already loaded from the project literature library. " +
     "Tags and AI Summary are project-local (not from external catalogs). " +
     `For other papers or tag-based discovery, use \`${TOOL_NAMES.literatureSearch}\` (optional \`tag=\`) or \`${TOOL_NAMES.literatureRead}\` with a cite key. ` +
     `For highlights or annotations on this paper, use \`${TOOL_NAMES.literatureRead}\`. ` +

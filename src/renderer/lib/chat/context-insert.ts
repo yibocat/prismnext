@@ -1,5 +1,5 @@
 import { createTokenId, type ComposerPart } from "@/lib/chat/composer-parts";
-import type { ExtractBlockType } from "../../../shared/paper-extract-block";
+import type { ExtractBlockType } from "../../../shared/literature/paper-extract-block";
 import {
   gitDiffSnippetLabel,
   gitDiffSnippetTooltip,

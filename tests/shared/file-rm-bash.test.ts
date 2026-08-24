@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFileRmBashCommand, fileRmBashBlockMessage } from "../../src/shared/file-rm-bash";
+import { isFileRmBashCommand, fileRmBashBlockMessage } from "../../src/shared/permissions/file-rm-bash";
 
 describe("isFileRmBashCommand", () => {
   it("blocks file rm / unlink", () => {

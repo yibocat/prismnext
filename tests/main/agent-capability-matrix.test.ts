@@ -8,7 +8,7 @@ import {
   PI_PRIMITIVE_TOOLS,
   isPiPrimitiveToolName,
 } from "../../src/main/agent/capability-matrix";
-import { AGENT_EVENT_TYPES } from "../../src/shared/agent-runtime";
+import { AGENT_EVENT_TYPES } from "../../src/shared/agent/runtime";
 
 const REPO = join(__dirname, "../..");
 

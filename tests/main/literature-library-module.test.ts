@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("LITERATURE_LIBRARY_PROMPT", () => {
   it("is library-citation workflow only — not external staging or tool catalog", () => {
-    expect(LITERATURE_LIBRARY_PROMPT).toContain(".prismnext/library/");
+    expect(LITERATURE_LIBRARY_PROMPT).toContain("project's literature library");
     expect(LITERATURE_LIBRARY_PROMPT).toContain("Chat paper citations");
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
     expect(LITERATURE_LIBRARY_PROMPT).toContain(TOOL_NAMES.literatureSearch);

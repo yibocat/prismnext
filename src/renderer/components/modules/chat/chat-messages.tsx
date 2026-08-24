@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, memo, useCallback, useMem
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { emptyConversation } from "@shared/agent-conversation";
+import { emptyConversation } from "@shared/agent/conversation";
 import {
   collectConversationAssistantBlocks,
   conversationCompactedCount,
@@ -30,7 +30,7 @@ import {
   TURN_WINDOW_LOAD_PULL_PX,
   TURN_WINDOW_SENTINEL_SUPPRESS_MS,
 } from "@/lib/chat/turn-window";
-import { extractTurnUserPreviewFromBlocks } from "./chat-turns";
+import { extractTurnUserPreviewFromBlocks } from "@/lib/chat/chat-turns";
 import { TurnRail } from "./turn-rail";
 import { buildToolResultMapFromBlocks } from "./tools/tool-result-map";
 import { MessageTodoDrawer } from "./todo-plan-bar";

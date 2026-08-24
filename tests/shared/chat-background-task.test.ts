@@ -5,7 +5,7 @@ import {
   isBackgroundTaskJoinInject,
   isBackgroundTaskStartedResult,
   parseBackgroundTaskMarkup,
-} from "../../src/shared/chat-background-task";
+} from "../../src/shared/chat/background-task";
 
 const STARTED_XML = `<task id="ses_child1" state="running">
 <summary>Background task started</summary>

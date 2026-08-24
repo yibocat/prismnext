@@ -46,6 +46,7 @@ import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, 
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
+import { ProjectSelector } from "@/components/modules/chat/project-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
 import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
@@ -102,6 +103,24 @@ export function LeftMainArea() {
   /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
   const showPlanNewIdea = showHomepage && sessionAgent !== "plan";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const [homepageComposerMotion, setHomepageComposerMotion] = useState(false);
+  useEffect(() => {
+    if (!showHomepage) {
+      setHomepageComposerMotion(false);
+      return;
+    }
+    // First paint must already be docked or centered. Enabling the
+    // flex-grow transition earlier would interpolate from the
+    // unmatched @xl class (grow 0) on every empty-chat mount.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setHomepageComposerMotion(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [showHomepage]);
   const {
     dragActive: chatFileDragActive,
     zoneRef: chatFileDropZoneRef,
@@ -263,13 +282,19 @@ export function LeftMainArea() {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm bg-background">
           <ChatHomeBackdrop />
           {showHomepage ? (
-          /* ── Homepage ── */
+          /* ── Homepage ──
+           * Narrow: trail flex-grow 0 (docked). @xl+: trail flex-grow 1
+           * and titlebar padding (optical center). justify-content cannot
+           * interpolate, so the two states are the same flex column with
+           * a trailing spacer — same 220ms flex-grow as the shell panels. */
           <div
             ref={chatFileDropZoneRef}
             className={cn(
-              "relative z-10 flex min-w-0 flex-1 flex-col items-center justify-end overflow-x-hidden @xl:justify-center @xl:pb-[var(--height-titlebar)]",
+              "relative z-10 flex min-w-0 flex-1 flex-col items-center overflow-x-hidden pb-0 @xl:pb-[var(--height-titlebar)]",
               chatFileDragActive && chatFileDropZoneClass,
             )}
+            data-homepage-composer=""
+            data-homepage-composer-motion={homepageComposerMotion ? "" : undefined}
             {...chatFileDropHandlers}
           >
             {chatFileDragActive ? (
@@ -277,11 +302,12 @@ export function LeftMainArea() {
                 {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
+            <div aria-hidden data-homepage-composer-lead="" className="pointer-events-none min-h-0 flex-1" />
             <div className="relative z-10 flex w-full flex-col items-center">
-              {/* Branch / worktree — sits directly above the centered composer */}
+              {/* Project / branch / worktree — sits directly above the centered composer */}
               <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
+                <ProjectSelector />
                 <BranchSelector />
-
                 <WorktreeSelector />
               </div>
 
@@ -312,6 +338,11 @@ export function LeftMainArea() {
               <span className="flex-1" />
               </div>
             </div>
+            <div
+              aria-hidden
+              data-homepage-composer-trail=""
+              className="pointer-events-none min-h-0 basis-0 grow-0 @xl:grow"
+            />
           </div>
         ) : (
           /* ── Chat view ── */

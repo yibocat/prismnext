@@ -11,6 +11,12 @@ export const RestoreUndoBar = memo(function RestoreUndoBar() {
   const { t } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const lastTurnFailed = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const turns = tab?.conversation.turns ?? [];
+    const last = turns[turns.length - 1];
+    return last?.status === "failed";
+  });
   const canUndo = useCheckpointStore((s) => s.canUndoRollback(activeTabId));
 
   const [undoing, setUndoing] = useState(false);
@@ -27,6 +33,10 @@ export const RestoreUndoBar = memo(function RestoreUndoBar() {
     }
     prevCanUndo.current = canUndo;
   }, [canUndo]);
+
+  useEffect(() => {
+    if (lastTurnFailed) setDismissed(true);
+  }, [lastTurnFailed]);
 
   const handleUndo = useCallback(async () => {
     if (!canUndo || undoing || isStreaming) return;

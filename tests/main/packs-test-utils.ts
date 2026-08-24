@@ -113,9 +113,9 @@ export function makePack(
   return dir;
 }
 
-/** 建一个项目根（.prismnext/agent 可选预建）。 */
+/** 建一个项目根（`.workbench/agent` 可选预建）。 */
 export function makeProjectRoot(): string {
   const root = makeTempDir("packs-project-");
-  mkdirSync(join(root, ".prismnext", "agent"), { recursive: true });
+  mkdirSync(join(root, ".workbench", "agent"), { recursive: true });
   return root;
 }

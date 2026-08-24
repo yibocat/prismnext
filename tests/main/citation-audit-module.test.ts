@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("CITATION_AUDIT_PROMPT", () => {
   it("points at citation-health for when-to-call (how-to lives on the tool)", () => {

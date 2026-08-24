@@ -12,11 +12,12 @@ import {
   listPapers,
   updatePaper,
   mapPaperForRenderer,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import { bibliographicToCslJson } from "../../src/shared/bibliographic-metadata/helpers";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-"));
+  return tempLiteratureProject();
 }
 
 describe("literature CRUD", () => {
@@ -121,8 +122,6 @@ describe("literature CRUD", () => {
   it("createCollection stores nested local collections without zotero_key", () => {
     const projectRoot = tempProject();
     roots.push(projectRoot);
-    fs.mkdirSync(path.join(projectRoot, ".prismnext", "library"), { recursive: true });
-
     const parent = createCollection(projectRoot, "Reading list");
     const child = createCollection(projectRoot, "To read", parent.id);
 

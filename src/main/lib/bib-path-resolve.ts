@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createLogger } from "../services/logger";
-import { readWorkspaceDirs } from "../services/workspace-config";
+import { createLogger } from "../app/logger";
+import { readWorkspaceDirs } from "./workspace-dirs";
 
 const log = createLogger("bib-path", "fs");
 
@@ -110,7 +110,7 @@ export function intendedBibliographyPath(
 
 /** Project-relative path to the manuscript main .tex (workspace config + common fallbacks). */
 export function resolveMainTexRelativePath(projectRoot: string): string | null {
-  const dirs = readWorkspaceDirs(path.join(projectRoot, ".prismnext"));
+  const dirs = readWorkspaceDirs(projectRoot);
   const manuscript = dirs.find((d) => d.function === "manuscript");
   if (manuscript && "mainTex" in manuscript) {
     const rel = normalizeRel(path.join(manuscript.name, manuscript.mainTex));

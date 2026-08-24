@@ -8,7 +8,7 @@ import type {
   UpdateCommandPayload,
 } from "../commands/types";
 import type { CommandImportConflictStrategy } from "../commands/export-import";
-import { assertUnderHome } from "../services/active-project-roots";
+import { assertUnderHome } from "../project/active-project-roots";
 
 const engine = CommandEngine.getInstance();
 

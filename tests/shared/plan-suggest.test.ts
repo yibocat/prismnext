@@ -4,8 +4,8 @@ import {
   clampPlanSuggestReason,
   PLAN_SUGGEST_TIMEOUT_MS,
   resolvePlanSuggestGate,
-} from "../../src/shared/plan-suggest";
-import { PLAN_DOC_STRUCTURE_HINTS, sessionDraftPlanRel } from "../../src/shared/research-plan";
+} from "../../src/shared/research/plan-suggest";
+import { PLAN_DOC_STRUCTURE_HINTS, sessionDraftPlanRel } from "../../src/shared/research/plan";
 
 describe("resolvePlanSuggestGate", () => {
   it("maps session / dismiss / missing tab", () => {

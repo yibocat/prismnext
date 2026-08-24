@@ -29,7 +29,7 @@ describe("suggestPlanTool", () => {
       planMode: true,
     });
     const r = result as { draftPath?: string; instruction?: string };
-    expect(r.draftPath).toContain(".prismnext/research/plans/drafts/");
+    expect(r.draftPath).toContain(".workbench/research/plans/drafts/");
     expect(r.instruction).toContain("BINDING");
     expect(r.instruction).toContain("## Analysis / ## Plan / ## Checklist");
   });

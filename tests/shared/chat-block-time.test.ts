@@ -3,7 +3,7 @@ import {
   activitySpanSecFromBlocks,
   durationSecFromOpenCodePart,
   durationSecFromOpenCodeTime,
-} from "../../src/shared/chat-block-time";
+} from "../../src/shared/chat/block-time";
 
 describe("durationSecFromOpenCodeTime", () => {
   it("computes seconds from start/end ms", () => {

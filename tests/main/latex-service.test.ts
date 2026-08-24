@@ -10,11 +10,14 @@ describe("resolveLatexRoot", () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "prism-latex-root-"));
     mkdirSync(join(root, "manuscript"), { recursive: true });
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [{ name: "manuscript", function: "manuscript", mainTex: "main.tex" }],
+        id: "p_test",
+        workspace: {
+          folders: [{ name: "manuscript", function: "manuscript", mainTex: "main.tex" }],
+        },
       }),
       "utf-8",
     );
@@ -45,7 +48,7 @@ Hello \cite{foo}.
     expect(resolved!.mainFile).toBe("manuscript/main.tex");
     expect(resolved!.engine).toBe("xelatex");
     expect(resolved!.bibTool).toBe("bibtex");
-    expect(resolved!.buildDir).toBe(".prismnext/compile");
+    expect(resolved!.buildDir).toBe(".workbench/compile");
     expect(resolved!.manuscriptFolder).toBe("manuscript");
   });
 

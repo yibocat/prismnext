@@ -5,8 +5,8 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
-import { buildPlanSuggestAcceptedResult } from "../../../shared/plan-suggest";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { buildPlanSuggestAcceptedResult } from "../../../shared/research/plan-suggest";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

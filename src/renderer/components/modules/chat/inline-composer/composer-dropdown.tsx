@@ -26,12 +26,12 @@ import {
   appMenuInlineChevronTriggerClass,
 } from "@/components/ui/app-menu";
 import { cn } from "@/lib/utils";
-import type { SubagentInfo } from "@shared/agent-subagents";
+import type { SubagentInfo } from "@shared/agent/subagents";
 import type { ProjectFile } from "@/stores/document-store";
 import type { LiteraturePaper } from "@/types/electron.d";
-import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
-import { PAPER_EXTRACT_ACTION_HINT_FIRST } from "../../../../../shared/paper-extract";
-import type { ExperimentSummary } from "../../../../../shared/experiment-log";
+import { formatPaperMentionLabel } from "../../../../../shared/literature/bibkey-utils";
+import { PAPER_EXTRACT_ACTION_HINT_FIRST } from "../../../../../shared/literature/paper-extract";
+import type { ExperimentSummary } from "../../../../../shared/experiments/log";
 import type { CommandDef } from "@commands/types";
 import type { CursorAnchor } from "./dropdown-position";
 import { preferredMenuSide } from "./dropdown-position";

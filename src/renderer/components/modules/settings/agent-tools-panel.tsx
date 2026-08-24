@@ -8,10 +8,9 @@ import {
 } from "./settings-tokens";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
 import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
+import { fetchBuiltinTools, type BuiltinToolInfo } from "@/lib/settings";
 
 const CATEGORY_ORDER = ["reference", "compile", "project", "utility"] as const;
-
-type BuiltinToolInfo = Awaited<ReturnType<typeof window.electronAPI.settingsGetBuiltinTools>>[number];
 
 export function AgentToolsPanel() {
   const { t } = useTranslation();
@@ -20,12 +19,9 @@ export function AgentToolsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.electronAPI.settingsGetBuiltinTools()
+    void fetchBuiltinTools()
       .then((list) => {
         if (!cancelled) setTools(list);
-      })
-      .catch(() => {
-        if (!cancelled) setTools([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

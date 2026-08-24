@@ -11,7 +11,7 @@ import {
   resolveBrandRibbonShadow,
   resolveBrandSchemeFromTheme,
   type BrandPaletteId,
-} from "../../../shared/brand-mark";
+} from "../../../shared/platform/brand-mark";
 
 type PrismRibbonMarkProps = {
   className?: string;

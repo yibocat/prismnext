@@ -3,7 +3,7 @@ import {
   isPathInsideProject,
   resolveSmartBashAction,
   resolveSmartPermissionAction,
-} from "../../src/shared/smart-permission-policy";
+} from "../../src/shared/permissions/smart-policy";
 
 const ROOT = "/Users/me/paper";
 

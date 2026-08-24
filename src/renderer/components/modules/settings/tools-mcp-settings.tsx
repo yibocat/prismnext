@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
+import { mcpDesktop } from "@/lib/desktop-api/mcp";
+import { listTeamAssets } from "@/stores/teams-store";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { Button } from "@/components/ui/button";
@@ -62,8 +64,8 @@ export function ToolsMcpSettings({
         setAssets([]);
         return;
       }
-      await window.electronAPI.mcpEnsure(projectRoot);
-      const list = await window.electronAPI.teamsListAssets(projectRoot, "mcp");
+      await mcpDesktop.mcpEnsure(projectRoot);
+      const list = await listTeamAssets(projectRoot, "mcp");
       setAssets(list);
     } catch {
       setAssets([]);
@@ -124,9 +126,9 @@ export function ToolsMcpSettings({
     if (!projectRoot || !asset.editable) return;
     deleteConfirm.clearPending();
     try {
-      const { content } = await window.electronAPI.mcpReadTeamJson(projectRoot, asset.teamId);
+      const { content } = await mcpDesktop.mcpReadTeamJson(projectRoot, asset.teamId);
       const next = parseTeamMcpConfig(content).filter((s) => s.name !== asset.id && s.name !== asset.name);
-      await window.electronAPI.mcpWriteTeamJson(
+      await mcpDesktop.mcpWriteTeamJson(
         projectRoot,
         serializeTeamMcpConfig(next),
         asset.teamId,

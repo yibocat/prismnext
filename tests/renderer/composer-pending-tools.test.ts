@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { ChatStreamMessage, ContentBlock } from "../../src/renderer/stores/chat-store";
-import { emptyConversation } from "../../src/shared/agent-conversation";
-import type { Conversation } from "../../src/shared/agent-conversation";
+import { emptyConversation } from "../../src/shared/agent/conversation";
+import type { Conversation } from "../../src/shared/agent/conversation";
 import {
   findComposerPendingQuestion,
   findComposerPendingQuestionFromConversation,

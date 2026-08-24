@@ -18,6 +18,10 @@ import {
 } from "@/lib/terminal/ai-terminal-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
 import { useExecutionStore } from "@/stores/execution-store";
+import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
+import { isActiveSessionFromChatState } from "@/lib/chat/session-status";
+import { lastPathForSession } from "@/stores/workbench-store";
+import { useDocumentStore } from "@/stores/document-store";
 
 export interface BashMirrorState {
   chatTabId: string;
@@ -186,6 +190,10 @@ function markSessionCompleted(
   if (aiTabId && isAiTabOpen(aiTabId)) {
     refreshAiTabTitle(aiTabId, prev?.activeCommand, "completed");
   }
+  const root = lastPathForSession(chatTabId) || useDocumentStore.getState().projectRoot;
+  void markSessionAutoUnreadIfBackground(root, chatTabId, () =>
+    isActiveSessionFromChatState(chatTabId, useChatStore.getState()),
+  );
 }
 
 export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
@@ -332,7 +340,7 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
     set((s) => {
       const tab = useRightPanelStore.getState().tabs.find((t) => t.id === aiTabId);
       const chatTabId =
-        tab?.linkedChatTabId
+        (tab?.kind === "terminal" ? tab.linkedChatTabId : undefined)
         ?? Object.entries(s.chatTabToAiTab).find(([, id]) => id === aiTabId)?.[0];
       const nextChat = { ...s.chatTabToAiTab };
       if (chatTabId) delete nextChat[chatTabId];
@@ -428,7 +436,7 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   focusAiTab: (aiTabId) => {
     if (!isAiTabOpen(aiTabId)) return;
     const tab = useRightPanelStore.getState().tabs.find((t) => t.id === aiTabId);
-    if (tab?.linkedChatTabId) {
+    if (tab?.kind === "terminal" && tab.linkedChatTabId) {
       get().touchSessionViewed(tab.linkedChatTabId);
     }
     useLayoutStore.getState().requestRightAreaExpand();
@@ -519,7 +527,7 @@ export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({
   getSessionStateForAiTab: (aiTabId) => {
     const tab = useRightPanelStore.getState().tabs.find((t) => t.id === aiTabId);
     const chatTabId =
-      tab?.linkedChatTabId
+      (tab?.kind === "terminal" ? tab.linkedChatTabId : undefined)
       ?? Object.entries(get().chatTabToAiTab).find(([, id]) => id === aiTabId)?.[0];
     if (!chatTabId) return undefined;
     return get().getSessionStateForChat(chatTabId);

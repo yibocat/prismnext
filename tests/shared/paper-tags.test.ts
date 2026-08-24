@@ -9,7 +9,7 @@ import {
   paperTagKey,
   paperTagToneClass,
   resolvePaperTagDisplay,
-} from "../../src/shared/paper-tags";
+} from "../../src/shared/literature/paper-tags";
 
 describe("paperTagKey", () => {
   it.each([

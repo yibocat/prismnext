@@ -7,7 +7,7 @@ vi.mock("electron", () => ({
   app: { getPath: () => "/tmp" },
 }));
 
-import { generateWorktreeNameForTest } from "../../src/main/services/worktree";
+import { generateWorktreeNameForTest } from "../../src/main/git/worktree";
 
 describe("worktree name generation", () => {
   it("produces lowercase adjective-noun slugs", () => {
@@ -28,7 +28,7 @@ describe("worktree name generation", () => {
   });
 
   it("skips directories that already exist when picking unique names", async () => {
-    const { createWorktree } = await import("../../src/main/services/worktree");
+    const { createWorktree } = await import("../../src/main/git/worktree");
     const root = mkdtempSync(join(tmpdir(), "prism-wt-name-"));
     mkdirSync(join(root, ".git"), { recursive: true });
     const worktreesDir = join(root, ".prismnext", "worktrees");

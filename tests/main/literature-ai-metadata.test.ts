@@ -8,9 +8,9 @@ import {
   getPaper,
   mapPaperForRenderer,
   updatePaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 
-vi.mock("../../src/main/services/provider-chat", () => ({
+vi.mock("../../src/main/lib/provider-chat", () => ({
   completeChatJson: vi.fn().mockResolvedValue(
     JSON.stringify({
       summary: "World models enable sample-efficient planning.",
@@ -19,7 +19,7 @@ vi.mock("../../src/main/services/provider-chat", () => ({
   ),
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     aiProvider: "openai",
     aiModel: "gpt-4o-mini",
@@ -27,17 +27,18 @@ vi.mock("../../src/main/services/settings", () => ({
   })),
 }));
 
-vi.mock("../../src/main/services/literature-ai-metadata-heuristics", () => ({
+vi.mock("../../src/main/literature/ai-metadata/literature-ai-metadata-heuristics", () => ({
   heuristicAbstractAndKeywords: vi.fn(() => ({
     abstract: "This paper studies world models for control.",
     keywordHints: ["world models"],
   })),
 }));
 
-import { runAiMetadataForPaper } from "../../src/main/services/literature-ai-metadata";
+import { runAiMetadataForPaper } from "../../src/main/literature/ai-metadata/literature-ai-metadata";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-ai-meta-"));
+  return tempLiteratureProject();
 }
 
 describe("literature-ai-metadata", () => {

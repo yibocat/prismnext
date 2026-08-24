@@ -35,6 +35,7 @@ import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { editorSearchAndKeymap } from "@/lib/editor";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { tabFilePath } from "@/lib/workspace/mode-registry";
 
 const log = createLogger("editor");
 
@@ -57,7 +58,7 @@ export function LatexEditor() {
     tab.kind === "file" || tab.kind === "texworkspace" || tab.kind === "research-plan"
       ? tab.fileId
       : null;
-  const filePath = tab.filePath ?? "";
+  const filePath = tabFilePath(tab) ?? "";
   const isTexworkspace = tab.kind === "texworkspace";
 
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);

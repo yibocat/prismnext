@@ -72,4 +72,10 @@ describe("getRightAreaLauncherModes", () => {
       ]),
     );
   });
+
+  it("puts the same workspace modes on the left-nav customize list", () => {
+    expect(modeRegistry.getLeftNavModes().map((m) => m.id)).toEqual(
+      getRightAreaLauncherModes().map((m) => m.id),
+    );
+  });
 });

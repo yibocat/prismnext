@@ -12,7 +12,7 @@ import { Hint } from "@/components/ui/hint";
 import { Card } from "@/components/ui/card";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { cn } from "@/lib/utils";
-import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/paper-extract";
+import { PAPER_EXTRACT_ACTION_LABEL } from "../../../shared/literature/paper-extract";
 import type { LiteraturePaper } from "@/types/electron.d";
 
 const NOTES_SECTION_LABEL =

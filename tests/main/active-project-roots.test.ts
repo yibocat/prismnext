@@ -4,13 +4,14 @@ import { join } from "node:path";
 import {
   registerProjectRoot,
   registerWorkspaceRoots,
+  replaceRegisteredRoots,
   clearRoots,
   isPathContained,
   isPathUnderHome,
   assertContained,
   assertUnderHome,
   _registeredRoots,
-} from "../../src/main/services/active-project-roots";
+} from "../../src/main/project/active-project-roots";
 
 const HOME = homedir();
 const projA = join(HOME, "prism-test-proj-A");
@@ -59,7 +60,7 @@ describe("active-project-roots registry", () => {
       registerProjectRoot(projA);
       expect(isPathContained(projAFile)).toBe(true);
       expect(isPathContained(projA)).toBe(true); // root itself
-      expect(isPathContained(join(projA, ".prismnext", "library", "library.db"))).toBe(true);
+      expect(isPathContained(join(projA, ".workbench", "compile", "main.pdf"))).toBe(true);
     });
 
     it("blocks paths under a different (unregistered) project", () => {
@@ -97,6 +98,17 @@ describe("active-project-roots registry", () => {
       registerProjectRoot(projB);
       expect(isPathContained(projAFile)).toBe(false); // A no longer active
       expect(isPathContained(projBFile)).toBe(true);  // B now active
+    });
+
+    it("replaceRegisteredRoots keeps every workbench member contained", () => {
+      replaceRegisteredRoots([projA, projB]);
+      expect(isPathContained(projAFile)).toBe(true);
+      expect(isPathContained(projBFile)).toBe(true);
+      expect(_registeredRoots()).toEqual([projA, projB].sort());
+
+      replaceRegisteredRoots([projB]);
+      expect(isPathContained(projAFile)).toBe(false);
+      expect(isPathContained(projBFile)).toBe(true);
     });
   });
 

@@ -5,10 +5,9 @@ import { app, BrowserWindow, protocol, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { exec } from "node:child_process";
-import { registerLiteraturePdfProtocol } from "./services/literature-pdf-protocol";
-import { discoverAndRegisterProTeams } from "./services/pro-teams-discovery";
-import { ensureUserTeamsRegistered } from "./services/user-teams";
-import { ensureUserTeamsMigrated } from "./teams/migrate-user-teams";
+import { registerLiteraturePdfProtocol } from "./app/literature-pdf-protocol";
+import { discoverAndRegisterProTeams } from "./teams/pro-teams-discovery";
+import { ensureUserTeamsRegistered } from "./teams/user-teams";
 import { ensureMyContentTeam } from "./teams/my-content";
 import { disposeChat, registerIpcHandlers } from "./ipc/index";
 import {
@@ -20,31 +19,33 @@ import {
 } from "./ipc/window";
 import { installApplicationMenu } from "./menu";
 import { destroyAllTerminalSessions } from "./ipc/terminal";
-import { destroyAllAiPty } from "./services/ai-pty";
-import { getExecutionRegistry, initExecutionRegistry } from "./services/execution-registry";
+import { destroyAllAiPty } from "./terminal/ai-pty";
+import { getExecutionRegistry, initExecutionRegistry } from "./terminal/execution-registry";
 import { startExecutionEventBroadcast } from "./ipc/execution";
-import { disposeAllTectonicDaemonSessions } from "./services/tectonic-daemon";
-import { stopTerminalBridge, setTerminalBridgeWindow } from "./services/terminal-bridge";
-import { stopLiteratureBridge } from "./services/literature-bridge";
-import { stopLatexBridge } from "./services/latex-bridge";
-import { stopResearchBriefBridge } from "./services/research-brief-bridge";
-import { stopExperimentLogBridge } from "./services/experiment-log-bridge";
-import { stopInteractionBridge } from "./services/interaction-bridge";
-import { stopImageDescribeBridge } from "./services/image-describe-bridge";
-import { installMainProcessNetwork } from "./lib/main-network";
+import { disposeAllTectonicDaemonSessions } from "./compile/tectonic-daemon";
+import { mainNetFetch } from "./lib/main-network";
+import { setCatalogFetch } from "./literature/catalog";
 import { registerCrashHandlers } from "./lib/crash-handler";
 import { installCsp } from "./lib/csp";
-import { createLogger } from "./services/logger";
+import { createLogger } from "./app/logger";
+import { HOME_JOBS_DIRNAME } from "../shared/workbench/paths";
+import { ensureWorkbenchHome } from "./workbench/home";
+import { ensureDefaultProject } from "./workbench/default-project";
 import { disposeLogger } from "./ipc/log";
-import { setDesktopNotificationWindowGetter } from "./services/desktop-notifications";
+import { setDesktopNotificationWindowGetter } from "./app/desktop-notifications";
 import {
   getIsQuitting,
   isTrayIconEnabled,
   setIsQuitting,
   setTrayWindowGetter,
   syncTrayFromSettings,
-} from "./services/tray";
-import { shouldHideOnClose } from "../shared/desktop-shell";
+} from "./app/tray";
+import { shouldHideOnClose } from "../shared/platform/desktop-shell";
+import {
+  applyNativeGlass,
+  opaqueWindowBackgroundFromSettings,
+  readPersistedGlassEffect,
+} from "./app/glass-vibrancy";
 
 const log = createLogger("main", "startup");
 
@@ -77,6 +78,22 @@ protocol.registerSchemesAsPrivileged([
 const isMac = process.platform === "darwin";
 
 let mainWindow: BrowserWindow | null = null;
+
+/**
+ * Native macOS traffic lights vs our 38px title bar (`--height-titlebar`).
+ *
+ * `hiddenInset` without this uses Electron's legacy inset `(12, 11)` — sized
+ * for a ~28–34pt system titlebar, not our chrome. Electron 43 / macOS Tahoe
+ * can also re-layout that container and leave the cluster high. x stays at
+ * the hiddenInset 12 so the sidebar's 68px spacer still clears the buttons.
+ * y = (38 − 14) / 2 centers the 14pt NSWindow buttons in that 38px bar.
+ */
+const MAC_TRAFFIC_LIGHT_POSITION = { x: 12, y: 12 } as const;
+
+function applyMacTrafficLightPosition(win: BrowserWindow): void {
+  if (!isMac || win.isDestroyed()) return;
+  win.setWindowButtonPosition({ ...MAC_TRAFFIC_LIGHT_POSITION });
+}
 
 // ─── Window size persistence ───
 
@@ -197,14 +214,6 @@ function disposeGlobalsWhenNoWindows(): void {
   disposeChat();
   destroyAllAiPty();
   destroyAllTerminalSessions();
-  stopTerminalBridge();
-  stopLiteratureBridge();
-  stopLatexBridge();
-  stopResearchBriefBridge();
-  stopExperimentLogBridge();
-  stopInteractionBridge();
-  stopImageDescribeBridge();
-  setTerminalBridgeWindow(null);
   disposeLogger();
   mainWindow = null;
   setMainWindow(null);
@@ -213,6 +222,8 @@ function disposeGlobalsWhenNoWindows(): void {
 function createWindow(): BrowserWindow {
   const existing = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
   const savedBounds = restoreWindowBounds();
+  const glassEnabled = readPersistedGlassEffect();
+  const opaqueBackground = opaqueWindowBackgroundFromSettings();
   const windowConfig: Electron.BrowserWindowConstructorOptions = {
     width: savedBounds.width ?? 1400,
     height: savedBounds.height ?? 900,
@@ -222,7 +233,9 @@ function createWindow(): BrowserWindow {
     minHeight: 600,
     title: "prismnext",
     show: false,
-    backgroundColor: "#00000000",
+    // `transparent` is constructor-only (Electron 43). Glass off still uses
+    // this path so the setting can turn vibrancy on later without recreate.
+    backgroundColor: glassEnabled ? "#00000000" : opaqueBackground,
     transparent: true,
     hasShadow: true,
     webPreferences: {
@@ -246,40 +259,44 @@ function createWindow(): BrowserWindow {
 
   if (isMac) {
     // macOS: hiddenInset gives native traffic lights, no titlebar
-    // vibrancy + transparent = native desktop-blur glass effect
     windowConfig.titleBarStyle = "hiddenInset";
-    windowConfig.vibrancy = "under-window";
-    windowConfig.visualEffectState = "active";
+    windowConfig.trafficLightPosition = { ...MAC_TRAFFIC_LIGHT_POSITION };
+    if (glassEnabled) {
+      windowConfig.vibrancy = "sidebar";
+      windowConfig.visualEffectState = "active";
+    }
   } else {
     // Windows/Linux: frameless so our custom titlebar is the only one
     windowConfig.frame = false;
     windowConfig.autoHideMenuBar = true;
-    // Windows: acrylic blur effect for desktop transparency
-    if (process.platform === "win32") {
-      windowConfig.backgroundMaterial = "acrylic";
+    if (process.platform === "win32" && glassEnabled) {
+      windowConfig.backgroundMaterial = "mica";
     }
     const winIcon = brandIconPath("app-icon-dark.png");
     if (existsSync(winIcon)) windowConfig.icon = winIcon;
   }
 
   const win = new BrowserWindow(windowConfig);
+  applyNativeGlass(win, { enabled: glassEnabled, opaqueBackground });
   mainWindow = win;
   setMainWindow(win);
-  setTerminalBridgeWindow(win);
   attachWindowStateEmitter(win);
   attachWindowBoundsPersistence(win);
+  applyMacTrafficLightPosition(win);
+  // AppKit rebuilds the titlebar container when leaving fullscreen (Tahoe).
+  win.on("leave-full-screen", () => applyMacTrafficLightPosition(win));
 
   // Re-warm child_process after macOS App Nap / background suspension.
   win.on("focus", () => {
     mainWindow = win;
     setMainWindow(win);
-    setTerminalBridgeWindow(win);
     exec("git --version", { timeout: 15000 }, () => {
       // focus warmup complete
     });
   });
 
   win.on("ready-to-show", () => {
+    applyMacTrafficLightPosition(win);
     if (!win.isDestroyed()) win.show();
   });
 
@@ -303,7 +320,6 @@ function createWindow(): BrowserWindow {
     if (mainWindow === win) {
       mainWindow = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null;
       setMainWindow(mainWindow);
-      setTerminalBridgeWindow(mainWindow);
     }
     disposeGlobalsWhenNoWindows();
   });
@@ -339,10 +355,14 @@ registerWindowHandlers();
 registerNewWindowHandler(createWindow);
 
 app.whenReady().then(async () => {
+  const workbenchHome = ensureWorkbenchHome();
+  try {
+    ensureDefaultProject();
+  } catch (err) {
+    log.warn("default project ensure failed", { error: (err as Error).message });
+  }
   registerLiteraturePdfProtocol();
-  installMainProcessNetwork();
-  // M2 canonicalizes legacy user-packs before the catalog sees any user Team.
-  ensureUserTeamsMigrated();
+  setCatalogFetch(mainNetFetch as typeof fetch);
   // Always-on My Content + chat lead (safety net so Core can be offloaded).
   ensureMyContentTeam();
   // Temporary read compatibility for any legacy directory that could not be
@@ -360,14 +380,12 @@ app.whenReady().then(async () => {
     ...(existsSync(aboutIcon) ? { iconPath: aboutIcon } : {}),
   });
 
-  initExecutionRegistry(join(app.getPath("userData"), "execution-history"));
+  initExecutionRegistry(join(workbenchHome, HOME_JOBS_DIRNAME));
   startExecutionEventBroadcast();
-  // File-bridge pollers are not started, including the leftover terminal
-  // request.json watcher (Pi bash goes through execution-registry). stop*()
-  // on quit stays a no-op if never started.
+  // Pi bash / experiment-run go through execution-registry (Job Monitor).
 
   try {
-    const { initAppUpdater } = await import("./services/update-checker");
+    const { initAppUpdater } = await import("./app/update-checker");
     initAppUpdater();
   } catch (err) {
     log.warn("App updater init failed", { error: (err as Error).message });
@@ -386,7 +404,7 @@ app.whenReady().then(async () => {
   // Initialize settings and prompt infrastructure. Agent runtimes stay lazy:
   // opening the app or a project must not spawn OpenCode.
   try {
-    const { getSettings, pruneOrphanProviderSettings } = await import("./services/settings");
+    const { getSettings, pruneOrphanProviderSettings } = await import("./app/settings");
 
     // GC leftovers from pre-v0.6.8 provider removals (orphan API keys etc.)
     // before anything below reads settings — orphans must not re-register.
@@ -411,20 +429,6 @@ app.whenReady().then(async () => {
       if ((settings as any).promptLayers) {
         promptManager.loadLayerStates((settings as any).promptLayers as Record<string, boolean>);
       }
-
-      const { registerLegacyBuiltinCommandStatesHooks } = await import("./services/teams-state");
-      const { clearLegacyBuiltinCommandStates } = await import("./services/settings");
-      // R11：legacy settings.builtinCommands（全局启停）→ 首个迁移项目的
-      // legacy settings.builtinCommands → teams.json migration; consumed once.。
-      registerLegacyBuiltinCommandStatesHooks({
-        read: () => {
-          const states = (getSettings() as Record<string, unknown>).builtinCommands;
-          return states && typeof states === "object" && !Array.isArray(states)
-            ? (states as Record<string, boolean>)
-            : null;
-        },
-        clear: () => clearLegacyBuiltinCommandStates(),
-      });
 
       log.info("Prompt system initialized");
     } catch (err: any) {

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compileLatex } from "../../src/main/services/compiler";
-import { resetTectonicBinaryCacheForTests } from "../../src/main/services/tectonic-binary";
+import { compileLatex } from "../../src/main/compile/facade";
+import { resetTectonicBinaryCacheForTests } from "../../src/main/compile/tectonic-binary";
 
 vi.mock("electron", () => ({
   app: {
@@ -50,7 +50,7 @@ Test \cite{christiano2017deep,zhang2025landscape}.
     const result = await compileLatex(root, "manuscript/main.tex", true);
     expect(result.success).toBe(true);
 
-    const buildDir = result.buildDir ?? join(root, ".prismnext", "compile");
+    const buildDir = result.buildDir ?? join(root, ".workbench", "compile");
     expect(existsSync(join(buildDir, "references.bib"))).toBe(true);
     expect(existsSync(join(buildDir, "main.bbl"))).toBe(true);
 

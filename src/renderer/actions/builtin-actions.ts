@@ -37,8 +37,12 @@
 //   - Do NOT import from main-process modules — this runs in the renderer.
 
 import { actionRegistry } from "./registry";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { projectDesktop } from "@/lib/desktop-api/project";
 import { compileCurrentDocument } from "@/stores/compile-store";
-import { formatCitationHealthReport } from "../../shared/format-citation-health-report";
+import { formatCitationHealthReport } from "../../shared/literature/format-citation-health-report";
 
 // ── compile-document ──
 actionRegistry.register("compile-document", async () => {
@@ -53,7 +57,7 @@ actionRegistry.register("bib-check", async () => {
   if (!projectRoot) {
     throw new Error("Open a project first.");
   }
-  const report = await window.electronAPI.literatureCitationHealth(projectRoot);
+  const report = await literatureDesktop.literatureCitationHealth(projectRoot);
   return formatCitationHealthReport(report);
 });
 
@@ -64,7 +68,8 @@ actionRegistry.register("ensure-research-brief", async () => {
   if (!projectRoot) {
     throw new Error("Open a project first.");
   }
-  const result = await window.electronAPI.researchBriefEnsure(projectRoot);
+  const { ensureResearchBrief } = await import("@/lib/files/open-research-brief");
+  const result = await ensureResearchBrief(projectRoot);
   const verb = result.created ? "Created" : "Loaded";
   return (
     `${verb} ${result.path}. ` +
@@ -80,11 +85,11 @@ actionRegistry.register("setup-agents-md", async () => {
     throw new Error("Open a project first.");
   }
 
-  const result = await window.electronAPI.projectScaffoldAgentsMd(projectRoot);
-  await window.electronAPI.fsWrite(result.agentsMdPath, result.content);
+  const result = await projectDesktop.projectScaffoldAgentsMd(projectRoot);
+  await fsDesktop.fsWrite(result.agentsMdPath, result.content);
 
   const verb = result.updated ? "Updated" : "Created";
-  return `${verb} .prismnext/agent/AGENTS.md from a local project scan (${result.stats.dirsListed} dirs, ${result.stats.filesListed} files). Add text after /setup to ask AI to refine it.`;
+  return `${verb} .workbench/agent/AGENTS.md from a local project scan (${result.stats.dirsListed} dirs, ${result.stats.filesListed} files). Add text after /setup to ask AI to refine it.`;
 });
 
 // ── compact-context ──
@@ -100,7 +105,7 @@ actionRegistry.register("compact-context", async () => {
     throw new Error("No active session — start a conversation first.");
   }
 
-  const result = await window.electronAPI.agentCompact({ conversationId });
+  const result = await agentDesktop.agentCompact({ conversationId });
   if (!result.ok) {
     throw new Error(result.error || "Failed to compact context.");
   }

@@ -53,20 +53,20 @@ import { registerExperimentHandlers } from "../../src/main/ipc/experiment";
 import {
   kickoffExperimentRun,
   _resetExperimentRunCancelledForTests,
-} from "../../src/main/services/experiment-run-executor";
+} from "../../src/main/experiment/experiment-run-executor";
 import {
   buildExperimentStorageContext,
   createExperiment,
   type ExperimentStorageContext,
-} from "../../src/main/services/experiment-log-service";
+} from "../../src/main/experiment/facade";
 import {
   _hasActiveAiPtyForSession,
   _resetAiPtyForTests,
-} from "../../src/main/services/ai-pty";
+} from "../../src/main/terminal/ai-pty";
 import {
   getExecutionRegistry,
   _resetExecutionRegistryForTests,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 interface FakeEvent {
   sender: { send: (channel: string, payload: unknown) => void };
@@ -77,9 +77,13 @@ function makeEvent(): FakeEvent {
 }
 
 function writeWorkspaceSettings(projectRoot: string, workspaceDirs: unknown[]): void {
-  const prismDir = join(projectRoot, ".prismnext");
-  mkdirSync(prismDir, { recursive: true });
-  writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ workspaceDirs }), "utf-8");
+  const metaDir = join(projectRoot, ".workbench");
+  mkdirSync(metaDir, { recursive: true });
+  writeFileSync(
+    join(metaDir, "workbench.json"),
+    JSON.stringify({ id: "p_test", workspace: { folders: workspaceDirs } }),
+    "utf-8",
+  );
 }
 
 async function waitForSent(
@@ -185,7 +189,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     expect(experiments.map((e) => e.id)).toContain(created.id);
     expect(experiments[0]!.title).toBe("LR ablation");
     expect(listResult.experimentRoot).toBe("experiment");
-    expect(listResult.registryRoot).toBe(".prismnext/experiments");
+    expect(listResult.registryRoot).toBe(".workbench/experiments");
 
     const readHandler = handlers.get("experiment:read")!;
     const readResult = (await readHandler(makeEvent(), { projectRoot: root, id: created.id })) as Record<string, unknown>;
@@ -220,7 +224,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const result = (await handler(makeEvent(), { projectRoot: root, id: created.id })) as Record<string, unknown>;
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.registryPath).toBe(`.prismnext/experiments/${created.id}`);
+    expect(result.registryPath).toBe(`.workbench/experiments/${created.id}`);
     expect(result.workspaceAbs).toBe(join(root, "experiment", created.id));
     expect(result.workspaceRel).toBe(`experiment/${created.id}`);
     expect(existsSync(result.workspaceAbs as string)).toBe(true);
@@ -310,7 +314,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const combined = outputEvents.map((e) => (e.payload as { chunk: string }).chunk).join("");
     expect(combined).toContain("run-complete-ok");
 
-    const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
+    const runsPath = join(root, ".workbench", "experiments", created.id, "runs.jsonl");
     const raw = readFileSync(runsPath, "utf-8").trim();
     expect(raw.split("\n").length).toBe(1);
     const persisted = JSON.parse(raw) as { runId: string; command: string; chatSessionId?: string | null };
@@ -416,7 +420,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
       (payload) => (payload as { runId?: string }).runId === started.runId,
     );
 
-    const runsPath = join(root, ".prismnext", "experiments", created.id, "runs.jsonl");
+    const runsPath = join(root, ".workbench", "experiments", created.id, "runs.jsonl");
     await waitUntil(
       () => existsSync(runsPath) && readFileSync(runsPath, "utf-8").trim().length > 0,
       5_000,
@@ -433,7 +437,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const created = createExperiment(c, { title: "Readonly" }, { ensureVenv: false });
     if (!created.ok) return;
 
-    const settingsModule = await import("../../src/main/services/settings");
+    const settingsModule = await import("../../src/main/app/settings");
     const baseSettings = settingsModule.getSettings() as Record<string, unknown>;
     const spy = vi.spyOn(settingsModule, "getSettings").mockReturnValue({
       ...baseSettings,
@@ -485,7 +489,7 @@ describe("experiment:* IPC (Sprint 0.7)", () => {
     const runId = "run-20260708-120000-cafe";
     const sessionId = `experiment:${id}:${runId}`;
 
-    const { runAiCommand } = await import("../../src/main/services/ai-pty");
+    const { runAiCommand } = await import("../../src/main/terminal/ai-pty");
     void runAiCommand({
       command: "sleep 30",
       cwd: process.cwd(),
@@ -678,6 +682,6 @@ describe("kickoffExperimentRun (executor refactor)", () => {
     });
 
     // The shared project venv must NOT have been created for this lane.
-    expect(existsSync(join(root, ".prismnext", ".venv"))).toBe(false);
+    expect(existsSync(join(root, ".workbench", ".venv"))).toBe(false);
   });
 });

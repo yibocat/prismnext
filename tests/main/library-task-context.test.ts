@@ -10,22 +10,23 @@ import {
   readLibraryTaskHitRecords,
   formatLibraryTaskHitsMarkdown,
   LIBRARY_TASK_APPENDIX_MARKER,
-} from "../../src/main/services/library-task-context";
+} from "../../src/main/session/library-task-context";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 const PARENT = "parent-session";
 const SUB = `sub-${PARENT}-1710000000000`;
 
 describe("library-task-context", () => {
-  let bridgeRoot: string;
+  let home: string;
 
   beforeEach(() => {
-    bridgeRoot = path.join(os.tmpdir(), `prism-lib-task-${Date.now()}`);
-    process.env.PRISM_LITERATURE_BRIDGE_ROOT = bridgeRoot;
+    home = fs.mkdtempSync(path.join(os.tmpdir(), "prism-lib-task-home-"));
+    setWorkbenchUserHomeOverride(home);
   });
 
   afterEach(() => {
-    try { fs.rmSync(bridgeRoot, { recursive: true, force: true }); } catch {}
-    delete process.env.PRISM_LITERATURE_BRIDGE_ROOT;
+    setWorkbenchUserHomeOverride(null);
+    try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
   });
 
   it("parses search and read tool results into hits", () => {

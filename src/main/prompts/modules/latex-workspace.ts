@@ -1,6 +1,6 @@
 import type { PromptContext } from "../types";
-import type { ManuscriptFolder } from "../../../renderer/types/workspace";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import type { ManuscriptFolder } from "../../../shared/workbench/workspace-folder";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 function manuscriptFolder(ctx: PromptContext): ManuscriptFolder | null {
   for (const d of ctx.workspaceDirs ?? []) {
@@ -33,7 +33,7 @@ export function buildLatexWorkspacePrompt(ctx: PromptContext): string {
     "## LaTeX workspace (writing & compile)",
     "",
     ...sourceLines,
-    "Build output for the **paper** goes to **`.prismnext/compile/`** — edit `.tex` / `.bib` in the manuscript folder,",
+    "Build output for the **paper** goes to **`.workbench/compile/`** — edit `.tex` / `.bib` in the manuscript folder,",
     "not in the compile cache.",
     "",
     "### Scope boundary",
@@ -74,7 +74,7 @@ export function buildLatexWorkspacePrompt(ctx: PromptContext): string {
     "### Soft workflow",
     "",
     `1. \`${TOOL_NAMES.latexRoot}\` when the paper root or engine is unclear.`,
-    "2. Edit sources under the configured manuscript folder — never the `.prismnext/compile/` cache.",
+    "2. Edit sources under the configured manuscript folder — never the `.workbench/compile/` cache.",
     `3. \`${TOOL_NAMES.latexCompile}\` to verify the paper — failure handling lives on that tool.`,
     "",
     "### Judgment",

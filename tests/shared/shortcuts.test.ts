@@ -96,13 +96,41 @@ describe("chordMatchesEvent", () => {
 describe("resolveChord", () => {
   it("returns defaults", () => {
     const r = resolveChord("shell.toggleRightArea");
-    expect(r?.chord).toEqual({ key: "j", primary: true });
+    expect(r?.chord).toEqual({ key: "b", primary: true, alt: true });
     expect(r?.isCustom).toBe(false);
   });
 
-  it("resolves RightArea maximize as primary+shift+j", () => {
+  it("resolves RightArea maximize as primary+ctrl+b", () => {
     const r = resolveChord("shell.toggleRightAreaMaximize");
-    expect(r?.chord).toEqual({ key: "j", primary: true, shift: true });
+    expect(r?.chord).toEqual({ key: "b", primary: true, ctrl: true });
+  });
+
+  it("matches ⌥⌘B and ⌃⌘B on darwin", () => {
+    const toggle = resolveChord("shell.toggleRightArea")!.chord;
+    const maximize = resolveChord("shell.toggleRightAreaMaximize")!.chord;
+    expect(formatChord(toggle, "darwin")).toBe("⌘⌥B");
+    expect(formatChord(maximize, "darwin")).toBe("⌘⌃B");
+    expect(
+      chordMatchesEvent(
+        toggle,
+        { key: "∫", code: "KeyB", metaKey: true, ctrlKey: false, shiftKey: false, altKey: true },
+        "darwin",
+      ),
+    ).toBe(true);
+    expect(
+      chordMatchesEvent(
+        maximize,
+        { key: "b", code: "KeyB", metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
+        "darwin",
+      ),
+    ).toBe(true);
+    expect(
+      chordMatchesEvent(
+        toggle,
+        { key: "b", code: "KeyB", metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
+        "darwin",
+      ),
+    ).toBe(false);
   });
 
   it("resolves mode shortcuts as Ctrl+1–6 and Ctrl+`", () => {

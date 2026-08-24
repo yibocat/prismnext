@@ -1,9 +1,9 @@
 /* ──── Layout Tokens ──── */
-/* App shell: TitleBar, Sidebar, BottomBar, RightArea */
+/* App shell: ContentTopBar, pinned chrome, Sidebar, RightArea */
 
 /* Height base scale: --height-base-* in globals.css @theme
    Z-Index layers used by layout:
-     z-10: TitleBar buttons, resize handles (×3), AI FAB
+     z-10: title-bar buttons, resize handles (×3), AI FAB
      z-20: (none in layout)
      z-50: (none in layout — all shadcn overlays) */
 

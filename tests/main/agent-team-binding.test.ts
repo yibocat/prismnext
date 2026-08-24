@@ -16,12 +16,12 @@ import { emptyAppTeamsState } from "../../src/shared/teams/state";
 import {
   readAppTeamsState,
   setAppAssetEnabled,
+  setAppTeamEnabled,
   setAppTeamsStateDataDir,
   writeAppTeamsState,
 } from "../../src/main/teams/state-app";
 import {
   setProjectDefaultTeam,
-  setProjectTeamEnabled,
 } from "../../src/main/teams/state-project";
 import {
   deriveExpertAllowedTools,
@@ -297,7 +297,7 @@ describe("agent-team-binding (TeamResolver → Pi Adapter)", () => {
     });
 
     setProjectDefaultTeam(projectRoot, "disabled-team");
-    setProjectTeamEnabled(projectRoot, "disabled-team", false);
+    setAppTeamEnabled("disabled-team", false);
 
     const binding = resolveTeamPiBinding({ projectRoot, sessionTeamId: "disabled-team" });
     expect(binding.ok).toBe(false);

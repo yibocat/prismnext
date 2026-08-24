@@ -9,13 +9,14 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, renameSync, writeFileS
 import { dirname, isAbsolute, join, relative, extname } from "node:path";
 import { execSync } from "node:child_process";
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
-import { resolveFigureAbsPath } from "../../../shared/interaction-figure-fs";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { resolveFigureAbsPath } from "../../lib/interaction-figure-fs";
 import {
   resolveProjectRuleWrite,
   type ProjectRuleWriteMode,
-} from "../../../shared/project-rule-md";
+} from "../../../shared/workbench/project-rule-md";
 import type { NativeToolDefinition } from "./types";
+import { projectRulesRel } from "../../../shared/workbench/paths";
 
 function str(v: unknown): string {
   return typeof v === "string" ? v.trim() : "";
@@ -127,7 +128,7 @@ export const imageDescribeTool: NativeToolDefinition = {
     const rawPath = str(args.path) || str(args.imagePath);
     if (!rawPath) return { ok: false, error: "missing_image_path" };
 
-    const { resolveVisionHelperFromSettings, describeImagesWithConfiguredHelper } = await import("../../services/vision-fallback");
+    const { resolveVisionHelperFromSettings, describeImagesWithConfiguredHelper } = await import("../vision-fallback");
     const helper = resolveVisionHelperFromSettings();
     if (!helper) {
       return {
@@ -270,7 +271,7 @@ export const moveTool: NativeToolDefinition = {
 export const projectRuleWriteTool: NativeToolDefinition = {
   name: TOOL_NAMES.projectRuleWrite,
   label: "Write Project Rule",
-  description: "Create or update a persistent project rule (.prismnext/agent/rules/<name>/RULE.md).",
+  description: "Create or update a persistent project rule (.workbench/agent/rules/<name>/RULE.md).",
   promptGuidelines: [
     "Use for conventions the agent must follow every turn in this project (citation style, naming, workflow) — not for one-off instructions.",
     "Default mode is `create`; use `replace` to overwrite or `append` to extend an existing rule body.",
@@ -287,7 +288,7 @@ export const projectRuleWriteTool: NativeToolDefinition = {
     category: "safe_write",
     extractPath: (args) => {
       const name = str(args.name);
-      return name ? `.prismnext/agent/rules/${name}/RULE.md` : null;
+      return name ? `${projectRulesRel()}/${name}/RULE.md` : null;
     },
   },
   async execute(args, ctx) {
@@ -298,7 +299,7 @@ export const projectRuleWriteTool: NativeToolDefinition = {
     const mode = (modeRaw === "replace" || modeRaw === "append" ? modeRaw : "create") as ProjectRuleWriteMode;
     const apply = str(args.apply) || "always";
 
-    const ruleDir = join(ctx.projectRoot, ".prismnext", "agent", "rules", name);
+    const ruleDir = join(ctx.projectRoot, projectRulesRel(), name);
     const ruleFile = join(ruleDir, "RULE.md");
 
     let existingContent: string | null = null;
@@ -330,7 +331,7 @@ export const projectRuleWriteTool: NativeToolDefinition = {
         success: true,
         name,
         mode: resolved.mode,
-        path: `.prismnext/agent/rules/${name}/RULE.md`,
+        path: `${projectRulesRel()}/${name}/RULE.md`,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

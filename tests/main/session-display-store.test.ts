@@ -12,7 +12,7 @@ import {
   deleteSessionDisplays,
   restoreUserDisplays,
   upsertPlanArtifactEvent,
-} from "../../src/main/services/session-display-store";
+} from "../../src/main/session/session-display-store";
 
 describe("session-display-store", () => {
   let tmpDir: string;
@@ -58,20 +58,20 @@ describe("session-display-store", () => {
   it("persists plan artifact upsert and discarded mark", () => {
     upsertPlanArtifactEvent(tmpDir, "sess-plan", {
       kind: "plan-artifact",
-      path: ".prismnext/research/plans/current-draft.md",
+      path: ".workbench/research/plans/current-draft.md",
       title: "T1",
       afterIndex: 2,
     });
     upsertPlanArtifactEvent(tmpDir, "sess-plan", {
       kind: "plan-artifact",
-      path: ".prismnext/research/plans/2026-07-18-ab12.md",
+      path: ".workbench/research/plans/2026-07-18-ab12.md",
       title: "T1",
       afterIndex: 2,
     });
     expect(getPlanEvents(tmpDir, "sess-plan")).toHaveLength(1);
     expect(getPlanEvents(tmpDir, "sess-plan")[0]).toMatchObject({
       kind: "plan-artifact",
-      path: ".prismnext/research/plans/2026-07-18-ab12.md",
+      path: ".workbench/research/plans/2026-07-18-ab12.md",
     });
 
     markLatestPlanArtifactDiscarded(tmpDir, "sess-plan");

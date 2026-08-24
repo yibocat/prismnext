@@ -1,14 +1,14 @@
 /**
  * experiment:* IPC — UI track for the Experiments RightArea mode (Sprint 0.7).
  *
- * Mirrors the file-bridge flow (single source of truth: `experiment-log-service` +
- * `kickoffExperimentRun`). Validates the project has a Workspace Experiment folder
- * configured and consults the current permission mode before kicking off a run.
+ * Single source of truth: `experiment/facade` + `kickoffExperimentRun`.
+ * Validates the project has a Workspace Experiment folder configured and
+ * consults the current permission mode before kicking off a run.
  */
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { getSettings } from "../services/settings";
+import { getSettings } from "../app/settings";
 import {
   archiveExperiment,
   createExperiment,
@@ -23,23 +23,23 @@ import {
   updateRunNotes,
   workspaceIslandPathForId,
   isExperimentCtxError,
-} from "../services/experiment-log-service";
+} from "../experiment/facade";
 import {
   cancelExperimentExecution,
   kickoffExperimentRun,
-} from "../services/experiment-run-executor";
-import { snapshotExperiment } from "../services/experiment-results-snapshot";
-import { broadcastExperimentChanged } from "../services/experiment-ui-events";
+} from "../experiment/experiment-run-executor";
+import { snapshotExperiment } from "../experiment/experiment-results-snapshot";
+import { broadcastExperimentChanged } from "../experiment/experiment-ui-events";
 import {
   buildPermissionRulesFromSettings,
   resolvePermissionAction,
   resolvePermissionMode,
-} from "../services/permission-modes";
-import type { SessionAgent } from "../../shared/session-agent";
+} from "../../shared/permissions/modes";
+import type { SessionAgent } from "../../shared/agent/session-agent";
 import {
   EXPERIMENT_REGISTRY_REL,
   parseExperimentRunKind,
-} from "../../shared/experiment-log";
+} from "../../shared/experiments/log";
 
 interface ExperimentListArgs {
   projectRoot: string;

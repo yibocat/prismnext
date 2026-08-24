@@ -4,7 +4,7 @@
  * Covers: resolveTri truth table, normalize whitelist filtering (injection
  * rejection), atomic write, write counter, and listeners (including one that throws).
  */
-import { mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -192,7 +192,7 @@ describe("state-app / state-project — IO, counter, listeners", () => {
   });
 
   it("project state: corrupt file self-heals to empty", () => {
-    const p = join(projectRoot, ".prismnext", "agent");
+    const p = join(projectRoot, ".workbench", "agent");
     mkdirSync(p, { recursive: true });
     writeFileSync(join(p, "teams.json"), "{ not json", "utf-8");
     expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
@@ -200,8 +200,27 @@ describe("state-app / state-project — IO, counter, listeners", () => {
     expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
   });
 
+  it("project state: leftover packs.json is not migrated", () => {
+    const agentDir = join(projectRoot, ".prismnext", "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "packs.json"),
+      JSON.stringify({
+        stateVersion: 3,
+        defaultOrchestrator: "prismnext.core:research-prism",
+        projectPackStates: { "prismnext.core": { enabled: false } },
+        disabledContent: [],
+        contentOverrides: {},
+      }),
+      "utf-8",
+    );
+
+    expect(readProjectTeamsState(projectRoot)).toEqual(emptyProjectTeamsState());
+    expect(existsSync(join(projectRoot, ".workbench", "agent", "teams.json"))).toBe(false);
+  });
+
   it("project state: rewrites persisted user.local identities to project.local", () => {
-    const p = join(projectRoot, ".prismnext", "agent");
+    const p = join(projectRoot, ".workbench", "agent");
     mkdirSync(p, { recursive: true });
     writeFileSync(
       join(p, "teams.json"),

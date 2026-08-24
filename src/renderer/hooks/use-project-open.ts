@@ -1,16 +1,6 @@
 import { useCallback } from "react";
-import { useProjectDialogStore } from "@/stores/project-dialog-store";
+import { confirmProjectScaffold } from "@/lib/workspace/project-lifecycle";
 
 export function useProjectOpen() {
-  return useCallback(async (path: string): Promise<boolean> => {
-    const check = await window.electronAPI.projectCheck(path);
-    if (check.missing.length > 0) {
-      const result = await useProjectDialogStore.getState().show(path, check.missing);
-      if (result === "cancel") return false;
-      if (result === "create") {
-        await window.electronAPI.projectCreate(path);
-      }
-    }
-    return true;
-  }, []);
+  return useCallback((path: string) => confirmProjectScaffold(path), []);
 }

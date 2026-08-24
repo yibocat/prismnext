@@ -3,14 +3,10 @@
  * active), matching OpenCode session cwd and the file tree — not only the
  * canonical main `projectRoot` (Bug #9).
  */
+import { selectExperimentProjectRoot } from "@/lib/experiments/project-root";
 import { useDocumentStore } from "@/stores/document-store";
 
-export function selectExperimentProjectRoot(state: {
-  checkoutRoot: string | null;
-  projectRoot: string | null;
-}): string | null {
-  return state.checkoutRoot ?? state.projectRoot;
-}
+export { selectExperimentProjectRoot };
 
 export function getExperimentProjectRoot(): string | null {
   return selectExperimentProjectRoot(useDocumentStore.getState());

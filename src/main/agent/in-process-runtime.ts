@@ -9,7 +9,7 @@ import type {
   CreateSessionResult,
   RuntimeSessionId,
   TurnInput,
-} from "../../shared/agent-runtime";
+} from "../../shared/agent/runtime";
 import type { AgentEventListener, AgentRuntime } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import type {

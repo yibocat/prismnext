@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { formatCitationHealthReport } from "../../src/shared/format-citation-health-report";
-import type { CitationHealthReport } from "../../src/shared/citation-health-types";
+import { formatCitationHealthReport } from "../../src/shared/literature/format-citation-health-report";
+import type { CitationHealthReport } from "../../src/shared/literature/citation-health-types";
 
 const baseReport: CitationHealthReport = {
   libraryCheck: {

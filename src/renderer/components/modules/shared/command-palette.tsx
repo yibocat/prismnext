@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -23,6 +22,10 @@ import { useThemeStore } from "@/stores/theme-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
+import { gitDesktop } from "@/lib/desktop-api/git";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
 import type { LiteraturePaper } from "@/types/electron.d";
@@ -32,14 +35,14 @@ import { SETTINGS_GROUPS } from "@/components/modules/settings/settings-sidebar"
 import { pressLeftNav } from "@/lib/workspace/left-nav";
 import { openRightArea, toggleRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { openPaperPdfReader, openPaperInMainLibrary } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "@/modes/literature-mode/literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { LiteratureExtractBadge } from "@/modes/literature-mode/literature-extract-badge";
 import { useLiteratureExtractStore, useLiteratureExtractSession } from "@/stores/literature-extract-store";
 import {
   APP_LOCALE_PREFERENCES,
   normalizeAppLocalePreference,
   type AppLocalePreference,
-} from "../../../../shared/app-locale";
+} from "../../../../shared/platform/app-locale";
 import { fuzzyMatch } from "@/lib/search/fuzzy";
 import {
   getSearchHistory,
@@ -64,12 +67,6 @@ import {
 } from "@/lib/chat/home-backdrops/registry";
 import type { ChatHomeBackdropSetting } from "@/lib/chat/home-backdrops/types";
 
-export interface CommandPanelRefs {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-}
-
 interface SessionListItem {
   id: string;
   title: string;
@@ -81,7 +78,6 @@ interface SessionListItem {
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  panelRefs: CommandPanelRefs;
   isMobile?: boolean;
 }
 
@@ -151,9 +147,8 @@ function PaletteMoreItem({
   );
 }
 
-export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, isMobile }: CommandPaletteProps) {
   const { t } = useTranslation();
-  const { centerRef, rightAreaRef } = panelRefs;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const chatTabs = useChatStore((s) => s.tabs);
@@ -171,7 +166,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     }
     let cancelled = false;
     const paths = files.map((f) => f.relativePath);
-    window.electronAPI
+    gitDesktop
       .gitCheckIgnore(projectRoot, paths)
       .then((ignored) => {
         if (!cancelled) setIgnoredPaths(new Set(ignored));
@@ -280,7 +275,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     }
     setSessionsReady(false);
     let cancelled = false;
-    window.electronAPI
+    agentDesktop
       .agentListSessions(projectRoot)
       .then((list) => {
         if (!cancelled) {
@@ -378,7 +373,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   // ── Appearance (theme / backdrop / language) — All tab only ──
   const currentThemePack = useThemeStore((s) => s.config.themePack);
-  const currentBackdrop = useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "auto");
+  const currentBackdrop = useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "paperplane");
   const appLocale = useSettingsStore((s) =>
     normalizeAppLocalePreference(s.settings.appLocale),
   );
@@ -577,7 +572,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     if (!hasQuery) {
       let cancelled = false;
       setPapersLoading(true);
-      window.electronAPI
+      literatureDesktop
         .literatureList(projectRoot)
         .then((list) => {
           if (!cancelled) {
@@ -603,7 +598,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
     let cancelled = false;
     setPapersLoading(true);
     const timer = setTimeout(() => {
-      window.electronAPI
+      literatureDesktop
         .literatureSearch(projectRoot, query, 20)
         .then((list) => {
           if (!cancelled) {
@@ -647,23 +642,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   // ── Open actions ──
   const ensureRightAreaOpen = () => {
-    const r = rightAreaRef.current;
-    if (r?.isCollapsed()) {
-      openRightArea({
-        centerRef: centerRef.current,
-        rightAreaRef: r,
-        leftSidebarRef: panelRefs.leftSidebarRef.current,
-        isMobile,
-      });
-    }
+    openRightArea({ isMobile });
   };
   const maximizeRightArea = () => {
-    toggleRightAreaMaximize({
-      centerRef: centerRef.current,
-      rightAreaRef: rightAreaRef.current,
-      leftSidebarRef: panelRefs.leftSidebarRef.current,
-      isMobile,
-    });
+    toggleRightAreaMaximize({ isMobile });
   };
   const openFile = async (f: ProjectFile, maximize = false) => {
     ensureRightAreaOpen();
@@ -687,7 +669,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   const openSetting = (categoryId: string, _maximize = false) => {
     useLayoutStore.getState().setSettingsCategory(categoryId);
     if (useLayoutStore.getState().leftSidebarView === "settings") return;
-    pressLeftNav("settings", { panelRefs: { centerRef, rightAreaRef } });
+    pressLeftNav("settings");
   };
   const openPaper = async (p: LiteraturePaper, maximize = false) => {
     ensureRightAreaOpen();
@@ -707,7 +689,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   const createIsland = async (title: string) => {
     if (!projectRoot) return;
-    const res = await window.electronAPI.experimentCreate({ projectRoot, title });
+    const res = await experimentDesktop.experimentCreate({ projectRoot, title });
     if (!res?.ok) {
       if (res?.hint) toast.error(res.hint);
       return;
@@ -1176,13 +1158,11 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
 /** Single app-level host - open via layout-store / ⌘K / sidebar search button. */
 export function AppCommandPalette({
-  panelRefs,
   isMobile,
 }: {
-  panelRefs: CommandPanelRefs;
   isMobile?: boolean;
 }) {
   const open = useLayoutStore((s) => s.commandPaletteOpen);
   const setOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
-  return <CommandPalette open={open} onOpenChange={setOpen} panelRefs={panelRefs} isMobile={isMobile} />;
+  return <CommandPalette open={open} onOpenChange={setOpen} isMobile={isMobile} />;
 }

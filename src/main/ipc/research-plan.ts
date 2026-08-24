@@ -6,8 +6,8 @@ import {
   readDraftPlan,
   sessionHasPendingPlanDraft,
   writeResearchPlan,
-} from "../services/research-plan-service";
-import type { ResearchPlanDoc } from "../../shared/research-plan";
+} from "../research/research-plan-service";
+import type { ResearchPlanDoc } from "../../shared/research/plan";
 
 export function registerResearchPlanHandlers(): void {
   ipcMain.handle(

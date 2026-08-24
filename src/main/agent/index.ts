@@ -16,8 +16,8 @@ export type {
   PendingQuestion,
   ConversationSubagentRun,
   TurnMessageMeta,
-} from "../../shared/agent-conversation";
-export { emptyConversation, newConversationId } from "../../shared/agent-conversation";
+} from "../../shared/agent/conversation";
+export { emptyConversation, newConversationId } from "../../shared/agent/conversation";
 export {
   mapPiSessionEvent,
   assertAgentEvent,

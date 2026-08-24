@@ -10,8 +10,8 @@ function TerminalToolbarWrapper({ tab }: { tab: RightTab }) {
       tabId={tab.id}
       tabTitle={tab.title}
       isAi={isJobMonitorTab(tab)}
-      linkedChatTabId={tab.linkedChatTabId}
-      linkedExecutionId={tab.linkedExecutionId}
+      linkedChatTabId={tab.kind === "terminal" ? tab.linkedChatTabId : undefined}
+      linkedExecutionId={tab.kind === "terminal" ? tab.linkedExecutionId : undefined}
     />
   );
 }

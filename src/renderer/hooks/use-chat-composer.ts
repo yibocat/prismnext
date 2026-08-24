@@ -5,6 +5,7 @@ import { useMentionableFiles } from "@/lib/files/mentionable-files";
 import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
 import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
+import { listProjectSubagents } from "@/lib/settings";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
@@ -14,7 +15,7 @@ import { useCommandStore } from "@/stores/command-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { actionRegistry } from "@/actions/registry";
 import "@/actions/builtin-actions";
-import type { SubagentInfo } from "@shared/agent-subagents";
+import type { SubagentInfo } from "@shared/agent/subagents";
 import type { ContentBlock } from "@/stores/chat-store";
 import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/chat/vision-fallback-send";
 import {
@@ -28,9 +29,8 @@ import {
   compileComposerPrompt,
   shouldSendPromptToAgent,
   buildComposerDisplayBlocks,
-  loadDraftParts,
-  type InlineComposerEditorHandle,
 } from "@/components/modules/chat/inline-composer";
+import { loadDraftParts, type InlineComposerEditorHandle } from "@/lib/chat/composer-draft";
 
 function offsetToLineCol(
   text: string,
@@ -169,7 +169,7 @@ export function useChatComposer() {
     }
     const loadMentions = async () => {
       try {
-        const expertList = await window.electronAPI.subagentsList(projectRoot);
+        const expertList = await listProjectSubagents(projectRoot);
         setExperts(expertList.filter((e) => e.enabled));
       } catch {
         setExperts([]);
@@ -400,11 +400,11 @@ export function useChatComposer() {
       let promptToSend = promptText;
       if (hadSetup) {
         promptToSend = [
-          "Refine `.prismnext/agent/AGENTS.md` based on the user request below.",
+          "Refine `.workbench/agent/AGENTS.md` based on the user request below.",
           "The file was just scaffolded by `/setup` from a local project scan.",
           "",
           "Rules:",
-          "- Read `.prismnext/agent/AGENTS.md` first, then update it in one write.",
+          "- Read `.workbench/agent/AGENTS.md` first, then update it in one write.",
           "- Do NOT re-explore the repository (no glob/grep/list unless the user explicitly asked).",
           "- Keep sections concise; this file is for AI agents, not end-user docs.",
           "",

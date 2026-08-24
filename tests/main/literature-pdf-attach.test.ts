@@ -8,10 +8,11 @@ import {
   createPaper,
   findExistingByIdentifier,
   getPaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-pdf-attach-"));
+  return tempLiteratureProject();
 }
 
 function writeMinimalPdf(filePath: string, label: string): void {

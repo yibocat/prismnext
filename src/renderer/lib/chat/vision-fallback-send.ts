@@ -4,6 +4,7 @@
  * When the chat model lacks native vision, describe attached images via
  * `aiVisionFallbackModel` before `agent:send`.
  */
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { PromptImageAttachment } from "@/lib/chat/composer-attach-file";
@@ -135,9 +136,9 @@ export async function applyVisionFallbackForSend(
 
   chatStore._setPreparePhase(tabId, "describing_images");
   try {
-    let result: Awaited<ReturnType<typeof window.electronAPI.agentDescribeImages>>;
+    let result: Awaited<ReturnType<typeof agentDesktop.agentDescribeImages>>;
     try {
-      result = await window.electronAPI.agentDescribeImages({
+      result = await agentDesktop.agentDescribeImages({
         providerId: helperProviderId,
         modelId: helperModelId,
         images: promptImages,

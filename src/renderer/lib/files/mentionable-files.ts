@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { isExternalFileId } from "./external-file";
 
 /** Project files plus any open external files for @mention picker. */
@@ -64,7 +65,7 @@ export function useMentionableFiles(
     }
     let cancelled = false;
     const paths = projectOnly.map((f) => f.relativePath);
-    window.electronAPI
+    gitDesktop
       .gitCheckIgnore(projectRoot, paths)
       .then((ignored) => {
         if (!cancelled) setIgnoredPaths(new Set(ignored));
@@ -83,12 +84,20 @@ export function useMentionableFiles(
   );
 }
 
-export function mentionFileLabel(file: ProjectFile): string {
+export type MentionFileRef = {
+  id: string;
+  relativePath: string;
+  absolutePath: string;
+  name?: string;
+  type?: ProjectFile["type"];
+};
+
+export function mentionFileLabel(file: MentionFileRef): string {
   return isExternalFileId(file.id) ? file.absolutePath : file.relativePath;
 }
 
 /** Visible @file token label — filename only (full path stays in `filePath`). */
-export function mentionFileDisplayLabel(file: ProjectFile): string {
+export function mentionFileDisplayLabel(file: MentionFileRef): string {
   const path = mentionFileLabel(file);
   return path.split(/[/\\]/).pop() || path;
 }

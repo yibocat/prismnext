@@ -1,3 +1,4 @@
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useDocumentStore } from "@/stores/document-store";
 import { useIntensiveReadingStore } from "@/stores/intensive-reading-store";
 
@@ -14,7 +15,7 @@ export function persistAndSyncIntensiveReading(
   const projectRoot = useDocumentStore.getState().projectRoot;
   if (!projectRoot) return;
 
-  void window.electronAPI.agentSyncIntensiveReading({
+  void agentDesktop.agentSyncIntensiveReading({
     conversationId: id,
     projectRoot,
     paperIds,

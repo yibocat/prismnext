@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import * as worktreeService from "../services/worktree";
+import * as worktreeService from "../git/worktree";
 
 export function registerWorktreeHandlers(): void {
   ipcMain.handle("worktree:list", async (_e, args: { projectRoot: string }) =>

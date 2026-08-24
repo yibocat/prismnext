@@ -13,7 +13,7 @@ import {
   listBackgroundTaskJoins,
   isBackgroundTaskStartedResult,
   type BackgroundTaskInject,
-} from "@shared/chat-background-task";
+} from "@shared/chat/background-task";
 
 function messagePlainText(msg: ChatStreamMessage): string {
   return contentBlocks(msg.message?.content)

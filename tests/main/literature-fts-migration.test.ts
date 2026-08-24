@@ -6,22 +6,24 @@ import { DatabaseSync } from "node:sqlite";
 import {
   closeLibraryDb,
   createPaper,
+  getLibraryPaths,
   openLibraryDb,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-fts-migrate-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library", "attachments"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }
 
 /** Simulate a v10 library where incremental FTS migration only rebuilt (old columns). */
 function seedLegacyFtsLibrary(root: string): void {
-  const dbPath = path.join(root, ".prismnext", "library", "library.db");
-  const db = new DatabaseSync(dbPath);
+  const paths = getLibraryPaths(root);
+  fs.mkdirSync(paths.libraryDir, { recursive: true });
+  const db = new DatabaseSync(paths.dbPath);
   db.exec(`
     CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO meta (key, value) VALUES ('schema_version', '10');

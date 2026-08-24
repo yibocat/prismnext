@@ -1,9 +1,8 @@
 /**
- * Left-nav / shortcut helpers for TeX · Library · Experiments in RightArea.
+ * Left-nav helpers for any RightArea workspace mode.
  * Opening a mode focuses it in parallel with other modes (no sibling teardown).
  * Dismissing a mode closes only that mode’s tabs; RightArea collapses only when empty.
  */
-import type { LeftNavContext } from "./types";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useLiteratureStore } from "@/stores/literature-store";
@@ -11,66 +10,45 @@ import { modeRegistry } from "@/lib/workspace/mode-registry";
 import { focusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { closeModeTabs } from "@/lib/workspace/close-mode-tabs";
 import {
-  openRightArea,
+  closeRightArea,
   openRightAreaMaximized,
   openRightAreaForDeepLink,
   type RightAreaLayoutCtx,
 } from "@/lib/workspace/right-area-layout";
 
-export type LeftNavWorkspaceMode = "texworkspace" | "literature" | "experiments";
+export type LeftNavWorkspaceMode = string;
 
-export function isTexWorkspaceOpen(): boolean {
+/** True when this RightArea mode is focused and the panel is expanded. */
+export function isWorkspaceModeOpen(modeId: string): boolean {
+  const def = modeRegistry.get(modeId);
+  if (!def) return false;
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
   return (
-    rps.tabs.some((t) => t.kind === "texworkspace")
+    rps.tabs.some((t) => def.tabKinds.includes(t.kind))
     && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "texworkspace"
+    && focusedModeId(rps.tabs, rps.activeTabId) === modeId
   );
+}
+
+export function isTexWorkspaceOpen(): boolean {
+  return isWorkspaceModeOpen("texworkspace");
 }
 
 export function isLiteraturePanelOpen(): boolean {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  return (
-    rps.tabs.some((t) => t.kind === "literature")
-    && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "literature"
-  );
+  return isWorkspaceModeOpen("literature");
 }
 
 export function isExperimentsPanelOpen(): boolean {
-  const st = useLayoutStore.getState();
-  const rps = useRightPanelStore.getState();
-  return (
-    rps.tabs.some((t) => t.kind === "experiments")
-    && st.rightAreaExpanded
-    && focusedModeId(rps.tabs, rps.activeTabId) === "experiments"
-  );
-}
-
-function rightAreaCtxFromLeftNav(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): RightAreaLayoutCtx {
-  return {
-    centerRef: ctx.panelRefs.centerRef?.current,
-    rightAreaRef: ctx.panelRefs.rightAreaRef?.current,
-    leftSidebarRef: layout?.leftSidebarRef,
-    isMobile: layout?.isMobile,
-  };
+  return isWorkspaceModeOpen("experiments");
 }
 
 /** Collapse RightArea only when no tabs remain. */
-export function maybeCollapseRightAreaIfEmpty(ctx: LeftNavContext): void {
+export function maybeCollapseRightAreaIfEmpty(): void {
   const rps = useRightPanelStore.getState();
   if (rps.tabs.length > 0) return;
 
-  const st = useLayoutStore.getState();
-  st.setEditorMaximized(false);
-  st.setRightAreaExpanded(false);
-  ctx.panelRefs.centerRef?.current?.expand();
-  ctx.panelRefs.rightAreaRef?.current?.collapse();
+  closeRightArea(false);
 }
 
 /**
@@ -79,12 +57,14 @@ export function maybeCollapseRightAreaIfEmpty(ctx: LeftNavContext): void {
  */
 export function focusModeInRightArea(
   modeId: LeftNavWorkspaceMode,
-  ctx: LeftNavContext,
   options?: {
     maximize?: boolean;
-    layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">;
+    layout?: Pick<RightAreaLayoutCtx, "isMobile">;
   },
 ): void {
+  const def = modeRegistry.get(modeId);
+  if (!def) return;
+
   const st = useLayoutStore.getState();
   const rps = useRightPanelStore.getState();
 
@@ -92,21 +72,20 @@ export function focusModeInRightArea(
     useLiteratureStore.getState().setLibrarySubview("library");
   }
 
-  rps.ensureTab(modeId);
+  const kind = def.tabKinds[0];
+  if (kind) rps.ensureTab(kind);
   st.setLeftSidebarView("sessions");
 
-  const def = modeRegistry.get(modeId);
   // Modes with a list sidebar (Files / Literature / Experiments / …) open it by default.
-  if (def?.Sidebar && !def.hideRightSidebar) {
+  if (def.Sidebar && !def.hideRightSidebar) {
     st.revealRightSidebar();
   }
 
-  const layoutCtx = rightAreaCtxFromLeftNav(ctx, options?.layout);
   if (options?.maximize) {
-    openRightAreaMaximized(layoutCtx);
-  } else {
-    openRightAreaForDeepLink(layoutCtx);
+    openRightAreaMaximized();
+    return;
   }
+  openRightAreaForDeepLink(options?.layout);
 }
 
 /**
@@ -115,132 +94,98 @@ export function focusModeInRightArea(
  */
 export function dismissModeFromRightArea(
   modeId: LeftNavWorkspaceMode,
-  ctx: LeftNavContext,
   onClosed?: () => void,
 ): void {
   closeModeTabs(modeId, {
     onComplete: () => {
-      maybeCollapseRightAreaIfEmpty(ctx);
+      maybeCollapseRightAreaIfEmpty();
       onClosed?.();
     },
   });
 }
 
-/** @deprecated Prefer dismissModeFromRightArea — kept for immersive nav callers. */
-export function closeTexWorkspace(ctx: LeftNavContext, onClosed?: () => void): void {
-  dismissModeFromRightArea("texworkspace", ctx, onClosed);
+export function openLiteratureLibrary(): void {
+  focusModeInRightArea("literature", { maximize: true });
 }
 
-/** @deprecated Prefer dismissModeFromRightArea */
-export function closeLiteraturePanel(ctx: LeftNavContext, onClosed?: () => void): void {
-  dismissModeFromRightArea("literature", ctx, onClosed);
+export function openLiteratureSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
+  focusModeInRightArea("literature", { layout });
 }
 
-/** @deprecated Prefer dismissModeFromRightArea */
-export function closeExperimentsPanel(ctx: LeftNavContext, onClosed?: () => void): void {
-  dismissModeFromRightArea("experiments", ctx, onClosed);
-}
-
-export function openLiteratureLibrary(ctx: LeftNavContext): void {
-  focusModeInRightArea("literature", ctx, { maximize: true });
-}
-
-export function openLiteratureSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
-  focusModeInRightArea("literature", ctx, { layout });
-}
-
-export function toggleLiteratureMaximize(ctx: LeftNavContext): void {
+export function toggleLiteratureMaximize(): void {
   const st = useLayoutStore.getState();
   if (isLiteraturePanelOpen() && st.editorMaximized) {
-    dismissModeFromRightArea("literature", ctx, () => {
+    dismissModeFromRightArea("literature", () => {
       st.setLeftSidebarView("sessions");
     });
     return;
   }
-  openLiteratureLibrary(ctx);
+  openLiteratureLibrary();
 }
 
-export function toggleLiteratureSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
+export function toggleLiteratureSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
   const st = useLayoutStore.getState();
   if (isLiteraturePanelOpen() && !st.editorMaximized) {
-    dismissModeFromRightArea("literature", ctx, () => {
+    dismissModeFromRightArea("literature", () => {
       st.setLeftSidebarView("sessions");
     });
     return;
   }
-  openLiteratureSplit(ctx, layout);
+  openLiteratureSplit(layout);
 }
 
-export function openExperimentsSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
-  focusModeInRightArea("experiments", ctx, { layout });
+export function openExperimentsSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
+  focusModeInRightArea("experiments", { layout });
 }
 
-export function openExperimentsPanel(ctx: LeftNavContext): void {
-  focusModeInRightArea("experiments", ctx, { maximize: true });
+export function openExperimentsPanel(): void {
+  focusModeInRightArea("experiments", { maximize: true });
 }
 
-export function toggleExperimentsMaximize(ctx: LeftNavContext): void {
+export function toggleExperimentsMaximize(): void {
   const st = useLayoutStore.getState();
   if (isExperimentsPanelOpen() && st.editorMaximized) {
-    dismissModeFromRightArea("experiments", ctx, () => {
+    dismissModeFromRightArea("experiments", () => {
       st.setLeftSidebarView("sessions");
     });
     return;
   }
-  openExperimentsPanel(ctx);
+  openExperimentsPanel();
 }
 
-export function toggleExperimentsSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
+export function toggleExperimentsSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
   const st = useLayoutStore.getState();
   if (isExperimentsPanelOpen() && !st.editorMaximized) {
-    dismissModeFromRightArea("experiments", ctx, () => {
+    dismissModeFromRightArea("experiments", () => {
       st.setLeftSidebarView("sessions");
     });
     return;
   }
-  openExperimentsSplit(ctx, layout);
+  openExperimentsSplit(layout);
 }
 
-export function openTexWorkspaceSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
-  focusModeInRightArea("texworkspace", ctx, { layout });
+export function openTexWorkspaceSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
+  focusModeInRightArea("texworkspace", { layout });
 }
 
-export function openTexWorkspaceMaximized(ctx: LeftNavContext): void {
-  focusModeInRightArea("texworkspace", ctx, { maximize: true });
+export function openTexWorkspaceMaximized(): void {
+  focusModeInRightArea("texworkspace", { maximize: true });
 }
 
-export function toggleTexWorkspaceMaximize(ctx: LeftNavContext): void {
+export function toggleTexWorkspaceMaximize(): void {
   const st = useLayoutStore.getState();
   if (isTexWorkspaceOpen() && st.editorMaximized) {
-    dismissModeFromRightArea("texworkspace", ctx);
+    dismissModeFromRightArea("texworkspace");
     return;
   }
-  openTexWorkspaceMaximized(ctx);
+  openTexWorkspaceMaximized();
 }
 
-export function toggleTexWorkspaceSplit(
-  ctx: LeftNavContext,
-  layout?: Pick<RightAreaLayoutCtx, "leftSidebarRef" | "isMobile">,
-): void {
+export function toggleTexWorkspaceSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
   const st = useLayoutStore.getState();
   if (isTexWorkspaceOpen() && !st.editorMaximized) {
-    dismissModeFromRightArea("texworkspace", ctx);
+    dismissModeFromRightArea("texworkspace");
     return;
   }
-  openTexWorkspaceSplit(ctx, layout);
+  openTexWorkspaceSplit(layout);
 }

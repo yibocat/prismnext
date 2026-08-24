@@ -4,16 +4,15 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   runAiBashJob,
-  _readBridgeResultForTests,
   _resetAiBashRunnerForTests,
-} from "../../src/main/services/ai-bash-runner";
+} from "../../src/main/terminal/ai-bash-runner";
 import {
   getExecutionRegistry,
   initExecutionRegistry,
   _resetExecutionRegistryForTests,
   type ExecutionTransport,
   type ExecutionTransportHandlers,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 function createFakeTransport() {
   const started: string[] = [];
@@ -43,15 +42,12 @@ function createFakeTransport() {
 
 describe("runAiBashJob via ExecutionRegistry", () => {
   const dirs: string[] = [];
-  let bridgeRoot: string;
   let historyRoot: string;
   let fakeTransport: ReturnType<typeof createFakeTransport>;
 
   beforeEach(() => {
-    bridgeRoot = mkdtempSync(join(tmpdir(), "prism-bash-bridge-"));
     historyRoot = mkdtempSync(join(tmpdir(), "prism-bash-exec-"));
-    dirs.push(bridgeRoot, historyRoot);
-    process.env.PRISM_TERMINAL_BRIDGE_ROOT = bridgeRoot;
+    dirs.push(historyRoot);
     fakeTransport = createFakeTransport();
     initExecutionRegistry(historyRoot, fakeTransport);
     _resetAiBashRunnerForTests();
@@ -60,7 +56,6 @@ describe("runAiBashJob via ExecutionRegistry", () => {
   afterEach(() => {
     _resetAiBashRunnerForTests();
     _resetExecutionRegistryForTests();
-    delete process.env.PRISM_TERMINAL_BRIDGE_ROOT;
     for (const dir of dirs) {
       try {
         rmSync(dir, { recursive: true, force: true });
@@ -71,7 +66,7 @@ describe("runAiBashJob via ExecutionRegistry", () => {
     dirs.length = 0;
   });
 
-  it("writes the OpenCode result file from the registered execution", async () => {
+  it("records the job on the execution registry", async () => {
     const job = await runAiBashJob({
       sessionId: "ses-1",
       chatTabId: "chat-1",
@@ -84,11 +79,8 @@ describe("runAiBashJob via ExecutionRegistry", () => {
     expect(job.executionId).toMatch(/[0-9a-f-]{36}/);
     expect(execution).toBeDefined();
     await getExecutionRegistry().waitForFinal(job.executionId);
-
-    expect(_readBridgeResultForTests("ses-1", "tool-1")).toMatchObject({
-      output: execution?.transcriptTail,
-      exitCode: 0,
-    });
+    expect(job.output).toBe(execution?.transcriptTail);
+    expect(job.exitCode).toBe(0);
     expect(fakeTransport.started).toEqual([job.executionId]);
   });
 
@@ -118,9 +110,7 @@ describe("runAiBashJob via ExecutionRegistry", () => {
     const execution = getExecutionRegistry().get(job.executionId);
     expect(execution?.state).toBe("failed");
     expect(execution?.exitCode).toBe(1);
+    expect(job.exitCode).toBe(1);
     expect(fakeTransport.started).toEqual([]);
-    expect(_readBridgeResultForTests("ses-tex", "tool-tex")).toMatchObject({
-      exitCode: 1,
-    });
   });
 });

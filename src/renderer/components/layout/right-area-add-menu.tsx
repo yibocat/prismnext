@@ -2,10 +2,9 @@
  * RightArea「+」add menu — open or focus a mode as tab(s).
  * Singleton modes disappear from the menu once open; multi (Terminal/Browser) stay and spawn new tabs.
  */
-import { useCallback, useMemo, type RefObject } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PlusIcon } from "lucide-react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
 import { Hint } from "@/components/ui/hint";
 import {
   AppMenu,
@@ -22,15 +21,9 @@ import { ShortcutKbdChips } from "@/lib/shortcuts";
 
 export function RightAreaAddMenu({
   surface,
-  centerRef,
-  rightAreaRef,
-  leftSidebarRef,
   isMobile,
 }: {
   surface: "workspace" | "settings";
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
   isMobile: boolean;
 }) {
   const { t } = useTranslation();
@@ -51,15 +44,10 @@ export function RightAreaAddMenu({
 
   const onPick = useCallback(
     (modeId: string) => {
-      openRightArea({
-        centerRef: centerRef.current,
-        rightAreaRef: rightAreaRef.current,
-        leftSidebarRef: leftSidebarRef.current,
-        isMobile,
-      });
+      openRightArea({ isMobile });
       openMode(modeId);
     },
-    [centerRef, rightAreaRef, leftSidebarRef, isMobile],
+    [isMobile],
   );
 
   if (modes.length === 0) return null;

@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { RuntimeRegistry } from "../../src/main/agent/runtime-registry";
 import { AgentSessionStore, resolvePiRuntimeSessionDir } from "../../src/main/agent/session-store";
+import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 function fakeRuntime(label: string): AgentRuntime & { disposed: string[] } {
   const disposed: string[] = [];
@@ -31,6 +32,7 @@ function fakeRuntime(label: string): AgentRuntime & { disposed: string[] } {
 describe("RuntimeRegistry", () => {
   const dirs: string[] = [];
   afterEach(() => {
+    setWorkbenchUserHomeOverride(null);
     for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
     dirs.length = 0;
   });
@@ -39,6 +41,7 @@ describe("RuntimeRegistry", () => {
     const userData = mkdtempSync(join(tmpdir(), "prism-reg-"));
     const project = mkdtempSync(join(tmpdir(), "prism-reg-proj-"));
     dirs.push(userData, project);
+    setWorkbenchUserHomeOverride(userData);
     writeFileSync(join(project, "README.md"), "keep", "utf-8");
 
     const started: string[] = [];
@@ -50,7 +53,7 @@ describe("RuntimeRegistry", () => {
         return {
           runtime: fakeRuntime(input.conversationId),
           runtimeSessionId: `rt-${input.conversationId}`,
-          piSessionFile: join(resolvePiRuntimeSessionDir(userData), `${input.conversationId}.jsonl`),
+          piSessionFile: join(resolvePiRuntimeSessionDir(), `${input.conversationId}.jsonl`),
         };
       },
     });
@@ -79,7 +82,8 @@ describe("RuntimeRegistry", () => {
     const project = mkdtempSync(join(tmpdir(), "prism-reg-proj-"));
     dirs.push(userData, project);
 
-    const sessionDir = resolvePiRuntimeSessionDir(userData);
+    setWorkbenchUserHomeOverride(userData);
+    const sessionDir = resolvePiRuntimeSessionDir();
     mkdirSync(sessionDir, { recursive: true });
     const runtime = fakeRuntime("keep");
     const registry = new RuntimeRegistry({
@@ -126,7 +130,8 @@ describe("RuntimeRegistry", () => {
     const project = mkdtempSync(join(tmpdir(), "prism-reg-dup-proj-"));
     dirs.push(userData, project);
     const store = new AgentSessionStore(join(userData, "pi-agent"));
-    const sessionDir = resolvePiRuntimeSessionDir(userData);
+    setWorkbenchUserHomeOverride(userData);
+    const sessionDir = resolvePiRuntimeSessionDir();
     mkdirSync(sessionDir, { recursive: true });
 
     let opens = 0;

@@ -1,5 +1,5 @@
 import type { ComposerDragPayload } from "@/lib/chat/composer-drag";
-import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
 
 export function paperSnippetDragPayloads(opts: {
   paper: { id: string; title: string; bibkey?: string | null };

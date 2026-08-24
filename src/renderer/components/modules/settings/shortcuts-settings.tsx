@@ -8,6 +8,7 @@ import {
   type ShortcutCategory,
   type ShortcutDef,
 } from "../../../../shared/shortcuts";
+import { desktopPlatform } from "@/lib/desktop-api/shell";
 import { resolveShortcut } from "@/lib/shortcuts";
 
 const CATEGORY_ORDER: ShortcutCategory[] = ["shell", "editor", "workspace", "product"];
@@ -22,7 +23,7 @@ const CATEGORY_TITLE_KEY: Record<ShortcutCategory, string> = {
 function ShortcutRow({ def }: { def: ShortcutDef }) {
   const { t } = useTranslation();
   const resolved = resolveShortcut(def.id);
-  const platform = detectShortcutPlatform(window.electronAPI?.platform ?? "darwin");
+  const platform = detectShortcutPlatform(desktopPlatform());
   const keys = resolved?.chord ? chordDisplayParts(resolved.chord, platform) : [];
   const fixed = !def.remappable;
   const active = def.implemented !== false;

@@ -5,11 +5,11 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   readResearchBrief,
   updateResearchBriefSection,
-} from "../../services/research-brief-service";
+} from "../../research/research-brief-service";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {

@@ -1,3 +1,4 @@
+import { shellDesktop } from "@/lib/desktop-api/shell";
 import { useDocumentStore } from "@/stores/document-store";
 import { resolveProjectRelativePath } from "./project-path";
 
@@ -9,5 +10,5 @@ export function revealProjectRelativePath(relativePath: string): void {
   const abs = resolveProjectRelativePath(projectRoot, relativePath);
   if (!abs) return;
 
-  void window.electronAPI.shellShowItemInFolder(abs);
+  void shellDesktop.shellShowItemInFolder(abs);
 }

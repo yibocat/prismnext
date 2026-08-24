@@ -14,7 +14,7 @@ type RunCompleteHandler = (data: {
   runId: string;
   result: {
     ok: boolean;
-    run?: import("../../src/shared/experiment-log").ExperimentRunEntry;
+    run?: import("../../src/shared/experiments/log").ExperimentRunEntry;
     exitCode?: number;
     stdoutTail?: string;
     stderrTail?: string;
@@ -116,7 +116,7 @@ vi.mock("../../src/renderer/stores/right-panel-store", () => ({
 }));
 
 import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
-import type { ExperimentSummary } from "../../src/shared/experiment-log";
+import type { ExperimentSummary } from "../../src/shared/experiments/log";
 
 const PROJECT = "/projects/demo";
 
@@ -151,7 +151,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: list,
       });
 
@@ -168,7 +168,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValue({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [],
       });
 
@@ -182,7 +182,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValue({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [
           makeSummary({ id: "exp-active", title: "Active", status: "active" }),
           makeSummary({ id: "exp-arch", title: "Arch", status: "archived" }),
@@ -245,7 +245,7 @@ describe("experiment-store", () => {
         runCount: 0,
         lastRunAt: null,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
       });
       electronAPI.experimentDetectEnv.mockResolvedValueOnce({
         ok: true,
@@ -284,7 +284,7 @@ describe("experiment-store", () => {
         runCount: 0,
         lastRunAt: null,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
       });
       electronAPI.experimentDetectEnv.mockResolvedValueOnce({
         ok: false,
@@ -332,7 +332,7 @@ describe("experiment-store", () => {
         runCount: 0,
         lastRunAt: null,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
       });
       electronAPI.experimentDetectEnv.mockResolvedValueOnce({
         ok: true,
@@ -885,7 +885,7 @@ describe("experiment-store", () => {
     it("returns paths on ok:true", async () => {
       electronAPI.experimentGetPaths.mockResolvedValueOnce({
         ok: true,
-        registryPath: ".prismnext/experiments/exp-a",
+        registryPath: ".workbench/experiments/exp-a",
         workspaceAbs: "/projects/demo/experiment/exp-a",
         workspaceRel: "experiment/exp-a",
       });
@@ -893,7 +893,7 @@ describe("experiment-store", () => {
       const paths = await useExperimentStore.getState().getPaths(PROJECT, "exp-a");
 
       expect(paths).toEqual({
-        registryPath: ".prismnext/experiments/exp-a",
+        registryPath: ".workbench/experiments/exp-a",
         workspaceAbs: "/projects/demo/experiment/exp-a",
         workspaceRel: "experiment/exp-a",
       });
@@ -1005,7 +1005,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [],
       });
 
@@ -1037,7 +1037,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [],
       });
 
@@ -1072,7 +1072,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [
           makeSummary({
             id: meta.id,
@@ -1146,7 +1146,7 @@ describe("experiment-store", () => {
       electronAPI.experimentList.mockResolvedValueOnce({
         ok: true,
         experimentRoot: "experiment",
-        registryRoot: ".prismnext/experiments",
+        registryRoot: ".workbench/experiments",
         experiments: [
           makeSummary({
             id: updatedMeta.id,

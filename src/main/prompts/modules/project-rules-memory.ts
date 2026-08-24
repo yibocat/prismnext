@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export const PROJECT_RULES_MEMORY_PROMPT = [
   "## Project rules memory",

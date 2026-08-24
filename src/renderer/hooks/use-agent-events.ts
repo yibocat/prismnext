@@ -1,9 +1,10 @@
 import { useEffect } from "react";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useChatStore } from "@/stores/chat-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { schedulePermissionTimeout } from "@/stores/permission-actions";
-import { isAgentRuntime } from "@shared/agent-api";
-import type { AgentEvent } from "@shared/agent-runtime";
+import { isAgentRuntime } from "@shared/agent/api";
+import type { AgentEvent } from "@shared/agent/runtime";
 
 function resolveAgentTabId(eventTabId: string): string | null {
   const store = useChatStore.getState();
@@ -15,7 +16,7 @@ function resolveAgentTabId(eventTabId: string): string | null {
 
 export function useAgentEvents(): void {
   useEffect(() => {
-    const offEvent = window.electronAPI.onAgentEvent((event: AgentEvent) => {
+    const offEvent = agentDesktop.onAgentEvent((event: AgentEvent) => {
       const tabId = resolveAgentTabId(event.tabId);
       if (!tabId) return;
       useChatStore.getState()._applyAgentEvent(tabId, event);

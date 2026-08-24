@@ -20,7 +20,7 @@ import {
   writeAppTeamsState,
 } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests, listMcpServers } from "../../src/main/teams/resolver";
-import { syncProjectSkillsIntegration } from "../../src/main/services/skills-sync";
+import { syncProjectSkillsIntegration } from "../../src/main/skills/skills-sync";
 import { getCommandRegistry, __resetCommandRegistriesForTests } from "../../src/main/commands/registry";
 
 let tmp: string;
@@ -156,7 +156,7 @@ describe("skills.paths precedence order (D-9)", () => {
     expect(coreIdx).toBeGreaterThanOrEqual(0);
     expect(packIdx).toBeGreaterThanOrEqual(0);
     expect(coreIdx).toBeLessThan(packIdx);
-    expect(paths[paths.length - 1]).toBe(".prismnext/agent");
+    expect(paths[paths.length - 1]).toBe(".workbench/agent");
   });
 });
 

@@ -1,4 +1,7 @@
 import { registerFsHandlers } from "./fs";
+import { registerDialogHandlers } from "./dialog";
+import { registerProjectScaffoldHandlers } from "./project-scaffold";
+import { registerTemplateHandlers } from "./template";
 import { registerCompileHandlers } from "./compile";
 import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
@@ -30,11 +33,16 @@ import { registerProLicenseHandlers } from "./pro-license";
 import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
+import { registerWorkbenchHandlers } from "./workbench";
 
 export function registerIpcHandlers(): void {
   installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
+  registerWorkbenchHandlers();
   registerFsHandlers();
+  registerDialogHandlers();
+  registerProjectScaffoldHandlers();
+  registerTemplateHandlers();
   registerCompileHandlers();
   registerAgentHandlers();
   registerMcpHandlers();

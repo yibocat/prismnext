@@ -8,15 +8,15 @@ import {
   listOrchestrators,
   saveCustomSubagent,
   saveCustomOrchestrator,
-} from "../services/subagents-sync";
+} from "../teams/subagents-sync";
 import { listSubagentRosterReferrers } from "../teams/lifecycle";
-import { scheduleSubagentsRefresh } from "../services/project-subagents-refresh";
+import { scheduleSubagentsRefresh } from "../teams/project-subagents-refresh";
 import type {
   SubagentInfo,
   OrchestratorInfo,
   SaveCustomSubagentPayload,
   SaveCustomOrchestratorPayload,
-} from "../services/agent-subagents";
+} from "../../shared/agent/subagents";
 
 export function registerExpertsHandlers(): void {
   ipcMain.handle("subagents:list", async (_event, args: { projectPath: string }) => {

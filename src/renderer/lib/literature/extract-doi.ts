@@ -5,7 +5,7 @@ import {
   extractDoisFromText,
   normalizeArxivId,
   normalizeDoi,
-} from "../../../shared/doi-utils";
+} from "../../../shared/literature/doi-utils";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -59,4 +59,4 @@ export async function extractIdsFromPdf(bytes: Uint8Array, fileNameHint?: string
   }
 }
 
-export { normalizeDoi, normalizeArxivId } from "../../../shared/doi-utils";
+export { normalizeDoi, normalizeArxivId } from "../../../shared/literature/doi-utils";

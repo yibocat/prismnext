@@ -9,7 +9,7 @@ export function FilesContent({ tab, isActive }: { tab: RightTab; isActive: boole
     () => ({ tab, isActive }),
     [tab, isActive],
   );
-  if (tab.isInitial || !tab.filePath) {
+  if (tab.kind !== "file" || tab.isInitial || !tab.filePath) {
     return wrapTabContext(ctx, <NoFileOpen />);
   }
   if (tab.viewMode === "preview") {

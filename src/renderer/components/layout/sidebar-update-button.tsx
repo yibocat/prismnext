@@ -28,7 +28,7 @@ export function SidebarUpdateButton({ className }: { className?: string }) {
       : t("settings.about.oneClickUpdate");
 
   return (
-    <Hint label={label} side="top" delayDuration={200}>
+    <Hint label={label} side="top">
       <button
         type="button"
         aria-label={label}

@@ -6,8 +6,10 @@ import type {
   PaperExtractStatesByPaper,
   PaperExtractProgress,
 } from "@/types/electron.d";
-import { pickBestReadySource } from "../../shared/paper-extract";
+import { pickBestReadySource } from "../../shared/literature/paper-extract";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { extractDesktop } from "@/lib/desktop-api/extract";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 
 const EXTRACT_SOURCES: PaperExtractSource[] = ["mineru", "pdfjs", "html"];
 
@@ -110,30 +112,30 @@ export const useLiteratureExtractStore = create<LiteratureExtractStore>((set, ge
 
   loadStatesForPapers: async (projectRoot, paperIds) => {
     if (!paperIds.length) return;
-    const batch = await window.electronAPI.extractList(projectRoot, paperIds);
+    const batch = await extractDesktop.extractList(projectRoot, paperIds);
     set((s) => ({
       statesByPaper: { ...s.statesByPaper, ...batch },
     }));
   },
 
   enqueue: async (projectRoot, paperId, source, force) => {
-    await window.electronAPI.extractEnqueue(projectRoot, paperId, source, force);
+    await extractDesktop.extractEnqueue(projectRoot, paperId, source, force);
   },
 
   cancel: async (projectRoot, paperId, source) => {
-    await window.electronAPI.extractCancel(projectRoot, paperId, source);
+    await extractDesktop.extractCancel(projectRoot, paperId, source);
   },
 
   retry: async (projectRoot, paperId, source) => {
-    await window.electronAPI.extractRetry(projectRoot, paperId, source);
+    await extractDesktop.extractRetry(projectRoot, paperId, source);
   },
 
   enqueueBatch: async (projectRoot, paperIds, source, force) => {
-    return window.electronAPI.extractEnqueueBatch(projectRoot, paperIds, source, force);
+    return extractDesktop.extractEnqueueBatch(projectRoot, paperIds, source, force);
   },
 
   enqueueCollection: async (projectRoot, collectionId, source, force) => {
-    return window.electronAPI.extractEnqueueCollection(projectRoot, collectionId, source, force);
+    return extractDesktop.extractEnqueueCollection(projectRoot, collectionId, source, force);
   },
 
   bestReadySource: (paperId) => pickBestReadySource(get().statesByPaper[paperId], "auto"),
@@ -146,7 +148,7 @@ export function bindLiteratureExtractIpc(projectRoot: string | null): () => void
   extractListenerRefCount += 1;
 
   if (!extractListenerCleanup) {
-    const offStatus = window.electronAPI.onExtractStatusChanged(({ projectRoot: root, state }) => {
+    const offStatus = extractDesktop.onExtractStatusChanged(({ projectRoot: root, state }) => {
       if (projectRoot && root !== projectRoot) return;
       useLiteratureExtractStore.getState().applyState(state);
       if (state.status === "ready") {
@@ -154,32 +156,32 @@ export function bindLiteratureExtractIpc(projectRoot: string | null): () => void
       }
     });
 
-    const offProgress = window.electronAPI.onExtractProgress(({ projectRoot: root, progress }) => {
+    const offProgress = extractDesktop.onExtractProgress(({ projectRoot: root, progress }) => {
       if (projectRoot && root !== projectRoot) return;
       useLiteratureExtractStore.getState().applyProgress(progress);
     });
 
-    const offProgressClear = window.electronAPI.onExtractProgressClear(
+    const offProgressClear = extractDesktop.onExtractProgressClear(
       ({ projectRoot: root, paperId, source }) => {
         if (projectRoot && root !== projectRoot) return;
         useLiteratureExtractStore.getState().clearProgress(paperId, source);
       },
     );
 
-    const offPdfCached = window.electronAPI.onExtractPdfCached(({ projectRoot: root, paperId }) => {
+    const offPdfCached = extractDesktop.onExtractPdfCached(({ projectRoot: root, paperId }) => {
       if (projectRoot && root !== projectRoot) return;
       useLiteratureStore.getState().markPaperPdfCached(paperId);
       void useLiteratureStore.getState().refresh(root);
     });
 
-    const offMaterialized = window.electronAPI.onLiteraturePaperMaterialized(
+    const offMaterialized = literatureDesktop.onLiteraturePaperMaterialized(
       ({ projectRoot: root }) => {
         if (projectRoot && root !== projectRoot) return;
         void useLiteratureStore.getState().refresh(root);
       },
     );
 
-    const offAgent = window.electronAPI.onExtractAgentRequested((payload) => {
+    const offAgent = extractDesktop.onExtractAgentRequested((payload) => {
       if (projectRoot && payload.projectRoot !== projectRoot) return;
       void import("sonner").then(({ toast }) => {
         toast.info(`Agent started PDF extraction for "${payload.title}" (${payload.source})`, {
@@ -189,7 +191,7 @@ export function bindLiteratureExtractIpc(projectRoot: string | null): () => void
       });
     });
 
-    const offAiMetadata = window.electronAPI.onLiteratureAiMetadataChanged(({ projectRoot: root }) => {
+    const offAiMetadata = literatureDesktop.onLiteratureAiMetadataChanged(({ projectRoot: root }) => {
       if (projectRoot && root !== projectRoot) return;
       void useLiteratureStore.getState().refresh(root);
     });
@@ -225,7 +227,7 @@ export function useLiteratureExtractSession(
   useEffect(() => {
     if (!projectRoot) return;
     const unbind = bindLiteratureExtractIpc(projectRoot);
-    void window.electronAPI.extractResume(projectRoot);
+    void extractDesktop.extractResume(projectRoot);
     return unbind;
   }, [projectRoot]);
 

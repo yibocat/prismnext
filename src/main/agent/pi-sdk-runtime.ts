@@ -17,8 +17,8 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { loadPiSkillsFromDirs, type HostSkillDir } from "./skill-loader";
-import { skillReadRootsFromDirs } from "../../shared/skill-read-roots";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { skillReadRootsFromDirs } from "../../shared/skills/read-roots";
+import { createLogger, shortLogDetail } from "../app/logger";
 import type { AgentMcpHost } from "./mcp-host";
 
 const piRuntimeLog = createLogger("pi-runtime", "agent");
@@ -30,14 +30,14 @@ import type {
   CreateSessionResult,
   RuntimeSessionId,
   TurnInput,
-} from "../../shared/agent-runtime";
-import type { ContentBlock } from "../../shared/agent-conversation";
+} from "../../shared/agent/runtime";
+import type { ContentBlock } from "../../shared/agent/conversation";
 import {
   applyAssistantEventToBlocks,
   deriveFlattenedAssistant,
   sealTurnBlockTimings,
-} from "../../shared/conversation-blocks";
-import type { AgentCompactResult } from "../../shared/agent-api";
+} from "../../shared/agent/conversation-blocks";
+import type { AgentCompactResult } from "../../shared/agent/api";
 import type { AgentEventListener, AgentRuntime, AgentTruncateEngineResult } from "./runtime";
 import { newRuntimeSessionId, newTurnId } from "./runtime";
 import { mapPiSessionEvent, type PiLikeSessionEvent } from "./events";
@@ -52,7 +52,7 @@ import type { ToolHost } from "./tool-host";
 import type { ToolExecuteContext } from "./tool-host";
 import type { PermissionGate } from "./permission-gate";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
-import { TOOL_NAMES } from "../../shared/tool-names";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
 import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
@@ -1067,6 +1067,11 @@ export class PiSdkRuntime implements AgentRuntime {
         this.persistActiveTurn(session, "completed");
         break;
       case "turn_failed":
+        piRuntimeLog.warn("turn.fail", {
+          runtimeSessionId: session.runtimeSessionId,
+          turnId: event.turnId,
+          error: shortLogDetail(event.error),
+        });
         this.persistActiveTurn(session, "failed", event.error);
         break;
       case "turn_cancelled":
@@ -1120,6 +1125,7 @@ export class PiSdkRuntime implements AgentRuntime {
       activeTurn: null,
       cancelled: false,
     });
+    const modelRef = handle.getModelRef?.() ?? undefined;
     this.opts.store.createSession({
       conversationId,
       runtimeSessionId,
@@ -1130,7 +1136,7 @@ export class PiSdkRuntime implements AgentRuntime {
       permissionMode: input.permissionMode ?? "edit_auto",
       sessionAgent: input.sessionAgent ?? "build",
       piSessionFile: handle.sessionFile,
-      ...(handle.getModelRef?.() ? { modelRef: handle.getModelRef() } : {}),
+      ...(modelRef ? { modelRef } : {}),
     });
     if (persist.mode !== "open") {
       piRuntimeLog.info("session.create", {
@@ -1183,6 +1189,7 @@ export class PiSdkRuntime implements AgentRuntime {
       sessionAgent: input.sessionAgent,
       allowedPaths: input.allowedPaths,
     });
+    const turnIdAtPrompt = session.turnId;
     try {
       await this.applyTurnModel(session, input);
       await session.handle.prompt(
@@ -1193,16 +1200,27 @@ export class PiSdkRuntime implements AgentRuntime {
         })),
       );
     } catch (err) {
+      const live = this.sessions.get(session.runtimeSessionId);
+      // Watchdog / cancel already committed the turn — abort() then throws
+      // "terminated" and must not overwrite that with a second turn_failed.
+      if (
+        !live
+        || live.cancelled
+        || !live.activeTurn
+        || live.activeTurn.turnId !== turnIdAtPrompt
+      ) {
+        return;
+      }
       piRuntimeLog.warn("turn.fail", {
         runtimeSessionId: session.runtimeSessionId,
-        turnId: session.turnId,
+        turnId: turnIdAtPrompt,
         error: shortLogDetail(err),
       });
       this.emit({
         type: "turn_failed",
         runtimeSessionId: session.runtimeSessionId,
         tabId: session.tabId,
-        turnId: session.turnId,
+        turnId: turnIdAtPrompt,
         error: err instanceof Error ? err.message : String(err),
       });
       return;
@@ -1210,7 +1228,6 @@ export class PiSdkRuntime implements AgentRuntime {
     // Pi may deliver terminal events (message_end / agent_end) asynchronously
     // after prompt() resolves. Wait briefly before closing the live turn, so
     // the terminal event's usage accumulation is not lost.
-    const turnIdAtPrompt = session.turnId;
     setTimeout(() => {
       const live = this.sessions.get(session.runtimeSessionId);
       if (!live) return;

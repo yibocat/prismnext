@@ -34,12 +34,13 @@ import {
   type SlashCatalogMcp,
   type SlashCatalogSkill,
 } from "@/lib/chat/slash-catalog";
+import { listProjectSubagents } from "@/lib/settings";
 import {
   extractUserMessageEditParts,
   resendFromUserTurn,
 } from "@/lib/chat/user-message-resend";
 import { ChatImagePreviewDialog } from "@/lib/markdown/chat-image-preview";
-import type { SubagentInfo } from "@shared/agent-subagents";
+import type { SubagentInfo } from "@shared/agent/subagents";
 import { ComposerToolbar } from "./agent-settings/composer-toolbar";
 import { InlineComposerEditor } from "./inline-composer";
 import { InlineRichText, InlineTokenChip } from "./inline-tokens";
@@ -127,7 +128,7 @@ export const UserMessageHeader = memo(function UserMessageHeader({
     void (async () => {
       try {
         const [expertList, catalog] = await Promise.all([
-          window.electronAPI.subagentsList(projectRoot),
+          listProjectSubagents(projectRoot),
           loadSlashCatalog(projectRoot),
         ]);
         if (cancelled) return;

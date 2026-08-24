@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildIntensiveReadingInstruction } from "../../src/main/prompts/per-turn/intensive-reading";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("buildIntensiveReadingInstruction", () => {
   it("returns empty string when no papers", () => {

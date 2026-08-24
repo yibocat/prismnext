@@ -104,8 +104,11 @@ describe("scrubLatexForKatex", () => {
 describe("isScientificExtractPath", () => {
   it("detects library extract markdown", () => {
     expect(
-      isScientificExtractPath(".prismnext/library/extract/abc123/mineru.md"),
+      isScientificExtractPath("library/extract/abc123/mineru.md"),
     ).toBe(true);
+    expect(
+      isScientificExtractPath(".prismnext/library/extract/abc123/mineru.md"),
+    ).toBe(false);
     expect(isScientificExtractPath("notes/readme.md")).toBe(false);
   });
 });

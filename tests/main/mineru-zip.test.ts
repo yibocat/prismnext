@@ -7,7 +7,7 @@ import {
   parseMineruZipBuffer,
   rewriteMarkdownAssetPaths,
   mineruImageRelPath,
-} from "../../src/main/services/mineru-zip";
+} from "../../src/main/literature/extract/mineru-zip";
 
 function createTestZip(files: Record<string, string | Buffer>): Buffer {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-mineru-zip-"));

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isLiteratureAiMetadataConfigured,
   resolveLiteratureAiMetadataModel,
-} from "../../src/shared/literature-ai-metadata-model";
+} from "../../src/shared/literature/ai-metadata-model";
 
 describe("literature-ai-metadata-model", () => {
   it("returns null when provider and model are unset (no openai default)", () => {

@@ -17,11 +17,11 @@ import {
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { LiteraturePaper } from "@/types/electron.d";
-import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
 import {
   blockRegions,
   mergeBlockMarkdown,
-} from "../../../shared/paper-extract-block";
+} from "../../../shared/literature/paper-extract-block";
 import { useLiteratureBlocks } from "./literature-block-context";
 import {
   excerptFromTextSelection,

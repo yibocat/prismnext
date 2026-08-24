@@ -2,7 +2,7 @@
  * AgentRuntime — lifecycle surface used by RuntimeRegistry / AgentService.
  */
 
-import type { AgentCompactResult } from "../../shared/agent-api";
+import type { AgentCompactResult } from "../../shared/agent/api";
 
 export interface AgentTruncateEngineResult {
   ok: boolean;
@@ -15,7 +15,7 @@ import type {
   CreateSessionResult,
   RuntimeSessionId,
   TurnInput,
-} from "../../shared/agent-runtime";
+} from "../../shared/agent/runtime";
 
 export type AgentEventListener = (event: AgentEvent) => void;
 

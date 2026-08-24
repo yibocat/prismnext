@@ -1,7 +1,7 @@
 // Skills settings — flat SETTINGS_CARD list (name · tokens · team · description).
 // Core / store skills are browse-only; self-created / self-installed can be deleted.
 // No per-skill enable Switch — availability is team Skills allowlist / presence.
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,9 +14,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useDocumentStore } from "@/stores/document-store";
-import { revealProjectHiddenPath } from "@/lib/files/open-project-path";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useSkillsRefreshStore } from "@/lib/settings/skills-refresh";
+import {
+  checkProjectSkillUpdates,
+  deleteProjectSkill,
+  listProjectSkills,
+  listSkillAssets,
+  reinstallProjectSkill,
+  revealHomeSkillsFolder,
+  type InstalledSkill,
+  type SkillUpdateRow,
+} from "@/lib/settings";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -37,31 +46,6 @@ import {
 } from "./agent-assets-shared";
 
 const SKILLS_LIST_PREVIEW = 15;
-
-interface InstalledSkill {
-  fqid: string;
-  id: string;
-  name: string;
-  description: string;
-  skillDirRel: string;
-  enabled: boolean;
-  tokenCount: number;
-  installOrigin?:
-    | { adapter: "github"; repo: string; ref: string; path: string }
-    | { adapter: "discovery"; indexUrl: string };
-  origin: "bundled" | "registry" | "custom" | "plugin";
-  originTeamName?: string;
-  removable: boolean;
-}
-
-interface SkillUpdateRow {
-  skillId: string;
-  status: "current" | "update_available" | "source_missing" | "unknown";
-  updateAvailable: boolean;
-  installedVersion?: string;
-  remoteVersion?: string;
-  message?: string;
-}
 
 export function SkillsSettings({
   embedded = false,
@@ -126,8 +110,8 @@ export function SkillsSettings({
         return;
       }
       const [assetList, skillList] = await Promise.all([
-        window.electronAPI.teamsListAssets(projectRoot, "skill"),
-        window.electronAPI.agentListSkills(projectRoot),
+        listSkillAssets(projectRoot),
+        listProjectSkills(projectRoot),
       ]);
       setAssets(assetList);
       setSkills(skillList);
@@ -156,7 +140,7 @@ export function SkillsSettings({
     deleteConfirm.clearPending();
     setSaving(true);
     try {
-      await window.electronAPI.agentReinstallSkill(projectRoot, skill.id);
+      await reinstallProjectSkill(projectRoot, skill.id);
       await loadAll();
       setUpdatesBySkillId((prev) => {
         const next = { ...prev };
@@ -176,7 +160,7 @@ export function SkillsSettings({
     deleteConfirm.clearPending();
     setCheckingUpdates(true);
     try {
-      const updates = await window.electronAPI.agentCheckSkillUpdates(projectRoot);
+      const updates = await checkProjectSkillUpdates(projectRoot);
       const next: Record<string, SkillUpdateRow> = {};
       for (const row of updates) next[row.skillId] = row;
       setUpdatesBySkillId(next);
@@ -196,7 +180,7 @@ export function SkillsSettings({
     deleteConfirm.clearPending();
     setSaving(true);
     try {
-      await window.electronAPI.agentDeleteSkill(projectRoot, fqid);
+      await deleteProjectSkill(projectRoot, fqid);
       await loadAll();
       toast.success(t("settings.skillsPage.toast.removed", { name: fqid.split(":").pop() }));
     } finally {
@@ -205,7 +189,7 @@ export function SkillsSettings({
   };
 
   const openSkillsFolder = () => {
-    revealProjectHiddenPath(".prismnext/agent/teams/project.local/skills");
+    void revealHomeSkillsFolder();
   };
 
   const openCreateSkill = () => {

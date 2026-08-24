@@ -5,7 +5,7 @@ import {
   resolveAppLocale,
   type AppLocalePreference,
   type ResolvedAppLocale,
-} from "../../../shared/app-locale";
+} from "../../../shared/platform/app-locale";
 import { resources } from "./locales";
 
 let initialized = false;

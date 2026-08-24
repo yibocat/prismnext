@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     literatureAutoExtractOnImport: false,
     literatureExtractEngineDefault: "pdfjs",
   })),
   updateSettings: vi.fn(),
 }));
-vi.mock("../../src/main/services/literature-extract-automation", () => ({
+vi.mock("../../src/main/literature/extract/literature-extract-automation", () => ({
   onPaperPdfAttached: vi.fn(),
   onPaperPdfChanged: vi.fn(),
   maybeAutoEnqueueExtract: vi.fn(),
@@ -19,15 +19,15 @@ import * as os from "node:os";
 import {
   createPaperFromStagedCitation,
   type StagedAddProgressCallback,
-} from "../../src/main/services/literature-enrich";
-import { getPaper, listPapers } from "../../src/main/services/literature-service";
-import * as bibliographic from "../../src/shared/bibliographic-metadata";
+} from "../../src/main/literature/enrich";
+import { getPaper, listPapers } from "../../src/main/literature/facade";
+import * as bibliographic from "../../src/main/literature/catalog";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-staged-add-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

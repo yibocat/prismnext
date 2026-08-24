@@ -7,9 +7,9 @@ import {
   buildPromptStackPreview,
   formatPromptStackPreviewMarkdown,
 } from "../../src/main/prompts/stack-preview";
-import { installProjectRule } from "../../src/main/services/rules-sync";
+import { installProjectRule } from "../../src/main/prompts/rules-sync";
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: () => ({}),
 }));
 
@@ -35,6 +35,8 @@ describe("prompt stack preview", () => {
     expect(stable?.content).toContain("# prismnext");
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
+    const agents = preview.sections.find((s) => s.id === "agents-md");
+    expect(agents?.fileHint).toBe(".workbench/agent/AGENTS.md");
   });
 
   it("includes orchestrator agent.md with profile modules", async () => {

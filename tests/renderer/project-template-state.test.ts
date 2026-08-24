@@ -57,7 +57,7 @@ describe("project-template-state", () => {
     });
 
     expect(window.electronAPI.fsWrite).toHaveBeenCalledWith(
-      "/proj/.prismnext/settings.json",
+      "/proj/.workbench/settings.json",
       expect.stringContaining('"phd-thesis"'),
     );
     const written = vi.mocked(window.electronAPI.fsWrite).mock.calls[0][1];

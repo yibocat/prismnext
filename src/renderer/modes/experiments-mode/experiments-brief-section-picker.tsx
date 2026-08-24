@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   RESEARCH_BRIEF_SECTIONS,
   type ResearchBriefSection,
-} from "../../../shared/research-brief";
+} from "../../../shared/research/brief";
 
 export function ExperimentsBriefSectionPicker({
   selected,

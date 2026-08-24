@@ -1,11 +1,11 @@
-import type { StageResult } from "../../../shared/citation-staging";
+import type { StageResult } from "../../../shared/literature/citation-staging";
 import { toolResultPlainText } from "../chat/unwrap-tool-result";
 
 function asStageResult(value: unknown): StageResult | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const obj = value as Record<string, unknown>;
-  if (typeof obj.verified !== "boolean") return null;
-  return obj as StageResult;
+  if (typeof obj.verified !== "boolean" || typeof obj.staged !== "boolean") return null;
+  return obj as unknown as StageResult;
 }
 
 function parseJsonObject(raw: string): unknown {

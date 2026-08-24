@@ -5,22 +5,23 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { entityToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { entityToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   listInteractionSummaries,
   readInteractionSpec,
   upsertInteractionSpec,
-} from "../../services/interaction-store";
+} from "../../interaction/interaction-store";
 import {
+  INTERACTION_SPEC_DIR_REL,
   interactionFenceHint,
   interactionSpecRelativePath,
   coerceInteractionSpecInput,
   explainInteractionSpecFailure,
   parseInteractionSpec,
   type InteractionSpec,
-} from "../../../shared/interaction-spec";
-import { broadcastInteractionChanged } from "../../services/interaction-ui-events";
+} from "../../../shared/interaction/spec";
+import { broadcastInteractionChanged } from "../../interaction/interaction-ui-events";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -41,7 +42,7 @@ function specResponse(spec: InteractionSpec) {
 export const interactionListTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionList,
   label: "List Interactions",
-  description: "List saved figure and plot Interaction objects in .prismnext/interactions/.",
+  description: "List saved figure and plot Interaction objects in .workbench/interactions/.",
   promptGuidelines: [
     "Use before updating an object or when the user asks what figures/plots already exist.",
     "`kindPrefix` narrows to e.g. `plot.` or `figure.`; ids returned here feed interaction-read / interaction-open.",
@@ -62,9 +63,9 @@ export const interactionListTool: NativeToolDefinition = {
 export const interactionReadTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionRead,
   label: "Read Interaction",
-  description: "Read one Interaction spec from .prismnext/interactions/<id>/spec.json (returns full JSON + fenceMarkdown for chat embed).",
+  description: "Read one Interaction spec from .workbench/interactions/<id>/spec.json (returns full JSON + fenceMarkdown for chat embed).",
   promptGuidelines: [
-    "Use interaction-list to discover ids first; ids are the directory names under .prismnext/interactions/.",
+    "Use interaction-list to discover ids first; ids are the directory names under .workbench/interactions/.",
     "The returned `fenceMarkdown` is what you embed in your reply to give the user a clickable card.",
   ],
   parameters: Type.Object({
@@ -86,7 +87,7 @@ export const interactionWriteTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionWrite,
   label: "Write Interaction",
   description:
-    "Create or update an Interaction spec (.prismnext/interactions/<id>/spec.json). " +
+    "Create or update an Interaction spec (.workbench/interactions/<id>/spec.json). " +
     "Embed the returned fenceMarkdown in your assistant reply after success.",
   promptGuidelines: [
     "An Interaction is for figures/plots the user will revisit — not a one-shot peek (`artifact` fence).",
@@ -108,8 +109,8 @@ export const interactionWriteTool: NativeToolDefinition = {
           ? (coerced as { id?: unknown }).id
           : undefined;
       return typeof id === "string" && id.trim()
-        ? `.prismnext/interactions/${id.trim()}/spec.json`
-        : ".prismnext/interactions/";
+        ? interactionSpecRelativePath(id.trim())
+        : `${INTERACTION_SPEC_DIR_REL}/`;
     },
   },
   async execute(args, ctx) {

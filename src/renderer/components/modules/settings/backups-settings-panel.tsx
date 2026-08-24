@@ -18,12 +18,12 @@ import { clearPdfCache } from "@/stores/compile-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { i18n } from "@/lib/i18n";
-
-interface BackupEntry {
-  label: string;
-  timestamp: string;
-  files: string[];
-}
+import {
+  deleteTemplateBackup,
+  listTemplateBackups,
+  restoreTemplateBackup,
+  type TemplateBackupEntry,
+} from "@/lib/settings";
 
 function formatLabel(label: string): { date: string; from: string; to: string } {
   const firstUnderscore = label.indexOf("_");
@@ -60,7 +60,7 @@ export function BackupsSettingsPanel({
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
-  const [backups, setBackups] = useState<BackupEntry[]>([]);
+  const [backups, setBackups] = useState<TemplateBackupEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
@@ -74,8 +74,7 @@ export function BackupsSettingsPanel({
     if (!projectRoot) return;
     setLoading(true);
     try {
-      const result = await window.electronAPI.templateListBackups({ rootPath: projectRoot });
-      setBackups(result);
+      setBackups(await listTemplateBackups(projectRoot));
     } catch {
       setBackups([]);
     }
@@ -91,8 +90,8 @@ export function BackupsSettingsPanel({
     setRestoreError(null);
     setRestoring(label);
     try {
-      await window.electronAPI.templateRestoreBackup({
-        rootPath: projectRoot,
+      await restoreTemplateBackup({
+        projectRoot,
         manuscriptDir,
         backupLabel: label,
       });
@@ -114,10 +113,7 @@ export function BackupsSettingsPanel({
     setDeleteError(null);
     setDeleting(label);
     try {
-      await window.electronAPI.templateDeleteBackup({
-        rootPath: projectRoot,
-        backupLabel: label,
-      });
+      await deleteTemplateBackup(projectRoot, label);
       setConfirmDelete(null);
       if (expanded === label) setExpanded(null);
       toast.success(t("settings.editor.backups.toast.deleted"));

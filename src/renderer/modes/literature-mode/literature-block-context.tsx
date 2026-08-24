@@ -6,12 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
 import {
   buildBlockPlacementsByPage,
   getFlowGroupMembers,
   type BlockPagePlacement,
-} from "../../../shared/paper-extract-block";
+} from "../../../shared/literature/paper-extract-block";
 import type { PdfTextExcerpt } from "./literature-pdf-excerpt";
 
 interface LiteratureBlockContextValue {

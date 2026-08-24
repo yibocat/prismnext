@@ -3,7 +3,7 @@ import {
   EXPERIMENT_RUN_CONFIRM_TIMEOUT_MS,
   PERMISSION_TIMEOUT_MS,
   PERMISSION_UI_TIMEOUT_MS,
-} from "../../src/shared/permission-timeouts";
+} from "../../src/shared/permissions/timeouts";
 
 describe("permission-timeouts (shared)", () => {
   it("keeps ACP/chat UI timeouts identical at 120s", () => {

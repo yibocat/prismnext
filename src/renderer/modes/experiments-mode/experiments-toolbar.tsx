@@ -44,7 +44,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
-import { EXPERIMENT_RUN_KINDS } from "../../../shared/experiment-log";
+import { EXPERIMENT_RUN_KINDS } from "../../../shared/experiments/log";
 import {
   experimentsToolbarContextClass,
 } from "./experiments-detail-chrome";
@@ -60,7 +60,7 @@ import type {
   RunsKindFilter,
   RunsSortOrder,
   RunsStatusFilter,
-} from "./experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 
 /** Match Git/Literature; Execution has more controls so we collapse earlier. */
 const EXPERIMENTS_TOOLBAR_COMPACT_WIDTH = 520;
@@ -171,10 +171,12 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   const workspacePath = useExperimentStore((s) => s.detail?.meta.workspacePath);
   const runInFlight = useExperimentStore((s) => s.runInFlight);
   const cancelRun = useExperimentStore((s) => s.cancelRun);
-  const inDetail = Boolean(tab.experimentId ?? selectedId);
-  const activeDetailTab: DetailPane = tab.experimentsDetailTab ?? "overview";
+  const tabExperimentId = tab.kind === "experiments" ? tab.experimentId : undefined;
+  const inDetail = Boolean(tabExperimentId ?? selectedId);
+  const activeDetailTab: DetailPane =
+    tab.kind === "experiments" ? tab.experimentsDetailTab ?? "overview" : "overview";
   const showRunFilters = inDetail && activeDetailTab === "run";
-  const experimentId = selectedId ?? tab.experimentId ?? null;
+  const experimentId = selectedId ?? tabExperimentId ?? null;
   const isInFlightForCurrent = Boolean(
     runInFlight && experimentId && runInFlight.id === experimentId,
   );
@@ -217,12 +219,12 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   const handleRefresh = useCallback(() => {
     if (!projectRoot) return;
     void refreshList(projectRoot);
-    const currentId = selectedId ?? tab.experimentId;
+    const currentId = selectedId ?? tabExperimentId;
     if (inDetail && currentId) {
       void selectExperiment(projectRoot, currentId);
       void loadResultsSnapshot(projectRoot, currentId);
     }
-  }, [inDetail, loadResultsSnapshot, projectRoot, refreshList, selectExperiment, selectedId, tab.experimentId]);
+  }, [inDetail, loadResultsSnapshot, projectRoot, refreshList, selectExperiment, selectedId, tabExperimentId]);
 
   const handleToggleArchived = useCallback(() => {
     if (!projectRoot) return;
@@ -230,13 +232,13 @@ export function ExperimentsToolbar({ tab }: { tab: RightTab }) {
   }, [projectRoot, setShowArchived, showArchived]);
 
   const handleOpenLab = useCallback(async () => {
-    const id = selectedId ?? tab.experimentId;
+    const id = selectedId ?? tabExperimentId;
     if (!projectRoot || !id) return;
     const paths = await openLabInFiles(projectRoot, id);
     if (!paths) {
       toast.error(t("experiments.toolbar.resolveFailed"));
     }
-  }, [projectRoot, selectedId, tab.experimentId, openLabInFiles, t]);
+  }, [projectRoot, selectedId, tabExperimentId, openLabInFiles, t]);
 
   const handleCancelRun = useCallback(() => {
     if (!projectRoot || !experimentId || !runInFlight || runInFlight.id !== experimentId) {

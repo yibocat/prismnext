@@ -7,9 +7,9 @@ import {
   reconstructInvertedAbstract,
 } from "../../src/shared/bibliographic-metadata/helpers";
 import { mergeBibliographicMetadata } from "../../src/shared/bibliographic-metadata/sources/resolver-helpers";
-import { pickCrossrefPage, pickCrossrefVenue } from "../../src/shared/bibliographic-metadata/sources/crossref";
-import { SOURCE_REGISTRY, listSources } from "../../src/shared/bibliographic-metadata/sources";
-import { dblpSource } from "../../src/shared/bibliographic-metadata/sources/dblp";
+import { pickCrossrefPage, pickCrossrefVenue } from "../../src/shared/bibliographic-metadata/crossref-parse";
+import { SOURCE_REGISTRY, listSources } from "../../src/main/literature/catalog";
+import { dblpSource } from "../../src/main/literature/catalog/sources/dblp";
 
 describe("bibliographic-metadata helpers", () => {
   it("reconstructs OpenAlex inverted abstract", () => {

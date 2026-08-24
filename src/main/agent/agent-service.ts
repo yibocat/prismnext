@@ -4,8 +4,9 @@
 
 import { join } from "node:path";
 import type { WebContents } from "electron";
-import type { AgentEvent } from "../../shared/agent-runtime";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
+import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
 import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
 import {
   type AgentAnswerQuestionInput,
@@ -30,6 +31,10 @@ import {
   type AgentUndoTruncateInput,
   type AgentUndoTruncateResult,
   type AgentRenameSessionInput,
+  type AgentGenerateSessionTitleInput,
+  type AgentGenerateSessionTitleResult,
+  type AgentReassignSessionProjectInput,
+  type AgentReassignSessionProjectResult,
   type AgentResolvePlanSuggestInput,
   type AgentEffortCatalogSnapshot,
   type AgentListModelsInput,
@@ -43,7 +48,7 @@ import {
   type AgentStatus,
   type AgentTestConnectionInput,
   type AgentTestConnectionResult,
-} from "../../shared/agent-api";
+} from "../../shared/agent/api";
 import {
   getAgentEffortCatalog,
   getAgentModelEffort,
@@ -52,17 +57,17 @@ import {
   testAgentConnection,
 } from "./model-catalog";
 import { hydrateSessionRecordToConversation } from "./session-hydrator";
-import { applySubagentEventToRuns } from "../../shared/conversation-blocks";
-import type { ConversationSubagentRun } from "../../shared/agent-conversation";
+import { applySubagentEventToRuns } from "../../shared/agent/conversation-blocks";
+import type { ConversationSubagentRun } from "../../shared/agent/conversation";
 import { PermissionGate, type PermissionGateRequest } from "./permission-gate";
 import { ToolHost } from "./tool-host";
-import { resolvePiAgentRoot, resolvePiRuntimeSessionDir } from "./session-store";
+import { resolvePiAgentRoot, resolvePiRuntimeSessionDir, type AgentSessionRecord } from "./session-store";
 import { RuntimeRegistry, type StartRuntimeInput } from "./runtime-registry";
 import { isPiPrimitiveToolName, PI_PRIMITIVE_TOOL_NAMES } from "./capability-matrix";
 import { InteractionBroker } from "./interaction-broker";
 import { ALL_NATIVE_TOOLS, type NativeToolDefinition, type ExperimentRunFn } from "./tools/index";
 import { resolveTeamPiBinding, type ResolvedPiLeadConfig, type ResolvedPiRosterEntry, type TeamPiBindingInput, type TeamPiBindingResult } from "./team-binding";
-import { buildPermissionRulesFromSettings } from "../services/permission-modes";
+import { buildPermissionRulesFromSettings } from "../../shared/permissions/modes";
 import {
   createTaskDelegationTool,
   PiSubsessionRuntime,
@@ -80,11 +85,12 @@ import {
 import {
   AgentMcpHost,
   mcpDefsFromTeamAssets,
+  resolveMcpSpawnCwd,
   selectMcpServers,
 } from "./mcp-host";
 import type { McpServerDef } from "../../shared/teams/types";
-import { buildLiveTaskRosterMarkdown } from "../../shared/subagent-roster";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("agent-service", "agent");
 
@@ -215,8 +221,6 @@ export interface AgentServiceDeps {
 
 export class AgentService {
   private runtime: PiSdkRuntime | null = null;
-  private gate: PermissionGate | null = null;
-  private interactions: InteractionBroker | null = null;
   private sessionId: string | null = null;
   private projectRoot: string | null = null;
   /** Conversations whose `send()` is still awaiting the engine. */
@@ -374,8 +378,15 @@ export class AgentService {
         mcpServers: mcpDefsFromTeamAssets(teamBinding?.mcps),
       });
       let binding = this.registry.getBinding(conversationId);
+      const existing = this.registry.store.getByConversationId(conversationId);
+      if (binding && existing) {
+        const recRoot = existing.projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+        const want = projectRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+        if (recRoot !== want) {
+          return { ok: false, error: "conversation_project_mismatch" };
+        }
+      }
       if (!binding) {
-        const existing = this.registry.store.getByConversationId(conversationId);
         binding = existing
           ? await this.registry.openConversation({
               conversationId,
@@ -386,6 +397,7 @@ export class AgentService {
               conversationId,
               tabId: this.activeTabId,
               projectRoot,
+              boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
             });
       }
       this.updateDefaultTitle(conversationId, text);
@@ -397,7 +409,7 @@ export class AgentService {
       if (!this.sessionId) {
         return { ok: false, error: "session_missing" };
       }
-      await this.attachLiveMcpTools(conversationId, projectRoot);
+      await this.attachLiveMcpTools(conversationId);
 
       const userText = buildAgentUserText({
         text: input.sessionAgent === "plan"
@@ -449,21 +461,15 @@ export class AgentService {
     this.sending.delete(id);
   }
 
-  async cancel(tabId?: string): Promise<void> {
-    const conversationId = tabId?.trim() || this.activeConversationId;
-    if (conversationId) {
-      const binding = this.registry.getBinding(conversationId);
-      if (binding?.runtimeSessionId) {
-        this.interactions?.cancelSession(binding.runtimeSessionId);
-        this.subsessionRuntimes.get(conversationId)?.cancelAllForParentSession(binding.runtimeSessionId);
-      }
-      await this.registry.cancelTurn(conversationId);
-      this.releaseTurnLock(conversationId);
-      return;
+  async cancel(conversationId?: string): Promise<void> {
+    const id = conversationId?.trim();
+    if (!id) return;
+    const runtimeSessionId = this.registry.cancelConversationWaiters(id);
+    if (runtimeSessionId) {
+      this.subsessionRuntimes.get(id)?.cancelAllForParentSession(runtimeSessionId);
     }
-    if (!this.runtime || !this.sessionId) return;
-    await this.runtime.cancelTurn(this.sessionId);
-    this.releaseTurnLock(this.activeConversationId);
+    await this.registry.cancelTurn(id);
+    this.releaseTurnLock(id);
   }
 
   async reset(tabId?: string): Promise<void> {
@@ -475,18 +481,18 @@ export class AgentService {
   }
 
   resolvePermission(requestId: string, decision: "allow" | "deny"): boolean {
-    return this.gate?.resolve(requestId, decision) ?? false;
+    return this.registry.resolvePermission(requestId, decision);
   }
 
   answerQuestion(input: AgentAnswerQuestionInput): boolean {
-    return this.interactions?.resolveQuestion(input.requestId, {
+    return this.registry.answerQuestion(input.requestId, {
       answer: input.answer,
       selected: input.selected,
-    }) ?? false;
+    });
   }
 
   resolvePlanSuggest(input: AgentResolvePlanSuggestInput): boolean {
-    return this.interactions?.resolvePlanSuggest(input.requestId, input.decision) ?? false;
+    return this.registry.resolvePlanSuggest(input.requestId, input.decision);
   }
 
   async deleteSession(input: AgentDeleteSessionInput): Promise<{ ok: boolean }> {
@@ -496,8 +502,6 @@ export class AgentService {
     this.registry.store.deleteByConversationId(conversationId);
     if (conversationId === this.activeConversationId) {
       this.runtime = null;
-      this.gate = null;
-      this.interactions = null;
       this.sessionId = null;
       this.activeConversationId = null;
     }
@@ -507,7 +511,17 @@ export class AgentService {
   listSessions(projectRoot: string): AgentSessionSummary[] {
     const root = projectRoot.trim();
     if (!root) return [];
-    return this.registry.store.listSessionsByProject(root).map((record) => ({
+    return this.summarizeSessions(this.registry.store.listSessionsByProject(root));
+  }
+
+  listSessionsByProjectId(projectId: string): AgentSessionSummary[] {
+    const id = projectId.trim();
+    if (!id) return [];
+    return this.summarizeSessions(this.registry.store.listSessionsByProjectId(id));
+  }
+
+  private summarizeSessions(records: AgentSessionRecord[]): AgentSessionSummary[] {
+    return records.map((record) => ({
       conversationId: record.conversationId || record.runtimeSessionId,
       title: record.title,
       updatedAt: Date.parse(record.updatedAt) || 0,
@@ -583,7 +597,7 @@ export class AgentService {
   }
 
   async describeImages(input: AgentDescribeImagesInput): Promise<AgentDescribeImagesResult> {
-    const { describeImagesWithVisionFallback } = await import("../services/vision-fallback");
+    const { describeImagesWithVisionFallback } = await import("./vision-fallback");
     return {
       descriptions: await describeImagesWithVisionFallback(
         input.providerId,
@@ -664,12 +678,28 @@ export class AgentService {
     return { count: this.registry.store.rebindCheckout(fromDirectory, toDirectory) };
   }
 
+  async reassignSessionProject(
+    input: AgentReassignSessionProjectInput,
+  ): Promise<AgentReassignSessionProjectResult> {
+    const conversationId = input.conversationId.trim();
+    const projectId = input.projectId.trim();
+    const projectRoot = input.projectRoot.trim();
+    if (!conversationId || !projectId || !projectRoot) {
+      return { ok: false, error: "missing_args" };
+    }
+    const existed = this.registry.store.reassignProject(conversationId, projectId, projectRoot);
+    if (this.registry.getBinding(conversationId)) {
+      await this.resetSession(conversationId);
+    }
+    return { ok: true, existed };
+  }
+
   async syncIntensiveReading(input: AgentSyncIntensiveReadingInput): Promise<{ ok: boolean }> {
     const conversationId = input.conversationId.trim();
     const projectRoot = input.projectRoot.trim();
     if (!conversationId || !projectRoot) return { ok: false };
-    const { getPaper } = await import("../services/literature-service");
-    const { setSessionIntensiveBibkeys } = await import("../services/chat-session-registry");
+    const { getPaper } = await import("../literature/facade");
+    const { setSessionIntensiveBibkeys } = await import("../session/chat-session-registry");
     const bibkeys: string[] = [];
     for (const paperId of input.paperIds ?? []) {
       const paper = getPaper(projectRoot, paperId);
@@ -729,6 +759,30 @@ export class AgentService {
     return { ok: true };
   }
 
+  async generateSessionTitle(
+    input: AgentGenerateSessionTitleInput,
+  ): Promise<AgentGenerateSessionTitleResult> {
+    const conversationId = input.conversationId.trim();
+    if (!conversationId) return { ok: false, error: "missing_conversation" };
+    const record = this.registry.store.getByConversationId(conversationId);
+    if (!record) return { ok: false, error: "unknown_conversation" };
+    const { generateSessionTitleFromRecord } = await import("./session-title");
+    const result = await generateSessionTitleFromRecord(
+      record,
+      input,
+      this.deps.getSettings(),
+    );
+    if (!result.ok || !result.title || result.skipped) return result;
+    const latest = this.registry.store.getByConversationId(conversationId);
+    if (!latest) return result;
+    const firstUser = (input.userText || latest.turns.find((turn) => turn.status === "completed")?.user.text || "").trim();
+    if (!isProvisionalSessionTitle(latest.title, firstUser)) {
+      return { ok: true, title: latest.title, skipped: true };
+    }
+    this.registry.store.put({ ...latest, title: result.title });
+    return result;
+  }
+
   attachOwner(contents: WebContents): void {
     if (this.owner !== contents) {
       this.owner = contents;
@@ -771,8 +825,7 @@ export class AgentService {
         // an in-flight Allow/Deny — otherwise a premature terminal event
         // silently kills a live delete (or any other) prompt.
         if (event.type === "turn_cancelled" || event.type === "turn_failed") {
-          this.runtime?.cancelPendingPermissions?.(event.runtimeSessionId);
-          this.gate?.cancelSession(event.runtimeSessionId);
+          this.registry.cancelHostWaiters(event.runtimeSessionId);
         }
       }
       if (
@@ -849,10 +902,9 @@ export class AgentService {
   private async startRuntime(input: StartRuntimeInput) {
     const ctx = this.startContexts.get(input.conversationId);
     if (!ctx) throw new Error("start_context_missing");
-    this.startContexts.delete(input.conversationId);
     const mcpHost = this.mcpHosts.get(input.conversationId) ?? new AgentMcpHost();
     this.mcpHosts.set(input.conversationId, mcpHost);
-    const agentRoot = resolvePiAgentRoot(this.deps.userDataDir);
+    const agentRoot = resolvePiAgentRoot();
     const store = this.registry.store;
     let runtimeRef: PiSdkRuntime | null = null;
     const gate = new PermissionGate({
@@ -987,7 +1039,7 @@ export class AgentService {
       gate,
       agentDir: join(agentRoot, "runtime"),
       persistSessions: true,
-      piSessionDir: resolvePiRuntimeSessionDir(this.deps.userDataDir),
+      piSessionDir: resolvePiRuntimeSessionDir(),
     });
     runtimeRef = runtime;
     runtime.subscribe((event) => this.sink?.(event));
@@ -997,14 +1049,13 @@ export class AgentService {
         tabId: input.tabId,
         projectRoot: input.projectRoot,
         conversationId: input.conversationId,
+        boundCheckoutPath: input.boundCheckoutPath,
         piSessionFile: input.piSessionFile,
         permissionMode: ctx.permissionMode,
         sessionAgent: "build",
       });
-      this.gate = gate;
-      this.interactions = interactions;
       const { getSessionIntensiveBibkeys, setSessionIntensiveBibkeys } = await import(
-        "../services/chat-session-registry"
+        "../session/chat-session-registry"
       );
       const intensive = getSessionIntensiveBibkeys(input.conversationId);
       if (intensive.length > 0) {
@@ -1014,6 +1065,8 @@ export class AgentService {
         runtime,
         runtimeSessionId: created.runtimeSessionId,
         piSessionFile: created.piSessionFile,
+        gate,
+        interactions,
       };
     } catch (err) {
       this.mcpHosts.delete(input.conversationId);
@@ -1023,15 +1076,21 @@ export class AgentService {
     }
   }
 
-  private async attachLiveMcpTools(conversationId: string, projectRoot: string): Promise<void> {
+  private async attachLiveMcpTools(conversationId: string): Promise<void> {
     const host = this.mcpHosts.get(conversationId);
-    const runtime = this.runtime;
-    const sessionId = this.sessionId;
-    const ctx = this.startContext;
+    const runtime = this.registry.getRuntime(conversationId) as PiSdkRuntime | null;
+    const sessionId = this.registry.getBinding(conversationId)?.runtimeSessionId;
+    const ctx = this.startContexts.get(conversationId);
     if (!host || !runtime || !sessionId || !ctx) return;
+    const record = this.registry.store.getByConversationId(conversationId);
     const tools = await host.ensure(
       selectMcpServers(ctx.mcpServers ?? [], ctx.mcpAllowlist),
-      { cwd: projectRoot },
+      {
+        cwd: resolveMcpSpawnCwd({
+          boundCheckoutPath: record?.boundCheckoutPath,
+          projectRoot: record?.projectRoot || this.projectRoot || "",
+        }),
+      },
     );
     const fresh = host.takeUnattached(tools);
     if (fresh.length === 0) return;
@@ -1047,31 +1106,26 @@ export class AgentService {
   }
 
   private async resetSession(conversationId?: string): Promise<void> {
-    const ids = conversationId
-      ? [conversationId]
-      : this.registry.liveConversationIds();
-    for (const id of ids) {
-      this.releaseTurnLock(id);
-      const host = this.mcpHosts.get(id);
-      this.mcpHosts.delete(id);
-      await host?.dispose().catch(() => {});
-      const subs = this.subsessionRuntimes.get(id);
-      this.subsessionRuntimes.delete(id);
-      if (subs) {
-        const runtimeSessionId = this.registry.getBinding(id)?.runtimeSessionId;
-        if (runtimeSessionId) subs.cancelAllForParentSession(runtimeSessionId);
-      }
-      await this.registry.disposeConversation(id).catch(() => {});
+    const id = conversationId?.trim();
+    if (!id) return;
+    this.releaseTurnLock(id);
+    const host = this.mcpHosts.get(id);
+    this.mcpHosts.delete(id);
+    await host?.dispose().catch(() => {});
+    const subs = this.subsessionRuntimes.get(id);
+    this.subsessionRuntimes.delete(id);
+    if (subs) {
+      const runtimeSessionId = this.registry.getBinding(id)?.runtimeSessionId;
+      if (runtimeSessionId) subs.cancelAllForParentSession(runtimeSessionId);
     }
-    if (!conversationId || conversationId === this.activeConversationId) {
+    await this.registry.disposeConversation(id).catch(() => {});
+    if (id === this.activeConversationId) {
       this.runtime = null;
-      this.gate = null;
-      this.interactions = null;
       this.sessionId = null;
       this.projectRoot = null;
       this.activeConversationId = null;
-      this.startContexts.clear();
     }
+    this.startContexts.delete(id);
   }
 }
 
@@ -1084,7 +1138,7 @@ export function createAgentService(deps: AgentServiceDeps): AgentService {
 export async function getAgentService(): Promise<AgentService> {
   if (singleton) return singleton;
   const { app } = await import("electron");
-  const { getSettings } = await import("../services/settings");
+  const { getSettings } = await import("../app/settings");
   const { promptManager } = await import("../prompts");
   const { buildPromptContext } = await import("../prompts/context");
 

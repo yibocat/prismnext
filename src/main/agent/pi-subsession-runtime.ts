@@ -7,15 +7,15 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import type { AgentEvent } from "../../shared/agent-runtime";
-import type { PermissionMode } from "../../shared/session-agent";
+import type { AgentEvent } from "../../shared/agent/runtime";
+import type { PermissionMode } from "../../shared/agent/session-agent";
 import type { PermissionGate } from "./permission-gate";
 import { ToolHost } from "./tool-host";
 import type { NativeToolDefinition } from "./tools/types";
 import type { ResolvedPiRosterEntry } from "./team-binding";
 import { ALL_NATIVE_TOOLS } from "./tools/index";
 import type { HostSkillDir } from "./skill-loader";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("subagent", "agent");
 
@@ -239,6 +239,15 @@ export class PiSubsessionRuntime {
     return slot;
   }
 
+  /** Parent worktree checkout when set; else the paper root. */
+  parentCheckoutPath(): string {
+    return this.opts.boundCheckoutPath?.trim() || this.opts.projectRoot?.trim() || "";
+  }
+
+  private resolveChildCheckout(input: { boundCheckoutPath?: string; projectRoot: string }): string {
+    return this.parentCheckoutPath() || input.boundCheckoutPath?.trim() || input.projectRoot;
+  }
+
   private beginChildSession(input: {
     parentSessionId: string;
     parentTabId: string;
@@ -361,7 +370,7 @@ export class PiSubsessionRuntime {
               parentToolCallId: input.parentToolCallId,
               expert: input.expert,
               projectRoot: input.projectRoot,
-              boundCheckoutPath: input.boundCheckoutPath,
+              boundCheckoutPath: this.resolveChildCheckout(input),
               abortController,
             });
             childText = built.childText;
@@ -375,7 +384,7 @@ export class PiSubsessionRuntime {
             parentToolCallId: input.parentToolCallId,
             expert: input.expert,
             projectRoot: input.projectRoot,
-            boundCheckoutPath: input.boundCheckoutPath,
+            boundCheckoutPath: this.resolveChildCheckout(input),
             abortController,
           });
           childText = built.childText;
@@ -517,7 +526,7 @@ export function createTaskDelegationTool(opts: {
         parentTurnId: ctx.turnId,
         parentToolCallId: ctx.toolCallId,
         projectRoot: ctx.projectRoot,
-        boundCheckoutPath: ctx.projectRoot,
+        boundCheckoutPath: opts.subsessionRuntime.parentCheckoutPath() || ctx.projectRoot,
         permissionMode: ctx.permissionMode,
         expert: target,
         prompt,

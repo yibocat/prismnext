@@ -1,12 +1,13 @@
 import { normalizeCheckoutPath } from "./worktree-path";
 import type { WorktreeInfo } from "@/types/electron";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 
 /** True when the worktree checkout directory still exists on disk (has a .git marker). */
 export async function isWorktreeCheckoutOnDisk(directory: string): Promise<boolean> {
   const root = normalizeCheckoutPath(directory);
   if (!root) return false;
   try {
-    return await window.electronAPI.fsExists(`${root}/.git`);
+    return await fsDesktop.fsExists(`${root}/.git`);
   } catch {
     return false;
   }

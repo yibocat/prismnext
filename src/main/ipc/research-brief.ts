@@ -1,11 +1,11 @@
 import { ipcMain } from "electron";
-import { RESEARCH_BRIEF_REL } from "../../shared/research-brief";
+import { RESEARCH_BRIEF_REL } from "../../shared/research/brief";
 import {
   ensureResearchBrief,
   readResearchBrief,
   researchBriefAbsPath,
   updateResearchBriefSection,
-} from "../services/research-brief-service";
+} from "../research/research-brief-service";
 
 export function registerResearchBriefHandlers(): void {
   ipcMain.handle("researchBrief:ensure", async (_event, args: { projectRoot: string }) => {

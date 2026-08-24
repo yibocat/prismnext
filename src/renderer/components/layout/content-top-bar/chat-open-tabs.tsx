@@ -93,7 +93,7 @@ export const ChatOpenTabs = memo(function ChatOpenTabs() {
               tabIndex={0}
               className={cn(
                 "group flex h-6 max-w-[9.5rem] shrink-0 items-center gap-1 rounded-md px-1.5",
-                "text-[length:var(--font-chat-meta)] select-none transition-colors cursor-default",
+                "text-[length:var(--font-chat-meta)] select-none transition-colors cursor-pointer",
                 active
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",

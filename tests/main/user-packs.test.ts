@@ -1,9 +1,9 @@
 // User teams (app-level, like installed teams) — create → catalog → resolver → delete.
 import { describe, it, expect, afterEach } from "vitest";
 import { rmSync } from "node:fs";
-import { setUserTeamsDataDir, createUserTeam, deleteUserTeam, listUserTeams, ensureUserTeamsRegistered } from "../../src/main/services/user-teams";
+import { setUserTeamsDataDir, createUserTeam, deleteUserTeam, listUserTeams, ensureUserTeamsRegistered } from "../../src/main/teams/user-teams";
 import { listAssets, listTeams } from "../../src/main/teams/resolver";
-import { saveCustomOrchestrator, saveCustomSubagent, deleteCustomOrchestrator, listOrchestrators } from "../../src/main/services/subagents-sync";
+import { saveCustomOrchestrator, saveCustomSubagent, deleteCustomOrchestrator, listOrchestrators } from "../../src/main/teams/subagents-sync";
 import { USER_TEAM_PUBLISHER } from "../../src/shared/teams/types";
 import { makeProjectRoot, makeTempDir } from "./packs-test-utils";
 

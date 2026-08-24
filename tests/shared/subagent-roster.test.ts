@@ -3,7 +3,7 @@ import {
   OPEN_BUILTIN_ROSTER,
   buildLiveTaskRosterMarkdown,
   buildSubagentRosterMarkdown,
-} from "../../src/shared/subagent-roster";
+} from "../../src/shared/agent/subagent-roster";
 
 describe("subagent-roster", () => {
   it("OPEN_BUILTIN_ROSTER covers open Task builtins only", () => {

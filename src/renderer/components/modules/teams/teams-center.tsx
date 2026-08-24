@@ -18,6 +18,7 @@ import {
   Trash2Icon,
   XIcon,
 } from "lucide-react";
+import { teamsDesktop } from "@/lib/desktop-api/teams";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
@@ -121,7 +122,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setPacks([]);
       return;
     }
-    setPacks((await window.electronAPI.teamsList(projectRoot)).map(toCardView));
+    setPacks((await teamsDesktop.teamsList(projectRoot)).map(toCardView));
   }, [projectRoot]);
 
   useEffect(() => {
@@ -134,7 +135,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
       setContents([]);
       return;
     }
-    void window.electronAPI.teamsGetTeamContents(selectedId, projectRoot).then(setContents);
+    void teamsDesktop.teamsGetTeamContents(selectedId, projectRoot).then(setContents);
   }, [selectedId, projectRoot]);
 
   const selected = packs.find((p) => p.manifest.id === selectedId) ?? null;
@@ -148,7 +149,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
     if (!projectRoot) return;
     setBusy(pack.manifest.id);
     try {
-      const { suggestedActiveTeam } = await window.electronAPI.teamsInstall(pack.manifest.id);
+      const { suggestedActiveTeam } = await teamsDesktop.teamsInstall(pack.manifest.id);
       toast.success(t("teamsCenter.toast.installed", { name: pack.manifest.name }));
       if (suggestedActiveTeam) {
         toast(t("teamsCenter.suggestion.text", { pack: pack.manifest.name }), {
@@ -177,7 +178,7 @@ export function TeamsCenter({ onBack }: TeamsCenterProps) {
   const uninstall = async (pack: TeamCardView) => {
     setBusy(pack.manifest.id);
     try {
-      await window.electronAPI.teamsUninstall(pack.manifest.id);
+      await teamsDesktop.teamsUninstall(pack.manifest.id);
       toast.success(t("teamsCenter.toast.uninstalled", { name: pack.manifest.name }));
       await reload();
       await syncComposerCatalog();

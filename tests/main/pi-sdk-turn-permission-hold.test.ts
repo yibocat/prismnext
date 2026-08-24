@@ -7,7 +7,7 @@ import { AgentSessionStore } from "../../src/main/agent/session-store";
 import { ToolHost } from "../../src/main/agent/tool-host";
 import { PermissionGate } from "../../src/main/agent/permission-gate";
 import { deleteTool } from "../../src/main/agent/tools/system";
-import type { AgentEvent } from "../../src/shared/agent-runtime";
+import type { AgentEvent } from "../../src/shared/agent/runtime";
 import type { PiLikeSessionEvent } from "../../src/main/agent/events";
 
 const dirs: string[] = [];

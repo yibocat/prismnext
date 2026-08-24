@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { checkBibConsistency, extractCiteKeysFromTex } from "../../src/main/services/latex-service";
+import { checkBibConsistency, extractCiteKeysFromTex } from "../../src/main/compile/latex-service";
 
 describe("latex bib check", () => {
   let root: string;

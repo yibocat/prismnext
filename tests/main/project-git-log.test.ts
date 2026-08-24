@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ProjectLifecycleFs } from "../../src/main/services/project-lifecycle-authority";
+import type { ProjectLifecycleFs } from "../../src/main/project/project-lifecycle-authority";
 
 type IpcHandler = (event: unknown, args?: { rootPath: string }) => Promise<unknown>;
 const handlers = new Map<string, IpcHandler>();
@@ -21,7 +21,7 @@ vi.mock("electron", () => ({
   dialog: {},
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");
@@ -30,10 +30,10 @@ vi.mock("../../src/main/services/logger", () => ({
   },
 }));
 
-import { commit, getStatus, gitFailCommand, shouldLogGitFail } from "../../src/main/services/git";
-import { createWorktree } from "../../src/main/services/worktree";
+import { commit, getStatus, gitFailCommand, shouldLogGitFail } from "../../src/main/git/facade";
+import { createWorktree } from "../../src/main/git/worktree";
 import { registerProjectLifecycleHandlers } from "../../src/main/ipc/project-lifecycle";
-import { ProjectLifecycleAuthority } from "../../src/main/services/project-lifecycle-authority";
+import { ProjectLifecycleAuthority } from "../../src/main/project/project-lifecycle-authority";
 
 const dirs: string[] = [];
 

@@ -11,8 +11,8 @@ import { Compartment, EditorState, EditorSelection, Prec } from "@codemirror/sta
 import { EditorView, keymap, placeholder as cmPlaceholder, drawSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import type { CommandDef } from "@commands/types";
-import type { SubagentInfo } from "@shared/agent-subagents";
-import { formatPaperMentionLabel } from "../../../../../shared/bibkey-utils";
+import type { SubagentInfo } from "@shared/agent/subagents";
+import { formatPaperMentionLabel } from "../../../../../shared/literature/bibkey-utils";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { mentionFileDisplayLabel, mentionFileLabel } from "@/lib/files/mentionable-files";
@@ -20,8 +20,8 @@ import type { LiteraturePaper } from "@/types/electron.d";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { useExperimentStore } from "@/stores/experiment-store";
-import { pickBestReadySource } from "../../../../../shared/paper-extract";
-import type { ExperimentSummary } from "../../../../../shared/experiment-log";
+import { pickBestReadySource } from "../../../../../shared/literature/paper-extract";
+import type { ExperimentSummary } from "../../../../../shared/experiments/log";
 import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
 import { absolutePathsFromDataTransfer } from "@/lib/chat/composer-attach-file";
 import { COMPOSER_INSERT_MIME, acceptComposerDrop, isComposerInsertDrag } from "@/lib/chat/composer-drag";
@@ -62,10 +62,16 @@ import type { CursorAnchor } from "./dropdown-position";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { compactComposerNeedsExpand } from "./compact-overflow";
 import { syncComposerQueryState } from "./composer-query-sync";
-import { loadDraftParts } from "./draft-utils";
+import {
+  loadDraftParts,
+  type ComposerFileMentionTarget,
+  type InlineComposerEditorHandle,
+} from "@/lib/chat/composer-draft";
 import { useChatStore } from "@/stores/chat-store";
 import { requestOpenModelPicker } from "@/lib/chat/open-model-picker";
 import type { Extension } from "@codemirror/state";
+
+export type { InlineComposerEditorHandle };
 
 /** Clear the `/…` query without inserting a command chip. */
 function clearSlashQuery(view: EditorView, q: ComposerQuery): void {
@@ -272,18 +278,6 @@ function applyPartsToEditorView(view: EditorView, parts: ComposerPart[]): void {
   } else {
     syncTokenMapFromParts(view, parts);
   }
-}
-
-export interface InlineComposerEditorHandle {
-  focus: () => void;
-  getParts: () => ComposerPart[];
-  /** Replace editor document immediately (send/clear — bypasses debounced draft persist). */
-  replaceParts: (parts: ComposerPart[]) => void;
-  insertFileMention: (file: ProjectFile) => void;
-  /** Insert a context token from RightArea (terminal, editor, git diff, …). */
-  insertContextPart: (part: Exclude<ComposerPart, { type: "text" }>) => boolean;
-  /** @deprecated Use insertContextPart */
-  insertTerminalSnippet: (part: ComposerPart) => void;
 }
 
 export interface InlineComposerEditorProps {
@@ -1274,7 +1268,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           focus: () => view.focus(),
           getParts: () => readPartsFromView(view),
           replaceParts: (next) => applyPartsToEditorView(view, next),
-          insertFileMention: (file: ProjectFile) => {
+          insertFileMention: (file: ComposerFileMentionTarget) => {
             const filePath = mentionFileLabel(file);
             const pos = view.state.selection.main.head;
             insertComposerToken(
@@ -1390,7 +1384,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         const view = viewRef.current;
         if (view) applyPartsToEditorView(view, next);
       },
-      insertFileMention: (file: ProjectFile) => {
+      insertFileMention: (file: ComposerFileMentionTarget) => {
         const view = viewRef.current;
         if (!view) return;
         const filePath = mentionFileLabel(file);

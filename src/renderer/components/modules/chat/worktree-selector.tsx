@@ -2,11 +2,11 @@ import { useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
-  GitBranchIcon,
   Loader2Icon,
   LaptopIcon,
   LockIcon,
   Trash2Icon,
+  WorkflowIcon,
 } from "lucide-react";
 import {
   AppMenu,
@@ -97,11 +97,11 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
       baseBranch = useGitStore.getState().branch;
     }
     if (!baseBranch) {
-      toast.error("Cannot determine base branch — is Git initialized?");
+      toast.error(t("chat.worktree.noBaseBranch"));
       return;
     }
     void applyCheckoutTransition({ type: "worktree-intent", baseBranch });
-  }, [projectRoot]);
+  }, [projectRoot, t]);
 
   const handleSelectExisting = useCallback(
     (wtName: string) => {
@@ -150,7 +150,7 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
         {mode === "local" ? (
           <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
         ) : (
-          <GitBranchIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+          <WorkflowIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
         )}
         <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
         <LockIcon className="size-3 text-muted-foreground/50" />
@@ -179,7 +179,7 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
             {mode === "local" ? (
               <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
             ) : (
-              <GitBranchIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
+              <WorkflowIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
             )}
             <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
           </button>

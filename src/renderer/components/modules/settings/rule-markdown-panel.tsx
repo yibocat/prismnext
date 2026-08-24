@@ -6,12 +6,17 @@ import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { notifyPromptConfigChanged } from "@/lib/settings/prompt-config-notify";
 import {
+  installProjectRule,
+  listProjectRules,
+  readProjectRuleMd,
+} from "@/lib/settings";
+import {
   defaultNewRuleMarkdown,
   validateRuleMarkdown,
 } from "@/lib/agent/rules-markdown";
 import { SettingsMarkdownEditor } from "./settings-markdown-editor";
-import { MarkdownContentPreview } from "./markdown-content-preview";
 import { SettingsMarkdownToolbar } from "./settings-markdown-toolbar";
+import { MarkdownContentPreview } from "./markdown-content-preview";
 
 type RuleMarkdownSlot = Extract<SettingsPanelSlot, { kind: "rule-markdown" }>;
 
@@ -29,13 +34,6 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
     slot.mode === "edit" ? "preview" : "source",
   );
 
-  const ruleDirRel =
-    slot.mode === "edit" ? `.prismnext/agent/rules/${slot.ruleId}` : null;
-  const rulePath =
-    projectRoot && ruleDirRel
-      ? `${projectRoot.replace(/[/\\]+$/, "")}/${ruleDirRel}/RULE.md`
-      : null;
-
   const loadContent = useCallback(
     async (options?: { silent?: boolean }) => {
       const silent = options?.silent ?? false;
@@ -46,7 +44,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
         if (!silent) setLoading(false);
         return;
       }
-      if (!rulePath) {
+      if (!projectRoot) {
         setContent("");
         setSavedContent("");
         if (!silent) setLoading(false);
@@ -54,8 +52,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
       }
       if (!silent) setLoading(true);
       try {
-        const result = await window.electronAPI.fsRead(rulePath);
-        const text = result?.content ?? "";
+        const text = await readProjectRuleMd(projectRoot, slot.ruleId);
         setContent(text);
         setSavedContent(text);
       } catch {
@@ -65,7 +62,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
         if (!silent) setLoading(false);
       }
     },
-    [slot.mode, rulePath, closePanel, t],
+    [slot.mode, slot.mode === "edit" ? slot.ruleId : null, projectRoot, closePanel, t],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -92,7 +89,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
     }
 
     if (slot.mode === "new") {
-      const list = await window.electronAPI.agentListRules(projectRoot);
+      const list = await listProjectRules(projectRoot);
       if (list.some((r) => r.id === validation.name)) {
         toast.error(t("settings.editor.rule.toast.exists", { name: validation.name }));
         return;
@@ -101,7 +98,7 @@ export function RuleMarkdownPanel({ slot }: { slot: RuleMarkdownSlot }) {
 
     setSaving(true);
     try {
-      await window.electronAPI.agentInstallRule(projectRoot, validation.name, content.trim());
+      await installProjectRule(projectRoot, validation.name, content.trim());
       setSavedContent(content);
       notifyPromptConfigChanged();
       toast.success(

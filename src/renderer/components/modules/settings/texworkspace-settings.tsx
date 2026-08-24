@@ -2,7 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { useDocumentStore } from "@/stores/document-store";
-import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import {
+  createWorkspaceFolders,
+  useWorkspaceConfigStore,
+} from "@/stores/workspace-config-store";
 import { useLayoutStore, type TexworkspaceViewMode } from "@/stores/layout-store";
 import { getTemplates } from "@/lib/templates/template-data";
 import type { TemplateMeta } from "@/components/modules/templates/types";
@@ -85,7 +88,6 @@ function ManuscriptSection() {
 
   const openTemplateCenter = () => {
     useLayoutStore.getState().setLeftSidebarView("templates");
-    useLayoutStore.getState().setLeftSidebarOverlay(false);
   };
 
   if (!projectRoot) {
@@ -190,7 +192,7 @@ export function TexworkspaceSettings() {
       const dirs = useWorkspaceConfigStore.getState().workspaceDirs;
       const ok = await saveConfig(capturedRoot);
       if (ok) {
-        await window.electronAPI.workspaceCreateFolders(capturedRoot, dirs);
+        await createWorkspaceFolders(capturedRoot, dirs);
       }
     }, 300);
     return () => {

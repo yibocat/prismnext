@@ -51,6 +51,7 @@
     "closeDisabledStreaming": "智能体运行中无法关闭",
     "unsavedSession": "尚未保存为会话",
     "mergesInto": "合并到 {{branch}}",
+    "noBranch": "无 Git 分支",
     "worktreeRemoved": "Worktree 已移除 — 会话保留在项目上",
     "citationsCount": "{{count}} 条暂存引用",
     "citationsCount_plural": "{{count}} 条暂存引用",
@@ -148,12 +149,30 @@
     "locked": "Agent 运行中时无法切换 worktree。",
     "lockedWithLabel": "Worktree 已锁定：{{label}}",
     "commitsBehind": "落后基线 {{n}} 个提交",
-    "remove": "移除 {{name}}"
+    "remove": "移除 {{name}}",
+    "noBaseBranch": "无法确定基线分支 — Git 是否已初始化？",
+    "close": "关闭 Worktree",
+    "closeHint": "丢弃 worktree 并回到主项目",
+    "mergeToBranch": "合并到分支",
+    "mergeDesc": "将 worktree 的更改并入 {{branch}}。Worktree 会保留，这不是远程推送。",
+    "noChanges": "没有可合并的更改",
+    "commitsReady": "{{count}} 个提交可合并到 {{branch}}",
+    "filesCount": "{{count}} 个文件",
+    "commitsCount": "{{count}} 个提交",
+    "merging": "正在合并…",
+    "mergeInto": "合并 → {{branch}}",
+    "mergeSuccess": "已将 {{summary}} 合并到 {{branch}}",
+    "mergeFailed": "合并失败：{{error}}",
+    "mergeRolledBack": "合并已回滚，并带有警告"
   },
   "branch": {
     "noBranches": "无分支",
     "next": "下一",
     "current": "当前"
+  },
+  "project": {
+    "select": "项目",
+    "locked": "Agent 运行中时无法更换项目。"
   },
   "model": {
     "selectModel": "选择模型",
@@ -220,7 +239,7 @@
     "approveDrawerBody": "同意后按计划文件开始构建；拒绝则丢弃草稿，会话可继续聊。",
     "approveDrawerBodyWithTitle": "{{title}}",
     "viewDraft": "查看草稿",
-    "draftNotYet": "草稿文件尚未就绪 — 请等助手写入本会话的 `.prismnext/research/plans/drafts/<sessionId>.md`。",
+    "draftNotYet": "草稿文件尚未就绪 — 请等助手写入本会话的 `.workbench/research/plans/drafts/<sessionId>.md`。",
     "draftMissingRedirect": "本轮未写入计划草稿文件。聊天内容不是正式计划 — 下一条消息会强制要求助手先写草稿。",
     "approveExecute": "Approve & Build",
     "rejectPlan": "Deny",
@@ -320,6 +339,7 @@
     "emptyTurn": "模型未返回任何内容，通常是触发了限流或额度耗尽，请重试。",
     "provider_error": "模型服务商返回错误（限流、额度不足或 API 失败）。请检查套餐或切换模型。",
     "turn_timeout": "长时间未收到模型响应，已自动终止本轮对话。服务商可能正在限流或暂时不可用。",
+    "turn_aborted": "这一轮在模型完成前被中止了。",
     "connectionLost": "Agent 连接已断开，请重试。",
     "cancelled": "已停止。"
   },

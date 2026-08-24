@@ -1,5 +1,5 @@
 import type { ComposerDragPayload } from "@/lib/chat/composer-drag";
-import type { ExperimentRunEntry } from "../../../shared/experiment-log";
+import type { ExperimentRunEntry } from "../../../shared/experiments/log";
 
 export function experimentRunDragPayload(
   run: ExperimentRunEntry,

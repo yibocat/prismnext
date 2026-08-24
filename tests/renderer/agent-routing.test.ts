@@ -28,6 +28,7 @@ vi.mock("@/lib/git/checkout-context", () => ({
   resolveWorktreeAtCheckout: vi.fn(),
   resolveWorktreePathForSend: vi.fn(),
   isWorktreeCheckoutPath: vi.fn().mockReturnValue(false),
+  isPendingNewWorktree: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("@/lib/git/worktree-path", () => ({
@@ -144,7 +145,7 @@ describe("chat-store Agent routing", () => {
   });
 
   it("loads history through the Agent API", async () => {
-    const { emptyConversation } = await import("../../src/shared/agent-conversation");
+    const { emptyConversation } = await import("../../src/shared/agent/conversation");
     agentLoadSession.mockResolvedValue({
       ok: true,
       conversationId: "conv-hist",

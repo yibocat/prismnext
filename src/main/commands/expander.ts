@@ -3,12 +3,12 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { execSync } from "node:child_process";
 import type { ParsedCommand } from "./types";
-import { getSettings } from "../services/settings";
+import { getSettings } from "../app/settings";
 import {
   buildPermissionRulesFromSettings,
   resolvePermissionAction,
   resolvePermissionMode,
-} from "../services/permission-modes";
+} from "../../shared/permissions/modes";
 
 const MAX_SHELL_OUTPUT = 10_240; // 10KB
 const SHELL_TIMEOUT_MS = 5_000;

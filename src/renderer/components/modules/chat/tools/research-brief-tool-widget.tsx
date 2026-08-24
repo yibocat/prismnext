@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { FileTextIcon } from "lucide-react";
-import { RESEARCH_BRIEF_REL } from "@shared/research-brief";
+import { RESEARCH_BRIEF_REL } from "@shared/research/brief";
 import { ToolCard, Field } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 

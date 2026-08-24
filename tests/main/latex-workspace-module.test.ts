@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getNativeToolByName } from "../../src/main/agent/tools/index";
 import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 import type { PromptContext } from "../../src/main/prompts/types";
 
 describe("buildLatexWorkspacePrompt", () => {
@@ -10,7 +10,7 @@ describe("buildLatexWorkspacePrompt", () => {
     expect(latex).toContain("Soft workflow");
     expect(latex).toContain(TOOL_NAMES.latexCompile);
     expect(latex).toContain(TOOL_NAMES.latexRoot);
-    expect(latex).toContain(".prismnext/compile/");
+    expect(latex).toContain(".workbench/compile/");
     expect(latex).toContain("Scope boundary");
     expect(latex).toContain("Route the request");
     expect(latex).toContain("Citation & bibliography audit");

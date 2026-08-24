@@ -1,6 +1,9 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { executionDesktop } from "@/lib/desktop-api/execution";
+import { desktopPlatform } from "@/lib/desktop-api/shell";
+import { terminalDesktop } from "@/lib/desktop-api/terminal";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
@@ -61,13 +64,13 @@ export function TerminalToolbar({
 
   const handleKill = useCallback(() => {
     if (!sessionId || !isActive) return;
-    window.electronAPI.terminalWrite({ sessionId, data: "\x03" });
+    terminalDesktop.terminalWrite({ sessionId, data: "\x03" });
   }, [sessionId, isActive]);
 
   const handleClear = useCallback(() => {
     if (!sessionId || !isActive) return;
-    const cmd = window.electronAPI.platform === "win32" ? "cls\r" : "clear\r";
-    window.electronAPI.terminalWrite({ sessionId, data: cmd });
+    const cmd = desktopPlatform() === "win32" ? "cls\r" : "clear\r";
+    terminalDesktop.terminalWrite({ sessionId, data: cmd });
   }, [sessionId, isActive]);
 
   const handleRestart = useCallback(() => {
@@ -119,7 +122,7 @@ export function TerminalToolbar({
       .filter((item) => item && !terminalExecutionIsFinal(item.state))
       .map((item) => item!.executionId);
     for (const id of ids.length > 0 ? ids : (linkedExecutionId ? [linkedExecutionId] : [])) {
-      void window.electronAPI.executionCancel(id);
+      void executionDesktop.executionCancel(id);
     }
   }, [linkedChatTabId, linkedExecutionId]);
 

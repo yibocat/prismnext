@@ -4,7 +4,7 @@ import {
   isPathUnderSkillReadRoots,
   resolveSkillRelativePath,
   skillReadRootsFromDirs,
-} from "../../src/shared/skill-read-roots";
+} from "../../src/shared/skills/read-roots";
 
 const PROJECT = "/Users/me/paper";
 const TIKZ = "/app/teams/core/skills/figure-tikz";
@@ -18,6 +18,14 @@ describe("skillReadRootsFromDirs", () => {
       { dir: "  " },
       { dir: MPL },
     ])).toEqual([TIKZ, MPL]);
+  });
+
+  it("drops leftover paper hangars and keeps home / bundled dirs", () => {
+    expect(skillReadRootsFromDirs([
+      { dir: TIKZ },
+      { dir: `${PROJECT}/.prismnext/agent/skills/old` },
+      { dir: "/Users/me/.prismnext/skills/my-flow" },
+    ])).toEqual([TIKZ, "/Users/me/.prismnext/skills/my-flow"]);
   });
 });
 

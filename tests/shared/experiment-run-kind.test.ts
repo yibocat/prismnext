@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EXPERIMENT_RUN_KINDS,
   parseExperimentRunKind,
-} from "../../src/shared/experiment-log";
+} from "../../src/shared/experiments/log";
 
 describe("parseExperimentRunKind", () => {
   it("accepts canonical kinds (case-insensitive trim)", () => {

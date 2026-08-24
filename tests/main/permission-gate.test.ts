@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolvePermissionAction,
   shouldPromptForPermission,
-} from "../../src/main/services/permission-modes";
+} from "../../src/shared/permissions/modes";
 import { shouldShowPermissionGate } from "../../src/renderer/components/modules/chat/permission-gate-panel";
 
 const ROOT = "/Users/me/paper";
@@ -78,6 +78,21 @@ describe("permission gate (smart policy)", () => {
     expect(shouldShowPermissionGate(undefined, "bash", {
       projectRoot: ROOT,
       bashCommand: null,
+      bashCwd: ROOT,
+    })).toBe(false);
+  });
+
+  it("prompts experiment-run when the command would prompt as bash", () => {
+    expect(shouldShowPermissionGate(undefined, "experiment-run", {
+      projectRoot: ROOT,
+      bashCommand: "pip install requests",
+      bashCwd: ROOT,
+    })).toBe(true);
+  });
+
+  it("allows experiment-run without a command when cwd is in project", () => {
+    expect(shouldShowPermissionGate(undefined, "experiment-run", {
+      projectRoot: ROOT,
       bashCwd: ROOT,
     })).toBe(false);
   });

@@ -22,7 +22,7 @@ import {
   FolderPlusIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EXPERIMENT_REGISTRY_REL } from "../../../shared/experiment-log";
+import { EXPERIMENT_REGISTRY_REL } from "../../../shared/experiments/log";
 import { ExperimentsNewButton } from "./experiments-new-button";
 
 /**

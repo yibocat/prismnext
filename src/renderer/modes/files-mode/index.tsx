@@ -14,6 +14,8 @@ export const filesMode: ModeDefinition = {
   initialTitle: "Files",
   initialTitleKey: "modes.files.initialTitle",
   Sidebar: FilesSidebar,
-  Toolbar: ({ tab }: { tab: RightTab }) => <FileToolbar filePath={tab.filePath} />,
+  Toolbar: ({ tab }: { tab: RightTab }) => (
+    <FileToolbar filePath={tab.kind === "file" ? tab.filePath : undefined} />
+  ),
   Content: FilesContent,
 };

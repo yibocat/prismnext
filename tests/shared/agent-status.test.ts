@@ -4,7 +4,7 @@ import {
   PROJECT_WARM_PHASES,
   isAgentLifecyclePhase,
   isProjectWarmPhase,
-} from "../../src/shared/agent-status";
+} from "../../src/shared/agent/status";
 
 describe("agent-status", () => {
   it("accepts known lifecycle phases", () => {

@@ -11,16 +11,16 @@ import { ORCHESTRATOR_JUDGMENT_PROMPT, buildOrchestratorJudgmentPrompt } from ".
 import { composeOrchestratorProfileModulePrompts, resolveOrchestratorProfileModuleKeys, resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
 import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
 import { getNativeToolByName } from "../../src/main/agent/tools/index";
-import { RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
+import { RESEARCH_BRIEF_REL } from "../../src/shared/research/brief";
 import {
   PLAN_DOC_STRUCTURE_HINTS,
   buildApprovedPlanExecutePrompt,
   planDraftMissingRedirectNote,
   sessionDraftPlanRel,
-} from "../../src/shared/research-plan";
-import { buildPlanSuggestAcceptedResult } from "../../src/shared/plan-suggest";
-import { resolveEffectivePermissionRule } from "../../src/shared/session-agent";
-import { TOOL_NAMES } from "../../src/shared/tool-names";
+} from "../../src/shared/research/plan";
+import { buildPlanSuggestAcceptedResult } from "../../src/shared/research/plan-suggest";
+import { resolveEffectivePermissionRule } from "../../src/shared/agent/session-agent";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 function toolDesc(name: string): string {
   const meta = getNativeToolByName(name);
@@ -84,7 +84,7 @@ describe("S2 — Enter Plan → draft file is plan of record", () => {
   it("Plan HARD-denies invented drafts filename", () => {
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: ".prismnext/research/plans/drafts/bubble-vs-quick-plan.md",
+        filePath: ".workbench/research/plans/drafts/bubble-vs-quick-plan.md",
         projectRoot: "/proj",
         sessionId: "ses_bubble",
       }),
@@ -102,7 +102,7 @@ describe("S2 — Enter Plan → draft file is plan of record", () => {
 describe("S3 — Approve seeds todowrite (prompt contract)", () => {
   it("approved execute prompt requires FIRST todowrite when todos provided", () => {
     const prompt = buildApprovedPlanExecutePrompt({
-      relativePath: ".prismnext/research/plans/2026-07-21-ab12.md",
+      relativePath: ".workbench/research/plans/2026-07-21-ab12.md",
       title: "Bubble vs Quick",
       todos: [
         { content: "Phase 1 — Design", status: "pending" },
@@ -162,7 +162,7 @@ describe("S6 — brief.md generic edit denied (HARD)", () => {
 
 describe("S7 — compile asks are soft (no keyword Plan gate in app)", () => {
   it("app has no user-message Plan heuristic export", async () => {
-    const mod = await import("../../src/shared/plan-suggest");
+    const mod = await import("../../src/shared/research/plan-suggest");
     expect("shouldSuggestPlanFromUserMessage" in mod).toBe(false);
   });
 });
@@ -171,7 +171,7 @@ describe("S8 — Plan wrong drafts path is HARD-deny (covered in S2)", () => {
   it("canonical session draft is allow; invented name is deny", () => {
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: ".prismnext/research/plans/drafts/foo-plan.md",
+        filePath: ".workbench/research/plans/drafts/foo-plan.md",
         projectRoot: "/proj",
         sessionId: "ses_x",
       }),

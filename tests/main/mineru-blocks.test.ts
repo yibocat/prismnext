@@ -7,14 +7,14 @@ import {
   findContentListEntryName,
   findMiddleJsonEntryName,
   reapplyGeometryFromMiddle,
-} from "../../src/main/services/mineru-blocks";
+} from "../../src/main/literature/extract/mineru-blocks";
 import {
   hitTestBlock,
   blocksOverlappingRect,
   normalizeBbox,
   splitBboxAcrossPages,
   type PaperExtractBlock,
-} from "../../src/shared/paper-extract-block";
+} from "../../src/shared/literature/paper-extract-block";
 
 describe("normalizeBbox", () => {
   it("normalizes 0-1000 integer coords to 0-1", () => {

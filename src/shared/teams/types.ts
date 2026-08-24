@@ -10,7 +10,8 @@
  * - 启停/可见性的唯一判定在 main 侧 PackResolver（§5），本文件只承载数据形状。
  */
 
-import type { IconSpec } from "../icon-spec";
+import type { IconSpec } from "../platform/icon-spec";
+import { projectTeamsRel, projectTeamsStateRel } from "../workbench/paths";
 
 // ── 基础枚举 ──────────────────────────────────────────────
 
@@ -144,7 +145,7 @@ export interface ResolvedMcp extends McpDef {
 export interface TeamView {
   manifest: TeamManifest;
   kind: TeamKind;
-  /** pack 目录绝对路径（local = <projectRoot>/.prismnext/agent/local） */
+  /** pack 目录绝对路径（local leftover = <projectRoot>/.prismnext/agent/local） */
   dir: string;
   /** core / local = true（隐式已装） */
   installedByDefault: boolean;
@@ -238,9 +239,6 @@ export const USER_TEAM_PUBLISHER = "user";
 export const DEFAULT_ORCHESTRATOR_FQID: Fqid = `${CORE_TEAM_ID}:research-prism`;
 /** Chat / active-team final fallback when no other lead is usable. */
 export const FALLBACK_ORCHESTRATOR_FQID: Fqid = `${MY_CONTENT_TEAM_ID}:${MY_CONTENT_LEAD_ID}`;
-/** Local Pack 目录（相对项目根）；pack-catalog / packs-state 共用此常量拼绝对路径 */
-export const LOCAL_TEAM_REL = ".prismnext/agent/local";
-
 /**
  * Project-level enable/disable override for a pack (spec L2).
  * Absent = automatically enabled once the pack is installed at app level.
@@ -254,7 +252,7 @@ export interface AssetOverride {
   thoughtLevel?: string;
   temperature?: number;
   modules?: string[];
-  /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层；T6 迁移为 roster） */
+  /** 磁盘 key 冻结为 allowedExperts（contentOverrides 透传，无映射层） */
   allowedExperts?: string[];
   /**
    * Lead-scoped skills allowlist (mirrors allowedExperts).
@@ -360,9 +358,9 @@ export const PROJECT_TEAMS_STATE_VERSION = 1;
 /** 应用级状态文件（userData 下） */
 export const APP_TEAMS_STATE_FILE = "teams-state.json";
 /** 项目级状态文件（相对项目根） */
-export const PROJECT_TEAMS_STATE_REL = ".prismnext/agent/teams.json";
+export const PROJECT_TEAMS_STATE_REL = projectTeamsStateRel();
 /** 项目团队根目录（相对项目根） */
-export const PROJECT_TEAMS_REL = ".prismnext/agent/teams";
+export const PROJECT_TEAMS_REL = projectTeamsRel();
 /** 项目默认团队 id（user.local 的迁移目标，治 C1） */
 export const PROJECT_DEFAULT_TEAM_ID = "project.local";
 /** Seeded hangar lead inside project.local (`orchestrators/project/`). */
@@ -404,7 +402,7 @@ export interface AppTeamsState {
   assetOverrides: Record<Fqid, AssetOverride>;
 }
 
-/** 项目级状态 `<projectRoot>/.prismnext/agent/teams.json`（v2） */
+/** 项目级状态 `<projectRoot>/.workbench/agent/teams.json`（v2） */
 export interface ProjectTeamsState {
   version: typeof PROJECT_TEAMS_STATE_VERSION;
   /** 项目级默认（活动）团队 */

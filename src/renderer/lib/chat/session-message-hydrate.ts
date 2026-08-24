@@ -1,4 +1,4 @@
-import { isToolResultUserMessage } from "@/components/modules/chat/chat-turns";
+import { isToolResultUserMessage } from "@/lib/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
 import { stripPlanControlTurns } from "@/lib/chat/plan-ui-events";
 import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-display";

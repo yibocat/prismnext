@@ -9,19 +9,28 @@ describe("resolveDocumentMarkdownImageRel", () => {
   it("keeps extract-relative images next to the extract markdown", () => {
     expect(
       resolveExtractRelativeAssetPath(
-        ".prismnext/library/extract/abc/full.md",
+        "library/extract/abc/full.md",
         "images/fig-0.png",
       ),
-    ).toBe(".prismnext/library/extract/abc/images/fig-0.png");
+    ).toBe("library/extract/abc/images/fig-0.png");
   });
 
-  it("treats .prismnext paths as project-root relative (notes embedding extract figures)", () => {
+  it("does not resolve leftover .prismnext extract paths (D-30)", () => {
     expect(
       resolveDocumentMarkdownImageRel(
         "notes/vaswani2017/2026-07-23-note.md",
         ".prismnext/library/extract/abc/images/fig-0.png",
       ),
-    ).toBe(".prismnext/library/extract/abc/images/fig-0.png");
+    ).toBeNull();
+  });
+
+  it("keeps library/extract display paths", () => {
+    expect(
+      resolveDocumentMarkdownImageRel(
+        "notes/vaswani2017/note.md",
+        "library/extract/abc/images/fig-0.png",
+      ),
+    ).toBe("library/extract/abc/images/fig-0.png");
   });
 
   it("still resolves plain relative assets against the note directory", () => {
@@ -34,12 +43,12 @@ describe("resolveDocumentMarkdownImageRel", () => {
 describe("rewritePaperExtractImageSrcs", () => {
   it("rewrites MinerU images/ refs to project extract paths", () => {
     expect(rewritePaperExtractImageSrcs("![Fig 1](images/fig-0.png)", "paper-1")).toBe(
-      "![Fig 1](.prismnext/library/extract/paper-1/images/fig-0.png)",
+      "![Fig 1](library/extract/paper-1/images/fig-0.png)",
     );
   });
 
   it("leaves already-rewritten and remote images alone", () => {
-    const abs = "![x](.prismnext/library/extract/paper-1/images/a.png)";
+    const abs = "![x](library/extract/paper-1/images/a.png)";
     expect(rewritePaperExtractImageSrcs(abs, "paper-1")).toBe(abs);
     expect(rewritePaperExtractImageSrcs("![x](https://example.com/a.png)", "paper-1")).toBe(
       "![x](https://example.com/a.png)",

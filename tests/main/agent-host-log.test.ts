@@ -11,7 +11,7 @@ const { info, warn, debug, error } = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");
@@ -31,7 +31,7 @@ import {
 } from "../../src/main/agent/pi-subsession-runtime";
 import type { AgentRuntime } from "../../src/main/agent/runtime";
 import type { ResolvedPiRosterEntry } from "../../src/main/agent/team-binding";
-import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent-runtime";
+import type { CreateSessionInput, CreateSessionResult, RuntimeSessionId, TurnInput } from "../../src/shared/agent/runtime";
 
 const dirs: string[] = [];
 

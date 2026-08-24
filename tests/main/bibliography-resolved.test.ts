@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { bibliographyLooksResolved } from "../../src/main/services/compiler";
+import { bibliographyLooksResolved } from "../../src/main/compile/facade";
 
 describe("bibliographyLooksResolved", () => {
   let dir: string;

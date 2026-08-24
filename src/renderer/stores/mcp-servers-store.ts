@@ -6,6 +6,9 @@ import {
   type McpServerEntry,
 } from "@/lib/agent/mcp-config";
 import { MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
+import { projectTeamsRel } from "@shared/workbench/paths";
+import { mcpDesktop } from "@/lib/desktop-api/mcp";
+import { teamsDesktop } from "@/lib/desktop-api/teams";
 
 interface McpServersState {
   /** Last loaded team’s entries (for the open editor / install panel). */
@@ -42,8 +45,8 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
       return;
     }
     try {
-      await window.electronAPI.mcpEnsure(projectRoot);
-      const { content } = await window.electronAPI.mcpReadTeamJson(projectRoot, tid);
+      await mcpDesktop.mcpEnsure(projectRoot);
+      const { content } = await mcpDesktop.mcpReadTeamJson(projectRoot, tid);
       set({ servers: parseTeamMcpConfig(content), loaded: true, teamId: tid });
     } catch {
       set({ servers: [], loaded: true });
@@ -55,7 +58,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
     const prev = get().servers;
     set({ servers: next, projectRoot, teamId: tid, saving: true });
     try {
-      const result = await window.electronAPI.mcpWriteTeamJson(
+      const result = await mcpDesktop.mcpWriteTeamJson(
         projectRoot,
         serializeTeamMcpConfig(next),
         tid,
@@ -63,7 +66,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
       if (!result.ok) throw new Error(result.error || "Failed to save MCP configuration");
       await Promise.all(
         next.map((entry) =>
-          window.electronAPI.teamsSetAssetEnabled(
+          teamsDesktop.teamsSetAssetEnabled(
             projectRoot,
             `${tid}:${entry.name.trim()}`,
             entry.enabled !== false,
@@ -82,7 +85,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
 
   readRaw: async (projectRoot, teamId) => {
     const tid = teamId?.trim() || get().teamId || PROJECT_DEFAULT_TEAM_ID;
-    const { content } = await window.electronAPI.mcpReadTeamJson(projectRoot, tid);
+    const { content } = await mcpDesktop.mcpReadTeamJson(projectRoot, tid);
     return content || "[]\n";
   },
 
@@ -94,7 +97,7 @@ export const useMcpServersStore = create<McpServersState>()((set, get) => ({
       const parsed = trimmed.startsWith("[")
         ? parseTeamMcpConfig(content)
         : parseMcpConfig(content);
-      const result = await window.electronAPI.mcpWriteTeamJson(
+      const result = await mcpDesktop.mcpWriteTeamJson(
         projectRoot,
         serializeTeamMcpConfig(parsed),
         tid,
@@ -112,5 +115,5 @@ export function mcpJsonRelPath(teamId: string = PROJECT_DEFAULT_TEAM_ID): string
   if (teamId === MY_CONTENT_TEAM_ID) {
     return "app teams / Common Team / mcp.json";
   }
-  return `.prismnext/agent/teams/${teamId}/mcp.json`;
+  return `${projectTeamsRel()}/${teamId}/mcp.json`;
 }

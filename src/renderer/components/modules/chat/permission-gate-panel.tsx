@@ -1,37 +1,31 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
-import {
-  ShieldIcon,
-  TerminalIcon,
-  FileEditIcon,
-  FileDiffIcon,
-  ChevronDownIcon,
-  CornerDownLeftIcon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Hint } from "@/components/ui/hint";
 import { i18n } from "@/lib/i18n";
+import {
+  isSimplePathPermissionGate,
+  PermissionAskSurface,
+} from "./permission-ask-surface";
 import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChatStore, type ContentBlock } from "@/stores/chat-store";
-import { usePermissionStore, type PendingPermission } from "@/stores/permission-store";
+import { pickActivePermission, usePermissionStore, type PendingPermission } from "@/stores/permission-store";
+import { projectRootForSession } from "@/stores/workbench-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
   extractPermissionToolName,
   buildPermissionRulesFromSettings,
-} from "@shared/permission-modes";
+} from "@shared/permissions/modes";
 import {
   resolveSmartPermissionAction,
   type SmartPermissionContext,
   type PermissionRulesConfig,
-} from "@shared/smart-permission-policy";
+} from "@shared/permissions/smart-policy";
 import { finalizePermissionAllow, finalizePermissionDeny } from "@/stores/permission-actions";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
 import { isBashToolName } from "@/lib/terminal/ai-bridge";
 import { getToolMeta, extractPatchTargetPaths } from "./tools/tool-meta";
 import { param } from "./tools/shared";
-import { ComposerChromeCard } from "./composer-chrome-card";
 
 function findToolUseBlock(tabId: string, toolCallId?: string): ContentBlock | undefined {
   if (!toolCallId) return undefined;
@@ -68,11 +62,7 @@ function truncateMiddle(text: string, max: number): string {
   return `${normalized.slice(0, head)}…${normalized.slice(-tail)}`;
 }
 
-/** Delete / move — path is the whole story; no expand preview needed. */
-export function isSimplePathPermissionGate(toolName: string): boolean {
-  const n = toolName.toLowerCase();
-  return n === "delete" || n === "move";
-}
+export { isSimplePathPermissionGate } from "./permission-ask-surface";
 
 function basename(path: string): string {
   return path.split("/").pop() || path;
@@ -158,23 +148,14 @@ export function useComposerHostedPermission(
   isAwaitingPermission: boolean,
 ): boolean {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const activeTabId = useChatStore((s) => s.activeTabId);
   const rules = usePermissionRulesConfig();
+  const sessionRoot = projectRootForSession(activeTabId, projectRoot);
   const ctx = useMemo(
-    () => buildToolSmartPermissionContext(toolUse, projectRoot),
-    [toolUse, projectRoot],
+    () => buildToolSmartPermissionContext(toolUse, sessionRoot),
+    [toolUse, sessionRoot],
   );
   return isComposerHostedPermission(undefined, toolName, isAwaitingPermission, ctx, rules);
-}
-
-function pickActivePermission(
-  tabId: string,
-  permissions: PendingPermission[],
-): PendingPermission | undefined {
-  const tabPerms = permissions.filter((p) => p.tabId === tabId);
-  if (tabPerms.length === 0) return undefined;
-  const withToolId = tabPerms.filter((p) => p.toolCallId);
-  if (withToolId.length === 1) return withToolId[0];
-  return withToolId[0] ?? tabPerms[0];
 }
 
 function permissionInput(
@@ -345,16 +326,15 @@ function permissionExpandPeek(
   return { path: "", preview: truncate(permission.message, 220) };
 }
 
-function PermissionIcon({ toolName }: { toolName: string }) {
-  const n = toolName.toLowerCase();
-  if (n === "bash") return <TerminalIcon className="size-3.5 shrink-0 text-warning" />;
-  if (n === "apply_patch") return <FileDiffIcon className="size-3.5 shrink-0 text-info" />;
-  if (n === "delete") return <FileEditIcon className="size-3.5 shrink-0 text-destructive" />;
-  if (n === "move") return <FileEditIcon className="size-3.5 shrink-0 text-info" />;
-  if (n.startsWith("edit") || n.startsWith("write")) {
-    return <FileEditIcon className="size-3.5 shrink-0 text-info" />;
-  }
-  return <ShieldIcon className="size-3.5 shrink-0 text-primary" />;
+export function buildPermissionAskView(
+  permission: PendingPermission,
+  toolName: string,
+  toolUse?: ContentBlock,
+): { summary: { label: string; detail: string }; peek: { path: string; preview: string } } {
+  return {
+    summary: permissionSummary(permission, toolUse, toolName),
+    peek: permissionExpandPeek(permission, toolUse, toolName),
+  };
 }
 
 export type PermissionGateState = {
@@ -374,6 +354,7 @@ export type PermissionGateState = {
 export function usePermissionGateState(): PermissionGateState {
   const activeTabId = useChatStore((s) => s.activeTabId);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const sessionRoot = projectRootForSession(activeTabId, projectRoot);
   const rules = usePermissionRulesConfig();
   const permission = usePermissionStore((s) =>
     pickActivePermission(activeTabId, s.permissions),
@@ -422,13 +403,13 @@ export function usePermissionGateState(): PermissionGateState {
     };
     const base = buildToolSmartPermissionContext(
       { type: "tool_use", input, title: toolUse?.title },
-      projectRoot,
+      sessionRoot,
     );
     return {
       ...base,
       filePath: base.filePath || permission.message || null,
     };
-  }, [permission, toolUse, projectRoot]);
+  }, [permission, toolUse, sessionRoot]);
 
   const show = !!permission && !!smartCtx
     && resolveSmartPermissionAction({ toolName, ...smartCtx }, rules) === "prompt";
@@ -483,17 +464,12 @@ function PermissionGatePanelInner({ gate }: { gate: PermissionGateState }) {
   const draftEmpty = useComposerEditorStore((s) => s.draftEmpty);
   const { permission, toolName, show, summary, toolUse } = gate;
   const [resolving, setResolving] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const isSimple = isSimplePathPermissionGate(toolName);
 
   const peek = useMemo(
     () => (permission ? permissionExpandPeek(permission, toolUse, toolName) : null),
     [permission, toolUse, toolName],
   );
-
-  useEffect(() => {
-    setExpanded(false);
-  }, [permission?.id]);
 
   const allow = useCallback(async (always = false) => {
     if (!permission || resolving) return;
@@ -553,140 +529,16 @@ function PermissionGatePanelInner({ gate }: { gate: PermissionGateState }) {
       : t("dialogs.permission.alwaysTool", { tool: toolName })
     : t("dialogs.permission.alwaysGeneric");
 
-  const hasExpandBody = !isSimple && !!(peek.path || peek.preview);
-  const confirmLabel = isSimple ? summary.label : t("dialogs.permission.allow");
-
-  if (isSimple) {
-    return (
-      <ComposerChromeCard className="overflow-hidden">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 text-[length:var(--font-chat-meta)]">
-          <span className="min-w-0 flex-1 truncate text-left">
-            <span className="font-medium text-foreground">{summary.label}</span>
-            {" "}
-            <span className="text-muted-foreground">{summary.detail}</span>
-          </span>
-          <div className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              className={cn(
-                "rounded px-1.5 py-0.5 text-muted-foreground transition-colors",
-                "hover:bg-accent hover:text-accent-foreground",
-                "disabled:pointer-events-none disabled:opacity-40",
-              )}
-              onClick={deny}
-              disabled={resolving}
-            >
-              {t("dialogs.permission.skip")}
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 font-medium",
-                "bg-primary text-primary-foreground transition-opacity",
-                "hover:opacity-90",
-                "disabled:pointer-events-none disabled:opacity-40",
-              )}
-              onClick={() => void allow(false)}
-              disabled={resolving}
-            >
-              {confirmLabel}
-              <CornerDownLeftIcon className="size-3 shrink-0 opacity-80" aria-hidden />
-            </button>
-          </div>
-        </div>
-      </ComposerChromeCard>
-    );
-  }
-
   return (
-    <ComposerChromeCard
-      className={cn(
-        "overflow-hidden transition-colors",
-        hasExpandBody && "cursor-pointer hover:bg-muted",
-      )}
-      onClick={() => {
-        if (hasExpandBody) setExpanded((v) => !v);
-      }}
-    >
-      <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[length:var(--font-chat-meta)]">
-        <PermissionIcon toolName={toolName} />
-        <span className="min-w-0 flex-1 truncate text-left">
-          <span className="font-medium text-foreground">{summary.label}</span>
-          <span className="text-muted-foreground"> · {summary.detail}</span>
-        </span>
-        {hasExpandBody ? (
-          <ChevronDownIcon
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-150",
-              expanded ? "rotate-0" : "-rotate-90",
-            )}
-            aria-hidden
-          />
-        ) : null}
-        <div
-          className="flex shrink-0 items-center gap-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            className={cn(
-              "rounded px-1.5 py-0.5 text-muted-foreground transition-colors",
-              "hover:bg-accent hover:text-accent-foreground",
-              "disabled:pointer-events-none disabled:opacity-40",
-            )}
-            onClick={deny}
-            disabled={resolving}
-          >
-            {t("dialogs.permission.deny")}
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "rounded px-1.5 py-0.5 font-medium text-primary transition-colors",
-              "hover:bg-accent hover:text-accent-foreground",
-              "disabled:pointer-events-none disabled:opacity-40",
-            )}
-            onClick={() => void allow(false)}
-            disabled={resolving}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </div>
-
-      {expanded && hasExpandBody ? (
-        <div className="space-y-1.5 border-t border-border px-2.5 py-2">
-          {peek.path ? (
-            <p className="break-all font-mono text-[length:var(--font-code)] text-muted-foreground">
-              {peek.path}
-            </p>
-          ) : null}
-          {peek.preview ? (
-            <p className="line-clamp-3 break-all font-mono text-[length:var(--font-code)] text-muted-foreground">
-              {peek.preview}
-            </p>
-          ) : null}
-          <div
-            className="flex justify-end"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Hint label={alwaysLabel}>
-              <button
-                type="button"
-                className={cn(
-                  "rounded px-2 py-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  "disabled:pointer-events-none disabled:opacity-40",
-                )}
-                onClick={() => void allow(true)}
-                disabled={resolving || !toolName}
-              >
-                {t("dialogs.permission.always")}
-              </button>
-            </Hint>
-          </div>
-        </div>
-      ) : null}
-    </ComposerChromeCard>
+    <PermissionAskSurface
+      toolName={toolName}
+      summary={summary}
+      peek={peek}
+      resolving={resolving}
+      onAllow={(always) => void allow(always)}
+      onDeny={() => void deny()}
+      showAlways
+      alwaysLabel={alwaysLabel}
+    />
   );
 }

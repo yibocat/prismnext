@@ -23,15 +23,22 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import { TeamPicker } from "../teams/team-picker";
-import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent-subagents";
+import type { SubagentInfo, SaveCustomSubagentPayload } from "@shared/agent/subagents";
 import { MY_CONTENT_TEAM_ID } from "@shared/teams/types";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import {
+  deleteCustomSubagent,
+  getSubagentDetail,
+  listSubagentRosterReferrers,
+  saveCustomSubagent,
+  saveSubagentAssetOverride,
+} from "@/lib/settings";
 import {
   detectExpertPermissionPreset,
   EXPERT_PERMISSION_PRESET_OPTIONS,
   permissionFromExpertPreset,
   type ExpertPermissionPreset,
-} from "@shared/expert-permission-presets";
+} from "@shared/permissions/expert-presets";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SHELL,
@@ -158,7 +165,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           return;
         }
 
-        const detail = await window.electronAPI.subagentsGetDetail(root, expertId!);
+        const detail = await getSubagentDetail(root, expertId!);
         if (cancelled) return;
         if (!detail) {
           toast.error(t("settings.editor.expert.toast.notFound"));
@@ -225,7 +232,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
         const permission = permissionFromExpertPreset(currentForm.permissionPreset);
 
         if (builtinCustomize && currentFqid) {
-          await window.electronAPI.teamsSaveAssetOverride(projectRoot, currentFqid, {
+          await saveSubagentAssetOverride(projectRoot, currentFqid, {
             model: model || undefined,
             thoughtLevel: currentForm.thoughtLevel.trim() || undefined,
             permission,
@@ -247,7 +254,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
           thoughtLevel: currentForm.thoughtLevel.trim() || undefined,
           permission,
         };
-        const result = await window.electronAPI.subagentsSaveCustom(
+        const result = await saveCustomSubagent(
           projectRoot,
           payload,
           currentTarget ?? MY_CONTENT_TEAM_ID,
@@ -329,7 +336,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     setDeleteReferrers([]);
     setDeleteReferrersLoading(true);
     try {
-      const refs = await window.electronAPI.subagentsListRosterReferrers(projectRoot, form.id);
+      const refs = await listSubagentRosterReferrers(projectRoot, form.id);
       setDeleteReferrers(refs.map((r) => ({ teamId: r.teamId, teamName: r.teamName })));
     } catch {
       setDeleteReferrers([]);
@@ -343,7 +350,7 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
     setDeleteDialogOpen(false);
     setSaving(true);
     try {
-      await window.electronAPI.subagentsDeleteCustom(projectRoot, form.id);
+      await deleteCustomSubagent(projectRoot, form.id);
       toast.success(t("settings.editor.expert.toast.deleted"));
       closePanel();
     } catch (err: unknown) {

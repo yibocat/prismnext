@@ -5,7 +5,7 @@ import { ipcMain } from "electron";
 import {
   ensureUserTeamsRegistered,
   listUserTeams,
-} from "../services/user-teams";
+} from "../teams/user-teams";
 
 export function registerUserPacksHandlers(): void {
   ensureUserTeamsRegistered();

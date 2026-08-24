@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FileTextIcon, Loader2Icon, MoreHorizontalIcon } from "lucide-react";
 import { toast } from "sonner";
+import { extractDesktop } from "@/lib/desktop-api/extract";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureExtractStore, selectExtractProgressForPaper } from "@/stores/literature-extract-store";
 import { Progress } from "@/components/ui/progress";
@@ -11,9 +12,9 @@ import { openHiddenProjectFile } from "@/lib/files/open-project-path";
 import {
   EXTRACT_MAX_AUTO_RETRIES,
   pickBestReadySource,
-} from "../../../shared/paper-extract";
+} from "../../../shared/literature/paper-extract";
 import type { LiteraturePaper, PaperExtractSource } from "@/types/electron.d";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { MetadataRow } from "./literature-inline-field";
 import {
   AppMenu,
@@ -106,7 +107,7 @@ export function useLiteratureAgentTextActions(paper: LiteraturePaper) {
     if (!projectRoot) return;
     const src = pickBestReadySource(states, "auto");
     if (!src) return;
-    const { relativePath } = await window.electronAPI.extractOpenMd(projectRoot, paper.id, src);
+    const { relativePath } = await extractDesktop.extractOpenMd(projectRoot, paper.id, src);
     if (!relativePath) {
       toast.error("Text file not found");
       return;

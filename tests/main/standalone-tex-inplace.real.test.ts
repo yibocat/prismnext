@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { compileStandaloneTexInPlace } from "../../src/main/services/compiler";
-import { resetTectonicBinaryCacheForTests } from "../../src/main/services/tectonic-binary";
+import { compileStandaloneTexInPlace } from "../../src/main/compile/facade";
+import { resetTectonicBinaryCacheForTests } from "../../src/main/compile/tectonic-binary";
 
 vi.mock("electron", () => ({
   app: {
@@ -49,6 +49,7 @@ describe("compileStandaloneTexInPlace (real engine)", () => {
     // In place: PDF + log + aux live next to the source…
     expect(existsSync(join(root, "figures", "box.pdf"))).toBe(true);
     // …and the shared manuscript build dir was never created.
+    expect(existsSync(join(root, ".workbench", "compile"))).toBe(false);
     expect(existsSync(join(root, ".prismnext", "compile"))).toBe(false);
   }, 120_000);
 });

@@ -22,7 +22,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info, warn, debug, error }),
   shortLogDetail: (value: unknown, max = 160) => {
     const text = value instanceof Error ? value.message : String(value ?? "");
@@ -35,15 +35,16 @@ vi.mock("node-pty", () => ({
   spawn: (...args: unknown[]) => spawn(...args),
 }));
 
-import { kickoffExperimentRun } from "../../src/main/services/experiment-run-executor";
+import { kickoffExperimentRun } from "../../src/main/experiment/experiment-run-executor";
 import {
   buildExperimentStorageContext,
   createExperiment,
-} from "../../src/main/services/experiment-log-service";
-import { openLibraryDb } from "../../src/main/services/literature-service";
-import { createSession } from "../../src/main/services/terminal";
-import * as executionRegistry from "../../src/main/services/execution-registry";
-import type { ExecutionRegistry } from "../../src/main/services/execution-registry";
+} from "../../src/main/experiment/facade";
+import { getLibraryPaths, openLibraryDb } from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
+import { createSession } from "../../src/main/terminal/terminal";
+import * as executionRegistry from "../../src/main/terminal/execution-registry";
+import type { ExecutionRegistry } from "../../src/main/terminal/execution-registry";
 
 const dirs: string[] = [];
 
@@ -145,8 +146,8 @@ describe("L4 experiment / literature / terminal logs", () => {
   });
 
   it("logs literature.open.fail when the library file cannot be opened", () => {
-    const root = tmp("prism-l4-lit-");
-    const dbPath = join(root, ".prismnext", "library", "library.db");
+    const root = tempLiteratureProject();
+    const dbPath = getLibraryPaths(root).dbPath;
     mkdirSync(dbPath, { recursive: true });
     expect(() => openLibraryDb(root)).toThrow();
     expect(warn).toHaveBeenCalledWith(

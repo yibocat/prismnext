@@ -5,20 +5,21 @@ import type {
   StagedCitationPayload,
   StagedAddProgressEvent,
   StageResult,
-} from "../../shared/citation-staging";
+} from "../../shared/literature/citation-staging";
 import {
   buildLibraryIdentityIndex,
   findLibraryPaperInIdentityIndex,
   type LibraryPaperLinkTarget,
-} from "../../shared/staged-citation-library-match";
+} from "../../shared/literature/staged-citation-library-match";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useLiteratureStore } from "./literature-store";
 import { useDocumentStore } from "./document-store";
 import { toast } from "sonner";
-import { formatPdfDownloadFailure } from "../../shared/pdf-download-messages";
+import { formatPdfDownloadFailure } from "../../shared/literature/pdf-download-messages";
 import {
   isStagedCitationAddCancelledError,
   isStagedCitationCreateCancelledResult,
-} from "../../shared/citation-staging";
+} from "../../shared/literature/citation-staging";
 
 /** Stable empty list for zustand selectors (avoid `?? []` creating new refs). */
 export const EMPTY_STAGED_CITATIONS: StagedCitation[] = [];
@@ -518,7 +519,7 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           cancelledAddIds: { ...s.cancelledAddIds, [stagedId]: true },
         }));
         get().clearAddProgress(stagedId);
-        void window.electronAPI.literatureCancelStagedCitationAdd(stagedId);
+        void literatureDesktop.literatureCancelStagedCitationAdd(stagedId);
       },
 
       cancelBatchAdd: (sessionId) => {
@@ -533,7 +534,7 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           if (!list.some((c) => c.id === id)) continue;
           cancelledAddIds[id] = true;
           get().clearAddProgress(id);
-          void window.electronAPI.literatureCancelStagedCitationAdd(id);
+          void literatureDesktop.literatureCancelStagedCitationAdd(id);
         }
         set({
           cancelledAddIds,
@@ -647,7 +648,7 @@ export const useCitationStagingStore = create<CitationStagingState>()(
         });
 
         try {
-          const result = await window.electronAPI.literatureCreateFromStagedCitation(
+          const result = await literatureDesktop.literatureCreateFromStagedCitation(
             projectRoot,
             stagedToImportInput(target, batch),
           );
@@ -658,7 +659,7 @@ export const useCitationStagingStore = create<CitationStagingState>()(
           if (get().cancelledAddIds[id]) {
             if (result.created) {
               try {
-                await window.electronAPI.literatureDeletePaper(projectRoot, result.paper.id);
+                await literatureDesktop.literatureDeletePaper(projectRoot, result.paper.id);
               } catch {
                 // Best-effort rollback when cancel raced IPC success.
               }
@@ -794,8 +795,8 @@ export const useCitationStagingStore = create<CitationStagingState>()(
   ),
 );
 
-if (typeof window !== "undefined" && window.electronAPI?.onLiteratureStagedAddProgress) {
-  window.electronAPI.onLiteratureStagedAddProgress((event) => {
+if (typeof window !== "undefined") {
+  literatureDesktop.onLiteratureStagedAddProgress((event) => {
     useCitationStagingStore.getState().setAddProgress(event);
   });
 }

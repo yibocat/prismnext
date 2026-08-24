@@ -6,7 +6,7 @@ import {
   extractDoisFromText,
   extractArxivFromText,
   arxivIdFromDoi,
-} from "../../src/shared/doi-utils";
+} from "../../src/shared/literature/doi-utils";
 
 describe("doi-utils", () => {
   it("normalizes URL-prefixed DOI", () => {

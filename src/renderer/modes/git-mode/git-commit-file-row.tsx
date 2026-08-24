@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, memo } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { Icon } from "@iconify/react/offline";
 import { useGitStore } from "@/stores/git-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { cn } from "@/lib/utils";
 import { GitDiffView } from "./git-diff-view";
 import { getFileIconName } from "@/lib/files/file-icon-class";
@@ -44,7 +45,7 @@ export const GitCommitFileRow = memo(function GitCommitFileRow({
     if (diff) return;
     let cancelled = false;
     setLoading(true);
-    window.electronAPI
+    gitDesktop
       .gitCommitFileDiff(gitRoot, commitHash, file.path)
       .then((result) => {
         if (!cancelled) {

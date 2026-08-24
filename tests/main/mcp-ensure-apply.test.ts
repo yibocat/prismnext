@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { EnsureDefaultMcpResult } from "../../src/main/services/project-mcp-defaults";
+import type { EnsureDefaultMcpResult } from "../../src/main/teams/project-mcp-defaults";
 
 vi.mock("electron", () => ({
   ipcMain: {
@@ -22,7 +22,6 @@ describe("mcp:ensure without OpenCode", () => {
   beforeEach(() => {
     handlers.clear();
     root = mkdtempSync(join(tmpdir(), "prism-mcp-ensure-"));
-    mkdirSync(join(root, ".prismnext", "agent"), { recursive: true });
     registerMcpHandlers();
   });
 
@@ -30,7 +29,7 @@ describe("mcp:ensure without OpenCode", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("creates an empty project.local MCP array when missing", async () => {
+  it("does not plant project.local when the paper has no MCP config", async () => {
     const ensure = handlers.get("mcp:ensure");
     expect(ensure).toBeTruthy();
     const result = (await ensure!({}, { projectPath: root })) as {
@@ -42,21 +41,14 @@ describe("mcp:ensure without OpenCode", () => {
     expect(result.ensure?.added).toBe(false);
     expect(result.ensure?.migrated).toBe(false);
     expect(result.reloadedSessions).toBe(0);
-    expect(
-      JSON.parse(
-        (await import("node:fs")).readFileSync(
-          join(root, ".prismnext", "agent", "teams", "project.local", "mcp.json"),
-          "utf-8",
-        ),
-      ),
-    ).toEqual([]);
-    expect((await import("node:fs")).existsSync(join(root, ".prismnext", "agent", "mcp.json"))).toBe(false);
+    expect(existsSync(join(root, ".prismnext"))).toBe(false);
   });
 
-  it("repairs a legacy paper-search file without reloading OpenCode sessions", async () => {
-    const agentDir = join(root, ".prismnext", "agent");
+  it("ignores leftover .prismnext/agent/mcp.json (D-30)", async () => {
+    const leftoverDir = join(root, ".prismnext", "agent");
+    mkdirSync(leftoverDir, { recursive: true });
     writeFileSync(
-      join(agentDir, "mcp.json"),
+      join(leftoverDir, "mcp.json"),
       JSON.stringify(
         {
           mcpServers: {
@@ -79,7 +71,37 @@ describe("mcp:ensure without OpenCode", () => {
       ensure?: Pick<EnsureDefaultMcpResult, "migrated" | "removed">;
     };
     expect(result.ok).toBe(true);
-    expect(result.ensure?.migrated).toBe(true);
+    expect(result.ensure?.migrated).toBe(false);
+    expect(result.reloadedSessions).toBe(0);
+    expect(existsSync(join(root, ".workbench", "agent", "teams"))).toBe(false);
+  });
+
+  it("strips paper-search from an existing workbench hangar without reloading OpenCode sessions", async () => {
+    const hangar = join(root, ".workbench", "agent", "teams", "project.local");
+    mkdirSync(hangar, { recursive: true });
+    writeFileSync(
+      join(hangar, "mcp.json"),
+      `${JSON.stringify(
+        [
+          {
+            id: "paper-search-mcp",
+            name: "paper-search-mcp",
+            transport: { type: "stdio", command: "npx" },
+          },
+        ],
+        null,
+        2,
+      )}\n`,
+      "utf-8",
+    );
+    const ensure = handlers.get("mcp:ensure");
+    const result = (await ensure!({}, { projectPath: root })) as {
+      ok: boolean;
+      reloadedSessions?: number;
+      ensure?: Pick<EnsureDefaultMcpResult, "migrated" | "removed">;
+    };
+    expect(result.ok).toBe(true);
+    expect(result.ensure?.removed).toBe(true);
     expect(result.reloadedSessions).toBe(0);
   });
 });

@@ -9,7 +9,7 @@ import {
   resolveOpaqueTaskCancelledDisplay,
   resolveTaskPermissionDenial,
   shouldDenyReservedTaskSubagent,
-} from "../../src/main/services/task-orchestrator-gate";
+} from "../../src/main/agent/task-orchestrator-gate";
 
 describe("task-orchestrator-gate", () => {
   it("buildTaskPermissionBlock allows open builtins and experts; denies plan/build", () => {

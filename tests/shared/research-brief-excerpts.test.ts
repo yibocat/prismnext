@@ -3,7 +3,7 @@ import {
   cleanResearchBriefExcerpt,
   experimentExcerptsFromBriefSections,
   findResearchBriefHeadingLine,
-} from "../../src/shared/research-brief";
+} from "../../src/shared/research/brief";
 
 describe("research-brief excerpts for experiments", () => {
   it("cleanResearchBriefExcerpt strips HTML comments", () => {

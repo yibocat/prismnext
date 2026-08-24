@@ -6,7 +6,7 @@
     "saveFile": "Save active workspace file",
     "toggleLeftSidebar": "Toggle left sidebar",
     "toggleRightArea": "Toggle RightArea",
-    "toggleRightAreaMaximize": "Maximize RightArea (or restore / close)",
+    "toggleRightAreaMaximize": "Open or close maximized RightArea",
     "openSettings": "Open Settings",
     "commandPalette": "Open command palette"
   },

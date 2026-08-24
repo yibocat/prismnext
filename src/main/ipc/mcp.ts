@@ -1,13 +1,14 @@
 import { join } from "node:path";
 import { ipcMain } from "electron";
-import { ensureDefaultMcpServers } from "../services/project-mcp-defaults";
+import { ensureDefaultMcpServers } from "../teams/project-mcp-defaults";
 import {
   readWritableTeamMcpJson,
   writeWritableTeamMcpJson,
-} from "../services/team-mcp-files";
+} from "../teams/team-mcp-files";
 import { invalidateCatalog } from "../teams/catalog";
 import { invalidateResolver } from "../teams/resolver";
 import { PROJECT_DEFAULT_TEAM_ID } from "../../shared/teams/types";
+import { PROJECT_AGENT_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench/paths";
 
 function refreshMcpCatalog(projectPath: string): void {
   invalidateCatalog();
@@ -26,7 +27,7 @@ export function registerMcpHandlers(): void {
       if (!projectPath) {
         return { ok: false as const };
       }
-      const ensure = ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
+      const ensure = ensureDefaultMcpServers(join(projectPath, PROJECT_META_DIR, PROJECT_AGENT_DIRNAME));
       if (ensure.added || ensure.migrated || ensure.reenabled || ensure.removed) {
         refreshMcpCatalog(projectPath);
       }
@@ -46,7 +47,7 @@ export function registerMcpHandlers(): void {
       if (!projectPath) {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
       }
-      ensureDefaultMcpServers(join(projectPath, ".prismnext", "agent"));
+      ensureDefaultMcpServers(join(projectPath, PROJECT_META_DIR, PROJECT_AGENT_DIRNAME));
       refreshMcpCatalog(projectPath);
       return { ok: true as const, reloadedSessions: 0 };
     },

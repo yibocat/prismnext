@@ -5,7 +5,7 @@ import {
   mergeFlowGroupMarkdown,
   mergeBlockMarkdown,
   type PaperExtractBlock,
-} from "../../src/shared/paper-extract-block";
+} from "../../src/shared/literature/paper-extract-block";
 
 function textBlock(
   index: number,

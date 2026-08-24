@@ -48,7 +48,8 @@
     "allow": "允許",
     "alwaysBash": "始終允許類似命令（字首匹配）",
     "alwaysTool": "始終允許 {{tool}}，不再詢問",
-    "alwaysGeneric": "始終允許此工具"
+    "alwaysGeneric": "始終允許此工具",
+    "autoDeny": "{{seconds}} 秒後自動拒絕"
   },
   "worktree": {
     "discardTitle": "丟棄未合併的工作？",

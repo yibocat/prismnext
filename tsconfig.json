@@ -1,16 +1,19 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "types": ["node"],
+    "noUncheckedSideEffectImports": true,
     "paths": {
       "@/*": ["./src/renderer/*"],
-      "@shared/*": ["./src/main/services/*", "./src/shared/*"],
-      "@commands/*": ["./src/main/commands/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@commands/*": ["./src/shared/commands/*"],
       "@prismnext/pro": ["./src/renderer/lib/pro/absent-module.ts"]
     }
   },
@@ -18,10 +21,6 @@
     "src/renderer/**/*.ts",
     "src/renderer/**/*.tsx",
     "src/renderer/**/*.d.ts",
-    "src/shared/**/*.ts",
-    "src/main/commands/types.ts",
-    "src/main/services/log-types.ts",
-    "src/main/services/context-constants.ts",
-    "src/main/services/permission-modes.ts"
+    "src/shared/**/*.ts"
   ]
 }

@@ -2,7 +2,7 @@ import { resolveTerminalRoot } from "@/lib/terminal/root";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import { resolveEffectiveAgentTerminalMode } from "@shared/permission-modes";
+import { resolveEffectiveAgentTerminalMode } from "@shared/permissions/modes";
 
 export { shouldAutoOpenAiTerminal } from "./ai-prefs";
 

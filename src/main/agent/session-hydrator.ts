@@ -8,10 +8,10 @@ import {
   type Conversation,
   type ConversationSubagentRun,
   type ConversationTurn,
-} from "../../shared/agent-conversation";
-import { collectTaskRunsFromBlocks } from "../../shared/conversation-blocks";
+} from "../../shared/agent/conversation";
+import { collectTaskRunsFromBlocks } from "../../shared/agent/conversation-blocks";
 import type { AgentSessionRecord, AgentTurnRecord } from "./session-store";
-import { usageTotalsFromTurns } from "../../shared/agent-context-usage";
+import { usageTotalsFromTurns } from "../../shared/agent/context-usage";
 
 function assistantBlocksFromTurn(turn: AgentTurnRecord): ContentBlock[] {
   if (Array.isArray(turn.assistant.blocks) && turn.assistant.blocks.length > 0) {

@@ -1,3 +1,5 @@
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
 
@@ -146,7 +148,7 @@ export async function promptImageFromAttachment(
     if (fromPreview) return fromPreview;
   }
   try {
-    const { dataUrl } = await window.electronAPI.fsReadImage(att.absolutePath);
+    const { dataUrl } = await fsDesktop.fsReadImage(att.absolutePath);
     return dataUrl ? promptImageFromDataUrl(dataUrl, att.name, att.absolutePath) : null;
   } catch {
     return null;
@@ -184,7 +186,7 @@ export async function projectFileToAttachment(file: ProjectFile): Promise<Compos
   let previewUrl: string | undefined;
   if (kind === "image") {
     try {
-      const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+      const { dataUrl } = await fsDesktop.fsReadImage(file.absolutePath);
       if (dataUrl) previewUrl = dataUrl;
     } catch {
       // thumb optional
@@ -221,7 +223,7 @@ export async function attachmentsFromAbsolutePaths(
 export async function pickComposerAttachments(opts?: {
   imagesOnly?: boolean;
 }): Promise<ProjectFile[]> {
-  const result = await window.electronAPI.dialogOpenFile();
+  const result = await dialogDesktop.dialogOpenFile();
   if (result.canceled || result.paths.length === 0) return [];
 
   const store = useDocumentStore.getState();
@@ -248,7 +250,7 @@ export function absolutePathsFromDataTransfer(dt: DataTransfer | null): string[]
   const paths: string[] = [];
   if (dt.files?.length) {
     for (const file of Array.from(dt.files)) {
-      const p = window.electronAPI.getPathForFile?.(file);
+      const p = fsDesktop.getPathForFile(file);
       if (typeof p === "string" && p.trim()) paths.push(p);
     }
   }

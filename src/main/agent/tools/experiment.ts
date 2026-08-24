@@ -6,20 +6,20 @@
  */
 
 import { Type } from "@earendil-works/pi-ai";
-import { fileToolOutcome } from "../../../shared/agent-runtime";
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { fileToolOutcome } from "../../../shared/agent/runtime";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import {
   isExperimentCtxError,
   resolveExperimentCtx,
-} from "../../services/experiment-log-service";
-import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiment-log";
-import { kickoffExperimentRun } from "../../services/experiment-run-executor";
+} from "../../experiment/facade";
+import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiments/log";
+import { kickoffExperimentRun } from "../../experiment/experiment-run-executor";
 import {
   dispatchExperimentLog,
   dispatchProvenanceQuery,
   dispatchResultsSnapshot,
-  type ExperimentLogBridgeRequest,
-} from "../../services/experiment-log-bridge";
+  type ExperimentToolRequest,
+} from "../../experiment/experiment-tool-dispatch";
 import type { NativeToolDefinition } from "./types";
 
 function str(v: unknown): string {
@@ -58,7 +58,7 @@ export const experimentLogTool: NativeToolDefinition = {
       return { ok: false, error: ctxResult.error, hint: ctxResult.hint };
     }
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "experiment-log",
       action,
       sessionId: ctx.runtimeSessionId,
@@ -175,7 +175,7 @@ export const resultsSnapshotTool: NativeToolDefinition = {
       return { ok: false, error: ctxResult.error, hint: ctxResult.hint };
     }
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "results-snapshot",
       action: "snapshot",
       id,
@@ -193,7 +193,7 @@ export const resultsSnapshotTool: NativeToolDefinition = {
 export const provenanceQueryTool: NativeToolDefinition = {
   name: TOOL_NAMES.provenanceQuery,
   label: "Query Provenance",
-  description: "Query provenance history (.prismnext/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
+  description: "Query provenance history (.workbench/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
   promptGuidelines: [
     "Use `resolve_artifact` to answer \"which run produced this file\" (command/env/exit/chat), and `resolve_run` for a run by id.",
     "An empty/null result is honest — nothing is recorded yet; report that rather than inventing a provenance.",
@@ -212,7 +212,7 @@ export const provenanceQueryTool: NativeToolDefinition = {
     const action = str(args.action);
     if (!action) return { ok: false, error: "missing_action" };
 
-    const req: ExperimentLogBridgeRequest = {
+    const req: ExperimentToolRequest = {
       tool: "provenance-query",
       action,
       sessionId: ctx.runtimeSessionId,

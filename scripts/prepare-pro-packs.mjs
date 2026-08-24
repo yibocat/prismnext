@@ -6,7 +6,7 @@
  * 但 main 进程的 pack discovery 是纯文件扫描，pro 包的 `packs/` 必须以文件形式
  * 随 app 发货。electron-builder 的 extraResources 已整体 shipped `resources/`，
  * 所以本脚本把 pro 包的 `package.json` + `packs/` 复制到 `resources/pro-package/`——
- * prod 布局与 dev 约定一致（见 src/main/services/pro-teams-discovery.ts）。
+ * prod 布局与 dev 约定一致（见 src/main/teams/pro-teams-discovery.ts）。
  *
  * 来源解析（与 discovery 同源）：
  *   PRISM_PRO_PATH（可指向 pro 仓 src/index.ts 或包根；dev:pro / dist:pro 脚本注入）

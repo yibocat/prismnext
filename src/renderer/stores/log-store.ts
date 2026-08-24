@@ -1,7 +1,8 @@
 import { create } from "zustand";
-import type { LogLevel, LogCategory, LogEntry } from "@shared/log-types";
-import { LOG_RING_LIMIT, redactLogValue, sanitizeLogEntry } from "@shared/log-types";
+import type { LogLevel, LogCategory, LogEntry } from "@shared/platform/log-types";
+import { LOG_RING_LIMIT, redactLogValue, sanitizeLogEntry } from "@shared/platform/log-types";
 import { logBuffer } from "@/services/logger";
+import { logDesktop } from "@/lib/desktop-api/log";
 
 interface LogState {
   // View state
@@ -105,7 +106,7 @@ export const useLogStore = create<LogState>((set, get) => ({
 
   fetchMainLogs: async () => {
     try {
-      const result = await window.electronAPI.logFetch({
+      const result = await logDesktop.logFetch({
         category: get().filterCategory === "all" ? undefined : get().filterCategory as LogCategory,
         limit: LOG_RING_LIMIT,
       });

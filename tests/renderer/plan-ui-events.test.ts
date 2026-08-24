@@ -6,7 +6,7 @@ import {
   stripPlanControlTurns,
   type PlanUiEvent,
 } from "../../src/renderer/lib/chat/plan-ui-events";
-import { PLAN_REJECT_ACK_PROMPT } from "../../src/shared/research-plan";
+import { PLAN_REJECT_ACK_PROMPT } from "../../src/shared/research/plan";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("plan-ui-events", () => {
@@ -18,7 +18,7 @@ describe("plan-ui-events", () => {
     const events: PlanUiEvent[] = [
       {
         kind: "plan-artifact",
-        path: ".prismnext/research/plans/current-draft.md",
+        path: ".workbench/research/plans/current-draft.md",
         title: "Demo",
         afterIndex: 2,
       },
@@ -83,7 +83,7 @@ describe("plan-ui-events", () => {
       planArtifactCardFromEvents([
         {
           kind: "plan-artifact",
-          path: ".prismnext/research/plans/current-draft.md",
+          path: ".workbench/research/plans/current-draft.md",
           title: "T",
           afterIndex: 2,
         },
@@ -94,7 +94,7 @@ describe("plan-ui-events", () => {
         },
       ]),
     ).toEqual({
-      path: ".prismnext/research/plans/current-draft.md",
+      path: ".workbench/research/plans/current-draft.md",
       title: "T",
       discarded: false,
     });

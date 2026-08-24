@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Loader2Icon, Wand2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { parseCatalogIdentifier } from "../../../shared/parse-catalog-identifier";
+import { parseCatalogIdentifier } from "../../../shared/literature/parse-catalog-identifier";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverFontClass, appPopoverListClass } from "@/components/ui/app-popover";
 import { Input } from "@/components/ui/input";

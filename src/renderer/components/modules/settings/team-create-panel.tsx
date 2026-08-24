@@ -12,7 +12,7 @@ import { useTeamsStore } from "@/stores/teams-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { IconPicker } from "../shared/icon-picker";
-import type { IconSpec } from "@shared/icon-spec";
+import type { IconSpec } from "@shared/platform/icon-spec";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SECTION,
@@ -60,7 +60,7 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
     if (!projectRoot || !name.trim()) return;
     setSaving(true);
     try {
-      const { teamId } = await window.electronAPI.teamsCreate(projectRoot, {
+      const teamId = await useTeamsStore.getState().createTeam(projectRoot, {
         name: name.trim(),
         description: description.trim() || undefined,
         longDescription: longDescription.trim() || undefined,
@@ -71,7 +71,6 @@ export function TeamCreatePanel({ slot }: { slot: TeamCreateSlot }) {
         icon: icon?.kind === "image" ? undefined : icon,
         iconImagePngBase64: pendingIconPngBase64 ?? undefined,
       });
-      await useTeamsStore.getState().load(projectRoot, { force: true });
       toast.success(t("settings.teams.toast.teamCreated"));
       openSettingsPanel({
         kind: "team-detail",

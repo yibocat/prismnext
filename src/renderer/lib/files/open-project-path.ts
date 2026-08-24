@@ -3,7 +3,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { resolveProjectRelativePath } from "./project-path";
 import { revealProjectRelativePath } from "./reveal-project-path";
 
-/** Open a hidden project file (`.prismnext/…` or `.brief.md`) in the editor (tab + content load). */
+/** Open a hidden project file (`.workbench/…` or `.brief.md`) in the editor (tab + content load). */
 export async function openHiddenProjectFile(
   relativePath: string,
   opts?: { pin?: boolean },
@@ -24,7 +24,7 @@ export async function openHiddenProjectFile(
   await store.openFile(relativePath);
 }
 
-/** Reveal a hidden `.prismnext/` path in the system file manager. */
+/** Reveal a hidden `.workbench/` path in the system file manager. */
 export function revealProjectHiddenPath(relativePath: string): void {
   revealProjectRelativePath(relativePath);
 }

@@ -2,16 +2,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { focusedModeId } from "../../src/renderer/lib/workspace/modes-from-tabs";
 import type { RightTab } from "../../src/renderer/lib/workspace/mode-registry";
 
-const expand = vi.fn();
-const collapse = vi.fn();
-const resize = vi.fn();
-const isCollapsed = vi.fn(() => false);
-
-const panelRefs = {
-  centerRef: { current: { expand, collapse, resize, isCollapsed } },
-  rightAreaRef: { current: { expand, collapse, resize, isCollapsed } },
-};
-
 let layoutState: {
   rightAreaExpanded: boolean;
   editorMaximized: boolean;
@@ -65,6 +55,12 @@ vi.mock("../../src/renderer/lib/workspace/right-area-layout", () => ({
     }
     if (layoutState.editorMaximized) return;
   }),
+  closeRightArea: vi.fn(() => {
+    layoutState.rightAreaExpanded = false;
+    layoutState.editorMaximized = false;
+    layoutState.setRightAreaExpanded(false);
+    layoutState.setEditorMaximized(false);
+  }),
 }));
 
 vi.mock("../../src/renderer/lib/workspace/mode-registry", () => ({
@@ -90,7 +86,7 @@ import {
   openLiteratureSplit,
   openTexWorkspaceSplit,
 } from "../../src/renderer/lib/workspace/left-nav/panel-utils";
-import { openRightAreaForDeepLink } from "../../src/renderer/lib/workspace/right-area-layout";
+import { closeRightArea, openRightAreaForDeepLink } from "../../src/renderer/lib/workspace/right-area-layout";
 
 describe("parallel RightArea modes", () => {
   beforeEach(() => {
@@ -136,9 +132,8 @@ describe("parallel RightArea modes", () => {
   });
 
   it("keeps TeX tabs when opening Literature", () => {
-    const ctx = { panelRefs };
-    openTexWorkspaceSplit(ctx);
-    openLiteratureSplit(ctx);
+    openTexWorkspaceSplit();
+    openLiteratureSplit();
 
     expect(panelState.tabs.map((t) => t.kind)).toEqual([
       "texworkspace",
@@ -151,24 +146,22 @@ describe("parallel RightArea modes", () => {
   });
 
   it("dismisses only the focused mode and keeps sibling tabs", () => {
-    const ctx = { panelRefs };
-    focusModeInRightArea("texworkspace", ctx);
-    focusModeInRightArea("literature", ctx);
+    focusModeInRightArea("texworkspace");
+    focusModeInRightArea("literature");
 
-    dismissModeFromRightArea("literature", ctx);
+    dismissModeFromRightArea("literature");
 
     expect(panelState.tabs.map((t) => t.kind)).toEqual(["texworkspace"]);
     expect(layoutState.rightAreaExpanded).toBe(true);
-    expect(collapse).not.toHaveBeenCalled();
+    expect(closeRightArea).not.toHaveBeenCalled();
   });
 
   it("collapses RightArea only when the last mode tab is dismissed", () => {
-    const ctx = { panelRefs };
-    focusModeInRightArea("texworkspace", ctx);
-    dismissModeFromRightArea("texworkspace", ctx);
+    focusModeInRightArea("texworkspace");
+    dismissModeFromRightArea("texworkspace");
 
     expect(panelState.tabs).toHaveLength(0);
     expect(layoutState.setRightAreaExpanded).toHaveBeenCalledWith(false);
-    expect(collapse).toHaveBeenCalled();
+    expect(closeRightArea).toHaveBeenCalled();
   });
 });

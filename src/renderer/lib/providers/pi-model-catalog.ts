@@ -4,7 +4,8 @@
  * and the model picker can show models without a round-trip.
  */
 
-import type { AgentModelRow } from "../../../shared/agent-api";
+import type { AgentModelRow } from "../../../shared/agent/api";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import type { ModelConfig, ProviderConfig } from "./types";
 
 /** Providers whose model lists are prefetched into the shared catalog cache. */
@@ -25,7 +26,7 @@ const CATALOG_PROVIDER_IDS = [
 
 let catalogEntries: Record<string, AgentModelRow[]> | null = null;
 let catalogFetchedAt = 0;
-let prefetchPromise: Promise<Record<string, CatalogModelRow[]> | null> | null = null;
+let prefetchPromise: Promise<Record<string, AgentModelRow[]> | null> | null = null;
 const catalogListeners = new Set<() => void>();
 
 /** Subscribe to cache fill / invalidate (e.g. context ring denominator). */
@@ -81,7 +82,7 @@ export async function prefetchPiModelsCatalog(): Promise<
   if (prefetchPromise) return prefetchPromise;
   prefetchPromise = (async () => {
     try {
-      const snapshot = await window.electronAPI.agentListModelsCatalog();
+      const snapshot = await agentDesktop.agentListModelsCatalog();
       catalogEntries = snapshot.entries;
       catalogFetchedAt = snapshot.fetchedAt;
       notifyPiModelsCatalogListeners();

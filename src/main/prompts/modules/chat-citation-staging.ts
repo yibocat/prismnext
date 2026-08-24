@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * External chat citations — papers not in the project library, cited as [n].
@@ -13,7 +13,7 @@ export const CHAT_CITATION_STAGING_PROMPT = [
   "### Scope boundary",
   "",
   "- **This module** — recommendations, recent literature, web findings, or any external source you will",
-  "  cite **in chat** without adding to `.prismnext/library/`.",
+  "  cite **in chat** without adding to the project library.",
   "- **Literature library** — papers already in the project; use `[@bibkey]`, not `[n]`.",
   "- **Citation & bibliography audit** — compliance of manuscript `.tex`/`.bib`; not for staging chat refs.",
   "- Adding to the library is a separate explicit user request — staging alone does not write the library.",
@@ -31,7 +31,7 @@ export const CHAT_CITATION_STAGING_PROMPT = [
   "Ask in order:",
   "",
   "1. **Could this be a library paper?** Search the library first when the user names a title or bibkey.",
-  "   If it is in `.prismnext/library/`, stop — use **Literature library** and `[@bibkey]`.",
+  "   If it is already in the project library, stop — use **Literature library** and `[@bibkey]`.",
   "2. **Discover IDs before prose.**",
   `   - Topic / catalog search → \`${TOOL_NAMES.literatureDiscover}\` (preferred).`,
   "   - websearch only when catalogs are insufficient — still stage before citing.",

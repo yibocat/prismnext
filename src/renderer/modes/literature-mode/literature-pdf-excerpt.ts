@@ -1,5 +1,5 @@
-import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
-import { blocksOverlappingRect, mergeBlockMarkdown } from "../../../shared/paper-extract-block";
+import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
+import { blocksOverlappingRect, mergeBlockMarkdown } from "../../../shared/literature/paper-extract-block";
 
 /** One queued PDF text excerpt (plain or MinerU-resolved Markdown). */
 export interface PdfTextExcerpt {

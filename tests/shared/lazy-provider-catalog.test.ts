@@ -4,7 +4,7 @@ import {
   LAZY_CATALOG_PROVIDER_IDS,
   LEGACY_BUILTIN_PROVIDER_IDS,
   migrateLegacyBuiltinProviders,
-} from "../../src/shared/lazy-provider-catalog";
+} from "../../src/shared/providers/lazy-catalog";
 import { PROVIDER_PRESETS, ALL_PROVIDERS } from "../../src/renderer/lib/providers/presets";
 import { getConfiguredProviderIds } from "../../src/renderer/lib/providers";
 

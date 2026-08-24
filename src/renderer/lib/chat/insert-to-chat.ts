@@ -124,7 +124,6 @@ export function insertContextToChat(req: ContextInsertRequest, options?: { quiet
     useComposerEditorStore.getState().flushPendingInsert();
   } else {
     layout.setLeftSidebarView("sessions");
-    layout.requestCenterExpand();
     useComposerInsertStore.getState().requestInsert(req);
     useComposerEditorStore.getState().flushPendingInsert();
   }
@@ -157,7 +156,6 @@ export function insertComposerDragPayloads(
     useComposerEditorStore.getState().flushPendingInsert();
   } else {
     layout.setLeftSidebarView("sessions");
-    layout.requestCenterExpand();
     useComposerInsertStore.getState().requestInserts(requests);
     useComposerEditorStore.getState().flushPendingInsert();
   }

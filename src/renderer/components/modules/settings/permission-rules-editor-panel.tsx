@@ -7,15 +7,15 @@ import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
-import { permissionGatedToolsByGroup } from "@shared/permission-tool-catalog";
+import { permissionGatedToolsByGroup } from "@shared/permissions/tool-catalog";
 import {
   formatAllowRulesText,
   formatAllowedPathsText,
   parseAllowedPathsLines,
   parsePermissionRuleLines,
   splitAllowRulesText,
-} from "@shared/permission-rules";
-import { buildPermissionRulesFromSettings } from "@shared/permission-modes";
+} from "@shared/permissions/rules";
+import { buildPermissionRulesFromSettings } from "@shared/permissions/modes";
 import {
   SETTINGS_DETAIL_ACTIONS,
   SETTINGS_DETAIL_SHELL,

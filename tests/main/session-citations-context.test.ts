@@ -7,17 +7,18 @@ import {
   enrichTaskToolResultContent,
   formatSessionCitationsMarkdown,
   readSessionCitationRecords,
-} from "../../src/main/services/session-citations-context";
+} from "../../src/main/session/session-citations-context";
+import { sessionCitationsDir, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 const SESSION = "sess-parent";
 
 describe("session-citations-context", () => {
-  let bridgeRoot: string;
+  let home: string;
 
   beforeEach(() => {
-    bridgeRoot = path.join(os.tmpdir(), `prism-citations-ctx-${Date.now()}`);
-    process.env.PRISM_LITERATURE_BRIDGE_ROOT = bridgeRoot;
-    const dir = path.join(bridgeRoot, SESSION);
+    home = fs.mkdtempSync(path.join(os.tmpdir(), "prism-citations-home-"));
+    setWorkbenchUserHomeOverride(home);
+    const dir = sessionCitationsDir(SESSION);
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(
       path.join(dir, "staging.json"),
@@ -44,8 +45,8 @@ describe("session-citations-context", () => {
   });
 
   afterEach(() => {
-    try { fs.rmSync(bridgeRoot, { recursive: true, force: true }); } catch {}
-    delete process.env.PRISM_LITERATURE_BRIDGE_ROOT;
+    setWorkbenchUserHomeOverride(null);
+    try { fs.rmSync(home, { recursive: true, force: true }); } catch {}
   });
 
   it("reads staging records for parent session", () => {
@@ -71,7 +72,7 @@ describe("session-citations-context", () => {
 
   it("enriches task tool result with library hits appendix", () => {
     fs.writeFileSync(
-      path.join(bridgeRoot, SESSION, "library-task-hits.json"),
+      path.join(sessionCitationsDir(SESSION), "library-task-hits.json"),
       JSON.stringify([
         {
           bibkey: "smith2024",
@@ -97,7 +98,7 @@ describe("session-citations-context", () => {
 
   it("writeToolOutputIntoPartData updates string and object outputs", async () => {
     const { writeToolOutputIntoPartData, readToolPartOutputText } = await import(
-      "../../src/main/services/session-citations-context"
+      "../../src/main/session/session-citations-context"
     );
 
     const stringPart = {

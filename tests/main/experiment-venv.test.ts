@@ -15,20 +15,20 @@ import {
   createExperiment,
   buildExperimentStorageContext,
   type ExperimentVenvRunner,
-} from "../../src/main/services/experiment-log-service";
-import { PRISMNEXT_VENV_REL } from "../../src/shared/experiment-log";
+} from "../../src/main/experiment/facade";
+import { PRISMNEXT_VENV_REL } from "../../src/shared/experiments/log";
 
 function makeProject(): string {
   const root = mkdtempSync(join(tmpdir(), "prism-exp-venv-proj-"));
-  mkdirSync(join(root, ".prismnext"), { recursive: true });
+  mkdirSync(join(root, ".workbench"), { recursive: true });
   return root;
 }
 
 function stubPythonAtProject(projectRoot: string): string {
   const isWin = process.platform === "win32";
   const binDir = isWin
-    ? join(projectRoot, ".prismnext", ".venv", "Scripts")
-    : join(projectRoot, ".prismnext", ".venv", "bin");
+    ? join(projectRoot, ".workbench", ".venv", "Scripts")
+    : join(projectRoot, ".workbench", ".venv", "bin");
   mkdirSync(binDir, { recursive: true });
   const py = join(binDir, isWin ? "python.exe" : "python");
   writeFileSync(py, "#!/bin/sh\necho Python 3.12.0\n", "utf-8");
@@ -40,7 +40,7 @@ function stubPythonAtProject(projectRoot: string): string {
   return py;
 }
 
-describe("ensureExperimentPythonVenv (project .prismnext/.venv)", () => {
+describe("ensureExperimentPythonVenv (project .workbench/.venv)", () => {
   let projectRoot: string;
 
   beforeEach(() => {
@@ -51,7 +51,7 @@ describe("ensureExperimentPythonVenv (project .prismnext/.venv)", () => {
     rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it("is a no-op when .prismnext/.venv python already exists", () => {
+  it("is a no-op when .workbench/.venv python already exists", () => {
     const py = stubPythonAtProject(projectRoot);
     let calls = 0;
     const result = ensureExperimentPythonVenv(projectRoot, {
@@ -68,7 +68,7 @@ describe("ensureExperimentPythonVenv (project .prismnext/.venv)", () => {
     expect(calls).toBe(0);
   });
 
-  it("creates .prismnext/.venv via uv when missing", () => {
+  it("creates .workbench/.venv via uv when missing", () => {
     const result = ensureExperimentPythonVenv(projectRoot, {
       runner: (cmd, cwd) => {
         expect(cwd).toBe(projectRoot);
@@ -122,7 +122,7 @@ describe("detectEnv after ensure", () => {
     if (projectRoot) rmSync(projectRoot, { recursive: true, force: true });
   });
 
-  it("reports project .prismnext/.venv (not under island or experiment folder)", () => {
+  it("reports project .workbench/.venv (not under island or experiment folder)", () => {
     projectRoot = makeProject();
     const workspaceRel = "labs";
     mkdirSync(join(projectRoot, workspaceRel, "exp-a"), { recursive: true });
@@ -139,7 +139,7 @@ describe("detectEnv after ensure", () => {
       projectRoot,
     });
     expect(env.venvPath).toBe(PRISMNEXT_VENV_REL);
-    expect(env.python).toMatch(/\.prismnext[/\\]\.venv/);
+    expect(env.python).toMatch(/\.workbench[/\\]\.venv/);
     expect(env.python).not.toContain("exp-a");
     expect(env.python).not.toMatch(/labs[/\\]\.venv/);
   });
@@ -156,7 +156,7 @@ describe("createExperiment injects shared python venv", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("creates project .prismnext/.venv on create (not under the island or experiment folder)", () => {
+  it("creates project .workbench/.venv on create (not under the island or experiment folder)", () => {
     const workspaceRel = "experiment";
     mkdirSync(join(root, workspaceRel), { recursive: true });
     const ctx = buildExperimentStorageContext(root, workspaceRel);
@@ -177,8 +177,8 @@ describe("createExperiment injects shared python venv", () => {
 
     const isWin = process.platform === "win32";
     const sharedPy = isWin
-      ? join(root, ".prismnext", ".venv", "Scripts", "python.exe")
-      : join(root, ".prismnext", ".venv", "bin", "python");
+      ? join(root, ".workbench", ".venv", "Scripts", "python.exe")
+      : join(root, ".workbench", ".venv", "bin", "python");
     const islandPy = isWin
       ? join(root, created.path, ".venv", "Scripts", "python.exe")
       : join(root, created.path, ".venv", "bin", "python");

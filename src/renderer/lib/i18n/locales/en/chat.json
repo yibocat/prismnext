@@ -51,6 +51,7 @@
     "closeDisabledStreaming": "Cannot close while the agent is running",
     "unsavedSession": "Not saved as a session yet",
     "mergesInto": "Merges into {{branch}}",
+    "noBranch": "No git branch",
     "worktreeRemoved": "Worktree removed — session kept on project",
     "citationsCount": "{{count}} staged citation",
     "citationsCount_plural": "{{count}} staged citations",
@@ -148,12 +149,30 @@
     "locked": "Worktree mode is locked while the agent is running.",
     "lockedWithLabel": "Worktree mode is locked: {{label}}",
     "commitsBehind": "{{n}} commits behind base",
-    "remove": "Remove {{name}}"
+    "remove": "Remove {{name}}",
+    "noBaseBranch": "Cannot determine base branch — is Git initialized?",
+    "close": "Close Worktree",
+    "closeHint": "Discard worktree and return to the main project",
+    "mergeToBranch": "Merge to Branch",
+    "mergeDesc": "Integrate worktree changes into {{branch}}. The worktree stays open — this is not a remote push.",
+    "noChanges": "No changes to merge",
+    "commitsReady": "{{count}} commits ready to merge into {{branch}}",
+    "filesCount": "{{count}} files",
+    "commitsCount": "{{count}} commits",
+    "merging": "Merging…",
+    "mergeInto": "Merge → {{branch}}",
+    "mergeSuccess": "Merged {{summary}} into {{branch}}",
+    "mergeFailed": "Merge failed: {{error}}",
+    "mergeRolledBack": "Merge rolled back with warnings"
   },
   "branch": {
     "noBranches": "No branches",
     "next": "next",
     "current": "current"
+  },
+  "project": {
+    "select": "Project",
+    "locked": "Cannot change project while the agent is running."
   },
   "model": {
     "selectModel": "Select model",
@@ -194,7 +213,7 @@
     "approveDrawerBody": "Approve to start Build against the plan file, or deny to discard the draft and keep chatting.",
     "approveDrawerBodyWithTitle": "{{title}}",
     "viewDraft": "View draft",
-    "draftNotYet": "Draft file not ready yet — the agent should write this session's `.prismnext/research/plans/drafts/<sessionId>.md` first.",
+    "draftNotYet": "Draft file not ready yet — the agent should write this session's `.workbench/research/plans/drafts/<sessionId>.md` first.",
     "draftMissingRedirect": "This turn did not update the plan draft file. Chat text is not the plan of record — the next message will require the agent to write the draft first.",
     "approveExecute": "Approve & Build",
     "rejectPlan": "Deny",
@@ -294,6 +313,7 @@
     "emptyTurn": "The model returned no content. This is usually caused by rate limits or quota exhaustion — please try again.",
     "provider_error": "The model provider returned an error (rate limit, quota, or API failure). Check your plan or switch models.",
     "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
+    "turn_aborted": "This turn was stopped before the model finished.",
     "connectionLost": "Agent connection lost. Please try again.",
     "cancelled": "Stopped."
   },

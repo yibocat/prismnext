@@ -5,12 +5,12 @@
  * picks a scope directly; they pick a team, and the team carries the scope.
  */
 
-import { app } from "electron";
 import { join } from "node:path";
 import {
   PROJECT_TEAMS_REL,
   type TeamScope,
 } from "../../shared/teams/types";
+import { homeTeamsDir } from "../workbench/home";
 
 let appTeamsDirOverride: string | null = null;
 
@@ -19,17 +19,13 @@ export function setAppTeamsDirForTests(dir: string | null): void {
   appTeamsDirOverride = dir;
 }
 
-/** App-level user-created teams root: `<userData>/teams/`. */
+/** App-level user-created teams root: `~/.prismnext/teams/`. */
 export function appTeamsDir(): string {
   if (appTeamsDirOverride) return appTeamsDirOverride;
-  try {
-    return join(app.getPath("userData"), "teams");
-  } catch {
-    return join(process.env.TMPDIR ?? "/tmp", "teams");
-  }
+  return homeTeamsDir();
 }
 
-/** Project teams root: `<projectRoot>/.prismnext/agent/teams/`. */
+/** Project teams root: `<projectRoot>/.workbench/agent/teams/`. */
 export function projectTeamsDir(projectRoot: string): string {
   return join(projectRoot, PROJECT_TEAMS_REL);
 }

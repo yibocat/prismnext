@@ -7,7 +7,7 @@ import {
   normalizeRunArtifactPaths,
   resolveImageArtifactPathsForDisplay,
   toProjectRelativeArtifact,
-} from "../../src/shared/artifact-path";
+} from "../../src/shared/interaction/artifact-path";
 
 describe("isPdfArtifactPath", () => {
   it("detects pdf extension", () => {
@@ -72,9 +72,9 @@ describe("imagePathsForRunDisplay", () => {
     expect(
       imagePathsForRunDisplay({
         artifacts: ["manuscript/foo.png"],
-        artifactSnapshots: [".prismnext/experiments/e/artifacts/r/foo.png"],
+        artifactSnapshots: [".workbench/experiments/e/artifacts/r/foo.png"],
       }),
-    ).toEqual([".prismnext/experiments/e/artifacts/r/foo.png"]);
+    ).toEqual([".workbench/experiments/e/artifacts/r/foo.png"]);
   });
 });
 

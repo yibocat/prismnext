@@ -37,7 +37,7 @@ import {
   setTokenMapEffect,
   tokenMapStateField,
 } from "../../src/renderer/components/modules/chat/inline-composer/token-field";
-import { loadDraftParts } from "../../src/renderer/components/modules/chat/inline-composer/draft-utils";
+import { loadDraftParts } from "../../src/renderer/lib/chat/composer-draft";
 
 import { preferredMenuSide } from "../../src/renderer/components/modules/chat/inline-composer/dropdown-position";
 import { compactContentNeedsExpand } from "../../src/renderer/components/modules/chat/inline-composer/compact-overflow";

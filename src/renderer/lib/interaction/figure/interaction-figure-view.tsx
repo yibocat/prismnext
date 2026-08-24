@@ -2,9 +2,9 @@ import { useTranslation } from "react-i18next";
 import { ChatProjectImage } from "@/lib/markdown/extract-markdown-images";
 import { ChatArtifactPdf } from "@/lib/markdown/chat-artifact-pdf";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
-import { isPdfArtifactPath } from "../../../../shared/artifact-path";
-import { pickFigureResourcePath } from "../../../../shared/interaction-figure";
-import type { InteractionSpec } from "../../../../shared/interaction-spec";
+import { isPdfArtifactPath } from "../../../../shared/interaction/artifact-path";
+import { pickFigureResourcePath } from "../../../../shared/interaction/figure";
+import type { InteractionSpec } from "../../../../shared/interaction/spec";
 
 export function InteractionFigureView({ spec }: { spec: InteractionSpec }) {
   const { t } = useTranslation();

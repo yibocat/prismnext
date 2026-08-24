@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useDocumentStore } from "@/stores/document-store";
-import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import {
+  createWorkspaceFolders,
+  ensureWorkspaceMainTex,
+  useWorkspaceConfigStore,
+} from "@/stores/workspace-config-store";
 import { toast } from "sonner";
 
 export type WorkspaceSaveStatus = "idle" | "saving" | "saved" | "error";
@@ -38,10 +42,10 @@ export function useWorkspaceProjectAutosave(projectRoot: string | null, loaded: 
       const dirs = useWorkspaceConfigStore.getState().workspaceDirs;
       const ok = await saveConfig(capturedRoot);
       if (ok) {
-        const createResult = await window.electronAPI.workspaceCreateFolders(capturedRoot, dirs);
+        const createResult = await createWorkspaceFolders(capturedRoot, dirs);
         const manuscript = dirs.find((d) => d.function === "manuscript");
         if (manuscript && createResult.created.includes(manuscript.name)) {
-          const mainTexResult = await window.electronAPI.workspaceEnsureMainTex(capturedRoot);
+          const mainTexResult = await ensureWorkspaceMainTex(capturedRoot);
           if (mainTexResult.created) {
             toast.success(`Created ${mainTexResult.relativePath}`, { duration: 2000 });
           }

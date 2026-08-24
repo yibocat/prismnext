@@ -228,6 +228,27 @@ describe("AgentSessionStore Worktree Isolation & Queries", () => {
     expect(mainCheckoutSessions).toHaveLength(2);
     expect(store.getSession("ses-proj-wt")?.boundCheckoutPath).toBe("/repo/main");
   });
+
+  it("reassigns a session to another project and resets checkout to the new root", () => {
+    store.createSession({
+      conversationId: "conv-move",
+      runtimeSessionId: "ses-move",
+      tabId: "tab-move",
+      title: "Move me",
+      projectId: "p_old",
+      projectRoot: "/repo/old",
+      boundCheckoutPath: "/repo/old/worktrees/feat",
+    });
+
+    expect(store.reassignProject("conv-move", "p_new", "/repo/new/")).toBe(true);
+    const moved = store.getByConversationId("conv-move");
+    expect(moved?.projectId).toBe("p_new");
+    expect(moved?.projectRoot).toBe("/repo/new");
+    expect(moved?.boundCheckoutPath).toBe("/repo/new");
+    expect(store.listSessionsByProjectId("p_old")).toHaveLength(0);
+    expect(store.listSessionsByProjectId("p_new").map((s) => s.conversationId)).toEqual(["conv-move"]);
+    expect(store.reassignProject("missing", "p_new", "/repo/new")).toBe(false);
+  });
 });
 
 describe("AgentSessionStore Checkpoint Rollback & Regret Synchronization", () => {
@@ -418,5 +439,25 @@ describe("AgentSessionStore v2 conversation identity", () => {
     store.deleteSession("rt-del");
     expect(store.getByConversationId("conv-del")).toBeNull();
     expect(store.getSession("rt-del")).toBeNull();
+  });
+
+  it("writes projectId on new records and lists by projectId first", () => {
+    const a = store.createSession({
+      runtimeSessionId: "ses-id-a",
+      title: "A",
+      projectRoot: "/paper-a",
+      projectId: "p_paper_a",
+    });
+    store.createSession({
+      runtimeSessionId: "ses-id-b",
+      title: "B",
+      projectRoot: "/paper-b",
+      projectId: "p_paper_b",
+    });
+    expect(a.projectId).toBe("p_paper_a");
+    expect(store.listSessionsByProjectId("p_paper_a")).toHaveLength(1);
+    expect(store.listSessionsByProjectId("p_paper_a")[0]?.runtimeSessionId).toBe("ses-id-a");
+    expect(store.listSessionsByProjectId("p_paper_b")[0]?.title).toBe("B");
+    expect(store.getSession("ses-id-a")?.projectId).toBe("p_paper_a");
   });
 });

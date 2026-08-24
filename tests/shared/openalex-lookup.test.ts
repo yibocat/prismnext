@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { arxivDoiFromArxivId } from "../../src/shared/doi-utils";
-import { openAlexWorkLookupUrl } from "../../src/shared/openalex-lookup";
+import { arxivDoiFromArxivId } from "../../src/shared/literature/doi-utils";
+import { openAlexWorkLookupUrl } from "../../src/shared/literature/openalex-lookup";
 
 describe("openAlexWorkLookupUrl", () => {
   it("uses arXiv DataCite DOI for arXiv-only lookup", () => {

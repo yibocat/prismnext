@@ -5,9 +5,10 @@ import { BoxesIcon, ExternalLinkIcon } from "lucide-react";
 import { ToolCard, Field, TOOL_INLINE_LABEL_CLASS } from "./shared";
 import { unwrapToolResultPayload } from "@/lib/chat/unwrap-tool-result";
 import { openInteractionPanel } from "@/lib/interaction/open-interaction-panel";
-import { kindDisplayLabel, type InteractionSpec } from "../../../../../shared/interaction-spec";
+import { kindDisplayLabel, type InteractionSpec } from "../../../../../shared/interaction/spec";
 import { InteractionChatThumbnail } from "@/lib/interaction/interaction-chat-thumbnail";
 import { useInteractionFenceClaim } from "@/lib/interaction/interaction-fence-dedupe";
+import { interactionDesktop } from "@/lib/desktop-api/interaction";
 import { useDocumentStore } from "@/stores/document-store";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -128,7 +129,7 @@ function InteractionToolPeek({
     }
     let cancelled = false;
     setLoading(true);
-    void window.electronAPI.interactionGet(projectRoot, id).then((res) => {
+    void interactionDesktop.interactionGet(projectRoot, id).then((res) => {
       if (cancelled) return;
       setSpec(res.spec ?? null);
       setLoading(false);

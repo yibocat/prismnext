@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { LogEntry } from "@shared/log-types";
+import type { LogEntry } from "@shared/platform/log-types";
 
 vi.mock("@/services/logger", () => ({
   logBuffer: [] as LogEntry[],

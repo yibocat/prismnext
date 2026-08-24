@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * Project brief — what `.brief.md` is (intellectual spine), not how to do research design.

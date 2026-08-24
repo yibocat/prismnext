@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "@/stores/chat-store";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useChatStore } from "@/stores/chat-store";
 import {
   MessageCircleQuestionIcon,
@@ -46,7 +47,7 @@ async function writeQuestionAnswer(answer: string, toolUseId?: string): Promise<
   const requestId = tab?.conversation.pendingQuestion?.requestId || toolUseId?.trim();
   if (!requestId) return false;
   try {
-    const result = await window.electronAPI.agentAnswerQuestion({ requestId, answer });
+    const result = await agentDesktop.agentAnswerQuestion({ requestId, answer });
     if (result.ok) {
       useChatStore.getState().acknowledgeQuestionAnswer(requestId, answer);
     }

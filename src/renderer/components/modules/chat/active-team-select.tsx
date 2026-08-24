@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/app-menu";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
+import { teamsDesktop } from "@/lib/desktop-api/teams";
 import { useDocumentStore } from "@/stores/document-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useTeamsStore } from "@/stores/teams-store";
 import { teamDisplayName } from "@/lib/teams/team-display-name";
-import { normalizeIconSpec } from "@shared/icon-spec";
+import { normalizeIconSpec } from "@shared/platform/icon-spec";
 import { IconRenderer } from "../shared/icon-renderer";
 import { useIconImageSrc } from "../shared/use-icon-image-src";
 import { COMPOSER_TOOLBAR_TRIGGER } from "./worktree-selector";
@@ -81,13 +82,13 @@ export function ActiveTeamSelect({
       return null;
     }
     try {
-      const team = await window.electronAPI.teamsGetActiveTeam(root, teamId);
+      const team = await teamsDesktop.teamsGetActiveTeam(root, teamId);
       const leadId = team?.orchestratorId;
       if (!team || !leadId) {
         setActiveLeadName(null);
         return { teamId: team?.manifest.id ?? teamId, teamName: team?.manifest.name ?? null, leadName: null };
       }
-      const orchs = await window.electronAPI.teamsListAssets(root, "orchestrator");
+      const orchs = await teamsDesktop.teamsListAssets(root, "orchestrator");
       const lead = orchs.find(
         (a) => a.teamId === team.manifest.id && (a.id === leadId || a.fqid.endsWith(`:${leadId}`)),
       );

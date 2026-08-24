@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEventHandler } from "react";
 import { toast } from "sonner";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { bindLiteraturePdfDragZone } from "./literature-pdf-drag-overlay";
 
@@ -16,7 +17,7 @@ function collectPdfPaths(dataTransfer: DataTransfer): string[] {
   const paths: string[] = [];
   for (const file of Array.from(dataTransfer.files)) {
     if (!isPdfFileName(file.name)) continue;
-    paths.push(window.electronAPI.getPathForFile(file));
+    paths.push(fsDesktop.getPathForFile(file));
   }
   return paths;
 }

@@ -6,6 +6,7 @@ import {
   type TerminalExecutionSummary,
 } from "../../shared/execution";
 import { shouldAutoOpenAiTerminal } from "@/lib/terminal/ai-prefs";
+import { executionDesktop } from "@/lib/desktop-api/execution";
 import { useRightPanelStore } from "./right-panel-store";
 
 const TAIL_MAX_CHARS = 64 * 1024;
@@ -128,7 +129,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         },
       },
     }));
-    const result = await window.electronAPI.executionReplay({ executionId, fromSequence });
+    const result = await executionDesktop.executionReplay({ executionId, fromSequence });
     if (!result.ok) {
       set((state) => ({
         byId: {
@@ -159,7 +160,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
 
   async hydrate(executionId) {
     if (get().byId[executionId]?.summary) return;
-    const result = await window.electronAPI.executionGet(executionId);
+    const result = await executionDesktop.executionGet(executionId);
     if (!result?.ok) return;
     set((state) => ({
       byId: {
@@ -188,7 +189,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
     if (!key) return undefined;
     const local = get().findByToolCallId(key);
     if (local) return local;
-    const result = await window.electronAPI.executionFindByToolCallId(key);
+    const result = await executionDesktop.executionFindByToolCallId(key);
     if (!result?.ok) return undefined;
     set((state) => ({
       byId: {
@@ -288,7 +289,7 @@ export const useExecutionStore = create<ExecutionState>()((set, get) => ({
         ),
       )
       .map((summary) => summary.executionId);
-    await Promise.all(ids.map((id) => window.electronAPI.executionCancel(id)));
+    await Promise.all(ids.map((id) => executionDesktop.executionCancel(id)));
   },
 
   reset() {

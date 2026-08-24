@@ -1,7 +1,8 @@
 import { icons, type LucideIcon, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
-import type { IconSpec } from "@shared/icon-spec";
+import { sessionIconColorClass } from "@/lib/chat/session-icon-registry";
+import type { IconSpec } from "@shared/platform/icon-spec";
 
 export type IconFallback = "package" | "letter";
 export type IconVariant = "badge" | "bare";
@@ -18,7 +19,7 @@ export interface IconRendererProps {
   variant?: IconVariant;
   /**
    * Resolved data URL for `kind: "image"`. Callers load via `useIconImageSrc`
-   * (file under team dir / `.prismnext/`).
+   * (file under team dir / `.workbench/`).
    */
   imageSrc?: string | null;
   className?: string;
@@ -71,15 +72,34 @@ export function IconRenderer({
   // Bare variant: inline glyph / icon for toolbar triggers (no chip box).
   if (variant === "bare") {
     if (spec?.kind === "emoji" && spec.value) {
+      // Emoji is a font glyph (Apple Color Emoji sits low in the em-box).
+      // Put it in the same SIZE_ICON flex box as Lucide so items-center rows line up.
       return (
-        <span className={cn("leading-none", SIZE_GLYPH[size], className)} aria-hidden>
-          {spec.value}
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center justify-center leading-none",
+            SIZE_ICON[size],
+            className,
+          )}
+          aria-hidden
+        >
+          <span className={cn("leading-none", SIZE_GLYPH[size])}>{spec.value}</span>
         </span>
       );
     }
     if (spec?.kind === "lucide" && isValidLucideIconName(spec.value)) {
       const Icon = icons[spec.value] as LucideIcon;
-      return <Icon className={cn("shrink-0", SIZE_ICON[size], className)} aria-hidden />;
+      return (
+        <Icon
+          className={cn(
+            "shrink-0",
+            SIZE_ICON[size],
+            spec.color ? sessionIconColorClass(spec.color) : undefined,
+            className,
+          )}
+          aria-hidden
+        />
+      );
     }
     if (spec?.kind === "image" && resolvedImage) {
       return (
@@ -119,7 +139,12 @@ export function IconRenderer({
     const Icon = icons[spec.value] as LucideIcon;
     return (
       <span className={base} aria-hidden>
-        <Icon className={cn("text-muted-foreground", SIZE_ICON[size])} />
+        <Icon
+          className={cn(
+            spec.color ? sessionIconColorClass(spec.color) : "text-muted-foreground",
+            SIZE_ICON[size],
+          )}
+        />
       </span>
     );
   }

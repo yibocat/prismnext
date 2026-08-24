@@ -2,9 +2,9 @@
  * kind → renderer table. Panel dispatch only queries this table.
  */
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
-import { isFigureStaticKind } from "../../../shared/interaction-figure";
-import { isInteractionPlotKind } from "../../../shared/interaction-plot";
-import type { InteractionSpec } from "../../../shared/interaction-spec";
+import { isFigureStaticKind } from "../../../shared/interaction/figure";
+import { isInteractionPlotKind } from "../../../shared/interaction/plot";
+import type { InteractionSpec } from "../../../shared/interaction/spec";
 
 export type InteractionRendererProps = {
   spec: InteractionSpec;

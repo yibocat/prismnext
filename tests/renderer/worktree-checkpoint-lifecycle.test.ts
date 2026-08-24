@@ -3,7 +3,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
-import { emptyConversation } from "../../src/shared/agent-conversation";
+import { emptyConversation } from "../../src/shared/agent/conversation";
 
 const PROJECT = "/proj";
 const WT = `${PROJECT}/.prismnext/worktrees/owl`;

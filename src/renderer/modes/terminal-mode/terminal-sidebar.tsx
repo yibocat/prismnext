@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { i18n } from "@/lib/i18n";
+import { terminalDesktop } from "@/lib/desktop-api/terminal";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalStore } from "@/stores/terminal-store";
 import {
@@ -208,7 +209,7 @@ export function TerminalSidebar() {
       useTerminalStore.getState().markCommandSubmitted(activeTabId);
       setSessionCommand(activeTabId, command);
     }
-    window.electronAPI.terminalWrite({ sessionId: activeSessionId, data: command + "\r" });
+    terminalDesktop.terminalWrite({ sessionId: activeSessionId, data: command + "\r" });
   };
 
   const handleSaveCommand = async (

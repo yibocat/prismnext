@@ -15,9 +15,6 @@ vi.mock("@/lib/workspace/mode-registry", () => ({
 vi.mock("@/lib/workspace/right-area-layout", () => ({
   closeRightArea: vi.fn(),
 }));
-vi.mock("@/lib/workspace/left-nav/panel-refs", () => ({
-  getLeftNavPanelRefs: () => ({ centerRef: null, rightAreaRef: null }),
-}));
 
 import {
   closeActiveTabFromShortcut,

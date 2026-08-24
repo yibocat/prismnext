@@ -19,11 +19,13 @@ import type {
   AgentLoadSessionInput,
   AgentModelEffortInput,
   AgentRenameSessionInput,
+  AgentGenerateSessionTitleInput,
+  AgentReassignSessionProjectInput,
   AgentResolvePlanSuggestInput,
   AgentSendInput,
   AgentCancelSubagentInput,
   AgentTestConnectionInput,
-} from "../../shared/agent-api";
+} from "../../shared/agent/api";
 import { getAgentService } from "../agent/agent-service";
 
 export function registerAgentHandlers(): void {
@@ -73,6 +75,11 @@ export function registerAgentHandlers(): void {
     return agent.listSessions(args.projectRoot);
   });
 
+  ipcMain.handle("agent:listSessionsByProjectId", async (_event, args: { projectId: string }) => {
+    const agent = await getAgentService();
+    return agent.listSessionsByProjectId(args.projectId);
+  });
+
   ipcMain.handle("agent:loadSession", async (_event, args: AgentLoadSessionInput) => {
     const agent = await getAgentService();
     return agent.loadSession(args);
@@ -81,6 +88,16 @@ export function registerAgentHandlers(): void {
   ipcMain.handle("agent:renameSession", async (_event, args: AgentRenameSessionInput) => {
     const agent = await getAgentService();
     return agent.renameSession(args);
+  });
+
+  ipcMain.handle("agent:generateSessionTitle", async (_event, args: AgentGenerateSessionTitleInput) => {
+    const agent = await getAgentService();
+    return agent.generateSessionTitle(args);
+  });
+
+  ipcMain.handle("agent:reassignSessionProject", async (_event, args: AgentReassignSessionProjectInput) => {
+    const agent = await getAgentService();
+    return agent.reassignSessionProject(args);
   });
 
   ipcMain.handle("agent:deleteSession", async (_event, args: AgentDeleteSessionInput) => {

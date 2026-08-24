@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 const compileLatex = vi.fn();
 const compileStandaloneTexInPlace = vi.fn();
 
-vi.mock("../../src/main/services/compiler", async (importOriginal) => {
+vi.mock("../../src/main/compile/facade", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../src/main/services/compiler")>();
+    await importOriginal<typeof import("../../src/main/compile/facade")>();
   return {
     ...actual,
     compileLatex: (...args: unknown[]) => compileLatex(...args),
@@ -22,7 +22,7 @@ import {
   compileForAgent,
   compileManuscriptForAgent,
   compileStandaloneForAgent,
-} from "../../src/main/services/latex-service";
+} from "../../src/main/compile/latex-service";
 
 const STANDALONE_FIGURE = String.raw`\documentclass[tikz,border=2mm]{standalone}
 \usepackage{tikz}
@@ -69,7 +69,7 @@ describe("compileForAgent standalone routing", () => {
     compileStandaloneTexInPlace.mockReset();
     compileLatex.mockResolvedValue({
       success: true,
-      buildDir: ".prismnext/compile",
+      buildDir: ".workbench/compile",
       logContent: "",
     });
     compileStandaloneTexInPlace.mockResolvedValue({
@@ -81,13 +81,16 @@ describe("compileForAgent standalone routing", () => {
     root = mkdtempSync(join(tmpdir(), "prism-standalone-compile-"));
     mkdirSync(join(root, "manuscript"), { recursive: true });
     mkdirSync(join(root, "figures"), { recursive: true });
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [
-          { name: "manuscript", function: "manuscript", mainTex: "main.tex" },
-        ],
+        id: "p_test",
+        workspace: {
+          folders: [
+            { name: "manuscript", function: "manuscript", mainTex: "main.tex" },
+          ],
+        },
       }),
       "utf-8",
     );
@@ -113,11 +116,14 @@ describe("compileForAgent standalone routing", () => {
 
   it("still compiles in place when the standalone figure is the workspace main tex", async () => {
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [
-          { name: "figures", function: "manuscript", mainTex: "arch.tex" },
-        ],
+        id: "p_test",
+        workspace: {
+          folders: [
+            { name: "figures", function: "manuscript", mainTex: "arch.tex" },
+          ],
+        },
       }),
       "utf-8",
     );
@@ -134,8 +140,8 @@ describe("compileForAgent standalone routing", () => {
   it("auto-detect of a standalone-only project compiles in place, not the article cache", async () => {
     rmSync(join(root, "manuscript"), { recursive: true, force: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
-      JSON.stringify({ workspaceDirs: [] }),
+      join(root, ".workbench", "workbench.json"),
+      JSON.stringify({ id: "p_test", workspace: { folders: [] } }),
       "utf-8",
     );
     await compileForAgent(root);
@@ -188,7 +194,7 @@ describe("agent compile tool split", () => {
     compileStandaloneTexInPlace.mockReset();
     compileLatex.mockResolvedValue({
       success: true,
-      buildDir: ".prismnext/compile",
+      buildDir: ".workbench/compile",
       logContent: "",
     });
     compileStandaloneTexInPlace.mockResolvedValue({
@@ -200,13 +206,16 @@ describe("agent compile tool split", () => {
     root = mkdtempSync(join(tmpdir(), "prism-latex-tool-split-"));
     mkdirSync(join(root, "manuscript"), { recursive: true });
     mkdirSync(join(root, "figures"), { recursive: true });
-    mkdirSync(join(root, ".prismnext"), { recursive: true });
+    mkdirSync(join(root, ".workbench"), { recursive: true });
     writeFileSync(
-      join(root, ".prismnext", "settings.json"),
+      join(root, ".workbench", "workbench.json"),
       JSON.stringify({
-        workspaceDirs: [
-          { name: "manuscript", function: "manuscript", mainTex: "main.tex" },
-        ],
+        id: "p_test",
+        workspace: {
+          folders: [
+            { name: "manuscript", function: "manuscript", mainTex: "main.tex" },
+          ],
+        },
       }),
       "utf-8",
     );

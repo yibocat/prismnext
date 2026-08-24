@@ -4,14 +4,14 @@ import {
   isResearchPlansDirPath,
   resolveEffectivePermissionRule,
   resolveSessionAgent,
-} from "../../src/shared/session-agent";
-import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
+} from "../../src/shared/agent/session-agent";
+import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research/brief";
 import {
   DRAFT_PLAN_REL,
   isResearchPlanDraftPath,
   RESEARCH_PLAN_DRAFTS_DIR_REL,
   sessionDraftPlanRel,
-} from "../../src/shared/research-plan";
+} from "../../src/shared/research/plan";
 
 describe("session-agent (Plan / Build permission)", () => {
   it("defaults unknown to build", () => {
@@ -63,7 +63,7 @@ describe("session-agent (Plan / Build permission)", () => {
     ).toBe("deny");
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: `.prismnext/research/plans/2026-07-18-abcd.md`,
+        filePath: `.workbench/research/plans/2026-07-18-abcd.md`,
         projectRoot: "/proj",
         sessionId: "ses_1",
       }),
@@ -73,7 +73,7 @@ describe("session-agent (Plan / Build permission)", () => {
   it("Plan without sessionId still allows broad plans-dir writes (fallback)", () => {
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: `.prismnext/research/plans/2026-07-18-abcd.md`,
+        filePath: `.workbench/research/plans/2026-07-18-abcd.md`,
         projectRoot: "/proj",
       }),
     ).toBe("allow");
@@ -83,7 +83,7 @@ describe("session-agent (Plan / Build permission)", () => {
     expect(resolveEffectivePermissionRule("auto", "plan", "bash")).toBe("allow");
     expect(
       resolveEffectivePermissionRule("auto", "plan", "bash", {
-        bashCommand: "ls -la .prismnext/research/plans",
+        bashCommand: "ls -la .workbench/research/plans",
       }),
     ).toBe("allow");
     expect(resolveEffectivePermissionRule("ask", "plan", "bash")).toBe("ask");
@@ -96,7 +96,7 @@ describe("session-agent (Plan / Build permission)", () => {
   it("isResearchPlanDraftPath / isResearchPlansDirPath", () => {
     expect(isResearchPlanDraftPath(DRAFT_PLAN_REL)).toBe(true);
     expect(isResearchPlanDraftPath(sessionDraftPlanRel("ses_1"))).toBe(true);
-    expect(isResearchPlansDirPath(".prismnext/research/plans/x.md")).toBe(true);
+    expect(isResearchPlansDirPath(".workbench/research/plans/x.md")).toBe(true);
     expect(isResearchPlansDirPath("src/main.tex")).toBe(false);
   });
 

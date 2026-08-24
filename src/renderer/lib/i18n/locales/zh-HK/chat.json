@@ -51,6 +51,7 @@
     "closeDisabledStreaming": "智慧體執行中無法關閉",
     "unsavedSession": "尚未儲存為會話",
     "mergesInto": "合併到 {{branch}}",
+    "noBranch": "無 Git 分支",
     "worktreeRemoved": "Worktree 已移除 — 會話保留在專案上",
     "citationsCount": "{{count}} 條暫存引用",
     "citationsCount_plural": "{{count}} 條暫存引用",
@@ -148,12 +149,30 @@
     "locked": "Agent 執行中時無法切換 worktree。",
     "lockedWithLabel": "Worktree 已鎖定：{{label}}",
     "commitsBehind": "落後基線 {{n}} 個提交",
-    "remove": "移除 {{name}}"
+    "remove": "移除 {{name}}",
+    "noBaseBranch": "無法確定基線分支 — Git 是否已初始化？",
+    "close": "關閉 Worktree",
+    "closeHint": "丟棄 worktree 並回到主項目",
+    "mergeToBranch": "合併到分支",
+    "mergeDesc": "將 worktree 的更改併入 {{branch}}。Worktree 會保留，這不是遠端推送。",
+    "noChanges": "沒有可合併的更改",
+    "commitsReady": "{{count}} 個提交可合併到 {{branch}}",
+    "filesCount": "{{count}} 個檔案",
+    "commitsCount": "{{count}} 個提交",
+    "merging": "正在合併…",
+    "mergeInto": "合併 → {{branch}}",
+    "mergeSuccess": "已將 {{summary}} 合併到 {{branch}}",
+    "mergeFailed": "合併失敗：{{error}}",
+    "mergeRolledBack": "合併已回滾，並帶有警告"
   },
   "branch": {
     "noBranches": "無分支",
     "next": "下一",
     "current": "當前"
+  },
+  "project": {
+    "select": "項目",
+    "locked": "Agent 執行中時無法更換項目。"
   },
   "model": {
     "selectModel": "選擇模型",
@@ -220,7 +239,7 @@
     "approveDrawerBody": "同意後按計劃檔案開始構建；拒絕則丟棄草稿，會話可繼續聊。",
     "approveDrawerBodyWithTitle": "{{title}}",
     "viewDraft": "檢視草稿",
-    "draftNotYet": "草稿檔案尚未就緒 — 請等助手寫入本會話的 `.prismnext/research/plans/drafts/<sessionId>.md`。",
+    "draftNotYet": "草稿檔案尚未就緒 — 請等助手寫入本會話的 `.workbench/research/plans/drafts/<sessionId>.md`。",
     "draftMissingRedirect": "本輪未寫入計劃草稿檔案。聊天內容不是正式計劃 — 下一條訊息會強制要求助手先寫草稿。",
     "approveExecute": "Approve & Build",
     "rejectPlan": "Deny",
@@ -320,6 +339,7 @@
     "emptyTurn": "模型未返回任何內容，通常是觸發了限流或額度耗盡，請重試。",
     "provider_error": "模型服務商返回錯誤（限流、額度不足或 API 失敗）。請檢查套餐或切換模型。",
     "turn_timeout": "長時間未收到模型響應，已自動終止本輪對話。服務商可能正在限流或暫時不可用。",
+    "turn_aborted": "這一輪在模型完成前被中止了。",
     "connectionLost": "Agent 連線已斷開，請重試。",
     "cancelled": "已停止。"
   },

@@ -20,7 +20,10 @@ pnpm exec vitest run \
   tests/main/compile-bib-integration.test.ts \
   tests/main/standalone-tex-inplace.real.test.ts \
   tests/main/experiment-ipc.test.ts \
-  tests/renderer/welcome-page.test.tsx
+  tests/main/workbench-default-project.test.ts \
+  tests/main/workbench-membership.test.ts \
+  tests/renderer/workbench-store.test.ts \
+  tests/renderer/project-lifecycle.test.ts
 
 echo "==> Full Host suite"
 pnpm test

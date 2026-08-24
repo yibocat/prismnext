@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useSettingsStore } from "@/stores/settings-store";
 import { applyAppLocalePreference } from "./index";
-import type { AppLocalePreference } from "../../../shared/app-locale";
+import type { AppLocalePreference } from "../../../shared/platform/app-locale";
 
 /** Keep react-i18next in sync with persisted `appLocale`. */
 export function LocaleSync() {

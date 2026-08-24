@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { GitBranchIcon, LockIcon } from "lucide-react";
+import { GitBranchIcon, Loader2Icon, LockIcon } from "lucide-react";
 import {
   AppMenu,
   AppMenuCheckItem,
@@ -23,7 +23,7 @@ export function BranchSelector() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const currentBranch = useGitStore((s) => s.branch);
-  const pendingBranch = useGitStore((s) => s.pendingBranch);
+  const switching = useGitStore((s) => s.switching);
   const branches = useGitStore((s) => s.branches);
   const refreshBranches = useGitStore((s) => s.refreshBranches);
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
@@ -53,22 +53,18 @@ export function BranchSelector() {
   const locked = activeWorktree !== null;
   const displayBranch: string = locked
     ? activeWorktree.baseBranch
-    : (pendingBranch
-      || (currentBranch && !currentBranch.startsWith(WT_PREFIX)
-        ? currentBranch
-        : (lastProjectBranch.current || "...")));
+    : (currentBranch && !currentBranch.startsWith(WT_PREFIX)
+      ? currentBranch
+      : (lastProjectBranch.current || "..."));
 
   const handleSelectBranch = useCallback(
     (branchName: string) => {
-      if (locked) return;
+      if (locked || switching) return;
       if (!projectRoot) return;
-      if (branchName === currentBranch) {
-        useGitStore.getState().setPendingBranch(null);
-      } else {
-        useGitStore.getState().setPendingBranch(branchName);
-      }
+      if (branchName === currentBranch) return;
+      void useGitStore.getState().switchBranch(projectRoot, branchName);
     },
-    [projectRoot, currentBranch, locked],
+    [projectRoot, currentBranch, locked, switching],
   );
 
   if (!projectRoot) return null;
@@ -77,7 +73,7 @@ export function BranchSelector() {
     return <GitInitButton />;
   }
 
-  const buttonLabel = pendingBranch && !locked ? pendingBranch : (displayBranch || "...");
+  const buttonLabel = displayBranch || "...";
 
   return (
     <AppMenu>
@@ -92,9 +88,13 @@ export function BranchSelector() {
                 : undefined,
             )}
             onMouseDown={(e) => e.preventDefault()}
-            disabled={locked}
+            disabled={locked || switching}
           >
-            <GitBranchIcon className="size-3 shrink-0" />
+            {switching ? (
+              <Loader2Icon className="size-3 shrink-0 animate-spin" />
+            ) : (
+              <GitBranchIcon className="size-3 shrink-0" />
+            )}
             <span className="max-w-[100px] truncate hidden @md:inline">{buttonLabel}</span>
             {locked && <LockIcon className="size-2.5" />}
           </button>
@@ -104,20 +104,15 @@ export function BranchSelector() {
         {visibleBranches.length > 0 ? (
           visibleBranches.map((b) => {
             const isCurrent = b === currentBranch;
-            const isPending = b === pendingBranch;
             return (
               <AppMenuCheckItem
                 key={b}
                 selected={isCurrent}
                 onClick={() => handleSelectBranch(b)}
-                disabled={locked}
+                disabled={locked || switching}
                 className={cn(locked && "opacity-50")}
                 trailing={
-                  isPending && !isCurrent ? (
-                    <span className="text-[length:var(--font-badge)] text-amber-500">
-                      {t("chat.branch.next")}
-                    </span>
-                  ) : isCurrent ? (
+                  isCurrent ? (
                     <span className="text-[length:var(--font-badge)] text-primary">
                       {t("chat.branch.current")}
                     </span>

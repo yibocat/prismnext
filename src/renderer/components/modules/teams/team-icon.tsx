@@ -3,7 +3,7 @@
 // Image icons live as `<teamDir>/icon.png` — resolved via fsReadImage.
 import { IconRenderer } from "../shared/icon-renderer";
 import { useIconImageSrc } from "../shared/use-icon-image-src";
-import { normalizeIconSpec, type IconSpec } from "@shared/icon-spec";
+import { normalizeIconSpec, type IconSpec } from "@shared/platform/icon-spec";
 
 export function PackIcon({
   size = "md",

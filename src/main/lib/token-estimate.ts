@@ -3,7 +3,7 @@ import o200k_base from "js-tiktoken/ranks/o200k_base";
 import {
   PROMPT_TOKEN_ENCODING,
   type PromptTokenEstimate,
-} from "../../shared/token-estimate";
+} from "../../shared/providers/token-estimate";
 
 let encoder: Tiktoken | null = null;
 

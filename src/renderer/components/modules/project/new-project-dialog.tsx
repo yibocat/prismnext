@@ -8,6 +8,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
+import { projectDesktop } from "@/lib/desktop-api/project";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -49,12 +51,6 @@ import {
   SETTINGS_ROW_DESC,
   SETTINGS_ROW_LABEL,
 } from "@/components/modules/settings/settings-tokens";
-import {
-  DEFAULT_PROJECT_ICON,
-} from "./project-icon";
-import { IconPicker } from "../shared/icon-picker";
-import type { IconSpec } from "@shared/icon-spec";
-
 type PresetId = "paper" | "research" | "minimal" | "custom";
 
 interface NewProjectPaneProps {
@@ -63,7 +59,7 @@ interface NewProjectPaneProps {
   /** Welcome already renders the page title + back control. */
   hideTitle?: boolean;
   onCancel?: () => void;
-  onCreated?: () => void;
+  onCreated?: (path: string) => void;
 }
 
 const PRESET_OPTIONS: Array<{
@@ -98,6 +94,7 @@ interface NewProjectDialogProps {
   children: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onCreated?: (path: string) => void;
 }
 
 interface NewFolderEntry {
@@ -134,13 +131,13 @@ function toCreateDirs(folders: NewFolderEntry[]): WorkspaceFolder[] {
     });
 }
 
-function LiveStructurePreview({
+export function LiveStructurePreview({
   projectName,
   folders,
   initGit,
 }: {
   projectName: string;
-  folders: NewFolderEntry[];
+  folders: Array<{ name: string; function: FolderFunction }>;
   initGit: boolean;
 }) {
   const { t } = useTranslation();
@@ -183,7 +180,7 @@ function LiveStructurePreview({
         <div className="flex items-center gap-1.5 pl-4 text-muted-foreground">
           <span className="text-muted-foreground/50">├──</span>
           <FolderIcon className="size-3 text-muted-foreground" />
-          <span className="text-foreground/80">.prismnext/</span>
+          <span className="text-foreground/80">.workbench/</span>
           <span className="font-sans text-[10px] text-muted-foreground/70">
             ({t("project.new.prismnextConfigTag", "智能体规则与配置")})
           </span>
@@ -252,11 +249,6 @@ export function NewProjectPane({
   );
   const [initGit, setInitGit] = useState(settingsInitGit);
   const [showCustomFolders, setShowCustomFolders] = useState(false);
-  const [projectIcon, setProjectIcon] = useState<IconSpec | null>({
-    kind: "emoji",
-    value: DEFAULT_PROJECT_ICON,
-  });
-  const [pendingIconPngBase64, setPendingIconPngBase64] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -291,7 +283,7 @@ export function NewProjectPane({
   };
 
   const handleSelectParent = async () => {
-    const result = await window.electronAPI?.dialogOpenFolder?.();
+    const result = await dialogDesktop.dialogOpenFolder();
     if (result && !result.canceled && result.path) setParentPath(result.path);
   };
 
@@ -300,15 +292,12 @@ export function NewProjectPane({
     setCreating(true);
     try {
       const workspaceDirs = toCreateDirs(workspaceFolders);
-      const icon = projectIcon ?? { kind: "emoji", value: DEFAULT_PROJECT_ICON };
-      await window.electronAPI?.projectCreate?.(fullPath, workspaceDirs, {
+      await projectDesktop.projectCreate(fullPath, workspaceDirs, {
         initGit,
-        projectIcon: icon.kind === "image" ? undefined : icon,
-        projectIconImagePngBase64: pendingIconPngBase64 ?? undefined,
       });
       addRecentProject(fullPath);
-      onCreated?.();
       await openProject(fullPath);
+      onCreated?.(fullPath);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t("project.new.createFailed");
       console.error("Project creation failed:", err);
@@ -342,29 +331,17 @@ export function NewProjectPane({
           <div className="space-y-4">
             <div className={SETTINGS_FORM_FIELD}>
               <label className={SETTINGS_ROW_LABEL}>{t("project.new.projectName")}</label>
-              <div className="flex items-center gap-2">
-                <IconPicker
-                  value={projectIcon}
-                  onChange={setProjectIcon}
-                  onPendingImagePngBase64={setPendingIconPngBase64}
-                  name={projectName || "P"}
-                  fallback="letter"
-                  size="sm"
-                  disabled={creating}
-                  triggerLabel={t("project.new.chooseIcon")}
-                />
-                <Input
-                  ref={inputRef}
-                  className={cn(SETTINGS_FORM_INPUT, "h-9 min-w-0 flex-1 font-medium")}
-                  placeholder="my-paper"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  disabled={creating}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && canCreate) void handleCreate();
-                  }}
-                />
-              </div>
+              <Input
+                ref={inputRef}
+                className={cn(SETTINGS_FORM_INPUT, "h-9 min-w-0 font-medium")}
+                placeholder="my-paper"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                disabled={creating}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canCreate) void handleCreate();
+                }}
+              />
             </div>
 
             <div className={SETTINGS_FORM_FIELD}>
@@ -642,6 +619,7 @@ export function NewProjectDialog({
   children,
   open: controlledOpen,
   onOpenChange,
+  onCreated,
 }: NewProjectDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -655,7 +633,13 @@ export function NewProjectDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       {!isControlled ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
       <DialogContent aria-describedby={undefined} className="max-w-2xl gap-0 overflow-hidden p-0 sm:rounded-xl">
-        <NewProjectPane onCancel={() => setOpen(false)} onCreated={() => setOpen(false)} />
+        <NewProjectPane
+          onCancel={() => setOpen(false)}
+          onCreated={(path) => {
+            setOpen(false);
+            onCreated?.(path);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

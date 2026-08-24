@@ -5,7 +5,7 @@
  * This module does NOT invent new catalogs, parallel experts, or disk file projections.
  */
 
-import type { Fqid, BlockReason } from "../../shared/teams/types";
+import { MY_CONTENT_TEAM_ID, type Fqid, type BlockReason } from "../../shared/teams/types";
 import type {
   AssetViewV2,
   OrchestratorDefV2,
@@ -14,6 +14,7 @@ import type {
 } from "../../shared/teams/view";
 import {
   getAsset,
+  listAssets,
   listEffectiveSlashCommands,
   listMcpServers,
   listTeams,
@@ -390,6 +391,14 @@ export function resolveTeamPiBinding(input: TeamPiBindingInput): TeamPiBindingRe
         seenSkillFqids.add(asset.fqid);
       }
     }
+  }
+
+  // Workbench hangar skills are available in every project chat.
+  for (const asset of listAssets(projectRoot, "skill")) {
+    if (asset.teamId !== MY_CONTENT_TEAM_ID || !asset.enabled) continue;
+    if (seenSkillFqids.has(asset.fqid)) continue;
+    skills.push(asset);
+    seenSkillFqids.add(asset.fqid);
   }
 
   // Commands

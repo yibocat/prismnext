@@ -6,16 +6,16 @@
  */
 
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { AgentEvent, AgentToolCallId, ToolOutcome } from "../../shared/agent-runtime";
-import { parseToolOutcome } from "../../shared/agent-runtime";
-import type { PermissionMode, SessionAgent } from "../../shared/session-agent";
+import type { AgentEvent, AgentToolCallId, ToolOutcome } from "../../shared/agent/runtime";
+import { parseToolOutcome } from "../../shared/agent/runtime";
+import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import {
   extractToolPathContext,
   type PermissionGate,
   type PermissionGateRequest,
 } from "./permission-gate";
 import type { NativeToolDefinition } from "./tools/types";
-import { createLogger, shortLogDetail } from "../services/logger";
+import { createLogger, shortLogDetail } from "../app/logger";
 
 const log = createLogger("tool-host", "agent");
 

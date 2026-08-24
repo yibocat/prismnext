@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * Research design — scientific thinking and intellectual roadmap (activity).

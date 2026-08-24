@@ -5,9 +5,10 @@ import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { useChatStore } from "@/stores/chat-store";
-import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
+import { usesProposedChange } from "@/lib/chat/tool-proposed-change";
 import { createLogger } from "@/services/logger";
-import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
+import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permissions/timeouts";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 async function answerPermission(
   _tabId: string,
@@ -16,7 +17,7 @@ async function answerPermission(
   _toolCallId?: string,
   _always?: boolean,
 ): Promise<void> {
-  await window.electronAPI.agentResolvePermission({
+  await agentDesktop.agentResolvePermission({
     requestId: permissionId,
     decision: allow ? "allow" : "deny",
   });
@@ -128,7 +129,7 @@ export async function finalizePermissionAllow(opts: {
         };
         const command = String(input.command ?? input.cmd ?? "").trim();
         if (command) {
-          const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
+          const { bashAlwaysPatternFromCommand } = await import("../../shared/permissions/bash-allow-always");
           const pattern = bashAlwaysPatternFromCommand(command);
           if (pattern) {
             const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];

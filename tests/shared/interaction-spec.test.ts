@@ -10,7 +10,7 @@ import {
   isAllowedInteractionKind,
   interactionSpecRelativePath,
   legacyInteractionSpecRelativePath,
-} from "../../src/shared/interaction-spec";
+} from "../../src/shared/interaction/spec";
 
 describe("isValidInteractionId", () => {
   it("accepts safe ids and rejects traversal", () => {
@@ -139,7 +139,7 @@ describe("interaction agent helpers", () => {
 describe("interaction spec paths", () => {
   it("uses interactions dir for canonical relative path", () => {
     expect(interactionSpecRelativePath("plot.loss")).toBe(
-      ".prismnext/interactions/plot.loss/spec.json",
+      ".workbench/interactions/plot.loss/spec.json",
     );
     expect(legacyInteractionSpecRelativePath("plot.loss")).toBe(
       ".prismnext/artifacts/plot.loss/spec.json",

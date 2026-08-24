@@ -11,7 +11,7 @@ import {
   missingInteractionFencesInText,
 } from "@/lib/markdown/chat-interaction";
 import { unwrapToolResultPayload } from "@/lib/chat/unwrap-tool-result";
-import { normalizeArtifactSlash } from "../../../shared/artifact-path";
+import { normalizeArtifactSlash } from "../../../shared/interaction/artifact-path";
 
 export function isInteractionWriteToolUse(toolUse: ContentBlock): boolean {
   return (toolUse.name || "").toLowerCase() === "interaction-write";

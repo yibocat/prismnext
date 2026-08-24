@@ -21,60 +21,139 @@ export function isEditableFileTabKind(kind: RightTabKind): boolean {
   return kind === "file" || kind === "texworkspace" || kind === "research-plan";
 }
 
-export function isJobMonitorTab(tab: Pick<RightTab, "kind" | "terminalSource">): boolean {
+export function isJobMonitorTab(
+  tab: RightTab,
+): tab is Extract<RightTab, { kind: "terminal" }> & {
+  terminalSource: "job-monitor" | "ai";
+} {
   return tab.kind === "terminal" && (tab.terminalSource === "job-monitor" || tab.terminalSource === "ai");
+}
+
+export function isFileBackedTab(
+  tab: RightTab,
+): tab is Extract<RightTab, { kind: "file" | "texworkspace" | "research-plan" }> {
+  return isEditableFileTabKind(tab.kind);
+}
+
+export function tabFileId(tab: RightTab): string | undefined {
+  return isFileBackedTab(tab) ? tab.fileId : undefined;
+}
+
+export function tabFilePath(tab: RightTab): string | undefined {
+  if (isFileBackedTab(tab) || tab.kind === "git-diff") return tab.filePath;
+  return undefined;
 }
 
 /** Where a mode may appear in the app chrome. */
 export type ModeSurface = "workspace" | "settings" | "any";
 
-export interface RightTab {
+interface RightTabBase {
   id: string;
-  kind: RightTabKind;
   title: string;
   isInitial: boolean;
   /** Preview tab (italic) — replaced on next single-click open until pinned */
   isPreview?: boolean;
-  /** File lives outside the project root */
-  isExternal?: boolean;
+  /** Source / preview (Files, Plan, literature notes). */
+  viewMode?: string;
+}
+
+type FileBackedRightTab = RightTabBase & {
+  kind: "file" | "texworkspace" | "research-plan";
   filePath?: string;
   fileId?: string;
+  /** File lives outside the project root */
+  isExternal?: boolean;
+};
+
+type BrowserRightTab = RightTabBase & {
+  kind: "browser";
   url?: string;
   isLoading?: boolean;
   /** Incremented to force the in-tab webview to reload (same URL included). */
   reloadToken?: number;
   hibernated?: boolean;
-  viewMode?: string;
+};
+
+type GitOverviewRightTab = RightTabBase & { kind: "git-overview" };
+
+type GitDiffRightTab = RightTabBase & {
+  kind: "git-diff";
+  filePath?: string;
+};
+
+type TerminalRightTab = RightTabBase & {
+  kind: "terminal";
   /** User shell vs read-only Job Monitor. Legacy `"ai"` is treated as job-monitor. */
   terminalSource?: "user" | "job-monitor" | "ai";
-  /** Optional cwd override for the terminal PTY. When set, TerminalView
-   *  spawns at this path instead of resolveTerminalRoot(...) - used by
-   *  Sprint 0.7 "Open terminal in lab" to land in an experiment island.
-   *  Plain user/AI terminals leave it undefined. */
+  /** Optional cwd override for the terminal PTY (experiment island / lab). */
   terminalCwd?: string;
-  /** Execution this Job Monitor tab is attached to */
   linkedExecutionId?: string;
-  /** Chat tab that owns this AI terminal */
   linkedChatTabId?: string;
-  /** Latest bash tool call mirrored in this tab */
   linkedToolCallId?: string;
-  /** Settings RightArea editor payload (forms, markdown, MCP, skills, …) */
+};
+
+type SettingsEditorRightTab = RightTabBase & {
+  kind: "settings-editor";
   settingsSlot?: SettingsPanelSlot;
-  /** Serialized slot identity for tab dedupe */
   settingsSlotKey?: string;
-  /** Literature mode: opened paper id */
+};
+
+type LiteratureRightTab = RightTabBase & {
+  kind: "literature";
   literaturePaperId?: string;
-  /** Literature mode: grid | reader | notes */
   literatureView?: "grid" | "reader" | "notes";
-  /** Experiments mode: selected experiment slug */
+};
+
+type ExperimentsRightTab = RightTabBase & {
+  kind: "experiments";
   experimentId?: string;
-  /** Experiments mode: list | detail (P0 = list always, detail inlined) */
   experimentsView?: "list" | "detail";
-  /** Experiments mode: active detail tab pane (overview | run | results) */
   experimentsDetailTab?: "overview" | "run" | "results";
-  /** Interaction mode: persisted object id under .prismnext/interactions/<id>/ */
+};
+
+type InteractionRightTab = RightTabBase & {
+  kind: "interaction";
   interactionId?: string;
-}
+};
+
+/** RightArea tab — discriminated by `kind`, same pattern as `SettingsPanelSlot`. */
+export type RightTab =
+  | FileBackedRightTab
+  | BrowserRightTab
+  | GitOverviewRightTab
+  | GitDiffRightTab
+  | TerminalRightTab
+  | SettingsEditorRightTab
+  | LiteratureRightTab
+  | ExperimentsRightTab
+  | InteractionRightTab;
+
+/** Kitchen-sink patch for `updateTab`. Prefer kind-specific constructors. */
+export type RightTabUpdate = {
+  title?: string;
+  isPreview?: boolean;
+  isExternal?: boolean;
+  viewMode?: string;
+  fileId?: string;
+  filePath?: string;
+  url?: string;
+  isLoading?: boolean;
+  hibernated?: boolean;
+  reloadToken?: number;
+  terminalSource?: TerminalRightTab["terminalSource"];
+  terminalCwd?: string;
+  linkedExecutionId?: string;
+  linkedChatTabId?: string;
+  linkedToolCallId?: string;
+  settingsSlot?: SettingsPanelSlot;
+  settingsSlotKey?: string;
+  literaturePaperId?: string;
+  literatureView?: LiteratureRightTab["literatureView"];
+  experimentId?: string;
+  experimentsView?: ExperimentsRightTab["experimentsView"];
+  experimentsDetailTab?: ExperimentsRightTab["experimentsDetailTab"];
+  interactionId?: string;
+};
 
 // ── Mode Definition ──
 
@@ -96,6 +175,11 @@ export interface ModeDefinition {
    * Default true. Set false for settings-editor / interaction / research-plan.
    */
   showInAddMenu?: boolean;
+  /**
+   * Whether the mode appears in the left sidebar module Nav (and Customize Sidebar).
+   * Default: same as the workspace「+」menu. Set false to keep a mode in「+」only.
+   */
+  showInLeftNav?: boolean;
   /** home / initial tab 默认标题（英文回退；UI 优先用 initialTitleKey） */
   initialTitle: string;
   /** i18n key for initial / home tab title */
@@ -168,6 +252,14 @@ export const modeRegistry = {
       if (modeSurface === "any") return true;
       return modeSurface === surface;
     });
+  },
+
+  /**
+   * Workspace modes that get a left-sidebar Nav slot.
+   * New `modeRegistry.register` entries appear here unless opted out.
+   */
+  getLeftNavModes(): ModeDefinition[] {
+    return modeRegistry.getAddMenuModes("workspace").filter((def) => def.showInLeftNav !== false);
   },
 
   /** Add-menu entries after applying singleton hide-when-open rules. */

@@ -1,4 +1,4 @@
-import { isPlanControlUserText } from "../../../shared/research-plan";
+import { isPlanControlUserText } from "../../../shared/research/plan";
 import type { ChatStreamMessage } from "@/stores/chat-store";
 
 /** Mirrors main `PlanUiEvent` — keep fields in sync. */

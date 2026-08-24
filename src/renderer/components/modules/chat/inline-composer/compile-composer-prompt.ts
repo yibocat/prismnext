@@ -8,6 +8,8 @@ import {
   promptImageFromAttachment,
   promptFileFromAttachment,
 } from "@/lib/chat/composer-attach-file";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { isExternalFileId, resolveExternalPath } from "@/lib/files/external-file";
@@ -26,7 +28,7 @@ import {
   PAPER_AGENT_CONTEXT_FOOTER,
   type PaperNoteAgentContext,
 } from "@/lib/literature/paper-agent-context";
-import { rewritePaperExtractImageSrcs } from "@shared/paper-extract-images";
+import { rewritePaperExtractImageSrcs } from "@shared/literature/paper-extract-images";
 
 /** Max chars inlined per @-mentioned text file (rest truncated with a note). */
 const MAX_INLINE_ATTACHMENT_CHARS = 200_000;
@@ -92,7 +94,7 @@ async function resolveProjectFileContent(
   if (!projectRoot) return "";
   try {
     const abs = `${projectRoot}/${relativePath.replace(/^\//, "")}`;
-    const { content } = await window.electronAPI.fsRead(abs);
+    const { content } = await fsDesktop.fsRead(abs);
     return content;
   } catch {
     return "";
@@ -224,7 +226,7 @@ export async function compileComposerPrompt(
       const abs = resolveExternalPath(fp.fileId);
       if (abs) {
         try {
-          const { content: disk } = await window.electronAPI.fsRead(abs);
+          const { content: disk } = await fsDesktop.fsRead(abs);
           content = disk;
         } catch {
           content = "";
@@ -267,7 +269,7 @@ export async function compileComposerPrompt(
       const abs = resolveExternalPath(fp.fileId);
       if (abs) {
         try {
-          const { content: disk } = await window.electronAPI.fsRead(abs);
+          const { content: disk } = await fsDesktop.fsRead(abs);
           content = disk;
         } catch {
           content = "";
@@ -372,7 +374,7 @@ export async function compileComposerPrompt(
 
       if (!paper && projectRoot && pm.paperId) {
         try {
-          paper = await window.electronAPI.literatureGet(projectRoot, pm.paperId);
+          paper = await literatureDesktop.literatureGet(projectRoot, pm.paperId);
         } catch {
           paper = null;
         }

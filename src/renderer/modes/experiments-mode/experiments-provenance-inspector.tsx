@@ -30,9 +30,10 @@ import {
 } from "@/components/ui/dialog";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";
 import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-field";
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { useLayoutStore } from "@/stores/layout-store";
+import { leaveRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
 import {
   experimentsCodeClass,
@@ -46,7 +47,7 @@ import { useExperimentProjectRoot } from "./experiments-project-root";
 import type {
   ProvenanceLinkMethod,
   ProvenanceRunRecorded,
-} from "../../../shared/provenance";
+} from "../../../shared/experiments/provenance";
 
 export interface ExperimentsProvenanceInspectorProps {
   open: boolean;
@@ -100,7 +101,7 @@ export function ExperimentsProvenanceInspector({
     let cancelled = false;
     setLoading(true);
     setResolved(null);
-    window.electronAPI
+    experimentDesktop
       .provenanceGetForArtifact(projectRoot, artifactPath)
       .then((result) => {
         if (cancelled) return;
@@ -139,7 +140,7 @@ export function ExperimentsProvenanceInspector({
   };
 
   const handleOpenChatSession = (sessionId: string) => {
-    useLayoutStore.getState().unmaximizeRightArea();
+    leaveRightAreaMaximize();
     void useChatStore.getState().loadSession(sessionId);
     onOpenChange(false);
   };

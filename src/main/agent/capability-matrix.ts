@@ -3,7 +3,7 @@
  * Pi primitives stay Pi's. Host research / interactive tools are customTools.
  */
 
-import { TOOL_NAMES } from "../../shared/tool-names";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
 
 export type ToolCapabilityKind =
   | "pi_primitive"
@@ -45,7 +45,7 @@ export const PI_PRIMITIVE_TOOLS: readonly ToolCapability[] = [
 export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
   { name: TOOL_NAMES.literatureSearch, kind: "host_research", notes: "literature-service.searchPapers" },
   { name: TOOL_NAMES.literatureDiscover, kind: "host_research", notes: "literature-discovery.discoverLiterature" },
-  { name: TOOL_NAMES.literatureStage, kind: "host_research", notes: "literature-bridge / enrich" },
+  { name: TOOL_NAMES.literatureStage, kind: "host_research", notes: "literature-citation-staging" },
   { name: TOOL_NAMES.literatureAdd, kind: "host_research", notes: "literature-service create/enrich" },
   { name: TOOL_NAMES.literatureDelete, kind: "host_research", notes: "literature-service delete" },
   { name: TOOL_NAMES.literatureRead, kind: "host_research", notes: "literature-service + extracts" },
@@ -54,15 +54,15 @@ export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
   { name: TOOL_NAMES.citationHealth, kind: "host_research", notes: "citation health service" },
   { name: TOOL_NAMES.literatureExportBib, kind: "host_research", notes: "bibliography export" },
   { name: TOOL_NAMES.latexRoot, kind: "host_research", notes: "latex-service root resolve" },
-  { name: TOOL_NAMES.latexCompile, kind: "host_research", notes: "compiler.ts under .prismnext/compile" },
+  { name: TOOL_NAMES.latexCompile, kind: "host_research", notes: "compiler.ts under .workbench/compile" },
   { name: TOOL_NAMES.latexCompileStandalone, kind: "host_research", notes: "compiler.ts in-place standalone figure" },
   { name: TOOL_NAMES.researchBriefRead, kind: "host_research", notes: "research-brief-service.read" },
   { name: TOOL_NAMES.researchBriefUpdate, kind: "host_research", notes: "research-brief-service.update" },
   { name: TOOL_NAMES.projectRuleWrite, kind: "host_research", notes: "project-rules writer" },
-  { name: TOOL_NAMES.experimentLog, kind: "host_research", notes: "experiment-log-service" },
+  { name: TOOL_NAMES.experimentLog, kind: "host_research", notes: "experiment/crud + runs" },
   { name: TOOL_NAMES.experimentRun, kind: "host_research", notes: "experiment-run-executor + PTY" },
   { name: TOOL_NAMES.resultsSnapshot, kind: "host_research", notes: "experiment-results-snapshot" },
-  { name: TOOL_NAMES.provenanceQuery, kind: "host_research", notes: "provenance-service" },
+  { name: TOOL_NAMES.provenanceQuery, kind: "host_research", notes: "experiment/provenance-service" },
   { name: TOOL_NAMES.interactionList, kind: "host_research", notes: "interaction store" },
   { name: TOOL_NAMES.interactionRead, kind: "host_research", notes: "interaction store" },
   { name: TOOL_NAMES.interactionWrite, kind: "host_research", notes: "interaction store" },

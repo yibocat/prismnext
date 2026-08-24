@@ -1,12 +1,12 @@
 import { ipcMain } from "electron";
-import { getSettings, updateSettings } from "../services/settings";
+import { getSettings, updateSettings } from "../app/settings";
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
 import { countPromptTokens } from "../lib/token-estimate";
-import { PROMPT_TOKEN_ENCODING } from "../../shared/token-estimate";
+import { PROMPT_TOKEN_ENCODING } from "../../shared/providers/token-estimate";
 import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { refreshApplicationMenu } from "../menu";
-import { syncTrayFromSettings } from "../services/tray";
+import { syncTrayFromSettings } from "../app/tray";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {
@@ -28,15 +28,17 @@ export function registerSettingsHandlers(): void {
         syncTrayFromSettings();
       }
       if ("aiSubagentModel" in patch) {
-        const lastProjectPath =
-          typeof getSettings().lastProjectPath === "string"
-            ? getSettings().lastProjectPath!.trim()
-            : "";
-        if (lastProjectPath) {
-          const { refreshProjectSubagentsIntegration } = await import(
-            "../services/project-subagents-refresh"
-          );
-          await refreshProjectSubagentsIntegration(lastProjectPath);
+        try {
+          const { getWorkbenchState } = await import("../workbench/default-project");
+          const lastPath = getWorkbenchState().defaultLastPath?.trim();
+          if (lastPath) {
+            const { refreshProjectSubagentsIntegration } = await import(
+              "../teams/project-subagents-refresh"
+            );
+            await refreshProjectSubagentsIntegration(lastPath);
+          }
+        } catch {
+          // Tests / missing home — skip disk-less in-memory refresh.
         }
       }
     },
@@ -120,7 +122,7 @@ export function registerSettingsHandlers(): void {
     async (_event, args: { projectPath: string }) => {
       const { readFileSync, existsSync } = require("node:fs");
       const { join } = require("node:path");
-      const settingsPath = join(args.projectPath, ".prismnext", "settings.json");
+      const settingsPath = join(args.projectPath, ".workbench", "settings.json");
       if (!existsSync(settingsPath)) return { contextComponents: {} };
       try {
         const raw = readFileSync(settingsPath, "utf-8");
@@ -137,7 +139,7 @@ export function registerSettingsHandlers(): void {
     async (_event, args: { projectPath: string; config: any }) => {
       const { readFileSync, writeFileSync, existsSync, mkdirSync } = require("node:fs");
       const { join } = require("node:path");
-      const prismDir = join(args.projectPath, ".prismnext");
+      const prismDir = join(args.projectPath, ".workbench");
       const settingsPath = join(prismDir, "settings.json");
       if (!existsSync(prismDir)) mkdirSync(prismDir, { recursive: true });
       let data: any = {};

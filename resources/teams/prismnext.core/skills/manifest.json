@@ -52,7 +52,7 @@
     {
       "id": "figure-tikz",
       "name": "figure-tikz",
-      "description": "Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path: match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "description": "Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },

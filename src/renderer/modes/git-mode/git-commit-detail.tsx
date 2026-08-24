@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { useGitStore, type GitCommitData } from "@/stores/git-store";
 import { Hint } from "@/components/ui/hint";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { cn } from "@/lib/utils";
 import { GitCommitFileRow } from "./git-commit-file-row";
 import {
@@ -80,7 +81,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
     setLoading(true);
     setStatFiles(null);
     setMetaExpanded(false);
-    window.electronAPI
+    gitDesktop
       .gitCommitFiles(gitRoot, commit.hash)
       .then((files) => setStatFiles(files))
       .catch(() => setStatFiles(null))

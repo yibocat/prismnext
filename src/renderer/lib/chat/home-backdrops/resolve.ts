@@ -17,7 +17,7 @@ export function resolveChatHomeBackdrop(
 ): ChatHomeBackdropStyle | null {
   if (enabled === false) return null;
 
-  let choice = setting ?? "auto";
+  let choice = setting ?? "paperplane";
   // Legacy persisted values.
   if ((choice as string) === "dot-grid" || (choice as string) === "contour") {
     choice = "blueprint";

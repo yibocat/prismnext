@@ -1,7 +1,5 @@
 import type { WorktreeInfo } from "@/types/electron";
-import { isWorktreeCheckoutPath } from "./checkout-context";
-
-const WORKTREE_SEGMENT = "/.prismnext/worktrees/";
+import { isHomeWorktreeCheckoutPath, parseHomeWorktreeCheckoutPath } from "../../../shared/workbench/paths";
 
 /** Normalize checkout paths for stable equality checks (slashes, trailing slash). */
 export function normalizeCheckoutPath(path: string): string {
@@ -10,15 +8,10 @@ export function normalizeCheckoutPath(path: string): string {
 
 export function parseWorktreeNameFromPath(
   directory: string,
-  projectRoot: string | null,
+  _projectRoot?: string | null,
 ): string | null {
-  if (!projectRoot || !isWorktreeCheckoutPath(directory, projectRoot)) return null;
-  const suffix = directory.slice(projectRoot.length);
-  const idx = suffix.indexOf(WORKTREE_SEGMENT);
-  if (idx < 0) return null;
-  const after = suffix.slice(idx + WORKTREE_SEGMENT.length);
-  const name = after.split("/")[0];
-  return name || null;
+  if (!isHomeWorktreeCheckoutPath(directory)) return null;
+  return parseHomeWorktreeCheckoutPath(directory)?.worktreeId ?? null;
 }
 
 export function worktreePathsEqual(a: string, b: string): boolean {

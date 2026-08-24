@@ -1,3 +1,4 @@
+import { templateDesktop } from "@/lib/desktop-api/template";
 import type { TemplateMeta } from "@/components/modules/templates/types";
 
 let _cache: TemplateMeta[] | null = null;
@@ -16,7 +17,7 @@ export async function getTemplates(options?: { refresh?: boolean }): Promise<Tem
   if (_cache) return _cache;
   if (_loading) return _loading;
 
-  _loading = window.electronAPI.templateList().then((data) => {
+  _loading = templateDesktop.templateList().then((data) => {
     _cache = data ?? [];
     return _cache;
   });
