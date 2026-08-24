@@ -11,20 +11,14 @@ import { agentDesktop } from "@/lib/desktop-api/agent";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import {
   PinIcon,
-  PinOff,
-  Dot,
-  CircleDotDashed,
   MessageSquareIcon,
   Loader2Icon,
   Archive,
   ArchiveRestore,
   Trash2Icon,
-  WorkflowIcon,
   ListFilter,
   Clock,
   Folder,
-  CircleAlert,
-  Square,
   ChevronRight,
   PlusIcon,
   Pencil,
@@ -55,6 +49,11 @@ import {
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import { SessionContextCard } from "@/components/layout/content-top-bar/session-context-card";
 import {
+  SessionContextMenu,
+  SessionContextMenuTrigger,
+  SessionTitleInline,
+} from "@/components/layout/session-context-menu";
+import {
   isLeftNavRequired,
   leftNavRegistry,
   resolvePrimaryNavItems,
@@ -69,6 +68,8 @@ import {
   toggleArchiveSessionForProject,
   togglePinSessionForProject,
 } from "@/lib/chat/session-ui-prefs";
+import { clearSessionChromeEntry } from "@/lib/chat/session-chrome";
+import { SessionStatusIndicator } from "@/components/layout/session-status-indicator";
 import { EditProjectDialog } from "@/components/modules/project/edit-project-dialog";
 import {
   AppContextMenu,
@@ -192,6 +193,18 @@ function selectStreamingSessionKey(state: { tabs: { isStreaming: boolean; sessio
   return ids.join("\0");
 }
 
+function selectPendingQuestionSessionKey(state: {
+  tabs: { id: string; sessionId: string | null; conversation: { pendingQuestion: unknown } }[];
+}): string {
+  const ids: string[] = [];
+  for (const t of state.tabs) {
+    if (!t.conversation.pendingQuestion) continue;
+    ids.push(t.sessionId || t.id);
+  }
+  ids.sort();
+  return ids.join("\0");
+}
+
 /** Stable store selector — only changes when non-generic tab titles change. */
 function selectTabTitleKey(state: {
   tabs: { sessionId: string | null; title: string; messages: ChatStreamMessage[] }[];
@@ -278,6 +291,11 @@ export const LeftSidebar = memo(function LeftSidebar() {
     () => new Set(streamingSessionKey ? streamingSessionKey.split("\0") : []),
     [streamingSessionKey],
   );
+  const pendingQuestionSessionKey = useChatStore(selectPendingQuestionSessionKey);
+  const pendingQuestionSessionIds = useMemo(
+    () => new Set(pendingQuestionSessionKey ? pendingQuestionSessionKey.split("\0") : []),
+    [pendingQuestionSessionKey],
+  );
   const tabTitleKey = useChatStore(selectTabTitleKey);
   const tabTitlesBySession = useMemo(() => tabTitlesFromKey(tabTitleKey), [tabTitleKey]);
   const tabUserTitleKey = useChatStore(selectTabUserTitleKey);
@@ -297,7 +315,6 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const hasAnyStreaming = streamingSessionIds.size > 0;
   const loadSession = useChatStore((s) => s.loadSession);
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
-  const cancelExecution = useChatStore((s) => s.cancelExecution);
   const pendingPermissions = usePermissionStore((s) => s.permissions);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const worktrees = useWorktreeStore((s) => s.worktrees);
@@ -314,8 +331,10 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const [loading, setLoading] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [customizeSidebarOpen, setCustomizeSidebarOpen] = useState(false);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const leftNavHiddenIds = useSettingsStore((s) => s.settings.leftNavHiddenIds);
   const leftNavOrder = useSettingsStore((s) => s.settings.leftNavOrder);
+  const sessionChromeByProject = useSettingsStore((s) => s.settings.sessionChromeByProject);
   const sessionsRef = useRef(sessions);
   sessionsRef.current = sessions;
 
@@ -345,6 +364,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
     if (pinnedSessionIds.includes(sessionId)) {
       void togglePinSessionForProject(root, sessionId);
     }
+    void clearSessionChromeEntry(root, sessionId);
   }, [projectPathForSession, archivedSessionIds, pinnedSessionIds]);
 
   useEffect(() => {
@@ -654,39 +674,42 @@ export const LeftSidebar = memo(function LeftSidebar() {
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
-    const isWaitingPermission = hasPendingPermission(pendingPermissions, s.id);
+    const isWaitingPermission =
+      hasPendingPermission(pendingPermissions, s.id)
+      || pendingQuestionSessionIds.has(s.id);
     const checkoutContext = resolveSessionWorktreeContext(
       s.directory,
       s.projectLastPath || projectRoot,
       worktrees,
     );
     const isWorktreeSession = checkoutContext.kind !== "local";
+    const sessionProjectRoot = s.projectLastPath || projectRoot;
+    const chromeEntry = sessionProjectRoot
+      ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
+      : undefined;
+    const isPinned = pinnedSessionIds.includes(s.id);
     const sessionTrailing = (
-      <>
-        {isSessionStreaming ? (
-          <Hint label={t("nav.sessions.stopSession")}>
+      <span className="flex shrink-0 items-center gap-1">
+        {archivedRow ? null : (
+          <Hint label={isPinned ? t("nav.sessions.unpin") : t("nav.sessions.pin")}>
             <span
               role="button"
               tabIndex={0}
-              className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                void cancelExecution(s.id);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.stopPropagation();
-                  void cancelExecution(s.id);
-                }
-              }}
+              className={cn(
+                "shrink-0 hover:text-foreground cursor-pointer",
+                isPinned
+                  ? "block text-foreground"
+                  : "hidden text-muted-foreground group-hover/session:block",
+              )}
+              onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
             >
-              <Square className="size-3" />
+              <PinIcon
+                className={cn("size-3.5", isPinned && "fill-current")}
+                strokeWidth={isPinned ? 2 : 1.75}
+              />
             </span>
           </Hint>
-        ) : (
-          <span className="hidden group-hover/session:inline text-[length:var(--font-timestamp)] text-muted-foreground/70 shrink-0">
-            {relativeTime(s.lastModified, t)}
-          </span>
         )}
         {archivedRow ? (
           <>
@@ -698,7 +721,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
               >
-                <ArchiveRestore className="size-3" />
+                <ArchiveRestore className="size-3.5" />
               </span>
             </Hint>
             <Hint label={t("nav.sessions.delete")}>
@@ -729,7 +752,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                   }
                 }}
               >
-                <Trash2Icon className="size-3" />
+                <Trash2Icon className="size-3.5" />
               </span>
             </Hint>
           </>
@@ -752,25 +775,23 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 }
               }}
             >
-              <Archive className="size-3" />
+              <Archive className="size-3.5" />
             </span>
           </Hint>
         )}
-      </>
+        <span className="hidden group-hover/session:inline text-[length:var(--font-size-12)] text-muted-foreground/70 shrink-0 tabular-nums">
+          {relativeTime(s.lastModified, t)}
+        </span>
+      </span>
     );
-    return (
-      <SessionContextCard
-        key={s.id}
-        title={displayChatTitle(s.title, t)}
-        sessionId={s.id}
-        sessionDirectory={s.directory ?? s.projectLastPath}
-        side="right"
-        align="start"
-      >
+    const title = displayChatTitle(s.title, t);
+    const isRenaming = renamingSessionId === s.id;
+    const rowButton = (
       <button
           type="button"
           data-workbench-session={s.id}
           onClick={() => {
+            if (isRenaming) return;
             if (s.projectId) {
               setExpandedWorkbenchProjectIds(
                 ensureWorkbenchProjectExpanded(
@@ -792,54 +813,33 @@ export const LeftSidebar = memo(function LeftSidebar() {
         >
           <span
             className={cn(
-              "relative flex size-3.5 shrink-0 items-center justify-center",
-              showProject && "h-[1lh] w-3.5",
+              "relative flex size-4 shrink-0 items-center justify-center",
+              showProject && "h-[1lh] w-4",
             )}
           >
-            {isWaitingPermission ? (
-              <CircleAlert className="size-3.5 text-warning" strokeWidth={2.5} />
-            ) : isSessionStreaming ? (
-              <CircleDotDashed className="size-3.5 text-primary transition-opacity group-hover/session:opacity-0" strokeWidth={2.5} />
-            ) : isAiTerminalRunning ? (
-              <CircleDotDashed className="size-3.5 text-warning transition-opacity group-hover/session:opacity-0" strokeWidth={2.5} />
-            ) : archivedRow ? (
-              <Archive className="size-3.5 text-muted-foreground/70" />
-            ) : isWorktreeSession ? (
-              <WorkflowIcon className="size-3 text-primary/70 transition-opacity group-hover/session:opacity-0" strokeWidth={2} />
-            ) : (
-              <Dot className="size-3.5 text-muted-foreground/30 transition-opacity group-hover/session:opacity-0" strokeWidth={5.5} />
-            )}
-            {archivedRow ? null : (
-            <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover/session:opacity-100">
-            <Hint
-              label={
-                pinnedSessionIds.includes(s.id)
-                  ? t("nav.sessions.unpin")
-                  : t("nav.sessions.pin")
-              }
-            >
-              <span
-                role="button"
-                tabIndex={0}
-                className="flex size-full items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
-              >
-                {pinnedSessionIds.includes(s.id) ? (
-                  <PinOff className="size-3.5" strokeWidth={1.5} />
-                ) : (
-                  <PinIcon className="size-3.5" strokeWidth={1.5} />
-                )}
-              </span>
-            </Hint>
-            </span>
-            )}
+            <SessionStatusIndicator
+              archivedRow={archivedRow}
+              isActive={isActive}
+              isWaitingPermission={isWaitingPermission}
+              isStreaming={isSessionStreaming}
+              isAiTerminalRunning={isAiTerminalRunning}
+              isUnread={chromeEntry?.unread === true}
+              customIcon={chromeEntry?.icon ?? null}
+              implicitWorktree={isWorktreeSession}
+            />
           </span>
           <span className="min-w-0 flex-1 text-left">
             <span className={cn(showProject && "flex min-w-0 items-center gap-2")}>
-              <span className={cn(showProject ? "min-w-0 flex-1 truncate" : "block truncate")}>
-                {displayChatTitle(s.title, t)}
-              </span>
+              <SessionTitleInline
+                title={title}
+                editing={isRenaming}
+                sessionId={s.id}
+                className={cn(
+                  showProject ? "min-w-0 flex-1 truncate" : "block truncate",
+                  chromeEntry?.unread === true && !isActive && "font-medium",
+                )}
+                onCancel={() => setRenamingSessionId(null)}
+              />
               {showProject ? sessionTrailing : null}
             </span>
             {showProject && project ? (
@@ -851,26 +851,55 @@ export const LeftSidebar = memo(function LeftSidebar() {
           </span>
           {showProject ? null : sessionTrailing}
         </button>
-      </SessionContextCard>
+    );
+    const trigger = (
+      <SessionContextMenuTrigger asChild>{rowButton}</SessionContextMenuTrigger>
+    );
+    return (
+      <SessionContextMenu
+        key={s.id}
+        sessionId={s.id}
+        title={title}
+        projectRoot={sessionProjectRoot}
+        sessionDirectory={s.directory ?? s.projectLastPath}
+        pinned={pinnedSessionIds.includes(s.id)}
+        archived={archivedRow}
+        unread={chromeEntry?.unread === true}
+        onRequestRename={() => setRenamingSessionId(s.id)}
+        onAfterArchive={() => {
+          if (!archivedRow && s.id === sessionId) clearCurrentTab();
+        }}
+      >
+        {isRenaming ? trigger : (
+          <SessionContextCard
+            title={title}
+            sessionId={s.id}
+            sessionDirectory={s.directory ?? s.projectLastPath}
+            side="right"
+            align="start"
+          >
+            {trigger}
+          </SessionContextCard>
+        )}
+      </SessionContextMenu>
     );
   };
 
   const renderArchivedSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
     const project = projectMetaForSession(s, members);
-    return (
-      <SessionContextCard
-        key={s.id}
-        title={displayChatTitle(s.title, t)}
-        sessionId={s.id}
-        sessionDirectory={s.directory ?? s.projectLastPath}
-        side="right"
-        align="start"
-      >
+    const sessionProjectRoot = s.projectLastPath || projectRoot;
+    const chromeEntry = sessionProjectRoot
+      ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
+      : undefined;
+    const title = displayChatTitle(s.title, t);
+    const isRenaming = renamingSessionId === s.id;
+    const rowButton = (
       <button
         type="button"
         data-workbench-session={s.id}
         onClick={() => {
+          if (isRenaming) return;
           loadSession(s.id, s.directory, s.projectLastPath);
         }}
         className={cn(
@@ -882,7 +911,16 @@ export const LeftSidebar = memo(function LeftSidebar() {
       >
         <span className="min-w-0 flex-1 text-left">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate">{displayChatTitle(s.title, t)}</span>
+            <SessionTitleInline
+              title={title}
+              editing={isRenaming}
+              sessionId={s.id}
+              className={cn(
+                "min-w-0 flex-1 truncate",
+                chromeEntry?.unread === true && !isActive && "font-medium",
+              )}
+              onCancel={() => setRenamingSessionId(null)}
+            />
             <Hint label={t("nav.sessions.restoreFromArchive")}>
               <span
                 role="button"
@@ -891,7 +929,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
               >
-                <ArchiveRestore className="size-3" />
+                <ArchiveRestore className="size-3.5" />
               </span>
             </Hint>
             <Hint label={t("nav.sessions.delete")}>
@@ -920,7 +958,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                   }
                 }}
               >
-                <Trash2Icon className="size-3" />
+                <Trash2Icon className="size-3.5" />
               </span>
             </Hint>
           </span>
@@ -935,7 +973,34 @@ export const LeftSidebar = memo(function LeftSidebar() {
           ) : null}
         </span>
       </button>
-      </SessionContextCard>
+    );
+    const trigger = (
+      <SessionContextMenuTrigger asChild>{rowButton}</SessionContextMenuTrigger>
+    );
+    return (
+      <SessionContextMenu
+        key={s.id}
+        sessionId={s.id}
+        title={title}
+        projectRoot={sessionProjectRoot}
+        sessionDirectory={s.directory ?? s.projectLastPath}
+        pinned={false}
+        archived
+        unread={chromeEntry?.unread === true}
+        onRequestRename={() => setRenamingSessionId(s.id)}
+      >
+        {isRenaming ? trigger : (
+          <SessionContextCard
+            title={title}
+            sessionId={s.id}
+            sessionDirectory={s.directory ?? s.projectLastPath}
+            side="right"
+            align="start"
+          >
+            {trigger}
+          </SessionContextCard>
+        )}
+      </SessionContextMenu>
     );
   };
 
@@ -982,10 +1047,13 @@ export const LeftSidebar = memo(function LeftSidebar() {
         <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-2">
           {!showArchived && pinnedSessions.length > 0 ? (
             <div className={LEFT_SIDEBAR_STACK}>
-              <Hint label={pinnedExpanded ? t("nav.sessions.collapsePinned") : t("nav.sessions.expandPinned")}>
+              <Hint
+                label={pinnedExpanded ? t("nav.sessions.collapsePinned") : t("nav.sessions.expandPinned")}
+                triggerClassName="w-full justify-start"
+              >
               <button
                 type="button"
-                className={cn(LEFT_SIDEBAR_SECTION_HEADER, "justify-start gap-1")}
+                className={cn(LEFT_SIDEBAR_SECTION_HEADER, "w-full justify-start gap-1")}
                 onClick={togglePinnedExpanded}
                 aria-expanded={pinnedExpanded}
               >

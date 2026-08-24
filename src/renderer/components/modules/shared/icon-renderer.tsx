@@ -1,6 +1,7 @@
 import { icons, type LucideIcon, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { isValidLucideIconName } from "@/lib/workspace/folder-icons";
+import { sessionIconColorClass } from "@/lib/chat/session-icon-registry";
 import type { IconSpec } from "@shared/platform/icon-spec";
 
 export type IconFallback = "package" | "letter";
@@ -88,7 +89,17 @@ export function IconRenderer({
     }
     if (spec?.kind === "lucide" && isValidLucideIconName(spec.value)) {
       const Icon = icons[spec.value] as LucideIcon;
-      return <Icon className={cn("shrink-0", SIZE_ICON[size], className)} aria-hidden />;
+      return (
+        <Icon
+          className={cn(
+            "shrink-0",
+            SIZE_ICON[size],
+            spec.color ? sessionIconColorClass(spec.color) : undefined,
+            className,
+          )}
+          aria-hidden
+        />
+      );
     }
     if (spec?.kind === "image" && resolvedImage) {
       return (
@@ -128,7 +139,12 @@ export function IconRenderer({
     const Icon = icons[spec.value] as LucideIcon;
     return (
       <span className={base} aria-hidden>
-        <Icon className={cn("text-muted-foreground", SIZE_ICON[size])} />
+        <Icon
+          className={cn(
+            spec.color ? sessionIconColorClass(spec.color) : "text-muted-foreground",
+            SIZE_ICON[size],
+          )}
+        />
       </span>
     );
   }

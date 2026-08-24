@@ -25,6 +25,7 @@ import { useWorktreeStore } from "../worktree-store";
 import { persistAndSyncIntensiveReading, resolveIntensivePaperIdsForSession } from "@/lib/literature/sync-intensive-reading";
 import { dismissTodoPlan as persistTodoPlanDismiss } from "@/lib/chat/composer-pending-tools";
 import { pruneDisposableEmptyChatTabs } from "@/lib/chat/session-title";
+import { markSessionRead } from "@/lib/chat/session-chrome";
 import { clearTurnWindowState } from "@/lib/chat/turn-window";
 import type { SessionAgent } from "../../../shared/agent/session-agent";
 import { isAgentRuntime, type ChatRuntimeKind } from "../../../shared/agent/api";
@@ -528,6 +529,7 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
         activeTabId: existingTab.id,
         ...projectActiveTab(nextTabs, existingTab.id),
       });
+      void markSessionRead(projectPath, conversationId);
       return;
     }
 
@@ -586,6 +588,7 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       if (member) {
         useWorkbenchStore.getState().recordSessionProject(conversationId, member.id);
       }
+      void markSessionRead(projectPath, conversationId);
     } catch (err: any) {
       set((s) => {
         const tabs = s.tabs.map((t) =>

@@ -130,6 +130,8 @@ export interface AppSettings {
   archivedSessionIdsByProject?: Record<string, string[]>;
   /** Pinned chat session ids per project root */
   pinnedSessionIdsByProject?: Record<string, string[]>;
+  /** Per-session icon + unread chrome (not in session JSON) */
+  sessionChromeByProject?: import("@shared/chat/session-chrome").SessionChromeByProject;
   /** Literature library sidebar view + list sort per project root */
   literatureUiByProject?: Record<string, LiteratureUiPrefs>;
   /** @deprecated Global list — do not read; use recentOpenedFilesByProject */

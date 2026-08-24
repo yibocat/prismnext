@@ -29,7 +29,7 @@ describe("PiSdkRuntime turn idle watchdog", () => {
 
     const events: AgentEvent[] = [];
     let aborted = false;
-    let resolvePrompt: (() => void) | null = null;
+    let rejectPrompt: ((err: Error) => void) | null = null;
 
     const runtime = new PiSdkRuntime({
       store: new AgentSessionStore(storeRoot),
@@ -39,8 +39,8 @@ describe("PiSdkRuntime turn idle watchdog", () => {
       createPiSession: async () => ({
         sessionId: "pi-idle-session",
         subscribe: () => () => {},
-        prompt: () => new Promise<void>((resolve) => {
-          resolvePrompt = resolve;
+        prompt: () => new Promise<void>((_resolve, reject) => {
+          rejectPrompt = reject;
         }),
         abort: async () => {
           aborted = true;
@@ -67,10 +67,13 @@ describe("PiSdkRuntime turn idle watchdog", () => {
       expect(failed.error).toBe("turn_idle_timeout");
     }
     expect(aborted).toBe(true);
+    expect(events.filter((e) => e.type === "turn_failed")).toHaveLength(1);
 
-    // Let the pending prompt settle so the test does not leak a hang.
-    resolvePrompt?.();
+    // abort() rejects the hanging prompt with "terminated" — must not emit again.
+    rejectPrompt?.(new Error("terminated"));
     await sendPromise;
+    expect(events.filter((e) => e.type === "turn_failed")).toHaveLength(1);
+    expect(events.some((e) => e.type === "turn_failed" && e.error === "terminated")).toBe(false);
   });
 
   it("keeps streaming when Pi events keep arriving inside the idle window", async () => {

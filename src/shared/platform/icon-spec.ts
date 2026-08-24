@@ -13,9 +13,32 @@
  */
 export type IconKind = "emoji" | "lucide" | "image";
 
+/** Lucide stroke tint — theme tokens first, then a few fixed hues (Cursor-style). */
+export const ICON_TINTS = [
+  "default",
+  "primary",
+  "muted",
+  "sky",
+  "indigo",
+  "violet",
+  "emerald",
+  "teal",
+  "warning",
+  "orange",
+  "destructive",
+  "rose",
+  "pink",
+] as const;
+
+export type IconTint = (typeof ICON_TINTS)[number];
+
+export function isIconTint(value: string | undefined | null): value is IconTint {
+  return !!value && (ICON_TINTS as readonly string[]).includes(value);
+}
+
 export type IconSpec =
   | { kind: "emoji"; value: string }
-  | { kind: "lucide"; value: string }
+  | { kind: "lucide"; value: string; color?: IconTint }
   | { kind: "image"; value: string };
 
 /** Canonical on-disk filename for team image icons. */
@@ -32,12 +55,18 @@ export function normalizeIconSpec(input: unknown): IconSpec | null {
     return null;
   }
   if (typeof input !== "object") return null;
-  const raw = input as { kind?: unknown; value?: unknown };
+  const raw = input as { kind?: unknown; value?: unknown; color?: unknown };
   const kind = raw.kind;
   const value = typeof raw.value === "string" ? raw.value.trim() : "";
   if (!value) return null;
-  if (kind === "emoji" || kind === "lucide") {
+  if (kind === "emoji") {
     return { kind, value };
+  }
+  if (kind === "lucide") {
+    const color = typeof raw.color === "string" && isIconTint(raw.color) && raw.color !== "default"
+      ? raw.color
+      : undefined;
+    return color ? { kind, value, color } : { kind, value };
   }
   if (kind === "image") {
     // Reject legacy inline data URLs — image icons must be relative filenames.
@@ -56,7 +85,10 @@ export function iconSpecEquals(
 ): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  return a.kind === b.kind && a.value === b.value;
+  if (a.kind !== b.kind || a.value !== b.value) return false;
+  const colorA = a.kind === "lucide" ? a.color : undefined;
+  const colorB = b.kind === "lucide" ? b.color : undefined;
+  return colorA === colorB;
 }
 
 /** Serialize for JSON storage. Returns null when there is nothing to store. */

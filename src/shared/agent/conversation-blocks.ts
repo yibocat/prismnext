@@ -17,11 +17,26 @@ export function appendTextBlock(blocks: ContentBlock[], text: string): ContentBl
 
 export function appendThinkingBlock(blocks: ContentBlock[], text: string): ContentBlock[] {
   const last = blocks.at(-1);
-  if (last?.type === "thinking") {
+  if (last?.type === "thinking" && typeof last.timeEnd !== "number") {
     return [...blocks.slice(0, -1), { ...last, thinking: `${last.thinking ?? ""}${text}` }];
   }
   const now = Date.now();
   return [...blocks, { type: "thinking", thinking: text, timeStart: now }];
+}
+
+/** Freeze open thinking so the live "Thinking…" timer stops when prose or a tool starts. */
+export function sealOpenThinkingBlocks(blocks: ContentBlock[], at = Date.now()): ContentBlock[] {
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (block.type !== "thinking") return block;
+    if (typeof block.timeEnd === "number") return block;
+    changed = true;
+    const duration = typeof block.timeStart === "number"
+      ? Math.max(0, Math.round(((at - block.timeStart) / 1000) * 10) / 10)
+      : undefined;
+    return { ...block, timeEnd: at, ...(duration !== undefined ? { duration } : {}) };
+  });
+  return changed ? next : blocks;
 }
 
 export function upsertToolUseBlock(blocks: ContentBlock[], block: ContentBlock): ContentBlock[] {
@@ -77,7 +92,7 @@ export function applyAssistantEventToBlocks(
 ): ContentBlock[] {
   switch (event.type) {
     case "text_delta":
-      return appendTextBlock(blocks, event.text);
+      return appendTextBlock(sealOpenThinkingBlocks(blocks), event.text);
     case "thinking_delta":
       return appendThinkingBlock(blocks, event.text);
     case "tool_started": {
@@ -98,7 +113,7 @@ export function applyAssistantEventToBlocks(
           : event.preparing
             ? "preparing"
             : "running";
-      return upsertToolUseBlock(blocks, {
+      return upsertToolUseBlock(sealOpenThinkingBlocks(blocks), {
         type: "tool_use",
         id: event.toolCallId,
         name: event.toolName,

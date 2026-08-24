@@ -400,6 +400,16 @@ html[data-left-sidebar-animating] [data-left-sidebar-slab] {
 html[data-left-sidebar-animating] #left-sidebar {
   transition: width 220ms var(--lsb-toggle-ease);
 }
+/*
+ * Left toggle writes the final column pixels immediately. #main-area is flex-1,
+ * so if #center jumps while #left-sidebar is still easing, an already-open
+ * RightArea is clipped then revealed — it looks like RightArea is opening.
+ * Ease the leftover (#center, or maximized #right-area) with the left rail.
+ */
+html[data-left-sidebar-animating] #center,
+html[data-left-sidebar-animating] #right-area {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
 html[data-right-area-animating] #right-area,
 html[data-right-area-animating] #center {
   transition: width 220ms var(--lsb-toggle-ease);
@@ -424,6 +434,8 @@ html[data-right-area-animating] [data-pinned-right-extra] {
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-left-sidebar-animating] #left-sidebar,
+  html[data-left-sidebar-animating] #center,
+  html[data-left-sidebar-animating] #right-area,
   html[data-left-sidebar-animating] [data-content-sidebar-spacer],
   html[data-left-sidebar-animating] [data-pinned-new-agent],
   html[data-right-area-animating] #right-area,
@@ -601,6 +613,27 @@ html[data-right-area-animating] [data-pinned-right-extra] {
 .literature-pdf-reader .colored-highlight span,
 .literature-pdf-reader .colored-highlight button {
   pointer-events: auto;
+}
+
+/* Slow blink for a running session (dot or icon-corner badge). */
+@keyframes session-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+.session-status-pulse {
+  animation: session-status-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-status-pulse {
+    animation: none;
+  }
 }
 
 /* ── Shiki dual-theme support ── */

@@ -18,6 +18,10 @@ import {
 } from "@/lib/terminal/ai-terminal-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
 import { useExecutionStore } from "@/stores/execution-store";
+import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
+import { isActiveSessionFromChatState } from "@/lib/chat/session-status";
+import { lastPathForSession } from "@/stores/workbench-store";
+import { useDocumentStore } from "@/stores/document-store";
 
 export interface BashMirrorState {
   chatTabId: string;
@@ -186,6 +190,10 @@ function markSessionCompleted(
   if (aiTabId && isAiTabOpen(aiTabId)) {
     refreshAiTabTitle(aiTabId, prev?.activeCommand, "completed");
   }
+  const root = lastPathForSession(chatTabId) || useDocumentStore.getState().projectRoot;
+  void markSessionAutoUnreadIfBackground(root, chatTabId, () =>
+    isActiveSessionFromChatState(chatTabId, useChatStore.getState()),
+  );
 }
 
 export const useTerminalAiStore = create<TerminalAiState>()((set, get) => ({

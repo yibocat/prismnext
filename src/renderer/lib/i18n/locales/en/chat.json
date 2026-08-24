@@ -313,6 +313,7 @@
     "emptyTurn": "The model returned no content. This is usually caused by rate limits or quota exhaustion — please try again.",
     "provider_error": "The model provider returned an error (rate limit, quota, or API failure). Check your plan or switch models.",
     "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
+    "turn_aborted": "This turn was stopped before the model finished.",
     "connectionLost": "Agent connection lost. Please try again.",
     "cancelled": "Stopped."
   },

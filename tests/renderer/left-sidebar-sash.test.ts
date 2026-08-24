@@ -142,6 +142,8 @@ describe("left sidebar collapse chrome", () => {
     expect(app).not.toContain("reconcileRightAreaOnMainAreaResize");
     expect(css).toContain("[data-left-sidebar-animating]");
     expect(css).toContain("#left-sidebar");
+    expect(css).toContain("html[data-left-sidebar-animating] #center");
+    expect(css).toContain("html[data-left-sidebar-animating] #right-area");
     expect(css).toContain(`${LEFT_SIDEBAR_TOGGLE_MS}ms`);
   });
 

@@ -1189,6 +1189,7 @@ export class PiSdkRuntime implements AgentRuntime {
       sessionAgent: input.sessionAgent,
       allowedPaths: input.allowedPaths,
     });
+    const turnIdAtPrompt = session.turnId;
     try {
       await this.applyTurnModel(session, input);
       await session.handle.prompt(
@@ -1199,16 +1200,27 @@ export class PiSdkRuntime implements AgentRuntime {
         })),
       );
     } catch (err) {
+      const live = this.sessions.get(session.runtimeSessionId);
+      // Watchdog / cancel already committed the turn — abort() then throws
+      // "terminated" and must not overwrite that with a second turn_failed.
+      if (
+        !live
+        || live.cancelled
+        || !live.activeTurn
+        || live.activeTurn.turnId !== turnIdAtPrompt
+      ) {
+        return;
+      }
       piRuntimeLog.warn("turn.fail", {
         runtimeSessionId: session.runtimeSessionId,
-        turnId: session.turnId,
+        turnId: turnIdAtPrompt,
         error: shortLogDetail(err),
       });
       this.emit({
         type: "turn_failed",
         runtimeSessionId: session.runtimeSessionId,
         tabId: session.tabId,
-        turnId: session.turnId,
+        turnId: turnIdAtPrompt,
         error: err instanceof Error ? err.message : String(err),
       });
       return;
@@ -1216,7 +1228,6 @@ export class PiSdkRuntime implements AgentRuntime {
     // Pi may deliver terminal events (message_end / agent_end) asynchronously
     // after prompt() resolves. Wait briefly before closing the live turn, so
     // the terminal event's usage accumulation is not lost.
-    const turnIdAtPrompt = session.turnId;
     setTimeout(() => {
       const live = this.sessions.get(session.runtimeSessionId);
       if (!live) return;

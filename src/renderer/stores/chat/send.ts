@@ -26,6 +26,8 @@ import { agentDesktop } from "@/lib/desktop-api/agent";
 import { isAgentRuntime } from "../../../shared/agent/api";
 import { useDocumentStore } from "../document-store";
 import { lastPathForSession, useWorkbenchStore } from "../workbench-store";
+import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
+import { isActiveSessionFromChatState } from "@/lib/chat/session-status";
 import { applyCheckoutTransition, captureSessionCwd, isPendingNewWorktree, resolveWorktreePathForSend } from "@/lib/git/checkout-context";
 import { useWorktreeStore } from "../worktree-store";
 import { useSettingsStore } from "../settings-store";
@@ -346,6 +348,12 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       void import("../checkpoint-store").then(({ useCheckpointStore }) => {
         void useCheckpointStore.getState().finalizeTurn(tabId, event.type === "turn_finished");
       });
+      const tab = get().tabs.find((item) => item.id === tabId);
+      const conversationId = tab?.conversation.conversationId || tab?.sessionId || tabId;
+      const root = lastPathForSession(conversationId) || useDocumentStore.getState().projectRoot;
+      void markSessionAutoUnreadIfBackground(root, conversationId, () =>
+        isActiveSessionFromChatState(conversationId, get()),
+      );
     }
     if (event.type === "turn_finished") {
       void maybeGenerateSessionTitle(tabId, get);

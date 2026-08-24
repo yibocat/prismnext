@@ -25,6 +25,42 @@ function ev<T extends AgentEvent>(event: T): T {
 }
 
 describe("applyAssistantEventToBlocks", () => {
+  it("seals thinking when a tool or reply starts so the live timer stops", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "先想",
+    }));
+    expect(blocks[0]).toMatchObject({ type: "thinking", thinking: "先想" });
+    expect((blocks[0] as { timeEnd?: number }).timeEnd).toBeUndefined();
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-read",
+      toolName: "read",
+      args: { path: "a.md" },
+    }));
+    expect(typeof (blocks[0] as { timeEnd?: number }).timeEnd).toBe("number");
+    expect(typeof (blocks[0] as { duration?: number }).duration).toBe("number");
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "再想",
+    }));
+    expect(blocks.map((block) => block.type)).toEqual(["thinking", "tool_use", "thinking"]);
+    expect((blocks[2] as { timeEnd?: number }).timeEnd).toBeUndefined();
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "text_delta",
+      text: "结论",
+    }));
+    expect(typeof (blocks[2] as { timeEnd?: number }).timeEnd).toBe("number");
+  });
+
   it("keeps thinking → tool → thinking → text in arrival order", () => {
     let blocks: ContentBlock[] = [];
     blocks = applyAssistantEventToBlocks(blocks, ev({
@@ -68,6 +104,8 @@ describe("applyAssistantEventToBlocks", () => {
     expect(blocks[0]).toMatchObject({ type: "thinking", thinking: "先看目录" });
     expect(blocks[3]).toMatchObject({ type: "thinking", thinking: "再找 tex" });
     expect(blocks[4]).toMatchObject({ type: "text", text: "找到 main.tex" });
+    expect(typeof (blocks[0] as { timeEnd?: number }).timeEnd).toBe("number");
+    expect(typeof (blocks[3] as { timeEnd?: number }).timeEnd).toBe("number");
 
     const flatten = deriveFlattenedAssistant(sealTurnBlockTimings(blocks));
     expect(flatten.text).toBe("找到 main.tex");

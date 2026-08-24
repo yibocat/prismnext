@@ -74,7 +74,10 @@ import {
 
 export function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
-  if (reason === "turn_idle_timeout") return i18n.t("chat.turn_timeout");
+  if (reason === "turn_idle_timeout") return i18n.t("chat.errors.turn_timeout");
+  if (reason === "terminated" || reason === "aborted") {
+    return i18n.t("chat.errors.turn_aborted");
+  }
   if (reason.startsWith("unsupported_pi_provider")) {
     return i18n.t("agentLab.reason.unsupportedProvider");
   }

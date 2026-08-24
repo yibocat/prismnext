@@ -15,6 +15,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 
@@ -88,12 +91,48 @@ function AppContextMenuLabel({
   return <div className={cn(appMenuLabelClass, className)} {...props} />;
 }
 
+function AppContextMenuSubContent({
+  className,
+  collisionPadding = 10,
+  ...props
+}: React.ComponentProps<typeof ContextMenuSubContent>) {
+  return (
+    <ContextMenuSubContent
+      collisionPadding={collisionPadding}
+      className={cn(appMenuPanelClass, "shadow-md", className)}
+      {...props}
+    />
+  );
+}
+
+function AppContextMenuSubTrigger({
+  className,
+  children,
+  trailing,
+  ...props
+}: React.ComponentProps<typeof ContextMenuSubTrigger> & {
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <ContextMenuSubTrigger
+      className={cn(appMenuItemClass, "min-h-7 [&>svg:last-child]:size-3.5", className)}
+      {...props}
+    >
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {trailing ? <span className="shrink-0">{trailing}</span> : null}
+    </ContextMenuSubTrigger>
+  );
+}
+
 export {
   AppContextMenuContent,
   AppContextMenuItem,
   AppContextMenuDestructiveItem,
   AppContextMenuSeparator,
   AppContextMenuLabel,
+  AppContextMenuSubContent,
+  AppContextMenuSubTrigger,
   ContextMenu as AppContextMenu,
   ContextMenuTrigger as AppContextMenuTrigger,
+  ContextMenuSub as AppContextMenuSub,
 };
