@@ -1,14 +1,12 @@
-import type { ReactNode, RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import type { ReactNode } from "react";
 import { Folder, FolderOpen } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
-import { pressLeftNav, type LeftNavDefinition, type LeftNavPanelRefs } from "@/lib/workspace/left-nav";
+import { pressLeftNav, type LeftNavDefinition } from "@/lib/workspace/left-nav";
 
 type LeftNavButtonProps = {
   item: LeftNavDefinition;
-  panelRefs: LeftNavPanelRefs;
   onPressed?: () => void;
 };
 
@@ -94,7 +92,7 @@ export function LeftSidebarReveal({
 }
 
 /** 左侧栏导航按钮（由 leftNavRegistry 提供数据，一般无需修改本文件） */
-export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps) {
+export function LeftNavButton({ item, onPressed }: LeftNavButtonProps) {
   const { t } = useTranslation();
   const Icon = item.icon;
   const active = item.isActive();
@@ -108,7 +106,7 @@ export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps
         active ? LEFT_SIDEBAR_ROW_ACTIVE : LEFT_SIDEBAR_ROW_HOVER,
       )}
       onClick={() => {
-        pressLeftNav(item.id, { panelRefs });
+        pressLeftNav(item.id);
         onPressed?.();
       }}
     >
@@ -126,22 +124,21 @@ export function LeftNavButton({ item, panelRefs, onPressed }: LeftNavButtonProps
 
 export type LeftNavButtonBarProps = {
   items: LeftNavDefinition[];
-  panelRefs: LeftNavPanelRefs;
   onPressed?: () => void;
 };
 
-export function LeftNavButtonBar({ items, panelRefs, onPressed }: LeftNavButtonBarProps) {
+export function LeftNavButtonBar({ items, onPressed }: LeftNavButtonBarProps) {
   return (
     <>
       {items.map((item) => (
-        <LeftNavButton key={item.id} item={item} panelRefs={panelRefs} onPressed={onPressed} />
+        <LeftNavButton key={item.id} item={item} onPressed={onPressed} />
       ))}
     </>
   );
 }
 
 /** Icon-only footer control — label + shortcut live in the Hint, not a kbd on the row. */
-export function LeftNavIconButton({ item, panelRefs, onPressed }: LeftNavButtonProps) {
+export function LeftNavIconButton({ item, onPressed }: LeftNavButtonProps) {
   const { t } = useTranslation();
   const Icon = item.icon;
   const active = item.isActive();
@@ -157,7 +154,7 @@ export function LeftNavIconButton({ item, panelRefs, onPressed }: LeftNavButtonP
           active ? LEFT_SIDEBAR_ROW_ACTIVE : LEFT_SIDEBAR_ROW_HOVER,
         )}
         onClick={() => {
-          pressLeftNav(item.id, { panelRefs });
+          pressLeftNav(item.id);
           onPressed?.();
         }}
       >
@@ -172,14 +169,3 @@ export function LeftNavIconButton({ item, panelRefs, onPressed }: LeftNavButtonP
   );
 }
 
-export type LeftNavPanelRefProps = {
-  centerRef?: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef?: RefObject<PanelImperativeHandle | null>;
-};
-
-export function leftNavPanelRefs({
-  centerRef,
-  rightAreaRef,
-}: LeftNavPanelRefProps): LeftNavPanelRefs {
-  return { centerRef, rightAreaRef };
-}

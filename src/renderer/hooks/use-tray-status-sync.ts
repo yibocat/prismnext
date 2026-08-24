@@ -6,7 +6,6 @@ import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { usePermissionStore } from "@/stores/permission-store";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import {
   openExperimentsPanel,
   openLiteratureLibrary,
@@ -211,16 +210,15 @@ export function useTrayStatusSync(): void {
 
 function openTrayModeMaximized(modeId: TrayModeId): void {
   if (!useDocumentStore.getState().projectRoot) return;
-  const ctx = { panelRefs: getLeftNavPanelRefs() };
   if (modeId === "texworkspace") {
-    openTexWorkspaceMaximized(ctx);
+    openTexWorkspaceMaximized();
     return;
   }
   if (modeId === "literature") {
-    openLiteratureLibrary(ctx);
+    openLiteratureLibrary();
     return;
   }
   if (modeId === "experiments") {
-    openExperimentsPanel(ctx);
+    openExperimentsPanel();
   }
 }

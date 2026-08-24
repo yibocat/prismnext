@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { createDebouncedStorage } from "@/lib/debounced-storage";
 import {
   SIDEBAR_LEFT_DEFAULT,
+  SIDEBAR_LEFT_MIN,
   SIDEBAR_LEFT_MAX,
   RIGHT_AREA_DEFAULT,
   SIDEBAR_RIGHT_DEFAULT,
@@ -29,6 +30,8 @@ export type RightToolbarTab =
 export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
+
+export type LeftSidebarView = "sessions" | "settings" | "templates" | "teams";
 
 export interface EditorTab {
   id: string;
@@ -64,11 +67,9 @@ interface LayoutState {
   texworkspaceSearchQuery: string;
   setTexworkspaceSearchQuery: (query: string) => void;
 
-  leftSidebarOverlay: boolean;
-  setLeftSidebarOverlay: (show: boolean) => void;
   /** 中间主区域当前视图；centerView 型导航项激活时写入，见 left-nav/items.tsx */
-  leftSidebarView: "sessions" | "settings" | "templates" | "teams";
-  setLeftSidebarView: (view: "sessions" | "settings" | "templates" | "teams") => void;
+  leftSidebarView: LeftSidebarView;
+  setLeftSidebarView: (view: LeftSidebarView) => void;
   /** Set when settings/templates collapse the right area; restored on exit unless cleared. */
   pendingRightAreaRestore: boolean;
   setPendingRightAreaRestore: (pending: boolean) => void;
@@ -98,13 +99,17 @@ interface LayoutState {
   rightSidebarRevealNonce: number;
   revealRightSidebar: () => void;
 
-  sidebarExpanded: boolean;
   sidebarWidth: number;
-  sidebarFullyCollapsed: boolean;
-  toggleSidebar: () => void;
-  setSidebarExpanded: (expanded: boolean) => void;
+  /** User toggle intent — window-fold must not clear this. */
+  leftUserExpanded: boolean;
+  /** Folded to 0 because the window was too narrow. */
+  leftWindowCollapsed: boolean;
+  /** After a window-fold, restore stays at 280 until the sash writes a width. */
+  leftPinToMin: boolean;
   setSidebarWidth: (width: number) => void;
-  setSidebarFullyCollapsed: (collapsed: boolean) => void;
+  setLeftUserExpanded: (expanded: boolean) => void;
+  setLeftWindowCollapsed: (collapsed: boolean) => void;
+  setLeftPinToMin: (pin: boolean) => void;
 
   rightAreaExpanded: boolean;
   rightAreaWidth: number;
@@ -118,24 +123,15 @@ interface LayoutState {
   /** Incremented to close the settings detail editor (collapse + clear slot). */
   settingsDetailCloseNonce: number;
   requestCloseSettingsDetailPanel: () => void;
-  /** Incremented to show the center Chat panel (e.g. terminal → composer insert). */
-  centerExpandNonce: number;
-  requestCenterExpand: () => void;
   /** Incremented to focus the AiBar composer when editor is maximized. */
   aiBarComposerFocusNonce: number;
   requestAiBarComposerFocus: () => void;
   rightSidebarWidth: number;
   editorMaximized: boolean;
-  toggleRightArea: () => void;
   setRightAreaExpanded: (expanded: boolean) => void;
   setRightAreaWidth: (width: number) => void;
   setRightSidebarWidth: (width: number) => void;
-  toggleEditorMaximized: () => void;
   setEditorMaximized: (maximized: boolean) => void;
-  /** Incremented to drive a panel-resize effect (center/right) when the right
-   *  area unmaximizes, so the visual layout follows the boolean change. */
-  rightAreaUnmaxNonce: number;
-  unmaximizeRightArea: () => void;
 
   pinnedSessionIds: string[];
   pinnedExpanded: boolean;
@@ -216,8 +212,6 @@ export const useLayoutStore = create<LayoutState>()(
         }),
       setTexworkspaceSearchQuery: (query) => set({ texworkspaceSearchQuery: query }),
 
-      leftSidebarOverlay: false,
-      setLeftSidebarOverlay: (show) => set({ leftSidebarOverlay: show }),
       leftSidebarView: "sessions",
       setLeftSidebarView: (view) => set({ leftSidebarView: view }),
       pendingRightAreaRestore: false,
@@ -247,13 +241,18 @@ export const useLayoutStore = create<LayoutState>()(
           rightSidebarRevealNonce: s.rightSidebarRevealNonce + 1,
         })),
 
-      sidebarExpanded: true,
       sidebarWidth: SIDEBAR_LEFT_DEFAULT,
-      sidebarFullyCollapsed: false,
-      toggleSidebar: () => set((s) => ({ sidebarExpanded: !s.sidebarExpanded })),
-      setSidebarExpanded: (expanded) => set({ sidebarExpanded: expanded }),
-      setSidebarWidth: (width) => set({ sidebarWidth: Math.min(width, SIDEBAR_LEFT_MAX) }),
-      setSidebarFullyCollapsed: (collapsed) => set({ sidebarFullyCollapsed: collapsed }),
+      leftUserExpanded: true,
+      leftWindowCollapsed: false,
+      leftPinToMin: false,
+      setSidebarWidth: (width) =>
+        set({
+          sidebarWidth: Math.min(Math.max(width, SIDEBAR_LEFT_MIN), SIDEBAR_LEFT_MAX),
+          leftPinToMin: false,
+        }),
+      setLeftUserExpanded: (expanded) => set({ leftUserExpanded: expanded }),
+      setLeftWindowCollapsed: (collapsed) => set({ leftWindowCollapsed: collapsed }),
+      setLeftPinToMin: (pin) => set({ leftPinToMin: pin }),
 
       rightAreaExpanded: false,
       rightAreaWidth: RIGHT_AREA_DEFAULT,
@@ -264,37 +263,18 @@ export const useLayoutStore = create<LayoutState>()(
       settingsDetailCloseNonce: 0,
       requestCloseSettingsDetailPanel: () =>
         set((s) => ({ settingsDetailCloseNonce: s.settingsDetailCloseNonce + 1 })),
-      centerExpandNonce: 0,
-      requestCenterExpand: () =>
-        set((s) => ({ centerExpandNonce: s.centerExpandNonce + 1 })),
       aiBarComposerFocusNonce: 0,
       requestAiBarComposerFocus: () =>
         set((s) => ({ aiBarComposerFocusNonce: s.aiBarComposerFocusNonce + 1 })),
       rightSidebarWidth: SIDEBAR_RIGHT_DEFAULT,
       editorMaximized: false,
-      toggleRightArea: () => set((s) => ({ rightAreaExpanded: !s.rightAreaExpanded })),
       setRightAreaExpanded: (expanded) =>
         set((s) => (s.rightAreaExpanded === expanded ? s : { rightAreaExpanded: expanded })),
       setRightAreaWidth: (width) => set({ rightAreaWidth: width }),
       setSettingsDetailWidth: (width) => set({ settingsDetailWidth: width }),
       setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
-      toggleEditorMaximized: () => set((s) => ({ editorMaximized: !s.editorMaximized })),
       setEditorMaximized: (maximized) =>
         set((s) => (s.editorMaximized === maximized ? s : { editorMaximized: maximized })),
-      /**
-       * Switch the right area from "maximized" (workspace full-screen) back to
-       * "split" so the center Chat panel is visible. If `editorMaximized` is
-       * already false, this is a no-op. The actual panel resize is driven by
-       * the non-reactive effect in `unmaximizeRightAreaPanel` (App.tsx),
-       * which mirrors the boolean change into the react-resizable-panels
-       * imperative handle so the visual layout follows the state.
-       */
-      rightAreaUnmaxNonce: 0,
-      unmaximizeRightArea: () =>
-        set((s) => {
-          if (!s.editorMaximized) return s;
-          return { editorMaximized: false, rightAreaUnmaxNonce: s.rightAreaUnmaxNonce + 1 };
-        }),
 
       expandedWorkbenchProjectIds: null,
       setExpandedWorkbenchProjectIds: (ids) => set({ expandedWorkbenchProjectIds: ids }),

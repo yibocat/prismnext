@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -68,12 +67,6 @@ import {
 } from "@/lib/chat/home-backdrops/registry";
 import type { ChatHomeBackdropSetting } from "@/lib/chat/home-backdrops/types";
 
-export interface CommandPanelRefs {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-}
-
 interface SessionListItem {
   id: string;
   title: string;
@@ -85,7 +78,6 @@ interface SessionListItem {
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  panelRefs: CommandPanelRefs;
   isMobile?: boolean;
 }
 
@@ -155,9 +147,8 @@ function PaletteMoreItem({
   );
 }
 
-export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: CommandPaletteProps) {
+export function CommandPalette({ open, onOpenChange, isMobile }: CommandPaletteProps) {
   const { t } = useTranslation();
-  const { centerRef, rightAreaRef } = panelRefs;
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
   const chatTabs = useChatStore((s) => s.tabs);
@@ -382,7 +373,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   // ── Appearance (theme / backdrop / language) — All tab only ──
   const currentThemePack = useThemeStore((s) => s.config.themePack);
-  const currentBackdrop = useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "auto");
+  const currentBackdrop = useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "paperplane");
   const appLocale = useSettingsStore((s) =>
     normalizeAppLocalePreference(s.settings.appLocale),
   );
@@ -651,23 +642,10 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
   // ── Open actions ──
   const ensureRightAreaOpen = () => {
-    const r = rightAreaRef.current;
-    if (r?.isCollapsed()) {
-      openRightArea({
-        centerRef: centerRef.current,
-        rightAreaRef: r,
-        leftSidebarRef: panelRefs.leftSidebarRef.current,
-        isMobile,
-      });
-    }
+    openRightArea({ isMobile });
   };
   const maximizeRightArea = () => {
-    toggleRightAreaMaximize({
-      centerRef: centerRef.current,
-      rightAreaRef: rightAreaRef.current,
-      leftSidebarRef: panelRefs.leftSidebarRef.current,
-      isMobile,
-    });
+    toggleRightAreaMaximize({ isMobile });
   };
   const openFile = async (f: ProjectFile, maximize = false) => {
     ensureRightAreaOpen();
@@ -691,7 +669,7 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
   const openSetting = (categoryId: string, _maximize = false) => {
     useLayoutStore.getState().setSettingsCategory(categoryId);
     if (useLayoutStore.getState().leftSidebarView === "settings") return;
-    pressLeftNav("settings", { panelRefs: { centerRef, rightAreaRef } });
+    pressLeftNav("settings");
   };
   const openPaper = async (p: LiteraturePaper, maximize = false) => {
     ensureRightAreaOpen();
@@ -1180,13 +1158,11 @@ export function CommandPalette({ open, onOpenChange, panelRefs, isMobile }: Comm
 
 /** Single app-level host - open via layout-store / ⌘K / sidebar search button. */
 export function AppCommandPalette({
-  panelRefs,
   isMobile,
 }: {
-  panelRefs: CommandPanelRefs;
   isMobile?: boolean;
 }) {
   const open = useLayoutStore((s) => s.commandPaletteOpen);
   const setOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
-  return <CommandPalette open={open} onOpenChange={setOpen} panelRefs={panelRefs} isMobile={isMobile} />;
+  return <CommandPalette open={open} onOpenChange={setOpen} isMobile={isMobile} />;
 }

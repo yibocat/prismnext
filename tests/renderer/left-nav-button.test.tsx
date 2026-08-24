@@ -25,7 +25,7 @@ describe("LeftNavButton icons", () => {
     expect(typeof Bot).toBe("object");
     expect(Bot).toEqual(expect.objectContaining({ $$typeof: expect.anything(), render: expect.any(Function) }));
     expect(() =>
-      render(<LeftNavButton item={item} panelRefs={{}} />),
+      render(<LeftNavButton item={item} />),
     ).not.toThrow();
   });
 
@@ -33,7 +33,7 @@ describe("LeftNavButton icons", () => {
     expect(() =>
       render(
         <TooltipProvider>
-          <LeftNavIconButton item={{ ...item, id: "settings" }} panelRefs={{}} />
+          <LeftNavIconButton item={{ ...item, id: "settings" }} />
         </TooltipProvider>,
       ),
     ).not.toThrow();

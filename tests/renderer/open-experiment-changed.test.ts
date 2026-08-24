@@ -34,7 +34,6 @@ vi.mock("../../src/renderer/stores/layout-store", () => ({
     getState: () => ({
       editorMaximized: false,
       rightAreaExpanded: true,
-      unmaximizeRightArea: vi.fn(),
       setLeftSidebarView: vi.fn(),
       requestRightAreaExpand: vi.fn(),
     }),
@@ -48,10 +47,6 @@ vi.mock("../../src/renderer/stores/right-panel-store", () => ({
       openExperimentTab: vi.fn(),
     }),
   },
-}));
-
-vi.mock("../../src/renderer/lib/workspace/left-nav/panel-refs", () => ({
-  getLeftNavPanelRefs: () => ({}),
 }));
 
 vi.mock("../../src/renderer/lib/workspace/left-nav/panel-utils", () => ({

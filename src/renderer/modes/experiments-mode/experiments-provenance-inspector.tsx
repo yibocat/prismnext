@@ -33,7 +33,7 @@ import { CopyFeedbackButton } from "@/modes/literature-mode/literature-inline-fi
 import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { useLayoutStore } from "@/stores/layout-store";
+import { leaveRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { insertExperimentRunToChat } from "@/lib/chat/insert-to-chat";
 import {
   experimentsCodeClass,
@@ -140,7 +140,7 @@ export function ExperimentsProvenanceInspector({
   };
 
   const handleOpenChatSession = (sessionId: string) => {
-    useLayoutStore.getState().unmaximizeRightArea();
+    leaveRightAreaMaximize();
     void useChatStore.getState().loadSession(sessionId);
     onOpenChange(false);
   };

@@ -1,6 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, memo, type RefObject } from "react";
-import { createPortal } from "react-dom";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
@@ -53,7 +51,6 @@ import {
   LeftSidebarReveal,
   DefaultProjectBadge,
   WorkbenchFolderGlyph,
-  leftNavPanelRefs,
 } from "@/components/layout/left-nav-button";
 import { SidebarUpdateButton } from "@/components/layout/sidebar-update-button";
 import { SessionContextCard } from "@/components/layout/content-top-bar/session-context-card";
@@ -256,17 +253,9 @@ function relativeTime(ms: number, t: (key: string, opts?: Record<string, unknown
   return t("nav.sessions.daysAgo", { n: Math.floor(sec / 86400) });
 }
 
-interface LeftSidebarProps {
-  leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
-  centerRef?: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef?: RefObject<PanelImperativeHandle | null>;
-}
-
-export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef, rightAreaRef }: LeftSidebarProps) {
+export const LeftSidebar = memo(function LeftSidebar() {
   const { t } = useTranslation();
 
-  const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
-  const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const focusedMode = useFocusedModeId();
@@ -526,8 +515,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
   );
   const settingsNavItem = footerNavItems.find((item) => item.id === "settings");
   const extraFooterNavItems = footerNavItems.filter((item) => item.id !== "settings");
-  const navPanelRefs = leftNavPanelRefs({ centerRef, rightAreaRef });
-  const dismissOverlay = () => setLeftSidebarOverlay(false);
   const settingsCategory = useLayoutStore((s) => s.settingsCategory);
   const setSettingsCategory = useLayoutStore((s) => s.setSettingsCategory);
 
@@ -652,14 +639,12 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     );
     await focusProject(lastPath);
     newSession();
-    setLeftSidebarOverlay(false);
   }, [
     expandedWorkbenchProjectIds,
     focusProject,
     focusProjectId,
     newSession,
     setExpandedWorkbenchProjectIds,
-    setLeftSidebarOverlay,
   ]);
 
   const renderSessionItem = (s: SessionInfo, opts?: { archivedRow?: boolean; showProject?: boolean }) => {
@@ -796,7 +781,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               );
             }
             loadSession(s.id, s.directory, s.projectLastPath);
-            setLeftSidebarOverlay(false);
           }}
           className={cn(
             LEFT_SIDEBAR_ROW,
@@ -888,7 +872,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         data-workbench-session={s.id}
         onClick={() => {
           loadSession(s.id, s.directory, s.projectLastPath);
-          setLeftSidebarOverlay(false);
         }}
         className={cn(
           LEFT_SIDEBAR_ROW,
@@ -960,8 +943,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     return (
       <SettingsSidebar
         activeCategory={settingsCategory as SettingsCategory}
-        onSelectCategory={(id) => { setSettingsCategory(id); setLeftSidebarOverlay(false); }}
-        leftSidebarRef={leftSidebarRef}
+        onSelectCategory={(id) => { setSettingsCategory(id); }}
       />
     );
   }
@@ -973,7 +955,7 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
     >
       <Sidebar collapsible="none" className="relative shrink-0 border-r-0" data-surface="sidebar" data-left-sidebar-slab="">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
-          <SidebarHitChrome leftSidebarRef={leftSidebarRef!} />
+          <SidebarHitChrome />
         </div>
         <AppContextMenu>
           <AppContextMenuTrigger asChild>
@@ -982,21 +964,15 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
         <div className={cn("shrink-0 px-2", LEFT_SIDEBAR_STACK)}>
           <LeftNavButtonBar
             items={primaryNavItems.filter(isLeftNavRequired)}
-            panelRefs={navPanelRefs}
-            onPressed={dismissOverlay}
           />
           <LeftNavButtonBar
             items={hubNavItems}
-            panelRefs={navPanelRefs}
-            onPressed={dismissOverlay}
           />
           {primaryNavItems.some((item) => !isLeftNavRequired(item)) ? (
             <>
               <div role="separator" className="mx-2 my-1 h-px bg-border" />
               <LeftNavButtonBar
                 items={primaryNavItems.filter((item) => !isLeftNavRequired(item))}
-                panelRefs={navPanelRefs}
-                onPressed={dismissOverlay}
               />
             </>
           ) : null}
@@ -1304,8 +1280,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
             {settingsNavItem ? (
               <LeftNavIconButton
                 item={settingsNavItem}
-                panelRefs={navPanelRefs}
-                onPressed={dismissOverlay}
               />
             ) : null}
             <Hint label={t("nav.sessions.archived")} side="top">
@@ -1319,7 +1293,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
                 )}
                 onClick={() => {
                   toggleShowArchived();
-                  dismissOverlay();
                 }}
               >
                 <Archive
@@ -1334,8 +1307,6 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
               <LeftNavIconButton
                 key={item.id}
                 item={item}
-                panelRefs={navPanelRefs}
-                onPressed={dismissOverlay}
               />
             ))}
             <div className="ml-auto">
@@ -1360,18 +1331,10 @@ export const LeftSidebar = memo(function LeftSidebar({ leftSidebarRef, centerRef
 
   return (
     <>
-      {leftSidebarOverlay &&
-        createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content" data-left-sidebar-overlay="">
-            <div className="flex-1 min-h-0">{sidebarContent}</div>
-          </div>,
-          document.body,
-        )}
       {sidebarContent}
       <CustomizeSidebarDialog
         open={customizeSidebarOpen}
         onOpenChange={setCustomizeSidebarOpen}
-        panelRefs={navPanelRefs}
       />
       <EditProjectDialog
         projectId={editingProjectId}

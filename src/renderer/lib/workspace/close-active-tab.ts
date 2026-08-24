@@ -3,17 +3,12 @@ import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { closeRightArea } from "@/lib/workspace/right-area-layout";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 
 export type CloseShortcutResult = "handled" | "close-window";
 
 /** Exit maximize (if any) and collapse RightArea. */
 function collapseRightShell(): void {
-  const refs = getLeftNavPanelRefs();
-  closeRightArea({
-    centerRef: refs.centerRef?.current,
-    rightAreaRef: refs.rightAreaRef?.current,
-  });
+  closeRightArea();
 }
 
 /** Collapse RightArea when expanded and no tabs remain (tab close, close-all, …). */

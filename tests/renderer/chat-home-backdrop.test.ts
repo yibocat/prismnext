@@ -6,16 +6,16 @@ describe("resolveChatHomeBackdrop", () => {
     expect(resolveChatHomeBackdrop("academic", false, "academic")).toBeNull();
   });
 
-  it("follows theme pack defaults in auto mode", () => {
-    expect(resolveChatHomeBackdrop("auto", true, "academic")).toBe("academic");
-    expect(resolveChatHomeBackdrop("auto", true, "warm-paper")).toBe("origami");
-    expect(resolveChatHomeBackdrop("auto", true, "midnight")).toBe("rain");
-    expect(resolveChatHomeBackdrop("auto", true, "forest")).toBe("forest");
-    expect(resolveChatHomeBackdrop("auto", true, "graphite")).toBe("blueprint");
+  it("uses paperplane for auto and every theme pack", () => {
+    expect(resolveChatHomeBackdrop("auto", true, "academic")).toBe("paperplane");
+    expect(resolveChatHomeBackdrop("auto", true, "warm-paper")).toBe("paperplane");
+    expect(resolveChatHomeBackdrop("auto", true, "midnight")).toBe("paperplane");
+    expect(resolveChatHomeBackdrop("auto", true, "forest")).toBe("paperplane");
+    expect(resolveChatHomeBackdrop("auto", true, "graphite")).toBe("paperplane");
   });
 
-  it("maps legacy none to theme default", () => {
-    expect(resolveChatHomeBackdrop("none", true, "academic")).toBe("academic");
+  it("maps legacy none to the paperplane default", () => {
+    expect(resolveChatHomeBackdrop("none", true, "academic")).toBe("paperplane");
   });
 
   it("allows manual override across theme packs", () => {
@@ -23,7 +23,7 @@ describe("resolveChatHomeBackdrop", () => {
     expect(resolveChatHomeBackdrop("origami", true, "academic")).toBe("origami");
   });
 
-  it("defaults to auto when setting is undefined", () => {
-    expect(resolveChatHomeBackdrop(undefined, undefined, "midnight")).toBe("rain");
+  it("defaults to paperplane when setting is undefined", () => {
+    expect(resolveChatHomeBackdrop(undefined, undefined, "midnight")).toBe("paperplane");
   });
 });

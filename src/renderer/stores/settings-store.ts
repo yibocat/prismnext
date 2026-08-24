@@ -306,7 +306,7 @@ const defaults: AppSettings = {
   aiTerminalIdleCloseMs: 600_000,
   aiTerminalCloseTabKillsProcess: false,
   messageWidth: "balanced",
-  chatHomeBackdrop: "auto",
+  chatHomeBackdrop: "paperplane",
   chatHomeBackdropEnabled: true,
   searchEngine: DEFAULT_SEARCH_ENGINE,
 };

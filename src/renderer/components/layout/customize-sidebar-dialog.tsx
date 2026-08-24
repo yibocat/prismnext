@@ -21,7 +21,6 @@ import {
   requiredPrimaryNavIds,
   sanitizeLeftNavPrefs,
   toggleLeftNavHidden,
-  type LeftNavContext,
   type LeftNavDefinition,
 } from "@/lib/workspace/left-nav";
 
@@ -30,13 +29,11 @@ const LIST_SHELL = "relative rounded-lg border border-border divide-y divide-bor
 interface CustomizeSidebarDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  panelRefs: LeftNavContext["panelRefs"];
 }
 
 export function CustomizeSidebarDialog({
   open,
   onOpenChange,
-  panelRefs,
 }: CustomizeSidebarDialogProps) {
   const { t } = useTranslation();
   const hiddenIds = useSettingsStore((s) => s.settings.leftNavHiddenIds);
@@ -60,7 +57,7 @@ export function CustomizeSidebarDialog({
       leftNavHiddenIds: sanitized.hiddenIds,
       leftNavOrder: sanitized.order,
     });
-    deactivateHiddenLeftNav(sanitized.hiddenIds, { panelRefs });
+    deactivateHiddenLeftNav(sanitized.hiddenIds);
   };
 
   const toggle = (id: string) => {

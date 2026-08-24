@@ -5,7 +5,7 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
-import { CircleIcon, FileTypeIcon, SparklesIcon, TerminalIcon } from "lucide-react";
+import { CircleIcon, DownloadIcon, FileTypeIcon, GitBranchIcon, SparklesIcon, TerminalIcon } from "lucide-react";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useCompileStore } from "@/stores/compile-store";
 import {
@@ -24,6 +24,8 @@ import type {
 } from "../../shared/agent/status";
 import { isAgentLifecyclePhase, isProjectWarmPhase } from "../../shared/agent/status";
 import { Button } from "@/components/ui/button";
+import { useGitStore } from "@/stores/git-store";
+import { useAvailableUpdate } from "@/hooks/use-available-update";
 
 const AGENT_COLORS: Record<AgentLifecyclePhase, string> = {
   starting: "text-warning",
@@ -102,6 +104,10 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const detectCompilers = useCompileStore((s) => s.detectCompilers);
+  const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const gitBranch = useGitStore((s) => s.branch);
+  const gitDirtyCount = useGitStore((s) => s.files.length);
+  const update = useAvailableUpdate();
 
   useTerminalAiStore((s) => s.sessionStates);
   useRightPanelStore((s) => s.tabs);
@@ -231,7 +237,7 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
 
   if (layer === "paint") {
     return (
-      <span className="relative inline-flex items-center justify-center size-5 shrink-0" aria-hidden>
+      <span className="relative flex size-5 shrink-0 items-center justify-center" aria-hidden>
         {glyph}
       </span>
     );
@@ -242,7 +248,7 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
       <HoverCardTrigger asChild>
         <button
           type="button"
-          className="relative inline-flex items-center justify-center size-5 shrink-0 rounded-full"
+          className="relative flex size-5 shrink-0 items-center justify-center rounded-full"
         >
           {glyph}
         </button>
@@ -279,6 +285,26 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
               {agent.projectWarmError}
             </p>
           ) : null}
+          {isGitRepo ? (
+            <StatusRow
+              label={t("shell.status.git")}
+              detail={
+                gitDirtyCount > 0
+                  ? t("shell.status.gitDirty", {
+                      branch: gitBranch || "…",
+                      count: gitDirtyCount,
+                    })
+                  : t("shell.status.gitClean", { branch: gitBranch || "…" })
+              }
+              icon={
+                <GitBranchIcon
+                  className={`size-3 shrink-0 ${
+                    gitDirtyCount > 0 ? "text-warning" : "text-success"
+                  }`}
+                />
+              }
+            />
+          ) : null}
           <StatusRow
             label={t("shell.status.latex")}
             detail={latexDetail}
@@ -290,6 +316,21 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
               />
             }
           />
+          {update.visible ? (
+            <StatusRow
+              label={t("shell.status.update")}
+              detail={
+                update.readyToInstall
+                  ? t("shell.status.updateReady")
+                  : update.downloading
+                    ? t("shell.status.updateDownloading")
+                    : t("shell.status.updateAvailable", {
+                        version: update.latestVersion ?? "",
+                      })
+              }
+              icon={<DownloadIcon className="size-3 shrink-0 text-primary" />}
+            />
+          ) : null}
           {showAiTerminal ? (
             <StatusRow
               label={t("shell.status.aiTerminal")}

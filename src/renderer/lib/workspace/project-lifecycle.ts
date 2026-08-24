@@ -95,7 +95,6 @@ export async function confirmProjectSwitchIfNeeded(
  */
 export async function applyWorkbenchFocusChange(): Promise<void> {
   useRightPanelStore.getState().closeAllTabs({ force: true });
-  useLayoutStore.getState().setLeftSidebarOverlay(false);
   clearPdfCache();
   useChangesStore.getState().clearAll();
   useWorktreeStore.getState().clearAll();
@@ -422,7 +421,6 @@ export async function joinWorkbenchFolder(path: string): Promise<boolean> {
   if (!ok) return false;
   const { useDocumentStore } = await import("@/stores/document-store");
   await useDocumentStore.getState().openProject(path);
-  useLayoutStore.getState().setLeftSidebarOverlay(false);
   return true;
 }
 
@@ -536,6 +534,5 @@ export async function openRecentFromAddPanel(path: string): Promise<boolean> {
   await useDocumentStore.getState().focusProject(member.lastPath);
   const { useChatStore } = await import("@/stores/chat-store");
   useChatStore.getState().newSession();
-  layout.setLeftSidebarOverlay(false);
   return true;
 }

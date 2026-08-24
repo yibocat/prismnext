@@ -1,17 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { leftNavRegistry } from "@/lib/workspace/left-nav";
 import { registerLeftNavItems } from "@/lib/workspace/left-nav/items";
 import { useLayoutStore } from "@/stores/layout-store";
-import { runWithProgrammaticCenterResize } from "@/lib/workspace/layout-resize-guard";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { restoreWorkbenchLaunch } from "@/lib/workspace/project-lifecycle";
 import { useProLicenseStore } from "@/stores/pro-license-store";
-import { cn } from "@/lib/utils";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
@@ -22,6 +18,7 @@ import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dia
 import { LeftSidebar } from "@/components/layout/left-sidebar";
 import { LeftMainArea } from "@/components/layout/left-main-area";
 import { RightArea } from "@/components/layout/right-area";
+import { ShellFrame } from "@/components/layout/shell-frame";
 import { useAppCloseTab } from "@/hooks/use-app-close-tab";
 import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
@@ -37,58 +34,22 @@ import { ContentTopBar } from "@/components/layout/content-top-bar";
 import { LeftSidebarPinnedChrome, RightAreaPinnedChrome, StatusDotPinnedChrome } from "@/components/layout/sidebar-controls";
 import {
   expandSettingsDetailPanel,
-  enforceSettingsSplitLayout,
-  collapseSettingsDetailPanel,
   closeSettingsDetailPanel,
 } from "@/lib/workspace/expand-settings-detail-panel";
 import { collapseRightAreaWhenEmpty } from "@/lib/workspace/close-active-tab";
-import {
-  hasOpenSettingsEditor,
-  isSettingsEditorTab,
-} from "@/hooks/use-settings-editor";
+import { hasOpenSettingsEditor } from "@/hooks/use-settings-editor";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import {
-  CENTER_MAXIMIZE_THRESHOLD_PX,
-  PANEL_COLLAPSE_THRESHOLD_PX,
-  PANEL_RESIZE_HIT,
-  LEFT_SIDEBAR_RESIZE_HIT,
-  RESIZE_FILL_PX,
-  PANEL_SASH_SEPARATOR_CLASS,
-  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
-  SHELL_SASH_SHADOW_RIGHT_CLASS,
-  SHELL_SASH_SHADOW_LEFT_CLASS,
-} from "@/lib/workspace/layout-constants";
-import { isProgrammaticCenterResize, isWindowLayoutResizing, runDuringWindowLayoutResize } from "@/lib/workspace/layout-resize-guard";
-import {
-  fitSplitRightWidthPx,
-  commitRightAreaExpandedFromPixels,
-  isRightAreaToggleAnimating,
-  measureMainAreaWidthPx,
   openRightArea,
-  reconcileRightAreaOnMainAreaResize,
   resetRightAreaForProjectOpen,
   watchRightAreaToggleAnimation,
 } from "@/lib/workspace/right-area-layout";
-import { setLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import {
-  syncSettingsLeftSidebar,
-  isLeftSidebarToggleAnimating,
-  onLeftSidebarPanelResize,
-  syncLeftSidebarWidthVar,
-  watchLeftSidebarResizeChrome,
-} from "@/lib/workspace/left-sidebar-panel";
-import {
-  SIDEBAR_LEFT_MIN,
-  SIDEBAR_LEFT_DEFAULT,
-  SIDEBAR_LEFT_MAX,
-  MAIN_AREA_MIN,
-  RIGHT_AREA_MIN,
-  RIGHT_AREA_MAX,
-  SIDEBAR_OVERLAY_THRESHOLD,
-  RIGHT_AREA_DEFAULT,
-} from "@/styles/constants";
+  syncSettingsDetailPresence,
+  syncShellForLeftSidebarView,
+} from "@/lib/workspace/shell-view-sync";
+import { syncLeftSidebarWidthVar } from "@/lib/workspace/left-sidebar-panel";
 
-// 左侧栏 chrome 注册。RightArea 模块 Nav 由 modeRegistry 投影，见 left-nav/mode-nav.ts
 registerAllModes();
 registerLeftNavItems();
 
@@ -108,41 +69,19 @@ function GlassNativeSync() {
 
 export function App() {
   const isMobile = useIsMobile();
-  const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
-  const setRightAreaWidth = useLayoutStore((s) => s.setRightAreaWidth);
-  const setSettingsDetailWidth = useLayoutStore((s) => s.setSettingsDetailWidth);
-  const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
-  const rightSidebarOpen = useLayoutStore((s) => s.rightSidebarOpen);
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
-  const editorMaximized = useLayoutStore((s) => s.editorMaximized);
-  const rightAreaMin = RIGHT_AREA_MIN;
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
   const inSettings = leftSidebarView === "settings";
-  const settingsDetailStacked = useLayoutStore((s) => s.settingsDetailStacked);
   const hasSettingsEditorTab = useRightPanelStore((s) =>
     s.tabs.some((t) => t.kind === "settings-editor"),
   );
   const settingsDetailOpen = inSettings && hasSettingsEditorTab;
-  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
   const sidebarWidth = useLayoutStore((s) => s.sidebarWidth);
-  const [sidebarUsesOverlay, setSidebarUsesOverlay] = useState(
-    () => window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD,
-  );
 
-  const leftSidebarRef = usePanelRef();
-  const centerRef = usePanelRef();
-  const rightAreaRef = usePanelRef();
-
-  // Expose panel refs for programatic left-nav opens (e.g. Experiments deep-link).
-  useLayoutEffect(() => {
-    setLeftNavPanelRefs({ centerRef, rightAreaRef });
-  }, [centerRef, rightAreaRef]);
-
-  // Last RightArea tab closed (any path) → collapse panel; do not land on the launcher.
   useEffect(() => {
     return useRightPanelStore.subscribe((state, prev) => {
       if (state.tabs.length === 0 && prev.tabs.length > 0) {
@@ -152,13 +91,12 @@ export function App() {
   }, []);
 
   useAppCloseTab();
-  useEffect(() => watchLeftSidebarResizeChrome(), []);
   useEffect(() => watchRightAreaToggleAnimation(), []);
   useLayoutEffect(() => {
     syncLeftSidebarWidthVar(sidebarWidth);
   }, [sidebarWidth]);
-  useAppShellShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
-  useWorkspaceModeShortcuts({ leftSidebarRef, centerRef, rightAreaRef }, { isMobile });
+  useAppShellShortcuts({ isMobile });
+  useWorkspaceModeShortcuts({ isMobile });
   useProductShortcuts();
   useEffect(() => {
     return executionDesktop.onExecutionEvent((event) => {
@@ -178,332 +116,63 @@ export function App() {
 
   const rightAreaExpandNonce = useLayoutStore((s) => s.rightAreaExpandNonce);
   const settingsDetailCloseNonce = useLayoutStore((s) => s.settingsDetailCloseNonce);
-  const centerExpandNonce = useLayoutStore((s) => s.centerExpandNonce);
 
-  // Programmatic RightArea expand (Browser link chips, settings detail, etc.)
   useLayoutEffect(() => {
     if (rightAreaExpandNonce === 0) return;
-    const r = rightAreaRef.current;
-    const c = centerRef.current;
-    if (!r) return;
     const st = useLayoutStore.getState();
-    // Maximized editor: RightArea already full width — do not shrink or restore center.
     if (st.editorMaximized) return;
     if (st.leftSidebarView === "settings" && hasOpenSettingsEditor()) {
-      expandSettingsDetailPanel({
-        centerRef: c,
-        rightAreaRef: r,
-        mainAreaWidthPx: measureMainAreaFallback(),
-      });
+      expandSettingsDetailPanel();
       return;
     }
-    if (r.isCollapsed()) {
-      openRightArea({
-        centerRef: c,
-        rightAreaRef: r,
-        leftSidebarRef: leftSidebarRef.current,
-        isMobile,
-      });
-    }
-    // Already visible — preserve the user's split; do not force resize.
+    openRightArea({ isMobile });
   }, [rightAreaExpandNonce, isMobile]);
 
-  // Programmatic settings detail close (editor Cancel/Save, etc.)
   useLayoutEffect(() => {
     if (settingsDetailCloseNonce === 0) return;
-    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+    closeSettingsDetailPanel();
   }, [settingsDetailCloseNonce]);
 
-  function measureMainAreaFallback(): number {
-    return measureMainAreaWidthPx(leftSidebarRef.current);
-  }
-
-  // Programmatic center (Chat) expand — terminal snippet insert, etc.
-  useLayoutEffect(() => {
-    if (centerExpandNonce === 0) return;
-    const c = centerRef.current;
-    if (!c?.isCollapsed()) return;
-    c.expand();
-  }, [centerExpandNonce]);
-
-  // Sync the react-resizable-panels layout to the editorMaximized boolean.
-  // When store flips editorMaximized false, expand center + restore the right
-  // area to a width that still leaves MAIN_AREA_MIN for Chat (same as openRightArea).
-  const rightAreaUnmaxNonce = useLayoutStore((s) => s.rightAreaUnmaxNonce);
-  useLayoutEffect(() => {
-    if (rightAreaUnmaxNonce === 0) return;
-    const r = rightAreaRef.current;
-    if (!r) return;
-    const preferred = useLayoutStore.getState().rightAreaWidth || RIGHT_AREA_DEFAULT;
-    const main = measureMainAreaWidthPx(leftSidebarRef.current);
-    const w = fitSplitRightWidthPx(main, preferred);
-    runWithProgrammaticCenterResize(() => {
-      if (r.isCollapsed()) r.expand();
-      r.resize(w);
-      centerRef.current?.expand();
-    });
-  }, [rightAreaUnmaxNonce]);
-
-  // RightArea starts collapsed when opening a project (spec A12).
   useLayoutEffect(() => {
     if (!projectRoot) return;
-    resetRightAreaForProjectOpen({
-      centerRef: centerRef.current,
-      rightAreaRef: rightAreaRef.current,
-    });
+    resetRightAreaForProjectOpen();
   }, [projectRoot]);
-
-  // Sidebar overlay: below SIDEBAR_OVERLAY_THRESHOLD (sidebar+main mins), open as
-  // fullscreen overlay — inline expand would exceed panel minSizes and collapse the shell.
-  // Throttled via requestAnimationFrame — the native resize event can fire faster
-  // than 60fps during a window corner drag, causing unnecessary panel API calls
-  // and layout thrashing. Coalescing to one check per frame eliminates this.
-  const belowOverlayThreshold = useRef(false);
-  useLayoutEffect(() => {
-    let rafId: number | null = null;
-    const check = () => {
-      if (rafId !== null) return; // Already scheduled for this frame
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        const narrow = window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD;
-        const st = useLayoutStore.getState();
-        const left = leftSidebarRef.current;
-
-        setSidebarUsesOverlay(narrow);
-        if (narrow && !belowOverlayThreshold.current) {
-          // Crossed below threshold: collapse panel, close any overlay
-          if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
-          left?.collapse();
-          belowOverlayThreshold.current = true;
-        } else if (!narrow && belowOverlayThreshold.current) {
-          // Crossed above threshold: close overlay, restore panel
-          if (st.leftSidebarOverlay) st.setLeftSidebarOverlay(false);
-          left?.resize(Math.min(st.sidebarWidth || SIDEBAR_LEFT_DEFAULT, SIDEBAR_LEFT_MAX));
-          belowOverlayThreshold.current = false;
-        } else if (!narrow && st.leftSidebarOverlay) {
-          // Safety net: on wide windows, never allow overlay to persist
-          st.setLeftSidebarOverlay(false);
-        }
-
-        if (useLayoutStore.getState().leftSidebarView !== "settings") {
-          runDuringWindowLayoutResize(() => {
-            reconcileRightAreaOnMainAreaResize({
-              centerRef: centerRef.current,
-              rightAreaRef: rightAreaRef.current,
-              leftSidebarRef: leftSidebarRef.current,
-              isMobile,
-            });
-          });
-        }
-      });
-    };
-    check();
-    window.addEventListener("resize", check);
-    return () => {
-      window.removeEventListener("resize", check);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, []);
-
-  // Narrow main-area: split → close RightArea (keep Content) or stay maximized.
-  useLayoutEffect(() => {
-    if (inSettings) return;
-    runDuringWindowLayoutResize(() => {
-      reconcileRightAreaOnMainAreaResize({
-        centerRef: centerRef.current,
-        rightAreaRef: rightAreaRef.current,
-        leftSidebarRef: leftSidebarRef.current,
-        isMobile,
-      });
-    });
-  }, [isMobile, inSettings]);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
 
-  // Open-core: hydrate activation key, then tryLoadPro (no-op when Free / absent).
   useEffect(() => {
     void hydrateProLicense();
   }, [hydrateProLicense]);
 
-  // Initialize theme system (injects <style id="prism-theme">)
   useEffect(() => {
     initTheme();
   }, [initTheme]);
 
-  // Inject diff override CSS once (native <style> tag — beats all CM6 theme CSS)
   useEffect(() => {
     injectDiffOverrides();
   }, []);
 
-  // Reflect chat message-width tier on <html> so [data-chat-width] containers can react.
-  // CSS rules live in styles/tokens/chat.css. Effect runs once settings load; falls back
-  // to "balanced" (the pre-feature default) when the value is missing.
   const messageWidth = useSettingsStore((s) => s.settings.messageWidth);
   useEffect(() => {
     if (!messageWidth) return;
     document.documentElement.setAttribute("data-message-width", messageWidth);
   }, [messageWidth]);
 
-  // Auto-collapse RightArea when entering immersive center views (leftNavRegistry.isImmersiveCenterView)
-  useEffect(() => {
-    const r = rightAreaRef.current;
-    const st = useLayoutStore.getState();
-    if (!r) return;
-    if (leftNavRegistry.isImmersiveCenterView(leftSidebarView)) {
-      if (st.editorMaximized) st.setEditorMaximized(false);
-      if (!r.isCollapsed()) {
-        st.setRightAreaWidth(r.getSize().inPixels);
-        r.collapse();
-        centerRef.current?.resize(RESIZE_FILL_PX);
-        st.setPendingRightAreaRestore(true);
-      }
-    } else if (st.pendingRightAreaRestore && r.isCollapsed()) {
-      r.resize(st.rightAreaWidth);
-      st.setPendingRightAreaRestore(false);
-    }
-  }, [leftSidebarView]);
-
-  // Snapshot workspace RightArea tab when entering Settings; restore on exit.
   const prevLeftSidebarViewRef = useRef(leftSidebarView);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const prev = prevLeftSidebarViewRef.current;
     prevLeftSidebarViewRef.current = leftSidebarView;
+    if (prev === leftSidebarView) return;
+    syncShellForLeftSidebarView(prev, leftSidebarView, { isMobile });
+  }, [leftSidebarView, isMobile]);
 
-    if (leftSidebarView === "settings" && prev !== "settings") {
-      const rp = useRightPanelStore.getState();
-      const active = rp.tabs.find((t) => t.id === rp.activeTabId);
-      if (active && !isSettingsEditorTab(active)) {
-        useLayoutStore.getState().setWorkspaceActiveTabIdBeforeSettings(rp.activeTabId);
-      }
-      return;
-    }
-
-    if (prev === "settings" && leftSidebarView !== "settings") {
-      const st = useLayoutStore.getState();
-      const snapshot = st.workspaceActiveTabIdBeforeSettings;
-      if (snapshot) {
-        st.setWorkspaceActiveTabIdBeforeSettings(null);
-        const rp = useRightPanelStore.getState();
-        if (rp.tabs.some((t) => t.id === snapshot)) {
-          rp.setActiveTab(snapshot);
-        }
-      }
-    }
-  }, [leftSidebarView]);
-
-  // Settings: inline category rail when wide; overlay list when the window is too narrow.
   useLayoutEffect(() => {
     if (!inSettings) return;
-    syncSettingsLeftSidebar(leftSidebarRef);
-  }, [inSettings]);
-
-  // Settings: keep list visible in split mode; collapse detail pane when no editor is open.
-  useEffect(() => {
-    if (!inSettings) return;
-    const st = useLayoutStore.getState();
-    if (st.editorMaximized) st.setEditorMaximized(false);
-
-    if (!hasOpenSettingsEditor()) {
-      st.setSettingsDetailStacked(false);
-      st.setRightAreaExpanded(false);
-      const r = rightAreaRef.current;
-      if (r && !r.isCollapsed()) {
-        collapseSettingsDetailPanel(centerRef.current, r);
-      } else {
-        centerRef.current?.expand();
-      }
-      return;
-    }
+    syncSettingsDetailPresence(settingsDetailOpen);
   }, [inSettings, settingsDetailOpen]);
 
-  // Settings stacked mode: apply panel sizes after React has committed
-  // the center panel's collapsible/minSize props for stacked layout.
-  useLayoutEffect(() => {
-    if (!inSettings || !hasOpenSettingsEditor() || !settingsDetailStacked) return;
-    const r = rightAreaRef.current;
-    const c = centerRef.current;
-    if (!r) return;
-
-    const st = useLayoutStore.getState();
-    st.setRightAreaExpanded(true);
-    if (r.isCollapsed()) r.expand();
-    c?.collapse();
-    r.resize(Math.max(measureMainAreaFallback(), RIGHT_AREA_MIN));
-  }, [inSettings, settingsDetailOpen, settingsDetailStacked]);
-
-  // Leaving settings: tear down shared right panel state so it does not leak into workspace.
-  const prevInSettingsRef = useRef(inSettings);
-  useLayoutEffect(() => {
-    const exitingSettings = prevInSettingsRef.current && !inSettings;
-    prevInSettingsRef.current = inSettings;
-    if (!exitingSettings) return;
-
-    const st = useLayoutStore.getState();
-    const r = rightAreaRef.current;
-    const c = centerRef.current;
-    if (!r) return;
-
-    st.setSettingsDetailStacked(false);
-
-    const shouldRestore = st.pendingRightAreaRestore;
-    if (shouldRestore) st.clearPendingRightAreaRestore();
-
-    if (hasOpenSettingsEditor()) {
-      closeSettingsDetailPanel(c, r);
-      if (shouldRestore) {
-        r.expand();
-        r.resize(st.rightAreaWidth || RIGHT_AREA_DEFAULT);
-        st.setRightAreaExpanded(true);
-        c?.expand();
-      }
-      return;
-    }
-
-    if (!r.isCollapsed()) {
-      st.setRightAreaExpanded(false);
-      r.collapse();
-      c?.expand();
-    }
-
-    if (shouldRestore) {
-      r.expand();
-      r.resize(st.rightAreaWidth || RIGHT_AREA_DEFAULT);
-      st.setRightAreaExpanded(true);
-      c?.expand();
-    }
-  }, [inSettings]);
-
-  // Rebalance settings detail when the window is resized.
-  useEffect(() => {
-    if (!inSettings) return;
-    let rafId: number | null = null;
-    const onResize = () => {
-      if (rafId !== null) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = null;
-        const st = useLayoutStore.getState();
-        if (st.leftSidebarView !== "settings") return;
-        if (!hasOpenSettingsEditor()) return;
-        const r = rightAreaRef.current;
-        if (!r) return;
-        expandSettingsDetailPanel({
-          centerRef: centerRef.current,
-          rightAreaRef: r,
-          mainAreaWidthPx: measureMainAreaFallback(),
-        });
-      });
-    };
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      if (rafId !== null) cancelAnimationFrame(rafId);
-    };
-  }, [inSettings]);
-
-  // ── Startup loading screen lifecycle ──
-  // Stay on splash until the last project (or default) is focused.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const [autoOpenChecked, setAutoOpenChecked] = useState(false);
 
@@ -531,12 +200,35 @@ export function App() {
 
   useEffect(() => {
     if (!appReady) return;
-    // ?freeze-splash keeps the loading screen on for design iteration
     if ((window as any).__FREEZE_SPLASH__) return;
     const el = document.getElementById("L");
     if (!el) return;
     el.remove();
   }, [appReady]);
+
+  const shell = (
+    <div className="relative flex h-full flex-col">
+      <LeftSidebarPinnedChrome />
+      <ShellFrame
+        overlay={
+          <>
+            <StatusDotPinnedChrome />
+            <RightAreaPinnedChrome />
+          </>
+        }
+        left={<LeftSidebar />}
+        center={
+          <div className="flex h-full min-w-0 flex-col">
+            <ContentTopBar />
+            <div className="min-h-0 flex-1">
+              <LeftMainArea />
+            </div>
+          </div>
+        }
+        right={<RightArea />}
+      />
+    </div>
+  );
 
   return (
     <GlobalErrorBoundary>
@@ -544,10 +236,9 @@ export function App() {
         <LocaleSync />
         <GlassNativeSync />
         <ProjectSetupDialog />
-        <AppCommandPalette panelRefs={{ leftSidebarRef, centerRef, rightAreaRef }} isMobile={isMobile} />
+        <AppCommandPalette isMobile={isMobile} />
         <Toaster />
         <TabCloseConfirmDialog />
-        {/* Full-screen warm splash when #L already dismissed (e.g. project switch). */}
         {isOpeningProject && appReady ? (
           <div
             className="fixed inset-0 z-[99999] flex items-center justify-center bg-background"
@@ -570,366 +261,7 @@ export function App() {
             </div>
           </div>
         ) : null}
-        {projectRoot ? (
-          <div className="relative flex h-full flex-col">
-            <LeftSidebarPinnedChrome leftSidebarRef={leftSidebarRef} />
-            <RightAreaPinnedChrome
-              leftSidebarRef={leftSidebarRef}
-              centerRef={centerRef}
-              rightAreaRef={rightAreaRef}
-            />
-            <Group
-              id="main-layout"
-              orientation="horizontal"
-              className="flex-1 min-h-0"
-              resizeTargetMinimumSize={LEFT_SIDEBAR_RESIZE_HIT}
-              disableCursor
-            >
-              <Panel
-                id="left-sidebar"
-                panelRef={leftSidebarRef}
-                collapsible={!inSettings || sidebarUsesOverlay}
-                collapsedSize={0}
-                minSize={SIDEBAR_LEFT_MIN}
-                maxSize={SIDEBAR_LEFT_MAX}
-                className="overflow-hidden"
-                defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : Math.min(useLayoutStore.getState().sidebarWidth, SIDEBAR_LEFT_MAX)}
-                groupResizeBehavior="preserve-pixel-size"
-                onResize={(s) => {
-                  onLeftSidebarPanelResize(s.inPixels);
-                  if (isLeftSidebarToggleAnimating()) return;
-                  const st = useLayoutStore.getState();
-                  // Only save width when panel is expanded (>= threshold)
-                  // to prevent collapse animation from polluting sidebarWidth
-                  if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) setSidebarWidth(s.inPixels);
-                  if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX && st.sidebarExpanded) st.setSidebarExpanded(false);
-                  if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX && !st.sidebarExpanded) st.setSidebarExpanded(true);
-                  const immersiveView = leftNavRegistry.isImmersiveCenterView(st.leftSidebarView);
-                  if (s.inPixels === 0 && st.editorMaximized && !immersiveView) {
-                    rightAreaRef.current?.resize(RESIZE_FILL_PX);
-                  }
-                }}
-              >
-                <LeftSidebar leftSidebarRef={leftSidebarRef} centerRef={centerRef} rightAreaRef={rightAreaRef} />
-              </Panel>
-
-              <Separator
-                id="sep-sidebar"
-                className={cn(
-                  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
-                  sidebarExpanded && SHELL_SASH_SHADOW_RIGHT_CLASS,
-                )}
-              />
-
-              <Panel id="main-area" minSize={MAIN_AREA_MIN}>
-                <div className="relative h-full min-w-0" data-surface="content">
-                <StatusDotPinnedChrome leftSidebarRef={leftSidebarRef} />
-                <Group
-                  id="center-right"
-                  orientation="horizontal"
-                  className="h-full"
-                  resizeTargetMinimumSize={PANEL_RESIZE_HIT}
-                  disableCursor
-                >
-                  <Panel
-                    id="center"
-                    panelRef={centerRef}
-                    collapsible={!inSettings || settingsDetailStacked}
-                    collapsedSize={0}
-                    minSize={inSettings && settingsDetailStacked ? 0 : MAIN_AREA_MIN}
-                    className="overflow-hidden"
-                    groupResizeBehavior="preserve-pixel-size"
-                    onResize={(s) => {
-                      if (isRightAreaToggleAnimating()) return;
-                      const st = useLayoutStore.getState();
-                      if (inSettings) {
-                        if (!st.settingsDetailStacked) {
-                          enforceSettingsSplitLayout(
-                            centerRef.current,
-                            rightAreaRef.current,
-                          );
-                        }
-                        return;
-                      }
-                      const immersiveView = leftNavRegistry.isImmersiveCenterView(st.leftSidebarView);
-                      if (
-                        !immersiveView &&
-                        !isProgrammaticCenterResize() &&
-                        !isWindowLayoutResizing()
-                      ) {
-                        if (s.inPixels < CENTER_MAXIMIZE_THRESHOLD_PX && !st.editorMaximized) {
-                          st.setEditorMaximized(true);
-                        }
-                        if (s.inPixels >= CENTER_MAXIMIZE_THRESHOLD_PX && st.editorMaximized) {
-                          st.setEditorMaximized(false);
-                        }
-                      }
-                    }}
-                  >
-                    <div className="flex h-full min-w-0 flex-col">
-                      <ContentTopBar
-                        leftSidebarRef={leftSidebarRef}
-                        centerRef={centerRef}
-                        rightAreaRef={rightAreaRef}
-                      />
-                      <div className="min-h-0 flex-1">
-                        <LeftMainArea />
-                      </div>
-                    </div>
-                  </Panel>
-
-                  {/*
-                    Collapsed RightArea: keep `w-0` but do NOT strip the hit fringe
-                    or set pointer-events-none — first edge-drag to open relies on it.
-                    Maximized: hide width only; `disabled` blocks drag (restore via button).
-                  */}
-                  <Separator
-                    id="sep-center-right"
-                    className={cn(
-                      PANEL_SASH_SEPARATOR_CLASS,
-                      rightAreaExpanded &&
-                        !(editorMaximized && !inSettings) &&
-                        SHELL_SASH_SHADOW_LEFT_CLASS,
-                      ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
-                    )}
-                    disabled={
-                      (editorMaximized && !inSettings) ||
-                      (inSettings && settingsDetailStacked)
-                    }
-                  />
-
-                  <Panel
-                    id="right-area"
-                    panelRef={rightAreaRef}
-                    collapsible
-                    collapsedSize={0}
-                    minSize={
-                      inSettings
-                        ? (settingsDetailOpen ? rightAreaMin : 0)
-                        : rightAreaMin
-                    }
-                    defaultSize={0}
-                    groupResizeBehavior="preserve-pixel-size"
-                    onResize={(s) => {
-                      if (isRightAreaToggleAnimating()) return;
-                      const st = useLayoutStore.getState();
-                      const r = rightAreaRef.current;
-                      if (inSettings && !hasOpenSettingsEditor()) {
-                        if (st.settingsDetailStacked) {
-                          st.setSettingsDetailStacked(false);
-                        }
-                        if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
-                          r?.collapse();
-                          commitRightAreaExpandedFromPixels(0);
-                        }
-                        return;
-                      }
-
-                      const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
-
-                      if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
-                        commitRightAreaExpandedFromPixels(s.inPixels);
-                        if (r && !r.isCollapsed()) {
-                          r.collapse();
-                        }
-                        return;
-                      }
-
-                      if (!st.editorMaximized || inSettings) {
-                        if (settingsSlotOpen && !st.settingsDetailStacked) {
-                          setSettingsDetailWidth(Math.min(s.inPixels, RIGHT_AREA_MAX));
-                        } else if (!inSettings) {
-                          setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
-                        }
-                      }
-                      commitRightAreaExpandedFromPixels(s.inPixels);
-                      if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
-                        enforceSettingsSplitLayout(
-                          centerRef.current,
-                          rightAreaRef.current,
-                        );
-                      }
-                    }}
-                  >
-                    <RightArea
-                      leftSidebarRef={leftSidebarRef}
-                      centerRef={centerRef}
-                      rightAreaRef={rightAreaRef}
-                    />
-                  </Panel>
-                </Group>
-                </div>
-              </Panel>
-            </Group>
-
-          </div>
-        ) : (
-          <div className="relative flex h-full flex-col">
-            <LeftSidebarPinnedChrome leftSidebarRef={leftSidebarRef} />
-            <RightAreaPinnedChrome
-              leftSidebarRef={leftSidebarRef}
-              centerRef={centerRef}
-              rightAreaRef={rightAreaRef}
-            />
-            <Group
-              id="main-layout"
-              orientation="horizontal"
-              className="flex-1 min-h-0"
-              resizeTargetMinimumSize={LEFT_SIDEBAR_RESIZE_HIT}
-              disableCursor
-            >
-              <Panel
-                id="left-sidebar"
-                panelRef={leftSidebarRef}
-                collapsible={!inSettings || sidebarUsesOverlay}
-                collapsedSize={0}
-                minSize={SIDEBAR_LEFT_MIN}
-                maxSize={SIDEBAR_LEFT_MAX}
-                className="overflow-hidden"
-                defaultSize={window.innerWidth < SIDEBAR_OVERLAY_THRESHOLD ? 0 : Math.min(useLayoutStore.getState().sidebarWidth, SIDEBAR_LEFT_MAX)}
-                groupResizeBehavior="preserve-pixel-size"
-                onResize={(s) => {
-                  onLeftSidebarPanelResize(s.inPixels);
-                  if (isLeftSidebarToggleAnimating()) return;
-                  const st = useLayoutStore.getState();
-                  if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) setSidebarWidth(s.inPixels);
-                  if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX && st.sidebarExpanded) st.setSidebarExpanded(false);
-                  if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX && !st.sidebarExpanded) st.setSidebarExpanded(true);
-                }}
-              >
-                <LeftSidebar leftSidebarRef={leftSidebarRef} centerRef={centerRef} rightAreaRef={rightAreaRef} />
-              </Panel>
-
-              <Separator
-                id="sep-sidebar"
-                className={cn(
-                  LEFT_SIDEBAR_SASH_SEPARATOR_CLASS,
-                  sidebarExpanded && SHELL_SASH_SHADOW_RIGHT_CLASS,
-                )}
-              />
-
-              <Panel id="main-area" minSize={MAIN_AREA_MIN}>
-                <div className="relative h-full min-w-0" data-surface="content">
-                <StatusDotPinnedChrome leftSidebarRef={leftSidebarRef} />
-                <Group
-                  id="center-right"
-                  orientation="horizontal"
-                  className="h-full"
-                  resizeTargetMinimumSize={PANEL_RESIZE_HIT}
-                  disableCursor
-                >
-                  <Panel
-                    id="center"
-                    panelRef={centerRef}
-                    collapsible={!inSettings || settingsDetailStacked}
-                    collapsedSize={0}
-                    minSize={inSettings && settingsDetailStacked ? 0 : MAIN_AREA_MIN}
-                    className="overflow-hidden"
-                    groupResizeBehavior="preserve-pixel-size"
-                    onResize={(s) => {
-                      if (isRightAreaToggleAnimating()) return;
-                      const st = useLayoutStore.getState();
-                      if (inSettings && !st.settingsDetailStacked) {
-                        enforceSettingsSplitLayout(
-                          centerRef.current,
-                          rightAreaRef.current,
-                        );
-                      }
-                    }}
-                  >
-                    <div className="flex h-full min-w-0 flex-col">
-                      <ContentTopBar
-                        leftSidebarRef={leftSidebarRef}
-                        centerRef={centerRef}
-                        rightAreaRef={rightAreaRef}
-                      />
-                      <div className="min-h-0 flex-1">
-                        <LeftMainArea />
-                      </div>
-                    </div>
-                  </Panel>
-
-                  <Separator
-                    id="sep-center-right"
-                    className={cn(
-                      PANEL_SASH_SEPARATOR_CLASS,
-                      rightAreaExpanded &&
-                        !(editorMaximized && !inSettings) &&
-                        SHELL_SASH_SHADOW_LEFT_CLASS,
-                      ((editorMaximized && !inSettings) || !rightAreaExpanded) && "w-0",
-                    )}
-                    disabled={
-                      (editorMaximized && !inSettings) ||
-                      (inSettings && settingsDetailStacked)
-                    }
-                  />
-
-                  <Panel
-                    id="right-area"
-                    panelRef={rightAreaRef}
-                    collapsible
-                    collapsedSize={0}
-                    minSize={
-                      inSettings
-                        ? (settingsDetailOpen ? rightAreaMin : 0)
-                        : rightAreaMin
-                    }
-                    defaultSize={0}
-                    groupResizeBehavior="preserve-pixel-size"
-                    onResize={(s) => {
-                      if (isRightAreaToggleAnimating()) return;
-                      const st = useLayoutStore.getState();
-                      const r = rightAreaRef.current;
-                      if (inSettings && !hasOpenSettingsEditor()) {
-                        if (st.settingsDetailStacked) {
-                          st.setSettingsDetailStacked(false);
-                        }
-                        if (s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
-                          r?.collapse();
-                          commitRightAreaExpandedFromPixels(0);
-                        }
-                        return;
-                      }
-
-                      const settingsSlotOpen = inSettings && hasOpenSettingsEditor();
-
-                      if (s.inPixels < PANEL_COLLAPSE_THRESHOLD_PX) {
-                        commitRightAreaExpandedFromPixels(s.inPixels);
-                        if (r && !r.isCollapsed()) {
-                          r.collapse();
-                        }
-                        return;
-                      }
-
-                      if (!st.editorMaximized || inSettings) {
-                        if (settingsSlotOpen && !st.settingsDetailStacked) {
-                          setSettingsDetailWidth(Math.min(s.inPixels, RIGHT_AREA_MAX));
-                        } else if (!inSettings) {
-                          setRightAreaWidth(Math.min(Math.max(s.inPixels, RIGHT_AREA_MIN), RIGHT_AREA_MAX));
-                        }
-                      }
-                      commitRightAreaExpandedFromPixels(s.inPixels);
-                      if (inSettings && !st.settingsDetailStacked && s.inPixels >= PANEL_COLLAPSE_THRESHOLD_PX) {
-                        enforceSettingsSplitLayout(
-                          centerRef.current,
-                          rightAreaRef.current,
-                        );
-                      }
-                    }}
-                  >
-                    <RightArea
-                      leftSidebarRef={leftSidebarRef}
-                      centerRef={centerRef}
-                      rightAreaRef={rightAreaRef}
-                    />
-                  </Panel>
-                </Group>
-                </div>
-              </Panel>
-            </Group>
-
-          </div>
-        )}
+        {shell}
       </ThemeProvider>
     </GlobalErrorBoundary>
   );

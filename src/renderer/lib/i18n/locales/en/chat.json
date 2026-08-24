@@ -149,7 +149,21 @@
     "locked": "Worktree mode is locked while the agent is running.",
     "lockedWithLabel": "Worktree mode is locked: {{label}}",
     "commitsBehind": "{{n}} commits behind base",
-    "remove": "Remove {{name}}"
+    "remove": "Remove {{name}}",
+    "noBaseBranch": "Cannot determine base branch — is Git initialized?",
+    "close": "Close Worktree",
+    "closeHint": "Discard worktree and return to the main project",
+    "mergeToBranch": "Merge to Branch",
+    "mergeDesc": "Integrate worktree changes into {{branch}}. The worktree stays open — this is not a remote push.",
+    "noChanges": "No changes to merge",
+    "commitsReady": "{{count}} commits ready to merge into {{branch}}",
+    "filesCount": "{{count}} files",
+    "commitsCount": "{{count}} commits",
+    "merging": "Merging…",
+    "mergeInto": "Merge → {{branch}}",
+    "mergeSuccess": "Merged {{summary}} into {{branch}}",
+    "mergeFailed": "Merge failed: {{error}}",
+    "mergeRolledBack": "Merge rolled back with warnings"
   },
   "branch": {
     "noBranches": "No branches",

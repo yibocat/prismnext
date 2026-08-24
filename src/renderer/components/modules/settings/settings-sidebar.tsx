@@ -1,6 +1,3 @@
-import { createPortal } from "react-dom";
-import type { RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -26,7 +23,6 @@ import {
   TerminalIcon,
   FileTextIcon,
   LayoutGridIcon,
-  XIcon,
   Bot,
   BookOpenIcon,
   ShieldIcon,
@@ -74,21 +70,18 @@ export type SettingsCategory =
 interface SettingsSidebarProps {
   activeCategory: SettingsCategory;
   onSelectCategory: (id: SettingsCategory) => void;
-  leftSidebarRef?: RefObject<PanelImperativeHandle | null>;
 }
 
-export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarRef }: SettingsSidebarProps) {
+export function SettingsSidebar({ activeCategory, onSelectCategory }: SettingsSidebarProps) {
   const { t } = useTranslation();
 
-  const leftSidebarOverlay = useLayoutStore((s) => s.leftSidebarOverlay);
-  const setLeftSidebarOverlay = useLayoutStore((s) => s.setLeftSidebarOverlay);
   const proSettings = useProLicenseStore((s) => s.contributions.settings);
 
-  const sidebarContent = (
+  return (
     <SidebarProvider defaultOpen className="contents">
       <Sidebar collapsible="none" className="relative shrink-0 border-r-0" data-surface="sidebar" data-left-sidebar-slab="">
         <div className="drag-region flex h-[var(--height-titlebar)] shrink-0 items-center px-2 select-none">
-          {leftSidebarRef ? <SidebarHitChrome leftSidebarRef={leftSidebarRef} /> : null}
+          <SidebarHitChrome />
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto px-2 pb-1">
@@ -98,7 +91,6 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
               className={cn(LEFT_SIDEBAR_ROW, "min-w-0 flex-1", LEFT_SIDEBAR_ROW_HOVER)}
               onClick={() => {
                 useLayoutStore.getState().setLeftSidebarView("sessions");
-                setLeftSidebarOverlay(false);
               }}
             >
               <ArrowLeftIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -184,25 +176,5 @@ export function SettingsSidebar({ activeCategory, onSelectCategory, leftSidebarR
         </div>
       </Sidebar>
     </SidebarProvider>
-  );
-
-  return (
-    <>
-      {leftSidebarOverlay &&
-        createPortal(
-          <div className="fixed top-[var(--height-titlebar)] right-0 bottom-0 left-0 z-50 flex flex-col" data-surface="content" data-left-sidebar-overlay="">
-            <div className="flex-1 min-h-0">{sidebarContent}</div>
-            <button
-              type="button"
-              className="absolute top-2 right-2 flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              onClick={() => setLeftSidebarOverlay(false)}
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          </div>,
-          document.body,
-        )}
-      {sidebarContent}
-    </>
   );
 }

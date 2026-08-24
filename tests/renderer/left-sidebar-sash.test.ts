@@ -13,33 +13,23 @@ import {
   LEFT_SIDEBAR_ANIMATING_ATTR,
   LEFT_SIDEBAR_COLLAPSED_ATTR,
   LEFT_SIDEBAR_WIDTH_VAR,
-  commitLeftSidebarChrome,
-  onLeftSidebarPanelResize,
   syncLeftSidebarCollapsedMark,
   syncLeftSidebarWidthVar,
   toggleLeftSidebarPanel,
-  syncSettingsLeftSidebar,
-  watchLeftSidebarResizeChrome,
 } from "../../src/renderer/lib/workspace/left-sidebar-panel";
+import { applyShellWindowLayout, getShellLive } from "../../src/renderer/lib/workspace/shell-layout-controller";
 import { useLayoutStore } from "../../src/renderer/stores/layout-store";
-
-function primaryPointer(type: "pointerdown" | "pointerup" | "pointercancel"): PointerEvent {
-  return new PointerEvent(type, { isPrimary: true, bubbles: true });
-}
 
 describe("left sidebar collapse chrome", () => {
   afterEach(() => {
-    const stop = watchLeftSidebarResizeChrome();
-    window.dispatchEvent(primaryPointer("pointerup"));
-    stop();
     document.documentElement.removeAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR);
     document.documentElement.removeAttribute(LEFT_SIDEBAR_ANIMATING_ATTR);
     document.documentElement.style.removeProperty(LEFT_SIDEBAR_WIDTH_VAR);
     useLayoutStore.setState({
-      sidebarFullyCollapsed: false,
-      sidebarExpanded: true,
       leftSidebarView: "sessions",
-      leftSidebarOverlay: false,
+      leftUserExpanded: true,
+      leftWindowCollapsed: false,
+      leftPinToMin: false,
     });
   });
 
@@ -61,32 +51,9 @@ describe("left sidebar collapse chrome", () => {
   it("marks collapse on the document without flipping the store", () => {
     syncLeftSidebarCollapsedMark(0);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(true);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(false);
+    expect(useLayoutStore.getState().leftUserExpanded).toBe(true);
     syncLeftSidebarCollapsedMark(280);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(false);
-  });
-
-  it("commits the store only when asked", () => {
-    commitLeftSidebarChrome(0);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
-    commitLeftSidebarChrome(280);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(false);
-  });
-
-  it("does not flip the store while the pointer is down, then commits from the mark", () => {
-    const stop = watchLeftSidebarResizeChrome();
-    window.dispatchEvent(primaryPointer("pointerdown"));
-    onLeftSidebarPanelResize(0);
-    expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(true);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(false);
-    window.dispatchEvent(primaryPointer("pointerup"));
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
-    stop();
-  });
-
-  it("commits the store immediately when no gesture is active", () => {
-    onLeftSidebarPanelResize(0);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
   });
 
   it("makes the left sash easier to grab and light up like RightArea", () => {
@@ -94,12 +61,12 @@ describe("left sidebar collapse chrome", () => {
     expect(LEFT_SIDEBAR_SASH_SEPARATOR_CLASS).toContain("hover:bg-border");
     expect(LEFT_SIDEBAR_SASH_SEPARATOR_CLASS).toContain("after:-left-[3px]");
     expect(PANEL_SASH_SEPARATOR_CLASS).toContain("hover:bg-border");
-    const app = readFileSync(
-      join(import.meta.dirname, "../../src/renderer/App.tsx"),
+    const frame = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/components/layout/shell-frame.tsx"),
       "utf-8",
     );
-    expect(app).toContain("resizeTargetMinimumSize={LEFT_SIDEBAR_RESIZE_HIT}");
-    expect(app).toContain("resizeTargetMinimumSize={PANEL_RESIZE_HIT}");
+    expect(frame).toContain("LEFT_SIDEBAR_SASH_SEPARATOR_CLASS");
+    expect(frame).toContain("data-shell-sash");
   });
 
   it("does not turn the unused no-drag class into a window-move hole", () => {
@@ -142,16 +109,13 @@ describe("left sidebar collapse chrome", () => {
       "utf-8",
     );
     expect(topBar).toContain("ContentSidebarSpacer");
-    expect(topBar).toContain("leftSidebarRef");
     expect(topBar).not.toContain("showSidebarControls");
     expect(app).toContain("LeftSidebarPinnedChrome");
     expect(app).toContain("syncLeftSidebarWidthVar");
-    expect(app).toContain("collapsible={!inSettings || sidebarUsesOverlay}");
-    expect(app).toContain("syncSettingsLeftSidebar");
+    expect(app).toContain("ShellFrame");
     expect(chrome).toContain("data-left-sidebar-pinned-chrome");
     expect(chrome).toContain("data-sidebar-hit-chrome");
     expect(chrome).toContain("data-pinned-new-agent");
-    expect(chrome).toContain("hideSidebarToggle");
     expect(shellShortcuts).toContain('leftSidebarView === "settings"');
     expect(shellShortcuts).toContain("toggleMaximizedRightArea");
     expect(modeShortcuts).toContain('leftSidebarView === "settings"');
@@ -159,11 +123,25 @@ describe("left sidebar collapse chrome", () => {
       join(import.meta.dirname, "../../src/renderer/components/layout/left-sidebar.tsx"),
       "utf-8",
     );
+    const frame = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/components/layout/shell-frame.tsx"),
+      "utf-8",
+    );
     expect(sidebar).toContain("data-left-sidebar-slab");
     expect(sidebar).toContain("SidebarHitChrome");
-    expect(sidebar).not.toMatch(/data-surface="sidebar"[^>]*!w-full/);
+    expect(css).toContain("width: 100%");
+    expect(css).not.toContain("margin-left: calc(100% - var(--left-sidebar-width))");
+    expect(css).not.toContain("[data-left-sidebar-overlay]");
+    expect(sidebar).not.toContain("data-left-sidebar-overlay");
+    expect(frame).toContain('id="main-layout"');
+    expect(frame).toContain('id="left-sidebar"');
+    expect(frame).toContain('id="main-area"');
+    expect(frame).toContain("watchShellWindowSize");
+    expect(frame).toContain("beginShellSashSession");
+    expect(frame).not.toContain("new ResizeObserver");
+    expect(app).not.toContain("reconcileRightAreaOnMainAreaResize");
     expect(css).toContain("[data-left-sidebar-animating]");
-    expect(css).toContain("flex-grow");
+    expect(css).toContain("#left-sidebar");
     expect(css).toContain(`${LEFT_SIDEBAR_TOGGLE_MS}ms`);
   });
 
@@ -174,26 +152,18 @@ describe("left sidebar collapse chrome", () => {
       return 1;
     });
     vi.stubGlobal("matchMedia", () => ({ matches: false }));
-    const panel = {
-      isCollapsed: () => false,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 280, asPercentage: 40 }),
-    };
+    vi.stubGlobal("innerWidth", 1200);
     useLayoutStore.setState({
-      leftSidebarOverlay: false,
-      sidebarExpanded: true,
-      sidebarFullyCollapsed: false,
       sidebarWidth: 280,
+      leftUserExpanded: true,
+      leftWindowCollapsed: false,
+      leftSidebarView: "sessions",
     });
-    toggleLeftSidebarPanel({ current: panel });
-    expect(panel.collapse).toHaveBeenCalledTimes(1);
+    toggleLeftSidebarPanel();
+    expect(useLayoutStore.getState().leftUserExpanded).toBe(false);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_ANIMATING_ATTR)).toBe(true);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(true);
     vi.advanceTimersByTime(LEFT_SIDEBAR_TOGGLE_MS);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(true);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_ANIMATING_ATTR)).toBe(false);
     vi.useRealTimers();
@@ -202,116 +172,65 @@ describe("left sidebar collapse chrome", () => {
 
   it("skips the motion when the user prefers reduced motion", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
-    const panel = {
-      isCollapsed: () => false,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 280, asPercentage: 40 }),
-    };
+    vi.stubGlobal("innerWidth", 1200);
     useLayoutStore.setState({
-      leftSidebarOverlay: false,
-      sidebarExpanded: true,
-      sidebarFullyCollapsed: false,
       sidebarWidth: 280,
+      leftUserExpanded: true,
+      leftWindowCollapsed: false,
     });
-    toggleLeftSidebarPanel({ current: panel });
-    expect(panel.collapse).toHaveBeenCalledTimes(1);
+    toggleLeftSidebarPanel();
+    expect(useLayoutStore.getState().leftUserExpanded).toBe(false);
     expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_ANIMATING_ATTR)).toBe(false);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(true);
+    expect(document.documentElement.hasAttribute(LEFT_SIDEBAR_COLLAPSED_ATTR)).toBe(true);
     vi.unstubAllGlobals();
   });
 
-  it("does not collapse the left rail while Settings is open on a wide window", () => {
-    vi.stubGlobal("innerWidth", 1400);
-    const panel = {
-      isCollapsed: () => false,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 280, asPercentage: 40 }),
-    };
+  it("lets Settings use the same fold toggle as the workspace", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    vi.stubGlobal("innerWidth", 1200);
     useLayoutStore.setState({
       leftSidebarView: "settings",
-      leftSidebarOverlay: false,
-      sidebarExpanded: true,
-      sidebarFullyCollapsed: false,
+      leftUserExpanded: true,
       sidebarWidth: 280,
     });
-    toggleLeftSidebarPanel({ current: panel });
-    expect(panel.collapse).not.toHaveBeenCalled();
-    expect(useLayoutStore.getState().sidebarExpanded).toBe(true);
+    toggleLeftSidebarPanel();
+    expect(useLayoutStore.getState().leftUserExpanded).toBe(false);
     vi.unstubAllGlobals();
   });
 
-  it("opens a folded rail when entering Settings on a wide window", () => {
-    vi.stubGlobal("innerWidth", 1400);
-    const panel = {
-      isCollapsed: () => true,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 0, asPercentage: 0 }),
-    };
-    useLayoutStore.setState({
-      leftSidebarView: "settings",
-      leftSidebarOverlay: true,
-      sidebarExpanded: false,
-      sidebarFullyCollapsed: true,
-      sidebarWidth: 320,
-    });
-    syncSettingsLeftSidebar({ current: panel });
-    expect(panel.expand).toHaveBeenCalledTimes(1);
-    expect(panel.resize).toHaveBeenCalledWith(320);
-    expect(useLayoutStore.getState().leftSidebarOverlay).toBe(false);
-    expect(useLayoutStore.getState().sidebarExpanded).toBe(true);
-    expect(useLayoutStore.getState().sidebarFullyCollapsed).toBe(false);
-    vi.unstubAllGlobals();
-  });
-
-  it("shows Settings categories as overlay when the window is too narrow", () => {
+  it("window-folds Left to 0 without overlay when the window is too narrow", () => {
     vi.stubGlobal("innerWidth", 500);
-    const panel = {
-      isCollapsed: () => false,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 280, asPercentage: 40 }),
-    };
     useLayoutStore.setState({
-      leftSidebarView: "settings",
-      leftSidebarOverlay: false,
-      sidebarExpanded: true,
-      sidebarFullyCollapsed: false,
+      leftSidebarView: "sessions",
+      leftUserExpanded: true,
+      leftWindowCollapsed: false,
+      leftPinToMin: false,
       sidebarWidth: 280,
+      rightAreaExpanded: false,
+      editorMaximized: false,
     });
-    syncSettingsLeftSidebar({ current: panel });
-    expect(panel.collapse).toHaveBeenCalledTimes(1);
-    expect(panel.expand).not.toHaveBeenCalled();
-    expect(useLayoutStore.getState().leftSidebarOverlay).toBe(true);
-    expect(useLayoutStore.getState().sidebarExpanded).toBe(false);
+    applyShellWindowLayout({ source: "window" });
+    expect(getShellLive().leftPx).toBe(0);
+    expect(useLayoutStore.getState().leftWindowCollapsed).toBe(true);
+    expect(useLayoutStore.getState().sidebarWidth).toBe(280);
     vi.unstubAllGlobals();
   });
 
-  it("opens the Settings overlay from a collapsed rail on a narrow window", () => {
-    vi.stubGlobal("innerWidth", 500);
-    const panel = {
-      isCollapsed: () => true,
-      collapse: vi.fn(),
-      expand: vi.fn(),
-      resize: vi.fn(),
-      getSize: () => ({ inPixels: 0, asPercentage: 0 }),
-    };
+  it("restores a window-folded Left to 280 and does not write the sash width", () => {
+    vi.stubGlobal("innerWidth", 1100);
     useLayoutStore.setState({
-      leftSidebarView: "settings",
-      leftSidebarOverlay: false,
-      sidebarExpanded: false,
-      sidebarFullyCollapsed: true,
-      sidebarWidth: 280,
+      leftUserExpanded: true,
+      leftWindowCollapsed: true,
+      leftPinToMin: true,
+      sidebarWidth: 400,
+      rightAreaExpanded: false,
+      editorMaximized: false,
     });
-    toggleLeftSidebarPanel({ current: panel });
-    expect(useLayoutStore.getState().leftSidebarOverlay).toBe(true);
-    expect(panel.expand).not.toHaveBeenCalled();
+    applyShellWindowLayout({ source: "window" });
+    expect(getShellLive().leftPx).toBe(280);
+    expect(useLayoutStore.getState().sidebarWidth).toBe(400);
+    expect(useLayoutStore.getState().leftPinToMin).toBe(true);
+    expect(useLayoutStore.getState().leftWindowCollapsed).toBe(false);
     vi.unstubAllGlobals();
   });
 });

@@ -1,5 +1,3 @@
-import { type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useTranslation } from "react-i18next";
 import { useWindowState } from "@/hooks/use-window-state";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -15,13 +13,7 @@ import { WindowControls } from "@/components/layout/window-controls";
 import { listBackgroundPending, usePermissionStore } from "@/stores/permission-store";
 import { lastPathForSession, useWorkbenchStore } from "@/stores/workbench-store";
 
-interface ContentTopBarProps {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef?: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef?: RefObject<PanelImperativeHandle | null>;
-}
-
-export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: ContentTopBarProps) {
+export function ContentTopBar() {
   const { t } = useTranslation();
   const { platform } = useWindowState();
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
@@ -66,7 +58,7 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
     <div className="drag-region flex h-[var(--height-titlebar)] min-w-0 shrink-0 items-center gap-0.5 overflow-hidden px-2 select-none" data-surface="content">
       {/* Pinned overlay owns the buttons; this spacer eases the status dot beside them. */}
       <div className="flex items-center gap-0.5 shrink-0">
-        <ContentSidebarSpacer leftSidebarRef={leftSidebarRef} />
+        <ContentSidebarSpacer />
       </div>
 
       {/* Status dot + open chat tabs (≥2) or single session title */}
@@ -107,13 +99,9 @@ export function ContentTopBar({ leftSidebarRef, centerRef, rightAreaRef }: Conte
 
       {/* Pinned overlay owns the glyphs; this spacer keeps the hit target on the window edge. */}
       <div className="flex items-center gap-0.5 shrink-0">
-        {rightAreaRef && centerRef && !inSettings ? (
+        {!inSettings ? (
           <>
-            <ContentRightAreaSpacer
-              leftSidebarRef={leftSidebarRef}
-              centerRef={centerRef}
-              rightAreaRef={rightAreaRef}
-            />
+            <ContentRightAreaSpacer />
             {!isMac && <div className="mx-1 h-4 w-px bg-border shrink-0" />}
           </>
         ) : null}

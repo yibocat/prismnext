@@ -8,7 +8,6 @@
 import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import { openExperimentsSplit } from "@/lib/workspace/left-nav/panel-utils";
 import { getExperimentProjectRoot } from "./experiments-project-root";
 
@@ -18,8 +17,7 @@ function normalizeRoot(p: string): string {
 
 /** Ensure Experiments is visible in a split RightArea (chat stays visible). */
 function ensureExperimentsPanelChrome(): void {
-  const panelRefs = getLeftNavPanelRefs();
-  openExperimentsSplit({ panelRefs });
+  openExperimentsSplit();
 }
 
 /**

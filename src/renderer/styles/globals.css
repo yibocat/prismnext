@@ -340,6 +340,10 @@ html[data-left-sidebar-collapsed] [data-pinned-new-agent] {
 html[data-left-sidebar-collapsed] [data-sidebar-hit-chrome] [data-pinned-new-agent] {
   pointer-events: auto;
 }
+/* Align spacer must never steal the + hit — hover fill lives under the paint glyph. */
+html[data-left-sidebar-collapsed] [data-pinned-status-dot] [data-pinned-new-agent] {
+  pointer-events: none;
+}
 
 /* Paint overlay on #main-area. Hits stay on the in-flow copy. */
 [data-pinned-status-dot] {
@@ -377,29 +381,28 @@ html[data-right-area-open] [data-right-area-hit-chrome] [data-pinned-right-extra
 }
 
 /*
- * Slab: content stays at --left-sidebar-width (pixels). The panel is only a
- * clip window. Negative margin keeps the slab glued to the sash so it slides
- * left/right instead of reflowing as flex-grow changes.
+ * Slab fills the column. Window squeeze and sash drag share one width, so
+ * labels reflow/truncate. Click toggle keeps the slab at the preferred width
+ * so the column clips it as a sliding board.
  */
 [data-left-sidebar-slab] {
-  width: var(--left-sidebar-width);
-  min-width: var(--left-sidebar-width);
-  max-width: var(--left-sidebar-width);
-  margin-left: calc(100% - var(--left-sidebar-width));
-}
-[data-left-sidebar-overlay] [data-left-sidebar-slab] {
   width: 100%;
   min-width: 0;
   max-width: none;
   margin-left: 0;
 }
+html[data-left-sidebar-animating] [data-left-sidebar-slab] {
+  width: var(--left-sidebar-width);
+  min-width: var(--left-sidebar-width);
+}
 
 /* Click/shortcut toggle only. Sash drag must stay 1:1 with the pointer. */
-html[data-left-sidebar-animating] #main-layout[data-group] > [data-panel] {
-  transition: flex-grow 220ms var(--lsb-toggle-ease);
+html[data-left-sidebar-animating] #left-sidebar {
+  transition: width 220ms var(--lsb-toggle-ease);
 }
-html[data-right-area-animating] #center-right[data-group] > [data-panel] {
-  transition: flex-grow 220ms var(--lsb-toggle-ease);
+html[data-right-area-animating] #right-area,
+html[data-right-area-animating] #center {
+  transition: width 220ms var(--lsb-toggle-ease);
 }
 html[data-left-sidebar-animating] [data-content-sidebar-spacer] {
   transition: width 220ms var(--lsb-toggle-ease);
@@ -420,10 +423,11 @@ html[data-right-area-animating] [data-pinned-right-extra] {
     opacity 220ms var(--lsb-toggle-ease);
 }
 @media (prefers-reduced-motion: reduce) {
-  html[data-left-sidebar-animating] #main-layout[data-group] > [data-panel],
+  html[data-left-sidebar-animating] #left-sidebar,
   html[data-left-sidebar-animating] [data-content-sidebar-spacer],
   html[data-left-sidebar-animating] [data-pinned-new-agent],
-  html[data-right-area-animating] #center-right[data-group] > [data-panel],
+  html[data-right-area-animating] #right-area,
+  html[data-right-area-animating] #center,
   html[data-right-area-animating] [data-content-right-spacer],
   html[data-right-area-animating] [data-pinned-right-extra] {
     transition: none;

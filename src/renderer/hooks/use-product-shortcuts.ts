@@ -7,7 +7,7 @@ import {
 import { cycleChatBackdrop } from "@/lib/chat/home-backdrops/resolve";
 import { cycleThemePack } from "@/lib/theme/theme-packs";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
+import { leaveRightAreaMaximize } from "@/lib/workspace/right-area-layout";
 import { compileCurrentDocument } from "@/stores/compile-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
@@ -156,7 +156,7 @@ export function useProductShortcuts() {
         }
         const layout = useLayoutStore.getState();
         layout.setLeftSidebarView("sessions");
-        layout.requestCenterExpand();
+        if (layout.editorMaximized) leaveRightAreaMaximize();
         requestAnimationFrame(() => {
           useComposerEditorStore.getState().handle?.focus();
         });
@@ -165,7 +165,7 @@ export function useProductShortcuts() {
 
       if (matchesShortcut("product.newChat", e)) {
         e.preventDefault();
-        pressLeftNav("new-agent", { panelRefs: getLeftNavPanelRefs() });
+        pressLeftNav("new-agent");
         return;
       }
 

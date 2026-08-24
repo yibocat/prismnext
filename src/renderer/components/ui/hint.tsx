@@ -46,7 +46,7 @@ export function Hint({
           composeRefs(setTrigger) on the same node twice. React 19 then
           detach(null)/attach(node) in a loop.
         */}
-        <span className="inline-flex max-w-full">{children}</span>
+        <span className="inline-flex max-w-full items-center justify-center">{children}</span>
       </TooltipTrigger>
       <TooltipContent side={side} className={cn(contentClassName)}>
         <span className="inline-flex items-center gap-2">

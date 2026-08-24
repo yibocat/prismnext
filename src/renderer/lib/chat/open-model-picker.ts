@@ -31,7 +31,6 @@ function ensureComposerReady(): void {
     layout.requestAiBarComposerFocus();
   } else {
     layout.setLeftSidebarView("sessions");
-    layout.requestCenterExpand();
     useComposerEditorStore.getState().handle?.focus();
   }
 }

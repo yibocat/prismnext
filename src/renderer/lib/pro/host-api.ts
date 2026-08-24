@@ -93,7 +93,6 @@ export function createProHostAPI(options: {
       const layout = useLayoutStore.getState();
       layout.setLeftSidebarView("settings");
       layout.setSettingsCategory(id);
-      layout.setLeftSidebarOverlay(false);
     },
 
     notify({ title, description, tone = "info" }) {

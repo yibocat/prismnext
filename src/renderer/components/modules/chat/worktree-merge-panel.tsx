@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Loader2Icon, AlertTriangleIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
@@ -20,6 +21,7 @@ interface WorktreeMergePanelProps {
 }
 
 export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
+  const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const resolvedWorktree = useResolvedWorktree({ refreshOnMount: true });
 
@@ -73,35 +75,37 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
         }
       }
       await syncAfterWorktreeMerge(projectRoot, worktreeRoot, resolvedWorktree.name);
-      toast.success(`Merged ${result.changeSummary} into ${baseBranch}`);
+      toast.success(t("chat.worktree.mergeSuccess", {
+        summary: result.changeSummary,
+        branch: baseBranch,
+      }));
       onClose();
     } else {
-      setError(result.error || "Merge failed");
+      setError(result.error || t("git.toast.mergeFailed"));
       if (result.rollbackWarnings?.length) {
-        toast.warning("Merge rolled back with warnings", {
+        toast.warning(t("chat.worktree.mergeRolledBack"), {
           description: result.rollbackWarnings.join(" "),
           duration: 10000,
         });
       }
-      toast.error(`Merge failed: ${result.error}`);
+      toast.error(t("chat.worktree.mergeFailed", { error: result.error }));
     }
 
     setMerging(false);
-  }, [worktreeRoot, projectRoot, files, baseBranch, resolvedWorktree, onClose, canMerge, aheadCount]);
+  }, [worktreeRoot, projectRoot, files, baseBranch, resolvedWorktree, onClose, canMerge, aheadCount, t]);
 
   return (
     <div className="p-3 space-y-3">
       <div className="px-1">
-        <p className="text-xs font-medium text-foreground">Merge to Branch</p>
+        <p className="text-xs font-medium text-foreground">{t("chat.worktree.mergeToBranch")}</p>
         <p className="text-[length:var(--font-hint)] text-muted-foreground mt-0.5">
-          Integrate worktree changes into <code className="text-xs bg-muted px-1 rounded">{baseBranch}</code>.
-          The worktree stays open — this is not a remote push.
+          {t("chat.worktree.mergeDesc", { branch: baseBranch })}
         </p>
       </div>
 
       {!canMerge ? (
         <p className="text-xs text-muted-foreground text-center py-4">
-          No changes to merge
+          {t("chat.worktree.noChanges")}
         </p>
       ) : (
         <>
@@ -129,7 +133,7 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground px-1">
-              {aheadCount} commit{aheadCount !== 1 ? "s" : ""} ready to merge into {baseBranch}
+              {t("chat.worktree.commitsReady", { count: aheadCount, branch: baseBranch })}
             </p>
           )}
 
@@ -153,8 +157,8 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs text-muted-foreground">
               {files.length > 0
-                ? `${files.length} file${files.length !== 1 ? "s" : ""}`
-                : `${aheadCount} commit${aheadCount !== 1 ? "s" : ""}`}
+                ? t("chat.worktree.filesCount", { count: files.length })
+                : t("chat.worktree.commitsCount", { count: aheadCount })}
             </span>
             <button
               type="button"
@@ -168,10 +172,10 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
               {merging ? (
                 <>
                   <Loader2Icon className="size-3 animate-spin" />
-                  Merging…
+                  {t("chat.worktree.merging")}
                 </>
               ) : (
-                `Merge → ${baseBranch}`
+                t("chat.worktree.mergeInto", { branch: baseBranch })
               )}
             </button>
           </div>

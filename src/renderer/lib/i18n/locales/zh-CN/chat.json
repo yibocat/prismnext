@@ -149,7 +149,21 @@
     "locked": "Agent 运行中时无法切换 worktree。",
     "lockedWithLabel": "Worktree 已锁定：{{label}}",
     "commitsBehind": "落后基线 {{n}} 个提交",
-    "remove": "移除 {{name}}"
+    "remove": "移除 {{name}}",
+    "noBaseBranch": "无法确定基线分支 — Git 是否已初始化？",
+    "close": "关闭 Worktree",
+    "closeHint": "丢弃 worktree 并回到主项目",
+    "mergeToBranch": "合并到分支",
+    "mergeDesc": "将 worktree 的更改并入 {{branch}}。Worktree 会保留，这不是远程推送。",
+    "noChanges": "没有可合并的更改",
+    "commitsReady": "{{count}} 个提交可合并到 {{branch}}",
+    "filesCount": "{{count}} 个文件",
+    "commitsCount": "{{count}} 个提交",
+    "merging": "正在合并…",
+    "mergeInto": "合并 → {{branch}}",
+    "mergeSuccess": "已将 {{summary}} 合并到 {{branch}}",
+    "mergeFailed": "合并失败：{{error}}",
+    "mergeRolledBack": "合并已回滚，并带有警告"
   },
   "branch": {
     "noBranches": "无分支",

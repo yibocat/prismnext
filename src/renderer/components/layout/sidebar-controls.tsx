@@ -1,5 +1,4 @@
-import { useLayoutEffect, type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useLayoutEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -17,13 +16,13 @@ import {
 } from "lucide-react";
 import { ServerStatusDot } from "@/components/server-status-dot";
 import { toggleLeftSidebarPanel } from "@/lib/workspace/left-sidebar-panel";
+import { isShellLeftOpen, useShellLive } from "@/lib/workspace/shell-layout-controller";
 import {
   toggleRightArea,
   toggleRightAreaMaximize,
 } from "@/lib/workspace/right-area-layout";
 
 interface SidebarControlsProps {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
   showMacSpacer?: boolean;
   className?: string;
   /** paint = glyphs only; hit = hover/selected fills (icons hidden in CSS). */
@@ -31,19 +30,15 @@ interface SidebarControlsProps {
 }
 
 const CHROME_BTN =
-  "flex size-6 items-center justify-center rounded text-muted-foreground transition-[color]";
+  "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-[color]";
 
 export function SidebarControls({
-  leftSidebarRef,
   showMacSpacer,
   className,
   layer = "hit",
 }: SidebarControlsProps) {
   const { t } = useTranslation();
-  const sidebarExpanded = useLayoutStore((s) => s.sidebarExpanded);
-  const hideSidebarToggle = useLayoutStore(
-    (s) => s.leftSidebarView === "settings" && s.sidebarExpanded && !s.leftSidebarOverlay,
-  );
+  const leftOpen = isShellLeftOpen(useShellLive());
   const setCommandPaletteOpen = useLayoutStore((s) => s.setCommandPaletteOpen);
   const newSession = useChatStore((s) => s.newSession);
   const paint = layer === "paint";
@@ -53,26 +48,24 @@ export function SidebarControls({
       <div className="flex items-center gap-1">
         {showMacSpacer && <div className="pointer-events-none w-[68px]" />}
 
-        {!hideSidebarToggle && (
-          <Hint shortcutId="shell.toggleLeftSidebar">
-            <button
-              type="button"
-              className={cn(
-                CHROME_BTN,
-                paint
-                  ? "bg-transparent"
-                  : cn(
-                      "hover:bg-accent hover:text-accent-foreground",
-                      sidebarExpanded && "bg-muted text-foreground",
-                    ),
-              )}
-              onClick={() => toggleLeftSidebarPanel(leftSidebarRef)}
-              tabIndex={paint ? -1 : undefined}
-            >
-              <PanelLeft className="size-3.5" />
-            </button>
-          </Hint>
-        )}
+        <Hint shortcutId="shell.toggleLeftSidebar">
+          <button
+            type="button"
+            className={cn(
+              CHROME_BTN,
+              paint
+                ? "bg-transparent"
+                : cn(
+                    "hover:bg-accent hover:text-accent-foreground",
+                    leftOpen && "bg-muted text-foreground",
+                  ),
+            )}
+            onClick={() => toggleLeftSidebarPanel()}
+            tabIndex={paint ? -1 : undefined}
+          >
+            <PanelLeft className="size-3.5" />
+          </button>
+        </Hint>
 
         <Hint shortcutId="shell.commandPalette">
           <button
@@ -115,11 +108,7 @@ export function SidebarControls({
  * Do not mount this only when RightArea is maximized: that unmounts
  * ContentTopBar and creates a new glyph in the same commit — the vertical jump.
  */
-export function StatusDotPinnedChrome({
-  leftSidebarRef,
-}: {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-}) {
+export function StatusDotPinnedChrome() {
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   if (leftSidebarView === "settings") return null;
 
@@ -129,8 +118,10 @@ export function StatusDotPinnedChrome({
       className="pointer-events-none absolute left-0 top-0 z-30 flex h-[var(--height-titlebar)] items-center gap-0.5 px-2"
       aria-hidden
     >
-      <ContentSidebarSpacer leftSidebarRef={leftSidebarRef} />
-      <div className="ml-0.5">
+      {/* Width only — do not mount hit chrome here. That copy was
+          re-enabling pointer-events on + and painting hover without a glyph. */}
+      <div data-content-sidebar-spacer="" />
+      <div className="ml-0.5 flex size-5 items-center justify-center">
         <ServerStatusDot layer="paint" />
       </div>
     </div>
@@ -138,11 +129,7 @@ export function StatusDotPinnedChrome({
 }
 
 /** Window-fixed cluster: traffic-light gap + toggle + search (+ appears on collapse). */
-export function LeftSidebarPinnedChrome({
-  leftSidebarRef,
-}: {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-}) {
+export function LeftSidebarPinnedChrome() {
   const { platform, isFullscreen } = useWindowState();
   const showMacSpacer = platform === "darwin" && !isFullscreen;
 
@@ -156,17 +143,15 @@ export function LeftSidebarPinnedChrome({
       className="pointer-events-none absolute left-0 top-0 z-30 flex h-[var(--height-titlebar)] items-center px-2"
       aria-hidden
     >
-      <SidebarControls leftSidebarRef={leftSidebarRef} showMacSpacer={showMacSpacer} layer="paint" />
+      <SidebarControls showMacSpacer={showMacSpacer} layer="paint" />
     </div>
   );
 }
 
 /** Invisible hit targets inside a title-bar drag-region. */
 export function SidebarHitChrome({
-  leftSidebarRef,
   className,
 }: {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
   className?: string;
 }) {
   const { platform, isFullscreen } = useWindowState();
@@ -174,7 +159,6 @@ export function SidebarHitChrome({
   return (
     <div data-sidebar-hit-chrome="">
       <SidebarControls
-        leftSidebarRef={leftSidebarRef}
         showMacSpacer={showMacSpacer}
         className={className}
       />
@@ -186,42 +170,24 @@ export function SidebarHitChrome({
  * Invisible hit targets inside a title-bar drag-region.
  * Electron only honors no-drag on descendants of drag — the paint overlay cannot receive clicks.
  */
-export function ContentSidebarSpacer({
-  leftSidebarRef,
-}: {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-}) {
+export function ContentSidebarSpacer() {
   return (
     <div data-content-sidebar-spacer="">
-      <SidebarHitChrome leftSidebarRef={leftSidebarRef} className="-ml-px" />
+      <SidebarHitChrome className="-ml-px" />
     </div>
   );
 }
 
-type RightAreaChromeRefs = {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-};
-
 function RightAreaChromeControls({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
   layer = "hit",
-}: RightAreaChromeRefs & { layer?: "paint" | "hit" }) {
+}: { layer?: "paint" | "hit" }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
   const paint = layer === "paint";
 
-  const layoutCtx = () => ({
-    centerRef: centerRef?.current,
-    rightAreaRef: rightAreaRef?.current,
-    leftSidebarRef: leftSidebarRef.current,
-    isMobile,
-  });
+  const layoutCtx = () => ({ isMobile });
 
   return (
     <div className="flex items-center">
@@ -269,11 +235,7 @@ function RightAreaChromeControls({
 }
 
 /** Window-fixed cluster: toggle stays put; maximize eases in when open. */
-export function RightAreaPinnedChrome({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
-}: RightAreaChromeRefs) {
+export function RightAreaPinnedChrome() {
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
 
   if (leftSidebarView === "settings") return null;
@@ -284,29 +246,16 @@ export function RightAreaPinnedChrome({
       className="pointer-events-none absolute right-0 top-0 z-30 flex h-[var(--height-titlebar)] items-center px-2"
       aria-hidden
     >
-      <RightAreaChromeControls
-        leftSidebarRef={leftSidebarRef}
-        centerRef={centerRef}
-        rightAreaRef={rightAreaRef}
-        layer="paint"
-      />
+      <RightAreaChromeControls layer="paint" />
     </div>
   );
 }
 
 /** Invisible hit targets inside a title-bar drag-region. */
-export function RightAreaHitChrome({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
-}: RightAreaChromeRefs) {
+export function RightAreaHitChrome() {
   return (
     <div data-right-area-hit-chrome="" className="shrink-0">
-      <RightAreaChromeControls
-        leftSidebarRef={leftSidebarRef}
-        centerRef={centerRef}
-        rightAreaRef={rightAreaRef}
-      />
+      <RightAreaChromeControls />
     </div>
   );
 }
@@ -315,18 +264,10 @@ export function RightAreaHitChrome({
  * Content top-bar reservation for the pinned toggle.
  * Collapses when RightArea is open so the cluster lives on the window edge.
  */
-export function ContentRightAreaSpacer({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
-}: RightAreaChromeRefs) {
+export function ContentRightAreaSpacer() {
   return (
     <div data-content-right-spacer="">
-      <RightAreaHitChrome
-        leftSidebarRef={leftSidebarRef}
-        centerRef={centerRef}
-        rightAreaRef={rightAreaRef}
-      />
+      <RightAreaHitChrome />
     </div>
   );
 }

@@ -48,7 +48,6 @@ import {
 import { COMPOSER_TOOLBAR_TRIGGER } from "../worktree-selector";
 import { useLayoutStore } from "@/stores/layout-store";
 import { pressLeftNav } from "@/lib/workspace/left-nav";
-import { getLeftNavPanelRefs } from "@/lib/workspace/left-nav/panel-refs";
 import {
   MODEL_PICKER_EVENT,
   setModelPickerOpenState,
@@ -899,7 +898,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
                   e.stopPropagation();
                   setMenuOpen(false);
                   useLayoutStore.getState().setSettingsCategory("models");
-                  pressLeftNav("settings", { panelRefs: getLeftNavPanelRefs() });
+                  pressLeftNav("settings");
                 }}
               >
                 <Settings2Icon className="size-3.5" />

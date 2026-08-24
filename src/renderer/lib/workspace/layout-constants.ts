@@ -31,9 +31,9 @@ const PANEL_SASH_BASE = `w-px transition-colors outline-none cursor-col-resize s
 const LEFT_SIDEBAR_SASH_BASE = `w-px transition-colors outline-none cursor-col-resize shrink-0 relative z-20 ${LEFT_SIDEBAR_SASH_HIT_FRINGE}`;
 
 /**
- * App shell + WorkspaceSplit panel sash (react-resizable-panels Separator).
- * Groups should set `disableCursor` so the library does not inject `ew-resize !important`
- * (that fought CSS `col-resize` and made the cursor flicker / feel like a second handle).
+ * Shared 1px sash chrome: custom `ShellSash` and WorkspaceSplit's RRP Separator.
+ * WorkspaceSplit groups should set `disableCursor` so the library does not inject
+ * `ew-resize !important` (that fought CSS `col-resize`).
  */
 export const PANEL_SASH_SEPARATOR_CLASS = `${PANEL_SASH_BASE} bg-[var(--shell-edge-line)] ${PANEL_SASH_HOVER}`;
 
@@ -49,22 +49,11 @@ export const SHELL_SASH_SHADOW_RIGHT_CLASS = "shell-sash-shadow-right";
 /** Drop shadow on a sash toward the center pane (RightArea open). */
 export const SHELL_SASH_SHADOW_LEFT_CLASS = "shell-sash-shadow-left";
 
-/**
- * Fully non-interactive sash (no hit fringe).
- * Do NOT use on the shell center↔RightArea sash when RightArea is merely
- * collapsed — first edge-drag-to-open needs the `after` fringe (`w-0` only).
- */
-export const PANEL_SASH_HIDDEN_CLASS =
-  "w-0 after:hidden pointer-events-none";
-
 /** WorkspaceSplit right pane below this % is treated as collapsed (drag-to-close). */
 export const WORKSPACE_SPLIT_COLLAPSE_PERCENT = 8;
 
 /** WorkspaceSplit right pane above this % re-opens after drag (hysteresis). */
 export const WORKSPACE_SPLIT_EXPAND_PERCENT = 12;
-
-/** Center panel below this width triggers chat-first maximize (user drag only). */
-export const CENTER_MAXIMIZE_THRESHOLD_PX = 20;
 
 /** Left sidebar treated as fully collapsed at or below this width. */
 export const SIDEBAR_FULLY_COLLAPSED_PX = 0.5;
@@ -74,12 +63,3 @@ export const LEFT_SIDEBAR_TOGGLE_MS = 220;
 
 /** Same curve as the left sidebar — programmatic RightArea open/close only. */
 export const RIGHT_AREA_TOGGLE_MS = LEFT_SIDEBAR_TOGGLE_MS;
-
-/**
- * Imperative resize sentinel — fill remaining space in the panel group.
- * react-resizable-panels treats large values as "take all remaining space".
- */
-export const RESIZE_FILL_PX = 9999;
-
-/** Margin below canSplit min-sum so narrow-collapse trips slightly early. */
-export const SPLIT_MARGIN_PX = 40;

@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, useCallback, useMemo, type RefObject } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { type PanelImperativeHandle } from "react-resizable-panels";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useDocumentStore } from "@/stores/document-store";
@@ -44,7 +43,6 @@ import {
 } from "@/lib/workspace/right-area-sidebar-layout";
 import { SIDEBAR_RIGHT_MIN } from "@/styles/constants";
 import { PANEL_COLLAPSE_THRESHOLD_PX, MODE_SIDEBAR_SASH_CLASS, SHELL_SASH_SHADOW_LEFT_CLASS } from "@/lib/workspace/layout-constants";
-import { closeRightArea } from "@/lib/workspace/right-area-layout";
 import {
   AppMenu,
   AppMenuContent,
@@ -60,11 +58,6 @@ import {
 import { settingsPanelSlotTitle } from "@/lib/settings/settings-panel-slots";
 import { closeSettingsDetailPanel } from "@/lib/workspace/expand-settings-detail-panel";
 
-interface RightAreaProps {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-}
 
 const TITLEBAR_BTN =
   "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-[color]";
@@ -129,25 +122,11 @@ function SidebarDragHandle({
   );
 }
 
-export function RightArea({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
-}: RightAreaProps) {
-  return (
-    <RightAreaWorkspace
-      leftSidebarRef={leftSidebarRef}
-      centerRef={centerRef}
-      rightAreaRef={rightAreaRef}
-    />
-  );
+export function RightArea() {
+  return <RightAreaWorkspace />;
 }
 
-function RightAreaWorkspace({
-  leftSidebarRef,
-  centerRef,
-  rightAreaRef,
-}: RightAreaProps) {
+function RightAreaWorkspace() {
   const { t } = useTranslation();
   const { platform } = useWindowState();
   const isMac = platform === "darwin";
@@ -182,14 +161,14 @@ function RightAreaWorkspace({
     if (!inSettings) return;
     if (prevCategoryRef.current === settingsCategory) return;
     prevCategoryRef.current = settingsCategory;
-    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
-  }, [inSettings, settingsCategory, centerRef, rightAreaRef]);
+    closeSettingsDetailPanel();
+  }, [inSettings, settingsCategory]);
 
   // Last settings editor tab closed → collapse RightArea (no empty-state pane).
   useEffect(() => {
     if (!inSettings || hasSettingsEditorTab) return;
-    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
-  }, [inSettings, hasSettingsEditorTab, centerRef, rightAreaRef]);
+    closeSettingsDetailPanel();
+  }, [inSettings, hasSettingsEditorTab]);
 
   const tabs = useRightPanelStore((s) => s.tabs);
   const activeTabId = useRightPanelStore((s) => s.activeTabId);
@@ -217,7 +196,7 @@ function RightAreaWorkspace({
     !modeRegistry.get(focusedMode)?.hideRightSidebar;
 
   const closeSettingsPanel = () => {
-    closeSettingsDetailPanel(centerRef.current, rightAreaRef.current);
+    closeSettingsDetailPanel();
   };
 
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -531,7 +510,7 @@ function RightAreaWorkspace({
           data-surface="content"
         >
           <div className="flex items-center gap-0.5 shrink-0">
-            <ContentSidebarSpacer leftSidebarRef={leftSidebarRef} />
+            <ContentSidebarSpacer />
           </div>
           <div className="flex items-center min-w-0 gap-1 ml-0.5 shrink-0">
             <Hint label={t("shell.rightArea.backToSettings")}>
@@ -558,7 +537,7 @@ function RightAreaWorkspace({
       {/* Toolbar */}
       <div ref={toolbarRef} className="drag-region flex h-[var(--height-titlebar)] min-w-0 shrink-0 items-center justify-end gap-0.5 overflow-hidden select-none px-2">
         <div className="flex items-center gap-0.5 shrink-0">
-        {editorMaximized ? <ContentSidebarSpacer leftSidebarRef={leftSidebarRef} /> : null}
+        {editorMaximized ? <ContentSidebarSpacer /> : null}
         {/* Status dot — visible when ContentTopBar is hidden (editor maximized) */}
         {editorMaximized && (
           <div className="flex items-center ml-0.5" data-status-dot-hit="">
@@ -570,13 +549,7 @@ function RightAreaWorkspace({
         {/* + sits immediately left of the tabs. Maximize / fold stay in RightAreaHitChrome. */}
         <div className="no-drag flex min-w-0 flex-1 items-center justify-end gap-0.5 self-stretch">
           {!inSettings ? (
-            <RightAreaAddMenu
-              surface="workspace"
-              centerRef={centerRef}
-              rightAreaRef={rightAreaRef}
-              leftSidebarRef={leftSidebarRef}
-              isMobile={isMobile}
-            />
+            <RightAreaAddMenu surface="workspace" isMobile={isMobile} />
           ) : null}
           {!compactChrome ? (
             <div className="min-w-0 max-w-full overflow-hidden self-stretch">
@@ -638,11 +611,7 @@ function RightAreaWorkspace({
 
         <div className="flex items-center gap-0.5 shrink-0">
         {!inSettings ? (
-          <RightAreaHitChrome
-            leftSidebarRef={leftSidebarRef}
-            centerRef={centerRef}
-            rightAreaRef={rightAreaRef}
-          />
+          <RightAreaHitChrome />
         ) : (
           <Hint label={t("shell.rightArea.closePanel")} shortcutId="shell.toggleRightArea">
             <button
@@ -652,10 +621,7 @@ function RightAreaWorkspace({
                 rightAreaExpanded && "bg-muted text-foreground",
               )}
               onClick={() => {
-                closeRightArea({
-                  centerRef: centerRef.current,
-                  rightAreaRef: rightAreaRef.current,
-                });
+                closeSettingsDetailPanel();
               }}
             >
               <PanelRight className="size-3.5" />

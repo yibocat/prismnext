@@ -140,7 +140,7 @@
     "chatHomeBackdrop": "Chat Background",
     "chatHomeBackdropDesc": "Decorative backdrop behind the chat column (homepage and conversations).",
     "chatHomeBackdropStyle": "Background Style",
-    "chatHomeBackdropStyleDesc": "Default follows each color theme; pick a style to override.",
+    "chatHomeBackdropStyleDesc": "Default is paper planes. You can pick another style.",
     "chatHomeBackdropDefault": "Default",
     "chatHomeBackdropAcademic": "Academic watermark",
     "chatHomeBackdropOrigami": "Scribbles",

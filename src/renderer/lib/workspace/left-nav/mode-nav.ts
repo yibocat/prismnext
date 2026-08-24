@@ -46,11 +46,11 @@ export function leftNavFromWorkspaceMode(
       if (useLayoutStore.getState().leftSidebarView !== "sessions") return false;
       return isWorkspaceModeOpen(mode.id);
     },
-    activate: (ctx) => {
-      focusModeInRightArea(mode.id, ctx, { maximize: true });
+    activate: () => {
+      focusModeInRightArea(mode.id, { maximize: true });
     },
-    onToggleOff: (ctx) => {
-      dismissModeFromRightArea(mode.id, ctx, () => {
+    onToggleOff: () => {
+      dismissModeFromRightArea(mode.id, () => {
         useLayoutStore.getState().setLeftSidebarView("sessions");
       });
     },

@@ -88,7 +88,6 @@ function ManuscriptSection() {
 
   const openTemplateCenter = () => {
     useLayoutStore.getState().setLeftSidebarView("templates");
-    useLayoutStore.getState().setLeftSidebarOverlay(false);
   };
 
   if (!projectRoot) {

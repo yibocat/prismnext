@@ -39,15 +39,9 @@ export const SIDEBAR_RIGHT_MAX = 520;
 /** Center main area (editor + chat) — narrow enough for side-by-side, wide enough for code */
 export const MAIN_AREA_MIN = 400;
 
-/**
- * Window width below which left sidebar uses fullscreen overlay instead of an
- * inline panel. Must be ≥ SIDEBAR_LEFT_MIN + MAIN_AREA_MIN — otherwise expand()
- * asks the panel group for more width than exists and the shell layout collapses.
- */
-export const SIDEBAR_OVERLAY_THRESHOLD = SIDEBAR_LEFT_MIN + MAIN_AREA_MIN;
-
 export const RIGHT_AREA_DEFAULT = 500;
 export const RIGHT_AREA_MIN = 280;
+/** Remembered split width only. Live sash may exceed this to exhaust Content. */
 export const RIGHT_AREA_MAX = 1100;
 
 // ─── Z-Index ───

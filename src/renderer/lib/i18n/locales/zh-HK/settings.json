@@ -140,7 +140,7 @@
     "chatHomeBackdrop": "聊天背景",
     "chatHomeBackdropDesc": "聊天欄背後的裝飾背景（空首頁與對話中均顯示）。",
     "chatHomeBackdropStyle": "背景樣式",
-    "chatHomeBackdropStyleDesc": "預設會跟隨各顏色主題；也可手動指定樣式。",
+    "chatHomeBackdropStyleDesc": "預設是紙飛機，也可以指定其他樣式。",
     "chatHomeBackdropDefault": "預設",
     "chatHomeBackdropAcademic": "學術水印",
     "chatHomeBackdropOrigami": "隨意塗畫",

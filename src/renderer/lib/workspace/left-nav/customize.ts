@@ -1,5 +1,5 @@
 import { leftNavRegistry } from "./registry";
-import type { LeftNavContext, LeftNavDefinition } from "./types";
+import type { LeftNavDefinition } from "./types";
 
 export type LeftNavLayoutPrefs = {
   hiddenIds: string[];
@@ -140,11 +140,11 @@ export function moveLeftNavOrder(order: readonly string[], from: number, to: num
 }
 
 /** Close a module that was just hidden while it is still the active view. */
-export function deactivateHiddenLeftNav(hiddenIds: readonly string[], ctx: LeftNavContext): void {
+export function deactivateHiddenLeftNav(hiddenIds: readonly string[]): void {
   for (const id of hiddenIds) {
     const def = leftNavRegistry.get(id);
     if (!def || isLeftNavRequired(def) || !def.isActive()) continue;
-    if (def.onToggleOff) def.onToggleOff(ctx);
-    else def.deactivate?.(ctx);
+    if (def.onToggleOff) def.onToggleOff();
+    else def.deactivate?.();
   }
 }
