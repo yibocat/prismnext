@@ -32,8 +32,11 @@ import {
   GitChangeLineCounts,
   gitChangeRowTextClass,
   gitPanelListBodyClass,
+  gitPanelListHeaderClass,
   gitPanelListHeaderShellClass,
 } from "./git-change-row-chrome";
+import { GitChangesFilterDropdown } from "./git-changes-filter-dropdown";
+import { branchRangeRev } from "@shared/git";
 import {
   commitSubjectLine,
   formatRelativeTime,
@@ -45,11 +48,13 @@ import {
 interface GitCommitDetailProps {
   gitRoot: string;
   commit: GitCommitData;
+  onBack?: () => void;
 }
 
-export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
+export function GitCommitDetail({ gitRoot, commit, onBack }: GitCommitDetailProps) {
   const { t } = useTranslation();
   const clearSelectedCommit = useGitStore((s) => s.clearSelectedCommit);
+  const handleBack = onBack ?? clearSelectedCommit;
   const expandedCommitFilePaths = useGitStore((s) => s.expandedCommitFilePaths);
   const expandedSet = useMemo(
     () => new Set(expandedCommitFilePaths),
@@ -124,7 +129,7 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
           <button
             type="button"
             className="size-4 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
-            onClick={clearSelectedCommit}
+            onClick={handleBack}
           >
             <ArrowLeftIcon className="size-3" />
           </button>
@@ -421,6 +426,70 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+export function GitBranchChangesDetail({
+  gitRoot,
+  baseBranch,
+}: {
+  gitRoot: string;
+  baseBranch: string;
+}) {
+  const { t } = useTranslation();
+  const expandedCommitFilePaths = useGitStore((s) => s.expandedCommitFilePaths);
+  const expandedSet = useMemo(
+    () => new Set(expandedCommitFilePaths),
+    [expandedCommitFilePaths],
+  );
+  const rangeRev = branchRangeRev(baseBranch);
+  const [statFiles, setStatFiles] = useState<CommitFile[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setStatFiles(null);
+    gitDesktop
+      .gitCommitFiles(gitRoot, rangeRev)
+      .then((files) => setStatFiles(files))
+      .catch(() => setStatFiles(null))
+      .finally(() => setLoading(false));
+  }, [gitRoot, rangeRev]);
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className={gitPanelListHeaderClass}>
+        <GitChangesFilterDropdown fileCount={statFiles?.length ?? 0} />
+      </div>
+      <div
+        className="flex flex-col flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overflow-anchor-none"
+        data-git-commit-scroll
+      >
+        {loading ? (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <Loader2Icon className="size-4 animate-spin text-muted-foreground/30" />
+          </div>
+        ) : statFiles && statFiles.length > 0 ? (
+          <div className={gitPanelListBodyClass}>
+            {statFiles.map((file) => (
+              <GitCommitFileRow
+                key={file.path}
+                gitRoot={gitRoot}
+                commitHash={rangeRev}
+                file={file}
+                isExpanded={expandedSet.has(file.path)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
+              {t("git.filter.branchChangesEmpty")}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

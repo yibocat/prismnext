@@ -1,3 +1,5 @@
+import type { GitChangesLens } from "@shared/git";
+import { normalizeGitRelPath } from "@shared/git";
 import type { ProjectFile } from "@/stores/document-store";
 import type { GitFileItem, GitFilterMode } from "@/stores/git-store";
 import {
@@ -44,6 +46,17 @@ export function gitFilterModeLineCounts(
     staged: sumGitLineCounts(filterGitFilesByMode(files, "staged")),
     unstaged: sumGitLineCounts(filterGitFilesByMode(files, "unstaged")),
   };
+}
+
+export function filterGitFilesByLens(
+  files: GitFileItem[],
+  lens: GitChangesLens,
+  agentPaths?: ReadonlySet<string>,
+): GitFileItem[] {
+  if (lens.kind === "working") return filterGitFilesByMode(files, lens.mode);
+  if (lens.kind === "commit" || lens.kind === "branch-changes") return [];
+  const paths = agentPaths ?? new Set<string>();
+  return files.filter((file) => paths.has(normalizeGitRelPath(file.path)));
 }
 
 export function gitFilesToTreeInputs(files: GitFileItem[]): {

@@ -130,8 +130,20 @@ export function registerGitHandlers(): void {
   // ── git:log ──
   ipcMain.handle(
     "git:log",
-    async (_event, args: { projectRoot: string; maxCount?: number }) => {
-      return gitService.getLog(args.projectRoot, args.maxCount);
+    async (
+      _event,
+      args: {
+        projectRoot: string;
+        maxCount?: number;
+        range?: "head" | "branch";
+        baseBranch?: string;
+      },
+    ) => {
+      return gitService.getLog(args.projectRoot, {
+        maxCount: args.maxCount,
+        range: args.range,
+        baseBranch: args.baseBranch,
+      });
     },
   );
 

@@ -10,13 +10,19 @@ import { cn } from "@/lib/utils";
  */
 export const gitChangeRowTextClass = "text-[length:var(--font-toolbar-tab)]";
 
+/** Same chip as Git TabToolbar (branch / local) — pad + type + icon box. */
+export const gitToolbarChipClass =
+  "flex items-center gap-1.5 h-6 px-2 rounded text-[length:var(--font-menu-item)] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors";
+
+export const gitToolbarIconClass = "size-3.5 shrink-0";
+
 /** Main changes list row — same height band as right-area subtoolbar. */
 export const gitChangeRowShellClass =
   "flex items-center gap-2 px-3 h-[var(--height-right-area-subtoolbar)] shrink-0 border-b border-border/60";
 
-/** Sticky list header — Changes scroll container. */
+/** Sticky list header — `pl-2` lines up with TabToolbar; `pr-3` lines up with file rows. */
 export const gitPanelListHeaderShellClass =
-  "flex items-center gap-2 px-3 shrink-0 h-[var(--height-right-area-subtoolbar)] bg-background border-b border-border/60";
+  "flex items-center gap-2 pl-2 pr-3 shrink-0 h-[var(--height-right-area-subtoolbar)] bg-background border-b border-border/60";
 
 export const gitPanelListHeaderClass =
   `${gitPanelListHeaderShellClass} sticky top-0 z-20`;

@@ -38,13 +38,11 @@ import { GitSyncBadge } from "./git-sync-badge";
 import { GitRemotePicker } from "./git-remote-picker";
 import { GitRemoteAddDialog } from "./git-remote-add-dialog";
 import { GitPrCreateDialog } from "./git-pr-create-dialog";
+import { gitToolbarChipClass } from "./git-change-row-chrome";
 
 const WT_PREFIX = "wt-";
 
-const toolbarBtn = cn(
-  "flex items-center gap-1.5 h-6 px-2 rounded text-[length:var(--font-menu-item)]",
-  "text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
-);
+const toolbarBtn = gitToolbarChipClass;
 
 export function GitToolbar({ projectRoot }: { projectRoot: string }) {
   const { t } = useTranslation();

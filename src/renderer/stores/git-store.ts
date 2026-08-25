@@ -11,7 +11,16 @@ import type {
   GitTrackingData,
   GhAuthStatus,
 } from "@/types/electron";
-import { EMPTY_TRACKING, isFastForwardPullError, isNonFastForwardPushError } from "@shared/git";
+import {
+  BRANCH_COMMITS_MAX,
+  EMPTY_TRACKING,
+  branchRangeRev,
+  isFastForwardPullError,
+  isNonFastForwardPushError,
+  workingLens,
+  type GitChangesLens,
+  type GitWorkingFilter,
+} from "@shared/git";
 import {
   EMPTY_GH_AUTH,
   firstCommitSubject,
@@ -29,7 +38,7 @@ const log = createLogger("git-store", "git");
 
 // ─── Types ───
 
-export type GitFilterMode = "unstaged" | "staged" | "all";
+export type GitFilterMode = GitWorkingFilter;
 export type GitSyncing = false | "fetch" | "pull" | "push";
 
 function toastGitDetail(text: string | undefined): string | undefined {
@@ -89,6 +98,11 @@ interface GitState {
   creatingPr: boolean;
   syncing: GitSyncing;
   filterMode: GitFilterMode;
+  changesLens: GitChangesLens;
+  branchCommits: GitCommitData[];
+  branchCommitsLoading: boolean;
+  branchCommitsForBranch: string | null;
+  branchChanges: { added: number; deleted: number; fileCount: number } | null;
 
   // ── Status ──
   loading: boolean;
@@ -142,6 +156,8 @@ interface GitState {
   refreshBranches: (projectRoot: string) => Promise<void>;
   loadDiff: (projectRoot: string, fileId: string, filePath: string) => Promise<void>;
   setFilterMode: (mode: GitFilterMode) => void;
+  setChangesLens: (lens: GitChangesLens) => void;
+  loadBranchCommits: (projectRoot: string) => Promise<void>;
   stageFile: (projectRoot: string, filePath: string) => Promise<void>;
   unstageFile: (projectRoot: string, filePath: string) => Promise<void>;
   stageAll: (projectRoot: string, filePaths: string[]) => Promise<void>;
@@ -249,6 +265,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
   creatingPr: false,
   syncing: false,
   filterMode: useGitDiffPrefsStore.getState().filterMode,
+  changesLens: workingLens(useGitDiffPrefsStore.getState().filterMode),
+  branchCommits: [],
+  branchCommitsLoading: false,
+  branchCommitsForBranch: null,
+  branchChanges: null,
   loading: false,
   error: null,
   pendingBranch: null,
@@ -290,6 +311,12 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }),
 
   selectChangeFromSidebar: (fileId: string) => {
+    if (
+      get().changesLens.kind === "commit"
+      || get().changesLens.kind === "branch-changes"
+    ) {
+      get().setChangesLens(workingLens(get().filterMode));
+    }
     get().expandChange(fileId);
     set({ selectedCommitHash: null, expandedCommitFilePaths: [] });
   },
@@ -367,7 +394,19 @@ export const useGitStore = create<GitState>()((set, get) => ({
     try {
       const isRepo = await gitDesktop.gitIsRepo(projectRoot);
       if (isRepo) {
-        set({ isGitRepo: true, checkingRepo: false });
+        set({
+          isGitRepo: true,
+          checkingRepo: false,
+          branchCommits: [],
+          branchCommitsForBranch: null,
+          branchChanges: null,
+        });
+        if (
+          get().changesLens.kind === "commit"
+          || get().changesLens.kind === "branch-changes"
+        ) {
+          get().setChangesLens(workingLens(get().filterMode));
+        }
         // Must be sequential: refreshStatus sets branch, refreshBranches refines it.
         // Parallel would cause a race condition on the `branch` field.
         await get().refreshStatus(projectRoot);
@@ -388,6 +427,10 @@ export const useGitStore = create<GitState>()((set, get) => ({
           createPrDefaults: null,
           commits: [],
           selectedCommitHash: null,
+          branchCommits: [],
+          branchCommitsForBranch: null,
+          branchChanges: null,
+          changesLens: workingLens(get().filterMode),
           error: null,
         });
       }
@@ -405,6 +448,10 @@ export const useGitStore = create<GitState>()((set, get) => ({
         createPrDefaults: null,
         commits: [],
         selectedCommitHash: null,
+        branchCommits: [],
+        branchCommitsForBranch: null,
+        branchChanges: null,
+        changesLens: workingLens(get().filterMode),
         error: null,
       });
     }
@@ -644,15 +691,89 @@ export const useGitStore = create<GitState>()((set, get) => ({
   },
 
   // ── setFilterMode ──
-  setFilterMode: (mode: GitFilterMode) =>
+  setFilterMode: (mode: GitFilterMode) => {
+    get().setChangesLens(workingLens(mode));
+  },
+
+  setChangesLens: (lens) =>
     set((s) => {
-      useGitDiffPrefsStore.getState().setFilterMode(mode);
-      const visible = idsForFilterMode(s.files, mode);
+      if (lens.kind === "working") {
+        useGitDiffPrefsStore.getState().setFilterMode(lens.mode);
+        const visible = idsForFilterMode(s.files, lens.mode);
+        return {
+          changesLens: lens,
+          filterMode: lens.mode,
+          expandedChangeIds: s.expandedChangeIds.filter((id) => visible.has(id)),
+        };
+      }
+      const detailChanged =
+        (lens.kind === "commit"
+          && (s.changesLens.kind !== "commit" || s.changesLens.hash !== lens.hash))
+        || (lens.kind === "branch-changes" && s.changesLens.kind !== "branch-changes");
       return {
-        filterMode: mode,
-        expandedChangeIds: s.expandedChangeIds.filter((id) => visible.has(id)),
+        changesLens: lens,
+        expandedChangeIds: [],
+        expandedCommitFilePaths: detailChanged ? [] : s.expandedCommitFilePaths,
       };
     }),
+
+  loadBranchCommits: async (projectRoot) => {
+    const branch = get().branch;
+    const defaultBranch = pickDefaultBranch(get().branches);
+    const cacheKey = `${projectRoot}::${branch}..${defaultBranch}`;
+    if (!branch || branch === "HEAD" || branch === defaultBranch) {
+      set({
+        branchCommits: [],
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges: null,
+      });
+      if (
+        get().changesLens.kind === "commit"
+        || get().changesLens.kind === "branch-changes"
+      ) {
+        get().setChangesLens(workingLens(get().filterMode));
+      }
+      return;
+    }
+    if (get().branchCommitsForBranch === cacheKey) return;
+
+    set({ branchCommitsLoading: true });
+    try {
+      const [commits, rangeFiles] = await Promise.all([
+        gitDesktop.gitLog(projectRoot, {
+          range: "branch",
+          baseBranch: defaultBranch,
+          maxCount: BRANCH_COMMITS_MAX,
+        }),
+        gitDesktop.gitCommitFiles(projectRoot, branchRangeRev(defaultBranch)).catch(() => []),
+      ]);
+      if (get().branch !== branch) return;
+      const branchChanges = {
+        added: rangeFiles.reduce((sum, file) => sum + file.added, 0),
+        deleted: rangeFiles.reduce((sum, file) => sum + file.deleted, 0),
+        fileCount: rangeFiles.length,
+      };
+      set({
+        branchCommits: commits,
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges,
+      });
+      const lens = get().changesLens;
+      if (lens.kind === "commit" && !commits.some((commit) => commit.hash === lens.hash)) {
+        get().setChangesLens(workingLens(get().filterMode));
+      }
+    } catch {
+      if (get().branch !== branch) return;
+      set({
+        branchCommits: [],
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges: null,
+      });
+    }
+  },
 
   // ── stageFile ──
   stageFile: async (projectRoot: string, filePath: string) => {
@@ -736,7 +857,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }
     await get().refreshStatus(projectRoot);
     // Commit does not modify files on disk — no reload needed
-    set({ error: null });
+    set({ error: null, branchCommitsForBranch: null });
     const tracking = get().tracking;
     const pushLabel = shouldOfferPushAfterCommit(tracking)
       ? derivePushLabel(tracking, {
@@ -788,7 +909,19 @@ export const useGitStore = create<GitState>()((set, get) => ({
     ]);
 
     // Clear commit selection when switching branches — old hash won't exist on new branch
-    set({ switching: false, selectedCommitHash: null });
+    set({
+      switching: false,
+      selectedCommitHash: null,
+      branchCommits: [],
+      branchCommitsForBranch: null,
+      branchChanges: null,
+    });
+    if (
+      get().changesLens.kind === "commit"
+      || get().changesLens.kind === "branch-changes"
+    ) {
+      get().setChangesLens(workingLens(get().filterMode));
+    }
     await useDocumentStore.getState().reloadAllFromDisk();
     log.debug("switchBranch total", { durationMs: Math.round(performance.now() - t0), branch });
   },
@@ -806,6 +939,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       get().refreshStatus(projectRoot),
       get().refreshBranches(projectRoot),
     ]);
+    set({ branchCommits: [], branchCommitsForBranch: null, branchChanges: null });
   },
 
   cancelRemotePick: () => set({ pendingRemotePick: false }),
@@ -1203,6 +1337,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
       pendingRemotePick: false,
       pendingAddRemote: false,
       addingRemote: false,
+      changesLens: workingLens(filterMode),
+      branchCommits: [],
+      branchCommitsLoading: false,
+      branchCommitsForBranch: null,
+      branchChanges: null,
       ghAuth: EMPTY_GH_AUTH,
       pendingCreatePr: false,
       createPrDefaults: null,
@@ -1231,7 +1370,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
 /** Persist hydrates async — sync filterMode once localStorage is ready. */
 function syncFilterModeFromPrefs() {
-  useGitStore.setState({ filterMode: useGitDiffPrefsStore.getState().filterMode });
+  const mode = useGitDiffPrefsStore.getState().filterMode;
+  useGitStore.setState((s) => ({
+    filterMode: mode,
+    changesLens: s.changesLens.kind === "working" ? workingLens(mode) : s.changesLens,
+  }));
 }
 if (useGitDiffPrefsStore.persist.hasHydrated()) {
   syncFilterModeFromPrefs();

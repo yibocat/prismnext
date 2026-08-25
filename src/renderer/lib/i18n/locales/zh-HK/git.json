@@ -153,7 +153,16 @@
     "unstagedChanges": "未暫存更改",
     "uncommittedChangesCount": "{{count}} 項未提交更改",
     "stagedChangesCount": "{{count}} 項已暫存更改",
-    "unstagedChangesCount": "{{count}} 項未暫存更改"
+    "unstagedChangesCount": "{{count}} 項未暫存更改",
+    "lastAgentTurn": "上一輪 Agent",
+    "lastAgentTurnCount": "{{count}} 項上一輪 Agent 更改",
+    "lastAgentTurnEmpty": "本輪暫無檔案變更",
+    "lastAgentTurnWrongCheckout": "目前對話綁定了另一個工作區",
+    "commits": "提交",
+    "commitsNone": "相對預設分支沒有新提交",
+    "branchChanges": "分支更改",
+    "branchChangesCount": "{{count}} 項分支更改",
+    "branchChangesEmpty": "此分支相對預設分支沒有檔案變更"
   },
   "changes": {
     "new": "新增",

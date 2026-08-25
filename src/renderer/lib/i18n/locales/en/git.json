@@ -153,7 +153,16 @@
     "unstagedChanges": "Unstaged Changes",
     "uncommittedChangesCount": "{{count}} Uncommitted Changes",
     "stagedChangesCount": "{{count}} Staged Changes",
-    "unstagedChangesCount": "{{count}} Unstaged Changes"
+    "unstagedChangesCount": "{{count}} Unstaged Changes",
+    "lastAgentTurn": "Last agent turn",
+    "lastAgentTurnCount": "{{count}} Last agent turn",
+    "lastAgentTurnEmpty": "No file changes in this turn",
+    "lastAgentTurnWrongCheckout": "This chat is bound to another checkout",
+    "commits": "Commits",
+    "commitsNone": "No commits ahead of the default branch",
+    "branchChanges": "Branch changes",
+    "branchChangesCount": "{{count}} Branch changes",
+    "branchChangesEmpty": "No file changes on this branch"
   },
   "changes": {
     "new": "New",

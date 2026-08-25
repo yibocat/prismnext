@@ -41,8 +41,16 @@ export const gitApi = {
 		ipcRenderer.invoke("git:reset", { projectRoot, hash, mode }),
 	gitDiffStats: (projectRoot: string) =>
 		ipcRenderer.invoke("git:diffStats", { projectRoot }),
-	gitLog: (projectRoot: string, maxCount?: number) =>
-		ipcRenderer.invoke("git:log", { projectRoot, maxCount }),
+	gitLog: (
+		projectRoot: string,
+		maxCountOrOpts?: number | { maxCount?: number; range?: "head" | "branch"; baseBranch?: string },
+	) => {
+		const opts =
+			typeof maxCountOrOpts === "number"
+				? { maxCount: maxCountOrOpts }
+				: maxCountOrOpts;
+		return ipcRenderer.invoke("git:log", { projectRoot, ...opts });
+	},
 	gitPush: (projectRoot: string, remote?: string) =>
 		ipcRenderer.invoke("git:push", { projectRoot, remote }),
 	gitRemotes: (projectRoot: string) =>

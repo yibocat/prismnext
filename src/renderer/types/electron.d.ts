@@ -1818,7 +1818,10 @@ export interface ElectronAPI {
     unstaged: Record<string, { added: number; deleted: number }>;
     staged: Record<string, { added: number; deleted: number }>;
   }>;
-  gitLog: (projectRoot: string, maxCount?: number) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
+  gitLog: (
+    projectRoot: string,
+    maxCountOrOpts?: number | { maxCount?: number; range?: "head" | "branch"; baseBranch?: string },
+  ) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
   gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => Promise<GitResultData>;
   gitPush: (projectRoot: string, remote?: string) => Promise<GitPushResultData>;
   gitRemotes: (projectRoot: string) => Promise<GitRemoteInfo[]>;
@@ -1834,7 +1837,7 @@ export interface ElectronAPI {
   gitStash: (projectRoot: string, message?: string) => Promise<GitResultData>;
   gitStashPop: (projectRoot: string) => Promise<GitResultData>;
   gitCommitDiff: (projectRoot: string, hash: string) => Promise<string>;
-  gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>;
+  gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>; // hash or `base...HEAD`
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
   gitCheckIgnore: (projectRoot: string, relativePaths: string[]) => Promise<string[]>;
 

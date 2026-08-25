@@ -349,15 +349,18 @@ function AppMenuSubTrigger({
   className,
   children,
   trailing,
+  leading,
   ...props
 }: React.ComponentProps<typeof DropdownMenuSubTrigger> & {
   trailing?: React.ReactNode;
+  leading?: React.ReactNode;
 }) {
   return (
     <DropdownMenuSubTrigger
       className={cn(appMenuItemClass, "min-h-7 [&>svg:last-child]:size-3.5", className)}
       {...props}
     >
+      {leading}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </DropdownMenuSubTrigger>
