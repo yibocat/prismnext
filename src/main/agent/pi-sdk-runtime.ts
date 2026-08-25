@@ -448,6 +448,42 @@ function attachPiCustomTools(session: object, tools: ToolDefinition[]): number {
   return added;
 }
 
+type PiModelRuntimeLike = Pick<
+  ModelRuntime,
+  "getModel" | "refresh" | "setRuntimeApiKey"
+>;
+
+/** Resolve a Pi model, refreshing the provider catalog when the bundled snapshot is stale. */
+export async function resolvePiModelFromRuntime(
+  runtime: PiModelRuntimeLike,
+  input: { providerId: string; modelId: string; apiKey?: string },
+): Promise<NonNullable<ReturnType<ModelRuntime["getModel"]>>> {
+  const providerId = input.providerId.trim();
+  const modelId = input.modelId.trim();
+  if (!providerId || !modelId) {
+    throw new Error("missing_pi_model");
+  }
+
+  let model = runtime.getModel(providerId, modelId);
+  if (model) return model;
+
+  const apiKey = input.apiKey?.trim();
+  if (apiKey) {
+    await runtime.setRuntimeApiKey(providerId, apiKey);
+    await runtime.refresh?.({
+      providers: [providerId],
+      allowNetwork: true,
+      force: true,
+    });
+    model = runtime.getModel(providerId, modelId);
+  }
+
+  if (!model) {
+    throw new Error(`unknown_pi_model:${providerId}/${modelId}`);
+  }
+  return model;
+}
+
 export function createPiSdkSessionFactory(
   input: PiSdkSessionFactoryInput,
 ): PiSessionFactory {
@@ -462,13 +498,13 @@ export function createPiSdkSessionFactory(
       credentials: new InMemoryCredentialStore(),
       modelsPath: null,
       refreshOnCreate: false,
+      allowModelNetwork: true,
     });
-    await modelRuntime.setRuntimeApiKey(input.providerId, apiKey);
-
-    const model = modelRuntime.getModel(input.providerId, input.modelId);
-    if (!model) {
-      throw new Error(`unknown_pi_model:${input.providerId}/${input.modelId}`);
-    }
+    const model = await resolvePiModelFromRuntime(modelRuntime, {
+      providerId: input.providerId,
+      modelId: input.modelId,
+      apiKey,
+    });
 
     const getContext = (): PiToolExecutionContext => turnContext;
     const skillReadRoots = skillReadRootsFromDirs(input.skills);
@@ -606,11 +642,11 @@ export function createPiSdkSessionFactory(
       },
       setModel: async (next) => {
         const key = next.apiKey?.trim() || input.apiKey?.trim();
-        if (key) await modelRuntime.setRuntimeApiKey(next.provider, key);
-        const model = modelRuntime.getModel(next.provider, next.modelId);
-        if (!model) {
-          throw new Error(`unknown_pi_model:${next.provider}/${next.modelId}`);
-        }
+        const model = await resolvePiModelFromRuntime(modelRuntime, {
+          providerId: next.provider,
+          modelId: next.modelId,
+          apiKey: key,
+        });
         await session.setModel(model);
         syncImageDescribeTool(session, model, imageDescribeTool);
       },

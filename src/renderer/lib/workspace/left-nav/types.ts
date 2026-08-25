@@ -51,8 +51,8 @@ export interface LeftNavDefinition {
    * `syncShellForLeftSidebarView` 通过 isImmersiveCenterView() 识别。
    */
   immersive?: boolean;
-  /** 行尾附加 UI（如快捷键 Kbd） */
+  /** 行尾附加 UI（如快捷键 Kbd）；全行按钮上 hover 才显示 */
   trailing?: ReactNode;
-  /** Footer icon buttons show this chord inside the Hint tooltip. */
+  /** Full rows: hover-reveal kbd. Footer icons: Hint tooltip. */
   shortcutId?: string;
 }

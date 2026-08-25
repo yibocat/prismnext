@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { Hint } from "@/components/ui/hint";
 import { pressLeftNav, type LeftNavDefinition } from "@/lib/workspace/left-nav";
+import { ShortcutKbdChips, SHORTCUT_CHIPS_HOVER_REVEAL } from "@/lib/shortcuts";
 
 type LeftNavButtonProps = {
   item: LeftNavDefinition;
@@ -102,6 +103,7 @@ export function LeftNavButton({ item, onPressed }: LeftNavButtonProps) {
     <button
       type="button"
       className={cn(
+        "group",
         LEFT_SIDEBAR_ROW,
         active ? LEFT_SIDEBAR_ROW_ACTIVE : LEFT_SIDEBAR_ROW_HOVER,
       )}
@@ -117,7 +119,12 @@ export function LeftNavButton({ item, onPressed }: LeftNavButtonProps) {
         )}
       />
       <span className="flex-1 text-left">{label}</span>
-      {item.trailing}
+      {item.shortcutId ? (
+        <ShortcutKbdChips id={item.shortcutId} className={SHORTCUT_CHIPS_HOVER_REVEAL} />
+      ) : null}
+      {item.trailing ? (
+        <span className={SHORTCUT_CHIPS_HOVER_REVEAL}>{item.trailing}</span>
+      ) : null}
     </button>
   );
 }

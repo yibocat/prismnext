@@ -245,7 +245,9 @@ describe("workbench sidebar wiring", () => {
   it("puts Settings and Archived as footer icons and lists archived chats in two lines", () => {
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
     const items = sourceOf("src/renderer/lib/workspace/left-nav/items.tsx");
+    expect(items).toContain('shortcutId: "product.newChat"');
     expect(items).toContain('shortcutId: "shell.openSettings"');
+    expect(items).not.toContain('trailing: <ShortcutKbdChips id="product.newChat" />');
     expect(items).not.toContain('trailing: <ShortcutKbdChips id="shell.openSettings" />');
     expect(sidebar).toContain("LeftNavIconButton");
     expect(sidebar).toContain("renderArchivedSessionItem");

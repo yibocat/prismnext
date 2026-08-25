@@ -17,7 +17,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { openMode } from "@/lib/workspace/open-right-area-mode";
 import { openRightArea } from "@/lib/workspace/right-area-layout";
 import { getModeShortcutId } from "@/lib/workspace/mode-shortcuts";
-import { ShortcutKbdChips } from "@/lib/shortcuts";
+import { ShortcutKbdChips, SHORTCUT_CHIPS_HOVER_REVEAL } from "@/lib/shortcuts";
 
 export function RightAreaAddMenu({
   surface,
@@ -71,8 +71,13 @@ export function RightAreaAddMenu({
           return (
             <AppMenuItem
               key={mode.id}
+              className="group"
               leading={<span className="[&>svg]:size-3.5 shrink-0">{mode.icon}</span>}
-              trailing={shortcutId ? <ShortcutKbdChips id={shortcutId} /> : undefined}
+              trailing={
+                shortcutId ? (
+                  <ShortcutKbdChips id={shortcutId} className={SHORTCUT_CHIPS_HOVER_REVEAL} />
+                ) : undefined
+              }
               onClick={() => onPick(mode.id)}
             >
               {modeLabel(mode)}

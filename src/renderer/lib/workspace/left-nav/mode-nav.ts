@@ -8,6 +8,7 @@ import {
   focusModeInRightArea,
   isWorkspaceModeOpen,
 } from "./panel-utils";
+import { getModeShortcutId } from "@/lib/workspace/mode-shortcuts";
 import type { LeftNavDefinition } from "./types";
 
 /** Mode.icon is a JSX element (`<GitBranchIcon />`). Left nav renders `<Icon />`. */
@@ -54,6 +55,7 @@ export function leftNavFromWorkspaceMode(
         useLayoutStore.getState().setLeftSidebarView("sessions");
       });
     },
+    shortcutId: getModeShortcutId(mode.id),
   };
 }
 

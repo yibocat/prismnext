@@ -1,5 +1,4 @@
 import { Bot, LayoutTemplate, Package, SettingsIcon } from "lucide-react";
-import { ShortcutKbdChips } from "@/lib/shortcuts";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { resetSettingsEditors } from "@/stores/settings-panel-store";
@@ -32,7 +31,7 @@ const newAgentNav: LeftNavDefinition = {
     st.setLeftSidebarView("sessions");
     st.clearPendingRightAreaRestore();
   },
-  trailing: <ShortcutKbdChips id="product.newChat" />,
+  shortcutId: "product.newChat",
 };
 
 const templatesNav: LeftNavDefinition = {

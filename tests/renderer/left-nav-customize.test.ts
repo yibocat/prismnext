@@ -124,6 +124,7 @@ describe("left nav customize", () => {
     expect(item.required).toBeUndefined();
     expect(item.deactivate).toBeUndefined();
     expect(item.icon).toBe(GitBranchIcon);
+    expect(item.shortcutId).toBe("workspace.openGit");
     expect(lucideIconFromMode(mode)).toBe(GitBranchIcon);
   });
 

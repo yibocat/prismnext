@@ -4,6 +4,10 @@ import { resolveShortcut } from "./resolve";
 import { chordDisplayParts, detectShortcutPlatform } from "../../../shared/shortcuts";
 import { cn } from "@/lib/utils";
 
+/** Parent must be `group`. Hidden until the row is hovered, focused, or menu-highlighted. */
+export const SHORTCUT_CHIPS_HOVER_REVEAL =
+  "opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-data-[highlighted]:opacity-100";
+
 /** Separate Kbd chips for a registry shortcut (same look as Hint tooltips). */
 export function ShortcutKbdChips({
   id,
