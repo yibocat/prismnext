@@ -19,6 +19,9 @@ export const LEFT_SIDEBAR_ROW_ACTIVE = "bg-sidebar-accent text-sidebar-accent-fo
 /** In-row action (project “+” / “−”) — ghost icon; fill only while pointed at. */
 export const LEFT_SIDEBAR_ROW_ACTION =
   "flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-[color,opacity] group-hover/project:opacity-100 hover:bg-muted hover:text-foreground";
+/** Session trailing control — keep the slot so a pinned pin does not jump when archive/time fade in. */
+export const LEFT_SIDEBAR_SESSION_HOVER_ACTION =
+  "shrink-0 opacity-0 pointer-events-none transition-opacity group-hover/session:opacity-100 group-hover/session:pointer-events-auto";
 /** Compact stack — 2px so rounded hover pills do not fuse. */
 export const LEFT_SIDEBAR_STACK = "flex flex-col gap-0.5";
 /** Between collapsed projects — same 2px as `LEFT_SIDEBAR_STACK`. */

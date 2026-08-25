@@ -33,6 +33,7 @@ import {
   LEFT_SIDEBAR_FOOTER_ICON,
   LEFT_SIDEBAR_ROW,
   LEFT_SIDEBAR_ROW_ACTION,
+  LEFT_SIDEBAR_SESSION_HOVER_ACTION,
   LEFT_SIDEBAR_ROW_ACTIVE,
   LEFT_SIDEBAR_ROW_HOVER,
   LEFT_SIDEBAR_SECTION_ACTION,
@@ -691,16 +692,14 @@ export const LeftSidebar = memo(function LeftSidebar() {
     const sessionTrailing = (
       <span className="flex shrink-0 items-center gap-1">
         {archivedRow ? null : (
-          <Hint label={isPinned ? t("nav.sessions.unpin") : t("nav.sessions.pin")}>
+          <Hint
+            label={isPinned ? t("nav.sessions.unpin") : t("nav.sessions.pin")}
+            triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+          >
             <span
               role="button"
               tabIndex={0}
-              className={cn(
-                "shrink-0 hover:text-foreground cursor-pointer",
-                isPinned
-                  ? "block text-foreground"
-                  : "hidden text-muted-foreground group-hover/session:block",
-              )}
+              className="shrink-0 cursor-pointer"
               onClick={(e) => { e.stopPropagation(); pinSession(s.id); }}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); pinSession(s.id); } }}
             >
@@ -713,22 +712,28 @@ export const LeftSidebar = memo(function LeftSidebar() {
         )}
         {archivedRow ? (
           <>
-            <Hint label={t("nav.sessions.restoreFromArchive")}>
+            <Hint
+              label={t("nav.sessions.restoreFromArchive")}
+              triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+            >
               <span
                 role="button"
                 tabIndex={0}
-                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
               >
                 <ArchiveRestore className="size-3.5" />
               </span>
             </Hint>
-            <Hint label={t("nav.sessions.delete")}>
+            <Hint
+              label={t("nav.sessions.delete")}
+              triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+            >
               <span
                 role="button"
                 tabIndex={0}
-                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                className="shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
                 onClick={async (e) => {
                   e.stopPropagation();
                   if (!projectRoot) return;
@@ -757,11 +762,14 @@ export const LeftSidebar = memo(function LeftSidebar() {
             </Hint>
           </>
         ) : (
-          <Hint label={t("nav.sessions.archive")}>
+          <Hint
+            label={t("nav.sessions.archive")}
+            triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+          >
             <span
               role="button"
               tabIndex={0}
-              className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+              className="shrink-0 cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
                 archiveSession(s.id);
@@ -779,7 +787,12 @@ export const LeftSidebar = memo(function LeftSidebar() {
             </span>
           </Hint>
         )}
-        <span className="hidden group-hover/session:inline text-[length:var(--font-size-12)] text-muted-foreground/70 shrink-0 tabular-nums">
+        <span
+          className={cn(
+            LEFT_SIDEBAR_SESSION_HOVER_ACTION,
+            "text-[length:var(--font-size-12)] text-muted-foreground/70 tabular-nums",
+          )}
+        >
           {relativeTime(s.lastModified, t)}
         </span>
       </span>
@@ -921,22 +934,28 @@ export const LeftSidebar = memo(function LeftSidebar() {
               )}
               onCancel={() => setRenamingSessionId(null)}
             />
-            <Hint label={t("nav.sessions.restoreFromArchive")}>
+            <Hint
+              label={t("nav.sessions.restoreFromArchive")}
+              triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+            >
               <span
                 role="button"
                 tabIndex={0}
-                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
                 onClick={(e) => { e.stopPropagation(); archiveSession(s.id); }}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); archiveSession(s.id); } }}
               >
                 <ArchiveRestore className="size-3.5" />
               </span>
             </Hint>
-            <Hint label={t("nav.sessions.delete")}>
+            <Hint
+              label={t("nav.sessions.delete")}
+              triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
+            >
               <span
                 role="button"
                 tabIndex={0}
-                className="hidden group-hover/session:block shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
+                className="shrink-0 text-muted-foreground hover:text-destructive cursor-pointer"
                 onClick={async (e) => {
                   e.stopPropagation();
                   const result = await agentDesktop.agentDeleteSession({ conversationId: s.id });
