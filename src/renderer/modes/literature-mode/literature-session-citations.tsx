@@ -25,9 +25,9 @@ import {
   LITERATURE_COL_VENUE,
   LITERATURE_COL_CHECK,
 } from "./literature-list-chrome";
-import { formatLiteratureAuthorsShort } from "./literature-format";
+import { formatLiteratureAuthorsShort } from "@/lib/literature/literature-format";
 import { cn } from "@/lib/utils";
-import type { StagedCitation } from "../../../shared/citation-staging";
+import type { StagedCitation } from "../../../shared/literature/citation-staging";
 
 function StatusChip({
   c,

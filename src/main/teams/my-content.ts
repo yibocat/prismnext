@@ -14,7 +14,7 @@ import {
   MY_CONTENT_TEAM_ID,
   USER_TEAM_PUBLISHER,
 } from "../../shared/teams/types";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { invalidateCatalog } from "./catalog";
 import { appTeamsDir } from "./scope";
 

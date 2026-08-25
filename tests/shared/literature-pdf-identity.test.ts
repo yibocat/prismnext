@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkPdfMatchesEntry,
   normalizeLiteratureIdentifiers,
-} from "../../src/shared/literature-pdf-identity";
+} from "../../src/shared/literature/pdf-identity";
 
 describe("literature-pdf-identity", () => {
   it("matches when DOI agrees", () => {

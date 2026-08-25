@@ -1,5 +1,4 @@
-import { useEffect, type RefObject } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useEffect } from "react";
 import {
   chordMatchesEvent,
   detectShortcutPlatform,
@@ -18,6 +17,7 @@ import {
   openModeInSplit,
 } from "@/lib/workspace/toolbar-mode-open";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useLayoutStore } from "@/stores/layout-store";
 
 function matchesShortcut(id: string, e: KeyboardEvent): boolean {
   const overrides = useSettingsStore.getState().settings.shortcutOverrides;
@@ -26,12 +26,6 @@ function matchesShortcut(id: string, e: KeyboardEvent): boolean {
   return chordMatchesEvent(resolved.chord, e, detectShortcutPlatform());
 }
 
-type PanelRefs = {
-  leftSidebarRef: RefObject<PanelImperativeHandle | null>;
-  centerRef: RefObject<PanelImperativeHandle | null>;
-  rightAreaRef: RefObject<PanelImperativeHandle | null>;
-};
-
 /**
  * Workspace mode shortcuts (Control on all platforms — avoids macOS ⌘⇧ screenshot):
  * - TeX / Library / Experiments: Ctrl+1–3 (+ Shift = maximize)
@@ -39,106 +33,91 @@ type PanelRefs = {
  * - Terminal: Ctrl+` (+ Shift = maximize) — VS Code-style
  * - Templates: no shortcut
  */
-export function useWorkspaceModeShortcuts(
-  panelRefs: PanelRefs,
-  options?: { isMobile?: boolean },
-) {
-  const { leftSidebarRef, centerRef, rightAreaRef } = panelRefs;
+export function useWorkspaceModeShortcuts(options?: { isMobile?: boolean }) {
   const isMobile = options?.isMobile;
 
   useEffect(() => {
-    const navCtx = () => ({
-      panelRefs: { centerRef, rightAreaRef },
-    });
-    const layoutCtx = () => ({
-      centerRef: centerRef.current,
-      rightAreaRef: rightAreaRef.current,
-      leftSidebarRef: leftSidebarRef.current,
-      isMobile,
-    });
-    const splitLayout = () => ({
-      leftSidebarRef: leftSidebarRef.current,
-      isMobile,
-    });
+    const layout = { isMobile };
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.altKey && !e.metaKey && !e.ctrlKey) return;
+      if (useLayoutStore.getState().leftSidebarView === "settings") return;
 
       // LeftNav modes (Shift before bare).
       if (matchesShortcut("workspace.openTexWorkspaceMaximize", e)) {
         e.preventDefault();
-        toggleTexWorkspaceMaximize(navCtx());
+        toggleTexWorkspaceMaximize();
         return;
       }
       if (matchesShortcut("workspace.openTexWorkspace", e)) {
         e.preventDefault();
-        toggleTexWorkspaceSplit(navCtx(), splitLayout());
+        toggleTexWorkspaceSplit(layout);
         return;
       }
       if (matchesShortcut("workspace.openLiteratureMaximize", e)) {
         e.preventDefault();
-        toggleLiteratureMaximize(navCtx());
+        toggleLiteratureMaximize();
         return;
       }
       if (matchesShortcut("workspace.openLiterature", e)) {
         e.preventDefault();
-        toggleLiteratureSplit(navCtx(), splitLayout());
+        toggleLiteratureSplit(layout);
         return;
       }
       if (matchesShortcut("workspace.openExperimentsMaximize", e)) {
         e.preventDefault();
-        toggleExperimentsMaximize(navCtx());
+        toggleExperimentsMaximize();
         return;
       }
       if (matchesShortcut("workspace.openExperiments", e)) {
         e.preventDefault();
-        toggleExperimentsSplit(navCtx(), splitLayout());
+        toggleExperimentsSplit(layout);
         return;
       }
 
       // Toolbar modes.
       if (matchesShortcut("workspace.openFilesMaximize", e)) {
         e.preventDefault();
-        openModeMaximized("files", layoutCtx());
+        openModeMaximized("files", layout);
         return;
       }
       if (matchesShortcut("workspace.openFiles", e)) {
         e.preventDefault();
-        openModeInSplit("files", layoutCtx());
+        openModeInSplit("files", layout);
         return;
       }
       if (matchesShortcut("workspace.openGitMaximize", e)) {
         e.preventDefault();
-        openModeMaximized("git", layoutCtx());
+        openModeMaximized("git", layout);
         return;
       }
       if (matchesShortcut("workspace.openGit", e)) {
         e.preventDefault();
-        openModeInSplit("git", layoutCtx());
+        openModeInSplit("git", layout);
         return;
       }
       if (matchesShortcut("workspace.openBrowserMaximize", e)) {
         e.preventDefault();
-        openModeMaximized("browser", layoutCtx());
+        openModeMaximized("browser", layout);
         return;
       }
       if (matchesShortcut("workspace.openBrowser", e)) {
         e.preventDefault();
-        openModeInSplit("browser", layoutCtx());
+        openModeInSplit("browser", layout);
         return;
       }
       if (matchesShortcut("workspace.openTerminalMaximize", e)) {
         e.preventDefault();
-        openModeMaximized("terminal", layoutCtx());
+        openModeMaximized("terminal", layout);
         return;
       }
       if (matchesShortcut("workspace.openTerminal", e)) {
         e.preventDefault();
-        openModeInSplit("terminal", layoutCtx());
+        openModeInSplit("terminal", layout);
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [leftSidebarRef, centerRef, rightAreaRef, isMobile]);
+  }, [isMobile]);
 }

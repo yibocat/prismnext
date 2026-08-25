@@ -7,6 +7,7 @@ import { SubAgentRunPanel, SUBAGENT_PANEL_EXIT_MS } from "./subagent-run-panel";
 import { ChatFloatPanel, CHAT_FLOAT_PANEL_HEIGHT } from "./chat-float-panel";
 import { RestoreUndoBar } from "./restore-undo-bar";
 import { useChatStore } from "@/stores/chat-store";
+import { selectComposerHostedQuestionId } from "@/lib/chat/composer-pending-tools";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
@@ -63,11 +64,16 @@ export function AiBar() {
   const composerShellRef = useRef<HTMLDivElement>(null);
   const morphRef = useRef<HTMLDivElement>(null);
 
-  const messages = useChatStore((s) => s.messages);
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const conversationPresent = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const conv = tab?.conversation;
+    return Boolean(conv && (conv.turns.length > 0 || conv.live));
+  });
   const openSubAgentId = useChatStore(
     (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
   );
+  const pendingQuestionId = useChatStore(selectComposerHostedQuestionId);
   const closeSubAgentPanel = useChatStore((s) => s.closeSubAgentPanel);
   const [displayedSubId, setDisplayedSubId] = useState<string | null>(null);
   const [subClosing, setSubClosing] = useState(false);
@@ -88,7 +94,7 @@ export function AiBar() {
   const closeSubAnimated = useCallback(() => {
     if (subClosingRef.current || !displayedSubId) return;
     setSubClosing(true);
-    // Clear store id immediately (panel-chat scrim fades with exit); keep
+    // Clear store id immediately; keep
     // `displayedSubId` mounted until the animation finishes.
     closeSubAgentPanel();
     blurKeyboardFocus();
@@ -131,7 +137,7 @@ export function AiBar() {
   const queueLengthRef = useRef(queueLength);
   queueLengthRef.current = queueLength;
 
-  const hasConversation = messages.length > 0 || isStreaming;
+  const hasConversation = conversationPresent || isStreaming;
   const isInputting = phase === "input";
   const isComposerVisible = phase !== "idle";
   const composerHasContent = !draftEmpty || attachmentCount > 0 || queueLength > 0;
@@ -216,11 +222,14 @@ export function AiBar() {
     }
   }, [phase, draftEmpty, attachmentCount, draftNeedsExpanded, collapseToInput]);
 
-  // Opening a Task panel in AiBar also peels open the main run panel behind it.
+  // Opening a Task panel or a live question in AiBar also peels open the main
+  // run panel. Maximize remounts AiBar idle; the capsule must leave idle so
+  // the transcript and composer chrome stay usable.
   useEffect(() => {
-    if (!openSubAgentId || !hasConversation || isPanelOpen) return;
-    openPanel();
-  }, [openSubAgentId, hasConversation, isPanelOpen, openPanel]);
+    if (!openSubAgentId && !pendingQuestionId) return;
+    if (!isPanelOpen) openPanel();
+    if (phase === "idle") setPhase("input");
+  }, [openSubAgentId, pendingQuestionId, isPanelOpen, openPanel, phase]);
 
   // Click outside → idle when compact capsule is empty (no draft, no attachments)
   useEffect(() => {
@@ -248,6 +257,15 @@ export function AiBar() {
         return;
       }
       if (
+        pendingQuestionId
+        && (
+          target.closest("[data-composer-chrome]")
+          || target.closest("[data-ai-bar-capsule]")
+        )
+      ) {
+        return;
+      }
+      if (
         target.closest("[data-radix-menu-content]")
         || target.closest("[data-radix-popper-content-wrapper]")
       ) {
@@ -263,7 +281,7 @@ export function AiBar() {
 
     document.addEventListener("mousedown", handleMouseDown, true);
     return () => document.removeEventListener("mousedown", handleMouseDown, true);
-  }, [stackVisible, stackExiting, subPanelOpen, subPanelFront, closeSubAnimated, closePanel]);
+  }, [stackVisible, stackExiting, subPanelOpen, subPanelFront, pendingQuestionId, closeSubAnimated, closePanel]);
 
   // ⌘I → open/focus capsule. AiBar only mounts when editor is maximized;
   // in that mode this chord prefers the capsule over editor.italic.
@@ -384,7 +402,7 @@ export function AiBar() {
   );
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
+    <div data-ai-bar className="absolute bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none z-10">
       {stackVisible && (
         <div
           data-chat-width
@@ -494,7 +512,7 @@ export function AiBar() {
           <div
             id="ai-bar-composer-queue-slot"
             data-chat-width
-            className="pointer-events-auto w-full max-w-[var(--chat-max-w)] mx-auto"
+            className="pointer-events-auto mb-1.5 w-full max-w-[var(--chat-max-w)] mx-auto"
           />
           <div
             ref={(node) => {

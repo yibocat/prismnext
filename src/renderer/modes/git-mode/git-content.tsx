@@ -18,5 +18,6 @@ export function GitContent({ tab, isActive }: { tab: RightTab; isActive: boolean
   if (tab.kind === "git-overview") {
     return wrapTabContext(ctx, <GitViewer projectRoot={projectRoot ?? ""} />);
   }
-  return wrapTabContext(ctx, resolveViewer(tab.filePath ?? ""));
+  const filePath = tab.kind === "git-diff" ? tab.filePath ?? "" : "";
+  return wrapTabContext(ctx, resolveViewer(filePath));
 }

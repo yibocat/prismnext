@@ -1,0 +1,51 @@
+{
+  "setup": {
+    "title": "Setup Project",
+    "description": "This folder is missing the standard prismnext project structure.",
+    "missing": "Missing directories:",
+    "openAnyway": "Open Anyway",
+    "createAndOpen": "Create & Open"
+  },
+  "new": {
+    "title": "New Project",
+    "description": "Configure project name, location, and workspace architecture.",
+    "projectName": "Project name",
+    "location": "Location",
+    "chooseParent": "Choose parent folder…",
+    "template": "Workspace Template",
+    "minimal": "Minimal",
+    "paper": "Paper",
+    "research": "Research Lab",
+    "custom": "Custom",
+    "recommended": "Recommended",
+    "paperDesc": "LaTeX manuscript with literature library & BibTeX citations.",
+    "researchDesc": "Complete lab workspace with experiments, literature & agents.",
+    "minimalDesc": "Single manuscript folder with basic LaTeX template.",
+    "customDesc": "Configure custom workspace folders and functions.",
+    "fullPath": "Creates at",
+    "gitInitialized": "Git",
+    "previewTitle": "Structure Preview",
+    "manuscriptTag": "LaTeX source & main.tex",
+    "literatureTag": "Literature & citations",
+    "experimentsTag": "AI experiments & scripts",
+    "prismnextConfigTag": "Agent rules & settings",
+    "noFolders": "No folders",
+    "editFolders": "Edit folders",
+    "folders": "Folders",
+    "addFolder": "Add folder",
+    "initGit": "Initialize Git repository",
+    "initGitDesc": "Create a Git repo to track revision history and branches.",
+    "createProject": "Create project",
+    "creating": "Creating…",
+    "needManuscript": "A manuscript folder is required.",
+    "removeFolder": "Remove folder",
+    "createFailed": "Failed to create project"
+  },
+  "edit": {
+    "title": "Edit project",
+    "description": "Change the name shown in the workbench.",
+    "nameHint": "Shown in the workbench. The folder name on disk does not change.",
+    "save": "Save",
+    "saveFailed": "Could not save project"
+  }
+}

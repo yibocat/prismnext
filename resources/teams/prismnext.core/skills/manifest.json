@@ -24,35 +24,35 @@
     {
       "id": "figure-interaction",
       "name": "figure-interaction",
-      "description": "Use when presenting a result as a reopenable figure or plot in the RightArea panel — visual standards (palette, sizing, legibility on any theme), choosing between a static figure and a CSV plot, and update discipline. Not for making the figures themselves (→ figure-matplotlib / figure-tikz) or wiring them into the manuscript (→ figure-pipeline).",
+      "description": "Use only when the user asked for a reopenable chat/panel card and the figure or CSV already exists on disk — interaction-write, one sentence, stop. Not for drawing (→ figure-matplotlib / figure-tikz) or manuscript wiring (→ figure-pipeline).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-matplotlib",
       "name": "figure-matplotlib",
-      "description": "Use when creating data-driven 2D figures — for analysis, notes, or publication — with matplotlib or seaborn. Chart selection, colorblind-safe palettes, a ready style file, and a plotting template that outputs into the project's figures folder. Not for structural diagrams (architecture, schematics → figure-tikz), not for the manuscript-wiring process (→ figure-pipeline), not for panel presentation standards (→ figure-interaction).",
+      "description": "Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-observable-plot",
       "name": "figure-observable-plot",
-      "description": "Use when a data figure needs Observable Plot's chart vocabulary — density contours, hexbin, faceted small multiples, heatmap cells, geo/graticule views, or Plot's polished default aesthetics — rendered headless to manuscript-grade SVG from a spec + CSV in the experiment island. Not for ordinary 2D line/bar/scatter (figure-matplotlib is the default lane), not for panel CSV charts (figure-interaction), not for diagrams (figure-tikz).",
+      "description": "Use when a data figure needs Observable Plot's chart vocabulary — density, hexbin, facets, cell heatmap, geo — spec + CSV → experiment-run → SVG, then stop. Ordinary line/bar/scatter → figure-matplotlib. Diagrams → figure-tikz. Panel cards → figure-interaction. Manuscript include → figure-pipeline, and only if the user asked.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-pipeline",
       "name": "figure-pipeline",
-      "description": "Use when turning experiment outputs or project data into publication-quality figures wired into the manuscript and reopenable as interaction objects. This is the plumbing (source data → script → manuscript wiring); the chart craft itself lives in figure-matplotlib, the panel presentation in figure-interaction.",
+      "description": "Use only when the user asked to put an existing (or just-drawn) figure into the manuscript — includegraphics, caption, label, in-text cite, then latex-compile. Not for drawing the figure (→ figure-matplotlib / figure-tikz / figure-observable-plot) and not for chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-tikz",
       "name": "figure-tikz",
-      "description": "Use when drawing publication-quality TikZ/pgfplots figures — architecture and pipeline diagrams, commutative diagrams, function/schematic plots, and data line-plots rendered by LaTeX itself. Not for data-heavy result plots (→ figure-matplotlib). Templates compile standalone into the project's figures folder.",
+      "description": "Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },

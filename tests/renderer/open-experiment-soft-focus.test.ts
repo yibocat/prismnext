@@ -33,10 +33,6 @@ vi.mock("../../src/renderer/stores/right-panel-store", () => ({
   },
 }));
 
-vi.mock("../../src/renderer/lib/workspace/left-nav/panel-refs", () => ({
-  getLeftNavPanelRefs: () => ({}),
-}));
-
 vi.mock("../../src/renderer/lib/workspace/left-nav/panel-utils", () => ({
   openExperimentsSplit,
 }));

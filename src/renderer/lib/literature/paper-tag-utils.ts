@@ -1,4 +1,4 @@
-import { paperTagKey } from "../../../shared/paper-tags";
+import { paperTagKey } from "../../../shared/literature/paper-tags";
 
 export type ProjectTagEntry = { tag: string; count: number };
 

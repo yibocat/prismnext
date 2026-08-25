@@ -26,13 +26,7 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
 }));
 
 vi.stubGlobal("window", {
-  electronAPI: {
-    sessionLoad: vi.fn().mockResolvedValue([]),
-    sessionGetDirectory: vi.fn().mockResolvedValue(null),
-    sessionGetContext: vi.fn().mockResolvedValue(null),
-    sessionGetUserDisplays: vi.fn().mockResolvedValue([]),
-    chatRegisterTab: vi.fn().mockResolvedValue({ success: true }),
-  },
+  electronAPI: {},
 });
 
 import {

@@ -13,7 +13,7 @@ import { useLiteratureStore } from "@/stores/literature-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { collectProjectTags } from "@/lib/literature/paper-tag-utils";
 import { i18n } from "@/lib/i18n";
-import { paperTagDotClass, paperTagToneClass } from "../../../shared/paper-tags";
+import { paperTagDotClass, paperTagToneClass } from "../../../shared/literature/paper-tags";
 import { cn } from "@/lib/utils";
 
 const triggerClass = cn(

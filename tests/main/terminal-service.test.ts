@@ -40,7 +40,7 @@ import {
   _getSessionCountForTests,
   _resetSessionsForTests,
   _getSessionForTests,
-} from "../../src/main/services/terminal";
+} from "../../src/main/terminal/terminal";
 
 function spawnSession(
   sessionId: string,

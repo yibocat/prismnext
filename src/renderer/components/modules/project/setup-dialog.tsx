@@ -25,7 +25,7 @@ function projectFolderName(projectPath: string): string {
   return parts[parts.length - 1] || projectPath;
 }
 
-/** `ceshi/.prismnext/` — project name + relative missing path, one trailing slash for dirs. */
+/** `ceshi/.workbench/` — project name + relative missing path, one trailing slash for dirs. */
 export function formatMissingEntry(projectPath: string, rel: string): string {
   const name = projectFolderName(projectPath);
   const isDir = rel.endsWith("/") || rel.endsWith("\\");

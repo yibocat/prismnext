@@ -2,7 +2,7 @@ import { describe, expect, it, afterEach } from "vitest";
 import {
   materializePromptFiles,
   _setAttachCacheDirForTests,
-} from "../../src/main/services/prompt-file-attachments";
+} from "../../src/main/session/prompt-file-attachments";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";

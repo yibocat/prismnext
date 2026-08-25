@@ -1,8 +1,11 @@
-import { ipcMain, session } from "electron";
+import { BrowserWindow, app, ipcMain, session } from "electron";
+import type { WebContents } from "electron";
 import * as fs from "fs";
 import * as path from "path";
+import { createLogger } from "../app/logger";
+import { ensureWorkbenchHome, homeBrowserDir } from "../workbench/home";
 
-const BROWSER_DIR = ".prismnext/browser";
+const log = createLogger("browser-ipc", "ipc");
 
 /**
  * Partition used by the in-app browser `<webview>` (see browser-view.tsx).
@@ -12,6 +15,42 @@ const BROWSER_DIR = ".prismnext/browser";
  * `persist:` keeps login state across restarts.
  */
 const BROWSER_PARTITION = "persist:browser";
+
+export function isBrowserGuestOpenUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" || parsed.protocol === "file:";
+  } catch {
+    return false;
+  }
+}
+
+function notifyRendererOpenInTab(guest: WebContents, url: string): void {
+  const payload = { url, newTab: true };
+  const embedder = guest.hostWebContents;
+  if (embedder && !embedder.isDestroyed()) {
+    embedder.send("browser:open-in-tab", payload);
+    return;
+  }
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send("browser:open-in-tab", payload);
+  }
+}
+
+function attachGuestWindowHandler(contents: WebContents): void {
+  if (contents.getType() !== "webview") return;
+  try {
+    if (contents.session !== session.fromPartition(BROWSER_PARTITION)) return;
+  } catch {
+    return;
+  }
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isBrowserGuestOpenUrl(url)) {
+      notifyRendererOpenInTab(contents, url);
+    }
+    return { action: "deny" };
+  });
+}
 
 interface Bookmark {
   id: string;
@@ -55,7 +94,9 @@ function readJson<T>(filePath: string, fallback: T): T {
       return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
     }
   } catch {
-    console.error(`Failed to read or parse ${filePath}, using fallback`);
+    log.warn("Failed to read or parse browser state, using fallback", {
+      file: path.basename(filePath),
+    });
   }
   return fallback;
 }
@@ -64,8 +105,13 @@ function writeJson(filePath: string, data: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 
-function initBrowserState(projectRoot: string): BrowserState {
-  const dir = path.join(projectRoot, BROWSER_DIR);
+function browserStateDir(): string {
+  ensureWorkbenchHome();
+  return homeBrowserDir();
+}
+
+function initBrowserState(): BrowserState {
+  const dir = browserStateDir();
   ensureDir(dir);
 
   const bookmarksPath = path.join(dir, "bookmarks.json");
@@ -88,13 +134,17 @@ function initBrowserState(projectRoot: string): BrowserState {
 }
 
 export function registerBrowserHandlers(): void {
-  ipcMain.handle("browser:init", async (_event, { projectRoot }: { projectRoot: string }) => {
-    return initBrowserState(projectRoot);
+  app.on("web-contents-created", (_event, contents) => {
+    attachGuestWindowHandler(contents);
   });
 
-  ipcMain.handle("browser:saveBookmarks", async (_event, { projectRoot, bookmarks }: { projectRoot: string; bookmarks: Bookmark[] }) => {
+  ipcMain.handle("browser:init", async () => {
+    return initBrowserState();
+  });
+
+  ipcMain.handle("browser:saveBookmarks", async (_event, { bookmarks }: { projectRoot?: string; bookmarks: Bookmark[] }) => {
     try {
-      const dir = path.join(projectRoot, BROWSER_DIR);
+      const dir = browserStateDir();
       ensureDir(dir);
       writeJson(path.join(dir, "bookmarks.json"), bookmarks);
       return { success: true };
@@ -103,9 +153,9 @@ export function registerBrowserHandlers(): void {
     }
   });
 
-  ipcMain.handle("browser:saveRecent", async (_event, { projectRoot, recent }: { projectRoot: string; recent: RecentVisit[] }) => {
+  ipcMain.handle("browser:saveRecent", async (_event, { recent }: { projectRoot?: string; recent: RecentVisit[] }) => {
     try {
-      const dir = path.join(projectRoot, BROWSER_DIR);
+      const dir = browserStateDir();
       ensureDir(dir);
       writeJson(path.join(dir, "recent.json"), recent);
       return { success: true };
@@ -129,7 +179,7 @@ export function registerBrowserHandlers(): void {
       await browserSession.clearCache();
       // Also clear localStorage / service worker caches for all origins
       await browserSession.clearStorageData({
-        storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb", "websql"],
+        storages: ["localstorage", "serviceworkers", "cachestorage", "indexdb"],
       });
       return { success: true };
     } catch (err: any) {

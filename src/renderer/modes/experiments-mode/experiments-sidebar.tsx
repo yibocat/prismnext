@@ -19,7 +19,7 @@ import {
   formatExperimentRelativeTime,
 } from "./experiments-detail-chrome";
 import { useExperimentProjectRoot } from "./experiments-project-root";
-import type { ExperimentSummary } from "../../../shared/experiment-log";
+import type { ExperimentSummary } from "../../../shared/experiments/log";
 import { experimentMentionDragPayload } from "./experiment-run-drag";
 import { setComposerDragData } from "@/lib/chat/composer-drag";
 

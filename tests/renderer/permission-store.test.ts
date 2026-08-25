@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { usePermissionStore } from "../../src/renderer/stores/permission-store";
+import {
+  hasPendingPermission,
+  listBackgroundPending,
+  pickActivePermission,
+  usePermissionStore,
+} from "../../src/renderer/stores/permission-store";
 
 describe("permission-store", () => {
   beforeEach(() => {
@@ -35,5 +40,36 @@ describe("permission-store", () => {
     store.clearPermission("perm-1");
 
     expect(usePermissionStore.getState().getPermissionForTool("tab-1", "call-1")).toBeUndefined();
+  });
+
+  it("pickActivePermission only returns the active tab's card", () => {
+    const perms = [
+      {
+        id: "a",
+        tabId: "tab-a",
+        toolCallId: "call-a",
+        toolName: "write",
+        message: "A",
+        options: [],
+      },
+      {
+        id: "b",
+        tabId: "tab-b",
+        toolCallId: "call-b",
+        toolName: "write",
+        message: "B",
+        options: [],
+      },
+    ];
+    expect(pickActivePermission("tab-a", perms)?.id).toBe("a");
+    expect(pickActivePermission("tab-b", perms)?.id).toBe("b");
+    expect(listBackgroundPending(perms, "tab-a").map((p) => p.tabId)).toEqual(["tab-b"]);
+    expect(hasPendingPermission(perms, "tab-b")).toBe(true);
+    expect(hasPendingPermission(perms, "tab-a")).toBe(true);
+    expect(hasPendingPermission(perms, "tab-c")).toBe(false);
+  });
+
+  it("allocates a new array even when empty (unsafe as a Zustand selector)", () => {
+    expect(listBackgroundPending([], "tab-a")).not.toBe(listBackgroundPending([], "tab-a"));
   });
 });

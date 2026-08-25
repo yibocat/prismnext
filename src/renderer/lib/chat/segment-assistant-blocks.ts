@@ -1,19 +1,18 @@
 /**
  * Split assistant blocks into prose vs activity (thinking + tools).
  *
- * - live: contiguous thinking/tools → burst folds; Task standalone; prose outside.
- * - settled (turn done / history): same burst folds nested inside one Worked-for
- *   wrapper (through last process block); trailing final reply stays outside.
+ * One tree for live and settled: contiguous thinking/tools → burst folds;
+ * Task standalone; prose stays outside. Settling only changes chrome, never remounts.
  */
 import type { ContentBlock } from "@/stores/chat-store";
 import {
   param,
-  basenamePath,
   computeLineDiffStats,
   computePatchLineStats,
+  toolUseActivityLabel,
 } from "@/components/modules/chat/tools/shared";
 import { extractPatchTargetPaths } from "@/components/modules/chat/tools/tool-meta";
-import { activitySpanSecFromBlocks } from "@shared/opencode-part-time";
+import { activitySpanSecFromBlocks } from "@shared/chat/block-time";
 
 export type TextSegment = {
   kind: "text";
@@ -58,10 +57,16 @@ export type AssistantSegment =
   | StandaloneToolSegment
   | WorkedSegment;
 
+function isQuestionToolBlock(block: ContentBlock): boolean {
+  if (block.type !== "tool_use") return false;
+  const name = (block.name || block._backfillName || "").toLowerCase();
+  return name === "question" || name === "ask_question";
+}
+
 function isStandaloneToolBlock(block: ContentBlock): boolean {
   if (block.type !== "tool_use") return false;
   const name = (block.name || block._backfillName || "").toLowerCase();
-  return name === "task";
+  return name === "task" || isQuestionToolBlock(block);
 }
 
 function isActivityBlock(block: ContentBlock): boolean {
@@ -85,11 +90,39 @@ export type SegmentAssistantBlocksOptions = {
 /** Ordered prose / activity / standalone-tool segments preserving block order. */
 export function segmentAssistantBlocks(
   blocks: ContentBlock[],
-  options?: SegmentAssistantBlocksOptions,
+  _options?: SegmentAssistantBlocksOptions,
 ): AssistantSegment[] {
-  const phase = options?.phase ?? "settled";
-  if (phase === "live") return segmentAssistantBlocksLive(blocks);
-  return segmentAssistantBlocksSettled(blocks);
+  return segmentAssistantBlocksLive(blocks);
+}
+
+/** Persist / React key: turn + first block index. Never include live|settled. */
+export function activityFoldPersistKey(turnId: string, firstBlockIndex: number): string {
+  return `${turnId}:a${firstBlockIndex}`;
+}
+
+/**
+ * Burst is streaming only while this turn is live AND the burst itself is unsealed
+ * (a tool still running, or the last thinking has no duration/timeEnd).
+ * A later prose / burst / Task segment means this burst already ended.
+ */
+export function isActivityBurstStreaming(
+  blocks: ContentBlock[],
+  turnLive: boolean,
+  opts?: { hasLaterSegment?: boolean },
+): boolean {
+  if (!turnLive) return false;
+  if (blocks.some((block) => block.type === "tool_use" && block.status === "running")) {
+    return true;
+  }
+  if (opts?.hasLaterSegment) return false;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!;
+    if (block.type === "thinking") {
+      return typeof block.duration !== "number" && typeof block.timeEnd !== "number";
+    }
+    if (block.type === "tool_use") return false;
+  }
+  return false;
 }
 
 /** Live: burst folds + standalone Task; AI prose stays outside between bursts. */
@@ -129,76 +162,6 @@ function segmentAssistantBlocksLive(blocks: ContentBlock[]): AssistantSegment[] 
     }
   }
   flushActivity();
-  return out;
-}
-
-/** Flatten process blocks from worked children (for outer duration). */
-function flattenWorkedProcessBlocks(
-  children: WorkedChildSegment[],
-): { blocks: ContentBlock[]; blockIndices: number[] } {
-  const blocks: ContentBlock[] = [];
-  const blockIndices: number[] = [];
-  for (const child of children) {
-    if (child.kind === "activity") {
-      blocks.push(...child.blocks);
-      blockIndices.push(...child.blockIndices);
-    } else if (child.kind === "tool") {
-      blocks.push(child.block);
-      blockIndices.push(child.blockIndex);
-    }
-  }
-  return { blocks, blockIndices };
-}
-
-/**
- * Settled: live-style bursts nested inside one Worked-for fold through the last
- * process block; trailing final reply stays outside.
- */
-function segmentAssistantBlocksSettled(blocks: ContentBlock[]): AssistantSegment[] {
-  if (blocks.length === 0) return [];
-
-  let tailTextStart = blocks.length;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (hasTextContent(blocks[i]!)) {
-      tailTextStart = i;
-      continue;
-    }
-    break;
-  }
-
-  const head = blocks.slice(0, tailTextStart);
-  const tail = blocks.slice(tailTextStart).filter((b) => hasTextContent(b));
-
-  // Same burst / Task / interim-prose cuts as live — then wrap as Worked for.
-  const children = segmentAssistantBlocksLive(head).filter(
-    (seg): seg is WorkedChildSegment => seg.kind !== "worked",
-  );
-  const hasProcess = children.some(
-    (c) => c.kind === "activity" || c.kind === "tool",
-  );
-
-  const out: AssistantSegment[] = [];
-  if (hasProcess) {
-    const flat = flattenWorkedProcessBlocks(children);
-    out.push({
-      kind: "worked",
-      children,
-      blocks: flat.blocks,
-      blockIndices: flat.blockIndices,
-    });
-  } else {
-    // Prose-only head (no tools/thinking) — keep as plain text, no empty Worked for.
-    for (const child of children) {
-      if (child.kind === "text") out.push(child);
-    }
-  }
-  for (let i = 0; i < tail.length; i++) {
-    out.push({
-      kind: "text",
-      blockIndex: tailTextStart + i,
-      block: tail[i]!,
-    });
-  }
   return out;
 }
 
@@ -282,51 +245,7 @@ export function describeLatestActivityBlock(block: ContentBlock | undefined): st
     return block._progress ? "Initialization" : "Thinking";
   }
   if (block.type !== "tool_use") return null;
-
-  const name = (block.name || block._backfillName || "tool").toLowerCase();
-  const input = (block.input ?? block._backfillInput) as Record<string, unknown> | undefined;
-
-  switch (name) {
-    case "read":
-    case "write":
-    case "edit": {
-      const p =
-        param(input, "file_path", "filePath")
-        || param(input, "path")
-        || "";
-      return p ? basenamePath(p) : "file";
-    }
-    case "grep": {
-      const pat = param(input, "pattern") || param(input, "query") || "";
-      return pat ? `"${pat.slice(0, 40)}${pat.length > 40 ? "…" : ""}"` : "search";
-    }
-    case "glob": {
-      const g = param(input, "glob_pattern", "globPattern") || param(input, "pattern") || "";
-      return g || "glob";
-    }
-    case "bash": {
-      const cmd =
-        param(input, "command")
-        || block.title
-        || "";
-      const line = cmd.split("\n")[0]?.trim() || "shell";
-      return line.length > 48 ? `${line.slice(0, 48)}…` : line;
-    }
-    case "task": {
-      const agent =
-        param(input, "agent")
-        || param(input, "subagent_type")
-        || "task";
-      return `@${agent.replace(/^@/, "")}`;
-    }
-    default: {
-      const title = typeof block.title === "string" ? block.title.trim() : "";
-      if (title) return title.length > 48 ? `${title.slice(0, 48)}…` : title;
-      const idHint = param(input, "id") || param(input, "experiment_id", "experimentId") || "";
-      if (idHint) return basenamePath(String(idHint));
-      return name;
-    }
-  }
+  return toolUseActivityLabel(block);
 }
 
 /** Cursor-style burst phase — not the final-turn "Worked for" summary. */

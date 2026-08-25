@@ -6,6 +6,7 @@ import {
   flattenGitChangesTree,
   gitFileTreeKey,
   gitFilesToTreeInputs,
+  gitFilterModeLineCounts,
 } from "@/modes/git-mode/git-changes-tree";
 
 function makeFile(overrides: Partial<GitFileItem> & Pick<GitFileItem, "id" | "path">): GitFileItem {
@@ -72,5 +73,26 @@ describe("git-changes-tree", () => {
     expect(filterGitFilesByMode(files, "staged").map((f) => f.id)).toEqual(["s"]);
     expect(filterGitFilesByMode(files, "unstaged").map((f) => f.id).sort()).toEqual(["t", "u"]);
     expect(filterGitFilesByMode(files, "all")).toHaveLength(3);
+  });
+
+  it("sums +/− line counts per filter mode", () => {
+    const files = [
+      makeFile({ id: "s", path: "a.ts", staged: true, unstaged: false, added: 10, deleted: 2 }),
+      makeFile({ id: "u", path: "b.ts", staged: false, unstaged: true, added: 4, deleted: 1 }),
+      makeFile({
+        id: "t",
+        path: "c.ts",
+        staged: false,
+        unstaged: false,
+        untracked: true,
+        added: 7,
+        deleted: 0,
+      }),
+    ];
+    expect(gitFilterModeLineCounts(files)).toEqual({
+      all: { added: 21, deleted: 3 },
+      staged: { added: 10, deleted: 2 },
+      unstaged: { added: 11, deleted: 1 },
+    });
   });
 });

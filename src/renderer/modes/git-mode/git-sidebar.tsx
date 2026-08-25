@@ -13,7 +13,9 @@ import { useWorktreeStore } from "@/stores/worktree-store";
 import { groupByDate, formatRelativeTime, parseRefs, type RefBadge } from "./git-utils";
 import { GitSidebarViewTabs } from "./git-sidebar-view-tabs";
 import { GitChangesTreeSidebar } from "./git-changes-tree-sidebar";
-import { filterGitFilesByMode } from "./git-changes-tree";
+import { workingLens } from "@shared/git";
+import { useLastAgentTurnLens } from "@/lib/git/agent-turn-lens";
+import { filterGitFilesByLens } from "./git-changes-tree";
 import {
   SidebarHeader,
   SidebarContent,
@@ -31,6 +33,8 @@ export function GitSidebar() {
   const checkingRepo = useGitStore((s) => s.checkingRepo);
   const files = useGitStore((s) => s.files);
   const filterMode = useGitStore((s) => s.filterMode);
+  const changesLens = useGitStore((s) => s.changesLens);
+  const lastTurn = useLastAgentTurnLens();
   const selectUnit = useGitStore((s) => s.selectUnit);
   const refreshStatus = useGitStore((s) => s.refreshStatus);
   const refreshBranches = useGitStore((s) => s.refreshBranches);
@@ -65,8 +69,15 @@ export function GitSidebar() {
   // ── Filtered files ──
 
   const filteredFiles = useMemo(
-    () => filterGitFilesByMode(files, filterMode),
-    [files, filterMode],
+    () =>
+      filterGitFilesByLens(
+        files,
+        changesLens.kind === "commit" || changesLens.kind === "branch-changes"
+          ? workingLens(filterMode)
+          : changesLens,
+        lastTurn.paths,
+      ),
+    [files, changesLens, filterMode, lastTurn.paths],
   );
 
   // ── Not a git repo ──

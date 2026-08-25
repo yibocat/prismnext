@@ -6,7 +6,8 @@ import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteraturePdfDrop } from "@/lib/literature/use-literature-pdf-drop";
 import { LiteratureLibrary } from "./literature-library";
 import { LiteratureSessionCitations } from "./literature-session-citations";
-import { BETTER_BIBTEX_URL } from "./literature-format";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
+import { BETTER_BIBTEX_URL } from "@/lib/literature/literature-format";
 import { cn } from "@/lib/utils";
 import { literatureLibraryPdfDropZoneClass } from "./literature-list-chrome";
 
@@ -29,7 +30,7 @@ function LiteratureBbtBanner() {
       <button
         type="button"
         className="shrink-0 text-foreground/85 hover:text-foreground underline underline-offset-2"
-        onClick={() => void window.electronAPI.shellOpenExternal(BETTER_BIBTEX_URL)}
+        onClick={() => void openExternalUrl(BETTER_BIBTEX_URL)}
       >
         {t("modes.literature.getBbt")}
       </button>
@@ -58,10 +59,11 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
     subview === "library" ? projectRoot : null,
   );
 
+  const paperId = tab.kind === "literature" ? tab.literaturePaperId : undefined;
   const paper = useMemo(
     () =>
-      tab.literaturePaperId ? papers.find((p) => p.id === tab.literaturePaperId) ?? null : null,
-    [papers, tab.literaturePaperId],
+      paperId ? papers.find((p) => p.id === paperId) ?? null : null,
+    [papers, paperId],
   );
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export function LiteratureContent({ tab, isActive }: { tab: RightTab; isActive: 
     );
   }
 
-  if (tab.literaturePaperId && paper) {
+  if (paperId && paper) {
     return null;
   }
 

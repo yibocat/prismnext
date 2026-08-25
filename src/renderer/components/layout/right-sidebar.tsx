@@ -20,7 +20,7 @@ export function RightSidebar(_props: { fullMode?: boolean }) {
         collapsible="none"
         className="relative shrink-0 border-l-0 !w-full"
         side="right"
-        data-surface="sidebar"
+        data-surface="content"
       >
         <Content />
       </Sidebar>

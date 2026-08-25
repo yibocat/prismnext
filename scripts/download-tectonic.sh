@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Download pinned Tectonic binaries into bin/tectonic/<platform>-<arch>/ for dev + packaging.
-# Same layout as bin/opencode/ — keep all release platforms locally, then electron-builder
-# copies the matching folder per target (see electron-builder.yml).
+# Keep all release platforms locally, then electron-builder copies the matching folder
+# per target (see electron-builder.yml).
 #
 # Usage:
 #   ./scripts/download-tectonic.sh --all          # all platforms (recommended before dist)
@@ -26,7 +26,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/download-tectonic.sh [--all] [version]
 
-  --all   Download darwin-arm64, linux-x64, windows-x64 (same trio as bin/opencode/)
+  --all   Download darwin-arm64, linux-x64, windows-x64
   version Override pin in scripts/tectonic-version.txt
 EOF
 }
@@ -123,7 +123,7 @@ download_one() {
 
 download_all_platforms() {
   echo "Fetching Tectonic ${VERSION} for all release platforms (pin: $PIN_FILE)"
-  # Same trio as bin/opencode/: darwin-arm64, linux-x64, windows-x64
+  # Release trio: darwin-arm64, linux-x64, windows-x64
   download_one darwin arm64 "tectonic-${VERSION}-aarch64-apple-darwin.tar.gz" tectonic
   download_one linux x64 "tectonic-${VERSION}-x86_64-unknown-linux-musl.tar.gz" tectonic
   download_one windows x64 "tectonic-${VERSION}-x86_64-pc-windows-msvc.zip" tectonic.exe

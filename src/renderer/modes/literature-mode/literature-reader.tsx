@@ -7,6 +7,8 @@ import {
   usePdfJump,
 } from "@anaralabs/lector";
 import type { ColoredHighlight } from "@anaralabs/lector";
+import { extractDesktop } from "@/lib/desktop-api/extract";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
@@ -15,8 +17,8 @@ import { PdfDocumentView } from "@/components/modules/preview";
 import { Progress } from "@/components/ui/progress";
 import { i18n } from "@/lib/i18n";
 import type { LiteraturePaper } from "@/types/electron.d";
-import type { PaperExtractBlock } from "../../../shared/paper-extract-block";
-import { paperHasReadablePdf } from "./literature-format";
+import type { PaperExtractBlock } from "../../../shared/literature/paper-extract-block";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { LiteratureBlockProvider } from "./literature-block-context";
 import { LiteratureBlockPageOverlay } from "./literature-block-overlay";
 import { LiteratureBlockPointerCapture } from "./literature-block-pointer";
@@ -189,7 +191,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
       return;
     }
     let cancelled = false;
-    void window.electronAPI.extractGetBlocks(projectRoot, paper.id, "mineru").then(({ blocks }) => {
+    void extractDesktop.extractGetBlocks(projectRoot, paper.id, "mineru").then(({ blocks }) => {
       if (cancelled) return;
       setExtractBlocks(blocks ?? []);
       setBlocksHint(
@@ -221,7 +223,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
     setDownloadProgress(null);
     setLoadingHint(i18n.t("literature.reader.loadingPdf"));
 
-    const unsubscribeProgress = window.electronAPI.onLiteraturePdfDownloadProgress((data) => {
+    const unsubscribeProgress = literatureDesktop.onLiteraturePdfDownloadProgress((data) => {
       if (cancelled || data.paperId !== paper.id) return;
       if (data.phase === "resolving") {
         setLoadingHint(i18n.t("literature.reader.connectingZotero"));
@@ -248,7 +250,7 @@ export function LiteratureReader({ projectRoot, paper }: LiteratureReaderProps) 
 
     void (async () => {
       try {
-        const { pdfUrl } = await window.electronAPI.literatureEnsurePaperPdf(projectRoot, paper.id);
+        const { pdfUrl } = await literatureDesktop.literatureEnsurePaperPdf(projectRoot, paper.id);
         if (cancelled) return;
         if (!pdfUrl) {
           setLoadState("error");

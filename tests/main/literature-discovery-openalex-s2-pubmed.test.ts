@@ -2,10 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   resetCatalogFetchForTests,
   setCatalogFetch,
-} from "../../src/shared/bibliographic-metadata/catalog-fetch";
-import { openalexDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/openalex";
-import { semanticScholarDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/semantic-scholar";
-import { pubmedDiscoveryAdapter } from "../../src/main/services/literature-discovery/sources/pubmed";
+} from "../../src/main/literature/catalog/catalog-fetch";
+import { openalexDiscoveryAdapter } from "../../src/main/literature/discovery/sources/openalex";
+import { semanticScholarDiscoveryAdapter } from "../../src/main/literature/discovery/sources/semantic-scholar";
+import { pubmedDiscoveryAdapter } from "../../src/main/literature/discovery/sources/pubmed";
 
 afterEach(() => resetCatalogFetchForTests());
 

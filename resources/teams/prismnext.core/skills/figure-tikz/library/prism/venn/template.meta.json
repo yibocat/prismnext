@@ -1,0 +1,33 @@
+{
+  "id": "venn",
+  "name": "Venn (three sets)",
+  "type": "template",
+  "domain": ["general"],
+  "tags": ["venn", "sets", "overlap", "intersection", "euler"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "positioning"],
+  "description": "Three overlapping circles with set names and intersection labels. For two sets, drop circle C and its labels.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\alabel", "type": "text", "meaning": "set A name"},
+      {"name": "\\blabel", "type": "text", "meaning": "set B name"},
+      {"name": "\\clabel", "type": "text", "meaning": "set C name"},
+      {"name": "\\ablabel", "type": "text", "meaning": "A∩B label"},
+      {"name": "\\bclabel", "type": "text", "meaning": "B∩C label"},
+      {"name": "\\aclabel", "type": "text", "meaning": "A∩C label"},
+      {"name": "\\centerlabel", "type": "text", "meaning": "triple intersection"}
+    ],
+    "node_naming": "circles (A) (B) (C); labels are macros, not named nodes",
+    "styles": ["set", "lab"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "drop-set", "summary": "remove circle C and the C labels for a two-set figure"},
+      {"id": "recolor", "summary": "change a circle's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "keep the three-circle geometry unless the user asked for two sets",
+      "colors only via the five palette names"
+    ]
+  }
+}

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   OPEN_BUILTIN_ROSTER,
+  buildLiveTaskRosterMarkdown,
   buildSubagentRosterMarkdown,
-} from "../../src/shared/subagent-roster";
+} from "../../src/shared/agent/subagent-roster";
 
 describe("subagent-roster", () => {
   it("OPEN_BUILTIN_ROSTER covers open Task builtins only", () => {
@@ -26,5 +27,32 @@ describe("subagent-roster", () => {
     expect(md).toContain("### Project experts");
     expect(md).toContain("Choose by fit");
     expect(md).toContain("Do not Task to `plan` or `build`");
+  });
+
+  it("buildLiveTaskRosterMarkdown lists only session experts and forbids disk discovery", () => {
+    const md = buildLiveTaskRosterMarkdown([
+      {
+        id: "literature-synthesizer",
+        name: "Literature Synthesizer",
+        description: "Cross-paper synthesis",
+        fqid: "prismnext.core:literature-synthesizer",
+      },
+    ]);
+    expect(md).toContain("## Available subagents (via Task)");
+    expect(md).toContain("`literature-synthesizer`");
+    expect(md).toContain("`prismnext.core:literature-synthesizer`");
+    expect(md).toContain("call the **task** tool immediately");
+    expect(md).toContain("Do not");
+    expect(md).toContain("team.json");
+    expect(md).not.toContain("`general`");
+    expect(md).not.toContain("`explore`");
+    expect(md).not.toContain("### Built-in");
+  });
+
+  it("buildLiveTaskRosterMarkdown says when no experts are enabled", () => {
+    const md = buildLiveTaskRosterMarkdown([]);
+    expect(md).toContain("No project experts are enabled");
+    expect(md).toContain("There is no `task` tool");
+    expect(md).toContain("team.json");
   });
 });

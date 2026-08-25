@@ -115,23 +115,24 @@ license: MIT
 
 ## Install location
 
-Write new skills under this **relative** project path (same on macOS,
-Windows, Linux) — the Project Team hangar:
+Write new skills under the **workbench home** (same on macOS, Windows,
+Linux) — not inside the paper folder:
 
 ```
-.prismnext/agent/teams/project.local/skills/<skill-id>/SKILL.md
+~/.prismnext/skills/<skill-id>/SKILL.md
 ```
 
-- PrismNext owns project custom skills on the **Project Team** hangar
-  (`.prismnext/agent/teams/project.local/skills/`). OpenCode sync uses
-  app-level config under userData — never project-root `.opencode/`.
-- Skills created here are **user-created**: they appear in Settings →
-  Skills (owned by Project Team) and can be deleted there. Bundled skills
-  ship with the app under the Core team — enable via the team Skills
-  allowlist; they are not deleted from disk by the user.
+Expand `~` to the user's home directory. Create the skill folder if
+needed. Never write under the paper project (`.workbench/`, `.prismnext/`,
+`project.local/`).
+
+- PrismNext owns user skills on the workbench hangar
+  (`~/.prismnext/skills/`). They appear in every project. Settings →
+  Skills can delete them. Bundled skills ship with the Core team — enable
+  via the team Skills allowlist; they are not deleted from disk by the user.
 - Prefer Settings → Skills / team detail **New** when the user wants a
   Common Team skill; do **not** invent paths under Application Support /
-  userData.
+  userData, and do **not** write into the paper git tree.
 - A **new chat tab** is required before the skill can be invoked via the
   `skill` tool (skill lists are session-scoped).
 
@@ -173,6 +174,8 @@ Windows, Linux) — the Project Team hangar:
 |------|-----|
 | `.agents/` or `.agents/skills/` | OpenCode default — not PrismNext storage |
 | `<project>/.opencode/` | Runtime/npm artifacts; pollutes Git |
-| `.prismnext/agent/skills/<id>/` (legacy flat tree) | Old layout; Settings CRUD expects hangar teams |
-| `.prismnext/agent/local/skills/` | Pre-M8 path; migrated to `teams/project.local/` |
+| `.prismnext/agent/skills/<id>/` (legacy flat tree) | Old layout; Settings CRUD expects the workbench hangar |
+| `.prismnext/agent/local/skills/` | Pre-M8 path; do not revive |
+| `.prismnext/agent/teams/project.local/skills/` | Retired paper hangar; pollutes git |
+| `<project>/.workbench/` | Project config only — not skills |
 | Any other path for new `SKILL.md` (except the Install location above) | Breaks Settings + team ownership |

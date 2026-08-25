@@ -11,11 +11,11 @@ vi.mock("electron-store", () => ({
   },
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: () => settingsState.current,
 }));
 
-vi.mock("../../src/main/services/logger", () => ({
+vi.mock("../../src/main/app/logger", () => ({
   createLogger: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
 }));
 
@@ -25,7 +25,7 @@ import {
   resolveAnthropicMessagesUrl,
   resolveVisionHelperFromSettings,
   usesAnthropicMessagesApi,
-} from "../../src/main/services/vision-fallback";
+} from "../../src/main/agent/vision-fallback";
 
 describe("vision-fallback URL routing", () => {
   it("routes OpenCode Go MiniMax/Qwen to Anthropic messages API", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { analyzeSkillSource } from "../../src/main/services/skill-install";
-import { clearDiscoveryCacheForTests } from "../../src/main/services/skill-install-discovery";
+import { analyzeSkillSource } from "../../src/main/skills/skill-install";
+import { clearDiscoveryCacheForTests } from "../../src/main/skills/skill-install-discovery";
 
 describe("skill-install analyze", () => {
   afterEach(() => {

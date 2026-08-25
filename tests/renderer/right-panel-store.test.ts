@@ -5,7 +5,7 @@ const executionCancel = vi.fn();
 vi.stubGlobal("window", {
   electronAPI: {
     executionCancel,
-    chatCancel: vi.fn(),
+    agentCancel: vi.fn(),
   },
 });
 

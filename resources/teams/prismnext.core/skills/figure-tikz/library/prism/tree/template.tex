@@ -1,0 +1,53 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\rootlabel{Root}
+\def\alabel{A}
+\def\blabel{B}
+\def\clabel{A1}
+\def\dlabel{A2}
+\def\elabel{B1}
+\def\flabel{B2}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.2mm]},
+  node distance=0.85cm and 0.95cm,
+  nd/.style={
+    draw=otblue!75!black, fill=otblue!14, rounded corners=2pt,
+    minimum width=1.35cm, minimum height=0.65cm,
+    align=center, font=\sffamily\small,
+  },
+  leaf/.style={
+    draw=otteal!75!black, fill=otteal!16, rounded corners=2pt,
+    minimum width=1.2cm, minimum height=0.6cm,
+    align=center, font=\sffamily\small,
+  },
+  flow/.style={draw=otgray!70, line width=0.85pt, ->},
+]
+  \node[nd] (root) {\rootlabel};
+  \node[nd, below left=of root] (a) {\alabel};
+  \node[nd, below right=of root] (b) {\blabel};
+  \node[leaf, below left=of a] (c) {\clabel};
+  \node[leaf, below right=of a] (d) {\dlabel};
+  \node[leaf, below left=of b] (e) {\elabel};
+  \node[leaf, below right=of b] (f) {\flabel};
+
+  \draw[flow] (root) -- (a);
+  \draw[flow] (root) -- (b);
+  \draw[flow] (a) -- (c);
+  \draw[flow] (a) -- (d);
+  \draw[flow] (b) -- (e);
+  \draw[flow] (b) -- (f);
+\end{tikzpicture}
+\end{document}

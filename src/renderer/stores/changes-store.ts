@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useDocumentStore } from "./document-store";
 import { useChatStore } from "./chat-store";
 
@@ -91,7 +92,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
     if (!change) return;
 
     try {
-      await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
+      await fsDesktop.fsWrite(change.absolutePath, change.newContent);
       const docState = useDocumentStore.getState();
       const file = docState.files.find((f) => f.relativePath === change.filePath);
       if (file) {
@@ -118,7 +119,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
     const file = docState.files.find((f) => f.relativePath === change.filePath);
 
     try {
-      await window.electronAPI.fsWrite(change.absolutePath, change.oldContent);
+      await fsDesktop.fsWrite(change.absolutePath, change.oldContent);
       if (file) {
         await docState.refreshFileContent(file.id);
       }
@@ -141,7 +142,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
 
     for (const change of changes) {
       try {
-        await window.electronAPI.fsWrite(change.absolutePath, change.newContent);
+        await fsDesktop.fsWrite(change.absolutePath, change.newContent);
         const file = docState.files.find((f) => f.relativePath === change.filePath);
         if (file) {
           await docState.refreshFileContent(file.id);
@@ -172,7 +173,7 @@ export const useChangesStore = create<ChangesState>()((set, get) => ({
 
     for (const change of changes) {
       try {
-        await window.electronAPI.fsWrite(change.absolutePath, change.oldContent);
+        await fsDesktop.fsWrite(change.absolutePath, change.oldContent);
         const file = docState.files.find((f) => f.relativePath === change.filePath);
         if (file) {
           await docState.refreshFileContent(file.id);

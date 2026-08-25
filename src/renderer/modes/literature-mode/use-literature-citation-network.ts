@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import type { LiteraturePaper, PaperCitationNetworkResult } from "@/types/electron.d";
-import type { PaperCitationSectionKind } from "../../../shared/paper-citation-network";
-import type { PaperCitationSection } from "../../../shared/paper-citation-network";
+import type { PaperCitationSectionKind } from "../../../shared/literature/paper-citation-network";
+import type { PaperCitationSection } from "../../../shared/literature/paper-citation-network";
 
 function mergeSection(
   prev: PaperCitationSection | undefined,
@@ -39,7 +40,7 @@ export function useLiteratureCitationNetwork(
       if (!projectRoot || !enabled) return;
       setLoading(true);
       try {
-        const data = await window.electronAPI.literatureGetCitationNetwork(
+        const data = await literatureDesktop.literatureGetCitationNetwork(
           projectRoot,
           paper.id,
           { refresh },
@@ -79,7 +80,7 @@ export function useLiteratureCitationNetwork(
 
       setLoadingMore(kind);
       try {
-        const page = await window.electronAPI.literatureGetCitationNetworkPage(
+        const page = await literatureDesktop.literatureGetCitationNetworkPage(
           projectRoot,
           paper.id,
           kind,

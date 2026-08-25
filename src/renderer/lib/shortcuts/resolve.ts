@@ -1,3 +1,4 @@
+import { desktopPlatform } from "@/lib/desktop-api/shell";
 import { i18n } from "@/lib/i18n";
 import { useSettingsStore } from "@/stores/settings-store";
 import {
@@ -33,9 +34,7 @@ export function resolveShortcut(id: string): ResolvedShortcut | null {
   const resolved = resolveChord(id, readOverrides());
   if (!resolved) return null;
 
-  const platform = detectShortcutPlatform(
-    typeof window !== "undefined" ? (window.electronAPI?.platform ?? "darwin") : "darwin",
-  );
+  const platform = detectShortcutPlatform(desktopPlatform());
   const chordLabel = formatChord(resolved.chord, platform);
   const label = i18n.t(resolved.def.labelKey);
   return {
@@ -65,8 +64,6 @@ export function shortcutChordLabel(id: string): string {
 export function matchesShortcutEvent(id: string, e: KeyboardEvent): boolean {
   const resolved = resolveChord(id, readOverrides());
   if (!resolved) return false;
-  const platform = detectShortcutPlatform(
-    typeof window !== "undefined" ? (window.electronAPI?.platform ?? "darwin") : "darwin",
-  );
+  const platform = detectShortcutPlatform(desktopPlatform());
   return chordMatchesEvent(resolved.chord, e, platform);
 }

@@ -5,16 +5,8 @@ import {
   resolveAppLocale,
   type AppLocalePreference,
   type ResolvedAppLocale,
-} from "../../../shared/app-locale";
-import en from "./locales/en.json";
-import zhCN from "./locales/zh-CN.json";
-import zhHK from "./locales/zh-HK.json";
-
-const resources = {
-  en: { translation: en },
-  "zh-CN": { translation: zhCN },
-  "zh-HK": { translation: zhHK },
-} as const;
+} from "../../../shared/platform/app-locale";
+import { resources } from "./locales";
 
 let initialized = false;
 

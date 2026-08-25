@@ -1,16 +1,18 @@
 /**
- * Experiment result files in assistant chat replies.
+ * Tool result files in assistant chat replies.
  *
  * Prefer the model embedding ```artifact fences (or `![…](path)` for images).
- * Narrow fallback: append fences for missing experiment-run / append_run artifacts.
+ * Narrow fallback: append fences for missing experiment-run / append_run
+ * artifacts and latex-compile PDF output.
  */
+import type { ToolOutcome } from "../../../shared/agent/runtime";
 import type { ContentBlock } from "@/stores/chat-store";
 import {
   artifactBasename,
   isImageArtifactPath,
   normalizeArtifactSlash,
   resolveImageArtifactPathsForDisplay,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import {
   assistantTextEmbedsArtifactPath,
   buildArtifactFallbackMarkdown,
@@ -18,6 +20,7 @@ import {
   collapseVisualArtifactPaths,
   collectEmbeddedArtifactPaths,
   missingArtifactPathsInText,
+  presentOutcomeResource,
 } from "@/lib/markdown/chat-artifact";
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
@@ -152,6 +155,45 @@ export function extractExperimentImageArtifactPaths(
   return extractExperimentArtifactPaths(toolUse, toolResult).filter(isImageArtifactPath);
 }
 
+export function isLatexCompileToolUse(toolUse: ContentBlock): boolean {
+  const name = (toolUse.name || "").toLowerCase();
+  return name === "latex-compile" || name === "latex-compile-standalone";
+}
+
+/** Successful compile PDF (in-place figure or `.workbench/compile/` paper). */
+export function extractLatexCompileArtifactPaths(
+  toolUse: ContentBlock,
+  toolResult?: ContentBlock,
+): string[] {
+  if (!isLatexCompileToolUse(toolUse)) return [];
+  if (!toolResult || toolResult.is_error) return [];
+  const data = unwrapPayload(toolResult.content ?? toolUse.content);
+  if (!data) return [];
+  const nested = data.result;
+  const inner =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : data;
+  if (inner.success !== true && data.success !== true) return [];
+  const pdfPath =
+    (typeof inner.pdfPath === "string" && inner.pdfPath.trim())
+    || (typeof data.pdfPath === "string" && data.pdfPath.trim())
+    || "";
+  if (!pdfPath) return [];
+  return collapseVisualArtifactPaths([normalizeArtifactSlash(pdfPath)]);
+}
+
+function filePathsFromOutcome(outcome: ToolOutcome | undefined): string[] {
+  if (!outcome?.resources?.length) return [];
+  return collapseVisualArtifactPaths(
+    outcome.resources
+      .filter((resource): resource is Extract<ToolOutcome["resources"][number], { type: "file" }> => (
+        resource.type === "file" && presentOutcomeResource(resource) !== "skip"
+      ))
+      .map((resource) => resource.path),
+  );
+}
+
 export function collectExperimentArtifactPathsFromBlocks(
   blocks: ContentBlock[],
   toolResultMap: Map<string, ContentBlock>,
@@ -161,7 +203,14 @@ export function collectExperimentArtifactPathsFromBlocks(
   for (const block of blocks) {
     if (block.type !== "tool_use") continue;
     const result = toolResultMap.get(block.id || "");
-    for (const p of extractExperimentArtifactPaths(block, result)) {
+    const fromOutcome = filePathsFromOutcome(result?.outcome);
+    const paths = fromOutcome.length
+      ? fromOutcome
+      : [
+          ...extractExperimentArtifactPaths(block, result),
+          ...extractLatexCompileArtifactPaths(block, result),
+        ];
+    for (const p of paths) {
       if (seen.has(p)) continue;
       seen.add(p);
       out.push(p);

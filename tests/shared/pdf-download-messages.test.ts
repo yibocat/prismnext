@@ -4,7 +4,7 @@ import {
   joinPdfAttachAttempts,
   PDF_ATTACH_NO_OA_URL,
   PDF_ATTACH_PAYWALL_FALLBACK,
-} from "../../src/shared/pdf-download-messages";
+} from "../../src/shared/literature/pdf-download-messages";
 
 describe("formatPdfDownloadFailure", () => {
   it("maps paywall fallback without losing manual-import guidance", () => {

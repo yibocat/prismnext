@@ -7,7 +7,7 @@ import { createActiveModulesLayer } from "./layers/active-modules";
 import { createAgentsMdLayer } from "./layers/agents-md";
 import { createCustomRulesLayer } from "./layers/custom-rules";
 import { ALL_MODULES } from "./modules";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 import { countPromptTokens } from "../lib/token-estimate";
 
 /** DJB2 — must stay in sync with PromptComposer fingerprint hashing. */
@@ -85,9 +85,8 @@ class PromptManager {
   }
 
   /**
-   * Stable system content written to `.prismnext/agent/_prism-system.md` and
-   * loaded by OpenCode via `instructions`. Excludes AGENTS.md (separate file)
-   * and project rules (per-turn user block).
+   * Stable system content passed to the Pi ResourceLoader in memory.
+   * Excludes AGENTS.md (appended separately) and project rules (per-turn user block).
    */
   composeStableSystem(ctx: PromptContext): string {
     this.initialize();
@@ -135,7 +134,7 @@ class PromptManager {
           ? "Primary orchestrator agent.md only (auto-attached)"
           : m.profileOnly
             ? "Orchestrator + expert agent.md (auto-attached)"
-            : "Global `_prism-system.md` (OpenCode instructions — all sessions)";
+            : "Pi system prompt (all sessions)";
       return {
         key: m.key,
         label: m.label,

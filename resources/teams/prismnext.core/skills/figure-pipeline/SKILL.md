@@ -1,48 +1,47 @@
 ---
 name: figure-pipeline
-description: Use when turning experiment outputs or project data into publication-quality figures wired into the manuscript and reopenable as interaction objects. This is the plumbing (source data → script → manuscript wiring); the chart craft itself lives in figure-matplotlib, the panel presentation in figure-interaction.
+description: Use only when the user asked to put an existing (or just-drawn) figure into the manuscript — includegraphics, caption, label, in-text cite, then latex-compile. Not for drawing the figure (→ figure-matplotlib / figure-tikz / figure-observable-plot) and not for chat panel cards (→ figure-interaction).
 license: MIT
 ---
 
 # Figure Pipeline
 
-From artifact to a manuscript-ready figure: scripted, reproducible, wired
-into the document, and reopenable in chat. This skill owns the **plumbing** —
-where data comes from, where outputs land, how figures enter the manuscript.
-It stands alone: when the sibling figure skills are disabled, apply the
-inline standards below.
+Plumbing from a figure **file that already exists** into the paper. This
+skill does not draw. If the PDF/PNG/SVG is not on disk yet, stop and use
+the drawing skill (`figure-matplotlib`, `figure-tikz`, or
+`figure-observable-plot`); come back only if they still want it in the
+manuscript.
 
 ## When to use
 
-- Creating or regenerating manuscript figures from experiment outputs
-- A figure must survive re-runs (scripted, not hand-drawn)
-- The user wants a figure they can reopen and iterate on in chat
+- The user asked to insert, replace, or re-wire a figure **in the
+  manuscript**
+- Regenerating a manuscript figure from a new run artifact, then updating
+  the `\includegraphics` path
 
-## Workflow
+Not: "draw me a figure", "plot the loss", or "make a card I can reopen".
 
-1. **Source** — locate data via `experiment-log` read; prefer run artifact
-   snapshots over mutable working paths.
-2. **Script** — write or adjust the plotting script under the island or the
-   project's scripts folder; run it with `experiment-run` (the shared
-   project venv is injected by the tool). If `figure-matplotlib` is enabled,
-   start from its template and style file.
-3. **Output** — save into the project's figures folder (see Workspace Folder
-   Descriptions — do not assume a fixed name).
-4. **Standards** — the full craft checklist lives in `figure-matplotlib`
-   (chart selection, palettes, style file) when enabled. Either way, the
-   minimum bar never moves: axis labels with units, legible at final column
-   width, colorblind-safe palette, caption states what the figure *shows*
-   (not just what it is).
-5. **Wire into the manuscript** — `\includegraphics` with the
-   figures-relative path, caption, `\label{fig:...}`, and an in-text
-   reference.
-6. **Reopenable** — `interaction-write` so the figure becomes a reopenable
-   chat object carrying its spec (presentation standards:
-   `figure-interaction` when enabled).
-7. **Verify** — `latex-compile`.
+## Closed path
+
+1. **Source file** — the figure path on disk. Prefer a run
+   `artifactSnapshots` path over a mutable working copy. If it does not
+   exist, do not invent one here.
+2. **Wire** — `\includegraphics` with the figures-relative path, a caption
+   that states what the figure *shows*, `\label{fig:...}`, and one in-text
+   reference. Caption bar: axis units, sample size / seeds when relevant.
+3. **Compile** — `latex-compile` (the paper). Fix broken paths or missing
+   labels; do not start a drawing loop.
+4. **Stop.**
+
+**Do not** (unless the user named that next step):
+
+- `interaction-write`
+- Re-plot from scratch inside this skill
+- bash conversion (`cairosvg`, `sips`, `gs`) just to have another format
 
 ## Rules
 
-- Never hand-draw data values; every figure regenerates from its script.
-- Historical figures come from run artifact snapshots, not files that later
+- Never hand-draw data values; the file on disk must come from a script or
+  a TikZ source.
+- Historical figures come from run artifact snapshots, not files later
   runs may overwrite.

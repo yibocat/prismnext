@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * Citation audit — when to call citation-health; how-to lives on that tool.
@@ -7,7 +7,7 @@ export const CITATION_AUDIT_PROMPT = [
   "## Citation & bibliography audit",
   "",
   "Manuscript citation **compliance**: every `\\cite{key}` in project `.tex` ↔ project `.bib` ↔",
-  "`.prismnext/library/` in one grounded snapshot. This is not library browsing and not chat `[n]` staging.",
+  "the current project library in one grounded snapshot. This is not library browsing and not chat `[n]` staging.",
   "",
   "### Scope boundary",
   "",

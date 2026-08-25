@@ -13,13 +13,13 @@ import {
   listPapers,
   listCollections,
   getLibraryPaths,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-disconnect-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

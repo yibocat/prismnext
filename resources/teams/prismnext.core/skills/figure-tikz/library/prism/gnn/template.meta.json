@@ -1,0 +1,36 @@
+{
+  "id": "gnn",
+  "name": "GNN message-passing layer",
+  "type": "template",
+  "domain": ["ml"],
+  "tags": ["gnn", "graph neural network", "message passing", "aggregate", "update", "node classification", "architecture"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "A four-node graph plus one message-passing step: Message → Aggregate → Update, writing $h_v^{(t+1)}$.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\graphlabel", "type": "text", "meaning": "caption above the graph"},
+      {"name": "\\nlabel", "type": "text", "meaning": "message block"},
+      {"name": "\\alabel", "type": "text", "meaning": "aggregate block"},
+      {"name": "\\ulabel", "type": "text", "meaning": "update block"},
+      {"name": "\\outlabel", "type": "text", "meaning": "updated embedding"},
+      {"name": "\\vone", "type": "text", "meaning": "vertex 1"},
+      {"name": "\\vtwo", "type": "text", "meaning": "vertex 2"},
+      {"name": "\\vthree", "type": "text", "meaning": "vertex 3"},
+      {"name": "\\vfour", "type": "text", "meaning": "vertex 4"}
+    ],
+    "node_naming": "fixed names: (v1) (v2) (v3) (v4) (msg) (agg) (upd) (out)",
+    "styles": ["vertex", "edge", "blk", "io", "flow", "glabel"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-edge", "summary": "draw another edge between existing vertices; keep vertex names"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (v1) (v2) (v3) (v4) (msg) (agg) (upd) (out)",
+      "keep the Message / Aggregate / Update order",
+      "colors only via the five palette names"
+    ]
+  }
+}

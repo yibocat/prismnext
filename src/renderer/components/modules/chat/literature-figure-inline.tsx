@@ -4,9 +4,9 @@ import { ChatArtifactBlock } from "@/lib/markdown/chat-artifact-block";
 import {
   decodeLibraryFigureHref,
   resolveLibraryFigurePath,
-} from "@shared/paper-extract-images";
+} from "@shared/literature/paper-extract-images";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { artifactBasename } from "@shared/artifact-path";
+import { artifactBasename } from "@shared/interaction/artifact-path";
 
 export { decodeLibraryFigureHref };
 

@@ -3,10 +3,15 @@ import {
   cleanSessionTitleText,
   deriveSessionTitleForSend,
   extractSessionTitle,
+  extractSessionTitleFromConversation,
   extractTitleFromContentBlocks,
   isGenericSessionTitle,
+  isProvisionalSessionTitle,
   resolveSessionTitle,
+  sanitizeGeneratedSessionTitle,
+  shouldOfferAutoSessionTitle,
 } from "../../src/renderer/lib/chat/session-title";
+import { emptyConversation } from "../../src/shared/agent/conversation";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
 
 describe("session-title", () => {
@@ -150,5 +155,31 @@ describe("session-title", () => {
       },
     ];
     expect(extractSessionTitle(messages)).toBe("hello");
+  });
+
+  it("extracts a title from Conversation user blocks", () => {
+    const conv = {
+      ...emptyConversation({ conversationId: "c1", title: "New Chat" }),
+      turns: [{
+        turnId: "t1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text" as const, text: "review the abstract" }] },
+        assistant: { blocks: [] },
+        status: "completed" as const,
+      }],
+    };
+    expect(extractSessionTitleFromConversation(conv)).toBe("review the abstract");
+    expect(resolveSessionTitle({ title: "New Chat", conversation: conv, messages: [] }))
+      .toBe("review the abstract");
+  });
+
+  it("sanitizes generated titles and offers auto-title only on the first turn", () => {
+    expect(sanitizeGeneratedSessionTitle('  "Fix the abstract"  ')).toBe("Fix the abstract");
+    expect(sanitizeGeneratedSessionTitle("标题：引言改写")).toBe("引言改写");
+    expect(isProvisionalSessionTitle("hello there", "hello there")).toBe(true);
+    expect(isProvisionalSessionTitle("Rewrite the intro", "hello there")).toBe(false);
+    expect(shouldOfferAutoSessionTitle({ completedUserTurns: 1 })).toBe(true);
+    expect(shouldOfferAutoSessionTitle({ completedUserTurns: 1, userTitleSet: true })).toBe(false);
+    expect(shouldOfferAutoSessionTitle({ completedUserTurns: 2 })).toBe(false);
   });
 });

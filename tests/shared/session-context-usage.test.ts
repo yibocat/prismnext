@@ -3,7 +3,7 @@ import {
   mapAcpUsageToSnake,
   parseAcpUsageUpdate,
   resolveContextUsedFromPromptUsage,
-} from "../../src/shared/session-context-usage";
+} from "../../src/shared/agent/session-context-usage";
 
 describe("parseAcpUsageUpdate", () => {
   it("parses flattened usage_update", () => {

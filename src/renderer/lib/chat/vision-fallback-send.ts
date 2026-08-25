@@ -2,15 +2,16 @@
  * Composer → vision helper → text-only main model.
  *
  * When the chat model lacks native vision, describe attached images via
- * `aiVisionFallbackModel` before `chat:send` (strips ACP image blocks).
+ * `aiVisionFallbackModel` before `agent:send`.
  */
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { PromptImageAttachment } from "@/lib/chat/composer-attach-file";
 import {
   getModel,
   modelSupportsVision,
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   resolveProviderConfig,
 } from "@/lib/providers";
 import type { AppSettings } from "@/stores/settings-store";
@@ -72,10 +73,10 @@ export async function applyVisionFallbackForSend(
     return { promptText, promptImages, displayBlocks, note: null };
   }
 
-  // OpenCode Go/Zen model rows (incl. vision flags) live in an async catalog.
-  // Settings may have selected a helper while the catalog was warm; chat send
-  // must not race an empty cache and reject a valid helper.
-  await prefetchOpenCodeModelsCatalog();
+  // Pi model rows (incl. vision flags) live in an async catalog. Settings may
+  // have selected a helper while the catalog was warm; chat send must not race
+  // an empty cache and reject a valid helper.
+  await prefetchPiModelsCatalog();
 
   const currentProviderId = settings.aiProvider?.trim() || "";
   const currentProvider = currentProviderId
@@ -135,9 +136,9 @@ export async function applyVisionFallbackForSend(
 
   chatStore._setPreparePhase(tabId, "describing_images");
   try {
-    let result: Awaited<ReturnType<typeof window.electronAPI.chatDescribeImages>>;
+    let result: Awaited<ReturnType<typeof agentDesktop.agentDescribeImages>>;
     try {
-      result = await window.electronAPI.chatDescribeImages({
+      result = await agentDesktop.agentDescribeImages({
         providerId: helperProviderId,
         modelId: helperModelId,
         images: promptImages,

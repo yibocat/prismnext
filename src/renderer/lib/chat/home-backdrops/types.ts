@@ -45,9 +45,9 @@ export const CHAT_HOME_BACKDROP_SETTINGS: ChatHomeBackdropSetting[] = [
 
 /** Default backdrop per theme pack when setting is `auto`. */
 export const THEME_PACK_HOME_BACKDROP: Record<ThemePackId, ChatHomeBackdropSetting> = {
-  academic: "academic",
-  "warm-paper": "origami",
-  midnight: "rain",
-  forest: "forest",
-  graphite: "blueprint",
+  academic: "paperplane",
+  "warm-paper": "paperplane",
+  midnight: "paperplane",
+  forest: "paperplane",
+  graphite: "paperplane",
 };

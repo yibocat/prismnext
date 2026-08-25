@@ -1,10 +1,10 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CopyIcon, CheckIcon, Undo2Icon, Loader2Icon } from "lucide-react";
 import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
-import { countUserTurns } from "@/components/modules/chat/chat-turns";
+import { countConversationTurns } from "@/lib/chat/conversation-view";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useChangesStore } from "@/stores/changes-store";
@@ -34,7 +34,18 @@ export const TurnFooter = memo(function TurnFooter({
   const { t } = useTranslation();
   const activeTabId = useChatStore((s) => s.activeTabId);
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const canRollback = useCheckpointStore((s) => s.canRollbackToTurn(activeTabId, turnIndex));
+  const committedTurnCount = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    return countConversationTurns(tab?.conversation);
+  });
+  const checkpointTick = useCheckpointStore((s) => {
+    const tab = s.byTab[activeTabId];
+    return `${tab?.boundCheckoutPath ?? ""}:${tab?.checkpoints.length ?? 0}`;
+  });
+  const canRollback = useMemo(
+    () => useCheckpointStore.getState().canRollbackToTurn(activeTabId, turnIndex),
+    [activeTabId, checkpointTick, committedTurnCount, turnIndex],
+  );
 
   const [copied, setCopied] = useState(false);
   const [rollingBack, setRollingBack] = useState(false);
@@ -57,7 +68,7 @@ export const TurnFooter = memo(function TurnFooter({
     if (!canRollback || rollingBack || isStreaming) return;
 
     const chatTab = useChatStore.getState().tabs.find((t) => t.id === activeTabId);
-    const turnCount = countUserTurns(chatTab?.messages ?? []);
+    const turnCount = countConversationTurns(chatTab?.conversation);
     const hasLaterTurns = turnIndex < turnCount - 1;
     const tabCp = useCheckpointStore.getState().byTab[activeTabId];
     const fileTarget =
@@ -161,6 +172,17 @@ export const TurnFooter = memo(function TurnFooter({
 });
 
 /** Collect assistant text blocks from a turn for copy-to-clipboard. */
+export function extractTurnCopyTextFromBlocks(
+  blocks: Array<{ type?: string; text?: string }>,
+): string {
+  const parts: string[] = [];
+  for (const block of blocks) {
+    if (block.type === "text" && block.text) parts.push(block.text);
+  }
+  return parts.join("\n\n");
+}
+
+/** @deprecated Prefer extractTurnCopyTextFromBlocks — ChatStream response list. */
 export function extractTurnCopyText(
   responses: { msg: { type?: string; message?: { content?: unknown } } }[],
 ): string {

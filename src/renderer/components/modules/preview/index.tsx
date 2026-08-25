@@ -63,7 +63,9 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { TabContext } from "@/lib/workspace/tab-context";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useTranslation } from "react-i18next";
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
@@ -704,7 +706,7 @@ export function PdfViewerInner({
       {/* Body: Side Panel + Pages */}
       <div className="relative flex flex-1 min-h-0">
         {!hideToolbar && panelOpen && (
-          <div data-surface="sidebar" className="shrink-0 border-r border-[var(--sidebar-edge-line)] bg-sidebar overflow-hidden" style={{ width: PANEL_WIDTH }}>
+          <div data-surface="content" className="shrink-0 border-r border-[var(--sidebar-edge-line)] bg-sidebar overflow-hidden" style={{ width: PANEL_WIDTH }}>
             {sidePanel === "outline" && <OutlinePanel onJump={() => setSidePanel(null)} />}
             {sidePanel === "search" && <SearchPanel />}
             {sidePanel === "thumbnails" && <ThumbnailsPanel />}
@@ -1101,8 +1103,8 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   // Prefer per-tab context (when rendered inside PaneContent); fall back to
   // global active tab (when rendered directly by RightMainArea for compiled PDFs).
   const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
-  const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab?.filePath);
-  const fileId = activeTab?.fileId ?? null;
+  const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab ? tabFilePath(activeTab) : undefined);
+  const fileId = activeTab ? tabFileId(activeTab) ?? null : null;
   const absolutePath = fileId
     ? (fileMetadata.get(fileId)?.absolutePath ?? null)
     : null;
@@ -1110,7 +1112,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   /** Standalone Files PDF — same Uint8Array path as compile preview (not data URL). */
   const [filePdfBytes, setFilePdfBytes] = useState<Uint8Array | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  /** Hydrating compile preview from `.prismnext/compile/` when memory cache is empty. */
+  /** Hydrating compile preview from `.workbench/compile/` when memory cache is empty. */
   const [diskHydrating, setDiskHydrating] = useState(false);
 
   const compilePdfBytes = useMemo(() => {
@@ -1154,7 +1156,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
     setFilePdfBytes(null);
     (async () => {
       try {
-        const { bytes } = await window.electronAPI.fsReadBytes(absolutePath);
+        const { bytes } = await fsDesktop.fsReadBytes(absolutePath);
         if (!cancelled) setFilePdfBytes(new Uint8Array(bytes));
       } catch (err) {
         if (!cancelled) {
@@ -1175,8 +1177,8 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   }, [filePdfBytes, compilePdfBytes]);
 
   const persistKey = useMemo(
-    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab?.fileId),
-    [projectRoot, sourceMode, activeTab?.fileId],
+    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab ? tabFileId(activeTab) : undefined),
+    [projectRoot, sourceMode, activeTab],
   );
 
   if (loadError && isPdfFile) {

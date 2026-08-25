@@ -1,5 +1,5 @@
 import { lazy, type ReactNode } from "react";
-import { isBinaryProjectFile } from "../../../shared/project-file-openability";
+import { isBinaryProjectFile } from "../../../shared/platform/project-file-openability";
 import { TabContext, type TabContextValue } from "./tab-context";
 
 // ── Lazy-loaded viewers (single canonical source) ──

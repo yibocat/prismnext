@@ -4,7 +4,7 @@ import { isPatchMetadataText } from "./user-message-display";
 import {
   durationSecFromOpenCodeTime,
   extractOpenCodeTime,
-} from "@shared/opencode-part-time";
+} from "@shared/chat/block-time";
 
 /** OpenCode SQLite part types that should not appear in chat UI. */
 export const INTERNAL_PART_TYPES = new Set([

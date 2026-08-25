@@ -15,12 +15,12 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import type { SmartPermissionAction } from "@shared/smart-permission-policy";
-import { explainSmartPermissionAction } from "@shared/smart-permission-policy";
+import type { SmartPermissionAction } from "@shared/permissions/smart-policy";
+import { explainSmartPermissionAction } from "@shared/permissions/smart-policy";
 import {
   buildPermissionRulesFromSettings,
   resolvePermissionMode,
-} from "@shared/permission-modes";
+} from "@shared/permissions/modes";
 import type { PermissionRulesField } from "./permission-rules-editor-panel";
 import {
   SETTINGS_CARD,
@@ -152,7 +152,8 @@ export function PermissionsSettings() {
     try {
       const cfg = buildPermissionRulesFromSettings(settingsRecord(settings));
       const tool = testTool.trim().toLowerCase() || "bash";
-      const isBash = tool === "bash" || tool === "experiment-run" || tool === "latex-compile";
+      const isBash = tool === "bash" || tool === "experiment-run"
+        || tool === "latex-compile" || tool === "latex-compile-standalone";
       const detail = explainSmartPermissionAction(
         {
           toolName: tool,

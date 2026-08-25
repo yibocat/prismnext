@@ -1,5 +1,5 @@
 import { ipcMain } from "electron";
-import * as gitService from "../services/git";
+import * as gitService from "../git/facade";
 
 export function registerGitHandlers(): void {
   // ── git:warmup — directory-level warmup to absorb TCC / code-signing ──
@@ -130,8 +130,20 @@ export function registerGitHandlers(): void {
   // ── git:log ──
   ipcMain.handle(
     "git:log",
-    async (_event, args: { projectRoot: string; maxCount?: number }) => {
-      return gitService.getLog(args.projectRoot, args.maxCount);
+    async (
+      _event,
+      args: {
+        projectRoot: string;
+        maxCount?: number;
+        range?: "head" | "branch";
+        baseBranch?: string;
+      },
+    ) => {
+      return gitService.getLog(args.projectRoot, {
+        maxCount: args.maxCount,
+        range: args.range,
+        baseBranch: args.baseBranch,
+      });
     },
   );
 
@@ -260,8 +272,32 @@ export function registerGitHandlers(): void {
   }) => gitService.deleteBranch(args.projectRoot, args.branch));
 
   // ── git:push ──
-  ipcMain.handle("git:push", async (_e, args: { projectRoot: string }) =>
-    gitService.pushBranch(args.projectRoot),
+  ipcMain.handle(
+    "git:push",
+    async (_e, args: { projectRoot: string; remote?: string }) =>
+      gitService.pushBranch(args.projectRoot, { remote: args.remote }),
+  );
+
+  ipcMain.handle("git:remotes", async (_e, args: { projectRoot: string }) =>
+    gitService.listRemotes(args.projectRoot),
+  );
+
+  ipcMain.handle(
+    "git:addRemote",
+    async (_e, args: { projectRoot: string; name: string; url: string }) =>
+      gitService.addRemote(args.projectRoot, { name: args.name, url: args.url }),
+  );
+
+  // ── git:fetch ──
+  ipcMain.handle(
+    "git:fetch",
+    async (_e, args: { projectRoot: string; remote?: string; all?: boolean }) =>
+      gitService.fetchRemote(args.projectRoot, { remote: args.remote, all: args.all }),
+  );
+
+  // ── git:pull ──
+  ipcMain.handle("git:pull", async (_e, args: { projectRoot: string }) =>
+    gitService.pullRemote(args.projectRoot),
   );
 
   // ── git:checkIgnore ──

@@ -9,7 +9,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type {
   AssetKind,
   BlockReason,
@@ -28,9 +28,9 @@ import type {
   SubagentDefV2,
   TeamViewV2,
 } from "../../shared/teams/view";
-import { createLogger } from "../services/logger";
-import { _registeredRoots } from "../services/active-project-roots";
-import { licenseGrants, licenseStateVersion } from "../services/teams-license";
+import { createLogger } from "../app/logger";
+import { _registeredRoots } from "../project/active-project-roots";
+import { licenseGrants, licenseStateVersion } from "./teams-license";
 import {
   appTeamsStateWriteCounter,
   onAppTeamsStateWritten,
@@ -129,8 +129,8 @@ function resolveTeamState(
       : appState.installed.some((r) => r.teamId === id));
 
   const enabledApp = appState.teamEnabled[id];
-  const enabledProject = projectState.teamEnabled[id];
-  const flag = resolveTri(enabledProject, enabledApp, true);
+  const enabledProject = undefined;
+  const flag = resolveTri(undefined, enabledApp, true);
 
   const blockedBy: BlockReason | undefined =
     !installed
@@ -139,11 +139,9 @@ function resolveTeamState(
         ? "license"
         : !compatible
           ? "incompatible"
-          : enabledProject === false
-            ? "team-disabled-project"
-            : enabledProject === undefined && enabledApp === false
-              ? "team-disabled-app"
-              : undefined;
+          : enabledApp === false
+            ? "team-disabled-app"
+            : undefined;
 
   const counts: Record<AssetKind, number> = {
     orchestrator: 0,
@@ -253,14 +251,12 @@ function buildProjectView(projectRoot: string): ProjectView {
     ) => {
       const fqid = toFqid(team.manifest.id, id);
       const enabledApp = appState.assetEnabled[fqid];
-      const enabledProject = projectState.assetEnabled[fqid];
+      const enabledProject = undefined;
       const blockedBy: BlockReason | undefined = !team.enabled
         ? team.blockedBy
-        : enabledProject === false
-          ? "asset-disabled-project"
-          : enabledProject === undefined && enabledApp === false
-            ? "asset-disabled-app"
-            : undefined;
+        : enabledApp === false
+          ? "asset-disabled-app"
+          : undefined;
       const hasOverride =
         appState.assetOverrides[fqid] !== undefined ||
         projectState.assetOverrides[fqid] !== undefined;
@@ -301,13 +297,11 @@ function buildProjectView(projectRoot: string): ProjectView {
   for (const a of listAppCommandAssets()) {
     const fqid = toFqid(APP_COMMANDS_OWNER_ID, a.id);
     const enabledApp = appState.assetEnabled[fqid];
-    const enabledProject = projectState.assetEnabled[fqid];
+    const enabledProject = undefined;
     const blockedBy: BlockReason | undefined =
-      enabledProject === false
-        ? "asset-disabled-project"
-        : enabledProject === undefined && enabledApp === false
-          ? "asset-disabled-app"
-          : undefined;
+      enabledApp === false
+        ? "asset-disabled-app"
+        : undefined;
     assets.push({
       fqid,
       kind: "command",
@@ -456,16 +450,11 @@ export function notifyTeamsChanged(projectRoot?: string): void {
   const roots = projectRoot ? [projectRoot] : _registeredRoots();
   if (roots.length === 0) return;
   for (const root of roots) {
-    void import("../services/project-subagents-refresh")
+    void import("./project-subagents-refresh")
       .then((m) => m.scheduleSubagentsRefresh(root))
       .catch(() => {});
-    void import("../services/project-skills-refresh")
+    void import("../skills/project-skills-refresh")
       .then((m) => m.scheduleSkillsRefresh(root))
-      .catch(() => {});
-    void import("../acp/service")
-      .then((m) => {
-        m.AcpService.getInstanceForProject(root).invalidateAgentConfigCache(root);
-      })
       .catch(() => {});
   }
 }
@@ -673,8 +662,8 @@ export function resolveChatOrchestrator(
     resolved = pick(asset);
   }
 
-  log.info("resolveChatOrchestrator", {
-    projectRoot,
+  log.debug("resolveChatOrchestrator", {
+    project: basename(projectRoot),
     sessionTeamId: opts?.sessionTeamId ?? null,
     orchestratorIdArg: opts?.orchestratorId ?? null,
     teamId: resolved.teamId,

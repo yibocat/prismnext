@@ -3,19 +3,19 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import type { PromptContext } from "./types";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
-import { createLogger } from "../services/logger";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
+import { createLogger } from "../app/logger";
+import { readWorkbenchJson } from "../workbench/identity";
+import { projectAgentsMdRel } from "../../shared/workbench/paths";
 
 const log = createLogger("prompt-context", "agent");
 
 /** Safely read workspace dirs, returning [] on any error. */
-function readWorkspaceDirsSafe(prismDir: string): WorkspaceFolder[] {
+function readWorkspaceDirsSafe(projectRoot: string): WorkspaceFolder[] {
   try {
-    const settingsPath = path.join(prismDir, "settings.json");
-    if (!fs.existsSync(settingsPath)) return [];
-    const raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-    if (Array.isArray(raw.workspaceDirs) && raw.workspaceDirs.length > 0) {
-      return raw.workspaceDirs;
+    const folders = readWorkbenchJson(projectRoot)?.workspace?.folders;
+    if (Array.isArray(folders) && folders.length > 0) {
+      return folders as WorkspaceFolder[];
     }
     // No configured folders → []. Never invent a manuscript/main.tex here:
     // the workspace-folders and latex-workspace modules would otherwise assert
@@ -52,26 +52,24 @@ export async function buildPromptContext(
   const ctx: PromptContext = { projectRoot };
 
   if (projectRoot) {
-    const prismDir = path.join(projectRoot, ".prismnext");
-
-    ctx.workspaceDirs = readWorkspaceDirsSafe(prismDir);
+    ctx.workspaceDirs = readWorkspaceDirsSafe(projectRoot);
     log.info(
       `Workspace dirs loaded: ${ctx.workspaceDirs.length} folder(s)`,
       { dirs: ctx.workspaceDirs.map((d) => `${d.name} (${d.function})`) },
     );
 
     ctx.agentsMdContent =
-      readFileIfExists(path.join(prismDir, "agent", "AGENTS.md")) ?? undefined;
+      readFileIfExists(path.join(projectRoot, projectAgentsMdRel())) ?? undefined;
   }
 
   try {
-    const { getSettings } = await import("../services/settings");
+    const { getSettings } = await import("../app/settings");
     const settings = getSettings() as Record<string, unknown>;
     const userPrompt = settings.agentSystemPrompt as string | undefined;
     ctx.userCustomPrompt = userPrompt || undefined;
 
     if (projectRoot) {
-      const { getPromptProjectRules } = await import("../services/rules-sync");
+      const { getPromptProjectRules } = await import("./rules-sync");
       const allRules = getPromptProjectRules(projectRoot);
       if (allRules.length > 0) {
         ctx.customRules = allRules;

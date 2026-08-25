@@ -1,0 +1,57 @@
+{
+  "shell": {
+    "newWindow": "新建視窗",
+    "close": "關閉：工作區標籤 → 聊天標籤 → 新空白對話 → 視窗",
+    "closeWindow": "關閉視窗",
+    "saveFile": "儲存當前工作區檔案",
+    "toggleLeftSidebar": "切換左側邊欄",
+    "toggleRightArea": "切換 RightArea",
+    "toggleRightAreaMaximize": "打開或關閉最大化 RightArea",
+    "openSettings": "開啟設定",
+    "commandPalette": "開啟命令面板"
+  },
+  "editor": {
+    "find": "在檔案中查詢",
+    "bold": "加粗（\\textbf{}）",
+    "italic": "斜體（\\textit{}）",
+    "comment": "切換註釋",
+    "closeSearch": "關閉搜尋面板"
+  },
+  "workspace": {
+    "nextTab": "下一個工作區標籤",
+    "prevTab": "上一個工作區標籤",
+    "gitRefresh": "重新整理 Git 狀態或歷史",
+    "insertToChat": "將選區插入聊天",
+    "openTexWorkspace": "開啟 TeX 工作區（分欄）",
+    "openTexWorkspaceMaximize": "開啟 TeX 工作區（最大化）",
+    "openLiterature": "開啟文獻庫（分欄）",
+    "openLiteratureMaximize": "開啟文獻庫（最大化）",
+    "openExperiments": "開啟實驗（分欄）",
+    "openExperimentsMaximize": "開啟實驗（最大化）",
+    "openFiles": "開啟檔案（分欄）",
+    "openFilesMaximize": "開啟檔案（最大化）",
+    "openGit": "開啟 Git（分欄）",
+    "openGitMaximize": "開啟 Git（最大化）",
+    "openBrowser": "開啟瀏覽器（分欄）",
+    "openBrowserMaximize": "開啟瀏覽器（最大化）",
+    "openTerminal": "開啟終端（分欄）",
+    "openTerminalMaximize": "開啟終端（最大化）"
+  },
+  "product": {
+    "focusAiBar": "聚焦聊天輸入框",
+    "newChat": "新建聊天標籤",
+    "nextChat": "下一個聊天標籤",
+    "prevChat": "上一個聊天標籤",
+    "compile": "編譯文件",
+    "acceptChange": "接受當前更改",
+    "rejectChange": "拒絕當前更改",
+    "acceptAll": "接受全部更改",
+    "rejectAll": "拒絕全部更改",
+    "togglePlanMode": "切換 Plan 模式",
+    "openModelPicker": "開啟模型選擇",
+    "cycleMessageWidth": "迴圈切換訊息寬度",
+    "undoRename": "撤銷會話重新命名",
+    "cycleThemePack": "迴圈切換主題",
+    "cycleChatBackdrop": "迴圈切換聊天背景"
+  }
+}

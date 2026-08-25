@@ -27,8 +27,8 @@ import {
   resolveInvocation,
   resolveRef,
 } from "../teams/resolver";
-import { setProjectAssetEnabled } from "../teams/state-project";
-import { resolveWritableTeamDir } from "../services/team-mcp-files";
+import { setAppAssetEnabled } from "../teams/state-app";
+import { resolveWritableTeamDir } from "../teams/team-mcp-files";
 
 /**
  * CommandRegistry — resolver facade for slash commands, per-project.
@@ -138,7 +138,7 @@ export class CommandRegistry {
     if (!existing) throw new Error(`Command not found: ${id}`);
     if (!existing.removable) throw new Error(`Cannot delete pack command (disable it instead): ${id}`);
     this.deleteFile(existing.name, existing.teamId);
-    setProjectAssetEnabled(this.projectRoot, existing.id, true);
+    setAppAssetEnabled(existing.id, null);
     invalidateResolver(this.projectRoot);
   }
 
@@ -147,7 +147,7 @@ export class CommandRegistry {
       ? id
       : resolveRef(this.projectRoot, id, undefined, "command");
     if (!fqid) throw new Error(`Command not found: ${id}`);
-    setProjectAssetEnabled(this.projectRoot, fqid, enabled ? true : false);
+    setAppAssetEnabled(fqid, enabled ? true : false);
   }
 
   exportPack(): CommandPack {
@@ -211,7 +211,7 @@ export class CommandRegistry {
 
       this.writeFile(def, teamId);
       if (!def.enabled) {
-        setProjectAssetEnabled(this.projectRoot, def.id, false);
+        setAppAssetEnabled(def.id, false);
       }
       existingNames.add(targetName);
       result.imported += 1;

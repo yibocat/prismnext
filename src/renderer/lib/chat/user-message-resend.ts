@@ -5,7 +5,7 @@ import {
   buildComposerDisplayBlocks,
   compileComposerPrompt,
 } from "@/components/modules/chat/inline-composer";
-import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+import type { ContentBlock } from "@/stores/chat-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useCommandStore } from "@/stores/command-store";
@@ -14,11 +14,11 @@ import { applyVisionFallbackForSend, visionFallbackErrorMessage } from "@/lib/ch
 import { toast } from "sonner";
 
 /** Display parts for editing a historical user bubble. */
-export function extractUserMessageEditParts(msg: ChatStreamMessage): {
+export function extractUserMessageEditParts(blocks: ContentBlock[]): {
   parts: ComposerPart[];
   attachments: ComposerAttachment[];
 } {
-  const allBlocks = (msg.message?.content ?? []) as ContentBlock[];
+  const allBlocks = Array.isArray(blocks) ? blocks : [];
   const inlineParts: ComposerPart[] = [];
   const attachments: ComposerAttachment[] = [];
   const seenAtt = new Set<string>();

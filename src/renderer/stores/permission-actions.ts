@@ -1,33 +1,33 @@
 import {
-  handleBashPermissionDenied,
   isBashToolName,
-  tryExecutePtyBashAfterPermission,
 } from "@/lib/terminal/ai-bridge";
+import { findConversationToolUse } from "@/lib/chat/conversation-view";
 import { useChangesStore } from "@/stores/changes-store";
 import { usePermissionStore } from "@/stores/permission-store";
-import { useChatStore, type ContentBlock } from "@/stores/chat-store";
-import { usesProposedChange } from "@/components/modules/chat/tools/tool-meta";
+import { useChatStore } from "@/stores/chat-store";
+import { usesProposedChange } from "@/lib/chat/tool-proposed-change";
 import { createLogger } from "@/services/logger";
-import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permission-timeouts";
+import { PERMISSION_UI_TIMEOUT_MS } from "../../shared/permissions/timeouts";
+import { agentDesktop } from "@/lib/desktop-api/agent";
+
+async function answerPermission(
+  _tabId: string,
+  permissionId: string,
+  allow: boolean,
+  _toolCallId?: string,
+  _always?: boolean,
+): Promise<void> {
+  await agentDesktop.agentResolvePermission({
+    requestId: permissionId,
+    decision: allow ? "allow" : "deny",
+  });
+}
 
 const log = createLogger("permission-actions", "agent");
 
 export { PERMISSION_UI_TIMEOUT_MS };
 
 const permissionTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function hasToolResult(tabId: string, toolUseId: string): boolean {
-  const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-  if (!tab) return false;
-
-  const scan = (blocks: ContentBlock[] | undefined) =>
-    blocks?.some((b) => b.type === "tool_result" && b.tool_use_id === toolUseId);
-
-  for (const msg of tab.messages) {
-    if (scan(msg.message?.content)) return true;
-  }
-  return scan(tab.streamingMessage?.message?.content) ?? false;
-}
 
 export function clearPermissionTimer(permissionId: string) {
   const timer = permissionTimers.get(permissionId);
@@ -76,7 +76,6 @@ export async function finalizePermissionDeny(opts: {
     permissionId,
     toolCallId,
     toolName,
-    reason = "Permission denied",
     skipApi = false,
   } = opts;
 
@@ -84,29 +83,13 @@ export async function finalizePermissionDeny(opts: {
 
   if (!skipApi) {
     log.debug("finalizePermissionDeny", { permissionId, toolCallId, toolName });
-    await window.electronAPI.chatAnswerPermission(permissionId, false, toolCallId);
+    await answerPermission(tabId, permissionId, false, toolCallId);
   }
 
   const permissionStore = usePermissionStore.getState();
   if (toolCallId) {
     permissionStore.markToolDenied(tabId, toolCallId);
     permissionStore.markToolResolved(tabId, toolCallId);
-    if (!hasToolResult(tabId, toolCallId)) {
-      useChatStore.getState()._injectToolResult(tabId, toolCallId, reason, true);
-    }
-    const tn = (toolName || "").toLowerCase();
-    if (isBashToolName(tn) && toolCallId) {
-      const tabTools = useChatStore.getState().tabs.find((t) => t.id === tabId);
-      const toolUseMsg = tabTools?.messages
-        .flatMap((m) => m.message?.content ?? [])
-        .find((b) => b.type === "tool_use" && b.id === toolCallId);
-      handleBashPermissionDenied(
-        tabId,
-        toolCallId,
-        tn,
-        toolUseMsg?.input as Record<string, unknown> | undefined,
-      );
-    }
     if (usesProposedChange(toolName || "")) {
       await useChangesStore.getState().rejectChange(toolCallId);
     }
@@ -135,14 +118,18 @@ export async function finalizePermissionAllow(opts: {
         isBashToolName(n) || n === "experiment-run" || /bash|shell|terminal|command/.test(n);
       if (isBash) {
         const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-        const toolUseMsg = [
+        const pending = usePermissionStore.getState().permissions.find((p) => p.id === permissionId);
+        const toolUseMsg = findConversationToolUse(tab?.conversation, toolCallId) ?? [
           ...(tab?.streamingMessage?.message?.content ?? []),
           ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
         ].find((b) => b.type === "tool_use" && b.id === toolCallId);
-        const input = (toolUseMsg?.input ?? {}) as Record<string, unknown>;
+        const input = {
+          ...(pending?.args ?? {}),
+          ...((toolUseMsg?.input ?? {}) as Record<string, unknown>),
+        };
         const command = String(input.command ?? input.cmd ?? "").trim();
         if (command) {
-          const { bashAlwaysPatternFromCommand } = await import("../../shared/bash-allow-always");
+          const { bashAlwaysPatternFromCommand } = await import("../../shared/permissions/bash-allow-always");
           const pattern = bashAlwaysPatternFromCommand(command);
           if (pattern) {
             const cur = useSettingsStore.getState().settings.bashAllowAlwaysPatterns ?? [];
@@ -163,9 +150,7 @@ export async function finalizePermissionAllow(opts: {
       }
     }
   }
-  await window.electronAPI.chatAnswerPermission(permissionId, true, toolCallId, {
-    always: Boolean(always),
-  });
+  await answerPermission(tabId, permissionId, true, toolCallId, always);
 
   const permissionStore = usePermissionStore.getState();
   if (toolCallId) {
@@ -178,17 +163,4 @@ export async function finalizePermissionAllow(opts: {
     useChangesStore.getState().removeChange(toolCallId);
   }
 
-  if (toolCallId && isBashToolName(toolName || "")) {
-    const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
-    const toolUseMsg = [
-      ...(tab?.streamingMessage?.message?.content ?? []),
-      ...(tab?.messages.flatMap((m) => m.message?.content ?? []) ?? []),
-    ].find((b) => b.type === "tool_use" && b.id === toolCallId);
-    tryExecutePtyBashAfterPermission(
-      tabId,
-      toolCallId,
-      toolName || "bash",
-      toolUseMsg?.input as Record<string, unknown> | undefined,
-    );
-  }
 }

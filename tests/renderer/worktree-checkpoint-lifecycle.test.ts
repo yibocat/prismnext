@@ -3,6 +3,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
+import { emptyConversation } from "../../src/shared/agent/conversation";
 
 const PROJECT = "/proj";
 const WT = `${PROJECT}/.prismnext/worktrees/owl`;
@@ -19,6 +20,16 @@ describe("clearCheckpointsForWorktree", () => {
           sessionCwd: WT,
           title: "Test",
           messages: [],
+          conversation: {
+            ...emptyConversation({ conversationId: "tab-1" }),
+            turns: [{
+              turnId: "t0",
+              turnIndex: 0,
+              user: { blocks: [{ type: "text", text: "hi" }] },
+              assistant: { blocks: [{ type: "text", text: "ok" }] },
+              status: "completed",
+            }],
+          },
           streamingMessage: null,
           error: null,
           isStreaming: false,

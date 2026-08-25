@@ -2,10 +2,9 @@ import { useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useGitStore, type GitFileItem } from "@/stores/git-store";
 import { GitChangeFileRow } from "./git-change-file-row";
-import { GitChangesFilterDropdown } from "./git-changes-filter-dropdown";
+import { GitChangesFilterDropdown, GitChangesLensHome } from "./git-changes-filter-dropdown";
 import {
   GitChangeHeaderDiscardButton,
-  GitChangeLineCounts,
   GitChangeStageCheckbox,
   gitPanelListBodyClass,
   gitPanelListHeaderClass,
@@ -24,14 +23,6 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
   const { t } = useTranslation();
   const expandedChangeIds = useGitStore((s) => s.expandedChangeIds);
   const expandedSet = useMemo(() => new Set(expandedChangeIds), [expandedChangeIds]);
-
-  const { totalAdded, totalDeleted } = useMemo(
-    () => ({
-      totalAdded: files.reduce((s, f) => s + f.added, 0),
-      totalDeleted: files.reduce((s, f) => s + f.deleted, 0),
-    }),
-    [files],
-  );
 
   const allStaged =
     files.length > 0 && files.every((f) => f.staged);
@@ -85,26 +76,23 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
     >
       <div className={gitPanelListHeaderClass}>
         <GitChangesFilterDropdown fileCount={files.length} />
-        <GitChangeLineCounts added={totalAdded} deleted={totalDeleted} />
         <span className="flex-1 min-w-0" />
         <GitChangeHeaderDiscardButton
-          visible={canDiscardAll}
+          visible={files.length > 0 && canDiscardAll}
           onClick={handleDiscardAll}
         />
-        <GitChangeStageCheckbox
-          checked={allStaged}
-          indeterminate={someStaged}
-          onClick={handleStageAllToggle}
-          title={allStaged ? t("git.changes.unstageAll") : t("git.changes.stageAll")}
-        />
+        {files.length > 0 ? (
+          <GitChangeStageCheckbox
+            checked={allStaged}
+            indeterminate={someStaged}
+            onClick={handleStageAllToggle}
+            title={allStaged ? t("git.changes.unstageAll") : t("git.changes.stageAll")}
+          />
+        ) : null}
       </div>
 
       {files.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center py-12">
-          <p className="text-[length:var(--font-placeholder)] text-muted-foreground">
-            {t("modes.git.emptyChanges")}
-          </p>
-        </div>
+        <GitChangesLensHome />
       ) : (
         <div className={gitPanelListBodyClass}>
           {files.map((file) => (

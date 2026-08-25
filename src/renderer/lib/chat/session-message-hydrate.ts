@@ -1,9 +1,6 @@
-import {
-  applyUserDisplaySnapshots,
-  isToolResultUserMessage,
-} from "@/components/modules/chat/chat-turns";
+import { isToolResultUserMessage } from "@/lib/chat/chat-turns";
 import { mapOpenCodePartToBlocks } from "@/lib/chat/message-parts";
-import { mergePlanUiEvents, stripPlanControlTurns } from "@/lib/chat/plan-ui-events";
+import { stripPlanControlTurns } from "@/lib/chat/plan-ui-events";
 import { sanitizeUserContentBlocksForDisplay } from "@/lib/chat/user-message-display";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
@@ -61,8 +58,8 @@ export function isPrismSystemPromptText(text: string): boolean {
 /** Map OpenCode sessionLoad payload → sanitized chat messages for UI. */
 export async function hydrateSessionMessages(
   raw: any[],
-  projectPath: string,
-  sessionId: string,
+  _projectPath?: string,
+  _sessionId?: string,
 ): Promise<ChatStreamMessage[]> {
   const messages: ChatStreamMessage[] = [];
 
@@ -125,33 +122,11 @@ export async function hydrateSessionMessages(
 
   let filtered = messages.filter((m) => m.message?.content && m.message.content.length > 0);
 
-  let hasSystemPromptBlock = false;
-  try {
-    const ctxData = await window.electronAPI.sessionGetContext(projectPath, sessionId);
-    hasSystemPromptBlock = ctxData?.hasSystemPromptBlock === true;
-  } catch { /* best-effort */ }
-
-  stripSystemPromptFromDisplay(filtered, hasSystemPromptBlock);
+  stripSystemPromptFromDisplay(filtered);
 
   // Drop silent Approve/Deny user kicks *before* display snapshots so they do
   // not consume a snapshot slot and shift 「继续」onto an earlier bubble.
   filtered = stripPlanControlTurns(filtered);
-
-  try {
-    const displays = await window.electronAPI.sessionGetUserDisplays(projectPath, sessionId);
-    if (displays?.length) {
-      filtered = applyUserDisplaySnapshots(filtered, displays);
-    }
-  } catch { /* best-effort */ }
-
-  try {
-    const planEvents = await window.electronAPI.sessionGetPlanEvents(projectPath, sessionId);
-    // Decisions only — Created Plan renders inline after write/edit tools.
-    const decisions = planEvents?.filter((e) => e.kind === "plan-decision") ?? [];
-    if (decisions.length) {
-      filtered = mergePlanUiEvents(filtered, decisions);
-    }
-  } catch { /* best-effort */ }
 
   return filtered.map((m) => {
     if (m.type !== "user" || isToolResultUserMessage(m)) return m;

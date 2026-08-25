@@ -1,21 +1,15 @@
 #!/usr/bin/env node
 /**
- * Extract one version section from changelog series files for GitHub Releases.
+ * Extract release notes for GitHub Releases.
  *
- * Layout convention (prism-next):
- *   changelog/0.5.x.md   → versions 0.5.*
- *   changelog/0.6.x.md   → versions 0.6.*
- *   changelog/2.1.x.md   → versions 2.1.*
- *   changelog/CHANGELOG.md → legacy / fallback when no series file exists
- *
- * Section headers look like:
- *   ## 0.5.14 — 2026-07-21
- *   ## 0.5.15 (Unreleased)
+ * Layout (prism-next):
+ *   changelog/releases/<version>.md  → summarized release notes (preferred)
+ *   changelog/series/X.Y.x.md        → detailed dev log (fallback)
+ *   changelog/X.Y.x.md               → legacy series path (fallback)
+ *   changelog/CHANGELOG.md           → legacy / oldest history
  *
  * Usage:
  *   node scripts/release/extract-changelog-section.mjs <version> [changelogDir]
- *   → prints section body (without the ## heading) to stdout
- *   exit 1 if not found
  */
 
 import fs from "node:fs";
@@ -57,7 +51,6 @@ export function normalizeVersion(version) {
 export function extractVersionSection(markdown, version) {
   const v = normalizeVersion(version);
   const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // ## 0.5.14 — date | ## 0.5.14 (Unreleased) | ## 0.5.14
   const headerRe = new RegExp(`^## ${escaped}(?:\\s|[—(]|$)`, "m");
   const match = headerRe.exec(markdown);
   if (!match || match.index === undefined) {
@@ -73,33 +66,65 @@ export function extractVersionSection(markdown, version) {
 }
 
 /**
+ * Strip optional HTML comments and a top-level `# …` title from release files.
+ * @param {string} markdown
+ * @returns {string}
+ */
+export function normalizeReleaseFileBody(markdown) {
+  let body = markdown.trim();
+  body = body.replace(/^<!--[\s\S]*?-->\s*/m, "");
+  body = body.replace(/^# [^\n]+\n+/, "");
+  return body.trim();
+}
+
+/**
  * @param {string} version
- * @param {string} changelogDir absolute or relative path to changelog/
+ * @param {string} changelogRoot absolute or relative path to changelog/
  * @returns {{ file: string, body: string }}
  */
-export function resolveChangelogSection(version, changelogDir) {
+export function resolveChangelogSection(version, changelogRoot) {
   const v = normalizeVersion(version);
   const seriesName = seriesFileNameForVersion(v);
   const candidates = [
-    path.join(changelogDir, seriesName),
-    path.join(changelogDir, "CHANGELOG.md"),
+    {
+      file: path.join(changelogRoot, "releases", `${v}.md`),
+      kind: "release",
+    },
+    {
+      file: path.join(changelogRoot, "series", seriesName),
+      kind: "series",
+    },
+    {
+      file: path.join(changelogRoot, seriesName),
+      kind: "series",
+    },
+    {
+      file: path.join(changelogRoot, "CHANGELOG.md"),
+      kind: "series",
+    },
   ];
 
   const tried = [];
-  for (const file of candidates) {
+  for (const { file, kind } of candidates) {
     tried.push(file);
     if (!fs.existsSync(file)) continue;
     const markdown = fs.readFileSync(file, "utf8");
-    const body = extractVersionSection(markdown, v);
+    const body =
+      kind === "release"
+        ? normalizeReleaseFileBody(markdown)
+        : extractVersionSection(markdown, v);
     if (body) {
       return { file, body };
     }
   }
 
   throw new Error(
-    `No changelog section for ${v}. Looked for heading "## ${v}" in:\n` +
+    `No changelog section for ${v}. Looked for:\n` +
+      `  - changelog/releases/${v}.md\n` +
+      `  - ## ${v} in changelog/series/${seriesName}\n` +
       tried.map((f) => `  - ${f}`).join("\n") +
-      `\nCreate/update changelog/${seriesName} (or CHANGELOG.md) before releasing.`,
+      `\nWhile developing, append to changelog/series/${seriesName}. Before release, run:\n` +
+      `  pnpm release:changelog ${v}`,
   );
 }
 
@@ -110,9 +135,9 @@ function main() {
     process.exit(2);
   }
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const changelogDir = process.argv[3] || path.join(here, "..", "..", "changelog");
+  const changelogRoot = process.argv[3] || path.join(here, "..", "..", "changelog");
 
-  const { file, body } = resolveChangelogSection(version, changelogDir);
+  const { file, body } = resolveChangelogSection(version, changelogRoot);
   console.error(`# from ${path.relative(process.cwd(), file)}`);
   process.stdout.write(body + "\n");
 }

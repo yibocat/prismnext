@@ -5,4 +5,4 @@ export {
   matchesShortcutEvent,
   type ResolvedShortcut,
 } from "./resolve";
-export { ShortcutKbdChips } from "./chord-chips";
+export { ShortcutKbdChips, SHORTCUT_CHIPS_HOVER_REVEAL } from "./chord-chips";

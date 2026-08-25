@@ -1,6 +1,7 @@
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { isFileBackedTab } from "@/lib/workspace/mode-registry";
 
 /** Save the dirty file / literature note bound to the active RightArea tab. */
 export function saveActiveWorkspaceFile(): boolean {
@@ -18,12 +19,10 @@ export function saveActiveWorkspaceFile(): boolean {
     return false;
   }
 
-  const fileId = activeTab.fileId;
+  const fileId = isFileBackedTab(activeTab) ? activeTab.fileId : undefined;
   if (
     fileId &&
-    (activeTab.kind === "file"
-      || activeTab.kind === "texworkspace"
-      || activeTab.kind === "research-plan") &&
+    isFileBackedTab(activeTab) &&
     useDocumentStore.getState().isFileDirty(fileId)
   ) {
     void useDocumentStore.getState().saveFile(fileId);

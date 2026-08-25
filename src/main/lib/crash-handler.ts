@@ -18,7 +18,7 @@
 import { appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { app } from "electron";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const crashLog = createLogger("main", "crash");
 

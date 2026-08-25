@@ -4,42 +4,40 @@ import type { WorkspaceFolder } from "@/types/workspace";
 import {
   DEFAULT_PERMISSION_MODE,
   type PermissionMode,
-} from "@shared/permission-modes";
+} from "@shared/permissions/modes";
 import {
   DEFAULT_SEARCH_ENGINE,
   isSearchEngineId,
   type SearchEngineId,
 } from "@/lib/browser/search-engines";
+import { nextRecentOpenedExperimentsByProject } from "@/lib/experiments/recent";
 import type { LiteratureUiPrefs } from "@/lib/literature/library-ui-prefs";
-import {
-  migrateOpenCodeEnabledModelIds,
-  normalizeOpenCodeModelId,
-  OPENCODE_GO_PROVIDER_ID,
-  OPENCODE_ZEN_PROVIDER_ID,
-} from "../../shared/opencode-provider";
 import {
   migrateOpenRouterEnabledModelIds,
   migrateOpenRouterPreferenceKey,
   normalizeOpenRouterModelId,
   OPENROUTER_PROVIDER_ID,
-} from "../../shared/openrouter-models";
+} from "../../shared/providers/openrouter-models";
 import {
   migrateGoogleEnabledModelIds,
   migrateGooglePreferenceKey,
   normalizeGoogleModelId,
   GOOGLE_PROVIDER_ID,
-} from "../../shared/google-models";
+} from "../../shared/providers/google-models";
 import {
   migrateAnthropicEnabledModelIds,
   migrateAnthropicPreferenceKey,
   normalizeAnthropicModelId,
   ANTHROPIC_PROVIDER_ID,
-} from "../../shared/anthropic-models";
-import { migrateLegacyBuiltinProviders } from "../../shared/lazy-provider-catalog";
+} from "../../shared/providers/anthropic-models";
+import { migrateLegacyBuiltinProviders } from "../../shared/providers/lazy-catalog";
 import { getModelEffortFallbackIds, getPreset } from "@/lib/providers";
-import { prefetchOpenCodeModelsCatalog } from "@/lib/providers/opencode-catalog-models";
-import { parseModelPreferenceKey } from "@/components/modules/chat/agent-settings/model-keys";
+import { prefetchPiModelsCatalog } from "@/lib/providers/pi-model-catalog";
+import { parseModelPreferenceKey } from "@/lib/providers/model-keys";
 import type { ModelConfig } from "@/lib/providers";
+import type { LogLevel } from "@shared/platform/log-types";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 
 const log = createLogger("settings-store");
 
@@ -74,7 +72,7 @@ async function sanitizePersistedModelThoughtLevels(
       customProviders,
     );
     try {
-      const result = await window.electronAPI.chatGetModelEffort({
+      const result = await agentDesktop.agentGetModelEffort({
         provider: parsed.providerId,
         modelId: parsed.modelId,
         fallback,
@@ -110,8 +108,8 @@ export interface AppSettings {
   zoteroApiKey?: string;
   zoteroUserId?: string;
   zoteroLastBBTDetected?: boolean;
-  /** Path to auto-reopen on next launch */
-  lastProjectPath?: string | null;
+  defaultProjectId?: string;
+  workbenchProjectIds?: string[];
   /** @deprecated Use lastActiveFileIdByProject */
   lastActiveFileId?: string | null;
   /** Recently opened files per project root */
@@ -123,10 +121,17 @@ export interface AppSettings {
   >;
   /** Last opened file per project root */
   lastActiveFileIdByProject?: Record<string, string | null>;
+  /** Project + chat tabs to reopen on the next launch. */
+  lastFocusProjectId?: string | null;
+  lastFocusConversationId?: string | null;
+  lastOpenConversationIds?: string[];
+  lastSessionProjectIds?: Record<string, string>;
   /** Archived chat session ids per project root */
   archivedSessionIdsByProject?: Record<string, string[]>;
   /** Pinned chat session ids per project root */
   pinnedSessionIdsByProject?: Record<string, string[]>;
+  /** Per-session icon + unread chrome (not in session JSON) */
+  sessionChromeByProject?: import("@shared/chat/session-chrome").SessionChromeByProject;
   /** Literature library sidebar view + list sort per project root */
   literatureUiByProject?: Record<string, LiteratureUiPrefs>;
   /** @deprecated Global list — do not read; use recentOpenedFilesByProject */
@@ -173,10 +178,20 @@ export interface AppSettings {
   aiModelThoughtLevels?: Record<string, string>;
   /** Pinned model keys (`providerId/modelId`) — shown at top of chat model picker. */
   aiPinnedModelKeys?: string[];
+  /** Hidden left-nav primary ids (New Chat cannot be hidden). */
+  leftNavHiddenIds?: string[];
+  /** Left-nav primary id order. Required items stay first. */
+  leftNavOrder?: string[];
   /** Providers whose API keys have been verified */
   aiVerifiedProviders?: string[];
   /** Chat tool permission preset: ask | edit_auto | auto | readonly */
   permissionMode?: PermissionMode;
+  /**
+   * Experimental: paint production chat text from AgentEvent instead of
+   * OpenCode `message.part.updated`. Default off — appearance unchanged.
+   * Testers set this in the settings JSON (no Settings UI).
+   */
+  agentEventUi?: boolean;
   /** Tools pinned via permission-gate "Always" (lowercased names). */
   toolAllowAlways?: string[];
   /** Bash command patterns from "Always" (e.g. `git status*`). */
@@ -189,6 +204,8 @@ export interface AppSettings {
   permissionDenyRules?: string[];
   /** Permission mode schema version (migration). */
   permissionModeSchemaVersion?: number;
+  /** Minimum level written by the main-process logger. Default info. */
+  logMinLevel?: LogLevel;
   /** Agent shell execution: mirror (OpenCode bash + UI mirror) | pty (custom bash tool) */
   agentTerminalMode?: "mirror" | "pty";
   /** Auto-open AI terminal tab when agent runs bash (default true). */
@@ -291,7 +308,7 @@ const defaults: AppSettings = {
   aiTerminalIdleCloseMs: 600_000,
   aiTerminalCloseTabKillsProcess: false,
   messageWidth: "balanced",
-  chatHomeBackdrop: "auto",
+  chatHomeBackdrop: "paperplane",
   chatHomeBackdropEnabled: true,
   searchEngine: DEFAULT_SEARCH_ENGINE,
 };
@@ -302,6 +319,7 @@ interface SettingsState {
 
   loadSettings: () => Promise<void>;
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
+  trackRecentOpenedExperiment: (projectRoot: string, id: string, name: string) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
@@ -311,7 +329,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   loadSettings: async () => {
     const t0 = performance.now();
     try {
-      const remote = await window.electronAPI.settingsGet();
+      const remote = await settingsDesktop.settingsGet();
 
       // Migrate: old manuscriptDir → defaultWorkspaceDirs
       if (
@@ -324,12 +342,150 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           { function: "manuscript", name: migratedDir, mainTex: "main.tex" },
         ];
         // Persist immediately so migration only happens once
-        window.electronAPI.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});
+        settingsDesktop.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});
         log.info("Migrated manuscriptDir → defaultWorkspaceDirs", { from: migratedDir });
       }
 
       // Migrate: aiCustomModels (string[]) → aiCustomModelsData (structured)
       const r = remote as any;
+
+      // ── OpenCode → Pi provider id migration (one-shot) ────────────────────
+      // Legacy product provider ids (opencode-zen, zhipu, kimi, alibaba, minimax)
+      // become their Pi equivalents. Every settings key that names a provider
+      // (or a `provider/model` key) must be rebased.
+      {
+        const { LEGACY_PROVIDER_ID_MAP } = await import("../../shared/providers/pi-catalog");
+        const legacyIds = Object.keys(LEGACY_PROVIDER_ID_MAP);
+        if (legacyIds.length > 0) {
+          let changed = false;
+          const rebaseKey = (key: string, legacyId: string): string => {
+            const prefix = `${legacyId}/`;
+            if (!key.startsWith(prefix)) return key;
+            return `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${key.slice(prefix.length)}`;
+          };
+          const rebaseMapKeys = (
+            map: Record<string, unknown> | undefined,
+            rebase: (k: string) => string,
+          ): Record<string, unknown> | undefined => {
+            if (!map) return map;
+            let next = map;
+            for (const key of Object.keys(map)) {
+              const rebased = rebase(key);
+              if (rebased === key) continue;
+              if (!changed) changed = true;
+              next = { ...next };
+              next[rebased] = next[key];
+              delete next[key];
+            }
+            return next;
+          };
+
+          // aiProvider / aiModel — the active selection itself.
+          if (typeof r.aiProvider === "string" && legacyIds.includes(r.aiProvider)) {
+            r.aiProvider = LEGACY_PROVIDER_ID_MAP[r.aiProvider];
+            changed = true;
+          }
+
+          // aiCustomProviders (id) / aiApiKeys / aiBaseUrls / aiEnabledModels /
+          // aiCustomModelsData / aiCustomModels — keyed by provider id.
+          if (Array.isArray(r.aiCustomProviders)) {
+            for (const cp of r.aiCustomProviders) {
+              if (cp && typeof cp.id === "string" && legacyIds.includes(cp.id)) {
+                cp.id = LEGACY_PROVIDER_ID_MAP[cp.id];
+                changed = true;
+              }
+            }
+          }
+          r.aiApiKeys = rebaseMapKeys(r.aiApiKeys, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string> | undefined;
+          r.aiBaseUrls = rebaseMapKeys(r.aiBaseUrls, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string> | undefined;
+          r.aiEnabledModels = rebaseMapKeys(r.aiEnabledModels, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string[]> | undefined;
+          r.aiCustomModelsData = rebaseMapKeys(r.aiCustomModelsData, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, unknown[]> | undefined;
+          r.aiCustomModels = rebaseMapKeys(r.aiCustomModels, (k) =>
+            legacyIds.includes(k) ? LEGACY_PROVIDER_ID_MAP[k] : k,
+          ) as Record<string, string[]> | undefined;
+          if (Array.isArray(r.aiVerifiedProviders)) {
+            r.aiVerifiedProviders = r.aiVerifiedProviders.map((id: string) =>
+              legacyIds.includes(id) ? LEGACY_PROVIDER_ID_MAP[id] : id,
+            );
+          }
+
+          // Per-model preference keys `provider/modelId` and `provider/modelId/effort`.
+          if (r.aiPinnedModelKeys) {
+            let next = r.aiPinnedModelKeys;
+            for (const legacyId of legacyIds) {
+              next = next.map((k: string) => rebaseKey(k, legacyId));
+            }
+            r.aiPinnedModelKeys = next;
+            changed = true;
+          }
+          if (r.aiModelThoughtLevels) {
+            let next = r.aiModelThoughtLevels;
+            let levelsChanged = false;
+            for (const legacyId of legacyIds) {
+              for (const key of Object.keys(next)) {
+                const rebased = rebaseKey(key, legacyId);
+                if (rebased === key) continue;
+                levelsChanged = true;
+                next = { ...next, [rebased]: next[key] };
+                delete next[key];
+              }
+            }
+            if (levelsChanged) {
+              r.aiModelThoughtLevels = next;
+              changed = true;
+            }
+          }
+          // Vision / subagent helper refs `provider/modelId`.
+          if (typeof r.aiVisionFallbackModel === "string") {
+            for (const legacyId of legacyIds) {
+              const prefix = `${legacyId}/`;
+              if (r.aiVisionFallbackModel.startsWith(prefix)) {
+                r.aiVisionFallbackModel = `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${r.aiVisionFallbackModel.slice(prefix.length)}`;
+                changed = true;
+              }
+            }
+          }
+          if (typeof r.aiSubagentModel === "string") {
+            for (const legacyId of legacyIds) {
+              const prefix = `${legacyId}/`;
+              if (r.aiSubagentModel.startsWith(prefix)) {
+                r.aiSubagentModel = `${LEGACY_PROVIDER_ID_MAP[legacyId]}/${r.aiSubagentModel.slice(prefix.length)}`;
+                changed = true;
+              }
+            }
+          }
+
+          if (changed) {
+            settingsDesktop
+              .settingsSet({
+                aiProvider: r.aiProvider,
+                aiApiKeys: r.aiApiKeys,
+                aiBaseUrls: r.aiBaseUrls,
+                aiEnabledModels: r.aiEnabledModels,
+                aiCustomModelsData: r.aiCustomModelsData,
+                aiCustomModels: r.aiCustomModels,
+                aiCustomProviders: r.aiCustomProviders,
+                aiVerifiedProviders: r.aiVerifiedProviders,
+                aiPinnedModelKeys: r.aiPinnedModelKeys,
+                aiModelThoughtLevels: r.aiModelThoughtLevels,
+                aiVisionFallbackModel: r.aiVisionFallbackModel,
+                aiSubagentModel: r.aiSubagentModel,
+              })
+              .catch(() => {});
+            log.info("Migrated legacy provider ids to Pi ids", {
+              map: LEGACY_PROVIDER_ID_MAP,
+            });
+          }
+        }
+      }
       if (
         r.aiCustomModels &&
         Object.keys(r.aiCustomModels).length > 0 &&
@@ -345,63 +501,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
           }));
         }
         r.aiCustomModelsData = migrated;
-        window.electronAPI.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
+        settingsDesktop.settingsSet({ aiCustomModelsData: migrated }).catch(() => {});
         log.info("Migrated aiCustomModels → aiCustomModelsData");
       }
 
-      // Migrate: global recent/lastActive → per-project maps (one-time, keyed by lastProjectPath)
-      const legacyProject = typeof r.lastProjectPath === "string" ? r.lastProjectPath : null;
-      if (legacyProject) {
-        let migratedScoped = false;
-        if (r.lastActiveFileId && !r.lastActiveFileIdByProject?.[legacyProject]) {
-          r.lastActiveFileIdByProject = {
-            ...(r.lastActiveFileIdByProject ?? {}),
-            [legacyProject]: r.lastActiveFileId,
-          };
-          migratedScoped = true;
-        }
-        if (
-          Array.isArray(r.recentOpenedFiles) &&
-          r.recentOpenedFiles.length > 0 &&
-          !r.recentOpenedFilesByProject?.[legacyProject]
-        ) {
-          r.recentOpenedFilesByProject = {
-            ...(r.recentOpenedFilesByProject ?? {}),
-            [legacyProject]: r.recentOpenedFiles,
-          };
-          migratedScoped = true;
-        }
-        if (migratedScoped) {
-          window.electronAPI
-            .settingsSet({
-              lastActiveFileIdByProject: r.lastActiveFileIdByProject,
-              recentOpenedFilesByProject: r.recentOpenedFilesByProject,
-            })
-            .catch(() => {});
-          log.info("Migrated global recent/lastActive → per-project maps", { legacyProject });
-        }
-      }
-
-      for (const catalogId of [OPENCODE_GO_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID] as const) {
+      for (const catalogId of ["opencode-go"] as const) {
         if (r.aiEnabledModels?.[catalogId]) {
           const raw = r.aiEnabledModels[catalogId] as string[];
-          const migrated = migrateOpenCodeEnabledModelIds(catalogId, raw);
+          const migrated = raw.map((id: string) => id.trim().toLowerCase());
           const changed =
             migrated.length !== raw.length || migrated.some((id, i) => id !== raw[i]);
           if (changed) {
             r.aiEnabledModels = { ...r.aiEnabledModels, [catalogId]: migrated };
-            window.electronAPI
+            settingsDesktop
               .settingsSet({ aiEnabledModels: r.aiEnabledModels })
               .catch(() => {});
             log.info(`Migrated ${catalogId} aiEnabledModels to canonical IDs`);
           }
         }
         if (r.aiProvider === catalogId && typeof r.aiModel === "string") {
-          const normalized = normalizeOpenCodeModelId(catalogId, r.aiModel);
+          const normalized = r.aiModel.trim().toLowerCase();
           if (normalized !== r.aiModel) {
             const previous = r.aiModel;
             r.aiModel = normalized;
-            window.electronAPI.settingsSet({ aiModel: normalized }).catch(() => {});
+            settingsDesktop.settingsSet({ aiModel: normalized }).catch(() => {});
             log.info(`Migrated aiModel to canonical ${catalogId} id`, {
               from: previous,
               to: normalized,
@@ -429,7 +552,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         if (migrated) {
           r.aiCustomProviders = migrated.aiCustomProviders;
           r.legacyBuiltinProvidersMigrated = true;
-          window.electronAPI
+          settingsDesktop
             .settingsSet({
               aiCustomProviders: migrated.aiCustomProviders,
               legacyBuiltinProvidersMigrated: true,
@@ -534,7 +657,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         }
 
         if (providerPatch) {
-          window.electronAPI.settingsSet(providerPatch).catch(() => {});
+          settingsDesktop.settingsSet(providerPatch).catch(() => {});
           log.info("Migrated provider model IDs to canonical catalog ids");
         }
       }
@@ -563,14 +686,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         void get().updateSettings({ aiModelThoughtLevels: sanitized });
       });
 
-      const hasOpenCodeCatalog =
-        Boolean(r.aiApiKeys?.[OPENCODE_GO_PROVIDER_ID]?.trim())
-        || Boolean(r.aiApiKeys?.[OPENCODE_ZEN_PROVIDER_ID]?.trim())
+      const hasPiCatalogProvider =
+        Boolean(r.aiApiKeys?.["opencode"]?.trim())
+        || Boolean(r.aiApiKeys?.["opencode-go"]?.trim())
         || remote.aiCustomProviders?.some(
-          (p) => p.id === OPENCODE_GO_PROVIDER_ID || p.id === OPENCODE_ZEN_PROVIDER_ID,
+          (p) => p.id === "opencode" || p.id === "opencode-go",
         );
-      if (hasOpenCodeCatalog) {
-        void prefetchOpenCodeModelsCatalog();
+      if (hasPiCatalogProvider) {
+        void prefetchPiModelsCatalog();
       }
     } catch (err) {
       console.log(`[settings] load failed: ${Math.round(performance.now() - t0)}ms`);
@@ -589,10 +712,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
 
     try {
-      await window.electronAPI.settingsSet(patch);
+      await settingsDesktop.settingsSet(patch);
       log.info("Settings updated", patch);
     } catch (err) {
       log.error("Failed to persist settings", err);
     }
+  },
+
+  trackRecentOpenedExperiment: async (projectRoot, id, name) => {
+    if (!projectRoot || !id.trim()) return;
+    const map = nextRecentOpenedExperimentsByProject(
+      get().settings.recentOpenedExperimentsByProject,
+      projectRoot,
+      id,
+      name,
+    );
+    await get().updateSettings({ recentOpenedExperimentsByProject: map });
   },
 }));

@@ -1,6 +1,7 @@
-/** Utilities for resolving project-relative paths (including hidden `.prismnext/` / `.brief.md`). */
+/** Utilities for resolving project-relative paths (including hidden `.workbench/` / leftover `.prismnext/` / `.brief.md`). */
 
 const PRISMNEXT_PREFIX = ".prismnext/";
+const WORKBENCH_PREFIX = ".workbench/";
 const RESEARCH_BRIEF_FILE = ".brief.md";
 
 export function normalizeProjectRoot(root: string): string {
@@ -26,6 +27,8 @@ export function isLazyProjectFilePath(relativePath: string): boolean {
   return (
     normalized.startsWith(PRISMNEXT_PREFIX)
     || normalized === ".prismnext"
+    || normalized.startsWith(WORKBENCH_PREFIX)
+    || normalized === ".workbench"
     || normalized === RESEARCH_BRIEF_FILE
   );
 }

@@ -1,7 +1,7 @@
 import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { WrenchIcon } from "lucide-react";
-import { ToolCard } from "./shared";
+import { ToolCard, toolUseContextTitle } from "./shared";
 
 export const GenericWidget = memo(function GenericWidget({
   toolUse,
@@ -17,13 +17,9 @@ export const GenericWidget = memo(function GenericWidget({
   const isError = toolResult?.is_error;
   const hasContent = toolResult?.content != null;
 
-  // During live streaming, OpenCode may not populate rawInput, leaving
-  // only `title` (a required ACP field) as the sole source of context.
-  // Show it so the user at least knows what the tool is doing.
-  const contextTitle =
-    toolUse.title ||
-    (toolUse.input as any)?._title ||
-    "";
+  // Pi primitives have no ACP `title`. Prefer an explicit title, else one
+  // line from args (path / pattern / command) that is not just the tool name.
+  const contextTitle = toolUseContextTitle(toolUse);
 
   return (
     <ToolCard

@@ -21,6 +21,11 @@ import type { GitDiffHunkSnippet } from "@/lib/git/diff-hunk-snippet";
 import { resolveSnippetFilePathFromStore } from "@/lib/files/snippet-file-path";
 import { offsetToLineCol } from "@/lib/editor/selection-anchor";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
+import { loadDraftParts } from "@/lib/chat/composer-draft";
+import {
+  isComposerEmpty,
+  mergeAdjacentText,
+} from "@/lib/chat/composer-parts";
 import {
   dragPayloadToContextRequest,
   readComposerDragPayloads,
@@ -124,10 +129,34 @@ export function insertContextToChat(req: ContextInsertRequest, options?: { quiet
     useComposerEditorStore.getState().flushPendingInsert();
   } else {
     layout.setLeftSidebarView("sessions");
-    layout.requestCenterExpand();
     useComposerInsertStore.getState().requestInsert(req);
     useComposerEditorStore.getState().flushPendingInsert();
   }
+
+  if (!options?.quiet) {
+    toast.success("Added to Chat");
+  }
+  return true;
+}
+
+/** Prefill the composer with plain text and do not send. */
+export function insertTextToChat(text: string, options?: { quiet?: boolean }): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  const layout = useLayoutStore.getState();
+  if (layout.editorMaximized) {
+    layout.requestAiBarComposerFocus();
+  } else {
+    layout.setLeftSidebarView("sessions");
+  }
+
+  const chat = useChatStore.getState();
+  const tab = chat.tabs.find((item) => item.id === chat.activeTabId);
+  const draft = loadDraftParts(tab?.draft);
+  const part = { type: "text" as const, text: trimmed };
+  const next = isComposerEmpty(draft) ? [part] : mergeAdjacentText([...draft, part]);
+  useComposerEditorStore.getState().replaceDraftNow(chat.activeTabId, next);
 
   if (!options?.quiet) {
     toast.success("Added to Chat");
@@ -157,7 +186,6 @@ export function insertComposerDragPayloads(
     useComposerEditorStore.getState().flushPendingInsert();
   } else {
     layout.setLeftSidebarView("sessions");
-    layout.requestCenterExpand();
     useComposerInsertStore.getState().requestInserts(requests);
     useComposerEditorStore.getState().flushPendingInsert();
   }

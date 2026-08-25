@@ -3,7 +3,7 @@ import {
   mergeMcpAllowlist,
   mcpAllowlistSetsEqual,
   PAPER_SEARCH_MCP_ID,
-} from "../../src/main/services/project-mcp-defaults";
+} from "../../src/main/teams/project-mcp-defaults";
 
 describe("project-mcp-defaults", () => {
   it("does not force paper-search into empty / custom allowlists", () => {

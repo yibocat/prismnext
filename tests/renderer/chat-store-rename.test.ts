@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const sessionRenameMock = vi.fn(async () => undefined);
+const agentRenameSession = vi.fn(async () => ({ ok: true }));
 
 // Mock stores and helpers that chat-store pulls in at module load.
 vi.mock("@/stores/document-store", () => ({
@@ -30,8 +30,9 @@ vi.mock("@/lib/git/worktree-sessions", () => ({
 
 vi.stubGlobal("window", {
   electronAPI: {
-    sessionRename: sessionRenameMock,
-    chatCancel: vi.fn().mockResolvedValue(undefined),
+    agentRenameSession,
+    agentCancel: vi.fn().mockResolvedValue({ ok: true }),
+    agentDispose: vi.fn().mockResolvedValue({ ok: true }),
   },
 });
 
@@ -42,6 +43,7 @@ const stubTab = (id: string, sessionId: string | null, title: string) => ({
   title,
   userTitleSet: false,
   sessionId,
+  runtime: "pi" as const,
   sessionCwd: null,
   isStreaming: false,
   isLoadingSession: false,
@@ -90,17 +92,16 @@ beforeEach(() => {
     activeTabId: "tab-a",
     lastTitleByTab: {},
   } as any);
-  sessionRenameMock.mockClear();
-  sessionRenameMock.mockResolvedValue(undefined);
+  agentRenameSession.mockClear();
+  agentRenameSession.mockResolvedValue({ ok: true });
 });
 
 describe("renameSession", () => {
   it("calls IPC and updates title when tab has a sessionId", async () => {
     await useChatStore.getState().renameSession("tab-a", "My plan");
-    expect(sessionRenameMock).toHaveBeenCalledWith({
-      tabId: "tab-a",
+    expect(agentRenameSession).toHaveBeenCalledWith({
+      conversationId: "tab-a",
       title: "My plan",
-      sessionId: "sess-1",
     });
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-a")?.title).toBe("My plan");
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-a")?.userTitleSet).toBe(true);
@@ -109,24 +110,26 @@ describe("renameSession", () => {
 
   it("trims surrounding whitespace before saving", async () => {
     await useChatStore.getState().renameSession("tab-a", "  My plan  ");
-    expect(sessionRenameMock).toHaveBeenCalledWith({
-      tabId: "tab-a",
+    expect(agentRenameSession).toHaveBeenCalledWith({
+      conversationId: "tab-a",
       title: "My plan",
-      sessionId: "sess-1",
     });
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-a")?.title).toBe("My plan");
   });
 
-  it("skips IPC and just updates local title when sessionId is null", async () => {
+  it("renames by conversationId even when sessionId is null", async () => {
     await useChatStore.getState().renameSession("tab-b", "Local rename");
-    expect(sessionRenameMock).not.toHaveBeenCalled();
+    expect(agentRenameSession).toHaveBeenCalledWith({
+      conversationId: "tab-b",
+      title: "Local rename",
+    });
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-b")?.title).toBe("Local rename");
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-b")?.userTitleSet).toBe(true);
     expect(useChatStore.getState().lastTitleByTab["tab-b"]).toBe("Another chat");
   });
 
   it("propagates IPC errors without writing the new title", async () => {
-    sessionRenameMock.mockRejectedValueOnce(new Error("boom"));
+    agentRenameSession.mockRejectedValueOnce(new Error("boom"));
     await expect(
       useChatStore.getState().renameSession("tab-a", "Won't stick"),
     ).rejects.toThrow("boom");
@@ -139,13 +142,12 @@ describe("undoRenameSession", () => {
   it("restores the previous title and clears the buffer on success", async () => {
     await useChatStore.getState().renameSession("tab-a", "First");
     expect(useChatStore.getState().lastTitleByTab["tab-a"]).toBe("New Chat");
-    sessionRenameMock.mockClear();
+    agentRenameSession.mockClear();
 
     await useChatStore.getState().undoRenameSession("tab-a");
-    expect(sessionRenameMock).toHaveBeenCalledWith({
-      tabId: "tab-a",
+    expect(agentRenameSession).toHaveBeenCalledWith({
+      conversationId: "tab-a",
       title: "New Chat",
-      sessionId: "sess-1",
     });
     expect(useChatStore.getState().tabs.find((t) => t.id === "tab-a")?.title).toBe("New Chat");
     expect(useChatStore.getState().lastTitleByTab["tab-a"]).toBeUndefined();
@@ -153,13 +155,13 @@ describe("undoRenameSession", () => {
 
   it("is a no-op when there is no buffered title", async () => {
     await useChatStore.getState().undoRenameSession("tab-a");
-    expect(sessionRenameMock).not.toHaveBeenCalled();
+    expect(agentRenameSession).not.toHaveBeenCalled();
   });
 
   it("preserves the buffer when IPC fails", async () => {
     await useChatStore.getState().renameSession("tab-a", "Second");
-    sessionRenameMock.mockClear();
-    sessionRenameMock.mockRejectedValueOnce(new Error("boom"));
+    agentRenameSession.mockClear();
+    agentRenameSession.mockRejectedValueOnce(new Error("boom"));
     await expect(useChatStore.getState().undoRenameSession("tab-a")).rejects.toThrow("boom");
     expect(useChatStore.getState().lastTitleByTab["tab-a"]).toBe("New Chat");
   });

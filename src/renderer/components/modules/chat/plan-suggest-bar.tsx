@@ -5,7 +5,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ComposerChromeCard } from "./composer-chrome-card";
-import { PLAN_SUGGEST_TIMEOUT_MS } from "../../../../shared/plan-suggest";
+import { PLAN_SUGGEST_TIMEOUT_MS } from "../../../../shared/research/plan-suggest";
 import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 
 export function PlanSuggestBar({ className }: { className?: string }) {

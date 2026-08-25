@@ -4,17 +4,16 @@ import {
   isResearchPlansDirPath,
   resolveEffectivePermissionRule,
   resolveSessionAgent,
-} from "../../src/shared/session-agent";
-import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research-brief";
+} from "../../src/shared/agent/session-agent";
+import { LEGACY_RESEARCH_BRIEF_REL, RESEARCH_BRIEF_REL } from "../../src/shared/research/brief";
 import {
   DRAFT_PLAN_REL,
   isResearchPlanDraftPath,
   RESEARCH_PLAN_DRAFTS_DIR_REL,
   sessionDraftPlanRel,
-} from "../../src/shared/research-plan";
-import { ensurePlanAgentPermissionConfig } from "../../src/main/services/opencode-tools-config";
+} from "../../src/shared/research/plan";
 
-describe("session-agent (OpenCode-aligned Plan)", () => {
+describe("session-agent (Plan / Build permission)", () => {
   it("defaults unknown to build", () => {
     expect(resolveSessionAgent(undefined)).toBe("build");
     expect(resolveSessionAgent("plan")).toBe("plan");
@@ -28,6 +27,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
       }),
     ).toBe("deny");
     expect(resolveEffectivePermissionRule("auto", "plan", "latex-compile")).toBe("deny");
+    expect(resolveEffectivePermissionRule("auto", "plan", "latex-compile-standalone")).toBe("deny");
     expect(resolveEffectivePermissionRule("auto", "plan", "experiment-run")).toBe("deny");
   });
 
@@ -63,7 +63,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
     ).toBe("deny");
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: `.prismnext/research/plans/2026-07-18-abcd.md`,
+        filePath: `.workbench/research/plans/2026-07-18-abcd.md`,
         projectRoot: "/proj",
         sessionId: "ses_1",
       }),
@@ -73,7 +73,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
   it("Plan without sessionId still allows broad plans-dir writes (fallback)", () => {
     expect(
       resolveEffectivePermissionRule("auto", "plan", "write", {
-        filePath: `.prismnext/research/plans/2026-07-18-abcd.md`,
+        filePath: `.workbench/research/plans/2026-07-18-abcd.md`,
         projectRoot: "/proj",
       }),
     ).toBe("allow");
@@ -83,7 +83,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
     expect(resolveEffectivePermissionRule("auto", "plan", "bash")).toBe("allow");
     expect(
       resolveEffectivePermissionRule("auto", "plan", "bash", {
-        bashCommand: "ls -la .prismnext/research/plans",
+        bashCommand: "ls -la .workbench/research/plans",
       }),
     ).toBe("allow");
     expect(resolveEffectivePermissionRule("ask", "plan", "bash")).toBe("ask");
@@ -96,7 +96,7 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
   it("isResearchPlanDraftPath / isResearchPlansDirPath", () => {
     expect(isResearchPlanDraftPath(DRAFT_PLAN_REL)).toBe(true);
     expect(isResearchPlanDraftPath(sessionDraftPlanRel("ses_1"))).toBe(true);
-    expect(isResearchPlansDirPath(".prismnext/research/plans/x.md")).toBe(true);
+    expect(isResearchPlansDirPath(".workbench/research/plans/x.md")).toBe(true);
     expect(isResearchPlansDirPath("src/main.tex")).toBe(false);
   });
 
@@ -175,13 +175,3 @@ describe("session-agent (OpenCode-aligned Plan)", () => {
   });
 });
 
-describe("ensurePlanAgentPermissionConfig", () => {
-  it("merges Prism plans dir into OpenCode plan agent edit allowlist", () => {
-    const next = ensurePlanAgentPermissionConfig({});
-    const plan = (next.agent as { plan: { permission: { edit: Record<string, string> } } }).plan;
-    expect(plan.permission.edit["*"]).toBe("deny");
-    expect(plan.permission.edit[DRAFT_PLAN_REL]).toBe("allow");
-    expect(plan.permission.edit[`${RESEARCH_PLAN_DRAFTS_DIR_REL}/**`]).toBe("allow");
-    expect(plan.permission.edit[".prismnext/research/plans/**"]).toBe("allow");
-  });
-});

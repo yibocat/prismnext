@@ -28,6 +28,7 @@ import {
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
 import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
+import { PROJECT_TEAMS_REL } from "../../src/shared/teams/types";
 import { emptyAppTeamsState } from "../../src/shared/teams/state";
 import {
   readAppTeamsState,
@@ -159,6 +160,8 @@ beforeEach(() => {
   appDataDir = mkdtempSync(join(tmpdir(), "teams-appdata-"));
   projectRoot = mkdtempSync(join(tmpdir(), "teams-project-"));
   setAppTeamsStateDataDir(appDataDir);
+  setAppTeamsDirForTests(join(appDataDir, "teams"));
+  mkdirSync(join(appDataDir, "teams"), { recursive: true });
   __setHostVersionForTests("0.7.0");
   writeAppTeamsState(emptyAppTeamsState());
   // Seal the bundled root to an empty dir so only fixture teams appear.
@@ -181,56 +184,47 @@ afterEach(() => {
 // ── Tri-state matrix (design §5.3) ────────────────────────
 
 describe("tri-state matrix (team + asset)", () => {
-  it("team: installed default-enabled; project=false blocks; project=true overrides app=false", () => {
+  it("team: installed default-enabled; only workbench (app) enable is honored", () => {
     const root = useExternalRoot();
     writeTeam(root, "acme.tools", { subagents: ["helper"] });
 
-    // Default: installed (external root) + enabled.
     expect(listTeams(projectRoot).find((t) => t.manifest.id === "acme.tools")?.enabled).toBe(true);
 
-    // Project-level disable.
     setProjectTeamEnabled(projectRoot, "acme.tools", false);
     let t = listTeams(projectRoot).find((x) => x.manifest.id === "acme.tools")!;
-    expect(t.enabled).toBe(false);
-    expect(t.blockedBy).toBe("team-disabled-project");
+    expect(t.enabled).toBe(true);
 
-    // App-level disable + project re-enable (C7: project overrides app).
     setAppTeamEnabled("acme.tools", false);
     setProjectTeamEnabled(projectRoot, "acme.tools", true);
     t = listTeams(projectRoot).find((x) => x.manifest.id === "acme.tools")!;
-    expect(t.enabled).toBe(true);
-    expect(t.blockedBy).toBeUndefined();
-
-    // App-level disable alone.
-    setProjectTeamEnabled(projectRoot, "acme.tools", null);
-    t = listTeams(projectRoot).find((x) => x.manifest.id === "acme.tools")!;
     expect(t.enabled).toBe(false);
     expect(t.blockedBy).toBe("team-disabled-app");
+
+    setAppTeamEnabled("acme.tools", null);
+    t = listTeams(projectRoot).find((x) => x.manifest.id === "acme.tools")!;
+    expect(t.enabled).toBe(true);
+    expect(t.blockedBy).toBeUndefined();
   });
 
-  it("asset: blocked by team, then by app, then by project; project overrides app", () => {
+  it("asset: blocked by workbench enable; project override is ignored", () => {
     const root = useExternalRoot();
     writeTeam(root, "acme.tools", { subagents: ["helper"] });
     const fqid = "acme.tools:helper";
 
     expect(isAssetActive(projectRoot, fqid)).toBe(true);
 
-    // Asset disabled at app level.
     setAppAssetEnabled(fqid, false);
     expect(isAssetActive(projectRoot, fqid)).toBe(false);
     expect(getAsset(projectRoot, fqid)?.blockedBy).toBe("asset-disabled-app");
 
-    // Project re-enables over app disable.
     setProjectAssetEnabled(projectRoot, fqid, true);
-    expect(isAssetActive(projectRoot, fqid)).toBe(true);
+    expect(isAssetActive(projectRoot, fqid)).toBe(false);
 
-    // Team disabled → asset blocked by team regardless of asset flags.
-    setProjectAssetEnabled(projectRoot, fqid, null);
     setAppAssetEnabled(fqid, null);
-    setProjectTeamEnabled(projectRoot, "acme.tools", false);
+    setAppTeamEnabled("acme.tools", false);
     const a = getAsset(projectRoot, fqid)!;
     expect(a.enabled).toBe(false);
-    expect(a.blockedBy).toBe("team-disabled-project");
+    expect(a.blockedBy).toBe("team-disabled-app");
   });
 
   it("incompatible team (minHostVersion too high) is blocked at runtime", () => {
@@ -246,7 +240,7 @@ describe("tri-state matrix (team + asset)", () => {
 
 describe("scope", () => {
   it("each project has its own project.local hangar without leaking source assets", () => {
-    const projectTeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectTeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectTeams, "project.local", { subagents: ["mine"] });
 
     const inProject = listTeams(projectRoot).find((t) => t.manifest.id === "project.local");
@@ -256,7 +250,7 @@ describe("scope", () => {
     const otherProject = mkdtempSync(join(tmpdir(), "teams-other-"));
     try {
       const elsewhere = listTeams(otherProject).find((t) => t.manifest.id === "project.local");
-      expect(elsewhere).toBeDefined();
+      expect(elsewhere).toBeUndefined();
       expect(listAssets(otherProject, "subagent").some((asset) => asset.fqid === "project.local:mine")).toBe(false);
     } finally {
       rmSync(otherProject, { recursive: true, force: true });
@@ -264,11 +258,11 @@ describe("scope", () => {
   });
 
   it("rejects an app default from project A and preserves project B's active team", () => {
-    const projectATeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectATeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectATeams, "project.local", { orchestrator: { id: "lead-a" } });
     const projectB = mkdtempSync(join(tmpdir(), "teams-project-b-"));
     try {
-      const projectBTeams = join(projectB, ".prismnext", "agent", "teams");
+      const projectBTeams = join(projectB, PROJECT_TEAMS_REL);
       writeTeam(projectBTeams, "project.local", { orchestrator: { id: "lead-b" } });
       setProjectDefaultTeam(projectB, "project.local");
 
@@ -335,7 +329,7 @@ describe("resolveRoster", () => {
     writeTeam(root, "acme.global", {
       orchestrator: { id: "lead", roster: { mode: "list", members: ["project.local:mine"] } },
     });
-    const projectTeams = join(projectRoot, ".prismnext", "agent", "teams");
+    const projectTeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectTeams, "project.local", { subagents: ["mine"] });
     const view = resolveRoster(projectRoot, "acme.global")!;
     expect(view.entries[0].unavailable).toBe("out-of-scope");
@@ -449,14 +443,17 @@ describe("resolveActiveTeam", () => {
     // Session override to a capability-only team → falls back to project default.
     expect(resolveActiveTeam(projectRoot, "acme.capability-only")?.manifest.id).toBe("acme.capable");
 
-    // Disabled project default → falls back to core.
-    setProjectTeamEnabled(projectRoot, "acme.capable", false);
+    // Disabled workbench default → falls back to core.
+    setAppTeamEnabled("acme.capable", false);
     expect(resolveActiveTeam(projectRoot)?.manifest.id).toBe("prismnext.core");
   });
 
   it("falls back to the project hangar when core is uninstalled and My Content is absent", () => {
     const root = useExternalRoot("bundled");
     writeTeam(root, "prismnext.core", { orchestrator: { id: "research-prism" } });
+    writeTeam(join(projectRoot, PROJECT_TEAMS_REL), "project.local", {
+      orchestrator: { id: "lead" },
+    });
     writeAppTeamsState({
       ...emptyAppTeamsState(),
       uninstalled: ["prismnext.core"],

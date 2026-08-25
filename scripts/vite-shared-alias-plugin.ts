@@ -2,12 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Plugin } from "vite";
 
-/** Match tsconfig `@shared/*` → main/services then src/shared. */
+/** Match tsconfig `@shared/*` → src/shared only. */
 export function sharedAliasPlugin(rootDir: string): Plugin {
-  const bases = [
-    path.resolve(rootDir, "src/main/services"),
-    path.resolve(rootDir, "src/shared"),
-  ];
+  const bases = [path.resolve(rootDir, "src/shared")];
 
   // Avoid up to 8 sync fs.existsSync calls per `@shared/*` import.
   // Cleared on build start / watched-file change so new files resolve.

@@ -1,27 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../src/main/services/literature-service", () => ({
+vi.mock("../../src/main/literature/facade", () => ({
   getPaperByBibkey: vi.fn(),
 }));
 
-vi.mock("../../src/main/services/paper-extract-db", () => ({
+vi.mock("../../src/main/literature/extract/paper-extract-db", () => ({
   listPaperExtractStates: vi.fn(),
   getPaperExtractState: vi.fn(),
   readExtractMarkdown: vi.fn(),
 }));
 
-vi.mock("../../src/main/services/literature-extract-queue", () => ({
+vi.mock("../../src/main/literature/extract/literature-extract-queue", () => ({
   enqueuePaperExtract: vi.fn(),
   notifyAgentExtractRequested: vi.fn(),
 }));
 
-import { getPaperByBibkey } from "../../src/main/services/literature-service";
+import { getPaperByBibkey } from "../../src/main/literature/facade";
 import {
   getPaperExtractState,
   listPaperExtractStates,
   readExtractMarkdown,
-} from "../../src/main/services/paper-extract-db";
-import { readPaperPdfContent } from "../../src/main/services/paper-extract-read";
+} from "../../src/main/literature/extract/paper-extract-db";
+import { readPaperPdfContent } from "../../src/main/literature/extract/paper-extract-read";
 
 const ROOT = "/proj";
 const PAPER = {
@@ -57,10 +57,10 @@ describe("readPaperPdfContent figure paths", () => {
     );
 
     expect(result.markdown).toContain(
-      ".prismnext/library/extract/paper-abc/images/fig-1.png",
+      "library/extract/paper-abc/images/fig-1.png",
     );
     expect(result.hasFigures).toBe(true);
-    expect(result.figures?.[0]).toContain(".prismnext/library/extract/paper-abc/images/fig-1.png");
+    expect(result.figures?.[0]).toContain("library/extract/paper-abc/images/fig-1.png");
     expect(result.hint).toMatch(/embed/i);
   });
 });

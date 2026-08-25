@@ -1,9 +1,13 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { ChatStreamMessage, ContentBlock } from "../../src/renderer/stores/chat-store";
+import { emptyConversation } from "../../src/shared/agent/conversation";
+import type { Conversation } from "../../src/shared/agent/conversation";
 import {
   findComposerPendingQuestion,
+  findComposerPendingQuestionFromConversation,
   findComposerPendingTodo,
   findMessageTodoPlan,
+  findMessageTodoPlanFromConversation,
   findOpenTodoPlan,
   composerToolsSuppressedOnSessionHydrate,
   questionNeedsUserAnswer,
@@ -13,6 +17,26 @@ import {
   dismissTodoPlan,
   isTodoPlanDismissed,
 } from "../../src/renderer/lib/chat/composer-pending-tools";
+
+function conversationWithTodo(todos: Array<{ content: string; status: string }>): Conversation {
+  return {
+    ...emptyConversation({ conversationId: "c1" }),
+    turns: [{
+      turnId: "turn-1",
+      turnIndex: 0,
+      user: { blocks: [{ type: "text", text: "plan this" }] },
+      assistant: {
+        blocks: [{
+          type: "tool_use",
+          id: "todo-1",
+          name: "todowrite",
+          input: { todos },
+        }],
+      },
+      status: "completed",
+    }],
+  };
+}
 
 function assistantMsg(blocks: ContentBlock[]): ChatStreamMessage {
   return { type: "assistant", message: { content: blocks } };
@@ -326,5 +350,117 @@ describe("composer-pending-tools", () => {
       ]),
     ];
     expect(composerToolsSuppressedOnSessionHydrate(messages)).toBe(true);
+  });
+
+  it("finds a todo plan from Conversation turns, not ChatStreamMessage", () => {
+    const plan = findMessageTodoPlanFromConversation(conversationWithTodo([
+      { content: "Review structure", status: "pending" },
+    ]));
+    expect(plan?.toolUse.id).toBe("todo-1");
+    expect(plan?.turnIndex).toBe(0);
+  });
+
+  it("hosts a pendingQuestion in composer chrome before the tool card exists", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c1" }),
+      pendingQuestion: {
+        requestId: "q-hang",
+        prompt: "Pick one?",
+        options: ["A", "B"],
+      },
+    };
+    expect(selectComposerHostedQuestionId({
+      activeTabId: "tab-1",
+      tabs: [{
+        id: "tab-1",
+        conversation: conv,
+        messages: [],
+        streamingMessage: null,
+        isStreaming: true,
+        composerToolsSuppressed: false,
+      }],
+    })).toBe("q-hang");
+  });
+
+  it("hosts a pending hang even when a different unanswered question tool is in the live turn", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c1" }),
+      pendingQuestion: {
+        requestId: "q-hang",
+        prompt: "Current hang?",
+        options: ["Yes", "No"],
+      },
+      live: {
+        turnId: "turn-1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text", text: "ask" }] },
+        assistant: {
+          blocks: [{
+            type: "tool_use",
+            id: "q-old",
+            name: "question",
+            input: { question: "Older unanswered?" },
+          }],
+        },
+        status: "streaming",
+      },
+    };
+    expect(selectComposerHostedQuestionId({
+      activeTabId: "tab-1",
+      tabs: [{
+        id: "tab-1",
+        conversation: conv,
+        messages: [],
+        streamingMessage: null,
+        isStreaming: true,
+        composerToolsSuppressed: false,
+      }],
+    })).toBe("q-hang");
+    expect(findComposerPendingQuestionFromConversation(conv, true)?.toolUse.id).toBe("q-hang");
+    expect(findComposerPendingQuestionFromConversation(conv, true)?.toolUse.input).toMatchObject({
+      question: "Current hang?",
+    });
+  });
+
+  it("does not host an unanswered question from a settled turn", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c1" }),
+      turns: [{
+        turnId: "turn-0",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text", text: "old" }] },
+        assistant: {
+          blocks: [{
+            type: "tool_use",
+            id: "q-old",
+            name: "question",
+            input: { question: "Leftover?" },
+          }],
+        },
+        status: "completed",
+      }],
+    };
+    expect(findComposerPendingQuestionFromConversation(conv, false)).toBeNull();
+  });
+
+  it("finds a pending question from Conversation assistant blocks", () => {
+    const conv: Conversation = {
+      ...emptyConversation({ conversationId: "c1" }),
+      live: {
+        turnId: "turn-1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text", text: "ask" }] },
+        assistant: {
+          blocks: [{
+            type: "tool_use",
+            id: "q1",
+            name: "question",
+            input: { question: "Pick one?" },
+          }],
+        },
+        status: "streaming",
+      },
+    };
+    expect(findComposerPendingQuestionFromConversation(conv, true)?.toolUse.id).toBe("q1");
   });
 });

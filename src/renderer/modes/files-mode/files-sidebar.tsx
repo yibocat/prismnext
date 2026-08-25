@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
+import { shellDesktop } from "@/lib/desktop-api/shell";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
@@ -9,6 +10,7 @@ import { DEFAULT_MANUSCRIPT_DIR, FOLDER_FUNCTION_LABELS, folderWorkspaceFunction
 import { resolveFolderIconName } from "@/lib/workspace/folder-icons";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import { useRightPanelStore } from "@/stores/right-panel-store";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { applyCheckoutTransition } from "@/lib/git/checkout-context";
@@ -169,7 +171,7 @@ export function FilesSidebar() {
       if (!window.confirm(t("dialogs.files.deleteBody", { name: fileId }))) return;
       const rps = useRightPanelStore.getState();
       for (const tab of rps.tabs) {
-        if (tab.fileId === fileId || tab.filePath === fileId) {
+        if (tabFileId(tab) === fileId || tabFilePath(tab) === fileId) {
           rps.requestCloseTab(tab.id);
         }
       }
@@ -367,7 +369,7 @@ export function FilesSidebar() {
     const rps = useRightPanelStore.getState();
     const prefix = `${folderPath}/`;
     for (const tab of rps.tabs) {
-      if (tab.fileId?.startsWith(prefix) || tab.filePath?.startsWith(prefix)) {
+      if (tabFileId(tab)?.startsWith(prefix) || tabFilePath(tab)?.startsWith(prefix)) {
         rps.requestCloseTab(tab.id);
       }
     }
@@ -445,7 +447,7 @@ export function FilesSidebar() {
       // Sync any tabs that were viewing this file
       const rps = useRightPanelStore.getState();
       for (const tab of rps.tabs) {
-        if (tab.fileId === oldPath || tab.filePath === oldPath) {
+        if (tabFileId(tab) === oldPath || tabFilePath(tab) === oldPath) {
           rps.updateTab(tab.id, { fileId: newPath, filePath: newPath, title: name });
         }
       }
@@ -474,7 +476,7 @@ export function FilesSidebar() {
       onRenameFolder: openFolderRenameDialog,
       onRevealInFinder: (pathOrRel: string) => {
         const abs = toAbsPath(pathOrRel);
-        if (abs) void window.electronAPI.shellShowItemInFolder(abs);
+        if (abs) void shellDesktop.shellShowItemInFolder(abs);
       },
       onCopyPath: (text: string) => void navigator.clipboard.writeText(text),
       onCopyRelativePath: (rel: string) => void navigator.clipboard.writeText(rel),

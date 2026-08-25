@@ -44,7 +44,7 @@ describe("applyVisionFallbackForSend", () => {
     visionPhaseTab.preparePhase = null;
     vi.stubGlobal("window", {
       electronAPI: {
-        chatDescribeImages: vi.fn(async () => ({
+        agentDescribeImages: vi.fn(async () => ({
           descriptions: [
             { name: "shot.png", text: "A red error dialog saying compile failed.", cached: false },
           ],
@@ -63,7 +63,7 @@ describe("applyVisionFallbackForSend", () => {
     expect(out.promptImages).toEqual([]);
     expect(out.promptText).toBe("hello");
     expect(out.note).toBeNull();
-    expect(window.electronAPI.chatDescribeImages).not.toHaveBeenCalled();
+    expect(window.electronAPI.agentDescribeImages).not.toHaveBeenCalled();
     expect(visionPhaseTab.preparePhase).toBeNull();
   });
 
@@ -97,7 +97,7 @@ describe("applyVisionFallbackForSend", () => {
       } as any,
     });
 
-    expect(window.electronAPI.chatDescribeImages).toHaveBeenCalledWith({
+    expect(window.electronAPI.agentDescribeImages).toHaveBeenCalledWith({
       providerId: "opencode-go",
       modelId: "minimax-m3",
       images: [{ name: "shot.png", mimeType: "image/png", data: "abc" }],
@@ -158,14 +158,14 @@ describe("applyVisionFallbackForSend", () => {
         },
       } as any,
     });
-    expect(window.electronAPI.chatDescribeImages).toHaveBeenCalled();
+    expect(window.electronAPI.agentDescribeImages).toHaveBeenCalled();
   });
 
   it("sets describing_images prepare phase while the helper runs", async () => {
     let phaseDuringCall: string | null = null;
     vi.stubGlobal("window", {
       electronAPI: {
-        chatDescribeImages: vi.fn(async () => {
+        agentDescribeImages: vi.fn(async () => {
           phaseDuringCall = visionPhaseTab.preparePhase;
           return {
             descriptions: [{ name: "a.png", text: "ok", cached: false }],

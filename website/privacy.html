@@ -76,7 +76,7 @@
     <main class="sheet sheet--legal">
       <article class="legal" data-legal-lang="en">
         <header class="legal-head">
-          <p class="legal-meta">Effective 16 August 2026</p>
+          <p class="legal-meta">Effective 19 August 2026</p>
           <h1>Privacy Policy</h1>
           <p class="legal-lede">
             This Privacy Policy explains how the PrismNext desktop application and this website
@@ -159,9 +159,10 @@
         </ul>
         <p>
           That folder may contain settings and API keys, application-level teams, a Pro license
-          file, OpenCode runtimes and session databases, execution history, a composer attachment
+          file, Agent session records, execution history, a composer attachment
           cache, and the Chromium profile used by the application (including the in-app Browser
-          partition).
+          partition). Older installs may still have leftover OpenCode runtime files in this
+          folder; current chat does not use them.
         </p>
         <h3>4.3 Logs and temporary files</h3>
         <p>The following locations are outside the two homes above, but are created by the software:</p>
@@ -181,7 +182,7 @@
           </li>
         </ul>
         <p>
-          Deleting a project folder does not delete that project’s OpenCode session data in the
+          Deleting a project folder does not delete that project’s Agent session records in the
           application data folder.
         </p>
         <h3>4.4 This website</h3>
@@ -251,7 +252,7 @@
         </p>
         <h3>6.5 Agent network tools</h3>
         <p>
-          A session that is permitted to use the network may call OpenCode’s web-search and
+          A session that is permitted to use the network may call the agent’s web-search and
           web-fetch tools. Web search, when enabled, uses Exa; query text is disclosed to Exa.
           Web-fetch requests go to the URLs the agent retrieves.
         </p>
@@ -370,7 +371,7 @@
 
       <article class="legal" data-legal-lang="zh" hidden>
         <header class="legal-head">
-          <p class="legal-meta">生效日期：2026 年 8 月 16 日</p>
+          <p class="legal-meta">生效日期：2026 年 8 月 19 日</p>
           <h1>隐私政策</h1>
           <p class="legal-lede">
             本隐私政策说明 PrismNext 桌面应用及本网站如何处理信息。请与
@@ -433,7 +434,7 @@
           <li>Linux：<code>~/.config/prismnext/</code></li>
         </ul>
         <p>
-          该文件夹可能包含设置与 API Key、应用级团队、Pro 许可证文件、OpenCode 运行时与会话数据库、任务历史、对话附件缓存，以及应用程序使用的 Chromium 配置（含内置 Browser 分区）。
+          该文件夹可能包含设置与 API Key、应用级团队、Pro 许可证文件、Agent 会话记录、任务历史、对话附件缓存，以及应用程序使用的 Chromium 配置（含内置 Browser 分区）。较旧安装可能仍留有 OpenCode 运行时文件；当前聊天不再使用它们。
         </p>
         <h3>4.3 日志与临时文件</h3>
         <p>下列位置不在上述两个「家」中，但由本软件产生：</p>
@@ -448,7 +449,7 @@
             您运行的工具产生的包缓存（例如 <code>uv</code> 位于 <code>~/.cache/uv</code>），不由 PrismNext 管理。
           </li>
         </ul>
-        <p>删除项目文件夹，并不会删除应用数据文件夹中该项目的 OpenCode 会话数据。</p>
+        <p>删除项目文件夹，并不会删除应用数据文件夹中该项目的 Agent 会话记录。</p>
         <h3>4.4 本网站</h3>
         <p>
           本网站将主题、语言与背景偏好保存在浏览器的 <code>localStorage</code> 中，不创建账号。
@@ -488,7 +489,7 @@
         </p>
         <h3>6.5 Agent 网络工具</h3>
         <p>
-          被允许使用网络的会话可能调用 OpenCode 的网页搜索与抓取工具。启用网页搜索时使用 Exa，查询文本将向 Exa 披露。网页抓取请求发往 Agent 所取回的 URL。
+          被允许使用网络的会话可能调用 Agent 的网页搜索与抓取工具。启用网页搜索时使用 Exa，查询文本将向 Exa 披露。网页抓取请求发往 Agent 所取回的 URL。
         </p>
         <h3>6.6 内置 Browser</h3>
         <p>

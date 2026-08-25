@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { appPopoverListClass } from "@/components/ui/app-popover";
 import { useChatStore } from "@/stores/chat-store";
 import { useLiteratureStore } from "@/stores/literature-store";
-import { formatPaperMentionLabel } from "../../../../shared/bibkey-utils";
+import { formatPaperMentionLabel } from "../../../../shared/literature/bibkey-utils";
 import {
   CAPSULE_TOOLBAR_PILL,
   CHAT_PANEL_TOOLBAR_BUTTON,

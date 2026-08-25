@@ -14,9 +14,9 @@ import {
   serializeResearchPlan,
   sessionDraftPlanRel,
   type ResearchPlanDoc,
-} from "../../src/shared/research-plan";
+} from "../../src/shared/research/plan";
 import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
-import { planDraftMissingRedirectNote } from "../../src/shared/research-plan";
+import { planDraftMissingRedirectNote } from "../../src/shared/research/plan";
 
 const sampleDoc: ResearchPlanDoc = {
   meta: {
@@ -157,7 +157,7 @@ N=100 is thin; need more repeats.
   });
 
   it("buildApprovedPlanExecutePrompt points at the file without embedding the body", () => {
-    const path = ".prismnext/research/plans/2026-07-18-b1c2.md";
+    const path = ".workbench/research/plans/2026-07-18-b1c2.md";
     const prompt = buildApprovedPlanExecutePrompt({
       relativePath: path,
       title: "Sorting study",
@@ -247,7 +247,7 @@ We will redesign the sampling protocol and validate on a pilot cohort.
 
   it("sessionDraftPlanRel / draftPlanPathBelongsToSession", () => {
     const rel = sessionDraftPlanRel("ses_abc");
-    expect(rel).toBe(".prismnext/research/plans/drafts/ses_abc.md");
+    expect(rel).toBe(".workbench/research/plans/drafts/ses_abc.md");
     expect(draftPlanPathBelongsToSession(rel, "ses_abc")).toBe(true);
     expect(draftPlanPathBelongsToSession(rel, "ses_other")).toBe(false);
     expect(draftPlanPathBelongsToSession(DRAFT_PLAN_REL, "ses_abc")).toBe(false);

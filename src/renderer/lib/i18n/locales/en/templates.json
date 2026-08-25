@@ -1,0 +1,62 @@
+{
+  "center": {
+    "title": "Template Center",
+    "subtitle": "Apply a LaTeX scaffold into your manuscript folder. Overlaps are explained before anything is overwritten.",
+    "search": "Search templates…",
+    "noFound": "No templates found",
+    "all": "All Templates",
+    "categories": "Categories",
+    "openProject": "Open a project before applying a template.",
+    "needManuscript": "Configure a manuscript folder in Workspace settings first.",
+    "current": "Current: {{name}} ({{category}})",
+    "inUse": "In use",
+    "status": "Status",
+    "countAll": "{{count}} templates",
+    "countFiltered": "Showing {{shown}} of {{total}}",
+    "categoryLabel": "Category: {{name}}",
+    "clearSearch": "Clear search"
+  },
+  "categories": {
+    "paper": "Academic Paper",
+    "thesis": "Thesis",
+    "cv": "CV / Resume",
+    "beamer": "Beamer Slides",
+    "poster": "Poster",
+    "letter": "Letter"
+  },
+  "detail": {
+    "back": "Back to templates",
+    "description": "Description",
+    "filesStructure": "Files & Structure",
+    "use": "Use",
+    "reapply": "Re-apply",
+    "viewSource": "View Source",
+    "viewPdf": "View PDF",
+    "preview": "Preview",
+    "noPreview": "No preview",
+    "info": "Info",
+    "documentClass": "Document class",
+    "fileCount": "Files",
+    "category": "Category",
+    "applyHint": "Applying writes template files into your manuscript folder. If files already exist or you changed a previous template, you will see which paths will be touched and a backup will be saved first."
+  },
+  "switch": {
+    "switchTitle": "Switch Template",
+    "resetTitle": "Reset Template",
+    "applyTitle": "Apply Template",
+    "l1": "Same document family — matching sections and the abstract/front matter will be preserved where possible. Preamble and packages come from the new template.",
+    "l2": "Related document types (paper ↔ thesis) — section merge will be attempted. Review the result after switching.",
+    "l3": "These template types cannot be merged automatically. Your existing template files will be fully replaced. A backup will be saved.",
+    "reset": "Reset to the template original? Your modifications will be lost. A backup will be saved.",
+    "firstUse": "This project already contains files that overlap with the template. Applying will overwrite them. A backup will be saved.",
+    "applyNamed": "Apply {{name}} ({{category}})",
+    "arrow": "{{oldName}} ({{oldCategory}}) → {{newName}} ({{newCategory}})",
+    "affected": "Affected files:",
+    "willTouch": "Files that will be overwritten or written:",
+    "willRemove": "Template files that will be removed:",
+    "noFileList": "No per-file list for this step — confirm to continue.",
+    "backupNote": "A copy of overlapping or previously applied template files is saved under .workbench/backups before changes are written.",
+    "backupMerge": "Backup & Merge",
+    "backupReplace": "Backup & Replace"
+  }
+}

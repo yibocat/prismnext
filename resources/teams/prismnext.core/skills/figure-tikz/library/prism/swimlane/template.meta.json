@@ -1,0 +1,37 @@
+{
+  "id": "swimlane",
+  "name": "Swimlane (three actors)",
+  "type": "template",
+  "domain": ["systems"],
+  "tags": ["swimlane", "sequence", "lane", "workflow", "actor", "handoff", "process"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning", "fit", "backgrounds"],
+  "description": "Three horizontal lanes (agent / tool / user) with a short handoff sequence. Relabel the lanes and steps; keep one row per actor.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\laneaw", "type": "text", "meaning": "top lane title"},
+      {"name": "\\lanebw", "type": "text", "meaning": "middle lane title"},
+      {"name": "\\lanecw", "type": "text", "meaning": "bottom lane title"},
+      {"name": "\\aonelabel", "type": "text", "meaning": "first top-lane step"},
+      {"name": "\\atonelabel", "type": "text", "meaning": "second top-lane step"},
+      {"name": "\\atwolabel", "type": "text", "meaning": "third top-lane step"},
+      {"name": "\\btonelabel", "type": "text", "meaning": "middle-lane run step"},
+      {"name": "\\btwolabel", "type": "text", "meaning": "middle-lane result step"},
+      {"name": "\\ctwolabel", "type": "text", "meaning": "bottom-lane approve step"},
+      {"name": "\\cthreelabel", "type": "text", "meaning": "bottom-lane read step"}
+    ],
+    "node_naming": "lane titles (la)(lb)(lc); steps (a1)(a2)(a3)(b2)(b3)(c3)(c4)",
+    "styles": ["task", "lane", "flow"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-step", "summary": "add a step node in the same y as its lane and extend the flow"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "one row per actor; do not put two actors on the same y",
+      "preserve existing step names unless the user dropped that step",
+      "colors only via the five palette names"
+    ]
+  }
+}

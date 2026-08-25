@@ -6,7 +6,7 @@ import {
   githubSourceToAnalyzeUrl,
   parseGitHubInput,
   scanSkillPackagesAtRoot,
-} from "../../src/main/services/skill-install-github";
+} from "../../src/main/skills/skill-install-github";
 
 describe("skill-install-github", () => {
   it("builds analyze URLs that parse back to the same repo ref", () => {

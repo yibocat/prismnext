@@ -15,7 +15,7 @@ import {
   experimentStatusOf,
   type ExperimentEnv,
   type ExperimentMeta,
-} from "../../../shared/experiment-log";
+} from "../../../shared/experiments/log";
 import {
   experimentsMetadataLabelClass,
   experimentsSectionHeaderRowClass,

@@ -1,0 +1,14 @@
+{
+  "findPanel": {
+    "find": "查詢",
+    "replace": "替換",
+    "replaceAll": "全部",
+    "matchCase": "區分大小寫",
+    "wholeWord": "全詞匹配",
+    "regexp": "使用正規表示式",
+    "previous": "上一個匹配",
+    "next": "下一個匹配",
+    "close": "關閉",
+    "toggleReplace": "展開/收起替換"
+  }
+}

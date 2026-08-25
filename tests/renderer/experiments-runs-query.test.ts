@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ExperimentRunEntry } from "../../src/shared/experiment-log";
+import type { ExperimentRunEntry } from "../../src/shared/experiments/log";
 import {
   experimentRunListTitle,
   queryExperimentRuns,
   shortExperimentCommandTitle,
   stepFocusIndex,
   type RunsQuery,
-} from "../../src/renderer/modes/experiments-mode/experiments-runs-query";
+} from "../../src/renderer/lib/experiments/runs-query";
 
 function run(partial: Partial<ExperimentRunEntry> & { runId: string }): ExperimentRunEntry {
   return {

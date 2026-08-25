@@ -14,17 +14,17 @@ import {
   listExperiments,
   readExperiment,
   restoreExperiment,
-} from "../../src/main/services/experiment-log-service";
-import { resolveExperimentDir } from "../../src/main/services/workspace-config";
+} from "../../src/main/experiment/facade";
+import { resolveExperimentDir } from "../../src/main/project/workspace-config";
 import {
   readProvenanceEvents,
   resolveRunForArtifact,
-} from "../../src/main/services/provenance-service";
+} from "../../src/main/experiment/provenance-service";
 import {
   EXPERIMENT_REGISTRY_REL,
   experimentEnvDisplayRows,
   slugBaseFromTitle,
-} from "../../src/shared/experiment-log";
+} from "../../src/shared/experiments/log";
 
 describe("experiment-log-service", () => {
   let root: string;
@@ -335,7 +335,7 @@ describe("experiment-log-service", () => {
     expect(r.run.artifacts).toEqual(["manuscript/fig.png"]);
     expect(r.run.artifactSnapshots?.length).toBe(1);
     const snapRel = r.run.artifactSnapshots![0]!;
-    expect(snapRel).toContain(`.prismnext/experiments/${id}/artifacts/`);
+    expect(snapRel).toContain(`.workbench/experiments/${id}/artifacts/`);
     expect(snapRel.endsWith("fig.png")).toBe(true);
     const snapAbs = join(c.projectRoot, snapRel);
     expect(existsSync(snapAbs)).toBe(true);
@@ -513,7 +513,7 @@ describe("experiment-log-service", () => {
     expect(created.ok).toBe(true);
     if (!created.ok) return;
 
-    const provenance = await import("../../src/main/services/provenance-service");
+    const provenance = await import("../../src/main/experiment/provenance-service");
     const spy = vi.spyOn(provenance, "recordRunProvenance").mockReturnValue(null);
     try {
       const r = appendRun(c, created.id, {
@@ -554,9 +554,13 @@ describe("resolveExperimentDir (workspace integration)", () => {
   });
 
   function writeSettings(projectRoot: string, workspaceDirs: unknown[]): void {
-    const prismDir = join(projectRoot, ".prismnext");
-    mkdirSync(prismDir, { recursive: true });
-    writeFileSync(join(prismDir, "settings.json"), JSON.stringify({ workspaceDirs }), "utf-8");
+    const metaDir = join(projectRoot, ".workbench");
+    mkdirSync(metaDir, { recursive: true });
+    writeFileSync(
+      join(metaDir, "workbench.json"),
+      JSON.stringify({ id: "p_test", workspace: { folders: workspaceDirs } }),
+      "utf-8",
+    );
   }
 
   it("returns not_configured when no experiment folder is configured", () => {
@@ -603,7 +607,7 @@ describe("experimentEnvDisplayRows", () => {
       rVersion: "4.4.0",
       platform: "darwin",
       gitCommit: "abc1234",
-      venvPath: ".prismnext/.venv",
+      venvPath: ".workbench/.venv",
     });
     expect(rows.map((r) => r.label)).toEqual([
       "Python",
@@ -620,7 +624,7 @@ describe("tailBytes", () => {
     const originalBuffer = globalThis.Buffer;
     // @ts-expect-error test shim
     delete globalThis.Buffer;
-    const { tailBytes: tailBytesFresh } = await import("../../src/shared/experiment-log");
+    const { tailBytes: tailBytesFresh } = await import("../../src/shared/experiments/log");
     const long = "a".repeat(5000);
     const out = tailBytesFresh(long, 100);
     expect(new TextEncoder().encode(out).length).toBeLessThanOrEqual(100);

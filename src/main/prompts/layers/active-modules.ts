@@ -2,7 +2,7 @@
 
 import type { PromptLayer, PromptContext } from "../types";
 import { resolveStableSystemModules } from "../resolve-active-modules";
-import { createLogger } from "../../services/logger";
+import { createLogger } from "../../app/logger";
 
 const log = createLogger("active-modules", "agent");
 

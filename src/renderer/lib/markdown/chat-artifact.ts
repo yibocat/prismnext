@@ -2,7 +2,7 @@
  * Chat artifact fence helpers — explicit ```artifact blocks in AI replies.
  *
  * Terminology: "artifact" here means **project file path embed**, not Interaction specs
- * (`.prismnext/interactions/<id>/spec.json` — see interaction-spec.ts and ```interaction fences).
+ * (`.workbench/interactions/<id>/spec.json` — see interaction-spec.ts and ```interaction fences).
  * See docs-private/superpowers/specs/2026-07-18-chat-artifact-block-design.md
  */
 import {
@@ -10,8 +10,9 @@ import {
   isImageArtifactPath,
   isPdfArtifactPath,
   normalizeArtifactSlash,
-} from "../../../shared/artifact-path";
-import { parseKeyedFenceBody } from "../../../shared/chat-fence-parse";
+} from "../../../shared/interaction/artifact-path";
+import { parseKeyedFenceBody } from "../../../shared/chat/fence-parse";
+import type { ToolOutcomeResource } from "../../../shared/agent/runtime";
 
 export type ChatArtifactKind = "image" | "pdf" | "generic";
 
@@ -53,6 +54,22 @@ export function classifyArtifactKind(path: string): ChatArtifactKind {
   return "generic";
 }
 
+export type OutcomePresentKind = "preview" | "chip" | "card" | "skip";
+
+/** How Conversation should present one host-authored outcome resource. */
+export function presentOutcomeResource(resource: ToolOutcomeResource): OutcomePresentKind {
+  if (resource.type === "entity") {
+    return resource.system === "interaction" ? "card" : "skip";
+  }
+  const kind = classifyArtifactKind(resource.path);
+  return kind === "image" || kind === "pdf" ? "preview" : "chip";
+}
+
+export function toolOutcomeResourceKey(resource: ToolOutcomeResource): string {
+  if (resource.type === "entity") return `entity:${resource.system}:${resource.id}`;
+  return normalizeArtifactSlash(resource.path);
+}
+
 /**
  * Parse ```artifact fence body: `path:` / `title:` lines (unknown keys ignored).
  * Fallback: first non-empty line is the path.
@@ -76,7 +93,14 @@ export function buildArtifactFenceMarkdown(path: string, title?: string): string
   return ["```artifact", `path: ${p}`, `title: ${t}`, "```"].join("\n");
 }
 
-/** Paths already present as ```artifact fences or markdown images in prose. */
+function pushVisualPath(out: string[], raw: string): void {
+  const p = normalizeArtifactSlash(raw);
+  if (!p) return;
+  if (classifyArtifactKind(p) === "generic") return;
+  out.push(p);
+}
+
+/** Paths already present as ```artifact fences, markdown images, or visual file links. */
 export function collectEmbeddedArtifactPaths(text: string): string[] {
   const out: string[] = [];
   const fenceRe = /```artifact\s*([\s\S]*?)```/gi;
@@ -90,10 +114,30 @@ export function collectEmbeddedArtifactPaths(text: string): string[] {
     const p = normalizeArtifactSlash(m[1] ?? "");
     if (p) out.push(p);
   }
+  const linkRe = /\[[^\]]*\]\(\s*<?([^)\s>]+)>?\s*\)/g;
+  while ((m = linkRe.exec(text)) !== null) {
+    const raw = (m[1] ?? "").trim();
+    if (/^https?:\/\//i.test(raw)) continue;
+    pushVisualPath(out, raw);
+  }
+  const tickRe = /`([^`\n]+)`/g;
+  while ((m = tickRe.exec(text)) !== null) {
+    pushVisualPath(out, m[1] ?? "");
+  }
   return out;
 }
 
-/** Exact path or same basename (working path ↔ snapshot). */
+/** Extensions chat previews as a figure (image inline / PDF peek). */
+const CHAT_VISUAL_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg|pdf)$/i;
+
+/** Group key for one logical figure: basename minus visual extension. */
+export function visualStemKey(path: string): string | null {
+  const base = artifactBasename(path);
+  if (!base || !CHAT_VISUAL_ARTIFACT_EXT.test(base)) return null;
+  return base.replace(CHAT_VISUAL_ARTIFACT_EXT, "").toLowerCase();
+}
+
+/** Exact path, same basename (working ↔ snapshot), or same visual stem (png ↔ pdf). */
 export function artifactPathMatchesAny(
   path: string,
   candidates: readonly string[],
@@ -101,23 +145,15 @@ export function artifactPathMatchesAny(
   const norm = normalizeArtifactSlash(path);
   if (!norm || !candidates.length) return false;
   const base = artifactBasename(norm);
+  const stem = visualStemKey(norm);
   for (const c of candidates) {
     const n = normalizeArtifactSlash(c);
     if (!n) continue;
     if (n === norm) return true;
     if (base && artifactBasename(n) === base) return true;
+    if (stem && visualStemKey(n) === stem) return true;
   }
   return false;
-}
-
-/** Extensions chat previews as a figure (image inline / PDF peek). */
-const CHAT_VISUAL_ARTIFACT_EXT = /\.(png|jpe?g|gif|webp|svg|pdf)$/i;
-
-/** Group key for one logical figure: basename minus visual extension. */
-function visualStemKey(path: string): string | null {
-  const base = artifactBasename(path);
-  if (!base || !CHAT_VISUAL_ARTIFACT_EXT.test(base)) return null;
-  return base.replace(CHAT_VISUAL_ARTIFACT_EXT, "").toLowerCase();
 }
 
 /** Representative preference: image over PDF; frozen snapshot over working path. */
@@ -194,9 +230,11 @@ export function assistantTextEmbedsArtifactPath(
   const norm = normalizeArtifactSlash(projectRelPath);
   if (!norm) return false;
   const base = artifactBasename(norm);
+  const stem = visualStemKey(norm);
   for (const embedded of collectEmbeddedArtifactPaths(text)) {
     if (embedded === norm) return true;
     if (base && artifactBasename(embedded) === base) return true;
+    if (stem && visualStemKey(embedded) === stem) return true;
   }
   return false;
 }

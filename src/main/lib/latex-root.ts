@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveMainTexRelativePath } from "./bib-path-resolve";
-import { detectBibTool, detectTexEngine } from "../services/compiler";
+import { detectBibTool, detectTexEngine } from "./tex-detect";
+import { projectCompileRel } from "../../shared/workbench/paths";
 
 /** Parse % !TEX root magic comment from content. */
 export function parseTexRootMagicComment(content: string): string | null {
@@ -36,7 +37,7 @@ export function hasDocumentClass(content: string): boolean {
  * True when the document uses the `standalone` class — a self-contained
  * graphic/figure artifact (what figure-tikz ships). These compile
  * in place in their own folder, never through the shared manuscript build
- * dir (`.prismnext/compile/`).
+ * dir (`.workbench/compile/`).
  */
 export function isStandaloneTexDocument(content: string): boolean {
   const head = content
@@ -75,7 +76,7 @@ function findTexByRelativePath(projectRoot: string, relPath: string): string | n
 /** Walk project tree for .tex files (skips dot dirs). */
 export function walkTexFiles(projectRoot: string): string[] {
   const results: string[] = [];
-  const skip = new Set([".git", ".prismnext", "node_modules", ".prismnext"]);
+  const skip = new Set([".git", ".workbench", ".prismnext", "node_modules"]);
 
   function walk(absDir: string, relDir: string): void {
     let entries: fs.Dirent[];
@@ -122,11 +123,18 @@ export interface ResolvedLatexRoot {
 /**
  * Resolve the LaTeX main file on disk (main process — no renderer store).
  */
+function buildDirForDocument(relFile: string, content: string): string {
+  if (isStandaloneTexDocument(content)) {
+    const dir = normalizeRel(path.dirname(relFile));
+    return dir === "." ? "." : dir;
+  }
+  return projectCompileRel();
+}
+
 export function resolveLatexRoot(
   projectRoot: string,
   mainFileHint?: string | null,
 ): ResolvedLatexRoot | null {
-  const buildDir = ".prismnext/compile";
   let resolution: LatexRootResolution = "workspace-config";
   let startFile: string | null = null;
 
@@ -187,7 +195,7 @@ export function resolveLatexRoot(
           absolutePath: path.join(projectRoot, current),
           engine,
           bibTool,
-          buildDir,
+          buildDir: buildDirForDocument(current, content),
           manuscriptFolder: mainDir === "." ? null : mainDir,
           resolution,
         };
@@ -209,7 +217,7 @@ export function resolveLatexRoot(
     absolutePath: path.join(projectRoot, current),
     engine: detectTexEngine(content) || "xelatex",
     bibTool: detectBibTool(content),
-    buildDir,
+    buildDir: buildDirForDocument(current, content),
     manuscriptFolder: mainDir === "." ? null : mainDir,
     resolution,
   };

@@ -13,8 +13,8 @@ import { useExperimentProjectRoot } from "./experiments-project-root";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { cn } from "@/lib/utils";
-import type { ExperimentSummary } from "../../../shared/experiment-log";
-import { stepFocusIndex } from "./experiments-runs-query";
+import type { ExperimentSummary } from "../../../shared/experiments/log";
+import { stepFocusIndex } from "@/lib/experiments/runs-query";
 import {
   experimentLabBasename,
   experimentsPathCompactClass,

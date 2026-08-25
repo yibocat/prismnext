@@ -1,13 +1,17 @@
 import { registerFsHandlers } from "./fs";
+import { registerDialogHandlers } from "./dialog";
+import { registerProjectScaffoldHandlers } from "./project-scaffold";
+import { registerTemplateHandlers } from "./template";
 import { registerCompileHandlers } from "./compile";
-import { registerChatHandlers, disposeChat } from "./chat";
+import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
 import { registerExecutionHandlers } from "./execution";
 import { registerGitHandlers } from "./git";
+import { registerGitHostingHandlers } from "./git-hosting";
 import { registerWorktreeHandlers } from "./worktree";
-import { registerLogHandlers } from "./log";
+import { installIpcHandlerErrorGuard, registerLogHandlers } from "./log";
 import { registerThemeHandlers } from "./theme";
 import { registerWorkspaceHandlers } from "./workspace";
 import { registerCommandsHandlers } from "./commands";
@@ -30,12 +34,18 @@ import { registerProLicenseHandlers } from "./pro-license";
 import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
+import { registerWorkbenchHandlers } from "./workbench";
 
 export function registerIpcHandlers(): void {
+  installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
+  registerWorkbenchHandlers();
   registerFsHandlers();
+  registerDialogHandlers();
+  registerProjectScaffoldHandlers();
+  registerTemplateHandlers();
   registerCompileHandlers();
-  registerChatHandlers();
+  registerAgentHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();
   registerProLicenseHandlers();
@@ -43,6 +53,7 @@ export function registerIpcHandlers(): void {
   registerTerminalHandlers();
   registerExecutionHandlers();
   registerGitHandlers();
+  registerGitHostingHandlers();
   registerWorktreeHandlers();
   registerLogHandlers();
   registerThemeHandlers();
@@ -66,4 +77,5 @@ export function registerIpcHandlers(): void {
   registerUserPacksHandlers();
 }
 
-export { disposeChat };
+/** Isolated OpenCode chat IPC is no longer registered. Window teardown is a no-op. */
+export function disposeChat(): void {}

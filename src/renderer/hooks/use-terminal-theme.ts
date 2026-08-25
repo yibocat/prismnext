@@ -5,8 +5,7 @@ import type { ITheme } from "@xterm/xterm";
  * xterm paints `theme.background` onto a canvas. CSS `background: transparent`
  * on the canvas element does not clear those pixels, so the terminal must use
  * a fully transparent theme color and `allowTransparency` — the
- * `[data-surface=content]` token (`--glass-content-bg` / `--background`) then
- * shows through and matches the title bar.
+ * `[data-surface=content]` token (`--background`) then shows through.
  *
  * Do not sample `--background` via canvas `getImageData`: on Display-P3
  * Electron that hex is often a warm-shifted sRGB misread of P3 values.

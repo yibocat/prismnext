@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { mapUpdaterStatus } from "@/lib/updates/map-updater-status";
 import { requestUpdateInstall } from "@/lib/updates/request-update-install";
+import {
+  checkForUpdate,
+  downloadUpdate,
+  getUpdateStatus,
+  subscribeUpdateChanged,
+  subscribeUpdateProgress,
+} from "@/lib/updates/updater";
 import type { UpdaterStatus } from "@/types/electron";
 
 export type AvailableUpdateState = {
@@ -74,13 +81,13 @@ export function useAvailableUpdate(): AvailableUpdateState {
 
     const run = async () => {
       try {
-        const cached = await window.electronAPI.updateStatus();
+        const cached = await getUpdateStatus();
         if (!cancelled) apply(cached);
       } catch {
         /* ignore */
       }
       try {
-        const fresh = await window.electronAPI.updateCheck();
+        const fresh = await checkForUpdate();
         if (!cancelled) apply(fresh);
       } catch {
         /* ignore */
@@ -89,12 +96,12 @@ export function useAvailableUpdate(): AvailableUpdateState {
 
     void run();
 
-    const unsubProgress = window.electronAPI.onUpdateProgress(({ percent: p }) => {
+    const unsubProgress = subscribeUpdateProgress(({ percent: p }) => {
       setDownloading(true);
       setReadyToInstall(false);
       setPercent(p);
     });
-    const unsubChanged = window.electronAPI.onUpdateChanged((raw) => {
+    const unsubChanged = subscribeUpdateChanged((raw) => {
       apply(raw as UpdaterStatus);
     });
 
@@ -108,7 +115,7 @@ export function useAvailableUpdate(): AvailableUpdateState {
   const oneClickUpdate = useCallback(async () => {
     setBusy(true);
     try {
-      const current = await window.electronAPI.updateStatus();
+      const current = await getUpdateStatus();
       let result = current;
       if (current.status !== "downloaded") {
         if (!latestVersion) {
@@ -116,7 +123,7 @@ export function useAvailableUpdate(): AvailableUpdateState {
           if (v) setLatestVersion(v);
         }
         setDownloading(true);
-        result = await window.electronAPI.updateDownload();
+        result = await downloadUpdate();
         apply(result);
       }
       if (result.status !== "downloaded") {

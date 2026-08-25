@@ -11,7 +11,7 @@ import {
   missingInteractionFencesInText,
 } from "@/lib/markdown/chat-interaction";
 import { unwrapToolResultPayload } from "@/lib/chat/unwrap-tool-result";
-import { normalizeArtifactSlash } from "../../../shared/artifact-path";
+import { normalizeArtifactSlash } from "../../../shared/interaction/artifact-path";
 
 export function isInteractionWriteToolUse(toolUse: ContentBlock): boolean {
   return (toolUse.name || "").toLowerCase() === "interaction-write";
@@ -29,6 +29,13 @@ export function extractInteractionWriteSuccess(
 ): InteractionWriteSuccess | null {
   if (!isInteractionWriteToolUse(toolUse)) return null;
   if (!toolResult || toolResult.is_error) return null;
+
+  const fromOutcome = toolResult.outcome?.resources.find(
+    (resource) => resource.type === "entity" && resource.system === "interaction",
+  );
+  if (fromOutcome && fromOutcome.type === "entity") {
+    return { id: fromOutcome.id, title: fromOutcome.title };
+  }
 
   const data = unwrapToolResultPayload(toolResult.content ?? toolUse.content);
   if (!data || data.ok === false) return null;

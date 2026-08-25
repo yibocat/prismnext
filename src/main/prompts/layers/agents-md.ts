@@ -2,7 +2,7 @@
 
 import type { PromptLayer, PromptContext } from "../types";
 
-/** Layer 1: Project-level instructions from .prismnext/agent/AGENTS.md */
+/** Layer 1: Project-level instructions from .workbench/agent/AGENTS.md */
 export function createAgentsMdLayer(): PromptLayer {
   return {
     id: "agents-md",

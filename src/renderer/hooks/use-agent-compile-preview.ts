@@ -1,16 +1,19 @@
 import { useEffect } from "react";
+import { compileDesktop } from "@/lib/desktop-api/compile";
 import { useCompileStore } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 
 /**
- * When the agent calls `latex-compile`, main pushes PDF bytes (or errors) here
- * so Tex workspace preview stays in sync without Cmd+Enter.
+ * When the agent compiles the paper (`latex-compile`), main pushes PDF bytes
+ * (or errors) here so an already-open TeX workspace preview stays in sync
+ * without Cmd+Enter. Standalone figures do not use this path.
+ * Does not steal RightArea — open TeX from the compile card if you want it.
  */
 export function useAgentCompilePreview(): void {
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onCompileAgentComplete((data) => {
+    const unsubscribe = compileDesktop.onCompileAgentComplete((data) => {
       const projectRoot = useDocumentStore.getState().projectRoot;
       if (!projectRoot || projectRoot !== data.projectDir) return;
 

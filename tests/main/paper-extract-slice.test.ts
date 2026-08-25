@@ -4,7 +4,7 @@ import {
   parsePageSpec,
   sliceMarkdownByPages,
   truncateMarkdown,
-} from "../../src/shared/paper-extract-slice";
+} from "../../src/shared/literature/paper-extract-slice";
 
 describe("paper-extract-slice", () => {
   const sample = [

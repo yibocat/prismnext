@@ -1,4 +1,5 @@
 import type { WorktreeInfo } from "@/types/electron";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { isWorktreeCheckoutPath } from "./checkout-context";
 import { findWorktreeForDirectory, parseWorktreeNameFromPath } from "./worktree-path";
 
@@ -10,6 +11,8 @@ export interface SessionWorktreeContext {
   kind: SessionCheckoutKind;
   directory: string;
   worktreeName?: string;
+  /** Git branch checked out in this directory (worktree branch or local HEAD). */
+  gitBranch?: string;
   baseBranch?: string;
   /** Full label for hover cards, e.g. "calm-owl → feature-auth" */
   label: string;
@@ -48,6 +51,7 @@ export function resolveSessionWorktreeContext(
       kind: "worktree",
       directory,
       worktreeName: active.name,
+      gitBranch: active.branch || undefined,
       baseBranch: branch,
       label: `${active.name} → ${branch}`,
       shortLabel: `${active.name} · ${branch}`,
@@ -62,4 +66,17 @@ export function resolveSessionWorktreeContext(
     label: `${name} (worktree closed)`,
     shortLabel: `${name} (closed)`,
   };
+}
+
+export async function readCurrentGitBranch(directory: string): Promise<string | null> {
+  const root = directory.trim();
+  if (!root) return null;
+  try {
+    const data = await gitDesktop.gitBranches(root);
+    const current = data.current?.trim();
+    if (!current || current === "(no branch)") return null;
+    return current;
+  } catch {
+    return null;
+  }
 }

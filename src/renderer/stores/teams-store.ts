@@ -8,9 +8,10 @@
 // T5: the catalog is TeamViewV2[] (new resolver). A derived `kind` / `locked`
 // compatibility field keeps the pre-T5 UI working until each page is reworked.
 import { create } from "zustand";
-import type { Fqid } from "@shared/teams/types";
+import type { AssetKind, Fqid } from "@shared/teams/types";
 import type { AssetViewV2, TeamViewV2 } from "@shared/teams/view";
 import { CORE_TEAM_ID } from "@shared/teams/types";
+import { teamsDesktop } from "@/lib/desktop-api/teams";
 
 /**
  * TeamViewV2 + legacy display fields the pre-T5 UI still reads.
@@ -67,7 +68,18 @@ interface TeamsStoreState {
   /** Persist active team, update store immediately, then reconcile. */
   setActiveTeam: (projectRoot: string, teamId: string) => Promise<void>;
   setTeamMcps: (mcps: AssetViewV2[]) => void;
+  createTeam: (
+    projectRoot: string,
+    input: Parameters<typeof teamsDesktop.teamsCreate>[1],
+  ) => Promise<string>;
   clear: () => void;
+}
+
+export async function listTeamAssets(
+  projectRoot: string,
+  kind: AssetKind,
+): Promise<AssetViewV2[]> {
+  return teamsDesktop.teamsListAssets(projectRoot, kind);
 }
 
 export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
@@ -89,15 +101,15 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
     set({ loading: true });
     try {
       const [raw, active] = await Promise.all([
-        window.electronAPI.teamsList(projectRoot),
-        window.electronAPI.teamsGetActiveTeam(projectRoot).catch(() => null),
+        teamsDesktop.teamsList(projectRoot),
+        teamsDesktop.teamsGetActiveTeam(projectRoot).catch(() => null),
       ]);
       const catalog = raw.map(toCardView);
       // Team enable/disable changes the effective MCP set — keep the team MCP
       // view in sync so the MCP settings page greys out / restores live.
       let teamMcps = get().teamMcps;
       try {
-        teamMcps = await window.electronAPI.teamsListProjectMcps(projectRoot);
+        teamMcps = await teamsDesktop.teamsListProjectMcps(projectRoot);
       } catch {
         // non-fatal; team MCP view stays stale until next load
       }
@@ -133,7 +145,7 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
     get().setEnabledLocal(teamId, enabled);
     let result: { defaultMovedTo?: string } | undefined;
     try {
-      result = (await window.electronAPI.teamsSetEnabled(
+      result = (await teamsDesktop.teamsSetEnabled(
         projectRoot,
         teamId,
         enabled,
@@ -150,7 +162,7 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
     const previous = get().activeTeamId;
     set({ activeTeamId: teamId });
     try {
-      await window.electronAPI.teamsSetActiveTeam(projectRoot, teamId, "project");
+      await teamsDesktop.teamsSetActiveTeam(projectRoot, teamId, "project");
     } catch (err) {
       set({ activeTeamId: previous });
       await get().load(projectRoot, { force: true });
@@ -172,6 +184,12 @@ export const useTeamsStore = create<TeamsStoreState>((set, get) => ({
   },
 
   setTeamMcps: (teamMcps) => set({ teamMcps }),
+
+  createTeam: async (projectRoot, input) => {
+    const { teamId } = await teamsDesktop.teamsCreate(projectRoot, input);
+    await get().load(projectRoot, { force: true });
+    return teamId;
+  },
 
   clear: () =>
     set({ catalog: [], teamMcps: [], activeTeamId: null, loadedRoot: null, loading: false }),

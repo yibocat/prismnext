@@ -23,7 +23,7 @@ import {
   type ExecutionTransport,
   type ExecutionTransportHandlers,
   _resetExecutionRegistryForTests,
-} from "../../src/main/services/execution-registry";
+} from "../../src/main/terminal/execution-registry";
 
 function createFakeTransport() {
   const next = new Map<string, ExecutionTransportHandlers>();

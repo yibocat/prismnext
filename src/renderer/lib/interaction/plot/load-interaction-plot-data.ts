@@ -1,4 +1,5 @@
-import type { InteractionSpec } from "../../../../shared/interaction-spec";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import type { InteractionSpec } from "../../../../shared/interaction/spec";
 import {
   csvRowsToPlotData,
   isInteractionPlotKind,
@@ -8,7 +9,7 @@ import {
   pickCsvResourcePath,
   type InteractionPlotKind,
   type PlotDataResult,
-} from "../../../../shared/interaction-plot";
+} from "../../../../shared/interaction/plot";
 
 function resolveProjectAbsPath(projectRoot: string, relPath: string): string {
   const p = relPath.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -40,7 +41,7 @@ export async function loadInteractionPlotData(
   const abs = resolveProjectAbsPath(projectRoot, csvPath);
   let content: string;
   try {
-    const res = await window.electronAPI.fsRead(abs);
+    const res = await fsDesktop.fsRead(abs);
     content = res.content;
   } catch {
     return { ok: false, error: `could not read "${csvPath}"` };

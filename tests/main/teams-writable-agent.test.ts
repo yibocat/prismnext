@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { createTeam } from "../../src/main/teams/lifecycle";
-import { saveCustomSubagent } from "../../src/main/services/subagents-sync";
+import { saveCustomSubagent } from "../../src/main/teams/subagents-sync";
 import { setAppTeamsDirForTests } from "../../src/main/teams/scope";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";
 import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";

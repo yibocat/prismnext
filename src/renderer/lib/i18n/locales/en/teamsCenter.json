@@ -1,0 +1,61 @@
+{
+  "title": "Teams",
+  "searchPlaceholder": "Search teams…",
+  "tabs": {
+    "all": "All",
+    "installed": "Installed"
+  },
+  "noProject": "Open a project to browse and install teams.",
+  "empty": "No teams match.",
+  "categories": {
+    "general": "General",
+    "research": "Research"
+  },
+  "card": {
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "manage": "Manage",
+    "moreActions": "More actions",
+    "added": "Installed",
+    "disabled": "Disabled",
+    "proLocked": "Pro",
+    "incompatible": "Incompatible",
+    "notInstalled": "Not installed",
+    "installedActive": "Installed · Active",
+    "installedDisabled": "Installed · Disabled",
+    "installedProLocked": "Installed · Pro locked",
+    "goActivate": "Activate"
+  },
+  "kinds": {
+    "orchestrator": "Orchestrators",
+    "expert": "Experts",
+    "skill": "Skills",
+    "command": "Commands",
+    "mcp": "MCP servers"
+  },
+  "meta": {
+    "title": "Info",
+    "status": "Status",
+    "publisher": "Publisher",
+    "version": "Version",
+    "tier": "Tier",
+    "category": "Category",
+    "tags": "Tags",
+    "minHostVersion": "Requires app"
+  },
+  "toast": {
+    "installed": "Team installed.",
+    "uninstalled": "Team uninstalled."
+  },
+  "suggestion": {
+    "text": "Set the orchestrator from \"{{pack}}\" as your default main agent?",
+    "accept": "Set as default",
+    "done": "Default orchestrator updated."
+  },
+  "subtitle": "Install teams of main agents, experts, skills and commands.",
+  "backToList": "Back to teams",
+  "manage": "Manage in Settings",
+  "sidebar": "Browse",
+  "count": "{{count}} teams",
+  "clearSearch": "Clear search"
+}

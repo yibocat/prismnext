@@ -3,7 +3,7 @@ import {
   countPromptTokens,
   _resetPromptTokenEncoderForTests,
 } from "../../src/main/lib/token-estimate";
-import { PROMPT_TOKEN_ENCODING } from "../../src/shared/token-estimate";
+import { PROMPT_TOKEN_ENCODING } from "../../src/shared/providers/token-estimate";
 
 describe("countPromptTokens", () => {
   afterEach(() => {

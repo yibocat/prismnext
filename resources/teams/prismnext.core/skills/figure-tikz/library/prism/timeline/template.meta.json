@@ -1,0 +1,32 @@
+{
+  "id": "timeline",
+  "name": "Timeline (five milestones)",
+  "type": "template",
+  "domain": ["general"],
+  "tags": ["timeline", "milestones", "schedule", "phases", "history", "process"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "A single axis with five alternating above/below milestone labels.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\eonelabel", "type": "text", "meaning": "first milestone (use \\\\ for a second line)"},
+      {"name": "\\etwolabel", "type": "text", "meaning": "second milestone"},
+      {"name": "\\ethreelabel", "type": "text", "meaning": "third milestone"},
+      {"name": "\\efourlabel", "type": "text", "meaning": "fourth milestone"},
+      {"name": "\\efivelabel", "type": "text", "meaning": "fifth milestone"}
+    ],
+    "node_naming": "ticks (e1) (e2) (e3) (e4) (e5) left to right",
+    "styles": ["axis", "tick", "aboveevent", "belowevent"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro"},
+      {"id": "add-event", "summary": "add a tick on the axis and an above/below label; keep alternating sides"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve tick names (e1)–(e5) unless the user dropped that event",
+      "keep a single horizontal axis",
+      "colors only via the five palette names"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "badge": {
+    "local": "Local",
+    "bound": "Bound"
+  },
+  "card": {
+    "loading": "Loading interaction…",
+    "unavailable": "Interaction “{{id}}” not found or invalid.",
+    "invalidFence": "Invalid ```interaction fence.",
+    "open": "Open",
+    "openPanel": "Open in panel",
+    "previewLoading": "Loading preview…",
+    "previewUnavailable": "Preview unavailable"
+  },
+  "panel": {
+    "empty": "No interaction selected.",
+    "loadError": "Could not load “{{id}}”: {{error}}",
+    "intro": "Research artifact — static figure or CSV plot in this panel.",
+    "placeholderTitle": "Preview not available yet",
+    "placeholderBody": "Kind “{{kind}}” will render here in a future release.",
+    "unsupportedTitle": "This Interaction kind is not supported",
+    "unsupportedBody": "Kind “{{kind}}” is not writable here. Use figure.static (image) or a plot.* CSV kind (plot.line / series / scatter / area / bar / histogram / box / density / heatmap).",
+    "figureMissingPath": "No image or PDF path in resources[]. Add a png/svg/pdf path and rewrite the Interaction.",
+    "figureLoadError": "Could not load image: {{path}}",
+    "plotErrorTitle": "Could not render plot",
+    "bindings": "Bindings",
+    "resources": "Resources"
+  }
+}

@@ -10,7 +10,7 @@ import {
   resolveEffectiveAgentTerminalMode,
   migratePermissionModeSetting,
   isEditAutoApplyMode,
-} from "../../src/main/services/permission-modes";
+} from "../../src/shared/permissions/modes";
 
 const ROOT = "/Users/me/paper";
 

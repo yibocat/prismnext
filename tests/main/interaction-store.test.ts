@@ -7,8 +7,8 @@ import {
   readInteractionSpec,
   upsertInteractionSpec,
   interactionSpecPath,
-} from "../../src/main/services/interaction-store";
-import { LEGACY_INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction-spec";
+} from "../../src/main/interaction/interaction-store";
+import { LEGACY_INTERACTION_SPEC_DIR_REL } from "../../src/shared/interaction/spec";
 
 /** Minimal valid 1×1 PNG */
 const TINY_PNG = Buffer.from(
@@ -40,6 +40,8 @@ describe("interaction-store upsert", () => {
     expect(created.ok).toBe(true);
     expect(created.created).toBe(true);
     expect(created.spec?.revision).toBe(1);
+    expect(interactionSpecPath(root, "fig.loss")).toContain("/.workbench/interactions/");
+    expect(existsSync(join(root, ".prismnext"))).toBe(false);
 
     const updated = upsertInteractionSpec(root, {
       id: "fig.loss",
@@ -130,13 +132,13 @@ describe("interaction-store upsert", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("reads legacy .prismnext/artifacts specs and migrates on upsert", () => {
+  it("does not read leftover .prismnext/artifacts specs (D-30)", () => {
     root = mkdtempSync(join(tmpdir(), "ix-store-legacy-"));
     const path = seedFigure(root);
-    const legacyDir = join(root, LEGACY_INTERACTION_SPEC_DIR_REL, "fig.loss");
-    mkdirSync(legacyDir, { recursive: true });
+    const leftoverDir = join(root, LEGACY_INTERACTION_SPEC_DIR_REL, "fig.loss");
+    mkdirSync(leftoverDir, { recursive: true });
     writeFileSync(
-      join(legacyDir, "spec.json"),
+      join(leftoverDir, "spec.json"),
       `${JSON.stringify({
         id: "fig.loss",
         title: "Legacy",
@@ -147,47 +149,9 @@ describe("interaction-store upsert", () => {
       })}\n`,
     );
 
-    expect(existsSync(interactionSpecPath(root, "fig.loss"))).toBe(false);
-    const read = readInteractionSpec(root, "fig.loss");
-    expect(read.spec?.title).toBe("Legacy");
-
-    const updated = upsertInteractionSpec(root, {
-      id: "fig.loss",
-      title: "Migrated",
-      kind: "figure.static",
-      compute: "local",
-      revision: 1,
-      resources: [{ role: "figure", path }],
-    });
-    expect(updated.ok).toBe(true);
-    expect(existsSync(interactionSpecPath(root, "fig.loss"))).toBe(true);
-    expect(existsSync(join(root, LEGACY_INTERACTION_SPEC_DIR_REL, "fig.loss"))).toBe(false);
-    expect(readInteractionSpec(root, "fig.loss").spec?.title).toBe("Migrated");
-
-    rmSync(root, { recursive: true, force: true });
-  });
-
-  it("bulk-migrates legacy specs when listing ids", () => {
-    root = mkdtempSync(join(tmpdir(), "ix-store-bulk-"));
-    const path = seedFigure(root);
-    const legacyDir = join(root, LEGACY_INTERACTION_SPEC_DIR_REL, "fig.bulk");
-    mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(
-      join(legacyDir, "spec.json"),
-      `${JSON.stringify({
-        id: "fig.bulk",
-        title: "Bulk",
-        kind: "figure.static",
-        compute: "local",
-        revision: 1,
-        resources: [{ role: "figure", path }],
-      })}\n`,
-    );
-
-    const ids = listInteractionSummaries(root).map((s) => s.id);
-    expect(ids).toContain("fig.bulk");
-    expect(existsSync(interactionSpecPath(root, "fig.bulk"))).toBe(true);
-    expect(existsSync(legacyDir)).toBe(false);
+    expect(readInteractionSpec(root, "fig.loss").spec).toBeNull();
+    expect(listInteractionSummaries(root).map((s) => s.id)).not.toContain("fig.loss");
+    expect(existsSync(leftoverDir)).toBe(true);
 
     rmSync(root, { recursive: true, force: true });
   });

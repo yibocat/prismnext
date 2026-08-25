@@ -1,3 +1,5 @@
+import type { Conversation } from "@shared/agent/conversation";
+import { collectConversationAssistantBlocks } from "@/lib/chat/conversation-view";
 import type { ChatStreamMessage, ContentBlock, SubAgentRun } from "@/stores/chat-store";
 import {
   buildToolResultMap,
@@ -6,7 +8,7 @@ import {
 } from "@/components/modules/chat/tools/tool-result-map";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
 import { parseStageToolResult } from "./parse-stage-tool-result";
-import type { StageResult } from "@shared/citation-staging";
+import type { StageResult } from "@shared/literature/citation-staging";
 
 /** Sessions already backfilled from transcript this app run (live capture handles new stages). */
 const backfilledFromTranscript = new Set<string>();
@@ -102,8 +104,8 @@ export function syncCitationStagingFromMessages(
   if (results.length > 0) {
     store.mergeStageResultsBatch(sessionId, results);
     store.setActiveSession(sessionId);
+    backfilledFromTranscript.add(sessionId);
   }
-  backfilledFromTranscript.add(sessionId);
 }
 
 export function scheduleCitationStagingBackfill(
@@ -117,4 +119,32 @@ export function scheduleCitationStagingBackfill(
   if (messages.length === 0 && !hasSubAgentBlocks) return;
   const toolResultMap = buildToolResultMap(messages, { isStreaming: false });
   syncCitationStagingFromMessages(sessionId, messages, toolResultMap, { subAgentRuns });
+}
+
+export function scheduleCitationStagingBackfillFromConversation(
+  sessionId: string,
+  conv: Conversation | null | undefined,
+  subAgentRuns?: Record<string, SubAgentRun>,
+): void {
+  if (!sessionId || !conv) return;
+  const blocks = collectConversationAssistantBlocks(conv);
+  const hasSubAgentBlocks =
+    subAgentRuns != null && Object.values(subAgentRuns).some((r) => r.blocks.length > 0);
+  if (blocks.length === 0 && !hasSubAgentBlocks) return;
+  const toolResultMap = buildToolResultMapFromBlocks(blocks, { isStreaming: false });
+  const store = useCitationStagingStore.getState();
+  if (store.backfillSuppressedSessions[sessionId]) return;
+  if (backfilledFromTranscript.has(sessionId)) return;
+  const results = collectStageResultsFromBlocks(blocks, toolResultMap);
+  if (subAgentRuns) {
+    for (const run of Object.values(subAgentRuns)) {
+      const runMap = buildToolResultMapFromBlocks(run.blocks, { isStreaming: false });
+      results.push(...collectStageResultsFromBlocks(run.blocks, runMap));
+    }
+  }
+  if (results.length > 0) {
+    store.mergeStageResultsBatch(sessionId, results);
+    store.setActiveSession(sessionId);
+    backfilledFromTranscript.add(sessionId);
+  }
 }

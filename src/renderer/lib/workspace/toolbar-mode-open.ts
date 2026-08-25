@@ -45,9 +45,9 @@ export function openModeMaximized(
 ): void {
   const st = useLayoutStore.getState();
   if (st.rightAreaExpanded && st.editorMaximized && isModeFocused(modeId)) {
-    closeRightArea(ctx);
+    closeRightArea();
     return;
   }
-  openRightAreaMaximized(ctx);
+  openRightAreaMaximized();
   openMode(modeId, { intent: "add" });
 }

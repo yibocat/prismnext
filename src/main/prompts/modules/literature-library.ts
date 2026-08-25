@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * Project library papers — when to use library tools vs external chat citations.
@@ -7,7 +7,7 @@ import { TOOL_NAMES } from "../../../shared/tool-names";
 export const LITERATURE_LIBRARY_PROMPT = [
   "## Project literature library",
   "",
-  "Papers **in** `.prismnext/library/` — the project's curated catalog with bibkeys, tags,",
+  "Papers **in** the current project's literature library — the curated catalog with bibkeys, tags,",
   "collections, PDFs, and AI summaries. Cite these as **`[@bibkey]`** using exact keys from tool results.",
   "",
   "### Scope boundary",

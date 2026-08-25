@@ -7,6 +7,8 @@ import { worktreePathsEqual } from "@/lib/git/worktree-path";
 import { reconcileWorktreeList, isWorktreeCheckoutOnDisk } from "@/lib/git/worktree-present";
 import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
 import { useDocumentStore } from "@/stores/document-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 
 export type WorktreeMode = "local" | "worktree";
 
@@ -60,7 +62,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
   refreshWorktrees: async (projectRoot: string) => {
     set({ loading: true, error: null });
     try {
-      let worktrees = await window.electronAPI.worktreeList(projectRoot);
+      let worktrees = await gitDesktop.worktreeList(projectRoot);
       if (useDocumentStore.getState().projectRoot !== projectRoot) return;
 
       worktrees = await reconcileWorktreeList(worktrees, get().worktrees);
@@ -95,7 +97,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
 
   preScanWorktree: async (worktreePath: string) => {
     try {
-      const result = await window.electronAPI.fsScanMetadata(worktreePath);
+      const result = await fsDesktop.fsScanMetadata(worktreePath);
       const files = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -153,7 +155,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
 
     set({ loading: true, error: null, activeWorktree: null });
     try {
-      const info = await window.electronAPI.worktreeCreate(
+      const info = await gitDesktop.worktreeCreate(
         projectRoot,
         undefined,
         pendingBranch,
@@ -194,7 +196,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
     await clearCheckpointsForWorktree(closing, "closed");
     try {
       try {
-        sessionCount = await window.electronAPI.worktreeMoveSessions(projectRoot, closing.name);
+        sessionCount = await gitDesktop.worktreeMoveSessions(projectRoot, closing.name);
       } catch {
         toast.warning("Conversation history could not be migrated", {
           description: "Sessions from this worktree may be lost.",
@@ -203,7 +205,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
       }
       const reassigned = await rehomeWorktreeSessions(projectRoot, wtPath);
       if (reassigned > 0) sessionCount = Math.max(sessionCount, reassigned);
-      await window.electronAPI.worktreeRemove(projectRoot, closing.name);
+      await gitDesktop.worktreeRemove(projectRoot, closing.name);
     } catch {
       // Even if removal fails, reset local state when we closed the active checkout
     }
@@ -239,7 +241,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
       if (wtPath) {
         await rehomeWorktreeSessions(projectRoot, wtPath);
       }
-      await window.electronAPI.worktreeRemove(projectRoot, name);
+      await gitDesktop.worktreeRemove(projectRoot, name);
       if (wtPath) {
         get().invalidateCache(wtPath);
       }
@@ -263,7 +265,7 @@ export const useWorktreeStore = create<WorktreeState>()((set, get) => ({
 
   refreshBranches: async (projectRoot: string) => {
     try {
-      const branches = await window.electronAPI.worktreeBranches(projectRoot);
+      const branches = await gitDesktop.worktreeBranches(projectRoot);
       if (useDocumentStore.getState().projectRoot !== projectRoot) return;
       set({ branches });
     } catch {}

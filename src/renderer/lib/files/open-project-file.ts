@@ -1,3 +1,4 @@
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -106,9 +107,9 @@ export async function openProjectFileFromChat(
     const abs = resolveProjectRelativePath(projectRoot, relativePath);
     if (!abs) return false;
     try {
-      const exists = await window.electronAPI.fsExists(abs);
+      const exists = await fsDesktop.fsExists(abs);
       if (!exists) return false;
-      const isFile = await window.electronAPI.fsIsFile(abs);
+      const isFile = await fsDesktop.fsIsFile(abs);
       if (!isFile) {
         navigateFileTreeToPath(relativePath);
         revealProjectRelativePath(relativePath);

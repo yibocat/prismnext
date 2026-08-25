@@ -93,7 +93,7 @@ export function AppearanceSettings() {
   const chatHomeBackdropEnabled =
     useSettingsStore((s) => s.settings.chatHomeBackdropEnabled ?? true);
   const chatHomeBackdrop =
-    useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "auto");
+    useSettingsStore((s) => s.settings.chatHomeBackdrop ?? "paperplane");
   const chatHomeBackdropStyleValue: ChatHomeBackdropSetting | ChatHomeBackdropStyle =
     chatHomeBackdrop === "none" ? "auto" : chatHomeBackdrop;
   const updateSettings = useSettingsStore((s) => s.updateSettings);

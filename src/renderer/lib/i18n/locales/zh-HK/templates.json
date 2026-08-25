@@ -1,0 +1,62 @@
+{
+  "center": {
+    "title": "模板中心",
+    "subtitle": "將 LaTeX 腳手架寫入手稿目錄。覆蓋前會說明會動到哪些檔案。",
+    "search": "搜尋模板…",
+    "noFound": "未找到模板",
+    "all": "全部模板",
+    "categories": "分類",
+    "openProject": "請先開啟專案再應用模板。",
+    "needManuscript": "請先在工作區設定中配置手稿資料夾。",
+    "current": "目前：{{name}}（{{category}}）",
+    "inUse": "使用中",
+    "status": "狀態",
+    "countAll": "共 {{count}} 個模板",
+    "countFiltered": "顯示 {{shown}} / {{total}}",
+    "categoryLabel": "分類：{{name}}",
+    "clearSearch": "清除搜尋"
+  },
+  "categories": {
+    "paper": "學術論文",
+    "thesis": "學位論文",
+    "cv": "履歷",
+    "beamer": "Beamer 投影片",
+    "poster": "海報",
+    "letter": "信件"
+  },
+  "detail": {
+    "back": "返回模板列表",
+    "description": "說明",
+    "filesStructure": "檔案與結構",
+    "use": "使用",
+    "reapply": "重新套用",
+    "viewSource": "檢視原始碼",
+    "viewPdf": "檢視 PDF",
+    "preview": "預覽",
+    "noPreview": "無預覽",
+    "info": "資訊",
+    "documentClass": "文件類",
+    "fileCount": "檔案數",
+    "category": "分類",
+    "applyHint": "套用會把模板檔案寫入手稿目錄。若已有同名檔案或你改過舊模板，會先列出將觸及的路徑，並在寫入前備份。"
+  },
+  "switch": {
+    "switchTitle": "切換模板",
+    "resetTitle": "重置模板",
+    "applyTitle": "應用模板",
+    "l1": "同文檔族 — 匹配的章節與摘要/前置部分將盡可能保留。導言區與宏包來自新模板。",
+    "l2": "相關文件型別（論文 ↔ 學位論文）— 將嘗試合併章節。切換後請檢查結果。",
+    "l3": "這些模板型別無法自動合併。現有模板檔案將被完全替換。會儲存備份。",
+    "reset": "重置為模板原件？你的修改將丟失。會儲存備份。",
+    "firstUse": "專案中已有與模板重疊的檔案。應用將覆蓋它們。會儲存備份。",
+    "applyNamed": "應用 {{name}}（{{category}}）",
+    "arrow": "{{oldName}}（{{oldCategory}}）→ {{newName}}（{{newCategory}}）",
+    "affected": "受影響的檔案：",
+    "willTouch": "將寫入或覆蓋的檔案：",
+    "willRemove": "將移除的舊模板檔案：",
+    "noFileList": "此步驟沒有逐檔列表 — 確認後繼續。",
+    "backupNote": "寫入前會把重疊或先前套用的模板檔案備份到 .workbench/backups。",
+    "backupMerge": "備份併合並",
+    "backupReplace": "備份並替換"
+  }
+}

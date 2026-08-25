@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
-import { isBinaryProjectFile } from "../../shared/project-file-openability";
+import { isBinaryProjectFile } from "../../shared/platform/project-file-openability";
 
 const log = createLogger("document-store", "startup");
 
@@ -12,23 +12,24 @@ let openProjectGeneration = 0;
 let projectOpenSupersededByClose = false;
 /** Monotonic id so a slower openFile cannot clobber a newer selection. */
 let fileOpenGeneration = 0;
-import { useProjectStore } from "./project-store";
 import { useRightPanelStore } from "./right-panel-store";
-import { useLayoutStore } from "./layout-store";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useWorktreeStore } from "./worktree-store";
-import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { externalFileId } from "@/lib/files/external-file";
 import {
   isLazyProjectFilePath,
   resolveProjectRelativePath,
 } from "@/lib/files/project-path";
-import { trackRecentOpenedFile, getProjectLastActiveFileId } from "@/lib/files/recent-files";
-import { loadSessionUiPrefsIntoLayout } from "@/lib/chat/session-ui-prefs";
+import { trackRecentOpenedFile } from "@/lib/files/recent-files";
+import { switchWorkbenchFocus } from "@/lib/workspace/project-lifecycle";
+import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import {
-  confirmProjectSwitchIfNeeded,
-  listRunningExperimentIds,
-  resetApplicationStateForProjectSwitch,
-} from "@/lib/workspace/project-lifecycle";
+  focusPathAfterOpenFolder,
+  workbenchStateFromOpenResult,
+} from "../../shared/workbench/api";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { projectDesktop } from "@/lib/desktop-api/project";
+import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
 export type ProjectFileType = "tex" | "image" | "pdf" | "bib" | "style" | "other";
 
@@ -62,8 +63,6 @@ interface DocumentState {
   projectRoot: string | null;
   /** Current working root — projectRoot on main, worktree path when active */
   checkoutRoot: string | null;
-  showWelcome: boolean;
-  setShowWelcome: (show: boolean) => void;
   files: ProjectFile[];
   folders: string[];
   activeFileId: string | null;
@@ -90,12 +89,14 @@ interface DocumentState {
 
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
+  /** Switch the focused workbench project without joining or tearing down agents. */
+  focusProject: (rootPath: string) => Promise<void>;
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
   /** Seed opened content without reading disk (after atomic create+write). */
   seedOpenedFile: (id: string, content: string) => void;
-  /** Register metadata for a hidden project file (`.prismnext/…`, `.brief.md`) not in the file tree scan */
+  /** Register metadata for a hidden project file (`.workbench/…`, `.brief.md`) not in the file tree scan */
   ensureLazyProjectFileMeta: (relativePath: string) => Promise<boolean>;
   /** Open a file outside the project root */
   openExternalFile: (absolutePath: string, opts?: { pin?: boolean }) => Promise<void>;
@@ -245,8 +246,6 @@ function markSuppressWatcherReload() {
 export const useDocumentStore = create<DocumentState>((set, get) => ({
   projectRoot: null,
   checkoutRoot: null,
-  showWelcome: true,
-  setShowWelcome: (show) => set({ showWelcome: show }),
   files: [],
   folders: [],
   activeFileId: null,
@@ -265,157 +264,76 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const opened = await workbenchDesktop.workbenchOpenFolder(rootPath);
+    useWorkbenchStore.setState({
+      ...workbenchStateFromOpenResult(opened),
+      loaded: true,
+    });
+    await get().focusProject(focusPathAfterOpenFolder(opened.openedLastPath, rootPath));
+  },
+
+  focusProject: async (rootPath: string) => {
     const previousRoot = get().projectRoot;
-    const switching = Boolean(previousRoot && previousRoot !== rootPath);
-    let stopExperimentIds: string[] | undefined;
-    if (switching) {
-      const decision = await confirmProjectSwitchIfNeeded(previousRoot);
-      if (decision === "abort") return;
-      stopExperimentIds = decision === "stop" && previousRoot
-        ? listRunningExperimentIds(previousRoot)
-        : [];
-      await window.electronAPI.executionApplyProjectSwitch?.({
-        projectId: previousRoot!,
-        stopExperimentIds,
-      });
+    if (sameProjectPath(previousRoot, rootPath) && get().initialized) {
+      const member = useWorkbenchStore.getState().members.find((item) =>
+        sameProjectPath(item.lastPath, rootPath),
+      );
+      if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+      return;
     }
 
     const generation = ++openProjectGeneration;
     projectOpenSupersededByClose = false;
     const t0 = performance.now();
     let canonicalRoot = rootPath;
-    set({ isOpeningProject: true });
+    const firstOpen = !previousRoot;
+    if (firstOpen) set({ isOpeningProject: true });
     try {
-      ({ rootPath: canonicalRoot } = await window.electronAPI.projectOpen(rootPath));
-      if (generation !== openProjectGeneration) return;
-      const t1 = performance.now();
-      // Same-project reopen (e.g. last-project on launch) keeps the OpenCode runtime.
-      await resetApplicationStateForProjectSwitch(canonicalRoot);
-      if (generation !== openProjectGeneration) return;
-      console.log(`[openProject] cleanup: ${Math.round(performance.now() - t1)}ms`);
-
-      const t2 = performance.now();
-      // Ensure .prismnext/ data hub exists before any agent operations.
-      window.electronAPI.projectEnsure(canonicalRoot).catch(() => {});
-
-      // Warm Agent process + project config in parallel with fs scan. Do NOT
-      // commit projectRoot until warm finishes — keeps the startup splash up
-      // instead of flashing the shell with a thin top loading bar.
-      const warmPromise = window.electronAPI.chatPrewarm(canonicalRoot).then((result) => {
-        if (generation !== openProjectGeneration) return result;
-        import("./command-store").then(({ useCommandStore }) => {
-          useCommandStore.getState().reloadCommands();
-        });
-        return result;
-      });
-
-      const result = await window.electronAPI.fsScanMetadata(canonicalRoot);
-      if (generation !== openProjectGeneration) return;
-      console.log(`[openProject] fsScanMetadata: ${Math.round(performance.now() - t2)}ms`);
-      const files: ProjectFile[] = result.files.map((f) => ({
-        id: f.relativePath,
-        name: f.relativePath.split("/").pop() || f.relativePath,
-        relativePath: f.relativePath,
-        absolutePath: f.absolutePath,
-        type: f.type,
-        fileSize: f.fileSize,
-      }));
-
-      const fileMetadata = new Map<string, FileMeta>();
-      for (const file of files) {
-        fileMetadata.set(file.id, {
-          relativePath: file.relativePath,
-          absolutePath: file.absolutePath,
-          name: file.name,
-          type: file.type,
-          fileSize: file.fileSize,
-        });
-      }
-
-      window.electronAPI.gitWarmup?.(canonicalRoot).catch(() => {});
-
-      // Workspace / prefs can load from path without committing projectRoot yet.
-      const workspaceStore = useWorkspaceConfigStore.getState();
-      await workspaceStore.loadConfig(canonicalRoot);
+      ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
       if (generation !== openProjectGeneration) return;
 
-      import("./literature-store").then(({ useLiteratureStore }) => {
-        if (generation !== openProjectGeneration) return;
-        void useLiteratureStore.getState().refresh(canonicalRoot);
-      });
-
-      const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
-      const expandedFolders = (() => {
-        if (!lastActiveFileId) return [] as string[];
-        const parts = lastActiveFileId.split("/");
-        const ancestors: string[] = [];
-        for (let i = 1; i < parts.length; i++) {
-          ancestors.push(parts.slice(0, i).join("/"));
-        }
-        return ancestors.filter((f) => result.folders.includes(f));
-      })();
-
-      import("./git-store").then(({ useGitStore }) => {
-        useGitStore.getState().clearAll();
-        useGitStore.getState().selectUnit(canonicalRoot);
-      });
-
-      // Block until Agent + project config (skills/experts/prompts) are warm.
-      const warm = await warmPromise.catch((err: unknown) => ({
-        ok: false as const,
-        error: err instanceof Error ? err.message : String(err),
-      }));
-      if (generation !== openProjectGeneration) return;
-      console.log(
-        `[openProject] chatPrewarm: ${Math.round(performance.now() - t2)}ms` +
-          (warm && "ok" in warm && warm.ok === false ? ` (failed: ${warm.error ?? "?"})` : ""),
-      );
-      if (warm && "ok" in warm && warm.ok === false) {
-        toast.error(
-          warm.error
-            ? `Agent project warm-up failed: ${warm.error}`
-            : "Agent project warm-up failed",
-        );
-      }
-
-      if (generation !== openProjectGeneration) return;
-      await window.electronAPI.projectActivate(canonicalRoot);
-      if (generation !== openProjectGeneration) {
-        if (projectOpenSupersededByClose) {
-          try {
-            await window.electronAPI.projectClose();
-          } catch (revertError) {
-            console.error("[openProject] failed to revoke superseded project authority", revertError);
+      await switchWorkbenchFocus({
+        canonicalRoot,
+        shouldAbort: () => generation !== openProjectGeneration,
+        supersededByClose: () => projectOpenSupersededByClose,
+        applyDocumentTree: (scan) => {
+          const files: ProjectFile[] = scan.files.map((file) => ({
+            id: file.relativePath,
+            name: file.relativePath.split("/").pop() || file.relativePath,
+            relativePath: file.relativePath,
+            absolutePath: file.absolutePath,
+            type: file.type as ProjectFile["type"],
+            fileSize: file.fileSize,
+          }));
+          const fileMetadata = new Map<string, FileMeta>();
+          for (const file of files) {
+            fileMetadata.set(file.id, {
+              relativePath: file.relativePath,
+              absolutePath: file.absolutePath,
+              name: file.name,
+              type: file.type,
+              fileSize: file.fileSize,
+            });
           }
-        }
-        return;
-      }
-
-      useProjectStore.getState().addRecentProject(canonicalRoot);
-      window.electronAPI.settingsSet({ lastProjectPath: canonicalRoot } as any);
-
-      // Commit UI only when ready — splash stays up until this point.
-      set({
-        projectRoot: canonicalRoot,
-        checkoutRoot: canonicalRoot,
-        showWelcome: false,
-        files,
-        folders: result.folders,
-        activeFileId: null,
-        fileMetadata,
-        openedContents: new Map(),
-        initialized: true,
+          set({
+            projectRoot: canonicalRoot,
+            checkoutRoot: canonicalRoot,
+            files,
+            folders: scan.folders,
+            activeFileId: null,
+            fileMetadata,
+            openedContents: new Map(),
+            initialized: true,
+          });
+        },
       });
-
-      loadSessionUiPrefsIntoLayout(canonicalRoot);
-      useLayoutStore.getState().setExpandedFileTreeFolders(expandedFolders);
     } catch (error) {
       if (generation === openProjectGeneration) {
         try {
-          if (previousRoot) await window.electronAPI.projectActivate(previousRoot);
-          else await window.electronAPI.projectClose();
+          if (previousRoot) await projectDesktop.projectActivate(previousRoot);
+          else await projectDesktop.projectClose();
         } catch (revertError) {
-          console.error("[openProject] failed to restore previous project authority", revertError);
+          log.warn("project.activate", { error: String(revertError), reason: "restore_previous" });
         }
       }
       toast.error(`Failed to open project: ${error}`);
@@ -423,41 +341,27 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     } finally {
       if (generation === openProjectGeneration) {
         const ms = Math.round(performance.now() - t0);
-        console.log(`[openProject] total: ${ms}ms  (${canonicalRoot})`);
-        log.info("openProject complete", { durationMs: ms, path: canonicalRoot });
-        set({ isOpeningProject: false });
+        const project = canonicalRoot.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? canonicalRoot;
+        log.debug("focusProject complete", { durationMs: ms, project });
+        if (firstOpen) set({ isOpeningProject: false });
       }
     }
   },
 
   closeProject: async () => {
     const previousRoot = get().projectRoot;
-    const decision = await confirmProjectSwitchIfNeeded(previousRoot);
-    if (decision === "abort") return;
-    if (previousRoot) {
-      await window.electronAPI.executionApplyProjectSwitch?.({
-        projectId: previousRoot,
-        stopExperimentIds: decision === "stop" ? listRunningExperimentIds(previousRoot) : [],
-      });
+    let defaultLastPath = useWorkbenchStore.getState().defaultLastPath.trim();
+    if (!defaultLastPath) {
+      try {
+        const wb = await workbenchDesktop.workbenchGetState();
+        defaultLastPath = wb.defaultLastPath?.trim() ?? "";
+      } catch {
+        defaultLastPath = "";
+      }
     }
-    openProjectGeneration++;
-    projectOpenSupersededByClose = true;
-    clearAutoSaveTimer();
-    // Clear last project path so next launch shows welcome page
-    window.electronAPI.settingsSet({ lastProjectPath: null } as any);
-    await window.electronAPI.projectClose();
-    await resetApplicationStateForProjectSwitch();
-    set({
-      projectRoot: null,
-      checkoutRoot: null,
-      showWelcome: true,
-      files: [],
-      folders: [],
-      activeFileId: null,
-      fileMetadata: new Map(),
-      openedContents: new Map(),
-      initialized: false,
-    });
+    if (!defaultLastPath) return;
+    if (sameProjectPath(previousRoot, defaultLastPath)) return;
+    await get().focusProject(defaultLastPath);
   },
 
   openFile: async (id: string) => {
@@ -512,7 +416,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           });
         }
       } else if (meta.type === "image") {
-        const { dataUrl } = await window.electronAPI.fsReadImage(meta.absolutePath);
+        const { dataUrl } = await fsDesktop.fsReadImage(meta.absolutePath);
         if (!dataUrl) return;
         const newMap = new Map(get().openedContents);
         newMap.set(id, { dataUrl, isDirty: false });
@@ -526,7 +430,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           contentVersion: get().contentVersion + 1,
         });
       } else {
-        const { content } = await window.electronAPI.fsRead(meta.absolutePath);
+        const { content } = await fsDesktop.fsRead(meta.absolutePath);
         const newMap = new Map(get().openedContents);
         newMap.set(id, { content, isDirty: false });
         if (openSeq !== fileOpenGeneration) {
@@ -561,9 +465,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!abs) return false;
 
     try {
-      const exists = await window.electronAPI.fsExists(abs);
+      const exists = await fsDesktop.fsExists(abs);
       if (!exists) return false;
-      const isFile = await window.electronAPI.fsIsFile(abs);
+      const isFile = await fsDesktop.fsIsFile(abs);
       if (!isFile) return false;
 
       const name = relativePath.split("/").pop() || relativePath;
@@ -637,7 +541,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     set({ isSaving: true });
 
     try {
-      await window.electronAPI.fsWrite(absPath, content.content);
+      await fsDesktop.fsWrite(absPath, content.content);
       const newMap = new Map(state.openedContents);
       newMap.set(id, { ...content, isDirty: false });
       set({ openedContents: newMap, isSaving: false, dirtyVersion: state.dirtyVersion + 1 });
@@ -666,7 +570,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         const meta = state.fileMetadata.get(id);
         const absPath = file?.absolutePath ?? meta?.absolutePath;
         if (!absPath) return Promise.resolve();
-        return window.electronAPI.fsWrite(absPath, fc.content!);
+        return fsDesktop.fsWrite(absPath, fc.content!);
       }),
     );
 
@@ -759,7 +663,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!force && _suppressWatcherReload) return;
 
     try {
-      const result = await window.electronAPI.fsScanMetadata(checkoutRoot);
+      const result = await fsDesktop.fsScanMetadata(checkoutRoot);
       const newFiles: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -805,7 +709,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       if (deletedCleanIds.length > 0) {
         const rps = useRightPanelStore.getState();
         for (const tab of rps.tabs) {
-          if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+          const fileId = tabFileId(tab);
+          if (fileId && deletedCleanIds.includes(fileId)) {
             rps.closeTab(tab.id);
           }
         }
@@ -867,7 +772,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // File is new (not in current file list) or deleted (need fs:exists check)
       const absPath = `${checkoutRootNormalized}${relPath}`;
       try {
-        const exists = await window.electronAPI.fsExists(absPath);
+        const exists = await fsDesktop.fsExists(absPath);
         if (exists && !existing) {
           // New file added externally → structural change
           hasStructuralChange = true;
@@ -903,7 +808,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       if (file.type === "image") {
         readTasks.push(
-          window.electronAPI.fsReadImage(absPath)
+          fsDesktop.fsReadImage(absPath)
             .then(({ dataUrl }) => {
               const current = get().openedContents.get(relPath);
               if (current && !current.isDirty) {
@@ -916,7 +821,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         );
       } else {
         readTasks.push(
-          window.electronAPI.fsRead(absPath)
+          fsDesktop.fsRead(absPath)
             .then(({ content }) => {
               const current = get().openedContents.get(relPath);
               if (current && !current.isDirty) {
@@ -938,13 +843,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!file) return;
     try {
       if (file.type === "image") {
-        const { dataUrl } = await window.electronAPI.fsReadImage(file.absolutePath);
+        const { dataUrl } = await fsDesktop.fsReadImage(file.absolutePath);
         if (!dataUrl) return;
         const newMap = new Map(get().openedContents);
         newMap.set(id, { dataUrl, isDirty: false });
         set({ openedContents: newMap });
       } else {
-        const { content } = await window.electronAPI.fsRead(file.absolutePath);
+        const { content } = await fsDesktop.fsRead(file.absolutePath);
         const newMap = new Map(get().openedContents);
         newMap.set(id, { content, isDirty: false });
         set({ openedContents: newMap });
@@ -976,10 +881,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Read all files in parallel
     const [textResults, imageResults] = await Promise.all([
       textTasks.length > 0
-        ? Promise.allSettled(textTasks.map((t) => window.electronAPI.fsRead(t.absPath)))
+        ? Promise.allSettled(textTasks.map((t) => fsDesktop.fsRead(t.absPath)))
         : Promise.resolve([] as PromiseSettledResult<{ content: string }>[]),
       imageTasks.length > 0
-        ? Promise.allSettled(imageTasks.map((t) => window.electronAPI.fsReadImage(t.absPath)))
+        ? Promise.allSettled(imageTasks.map((t) => fsDesktop.fsReadImage(t.absPath)))
         : Promise.resolve([] as PromiseSettledResult<{ dataUrl: string }>[]),
     ]);
 
@@ -1022,7 +927,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!checkoutRoot) return;
 
     // Phase 1: scan metadata
-    const result = await window.electronAPI.fsScanMetadata(checkoutRoot);
+    const result = await fsDesktop.fsScanMetadata(checkoutRoot);
     const newFiles: ProjectFile[] = result.files.map((f) => ({
       id: f.relativePath,
       name: f.relativePath.split("/").pop() || f.relativePath,
@@ -1075,10 +980,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // Phase 3: read all clean file contents in parallel
     const [textResults, imageResults] = await Promise.all([
       textTasks.length > 0
-        ? Promise.allSettled(textTasks.map((t) => window.electronAPI.fsRead(t.absPath)))
+        ? Promise.allSettled(textTasks.map((t) => fsDesktop.fsRead(t.absPath)))
         : Promise.resolve([] as PromiseSettledResult<{ content: string }>[]),
       imageTasks.length > 0
-        ? Promise.allSettled(imageTasks.map((t) => window.electronAPI.fsReadImage(t.absPath)))
+        ? Promise.allSettled(imageTasks.map((t) => fsDesktop.fsReadImage(t.absPath)))
         : Promise.resolve([] as PromiseSettledResult<{ dataUrl: string }>[]),
     ]);
 
@@ -1105,7 +1010,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (deletedCleanIds.length > 0) {
       const rps = useRightPanelStore.getState();
       for (const tab of rps.tabs) {
-        if (tab.fileId && deletedCleanIds.includes(tab.fileId)) {
+        const fileId = tabFileId(tab);
+        if (fileId && deletedCleanIds.includes(fileId)) {
           rps.closeTab(tab.id);
         }
       }
@@ -1135,7 +1041,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const inferred = type ? { type, content: type === "tex" ? defaultTexContent : "" } : inferFromExtension(name);
 
     try {
-      const { absPath } = await window.electronAPI.fsCreate(
+      const { absPath } = await fsDesktop.fsCreate(
         checkoutRoot,
         relativePath,
         inferred.content,
@@ -1192,7 +1098,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const absolutePath = `${checkoutRoot}/${folderPath}`.replace(/\\/g, "/");
 
     try {
-      await window.electronAPI.fsMkdir(absolutePath);
+      await fsDesktop.fsMkdir(absolutePath);
       set((s) => ({
         folders: s.folders.includes(folderPath) ? s.folders : [...s.folders, folderPath],
       }));
@@ -1209,7 +1115,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     if (!file) return;
 
     try {
-      await window.electronAPI.fsDelete(file.absolutePath);
+      await fsDesktop.fsDelete(file.absolutePath);
       const newFiles = files.filter((f) => f.id !== id);
       const newOpenedContents = new Map(get().openedContents);
       newOpenedContents.delete(id);
@@ -1258,7 +1164,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const absolutePath = `${checkoutRoot}/${folderPath}`.replace(/\\/g, "/");
 
     try {
-      await window.electronAPI.fsDeleteFolder(absolutePath);
+      await fsDesktop.fsDeleteFolder(absolutePath);
 
       const { activeFileId, openedContents } = get();
       const newFiles = files.filter((f) => !f.relativePath.startsWith(`${folderPath}/`));
@@ -1320,7 +1226,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const newAbsolutePath = `${checkoutRoot}/${newRelativePath}`.replace(/\\/g, "/");
 
     try {
-      await window.electronAPI.fsRename(file.absolutePath, newAbsolutePath);
+      await fsDesktop.fsRename(file.absolutePath, newAbsolutePath);
 
       const { activeFileId, openedContents } = get();
       const existingContent = openedContents.get(id);
@@ -1389,7 +1295,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const newAbs = `${checkoutRoot}/${newFolderPath}`.replace(/\\/g, "/");
 
     try {
-      await window.electronAPI.fsRename(oldAbs, newAbs);
+      await fsDesktop.fsRename(oldAbs, newAbs);
 
       // Update affected file paths
       const affectedFiles = files
@@ -1429,9 +1335,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       // Update tab references
       const rps = useRightPanelStore.getState();
       for (const t of rps.tabs) {
-        if (t.fileId?.startsWith(oldPrefix)) {
-          const newId = newPrefix + t.fileId.slice(oldPrefix.length);
-          const newPath = newPrefix + (t.filePath ?? "").slice(oldPrefix.length);
+        const fileId = tabFileId(t);
+        if (fileId?.startsWith(oldPrefix)) {
+          const newId = newPrefix + fileId.slice(oldPrefix.length);
+          const newPath = newPrefix + (tabFilePath(t) ?? "").slice(oldPrefix.length);
           rps.updateTab(t.id, { fileId: newId, filePath: newPath });
         }
       }

@@ -1,15 +1,14 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import { basename, extname, join } from "node:path";
 import { readFile } from "node:fs/promises";
-import { compileLatex } from "../services/compiler";
-import { detectTexlive, detectTectonic } from "../services/texlive-detect";
-import { createLogger } from "../services/logger";
+import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
+import { createLogger } from "../app/logger";
 import {
   fileExists,
   packManuscriptDirectory,
   resolveCompilePdfAbsolutePath,
   writeUint8File,
-} from "../services/manuscript-export";
+} from "../compile/manuscript-export";
 
 const log = createLogger("compile-ipc", "compile");
 
@@ -33,8 +32,7 @@ export function registerCompileHandlers(): void {
         fast?: boolean;
       },
     ) => {
-      log.info("compile:execute", {
-        projectDir: args.projectDir,
+      log.debug("compile:execute", {
         mainFile: args.mainFile,
         useTexlive: args.useTexlive ?? false,
         dirty: args.dirtyRelPaths?.length ?? 0,
@@ -51,10 +49,11 @@ export function registerCompileHandlers(): void {
           pdfOnDisk: args.pdfOnDisk,
           skipSynctex: args.skipSynctex,
           fast: args.fast,
+          source: "ui",
         },
       );
       if (result.success && (result.pdfBytes || result.pdfPath)) {
-        log.info("compile:execute success", {
+        log.debug("compile:execute success", {
           bytes: result.pdfBytes?.length,
           pdfPath: result.pdfPath,
         });
@@ -65,7 +64,7 @@ export function registerCompileHandlers(): void {
           stdout: result.logContent,
         };
       } else {
-        log.warn("compile:execute failed", { error: result.error || "unknown" });
+        log.debug("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
     },

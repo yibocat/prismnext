@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock } from "@/stores/chat-store";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useChatStore } from "@/stores/chat-store";
 import {
   MessageCircleQuestionIcon,
@@ -24,6 +25,7 @@ import {
   TOOL_EXPANDED_CONTENT_CLASS,
   StatusIcon,
 } from "./shared";
+import { selectComposerHostedQuestionId } from "@/lib/chat/composer-pending-tools";
 import { CHAT_CHROME_BUTTON_TEXT } from "../worktree-selector";
 import { ComposerChromeCard } from "../composer-chrome-card";
 
@@ -39,13 +41,17 @@ function parseAnswer(content: unknown): string {
   return String(content);
 }
 
-async function writeQuestionAnswer(answer: string): Promise<boolean> {
+async function writeQuestionAnswer(answer: string, toolUseId?: string): Promise<boolean> {
   const tabId = useChatStore.getState().activeTabId;
-  const sessionId = useChatStore.getState().tabs.find((t) => t.id === tabId)?.sessionId;
-  if (!sessionId) return false;
+  const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+  const requestId = tab?.conversation.pendingQuestion?.requestId || toolUseId?.trim();
+  if (!requestId) return false;
   try {
-    const result = await window.electronAPI.chatAnswerQuestion(sessionId, answer);
-    return !!result?.success;
+    const result = await agentDesktop.agentAnswerQuestion({ requestId, answer });
+    if (result.ok) {
+      useChatStore.getState().acknowledgeQuestionAnswer(requestId, answer);
+    }
+    return result.ok;
   } catch {
     return false;
   }
@@ -74,6 +80,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
   const customInputRef = useRef<HTMLInputElement>(null);
 
   const isStreaming = useChatStore((s) => s.isStreaming);
+  const chromeQuestionId = useChatStore(selectComposerHostedQuestionId);
   const isError = Boolean(toolResult?.is_error);
   const hasResult = toolResult?.content != null;
   const isAlreadyAnswered = hasResult && !isError;
@@ -154,14 +161,14 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     if (!needsUserAnswer || !hasSelection || sending) return;
     setSending(true);
     const answer = useCustom ? customText.trim() : selectedLabel;
-    const ok = await writeQuestionAnswer(answer);
+    const ok = await writeQuestionAnswer(answer, toolUse.id);
     if (!ok) setSending(false);
   };
 
   const handleCancel = async () => {
     if (!needsUserAnswer || sending) return;
     setSending(true);
-    const ok = await writeQuestionAnswer("Cancelled");
+    const ok = await writeQuestionAnswer("Cancelled", toolUse.id);
     if (!ok) setSending(false);
   };
 
@@ -199,7 +206,11 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
     );
   }
 
-  if (hostedInComposer && !isComposer && needsUserAnswer) {
+  if (!isComposer && needsUserAnswer && (hostedInComposer || toolUse.id === chromeQuestionId)) {
+    return null;
+  }
+
+  if (!isComposer && needsUserAnswer && chromeQuestionId) {
     return (
       <div className={cn(TOOL_INLINE_ROW_CLASS, "text-[length:var(--font-chat-message)] py-1")}>
         <StatusIcon isLoading={!hasResult} isError={!!isError} />
@@ -252,7 +263,7 @@ export const AskUserQuestionWidget = memo(function AskUserQuestionWidget({
 
   if (isComposer) {
     return (
-      <ComposerChromeCard className="px-3 py-2.5">
+      <ComposerChromeCard className="max-h-[min(36vh,320px)] overflow-y-auto px-3 py-2.5">
         <div className="flex items-start gap-2">
           <MessageCircleQuestionIcon className="mt-0.5 size-3.5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">

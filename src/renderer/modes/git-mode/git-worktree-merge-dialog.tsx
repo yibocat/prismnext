@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { useDocumentStore } from "@/stores/document-store";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { cn } from "@/lib/utils";
 import {
   buildMergeToBranchStepLabels,
@@ -19,7 +20,7 @@ import {
   type WorktreeChangedFile,
 } from "@/lib/git/git-orchestrator";
 import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
-import { syncAfterWorktreeMerge } from "@/lib/git/git-sync";
+import { showWorktreeMergeFollowUpToast, syncAfterWorktreeMerge } from "@/lib/git/git-sync";
 
 interface GitWorktreeMergeDialogProps {
   open: boolean;
@@ -61,7 +62,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
     setError(null);
     setMergeStep(0);
 
-    const currentBranch = await window.electronAPI.gitStatus(projectRoot)
+    const currentBranch = await gitDesktop.gitStatus(projectRoot)
       .then((s) => s.branch)
       .catch(() => "");
     const labels = buildMergeToBranchStepLabels(baseBranch, currentBranch === baseBranch);
@@ -84,7 +85,13 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
         }
       }
       await syncAfterWorktreeMerge(projectRoot, worktreeRoot, resolvedWorktree.name);
-      toast.success(`Merged ${result.changeSummary} into ${baseBranch}`);
+      showWorktreeMergeFollowUpToast({
+        projectRoot,
+        changeSummary: result.changeSummary,
+        mergedBranch: result.mergedBranch ?? baseBranch,
+        aheadAfterMerge: result.aheadAfterMerge ?? 0,
+        hasRemote: result.hasRemote ?? false,
+      });
       onOpenChange(false);
     } else {
       setError(result.error || "Merge failed");

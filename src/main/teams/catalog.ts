@@ -8,8 +8,8 @@
  * Four roots, each tagged with scope + source:
  *   bundled  resources/teams/                    (app, core/bundled; read-only)
  *   pro      <proPackageDir>/<teamsRoot>/        (app, pro; read-only, license-gated)
- *   user     <userData>/teams/                   (app, user; writable)
- *   project  <projectRoot>/.prismnext/agent/teams/ (project, user; writable)
+ *   user     ~/.prismnext/teams/                 (app, user; writable)
+ *   project  <projectRoot>/.workbench/agent/teams/ (project, user; writable)
  *
  * Dual layout (T0 froze the on-disk format; T6 migrates it): the new layout
  * Canonical layout: team.json + orchestrators/<id>/ + subagents/ (+ skills/commands).
@@ -32,13 +32,14 @@ import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 import {
   CORE_TEAM_ID,
   LOCAL_TEAM_ID,
-  LOCAL_TEAM_REL,
+  MY_CONTENT_TEAM_ID,
   PROJECT_DEFAULT_TEAM_ID,
+  USER_TEAM_PUBLISHER,
 } from "../../shared/teams/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
+import { homeSkillsDir } from "../workbench/home";
 import { appTeamsDir, projectTeamsDir } from "./scope";
-import { ensureProjectContentMigrated } from "./migrate-project-content";
 
 const log = createLogger("teams-catalog");
 
@@ -317,8 +318,7 @@ function scanSubagents(teamDir: string, teamId: string): ScannedAsset[] {
   return out;
 }
 
-function scanSkills(teamDir: string): ScannedAsset[] {
-  const root = join(teamDir, "skills");
+function scanSkillRoot(root: string): ScannedAsset[] {
   if (!existsSync(root)) return [];
   const out: ScannedAsset[] = [];
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -340,6 +340,61 @@ function scanSkills(teamDir: string): ScannedAsset[] {
     out.push({ kind: "skill", id: entry.name, name, description, path: dir });
   }
   return out;
+}
+
+function scanSkills(teamDir: string): ScannedAsset[] {
+  return scanSkillRoot(join(teamDir, "skills"));
+}
+
+function skillRootFingerprint(root: string): string {
+  if (!existsSync(root)) return "missing";
+  const parts: string[] = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const skillMd = join(root, entry.name, "SKILL.md");
+    try {
+      const st = statSync(skillMd);
+      parts.push(`${entry.name}:${st.mtimeMs}:${st.size}`);
+    } catch {
+      // vanished SKILL.md is part of the fingerprint change
+    }
+  }
+  return parts.sort().join("|");
+}
+
+/** User skills live in `~/.prismnext/skills/<id>` and hang off Common Team. */
+function attachHomeUserSkills(teams: TeamRecord[], byId: Map<string, TeamRecord>): void {
+  const extras = scanSkillRoot(homeSkillsDir());
+  const existing = byId.get(MY_CONTENT_TEAM_ID);
+  if (existing) {
+    const have = new Set(existing.assets.filter((a) => a.kind === "skill").map((a) => a.id));
+    for (const skill of extras) {
+      if (!have.has(skill.id)) existing.assets.push(skill);
+    }
+    return;
+  }
+  if (extras.length === 0) return;
+  const record: TeamRecord = {
+    manifest: {
+      id: MY_CONTENT_TEAM_ID,
+      name: "Common Team",
+      description: "Workbench user skills.",
+      version: "1.0.0",
+      packFormatVersion: 1,
+      tier: "free",
+      publisher: USER_TEAM_PUBLISHER,
+    },
+    scope: "app",
+    source: "user",
+    dir: homeSkillsDir(),
+    writable: true,
+    hasOrchestrator: false,
+    orchestratorId: undefined,
+    assets: extras,
+    mcps: [],
+  };
+  teams.push(record);
+  byId.set(MY_CONTENT_TEAM_ID, record);
 }
 
 /** Scan `*.md` command files under a commands directory (team or app). */
@@ -561,25 +616,11 @@ function computeFingerprint(projectRoots: string[]): string {
       parts.push(teamDirFingerprint(join(root, entry.name)));
     }
   }
-  // Pre-M8 fallback dir still fingerprints until physically moved.
-  for (const projectRoot of projectRoots) {
-    parts.push(`local:${teamDirFingerprint(join(projectRoot, LOCAL_TEAM_REL))}`);
-  }
+  parts.push(`home-skills:${skillRootFingerprint(homeSkillsDir())}`);
   return djb2(parts.sort().join("||"));
 }
 
 function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
-  for (const projectRoot of projectRoots) {
-    try {
-      ensureProjectContentMigrated(projectRoot);
-    } catch (err) {
-      log.error("M8/M11 project content migration failed", {
-        projectRoot,
-        error: String(err),
-      });
-    }
-  }
-
   const teams: TeamRecord[] = [];
   const byId = new Map<string, TeamRecord>();
 
@@ -591,7 +632,7 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
         dir,
         scope: "app" as const,
         source,
-        // user-packs / user-created roots are writable; pro/registry roots are not.
+        // Home user-created roots are writable; pro/registry roots are not.
         writable: source === "user",
       };
     }),
@@ -623,18 +664,14 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
     }
   }
 
-  // Pre-M8 safety net: if migration could not move local/, surface it as
-  // project.local (M10 id). Prefer the real teams/project.local/ when present.
-  for (const projectRoot of projectRoots) {
-    if (byId.has(PROJECT_DEFAULT_TEAM_ID) || byId.has(LOCAL_TEAM_ID)) continue;
-    const legacyLocal = join(projectRoot, LOCAL_TEAM_REL);
-    if (!existsSync(legacyLocal)) continue;
-    const team = scanTeam(legacyLocal, "project", "user", true, PROJECT_DEFAULT_TEAM_ID);
-    if (team) {
-      teams.push(team);
-      byId.set(team.manifest.id, team);
+  // User-authored skills live in ~/.prismnext/skills/. Paper-side hangar
+  // folders are not a write target and are not listed as skills.
+  for (const team of teams) {
+    if (team.manifest.id === PROJECT_DEFAULT_TEAM_ID || team.manifest.id === LOCAL_TEAM_ID) {
+      team.assets = team.assets.filter((asset) => asset.kind !== "skill");
     }
   }
+  attachHomeUserSkills(teams, byId);
 
   teams.sort((a, b) => a.manifest.id.localeCompare(b.manifest.id));
   return { fingerprint: computeFingerprint(projectRoots), teams, byId };

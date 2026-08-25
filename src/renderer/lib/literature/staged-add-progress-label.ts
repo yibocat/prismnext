@@ -1,4 +1,4 @@
-import type { StagedAddProgressEvent } from "../../../shared/citation-staging";
+import type { StagedAddProgressEvent } from "../../../shared/literature/citation-staging";
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;

@@ -4,13 +4,13 @@
  * Spec/kind validation and path checks live in main; args/examples on interaction-* tools.
  * Chat one-shot file peeks use ```artifact (Reply depth) — not this module.
  */
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 export const INTERACTION_PROMPT = [
   "## Interaction (figures & plots)",
   "",
   "An **Interaction** is a project-persisted research object: a static figure or a CSV-backed",
-  "plot under `.prismnext/interactions/<id>/`. After write, embed the tool's `fenceMarkdown`",
+  "plot under `.workbench/interactions/<id>/`. After write, embed the tool's `fenceMarkdown`",
   "(`interaction` fence with `id`) in your reply so the user gets a **clickable card** and can",
   "reopen the same view later.",
   "",
@@ -19,7 +19,7 @@ export const INTERACTION_PROMPT = [
   "### When this applies",
   "",
   "- A figure/plot should be **revisited** or compared later — not only glanced at once.",
-  "- After analysis writes a PNG/SVG or metrics CSV that deserves a durable view.",
+  "- After analysis writes a figure or a metrics CSV that deserves a durable view.",
   "",
   "### Route",
   "",
@@ -31,7 +31,7 @@ export const INTERACTION_PROMPT = [
   "",
   "### Kind judgment",
   "",
-  "- **`figure.static`** — finished image on disk (PNG/SVG/…).",
+  "- **`figure.static`** — a finished file on disk (PDF, PNG, SVG, …).",
   "- **`plot.line` / `plot.series` / `plot.scatter` / `plot.area`** — real CSV + x/y (or series); do not invent series.",
   "- **`plot.bar`** — categorical x + numeric y (multi-y stacks); **`plot.histogram`** — one numeric column (+ `bins`);",
   "  **`plot.box`** — group column x + one numeric y; **`plot.density`** — numeric x/y density contours;",
@@ -40,8 +40,8 @@ export const INTERACTION_PROMPT = [
   "### Judgment",
   "",
   "- Prefer Interaction when you may return to the view; prefer `artifact` for a quick peek.",
-  "- Need the image's contents (axes, values, text) and you cannot view images directly →",
-  `  \`${TOOL_NAMES.imageDescribe}\`; Interaction/\`artifact\` only display it.`,
-  "- Do not substitute `artifact` after a failed write — fix the file or spec.",
+  "- A compiled PDF is already a chat preview. Do not convert it via bash just to look at it.",
+  "- Need pixels and this chat model cannot view images →",
+  `  \`${TOOL_NAMES.imageDescribe}\`. If the model can see images, \`read\` the PNG/JPG instead.`,
   "- Tool how-to stays on the tools; project rules may tighten naming — defer to them.",
 ].join("\n");

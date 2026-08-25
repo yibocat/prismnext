@@ -2,7 +2,7 @@
 // IPC surface for the app updater: check / download / install / ignore + About versions.
 // Progress is broadcast from update-checker as `update:progress`.
 
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import {
   checkForUpdates,
   downloadUpdate,
@@ -10,8 +10,7 @@ import {
   ignoreVersion,
   quitAndInstall,
   unignoreVersion,
-} from "../services/update-checker";
-import { getAboutVersions } from "../services/opencode-binary";
+} from "../app/update-checker";
 
 export function registerUpdateHandlers(): void {
   ipcMain.handle("update:check", async () => {
@@ -41,6 +40,6 @@ export function registerUpdateHandlers(): void {
   });
 
   ipcMain.handle("about:getVersions", async () => {
-    return getAboutVersions();
+    return { appVersion: app.getVersion() };
   });
 }

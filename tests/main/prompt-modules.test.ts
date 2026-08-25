@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { ALL_MODULES } from "../../src/main/prompts/modules";
 import { resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
 import type { PromptModule } from "../../src/main/prompts/types";
-import { ALL_TOOL_NAMES } from "../../src/shared/tool-names";
+import { ALL_TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 function approxTokens(s: string): number {
   return Math.round(s.length / 4);

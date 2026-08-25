@@ -1,0 +1,29 @@
+{
+  "badge": {
+    "local": "本地",
+    "bound": "绑定"
+  },
+  "card": {
+    "loading": "正在加载交互对象…",
+    "unavailable": "找不到或无效的交互对象「{{id}}」。",
+    "invalidFence": "无效的 ```interaction 代码块。",
+    "open": "打开",
+    "openPanel": "在面板中打开",
+    "previewLoading": "正在加载预览…",
+    "previewUnavailable": "预览不可用"
+  },
+  "panel": {
+    "empty": "未选择交互对象。",
+    "loadError": "无法加载「{{id}}」：{{error}}",
+    "intro": "科研产物 — 在此面板显示静态图或 CSV 折线图。",
+    "placeholderTitle": "预览暂不可用",
+    "placeholderBody": "类型「{{kind}}」将在后续版本中在此渲染。",
+    "unsupportedTitle": "不支持该 Interaction 类型",
+    "unsupportedBody": "类型「{{kind}}」不可写入。请使用 figure.static（图像）或 plot.* CSV 图类（plot.line / series / scatter / area / bar / histogram / box / density / heatmap）。",
+    "figureMissingPath": "resources[] 中没有图像或 PDF 路径。请添加 png/svg/pdf 路径后重新写入。",
+    "figureLoadError": "无法加载图像：{{path}}",
+    "plotErrorTitle": "无法渲染图表",
+    "bindings": "绑定",
+    "resources": "资源"
+  }
+}

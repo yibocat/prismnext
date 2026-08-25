@@ -2,13 +2,14 @@ import { useTranslation } from "react-i18next";
 import { FileWarningIcon, FolderOpenIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { projectPathBasename } from "@/lib/files/mentionable-files";
 import { revealProjectRelativePath } from "@/lib/files/reveal-project-path";
 
 export function BinaryFilePlaceholder() {
   const { t } = useTranslation();
   const { tab } = useTabContext();
-  const filePath = tab.filePath ?? tab.fileId ?? "";
+  const filePath = tabFilePath(tab) ?? tabFileId(tab) ?? "";
   const name = projectPathBasename(filePath) || filePath;
 
   return (

@@ -198,7 +198,7 @@ export function ChatComposerCore({
     <Hint label={t("chat.composer.stop")}>
       <button
         type="button"
-        onClick={composer.cancelExecution}
+        onClick={() => void composer.cancelExecution()}
         aria-label={t("chat.composer.stop")}
         className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
       >
@@ -345,21 +345,25 @@ export function ChatComposerCore({
       data-chat-composer={variant === "panel" ? "true" : undefined}
       className={cn(
         "relative w-full min-w-0",
-        variant === "panel" ? "px-3 py-1.5 overflow-hidden" : className,
+        variant === "panel" ? "px-3 py-1.5" : className,
       )}
     >
       <div className="flex w-full flex-col">
         <SubAgentRunPanelHost />
         <ComposerChromeStack />
-        <ComposerSendQueuePanel
-          onEdit={composer.handleQueueEdit}
-          onSendOne={(id) => void composer.handleQueueSendOne(id)}
-          onDelete={composer.handleQueueDelete}
-        />
-
-        <div
-          className={cn(
-            "flex w-full flex-col overflow-hidden border border-border bg-card",
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-1.5">
+            <div className="pointer-events-auto w-full">
+              <ComposerSendQueuePanel
+                onEdit={composer.handleQueueEdit}
+                onSendOne={(id) => void composer.handleQueueSendOne(id)}
+                onDelete={composer.handleQueueDelete}
+              />
+            </div>
+          </div>
+          <div
+            className={cn(
+              "flex w-full flex-col overflow-hidden border border-border bg-card",
             "shadow-[0_0_2px_rgba(0,0,0,0.03)] transition-colors focus-within:border-ring",
             isCapsule ? "rounded-2xl" : "rounded-lg",
           )}
@@ -393,6 +397,7 @@ export function ChatComposerCore({
           {!hideToolbar && (
             <ComposerToolbar addMenu={addMenu} sendControls={sendControls} />
           )}
+          </div>
         </div>
       </div>
     </div>

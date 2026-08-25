@@ -4,7 +4,7 @@ import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/** Shared height for AiBar + Task run float panels (CSS length). */
+/** Shared height for AiBar float panels (CSS length). */
 export const CHAT_FLOAT_PANEL_HEIGHT = "min(78vh, 780px)";
 
 /**

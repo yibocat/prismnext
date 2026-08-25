@@ -14,15 +14,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { readResearchBrief } from "@/lib/files/open-research-brief";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
 import { ExperimentsBriefSectionPicker } from "./experiments-brief-section-picker";
 import { openExperimentResearchBrief } from "./experiments-open-brief";
-import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiment-log";
+import type { ExperimentBriefLinks, ExperimentMeta } from "../../../shared/experiments/log";
 import {
   experimentExcerptsFromBriefSections,
   type ResearchBriefSection,
-} from "../../../shared/research-brief";
+} from "../../../shared/research/brief";
 
 export function ExperimentsBriefEditDialog({
   meta,
@@ -56,7 +57,7 @@ export function ExperimentsBriefEditDialog({
     if (!projectRoot || filling) return;
     setFilling(true);
     try {
-      const brief = await window.electronAPI.researchBriefRead(projectRoot);
+      const brief = await readResearchBrief(projectRoot);
       const { hypothesisExcerpt, researchQuestionExcerpt } =
         experimentExcerptsFromBriefSections(brief.sections ?? {});
       if (!hypothesisExcerpt && !researchQuestionExcerpt) {

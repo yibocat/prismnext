@@ -6,7 +6,7 @@ import {
   isProvenanceRunRecorded,
   normalizeArtifactPath,
   type ProvenanceRunRecorded,
-} from "../../src/shared/provenance";
+} from "../../src/shared/experiments/provenance";
 
 describe("provenance types", () => {
   it("recognizes run_recorded events", () => {

@@ -1,0 +1,23 @@
+{
+  "picker": {
+    "choose": "Choose icon",
+    "clear": "Clear",
+    "default": "Use default",
+    "tab": {
+      "emoji": "Emoji",
+      "lucide": "Icon",
+      "image": "Image"
+    },
+    "search": "Search icons…",
+    "emoji": {
+      "paste": "Paste emoji"
+    },
+    "image": {
+      "badType": "Not a valid image file.",
+      "failed": "Could not read that image.",
+      "current": "Current icon",
+      "replace": "Replace",
+      "drop": "Click to choose an image"
+    }
+  }
+}

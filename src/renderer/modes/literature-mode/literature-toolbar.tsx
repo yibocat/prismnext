@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { PlusIcon, Loader2Icon, NotebookPenIcon, PlusCircleIcon, Trash2Icon, LoaderCircleIcon, XIcon, BookMarkedIcon, SquareIcon } from "lucide-react";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
@@ -277,14 +279,14 @@ function LiteratureLibraryToolbar() {
 
   const handleImportPdf = async () => {
     if (!projectRoot) return;
-    const { path } = await window.electronAPI.literaturePickPdf();
+    const { path } = await literatureDesktop.literaturePickPdf();
     if (!path) return;
     enqueuePdfImports(projectRoot, [path]);
   };
 
   const handleImportBibTeX = async () => {
     if (!projectRoot) return;
-    const { paths } = await window.electronAPI.literaturePickBibTeX();
+    const { paths } = await literatureDesktop.literaturePickBibTeX();
     if (!paths.length) return;
     setBusy(true);
     try {
@@ -293,11 +295,11 @@ function LiteratureLibraryToolbar() {
         toast.error("Select a .bib file (optionally with Better BibTeX .json)");
         return;
       }
-      const bibContent = await window.electronAPI.fsRead(bibPath).then((r) => r.content);
+      const bibContent = await fsDesktop.fsRead(bibPath).then((r) => r.content);
       const jsonPath = paths.find((p) => p.toLowerCase().endsWith(".json"));
       let jsonContent: string | undefined;
       if (jsonPath) {
-        jsonContent = await window.electronAPI.fsRead(jsonPath).then((r) => r.content);
+        jsonContent = await fsDesktop.fsRead(jsonPath).then((r) => r.content);
       }
       await importBibTeX(projectRoot, bibContent, jsonContent);
     } catch (err) {
@@ -543,18 +545,19 @@ function LiteratureLibraryToolbar() {
 export function LiteratureToolbar({ tab }: { tab: RightTab }) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const papers = useLiteratureStore((s) => s.papers);
-  const paper = tab.literaturePaperId
-    ? papers.find((p) => p.id === tab.literaturePaperId)
+  const paperId = tab.kind === "literature" ? tab.literaturePaperId : undefined;
+  const paper = paperId
+    ? papers.find((p) => p.id === paperId)
     : null;
 
   const extractPaperIds = useMemo(() => {
-    if (tab.literaturePaperId) return [tab.literaturePaperId];
+    if (paperId) return [paperId];
     return papers.map((p) => p.id);
-  }, [tab.literaturePaperId, papers]);
+  }, [paperId, papers]);
 
   useLiteratureExtractSession(projectRoot, extractPaperIds);
 
-  if (tab.literaturePaperId && paper) {
+  if (paperId && paper) {
     return <LiteratureReaderToolbar paper={paper} tab={tab} />;
   }
 

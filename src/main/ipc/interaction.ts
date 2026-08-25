@@ -3,8 +3,8 @@ import {
   listInteractionIds,
   readInteractionSpec,
   writeInteractionSpec,
-} from "../services/interaction-store";
-import type { InteractionSpec } from "../../shared/interaction-spec";
+} from "../interaction/interaction-store";
+import type { InteractionSpec } from "../../shared/interaction/spec";
 
 export function registerInteractionHandlers(): void {
   ipcMain.handle(

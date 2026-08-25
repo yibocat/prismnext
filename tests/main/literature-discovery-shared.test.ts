@@ -4,7 +4,7 @@ import {
   normalizeDiscoverySources,
   parseDiscoveryYearRange,
   DEFAULT_DISCOVERY_SOURCES,
-} from "../../src/shared/literature-discovery";
+} from "../../src/shared/literature/discovery";
 
 describe("literature-discovery shared", () => {
   it("defaults sources when omitted or empty", () => {

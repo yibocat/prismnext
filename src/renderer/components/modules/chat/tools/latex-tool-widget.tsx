@@ -2,10 +2,14 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { CheckCircle2Icon, FileTextIcon, XCircleIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
+import { ChatFileLink } from "../chat-file-link";
+import { ChatArtifactGallery } from "@/lib/markdown/chat-artifact-block";
+import { extractLatexCompileArtifactPaths } from "@/lib/chat/experiment-run-figures";
 
 const LABELS: Record<string, string> = {
   "latex-root": "LaTeX root",
   "latex-compile": "LaTeX compile",
+  "latex-compile-standalone": "Figure compile",
 };
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
@@ -74,8 +78,17 @@ function LatexResultSummary({
     );
   }
 
-  if (toolName === "latex-compile") {
-    const ok = data.success === true;
+  if (toolName === "latex-compile" || toolName === "latex-compile-standalone") {
+    const nested = data.result;
+    const inner =
+      nested && typeof nested === "object" && !Array.isArray(nested)
+        ? (nested as Record<string, unknown>)
+        : data;
+    const ok = inner.success === true || data.success === true;
+    const mainFile = typeof inner.mainFile === "string" ? inner.mainFile : data.mainFile;
+    const pdfPath = typeof inner.pdfPath === "string" ? inner.pdfPath : data.pdfPath;
+    const errorSummary =
+      typeof inner.errorSummary === "string" ? inner.errorSummary : data.errorSummary;
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)]">
         <p className="flex items-center gap-1.5">
@@ -88,14 +101,16 @@ function LatexResultSummary({
             {ok ? "Compile succeeded" : "Compile failed"}
           </span>
         </p>
-        {typeof data.mainFile === "string" ? (
-          <p className="text-muted-foreground truncate">{data.mainFile}</p>
+        {typeof mainFile === "string" ? (
+          <p className="text-muted-foreground truncate">
+            <ChatFileLink path={mainFile} className="font-normal" />
+          </p>
         ) : null}
-        {typeof data.pdfPath === "string" && ok ? (
-          <p className="text-muted-foreground">PDF: {data.pdfPath}</p>
+        {typeof pdfPath === "string" && ok ? (
+          <p className="text-muted-foreground">PDF: {pdfPath}</p>
         ) : null}
-        {!ok && typeof data.errorSummary === "string" && data.errorSummary ? (
-          <p className="text-destructive/90 whitespace-pre-wrap">{data.errorSummary}</p>
+        {!ok && typeof errorSummary === "string" && errorSummary ? (
+          <p className="text-destructive/90 whitespace-pre-wrap">{errorSummary}</p>
         ) : null}
       </div>
     );
@@ -108,10 +123,14 @@ export const LatexToolWidget = memo(function LatexToolWidget({
   toolUse,
   toolResult,
   toolName,
+  suppressArtifactPaths,
+  nestedInActivity,
 }: {
   toolUse: ContentBlock;
   toolResult?: ContentBlock;
   toolName: string;
+  suppressArtifactPaths?: readonly string[];
+  nestedInActivity?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const mainFile = param(toolUse.input, "mainFile");
@@ -130,12 +149,19 @@ export const LatexToolWidget = memo(function LatexToolWidget({
         ? "TeX Live"
         : "";
 
+  const previewPaths = nestedInActivity
+    ? []
+    : extractLatexCompileArtifactPaths(toolUse, toolResult);
+
   return (
+    <>
     <ToolCard
       toolName={toolName}
       icon={<FileTextIcon className="size-3.5 text-info" />}
       label={<span className="truncate font-medium">{LABELS[toolName] ?? toolName}</span>}
-      meta={detail ? (
+      meta={mainFile ? (
+        <ChatFileLink path={mainFile} className="font-normal" />
+      ) : detail ? (
         <span
           className="text-muted-foreground/70 min-w-0 truncate text-[length:var(--font-chat-meta)]"
           title={detail}
@@ -170,5 +196,12 @@ export const LatexToolWidget = memo(function LatexToolWidget({
         </>
       )}
     </ToolCard>
+    {previewPaths.length > 0 ? (
+      <ChatArtifactGallery
+        paths={previewPaths}
+        suppressPaths={suppressArtifactPaths}
+      />
+    ) : null}
+    </>
   );
 });

@@ -30,11 +30,11 @@ export function ComposerSendQueuePanel({
     <div
       data-chat-width
       className={cn(
-        "mb-1.5 w-full overflow-hidden rounded-lg border border-border bg-card",
+        "flex w-full max-h-[min(40vh,320px)] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-lg",
         className,
       )}
     >
-      <div className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-1">
+      <div className="flex shrink-0 items-center gap-1.5 px-2.5 pt-1.5 pb-1">
         <span className="text-[length:var(--font-chat-meta)] font-medium text-foreground">
           {t("chat.composer.queueCount", { count: queue.length })}
         </span>
@@ -49,7 +49,7 @@ export function ComposerSendQueuePanel({
         </span>
       </div>
 
-      <ul className="flex flex-col gap-0.5 px-1.5 pb-1.5">
+      <ul className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1.5 pb-1.5">
         {queue.map((item) => {
           const preview = composerQueueItemPreview(item);
           return (

@@ -7,30 +7,32 @@ vi.mock("electron", () => ({
   net: {
     fetch: (url: string, init?: RequestInit) => global.fetch(url, init),
   },
+  BrowserWindow: { getAllWindows: () => [] },
 }));
 
 import {
   closeLibraryDb,
   createPaper,
   updatePaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import {
   PAPER_CITATION_PAGE_SIZE,
   formatCitationFetchError,
   describePaperCitationIdentifier,
-} from "../../src/shared/paper-citation-network";
+} from "../../src/shared/literature/paper-citation-network";
 import {
   __testing,
   getPaperCitationNetwork,
   getPaperCitationNetworkPage,
-} from "../../src/main/services/literature-citation-network";
-import { __s2Testing } from "../../src/main/services/literature-citation-s2";
+} from "../../src/main/literature/citation/literature-citation-network";
+import { __s2Testing } from "../../src/main/literature/citation/literature-citation-s2";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const { mapOpenAlexWorkToCitationEntry, extractOpenAlexWorkId } = __testing;
 const { mapS2PaperToCitationEntry } = __s2Testing;
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-cites-"));
+  return tempLiteratureProject();
 }
 
 describe("paper-citation-network helpers", () => {

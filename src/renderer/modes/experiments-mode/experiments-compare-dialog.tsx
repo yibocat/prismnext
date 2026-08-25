@@ -11,13 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   parseFlatMetricsJsonText,
   pickMetricsArtifactPaths,
-} from "../../../shared/experiment-metrics";
-import type { ExperimentRunEntry } from "../../../shared/experiment-log";
-import { experimentRunListTitle } from "./experiments-runs-query";
+} from "../../../shared/experiments/metrics";
+import type { ExperimentRunEntry } from "../../../shared/experiments/log";
+import { experimentRunListTitle } from "@/lib/experiments/runs-query";
 import { formatExperimentRelativeTime } from "./experiments-detail-chrome";
 import { artifactFullPath } from "./experiments-artifact-nav";
 import { useExperimentProjectRoot } from "./experiments-project-root";
@@ -62,9 +63,9 @@ async function loadMetricsForRun(
     const abs = resolveProjectRelativePath(projectRoot, rel);
     if (!abs) continue;
     try {
-      const exists = await window.electronAPI.fsExists(abs);
+      const exists = await fsDesktop.fsExists(abs);
       if (!exists) continue;
-      const { content } = await window.electronAPI.fsRead(abs);
+      const { content } = await fsDesktop.fsRead(abs);
       const values = parseFlatMetricsJsonText(content ?? "");
       if (values) return values;
     } catch {

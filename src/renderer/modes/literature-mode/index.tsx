@@ -1,7 +1,7 @@
 import type { ModeDefinition, RightTab } from "@/lib/workspace/mode-registry";
 import { BookOpenIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
-import { useLiteratureStore } from "@/stores/literature-store";
+import { shouldRefreshLiteratureOnActivate, useLiteratureStore } from "@/stores/literature-store";
 import { LiteratureSidebar } from "./literature-sidebar";
 import { LiteratureToolbar } from "./literature-toolbar";
 import { LiteratureContent } from "./literature-content";
@@ -27,11 +27,9 @@ export const literatureMode: ModeDefinition = {
   onActivate: () => {
     const projectRoot = useDocumentStore.getState().projectRoot;
     if (!projectRoot) return;
-    // LiteratureContent.bootstrapLiterature handles bound-project Zotero sync;
-    // only refresh local list when activating without a bound collection loaded yet.
-    const { boundCollectionId, zoteroAutoPullDoneForRoot } = useLiteratureStore.getState();
-    if (!boundCollectionId || zoteroAutoPullDoneForRoot === projectRoot) {
-      void useLiteratureStore.getState().refresh(projectRoot);
-    }
+    const { bootstrappedRoot, refresh } = useLiteratureStore.getState();
+    // First paint is owned by LiteratureContent.bootstrapLiterature.
+    if (!shouldRefreshLiteratureOnActivate(bootstrappedRoot, projectRoot)) return;
+    void refresh(projectRoot);
   },
 };

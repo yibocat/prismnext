@@ -1,4 +1,6 @@
-/** Project-level template state persisted in `.prismnext/settings.json`. */
+/** Project-level template state persisted in `.workbench/settings.json`. */
+
+import { fsDesktop } from "@/lib/desktop-api/fs";
 
 export interface ProjectTemplateState {
   id: string;
@@ -8,7 +10,7 @@ export interface ProjectTemplateState {
 }
 
 function settingsPathForRoot(projectRoot: string): string {
-  return `${projectRoot}/.prismnext/settings.json`;
+  return `${projectRoot}/.workbench/settings.json`;
 }
 
 function parseTemplateState(raw: unknown): ProjectTemplateState | null {
@@ -32,9 +34,9 @@ export async function loadProjectTemplate(
 ): Promise<ProjectTemplateState | null> {
   const settingsPath = settingsPathForRoot(projectRoot);
   try {
-    const exists = await window.electronAPI.fsExists(settingsPath);
+    const exists = await fsDesktop.fsExists(settingsPath);
     if (!exists) return null;
-    const readResult = await window.electronAPI.fsRead(settingsPath);
+    const readResult = await fsDesktop.fsRead(settingsPath);
     if (!readResult) return null;
     const settings = JSON.parse(readResult.content);
     return parseTemplateState(settings.template);
@@ -51,9 +53,9 @@ export async function saveProjectTemplate(
   const settingsPath = settingsPathForRoot(projectRoot);
   let settings: Record<string, unknown> = {};
   try {
-    const exists = await window.electronAPI.fsExists(settingsPath);
+    const exists = await fsDesktop.fsExists(settingsPath);
     if (exists) {
-      const readResult = await window.electronAPI.fsRead(settingsPath);
+      const readResult = await fsDesktop.fsRead(settingsPath);
       if (readResult) {
         settings = JSON.parse(readResult.content);
       }
@@ -62,5 +64,5 @@ export async function saveProjectTemplate(
     settings = {};
   }
   settings.template = state;
-  await window.electronAPI.fsWrite(settingsPath, JSON.stringify(settings, null, 2));
+  await fsDesktop.fsWrite(settingsPath, JSON.stringify(settings, null, 2));
 }

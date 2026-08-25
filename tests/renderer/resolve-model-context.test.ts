@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/renderer/lib/providers/opencode-catalog-models", async () => {
+vi.mock("../../src/renderer/lib/providers/pi-model-catalog", async () => {
   const actual = await vi.importActual<
-    typeof import("../../src/renderer/lib/providers/opencode-catalog-models")
-  >("../../src/renderer/lib/providers/opencode-catalog-models");
+    typeof import("../../src/renderer/lib/providers/pi-model-catalog")
+  >("../../src/renderer/lib/providers/pi-model-catalog");
   return {
     ...actual,
-    getCachedOpenCodeCatalogModels: vi.fn(),
+    getCachedPiCatalogModels: vi.fn(),
   };
 });
 
 import {
-  getCachedOpenCodeCatalogModels,
+  getCachedPiCatalogModels,
   isUnknownContextWindowLabel,
-} from "../../src/renderer/lib/providers/opencode-catalog-models";
-import { resolveSelectedModelContextTokens } from "../../src/renderer/lib/providers/index";
+} from "../../src/renderer/lib/providers/pi-model-catalog";
+import {
+  resolveSelectedModelContextTokens,
+  resolveSelectedModelContextTokensIfKnown,
+} from "../../src/renderer/lib/providers/index";
 
 describe("isUnknownContextWindowLabel", () => {
   it("treats Unknown / em dash as unknown", () => {
@@ -26,11 +29,11 @@ describe("isUnknownContextWindowLabel", () => {
 
 describe("resolveSelectedModelContextTokens", () => {
   beforeEach(() => {
-    vi.mocked(getCachedOpenCodeCatalogModels).mockReset();
+    vi.mocked(getCachedPiCatalogModels).mockReset();
   });
 
-  it("falls back to OpenCode catalog when enabled model has Unknown context", () => {
-    vi.mocked(getCachedOpenCodeCatalogModels).mockReturnValue([
+  it("falls back to Pi catalog when enabled model has Unknown context", () => {
+    vi.mocked(getCachedPiCatalogModels).mockReturnValue([
       {
         id: "gpt-5.4",
         name: "GPT 5.4",
@@ -47,5 +50,18 @@ describe("resolveSelectedModelContextTokens", () => {
       [{ id: "opencode-go", name: "OpenCode Go", baseUrl: "" }],
     );
     expect(tokens).toBe(1_000_000);
+  });
+
+  it("returns null when the picker has no known window size", () => {
+    vi.mocked(getCachedPiCatalogModels).mockReturnValue([]);
+    expect(
+      resolveSelectedModelContextTokensIfKnown(
+        "opencode-go",
+        "mystery-model",
+        { "opencode-go": ["mystery-model"] },
+        { "opencode-go": [{ id: "mystery-model", name: "Mystery", contextWindow: "Unknown" }] },
+        [{ id: "opencode-go", name: "OpenCode Go", baseUrl: "" }],
+      ),
+    ).toBeNull();
   });
 });

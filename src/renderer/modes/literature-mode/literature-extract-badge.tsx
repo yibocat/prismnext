@@ -1,5 +1,5 @@
 import { Loader2Icon } from "lucide-react";
-import { extractBadgeLabel } from "../../../shared/paper-extract";
+import { extractBadgeLabel } from "../../../shared/literature/paper-extract";
 import type { PaperExtractStatesByPaper } from "@/types/electron.d";
 import { useLiteratureExtractStore, selectExtractProgressForPaper } from "@/stores/literature-extract-store";
 import { cn } from "@/lib/utils";

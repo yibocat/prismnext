@@ -4,17 +4,18 @@ import {
   resolveArtifactUrl,
   skillNameToFolderId,
   installRegistrySkill,
-} from "../../src/main/services/skills-registry";
+} from "../../src/main/skills/skills-registry";
 import {
   findLibraryCardByRegistryUrl,
   libraryCardForRegistryUrl,
   REMOTE_SKILL_LIBRARY_PRESETS,
   SKILL_LIBRARY_CARDS,
-} from "../../src/shared/skill-libraries";
+} from "../../src/shared/skills/libraries";
 import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { homeSkillDir, setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("skills-registry", () => {
   it("normalizes hostname to well-known index.json", () => {
@@ -91,6 +92,8 @@ describe("skills-registry", () => {
   });
 
   it("installs multi-file skill-md packages from registry index", async () => {
+    const userHome = mkdtempSync(join(tmpdir(), "prism-skill-install-home-"));
+    setWorkbenchUserHomeOverride(userHome);
     const root = mkdtempSync(join(tmpdir(), "prism-skill-install-"));
     const fetchMock = vi.fn(async (url: string | URL) => {
       const href = String(url);
@@ -117,13 +120,16 @@ describe("skills-registry", () => {
         "https://registry.test/index.json",
       );
 
-      const skillDir = join(root, ".prismnext/agent/teams/project.local/skills/local-pack");
+      const skillDir = homeSkillDir("local-pack");
       expect(existsSync(join(skillDir, "SKILL.md"))).toBe(true);
       expect(existsSync(join(skillDir, "README.md"))).toBe(true);
       expect(readFileSync(join(skillDir, "README.md"), "utf-8")).toContain("# Notes");
+      expect(existsSync(join(root, ".prismnext"))).toBe(false);
     } finally {
       vi.unstubAllGlobals();
+      setWorkbenchUserHomeOverride(null);
       rmSync(root, { recursive: true, force: true });
+      rmSync(userHome, { recursive: true, force: true });
     }
   });
 });

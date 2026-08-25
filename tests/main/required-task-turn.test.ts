@@ -9,12 +9,12 @@ import {
   claimTaskAllowlistFollowUp,
   deferTaskAllowlistFollowUp,
   takeDeferredTaskAllowlistFollowUp,
-} from "../../src/main/services/chat-session-registry";
+} from "../../src/main/session/chat-session-registry";
 import {
   shouldDenyOutsideTaskAllowlist,
   resolveTaskPermissionDenial,
-} from "../../src/main/services/task-orchestrator-gate";
-import { formatTaskError } from "../../src/shared/task-error-codes";
+} from "../../src/main/agent/task-orchestrator-gate";
+import { formatTaskError } from "../../src/shared/agent/task-error-codes";
 
 describe("this-turn Task allowlist + must-invoke (@ experts)", () => {
   beforeEach(() => {

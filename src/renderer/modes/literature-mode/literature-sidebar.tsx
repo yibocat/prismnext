@@ -42,7 +42,7 @@ import { Hint } from "@/components/ui/hint";
 import { useLiteratureExtractStore } from "@/stores/literature-extract-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import type { PaperExtractSource } from "@/types/electron.d";
-import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/paper-extract";
+import { EXTRACT_BATCH_MAX_PAPERS } from "../../../shared/literature/paper-extract";
 import { LiteratureOrphanNotesSection } from "./literature-orphan-notes";
 import { LiteraturePaperWorkspaceSidebar } from "./literature-sidebar-paper";
 

@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { formatBibliography, CSL_STYLES, createPaper, listPapers } from "../../src/main/services/literature-service";
+import { formatBibliography, CSL_STYLES, createPaper, listPapers } from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const roots: string[] = [];
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-csl-test-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
+  const dir = tempLiteratureProject();
   roots.push(dir);
   return dir;
 }

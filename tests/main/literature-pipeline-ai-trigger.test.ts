@@ -6,20 +6,20 @@ import {
   closeLibraryDb,
   createPaper,
   getPaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
 import {
   upsertPaperExtractState,
   writeExtractArtifacts,
-} from "../../src/main/services/paper-extract-db";
-import { backfillPaperAbstractFromExtract } from "../../src/main/services/literature-ai-metadata-heuristics";
+} from "../../src/main/literature/extract/paper-extract-db";
+import { backfillPaperAbstractFromExtract } from "../../src/main/literature/ai-metadata/literature-ai-metadata-heuristics";
 
 const runAiMetadataForPaper = vi.fn().mockResolvedValue({ status: "ready" });
 
-vi.mock("../../src/main/services/literature-ai-metadata", () => ({
+vi.mock("../../src/main/literature/ai-metadata/literature-ai-metadata", () => ({
   runAiMetadataForPaper: (...args: unknown[]) => runAiMetadataForPaper(...args),
 }));
 
-vi.mock("../../src/main/services/settings", () => ({
+vi.mock("../../src/main/app/settings", () => ({
   getSettings: vi.fn(() => ({
     literatureAutoAiMetadata: true,
     aiProvider: "openai",
@@ -28,7 +28,8 @@ vi.mock("../../src/main/services/settings", () => ({
   })),
 }));
 
-import { maybeEnqueueAiMetadataAfterMetadata } from "../../src/main/services/literature-ai-metadata-queue";
+import { maybeEnqueueAiMetadataAfterMetadata } from "../../src/main/literature/ai-metadata/literature-ai-metadata-queue";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 const EXTRACT_MD = `
 # Paper
@@ -42,7 +43,7 @@ Lorem ipsum dolor sit amet.
 `;
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-pipeline-"));
+  return tempLiteratureProject();
 }
 
 function seedReadyExtract(projectRoot: string, paperId: string, markdown: string): void {

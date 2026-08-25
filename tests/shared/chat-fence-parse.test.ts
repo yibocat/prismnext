@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseKeyedFenceBody } from "../../src/shared/chat-fence-parse";
+import { parseKeyedFenceBody } from "../../src/shared/chat/fence-parse";
 
 describe("parseKeyedFenceBody", () => {
   it("parses path fences", () => {

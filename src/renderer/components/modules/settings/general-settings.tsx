@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRightIcon, InfoIcon } from "lucide-react";
+import { ChevronRightIcon, FolderOpenIcon, InfoIcon } from "lucide-react";
 import {
   AppSelect,
   AppSelectContent,
@@ -9,12 +10,14 @@ import {
 } from "@/components/ui/app-select";
 import { Switch } from "@/components/ui/switch";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
+import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useWorkbenchStore } from "@/stores/workbench-store";
 import {
   APP_LOCALE_PREFERENCES,
   normalizeAppLocalePreference,
   type AppLocalePreference,
-} from "../../../../shared/app-locale";
+} from "../../../../shared/platform/app-locale";
 import {
   SETTINGS_CARD,
   SETTINGS_CATEGORY_HEADER,
@@ -26,6 +29,13 @@ const CARD = SETTINGS_CARD;
 const CATEGORY_HEADER = SETTINGS_CATEGORY_HEADER;
 const ROW_LABEL = SETTINGS_ROW_LABEL;
 const ROW_DESC = SETTINGS_ROW_DESC;
+
+function folderName(absPath: string): string {
+  const trimmed = absPath.replace(/[\\/]+$/, "").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/[\\/]/);
+  return parts[parts.length - 1] || trimmed;
+}
 
 function localeOptionLabel(value: AppLocalePreference, t: (key: string) => string): string {
   switch (value) {
@@ -77,6 +87,13 @@ export function GeneralSettings() {
   );
   const trayIconEnabled = useSettingsStore((s) => s.settings.trayIconEnabled !== false);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const defaultLastPath = useWorkbenchStore((s) => s.defaultLastPath);
+  const hydrateWorkbench = useWorkbenchStore((s) => s.hydrate);
+  const setDefaultFromFolder = useWorkbenchStore((s) => s.setDefaultFromFolder);
+
+  useEffect(() => {
+    void hydrateWorkbench();
+  }, [hydrateWorkbench]);
 
   return (
     <div className="flex-1 overflow-auto">
@@ -115,6 +132,35 @@ export function GeneralSettings() {
                   ))}
                 </AppSelectContent>
               </AppSelect>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className={CATEGORY_HEADER}>{t("settings.general.workbench")}</h3>
+          <div className={CARD}>
+            <div className="flex items-center justify-between gap-3 py-2.5">
+              <div className="min-w-0 flex-1 pr-4">
+                <p className={ROW_LABEL}>{t("settings.general.defaultProject")}</p>
+                <p className={ROW_DESC}>{t("settings.general.defaultProjectDesc")}</p>
+              </div>
+              <button
+                type="button"
+                title={defaultLastPath || undefined}
+                className="flex h-8 w-36 min-w-0 shrink items-center gap-1.5 rounded-md border border-input bg-background px-2 text-left text-[length:var(--font-size-12)] transition-colors hover:bg-muted"
+                onClick={() => {
+                  void (async () => {
+                    const result = await dialogDesktop.dialogOpenFolder();
+                    if (result.canceled || !result.path) return;
+                    await setDefaultFromFolder(result.path);
+                  })();
+                }}
+              >
+                <FolderOpenIcon className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate">
+                  {folderName(defaultLastPath) || t("settings.general.defaultProjectChoose")}
+                </span>
+              </button>
             </div>
           </div>
         </div>

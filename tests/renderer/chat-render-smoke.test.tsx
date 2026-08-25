@@ -58,25 +58,26 @@ describe("chat render smoke", () => {
     }
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     const tab = useChatStore.getState().tabs[0]!;
-    const messages = [
-      {
-        type: "assistant" as const,
-        message: {
-          content: [
-            {
-              type: "tool_use" as const,
-              id: "task-1",
-              name: "task",
-              input: { prompt: "find papers", agent: "literature-scout" },
-            },
-          ],
+    const conversation = {
+      ...tab.conversation,
+      turns: [{
+        turnId: "t1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text" as const, text: "find papers" }] },
+        assistant: {
+          blocks: [{
+            type: "tool_use" as const,
+            id: "task-1",
+            name: "task",
+            input: { prompt: "find papers", agent: "literature-scout" },
+          }],
         },
-      },
-    ];
+        status: "completed" as const,
+      }],
+    };
     useChatStore.setState({
-      tabs: [{ ...tab, sessionId: "sess-1", messages, isLoadingSession: false, isStreaming: false, subAgentRuns: {} }],
+      tabs: [{ ...tab, sessionId: "sess-1", conversation, isLoadingSession: false, isStreaming: false, subAgentRuns: {} }],
       activeTabId: tab.id,
-      messages,
       sessionId: "sess-1",
       isLoadingSession: false,
       isStreaming: false,

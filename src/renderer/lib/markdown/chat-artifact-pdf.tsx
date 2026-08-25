@@ -12,13 +12,15 @@ import { Hint } from "@/components/ui/hint";
 import { PdfDocumentView } from "@/components/modules/preview";
 import { PDFJS_DOCUMENT_OPTIONS } from "@/components/modules/preview/pdf-config";
 import { openArtifactPathInFiles } from "@/modes/experiments-mode/experiments-artifact-nav";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
 import {
   artifactBasename,
   chatImagePathCandidates,
-} from "../../../shared/artifact-path";
+} from "../../../shared/interaction/artifact-path";
 import { cn } from "@/lib/utils";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
@@ -38,10 +40,12 @@ async function resolveArtifactAbsPath(
 ): Promise<string | null> {
   const candidates = chatImagePathCandidates(src, workspaceHints);
   for (const rel of candidates) {
-    const abs = resolveProjectRelativePath(projectRoot, rel);
+    const abs = rel.replace(/\\/g, "/").startsWith("library/")
+      ? await literatureDesktop.literatureResolveAbs(projectRoot, rel)
+      : resolveProjectRelativePath(projectRoot, rel);
     if (!abs) continue;
     try {
-      if (await window.electronAPI.fsExists(abs)) return abs;
+      if (await fsDesktop.fsExists(abs)) return abs;
     } catch {
       // try next
     }
@@ -49,7 +53,7 @@ async function resolveArtifactAbsPath(
   const base = artifactBasename(src);
   if (!base) return null;
   try {
-    const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+    const found = await fsDesktop.fsFindByBasename(projectRoot, base);
     if (!found) return null;
     return resolveProjectRelativePath(projectRoot, found);
   } catch {
@@ -109,9 +113,12 @@ function ArtifactActionButton({
 export function ChatArtifactPdf({
   path,
   title,
+  embedded = false,
 }: {
   path: string;
   title?: string;
+  /** Peek only — no PDF header. Used inside an Interaction card. */
+  embedded?: boolean;
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -156,7 +163,7 @@ export function ChatArtifactPdf({
           }
           return;
         }
-        const { bytes } = await window.electronAPI.fsReadBytes(abs);
+        const { bytes } = await fsDesktop.fsReadBytes(abs);
         if (cancelled) return;
         const u8 = new Uint8Array(bytes);
         loadedAbsRef.current = abs;
@@ -203,6 +210,18 @@ export function ChatArtifactPdf({
     : t("chat.artifact.copyPath", { defaultValue: "Copy path" });
 
   if (failed && !peekUrl) {
+    if (embedded) {
+      return (
+        <div
+          className={cn(
+            CHAT_ARTIFACT_PEEK_BODY_CLASS,
+            "flex w-full items-center justify-center py-6 text-[length:var(--font-size-11)] text-muted-foreground",
+          )}
+        >
+          {t("chat.artifact.pdfUnavailable", { defaultValue: "PDF unavailable" })}
+        </div>
+      );
+    }
     return (
       <div className="my-2 flex w-full max-w-full items-stretch gap-2 rounded-lg border border-border-subtle bg-muted/20 p-1.5">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-background/80 text-muted-foreground">
@@ -225,6 +244,29 @@ export function ChatArtifactPdf({
         </div>
       </div>
     );
+  }
+
+  const peekImage = peekUrl ? (
+    <img
+      src={peekUrl}
+      alt={label}
+      className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
+      loading="lazy"
+    />
+  ) : (
+    <div
+      className={cn(
+        CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
+        embedded ? "" : "border-t border-border-subtle",
+        "text-[length:var(--font-size-11)] text-muted-foreground",
+      )}
+    >
+      {t("chat.artifact.pdfLoading", { defaultValue: "Loading PDF…" })}
+    </div>
+  );
+
+  if (embedded) {
+    return <div className={CHAT_ARTIFACT_PEEK_BODY_CLASS}>{peekImage}</div>;
   }
 
   return (
@@ -265,22 +307,10 @@ export function ChatArtifactPdf({
               "block w-full cursor-zoom-in text-left transition-opacity hover:opacity-90",
             )}
           >
-            <img
-              src={peekUrl}
-              alt={label}
-              className={CHAT_ARTIFACT_INLINE_IMAGE_CLASS}
-              loading="lazy"
-            />
+            {peekImage}
           </button>
         ) : (
-          <div
-            className={cn(
-              CHAT_ARTIFACT_THUMB_PREVIEW_CLASS,
-              "border-t border-border-subtle text-[length:var(--font-size-11)] text-muted-foreground",
-            )}
-          >
-            {t("chat.artifact.pdfLoading", { defaultValue: "Loading PDF…" })}
-          </div>
+          peekImage
         )}
       </div>
 

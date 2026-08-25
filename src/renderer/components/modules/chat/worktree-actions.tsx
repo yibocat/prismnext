@@ -47,14 +47,14 @@ export function WorktreeActions() {
 
   return (
     <div className="flex items-center gap-1.5">
-      <Hint label="Discard worktree and return to main project">
+      <Hint label={t("chat.worktree.closeHint")}>
         <button
           type="button"
           onClick={handleMoveToLocal}
           className={CHAT_PANEL_TOOLBAR_BUTTON}
         >
           <ArrowLeftIcon className="size-3" />
-          <span>Close Worktree</span>
+          <span>{t("chat.worktree.close")}</span>
         </button>
       </Hint>
 
@@ -68,7 +68,7 @@ export function WorktreeActions() {
             )}
             onMouseDown={(e) => e.preventDefault()}
           >
-            <span>Merge to Branch</span>
+            <span>{t("chat.worktree.mergeToBranch")}</span>
             <span className="text-[length:var(--font-hint)] opacity-60">▾</span>
           </button>
         </AppMenuTrigger>

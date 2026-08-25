@@ -1,35 +1,24 @@
 // Re-export from presets/
 export { type ProviderConfig, type ModelConfig } from "./types";
 export {
-  prefetchOpenCodeModelsCatalog,
-  getCachedOpenCodeCatalogModels,
-  mergeProviderWithOpenCodeCatalog,
-  subscribeOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
+  getCachedPiCatalogModels,
+  mergeProviderWithPiCatalog,
+  subscribePiModelsCatalog,
   isUnknownContextWindowLabel,
-} from "./opencode-catalog-models";
+} from "./pi-model-catalog";
 export { ALL_PROVIDERS, PROVIDER_PRESETS, CUSTOM_PRESET, getPreset } from "./presets";
-export {
-  openaiProvider,
-  googleProvider,
-  deepseekProvider,
-  openrouterPreset,
-  anthropicPreset,
-  zhipuPreset,
-  minimaxPreset,
-  kimiPreset,
-  alibabaPreset,
-  opencodeZenPreset,
-  opencodeGoPreset,
-} from "./presets";
+export { listProviderModels, testProviderConnection } from "./connection";
 
+import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/providers/context-constants";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { ALL_PROVIDERS, getPreset, PROVIDER_PRESETS } from "./presets";
 import type { ProviderConfig, ModelConfig } from "./types";
 import {
-  getCachedOpenCodeCatalogModels,
+  getCachedPiCatalogModels,
   isUnknownContextWindowLabel,
-  mergeProviderWithOpenCodeCatalog,
-} from "./opencode-catalog-models";
-import { parseContextWindow, DEFAULT_CONTEXT_WINDOW } from "@shared/context-constants";
+  mergeProviderWithPiCatalog,
+} from "./pi-model-catalog";
 
 /** User-added provider entry from settings (`aiCustomProviders`). */
 export interface CustomProviderEntry {
@@ -147,7 +136,7 @@ export function resolveProviderConfig(
           name: custom.name || preset.name,
           defaultBaseUrl: custom.baseUrl || preset.defaultBaseUrl,
         };
-    return mergeProviderWithOpenCodeCatalog(base);
+    return mergeProviderWithPiCatalog(base);
   }
 
   if (custom) {
@@ -157,7 +146,7 @@ export function resolveProviderConfig(
       defaultBaseUrl: custom.baseUrl,
       models: [],
     };
-    return mergeProviderWithOpenCodeCatalog(config);
+    return mergeProviderWithPiCatalog(config);
   }
 
   return undefined;
@@ -191,6 +180,31 @@ export function getProviderModels(
         vision: Boolean(prev.capabilities?.vision || m.capabilities?.vision),
       },
     });
+  }
+  // Backfill maxTokens / cost from the Pi catalog when the saved snapshot omits them.
+  const catalogRows = getCachedPiCatalogModels(providerId);
+  if (catalogRows?.length) {
+    const catalogById = new Map(catalogRows.map((m) => [m.id, m]));
+    for (const [id, config] of byId) {
+      const row = catalogById.get(id);
+      if (!row) continue;
+      const next: ModelConfig = { ...config };
+      let patched = false;
+      if (!next.maxTokens && row.maxTokens) {
+        next.maxTokens = row.maxTokens;
+        next.maxTokensNum = row.maxTokensNum;
+        patched = true;
+      }
+      if (!next.cost && row.cost) {
+        next.cost = row.cost;
+        patched = true;
+      }
+      if (!next.description && row.description) {
+        next.description = row.description;
+        patched = true;
+      }
+      if (patched) byId.set(id, next);
+    }
   }
   return Array.from(byId.values());
 }
@@ -320,6 +334,10 @@ function collectEnabledModelsForProvider(
   }
 
   for (const cm of customs) {
+    // Pi catalog + saved selection snapshots can carry the same model id.
+    // Skip snapshot entries already covered by the catalog so the model
+    // picker and the multimodal-helper dropdown never list a model twice.
+    if (knownIds.has(cm.id)) continue;
     knownIds.add(cm.id);
     if (!enabled || enabled.includes(cm.id)) {
       result.push({ provider, model: cm });
@@ -341,6 +359,8 @@ function collectEnabledModelsForProvider(
 
 /**
  * Returns all enabled models across user-added providers, ready for Chat model dropdown.
+ * Models are deduplicated by `providerId::modelId` so the Pi catalog, saved selection
+ * snapshots, and enabled-model orphans never list the same model twice.
  */
 export function getAllEnabledModels(
   enabledIds: Record<string, string[]> | undefined,
@@ -348,14 +368,20 @@ export function getAllEnabledModels(
   customProviders?: CustomProviderEntry[],
 ): Array<{ provider: ProviderConfig; model: ModelConfig }> {
   const result: Array<{ provider: ProviderConfig; model: ModelConfig }> = [];
-  const seen = new Set<string>();
+  const seenProviders = new Set<string>();
+  const seenModels = new Set<string>();
 
   for (const cp of customProviders ?? []) {
-    if (seen.has(cp.id)) continue;
+    if (seenProviders.has(cp.id)) continue;
     const provider = resolveProviderConfig(cp.id, customProviders);
     if (!provider) continue;
-    seen.add(cp.id);
-    result.push(...collectEnabledModelsForProvider(provider, enabledIds, customModels));
+    seenProviders.add(cp.id);
+    for (const entry of collectEnabledModelsForProvider(provider, enabledIds, customModels)) {
+      const key = `${entry.provider.id}::${entry.model.id}`;
+      if (seenModels.has(key)) continue;
+      seenModels.add(key);
+      result.push(entry);
+    }
   }
 
   return result;
@@ -419,7 +445,7 @@ export function getModelEffortFallbackIds(
 }
 
 /**
- * Per-model effort options — OpenCode ACP catalog when available, preset fallback offline.
+ * Per-model effort options — Pi thinking levels when available, preset fallback offline.
  */
 export async function getModelEffortLevelsAsync(
   providerId: string,
@@ -430,7 +456,7 @@ export async function getModelEffortLevelsAsync(
   const fallback = getModelEffortLevels(providerId, modelId, customModels, customProviders);
   const fallbackIds = fallback?.map((l) => l.value);
   try {
-    const result = await window.electronAPI.chatGetModelEffort({
+    const result = await agentDesktop.agentGetModelEffort({
       provider: providerId,
       modelId,
       fallback: fallbackIds,
@@ -447,7 +473,7 @@ export async function prefetchEffortCatalog(): Promise<
   Record<string, string[]> | null
 > {
   try {
-    const snapshot = await window.electronAPI.chatGetEffortCatalog();
+    const snapshot = await agentDesktop.agentGetEffortCatalog();
     return snapshot.entries;
   } catch {
     return null;
@@ -490,6 +516,36 @@ export function buildCustomModelEntry(
 }
 
 /**
+ * Catalog context-window size for the selected model, or null when the
+ * picker/catalog has no known size (so the live Pi snapshot can win).
+ */
+export function resolveSelectedModelContextTokensIfKnown(
+  providerId: string,
+  modelId: string | undefined,
+  enabledIds: Record<string, string[]> | undefined,
+  customModels: Record<string, ModelConfig[]> | undefined,
+  customProviders?: CustomProviderEntry[],
+): number | null {
+  if (!modelId) return null;
+  const allModels = getAllEnabledModels(enabledIds, customModels, customProviders);
+  const found = allModels.find(
+    (m) => m.provider.id === providerId && m.model.id === modelId,
+  );
+  let label = found?.model.contextWindow;
+  if (isUnknownContextWindowLabel(label)) {
+    const catalogRow = getCachedPiCatalogModels(providerId)?.find(
+      (m) => m.id === modelId,
+    );
+    if (catalogRow && !isUnknownContextWindowLabel(catalogRow.contextWindow)) {
+      label = catalogRow.contextWindow;
+    }
+  }
+  if (isUnknownContextWindowLabel(label)) return null;
+  const tokens = parseContextWindow(label);
+  return tokens > 0 ? tokens : null;
+}
+
+/**
  * Context-ring denominator for the selected model.
  * Prefers settings/catalog `contextWindow`; if Unknown/—, consults OpenCode
  * Go/Zen memory catalog (after prefetch).
@@ -501,19 +557,11 @@ export function resolveSelectedModelContextTokens(
   customModels: Record<string, ModelConfig[]> | undefined,
   customProviders?: CustomProviderEntry[],
 ): number {
-  if (!modelId) return DEFAULT_CONTEXT_WINDOW;
-  const allModels = getAllEnabledModels(enabledIds, customModels, customProviders);
-  const found = allModels.find(
-    (m) => m.provider.id === providerId && m.model.id === modelId,
-  );
-  let label = found?.model.contextWindow;
-  if (isUnknownContextWindowLabel(label)) {
-    const catalogRow = getCachedOpenCodeCatalogModels(providerId)?.find(
-      (m) => m.id === modelId,
-    );
-    if (catalogRow && !isUnknownContextWindowLabel(catalogRow.contextWindow)) {
-      label = catalogRow.contextWindow;
-    }
-  }
-  return parseContextWindow(label);
+  return resolveSelectedModelContextTokensIfKnown(
+    providerId,
+    modelId,
+    enabledIds,
+    customModels,
+    customProviders,
+  ) ?? DEFAULT_CONTEXT_WINDOW;
 }

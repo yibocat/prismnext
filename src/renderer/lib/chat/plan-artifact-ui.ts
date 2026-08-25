@@ -1,7 +1,7 @@
 import {
   isResearchPlanDraftPath,
   RESEARCH_PLANS_DIR_REL,
-} from "../../../shared/research-plan";
+} from "../../../shared/research/plan";
 import { param } from "@/components/modules/chat/tools/shared";
 import type { ContentBlock } from "@/stores/chat-store";
 

@@ -1,3 +1,4 @@
+import { compileDesktop } from "@/lib/desktop-api/compile";
 import { getPdfBytes, useCompileStore } from "@/stores/compile-store";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -143,7 +144,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       return;
     }
     const cached = getPdfBytes(target.projectRoot) ?? null;
-    const result = await window.electronAPI.compileExportPdf(
+    const result = await compileDesktop.compileExportPdf(
       target.projectRoot,
       target.mainFile,
       cached,
@@ -167,7 +168,7 @@ export function TexworkspaceToolbar({ compileFile }: TexworkspaceToolbarProps) {
       toast.error(t("modes.texworkspace.packNoManuscript"));
       return;
     }
-    const result = await window.electronAPI.manuscriptPackZip(
+    const result = await compileDesktop.manuscriptPackZip(
       projectRoot,
       manuscript.dir,
     );

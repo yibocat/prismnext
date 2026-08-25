@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { getRightAreaLauncherModes } from "@/lib/workspace/right-area-launcher-modes";
 import { openMode } from "@/lib/workspace/open-right-area-mode";
 import { getModeShortcutId } from "@/lib/workspace/mode-shortcuts";
-import { ShortcutKbdChips } from "@/lib/shortcuts";
+import { ShortcutKbdChips, SHORTCUT_CHIPS_HOVER_REVEAL } from "@/lib/shortcuts";
 import { appMenuFontClass } from "@/components/ui/app-menu";
 
 /**
@@ -34,7 +34,7 @@ export function RightAreaLauncher() {
               <button
                 type="button"
                 className={cn(
-                  "flex w-full min-h-12 items-center gap-2 rounded-lg border border-border bg-background px-3 text-left transition-[border-color]",
+                  "group flex w-full min-h-12 items-center gap-2 rounded-lg border border-border bg-background px-3 text-left transition-[border-color]",
                   appMenuFontClass,
                   "text-foreground hover:border-foreground/30",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-inset",
@@ -49,7 +49,10 @@ export function RightAreaLauncher() {
                 </span>
                 <span className="min-w-0 flex-1 truncate">{modeLabel(mode)}</span>
                 {shortcutId ? (
-                  <ShortcutKbdChips id={shortcutId} className="ml-auto shrink-0 opacity-70" />
+                  <ShortcutKbdChips
+                    id={shortcutId}
+                    className={cn("ml-auto shrink-0", SHORTCUT_CHIPS_HOVER_REVEAL)}
+                  />
                 ) : null}
               </button>
             </li>

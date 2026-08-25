@@ -1,4 +1,5 @@
-import { parseAuthorsInput } from "@/modes/literature-mode/literature-format";
+import { fsDesktop } from "@/lib/desktop-api/fs";
+import { parseAuthorsInput } from "@/lib/literature/literature-format";
 import type { ProjectFile } from "@/stores/document-store";
 import { useDocumentStore } from "@/stores/document-store";
 import type { LiteraturePaperPatch } from "@/stores/literature-store";
@@ -73,7 +74,7 @@ export async function loadNotebookNoteContents(
     let content = f.id ? doc.getAsset(f.id) : undefined;
     if (!content) {
       try {
-        const { content: disk } = await window.electronAPI.fsRead(
+        const { content: disk } = await fsDesktop.fsRead(
           `${projectRoot}/${f.relativePath.replace(/^\//, "")}`,
         );
         content = disk;
@@ -98,7 +99,7 @@ export async function persistNoteContent(
     await doc.saveFile(file.id);
     return;
   }
-  await window.electronAPI.fsWrite(
+  await fsDesktop.fsWrite(
     `${projectRoot}/${relativePath.replace(/^\//, "")}`,
     content,
   );

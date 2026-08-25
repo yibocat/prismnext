@@ -8,8 +8,8 @@ import {
   writeWorkspaceDirs,
   validateWorkspaceDirs,
   createConfiguredFolders,
-} from "../services/workspace-config";
-import type { WorkspaceFolder } from "../../renderer/types/workspace";
+} from "../project/workspace-config";
+import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { promptManager } from "../prompts";
 
 export function registerWorkspaceHandlers(): void {
@@ -19,8 +19,7 @@ export function registerWorkspaceHandlers(): void {
       _event,
       args: { projectRoot: string },
     ): Promise<WorkspaceFolder[]> => {
-      const prismDir = path.join(args.projectRoot, ".prismnext");
-      return readWorkspaceDirs(prismDir);
+      return readWorkspaceDirs(args.projectRoot);
     },
   );
 
@@ -35,8 +34,7 @@ export function registerWorkspaceHandlers(): void {
       if (errors.length > 0) {
         return { success: false, errors };
       }
-      const prismDir = path.join(args.projectRoot, ".prismnext");
-      writeWorkspaceDirs(prismDir, args.dirs);
+      writeWorkspaceDirs(args.projectRoot, args.dirs);
       // Workspace folder structure changed — invalidate prompt cache
       // so workspace-folders module reflects the new layout.
       promptManager.invalidate();
@@ -50,8 +48,7 @@ export function registerWorkspaceHandlers(): void {
       _event,
       args: { projectRoot: string; dirs?: WorkspaceFolder[] },
     ): Promise<{ created: string[]; errors: { folder: string; error: string }[] }> => {
-      const prismDir = path.join(args.projectRoot, ".prismnext");
-      const dirs = args.dirs ?? readWorkspaceDirs(prismDir);
+      const dirs = args.dirs ?? readWorkspaceDirs(args.projectRoot);
       return createConfiguredFolders(args.projectRoot, dirs);
     },
   );
@@ -62,8 +59,7 @@ export function registerWorkspaceHandlers(): void {
       _event,
       args: { projectRoot: string },
     ): Promise<{ created: boolean; relativePath?: string }> => {
-      const prismDir = path.join(args.projectRoot, ".prismnext");
-      const dirs = readWorkspaceDirs(prismDir);
+      const dirs = readWorkspaceDirs(args.projectRoot);
       const manuscript = dirs.find(
         (d): d is import("../../renderer/types/workspace").ManuscriptFolder =>
           d.function === "manuscript",

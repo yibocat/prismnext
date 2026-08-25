@@ -1,4 +1,4 @@
-import type { ResearchPlanStep } from "../../../shared/research-plan";
+import type { ResearchPlanStep } from "../../../shared/research/plan";
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
 
 function collectAssistantText(message: ChatStreamMessage): string {

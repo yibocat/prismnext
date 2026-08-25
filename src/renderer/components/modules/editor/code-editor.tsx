@@ -33,6 +33,7 @@ import { ChangesBar } from "./changes-bar";
 import { saveViewerPosition, loadViewerPosition } from "@/lib/editor/viewer-position";
 import { editorSearchAndKeymap } from "@/lib/editor";
 import { useTabContext } from "@/lib/workspace/tab-context";
+import { tabFilePath } from "@/lib/workspace/mode-registry";
 import { CodeMirrorInsertHost } from "./codemirror-insert-host";
 
 const log = createLogger("code-editor");
@@ -55,7 +56,7 @@ export function CodeEditor() {
     tab.kind === "file" || tab.kind === "texworkspace" || tab.kind === "research-plan"
       ? tab.fileId
       : null;
-  const filePath = tab.filePath ?? "";
+  const filePath = tabFilePath(tab) ?? "";
   const ext = (() => {
     const dot = filePath.lastIndexOf(".");
     return dot === -1 ? "" : filePath.slice(dot).toLowerCase();

@@ -8,10 +8,9 @@ import {
 } from "./settings-tokens";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
 import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
+import { fetchBuiltinTools, type BuiltinToolInfo } from "@/lib/settings";
 
 const CATEGORY_ORDER = ["reference", "compile", "project", "utility"] as const;
-
-type BuiltinToolInfo = Awaited<ReturnType<typeof window.electronAPI.settingsGetBuiltinTools>>[number];
 
 export function AgentToolsPanel() {
   const { t } = useTranslation();
@@ -20,12 +19,9 @@ export function AgentToolsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.electronAPI.settingsGetBuiltinTools()
+    void fetchBuiltinTools()
       .then((list) => {
         if (!cancelled) setTools(list);
-      })
-      .catch(() => {
-        if (!cancelled) setTools([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -84,6 +80,13 @@ export function AgentToolsPanel() {
                 </div>
                 {tool.schemaDescription.trim() ? (
                   <SettingsModulePromptPreview content={tool.schemaDescription} />
+                ) : null}
+                {tool.promptGuidelines?.length ? (
+                  <ul className="space-y-1 text-[length:var(--font-size-12)] text-muted-foreground list-disc pl-4">
+                    {tool.promptGuidelines.map((g) => (
+                      <li key={g}>{g}</li>
+                    ))}
+                  </ul>
                 ) : null}
               </article>
             ))}

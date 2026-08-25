@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import {
   resolveFigureAbsPath,
   validateFigureStaticSpec,
-} from "../../src/shared/interaction-figure-fs";
-import { pickFigureResourcePath } from "../../src/shared/interaction-figure";
-import type { InteractionSpec } from "../../src/shared/interaction-spec";
+} from "../../src/main/lib/interaction-figure-fs";
+import { pickFigureResourcePath } from "../../src/shared/interaction/figure";
+import type { InteractionSpec } from "../../src/shared/interaction/spec";
 
 const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -26,6 +26,24 @@ function baseSpec(over: Partial<InteractionSpec> = {}): InteractionSpec {
 }
 
 describe("interaction-figure", () => {
+  it("accepts a PDF figure and prefers an image when both exist", () => {
+    expect(
+      pickFigureResourcePath(
+        baseSpec({ resources: [{ role: "figure", path: "figures/som-cell.pdf" }] }),
+      ),
+    ).toBe("figures/som-cell.pdf");
+    expect(
+      pickFigureResourcePath(
+        baseSpec({
+          resources: [
+            { role: "figure", path: "figures/som-cell.pdf" },
+            { role: "figure", path: "figures/som-cell.png" },
+          ],
+        }),
+      ),
+    ).toBe("figures/som-cell.png");
+  });
+
   it("picks role=figure over other image paths", () => {
     const path = pickFigureResourcePath(
       baseSpec({
@@ -58,6 +76,14 @@ describe("interaction-figure", () => {
     );
     expect(ok.ok).toBe(true);
     if (ok.ok) expect(ok.relPath.replace(/\\/g, "/")).toBe("out/ok.png");
+
+    writeFileSync(join(root, "out", "fig.pdf"), "%PDF-1.4\n");
+    const pdfOk = validateFigureStaticSpec(
+      root,
+      baseSpec({ resources: [{ role: "figure", path: "out/fig.pdf" }] }),
+      (abs) => abs.endsWith("fig.pdf"),
+    );
+    expect(pdfOk.ok).toBe(true);
 
     rmSync(root, { recursive: true, force: true });
   });

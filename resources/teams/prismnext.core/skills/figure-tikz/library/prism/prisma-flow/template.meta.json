@@ -1,0 +1,34 @@
+{
+  "id": "prisma-flow",
+  "name": "PRISMA screening flow",
+  "type": "template",
+  "domain": ["research"],
+  "tags": ["prisma", "systematic review", "screening", "eligibility", "included", "flow diagram", "literature"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["tikz", "arrows.meta", "positioning"],
+  "description": "Four-stage PRISMA-style flow: identification → screening → eligibility → included, with two exclusion boxes. Counts live in the label macros.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "\\boxw", "type": "length-cm", "meaning": "width of the main-stage boxes", "default": "3.6"},
+      {"name": "\\identlabel", "type": "text", "meaning": "identification box (use \\\\ before the n= line)"},
+      {"name": "\\screenlabel", "type": "text", "meaning": "screening box"},
+      {"name": "\\eliglabel", "type": "text", "meaning": "eligibility box"},
+      {"name": "\\incllabel", "type": "text", "meaning": "included box"},
+      {"name": "\\exscreenlabel", "type": "text", "meaning": "excluded-at-screen box"},
+      {"name": "\\exeliglabel", "type": "text", "meaning": "excluded-at-full-text box"}
+    ],
+    "node_naming": "fixed names: (ident) (screen) (elig) (incl) (ex1) (ex2)",
+    "styles": ["stage", "keep", "drop", "flow"],
+    "operations": [
+      {"id": "rename-part", "summary": "edit the matching label macro; put the real n= on the second line"},
+      {"id": "add-exclude", "summary": "add another drop box to the right of a stage and a flow arrow"},
+      {"id": "recolor", "summary": "change a style's palette name; never a hex/stock color"}
+    ],
+    "invariants": [
+      "preserve the node names (ident) (screen) (elig) (incl) (ex1) (ex2)",
+      "every n= comes from a run or a screening log — do not invent counts",
+      "colors only via the five palette names"
+    ]
+  }
+}

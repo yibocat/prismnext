@@ -1,4 +1,4 @@
-/** Scroll helpers for Cursor-style active turn: user message pinned at viewport top. */
+/** Scroll helpers for the live turn: follow the reply tail; rail jumps still pin a turn to the top. */
 
 export function getTurnScrollTop(container: HTMLElement, turn: HTMLElement): number {
   const containerRect = container.getBoundingClientRect();
@@ -26,7 +26,19 @@ export function pinActiveTurnTop(
   });
 }
 
-/** Follow the bottom of a turn that overflows the viewport (streaming tail). */
+/** Pin the user message to the top while the turn still fits; follow the tail once it overflows. */
+export function pinOrFollowActiveTurn(
+  container: HTMLElement,
+  turn: HTMLElement,
+  smooth = false,
+): void {
+  if (turn.offsetHeight <= container.clientHeight) {
+    pinActiveTurnTop(container, turn, smooth);
+    return;
+  }
+  followActiveTurnTail(container, turn, smooth);
+}
+
 export function followActiveTurnTail(
   container: HTMLElement,
   turn: HTMLElement,
@@ -73,12 +85,15 @@ export function isFollowingStreamTurn(
   const turnTop = getTurnScrollTop(container, turn);
   const turnHeight = turn.offsetHeight;
   const viewH = container.clientHeight;
-  const tailScrollTop = turnTop + turnHeight - viewH;
 
-  if (turnHeight <= viewH) {
-    return container.scrollTop <= turnTop + 10;
+  // Overflowing reply: only the tail. Sitting on the figure at the top is reading, not following.
+  if (turnHeight > viewH) {
+    const tailScrollTop = turnTop + turnHeight - viewH;
+    return container.scrollTop >= tailScrollTop - 80;
   }
-  return container.scrollTop >= tailScrollTop - 80;
+
+  if (Math.abs(container.scrollTop - turnTop) <= 80) return true;
+  return container.scrollHeight - container.scrollTop - viewH < 80;
 }
 
 /**
@@ -133,6 +148,7 @@ export function captureSentinelScrollAnchor(
     if (el.hasAttribute("data-chat-turn-window-sentinel")) continue;
     if (el.hasAttribute("data-chat-turn-window-spacer")) continue;
     if (el.hasAttribute("data-chat-turn-window-load-more")) continue;
+    if (el.hasAttribute("data-chat-turn-runway")) continue;
     // First child whose bottom is at or below the viewport top = topmost visible.
     if (el.getBoundingClientRect().bottom >= containerTop) {
       sentinel = child;

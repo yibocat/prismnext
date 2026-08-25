@@ -1,0 +1,51 @@
+{
+  "setup": {
+    "title": "設定專案",
+    "description": "此資料夾缺少標準的 prismnext 專案結構。",
+    "missing": "缺少的目錄：",
+    "openAnyway": "仍要開啟",
+    "createAndOpen": "建立並開啟"
+  },
+  "new": {
+    "title": "新建專案",
+    "description": "設定專案名稱、儲存路徑與工作區預設架構。",
+    "projectName": "專案名稱",
+    "location": "儲存位置",
+    "chooseParent": "選擇父資料夾…",
+    "template": "工作區模板",
+    "minimal": "精簡手稿",
+    "paper": "學術論文",
+    "research": "科研實驗室",
+    "custom": "自定義",
+    "recommended": "推薦",
+    "paperDesc": "標準學術論文架構，整合 LaTeX 手稿與文獻引用庫。",
+    "researchDesc": "全功能科研工作區，包含實驗腳本、文獻管理與智能體協同。",
+    "minimalDesc": "極簡單一手稿目錄，預設基礎 LaTeX 論文模板。",
+    "customDesc": "自由配置各子目錄的名稱與功能對應。",
+    "fullPath": "將建立於",
+    "gitInitialized": "Git",
+    "previewTitle": "目錄結構預覽",
+    "manuscriptTag": "LaTeX 論文原始碼與 main.tex",
+    "literatureTag": "文獻管理與 BibTeX 引用",
+    "experimentsTag": "AI 實驗腳本與執行記錄",
+    "prismnextConfigTag": "智能體規則與專案配置",
+    "noFolders": "無資料夾",
+    "editFolders": "自定義資料夾",
+    "folders": "資料夾清單",
+    "addFolder": "新增資料夾",
+    "initGit": "初始化 Git 倉庫",
+    "initGitDesc": "在專案目錄中建立 Git 倉庫，方便版本追蹤與分支協同。",
+    "createProject": "建立專案",
+    "creating": "建立中…",
+    "needManuscript": "必須包含一個 manuscript（手稿）資料夾。",
+    "removeFolder": "移除資料夾",
+    "createFailed": "建立專案失敗"
+  },
+  "edit": {
+    "title": "編輯專案",
+    "description": "修改工作臺裡顯示的名稱。",
+    "nameHint": "顯示在工作臺列表中，不會重新命名磁碟上的資料夾。",
+    "save": "儲存",
+    "saveFailed": "無法儲存專案"
+  }
+}

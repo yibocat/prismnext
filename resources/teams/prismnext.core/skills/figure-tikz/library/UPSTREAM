@@ -1,0 +1,9 @@
+source: https://github.com/opentikz/opentikz
+commit: 359befbf8e8af7ce08e7e387b2c2a198e0ca735d
+homepage: https://opentikz.org/
+content-license: CC0-1.0 (see LICENSE-CONTENT)
+shipped: 9 OpenTikZ templates + 3 examples + 20 ml/systems icons + catalog + Okabe-Ito palette
+omitted: icons/brands/, preview.svg, Claude plugin skill, Mode B tooling
+
+PrismNext templates live in library/prism/ (MIT). They use the same
+edit_contract shape and palette names; they are not OpenTikZ content.

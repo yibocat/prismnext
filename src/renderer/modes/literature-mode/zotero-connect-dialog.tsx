@@ -8,6 +8,7 @@ import {
   XCircleIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,7 +99,7 @@ export function ZoteroConnectDialog({
     setLoading(true);
     setError(null);
     setZoteroStatus(null);
-    void window.electronAPI.zoteroProbe().then((status) => {
+    void literatureDesktop.zoteroProbe().then((status) => {
       setZoteroStatus(status);
       if (status.mode === "offline") {
         setError(status.error ?? "Zotero is not reachable.");
@@ -106,7 +107,7 @@ export function ZoteroConnectDialog({
         setLoading(false);
         return;
       }
-      return window.electronAPI
+      return literatureDesktop
         .zoteroListCollections()
         .then((rows) => setCollections(rows))
         .catch((err) => {
@@ -138,7 +139,7 @@ export function ZoteroConnectDialog({
     if (!col) return;
     setSaving(true);
     try {
-      await window.electronAPI.zoteroSetProjectBinding(projectRoot, selectedKey, col.name);
+      await literatureDesktop.zoteroSetProjectBinding(projectRoot, selectedKey, col.name);
       onBound(selectedKey, col.name);
       toast.success(`Bound to Zotero collection “${col.name}”`);
       handleOpenChange(false);

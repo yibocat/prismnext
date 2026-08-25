@@ -1,4 +1,4 @@
-/** Parse and build project RULE.md files under `.prismnext/agent/rules/`. */
+/** Parse and build project RULE.md files under `.workbench/agent/rules/`. */
 
 import { splitMarkdownFrontmatter } from "@/lib/markdown/frontmatter";
 

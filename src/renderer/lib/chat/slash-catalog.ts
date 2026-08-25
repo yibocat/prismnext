@@ -1,3 +1,6 @@
+import { teamsDesktop } from "@/lib/desktop-api/teams";
+import { listProjectSkills } from "@/lib/settings/skills";
+
 export type SlashCatalogSkill = { id: string; name: string; enabled: boolean };
 export type SlashCatalogMcp = { name: string };
 
@@ -15,8 +18,8 @@ export async function loadSlashCatalog(projectRoot: string | null): Promise<{
   if (!projectRoot) return { skills: [], mcps: [] };
 
   const [skills, mcps] = await Promise.all([
-    window.electronAPI.agentListSkills(projectRoot).catch(() => [] as SlashCatalogSkill[]),
-    window.electronAPI
+    listProjectSkills(projectRoot),
+    teamsDesktop
       .teamsListMcp(projectRoot)
       .then((list) =>
         list.filter((entry) => entry.enabled).map((entry) => ({ name: entry.name })),

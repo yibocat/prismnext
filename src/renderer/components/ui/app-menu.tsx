@@ -123,18 +123,39 @@ function AppMenuItemLabel({ children }: { children: React.ReactNode }) {
   return <span className={appMenuItemLabelClass}>{children}</span>;
 }
 
+function AppMenuTitleWithAddon({
+  children,
+  addon,
+}: {
+  children: React.ReactNode;
+  addon?: React.ReactNode;
+}) {
+  if (!addon) {
+    return <span className="min-w-0 truncate leading-tight">{children}</span>;
+  }
+  return (
+    <span className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 truncate leading-tight">{children}</span>
+      <span className="shrink-0">{addon}</span>
+    </span>
+  );
+}
+
 function AppMenuItem({
   className,
   children,
   description,
   leading,
   trailing,
+  titleAddon,
   variant,
   ...props
 }: React.ComponentProps<typeof DropdownMenuItem> & {
   description?: string;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
+  /** Sits immediately after the title, not at the row’s far end. */
+  titleAddon?: React.ReactNode;
 }) {
   if (description) {
     return (
@@ -145,7 +166,7 @@ function AppMenuItem({
       >
         {leading}
         <div className="min-w-0 flex-1 flex flex-col gap-px">
-          <span className="truncate leading-tight">{children}</span>
+          <AppMenuTitleWithAddon addon={titleAddon}>{children}</AppMenuTitleWithAddon>
           <span
             className="truncate text-[length:var(--font-path)] leading-tight text-muted-foreground/60"
             title={description}
@@ -153,6 +174,22 @@ function AppMenuItem({
             {description}
           </span>
         </div>
+        {trailing ? <span className="shrink-0">{trailing}</span> : null}
+      </DropdownMenuItem>
+    );
+  }
+
+  if (titleAddon) {
+    return (
+      <DropdownMenuItem
+        variant={variant}
+        className={cn(appMenuItemClass, className)}
+        {...props}
+      >
+        {leading}
+        <AppMenuItemLabel>
+          <AppMenuTitleWithAddon addon={titleAddon}>{children}</AppMenuTitleWithAddon>
+        </AppMenuItemLabel>
         {trailing ? <span className="shrink-0">{trailing}</span> : null}
       </DropdownMenuItem>
     );
@@ -264,12 +301,14 @@ function AppMenuCheckItem({
   className,
   children,
   trailing,
+  titleAddon,
   ...props
 }: React.ComponentProps<typeof DropdownMenuItem> & {
   selected?: boolean;
   description?: string;
   leading?: React.ReactNode;
   trailing?: React.ReactNode;
+  titleAddon?: React.ReactNode;
 }) {
   const trailingNode =
     trailing || selected ? (
@@ -284,6 +323,7 @@ function AppMenuCheckItem({
       className={className}
       description={description}
       trailing={trailingNode}
+      titleAddon={titleAddon}
       {...props}
     >
       {children}
@@ -309,15 +349,18 @@ function AppMenuSubTrigger({
   className,
   children,
   trailing,
+  leading,
   ...props
 }: React.ComponentProps<typeof DropdownMenuSubTrigger> & {
   trailing?: React.ReactNode;
+  leading?: React.ReactNode;
 }) {
   return (
     <DropdownMenuSubTrigger
       className={cn(appMenuItemClass, "min-h-7 [&>svg:last-child]:size-3.5", className)}
       {...props}
     >
+      {leading}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </DropdownMenuSubTrigger>

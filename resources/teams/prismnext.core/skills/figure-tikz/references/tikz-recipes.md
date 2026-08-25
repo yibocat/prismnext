@@ -1,7 +1,9 @@
 # TikZ / pgfplots Recipes
 
 The techniques the shipped templates use, plus the failures you will
-actually hit. Read when modifying templates or writing new pictures.
+actually hit. Read when a compile error is a TikZ construct you do not
+recognize — not as a prelude to drawing. Prefer `library/catalog.json`
+over inventing a new picture.
 
 ## Libraries — load what you use
 
@@ -36,7 +38,7 @@ Anchors: `n.south`, `n.north east`, `n.base`, `n.west`. Multi-`|-` chains:
 ```latex
 \tikzset{
   block/.style={draw, rounded corners=2pt, minimum width=2.6cm, font=\small},
-  encoder/.style={block, fill=blue!8},      % style inheritance
+  stage/.style={block, fill=blue!8},        % style inheritance
   flow/.style={-{Stealth[length=2.5mm]}, thick},
 }
 ```
@@ -86,14 +88,14 @@ figures.
 
 ## Compilation notes
 
-- TikZ works under pdflatex, lualatex, xelatex — match the project's engine
-  (`latex-root` reports it).
-- Big documents: `\usetikzlibrary{external}` + `\tikzexternalize` caches each
-  picture as its own PDF; needs `-shell-escape`. Use only when compile time
-  hurts — it complicates the build.
+- These templates are standalone figures. Compile with
+  `latex-compile-standalone` on the figure path. Do not call `latex-root`
+  or compile the paper to "check the engine."
 - Error messages point at the *end* of the picture, not the mistake: a
   missing `;` or an unknown style key usually sits a few lines above the
-  reported line. Compile after every structural edit.
+  reported line. Edit the `.tex`, compile again. Do not rasterize the PDF
+  to inspect it.
+- `\tikzexternalize` belongs in a full manuscript build, not this path.
 
 ## Choosing TikZ vs matplotlib
 

@@ -20,7 +20,4 @@ export const settingsEditorMode: ModeDefinition = {
   Content: SettingsEditorContent,
 };
 
-export type SettingsEditorTab = RightTab & {
-  kind: "settings-editor";
-  settingsSlot: NonNullable<RightTab["settingsSlot"]>;
-};
+export type SettingsEditorTab = Extract<RightTab, { kind: "settings-editor" }>;

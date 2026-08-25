@@ -7,7 +7,29 @@ import type {
   GitStatusData,
   GitBranchesData,
   GitFileDiffData,
+  GitRemoteInfo,
+  GitTrackingData,
+  GhAuthStatus,
 } from "@/types/electron";
+import {
+  BRANCH_COMMITS_MAX,
+  EMPTY_TRACKING,
+  branchRangeRev,
+  isFastForwardPullError,
+  isNonFastForwardPushError,
+  workingLens,
+  type GitChangesLens,
+  type GitWorkingFilter,
+} from "@shared/git";
+import {
+  EMPTY_GH_AUTH,
+  firstCommitSubject,
+  pickDefaultBranch,
+} from "@shared/git-hosting";
+import { derivePushLabel, shouldOfferCreatePr, shouldOfferPushAfterCommit } from "@/lib/git/git-publish";
+import { gitDesktop } from "@/lib/desktop-api/git";
+import { gitHostingDesktop } from "@/lib/desktop-api/git-hosting";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitDiffPrefsStore } from "./git-diff-prefs-store";
@@ -16,7 +38,20 @@ const log = createLogger("git-store", "git");
 
 // ─── Types ───
 
-export type GitFilterMode = "unstaged" | "staged" | "all";
+export type GitFilterMode = GitWorkingFilter;
+export type GitSyncing = false | "fetch" | "pull" | "push";
+
+function toastGitDetail(text: string | undefined): string | undefined {
+  const detail = text?.trim();
+  if (!detail) return undefined;
+  return detail.length > 300 ? `${detail.slice(0, 300)}...` : detail;
+}
+
+export interface GitCreatePrDefaults {
+  title: string;
+  base: string;
+  head: string;
+}
 
 export interface GitCommitData {
   hash: string;
@@ -52,7 +87,22 @@ interface GitState {
   branch: string;
   branches: string[];
   files: GitFileItem[];
+  tracking: GitTrackingData;
+  remotes: GitRemoteInfo[];
+  pendingRemotePick: boolean;
+  pendingAddRemote: boolean;
+  addingRemote: boolean;
+  ghAuth: GhAuthStatus;
+  pendingCreatePr: boolean;
+  createPrDefaults: GitCreatePrDefaults | null;
+  creatingPr: boolean;
+  syncing: GitSyncing;
   filterMode: GitFilterMode;
+  changesLens: GitChangesLens;
+  branchCommits: GitCommitData[];
+  branchCommitsLoading: boolean;
+  branchCommitsForBranch: string | null;
+  branchChanges: { added: number; deleted: number; fileCount: number } | null;
 
   // ── Status ──
   loading: boolean;
@@ -106,6 +156,8 @@ interface GitState {
   refreshBranches: (projectRoot: string) => Promise<void>;
   loadDiff: (projectRoot: string, fileId: string, filePath: string) => Promise<void>;
   setFilterMode: (mode: GitFilterMode) => void;
+  setChangesLens: (lens: GitChangesLens) => void;
+  loadBranchCommits: (projectRoot: string) => Promise<void>;
   stageFile: (projectRoot: string, filePath: string) => Promise<void>;
   unstageFile: (projectRoot: string, filePath: string) => Promise<void>;
   stageAll: (projectRoot: string, filePaths: string[]) => Promise<void>;
@@ -115,7 +167,21 @@ interface GitState {
   switchBranch: (projectRoot: string, branch: string) => Promise<void>;
   createBranch: (projectRoot: string, branchName: string) => Promise<void>;
   mergeBranch: (projectRoot: string, sourceBranch: string) => Promise<void>;
-  pushRemote: (projectRoot: string) => Promise<void>;
+  pushRemote: (projectRoot: string, opts?: { remote?: string }) => Promise<void>;
+  cancelRemotePick: () => void;
+  openAddRemote: () => void;
+  cancelAddRemote: () => void;
+  addRemote: (projectRoot: string, input: { name: string; url: string }) => Promise<boolean>;
+  refreshGhAuth: (projectRoot: string) => Promise<void>;
+  openCreatePr: (projectRoot: string) => Promise<void>;
+  cancelCreatePr: () => void;
+  createPullRequest: (
+    projectRoot: string,
+    input: { title: string; base: string; head: string; body?: string; draft?: boolean },
+  ) => Promise<void>;
+  openPrInBrowser: (projectRoot: string, url?: string) => Promise<void>;
+  fetchRemote: (projectRoot: string, opts?: { remote?: string; all?: boolean }) => Promise<void>;
+  pullRemote: (projectRoot: string) => Promise<void>;
   abortMerge: (projectRoot: string) => Promise<void>;
   revertCommit: (projectRoot: string, hash: string) => Promise<void>;
   resetToCommit: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<void>;
@@ -188,7 +254,22 @@ export const useGitStore = create<GitState>()((set, get) => ({
   branch: "",
   branches: [],
   files: [],
+  tracking: EMPTY_TRACKING,
+  remotes: [],
+  pendingRemotePick: false,
+  pendingAddRemote: false,
+  addingRemote: false,
+  ghAuth: EMPTY_GH_AUTH,
+  pendingCreatePr: false,
+  createPrDefaults: null,
+  creatingPr: false,
+  syncing: false,
   filterMode: useGitDiffPrefsStore.getState().filterMode,
+  changesLens: workingLens(useGitDiffPrefsStore.getState().filterMode),
+  branchCommits: [],
+  branchCommitsLoading: false,
+  branchCommitsForBranch: null,
+  branchChanges: null,
   loading: false,
   error: null,
   pendingBranch: null,
@@ -230,6 +311,12 @@ export const useGitStore = create<GitState>()((set, get) => ({
     }),
 
   selectChangeFromSidebar: (fileId: string) => {
+    if (
+      get().changesLens.kind === "commit"
+      || get().changesLens.kind === "branch-changes"
+    ) {
+      get().setChangesLens(workingLens(get().filterMode));
+    }
     get().expandChange(fileId);
     set({ selectedCommitHash: null, expandedCommitFilePaths: [] });
   },
@@ -286,7 +373,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     const id = ++get()._historyRequestId;
     set({ commitsLoading: true });
     try {
-      const commits = await window.electronAPI.gitLog(projectRoot);
+      const commits = await gitDesktop.gitLog(projectRoot);
       // Discard if a newer request was made while this one was in-flight
       if (get()._historyRequestId !== id) return;
       set({ commits, commitsLoading: false });
@@ -305,13 +392,26 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── checkRepo ──
   checkRepo: async (projectRoot: string) => {
     try {
-      const isRepo = await window.electronAPI.gitIsRepo(projectRoot);
+      const isRepo = await gitDesktop.gitIsRepo(projectRoot);
       if (isRepo) {
-        set({ isGitRepo: true, checkingRepo: false });
+        set({
+          isGitRepo: true,
+          checkingRepo: false,
+          branchCommits: [],
+          branchCommitsForBranch: null,
+          branchChanges: null,
+        });
+        if (
+          get().changesLens.kind === "commit"
+          || get().changesLens.kind === "branch-changes"
+        ) {
+          get().setChangesLens(workingLens(get().filterMode));
+        }
         // Must be sequential: refreshStatus sets branch, refreshBranches refines it.
         // Parallel would cause a race condition on the `branch` field.
         await get().refreshStatus(projectRoot);
         await get().refreshBranches(projectRoot);
+        void get().refreshGhAuth(projectRoot);
       } else {
         // Clear stale git data from previous project to prevent cross-project pollution
         set({
@@ -320,8 +420,17 @@ export const useGitStore = create<GitState>()((set, get) => ({
           files: [],
           branch: "",
           branches: [],
+          tracking: EMPTY_TRACKING,
+          remotes: [],
+          ghAuth: EMPTY_GH_AUTH,
+          pendingCreatePr: false,
+          createPrDefaults: null,
           commits: [],
           selectedCommitHash: null,
+          branchCommits: [],
+          branchCommitsForBranch: null,
+          branchChanges: null,
+          changesLens: workingLens(get().filterMode),
           error: null,
         });
       }
@@ -332,8 +441,17 @@ export const useGitStore = create<GitState>()((set, get) => ({
         files: [],
         branch: "",
         branches: [],
+        tracking: EMPTY_TRACKING,
+        remotes: [],
+        ghAuth: EMPTY_GH_AUTH,
+        pendingCreatePr: false,
+        createPrDefaults: null,
         commits: [],
         selectedCommitHash: null,
+        branchCommits: [],
+        branchCommitsForBranch: null,
+        branchChanges: null,
+        changesLens: workingLens(get().filterMode),
         error: null,
       });
     }
@@ -354,11 +472,14 @@ export const useGitStore = create<GitState>()((set, get) => ({
     } else {
       set({ loading: true, error: null });
       try {
+        const remotesPromise = gitDesktop.gitRemotes(projectRoot).catch(() => get().remotes);
         [data, stats] = await Promise.all([
-          window.electronAPI.gitStatus(projectRoot),
-          window.electronAPI.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
+          gitDesktop.gitStatus(projectRoot),
+          gitDesktop.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
         ]);
+        const remotes = await remotesPromise;
         _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
+        set({ remotes });
       } catch (err: unknown) {
         const msg = (err as Error).message || "Failed to get git status";
         // Non-repo roots should not surface a fatal toast (Git mode empty state handles CTA).
@@ -370,6 +491,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
             files: [],
             branch: "",
             branches: [],
+            tracking: EMPTY_TRACKING,
+            remotes: [],
           });
           return;
         }
@@ -439,6 +562,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       set({
         branch: data.branch,
         files,
+        tracking: data.tracking ?? EMPTY_TRACKING,
         loading: false,
       });
 
@@ -507,7 +631,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── refreshBranches ──
   refreshBranches: async (projectRoot: string) => {
     try {
-      const data: GitBranchesData = await window.electronAPI.gitBranches(projectRoot);
+      const data: GitBranchesData = await gitDesktop.gitBranches(projectRoot);
       // Only overwrite branch if we got a meaningful value
       if (data.current && data.current !== "(no branch)") {
         set({ branches: data.branches, branch: data.current });
@@ -534,7 +658,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     try {
       // Use splitView as the primary view; fall back to filterMode
       const view = file.splitView ?? get().filterMode;
-      const diff: GitFileDiffData = await window.electronAPI.gitDiff(
+      const diff: GitFileDiffData = await gitDesktop.gitDiff(
         projectRoot,
         filePath,
         file.indexStatus,
@@ -567,22 +691,96 @@ export const useGitStore = create<GitState>()((set, get) => ({
   },
 
   // ── setFilterMode ──
-  setFilterMode: (mode: GitFilterMode) =>
+  setFilterMode: (mode: GitFilterMode) => {
+    get().setChangesLens(workingLens(mode));
+  },
+
+  setChangesLens: (lens) =>
     set((s) => {
-      useGitDiffPrefsStore.getState().setFilterMode(mode);
-      const visible = idsForFilterMode(s.files, mode);
+      if (lens.kind === "working") {
+        useGitDiffPrefsStore.getState().setFilterMode(lens.mode);
+        const visible = idsForFilterMode(s.files, lens.mode);
+        return {
+          changesLens: lens,
+          filterMode: lens.mode,
+          expandedChangeIds: s.expandedChangeIds.filter((id) => visible.has(id)),
+        };
+      }
+      const detailChanged =
+        (lens.kind === "commit"
+          && (s.changesLens.kind !== "commit" || s.changesLens.hash !== lens.hash))
+        || (lens.kind === "branch-changes" && s.changesLens.kind !== "branch-changes");
       return {
-        filterMode: mode,
-        expandedChangeIds: s.expandedChangeIds.filter((id) => visible.has(id)),
+        changesLens: lens,
+        expandedChangeIds: [],
+        expandedCommitFilePaths: detailChanged ? [] : s.expandedCommitFilePaths,
       };
     }),
+
+  loadBranchCommits: async (projectRoot) => {
+    const branch = get().branch;
+    const defaultBranch = pickDefaultBranch(get().branches);
+    const cacheKey = `${projectRoot}::${branch}..${defaultBranch}`;
+    if (!branch || branch === "HEAD" || branch === defaultBranch) {
+      set({
+        branchCommits: [],
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges: null,
+      });
+      if (
+        get().changesLens.kind === "commit"
+        || get().changesLens.kind === "branch-changes"
+      ) {
+        get().setChangesLens(workingLens(get().filterMode));
+      }
+      return;
+    }
+    if (get().branchCommitsForBranch === cacheKey) return;
+
+    set({ branchCommitsLoading: true });
+    try {
+      const [commits, rangeFiles] = await Promise.all([
+        gitDesktop.gitLog(projectRoot, {
+          range: "branch",
+          baseBranch: defaultBranch,
+          maxCount: BRANCH_COMMITS_MAX,
+        }),
+        gitDesktop.gitCommitFiles(projectRoot, branchRangeRev(defaultBranch)).catch(() => []),
+      ]);
+      if (get().branch !== branch) return;
+      const branchChanges = {
+        added: rangeFiles.reduce((sum, file) => sum + file.added, 0),
+        deleted: rangeFiles.reduce((sum, file) => sum + file.deleted, 0),
+        fileCount: rangeFiles.length,
+      };
+      set({
+        branchCommits: commits,
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges,
+      });
+      const lens = get().changesLens;
+      if (lens.kind === "commit" && !commits.some((commit) => commit.hash === lens.hash)) {
+        get().setChangesLens(workingLens(get().filterMode));
+      }
+    } catch {
+      if (get().branch !== branch) return;
+      set({
+        branchCommits: [],
+        branchCommitsLoading: false,
+        branchCommitsForBranch: cacheKey,
+        branchChanges: null,
+      });
+    }
+  },
 
   // ── stageFile ──
   stageFile: async (projectRoot: string, filePath: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitStage(projectRoot, filePath);
+    const result = await gitDesktop.gitStage(projectRoot, filePath);
     if (!result.success) {
-      console.error(`[git] stage failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "stage", path: filePath, error: result.error });
       toast.error(result.error || "Stage failed");
       set({ error: result.error || "Stage failed" });
       return;
@@ -593,9 +791,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── unstageFile ──
   unstageFile: async (projectRoot: string, filePath: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitUnstage(projectRoot, filePath);
+    const result = await gitDesktop.gitUnstage(projectRoot, filePath);
     if (!result.success) {
-      console.error(`[git] unstage failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "unstage", path: filePath, error: result.error });
       toast.error(result.error || "Unstage failed");
       set({ error: result.error || "Unstage failed" });
       return;
@@ -608,9 +806,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    const result = await window.electronAPI.gitStageAll(projectRoot, paths);
+    const result = await gitDesktop.gitStageAll(projectRoot, paths);
     if (!result.success) {
-      console.error(`[git] stageAll failed`, result.error);
+      log.warn("git.fail", { op: "stageAll", error: result.error });
       // Don't toast — git may refuse to stage gitignored files, that's fine
     }
     await get().refreshStatus(projectRoot);
@@ -621,9 +819,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
     const paths = filePaths.filter(Boolean);
     if (paths.length === 0) return;
-    const result = await window.electronAPI.gitUnstageAll(projectRoot, paths);
+    const result = await gitDesktop.gitUnstageAll(projectRoot, paths);
     if (!result.success) {
-      console.error(`[git] unstageAll failed`, result.error);
+      log.warn("git.fail", { op: "unstageAll", error: result.error });
     }
     await get().refreshStatus(projectRoot);
   },
@@ -631,9 +829,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── discardFile ──
   discardFile: async (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
+    const result = await gitDesktop.gitDiscard(projectRoot, filePath, staged, untracked, worktreeStatus);
     if (!result.success) {
-      console.error(`[git] discard failed: ${filePath}`, result.error);
+      log.warn("git.fail", { op: "discard", path: filePath, error: result.error });
       toast.error(result.error || "Failed to discard changes");
       set({ error: result.error || "Failed to discard changes" });
       return;
@@ -650,16 +848,33 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── commitChanges ──
   commitChanges: async (projectRoot: string, message: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitCommit(projectRoot, message);
+    const result = await gitDesktop.gitCommit(projectRoot, message);
     if (!result.success) {
-      console.error("[git] commit failed:", result.error);
+      log.warn("git.fail", { op: "commit", error: result.error });
       toast.error(result.error || "Commit failed");
       set({ error: result.error || "Commit failed" });
       return;
     }
     await get().refreshStatus(projectRoot);
     // Commit does not modify files on disk — no reload needed
-    set({ error: null });
+    set({ error: null, branchCommitsForBranch: null });
+    const tracking = get().tracking;
+    const pushLabel = shouldOfferPushAfterCommit(tracking)
+      ? derivePushLabel(tracking, {
+          push: i18n.t("git.toolbar.push"),
+          publish: i18n.t("git.toolbar.publish"),
+        })
+      : null;
+    toast.success(i18n.t("git.toast.committed"), {
+      action: pushLabel
+        ? {
+            label: pushLabel,
+            onClick: () => {
+              void get().pushRemote(projectRoot);
+            },
+          }
+        : undefined,
+    });
   },
 
   // ── switchBranch ──
@@ -670,15 +885,13 @@ export const useGitStore = create<GitState>()((set, get) => ({
     invalidateStatusCache();
 
     const tWarmup = performance.now();
-    await window.electronAPI.gitWarmup?.(projectRoot).catch(() => {});
+    await gitDesktop.gitWarmup(projectRoot)?.catch(() => {});
     const wMs = Math.round(performance.now() - tWarmup);
-    console.log(`[switchBranch] warmup: ${wMs}ms  (${branch})`);
     log.debug("switchBranch warmup", { durationMs: wMs, branch });
 
     const tCheckout = performance.now();
-    const result = await window.electronAPI.gitCheckout(projectRoot, branch);
+    const result = await gitDesktop.gitCheckout(projectRoot, branch);
     const cMs = Math.round(performance.now() - tCheckout);
-    console.log(`[switchBranch] gitCheckout: ${cMs}ms  (${branch})`);
     log.debug("gitCheckout", { durationMs: cMs, branch });
     if (!result.success) {
       set({
@@ -696,15 +909,27 @@ export const useGitStore = create<GitState>()((set, get) => ({
     ]);
 
     // Clear commit selection when switching branches — old hash won't exist on new branch
-    set({ switching: false, selectedCommitHash: null });
+    set({
+      switching: false,
+      selectedCommitHash: null,
+      branchCommits: [],
+      branchCommitsForBranch: null,
+      branchChanges: null,
+    });
+    if (
+      get().changesLens.kind === "commit"
+      || get().changesLens.kind === "branch-changes"
+    ) {
+      get().setChangesLens(workingLens(get().filterMode));
+    }
     await useDocumentStore.getState().reloadAllFromDisk();
-    console.log(`[switchBranch] total: ${Math.round(performance.now() - t0)}ms  (-> ${branch})`);
+    log.debug("switchBranch total", { durationMs: Math.round(performance.now() - t0), branch });
   },
 
   // ── createBranch ──
   createBranch: async (projectRoot: string, branchName: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitCreateBranch(projectRoot, branchName);
+    const result = await gitDesktop.gitCreateBranch(projectRoot, branchName);
     if (!result.success) {
       toast.error(result.error || "Failed to create branch");
       set({ error: result.error || "Failed to create branch" });
@@ -714,27 +939,281 @@ export const useGitStore = create<GitState>()((set, get) => ({
       get().refreshStatus(projectRoot),
       get().refreshBranches(projectRoot),
     ]);
+    set({ branchCommits: [], branchCommitsForBranch: null, branchChanges: null });
+  },
+
+  cancelRemotePick: () => set({ pendingRemotePick: false }),
+
+  openAddRemote: () => set({ pendingAddRemote: true }),
+
+  cancelAddRemote: () => set({ pendingAddRemote: false, addingRemote: false }),
+
+  addRemote: async (projectRoot, input) => {
+    if (get().addingRemote) return false;
+    set({ addingRemote: true });
+    try {
+      const result = await gitDesktop.gitAddRemote(projectRoot, input.name, input.url);
+      if (!result?.success) {
+        const code = result?.error ?? "";
+        const message =
+          code === "invalid_remote_name"
+            ? i18n.t("git.remoteAdd.invalidName")
+            : code === "invalid_remote_url"
+              ? i18n.t("git.remoteAdd.invalidUrl")
+              : code === "remote_exists"
+                ? i18n.t("git.remoteAdd.exists")
+                : toastGitDetail(code) || i18n.t("git.remoteAdd.failed");
+        toast.error(i18n.t("git.remoteAdd.failed"), { description: message });
+        return false;
+      }
+      set({
+        remotes: result.remotes ?? [],
+        pendingAddRemote: false,
+      });
+      invalidateStatusCache();
+      await get().forceRefreshStatus(projectRoot);
+      toast.success(i18n.t("git.remoteAdd.added", { name: input.name.trim() }));
+      return true;
+    } finally {
+      set({ addingRemote: false });
+    }
+  },
+
+  refreshGhAuth: async (projectRoot: string) => {
+    try {
+      const ghAuth = await gitHostingDesktop.gitHostingAuthStatus(projectRoot);
+      set({ ghAuth: ghAuth ?? EMPTY_GH_AUTH });
+    } catch {
+      set({ ghAuth: EMPTY_GH_AUTH });
+    }
+  },
+
+  openCreatePr: async (projectRoot: string) => {
+    await get().refreshGhAuth(projectRoot);
+    const commits = await gitDesktop.gitLog(projectRoot, 1).catch(() => []);
+    const head = get().branch;
+    const title = firstCommitSubject(commits[0]?.message ?? "") || head;
+    set({
+      createPrDefaults: {
+        title,
+        base: pickDefaultBranch(get().branches),
+        head,
+      },
+      pendingCreatePr: true,
+    });
+  },
+
+  cancelCreatePr: () => set({ pendingCreatePr: false, creatingPr: false }),
+
+  createPullRequest: async (projectRoot, input) => {
+    if (get().creatingPr) return;
+    const title = input.title.trim();
+    const base = input.base.trim();
+    const head = input.head.trim();
+    if (!title || !base || !head) {
+      toast.error(i18n.t("git.prCreate.missingFields"));
+      return;
+    }
+    set({ creatingPr: true });
+    try {
+      const result = await gitHostingDesktop.gitHostingPrCreate({
+        projectRoot,
+        title,
+        base,
+        head,
+        body: input.body,
+        draft: input.draft,
+      });
+      if (!result?.success) {
+        toast.error(i18n.t("git.toast.createPrFailed"), {
+          description: toastGitDetail(result?.output || result?.error),
+        });
+        return;
+      }
+      set({ pendingCreatePr: false });
+      toast.success(i18n.t("git.toast.prCreated"), {
+        action: {
+          label: i18n.t("git.toast.openPr"),
+          onClick: () => {
+            void get().openPrInBrowser(projectRoot, result.url);
+          },
+        },
+      });
+    } finally {
+      set({ creatingPr: false });
+    }
+  },
+
+  openPrInBrowser: async (projectRoot, url) => {
+    if (url) {
+      await openExternalUrl(url).catch(() => {});
+      return;
+    }
+    const result = await gitHostingDesktop.gitHostingPrViewWeb(projectRoot);
+    if (!result?.success) {
+      toast.error(i18n.t("git.toast.openPrFailed"), {
+        description: toastGitDetail(result?.error),
+      });
+    }
   },
 
   // ── pushRemote ──
-  pushRemote: async (projectRoot: string) => {
-    invalidateStatusCache();
-    const result = await window.electronAPI.gitPush(projectRoot);
-    if (!result.success) {
-      toast.error(result.error || "Push failed");
-      set({ error: result.error || "Push failed" });
+  pushRemote: async (projectRoot: string, opts) => {
+    if (get().syncing) return;
+    const tracking = get().tracking;
+    if (tracking.isDetached) {
+      toast.error(i18n.t("git.toast.detachedHead"));
       return;
     }
-    const summary = result.output?.trim();
-    toast.success(summary || "Pushed successfully");
-    await get().refreshBranches(projectRoot);
+    if (!tracking.hasRemote && !opts?.remote) {
+      get().openAddRemote();
+      return;
+    }
+
+    set({ syncing: "push", pendingRemotePick: false });
+    invalidateStatusCache();
+    try {
+      const result = await gitDesktop.gitPush(projectRoot, opts?.remote);
+      if (result.needsRemoteChoice) {
+        set({
+          remotes: result.remotes ?? [],
+          pendingRemotePick: true,
+          syncing: false,
+        });
+        return;
+      }
+      if (!result.success) {
+        const raw = result.output || result.error || "";
+        toast.error(i18n.t("git.toast.pushFailed"), {
+          description: isNonFastForwardPushError(raw)
+            ? i18n.t("git.toast.pushNeedPull")
+            : toastGitDetail(raw),
+        });
+        set({ error: result.error || raw || "Push failed" });
+        return;
+      }
+      const branch = get().branch;
+      const afterTracking = {
+        ...get().tracking,
+        aheadCount: 0,
+        hasRemote: true,
+        upstreamRef:
+          get().tracking.upstreamRef
+          ?? (result.publishedRemote && branch
+            ? `${result.publishedRemote}/${branch}`
+            : get().tracking.upstreamRef),
+        remoteName: get().tracking.remoteName ?? result.publishedRemote ?? null,
+      };
+      const offerPr = shouldOfferCreatePr(afterTracking, {
+        currentBranch: branch,
+        defaultBranch: pickDefaultBranch(get().branches),
+        ghInstalled: get().ghAuth.installed,
+        ghAuthenticated: get().ghAuth.authenticated,
+      });
+      const prAction = offerPr
+        ? {
+            label: i18n.t("git.toast.createPr"),
+            onClick: () => {
+              void get().openCreatePr(projectRoot);
+            },
+          }
+        : undefined;
+      if (result.publishedRemote) {
+        toast.success(
+          i18n.t("git.toast.published", { remote: result.publishedRemote }),
+          {
+            action: prAction ?? (branch
+              ? {
+                  label: i18n.t("git.toast.copyBranch"),
+                  onClick: () => {
+                    void navigator.clipboard.writeText(branch).catch(() => {});
+                  },
+                }
+              : undefined),
+          },
+        );
+      } else {
+        const summary = result.output?.trim();
+        toast.success(summary || i18n.t("git.toast.pushed"), {
+          action: prAction,
+        });
+      }
+      await Promise.all([
+        get().forceRefreshStatus(projectRoot),
+        get().refreshBranches(projectRoot),
+      ]);
+    } finally {
+      if (get().syncing === "push") set({ syncing: false });
+    }
+  },
+
+  // ── fetchRemote ──
+  fetchRemote: async (projectRoot: string, opts) => {
+    if (get().syncing) return;
+    set({ syncing: "fetch" });
+    try {
+      const result = await gitDesktop.gitFetch(projectRoot, {
+        remote: opts?.all ? undefined : (opts?.remote ?? get().tracking.remoteName ?? undefined),
+        all: opts?.all,
+      });
+      if (!result.success) {
+        toast.error(i18n.t("git.toast.fetchFailed"), {
+          description: toastGitDetail(result.output || result.error),
+        });
+        set({ error: result.error || "Fetch failed" });
+        return;
+      }
+      if (result.noop) {
+        toast.message(i18n.t("git.sync.noRemote"));
+      } else {
+        const summary = result.output?.trim();
+        toast.success(
+          summary && summary !== "Fetched."
+            ? summary
+            : i18n.t("git.toast.fetched"),
+        );
+      }
+      await get().forceRefreshStatus(projectRoot);
+    } finally {
+      set({ syncing: false });
+    }
+  },
+
+  // ── pullRemote ──
+  pullRemote: async (projectRoot: string) => {
+    if (get().syncing) return;
+    set({ syncing: "pull" });
+    invalidateStatusCache();
+    try {
+      const result = await gitDesktop.gitPull(projectRoot);
+      if (!result.success) {
+        const raw = result.output || result.error || "";
+        const needRebase = isFastForwardPullError(raw);
+        toast.error(i18n.t("git.toast.pullFailed"), {
+          description: needRebase
+            ? i18n.t("git.toast.pullNeedRebase")
+            : toastGitDetail(raw),
+        });
+        set({ error: result.error || "Pull failed" });
+        await get().forceRefreshStatus(projectRoot);
+        return;
+      }
+      const summary = result.output?.trim();
+      toast.success(summary || i18n.t("git.toast.pulled"));
+      await Promise.all([
+        get().forceRefreshStatus(projectRoot),
+        get().refreshBranches(projectRoot),
+      ]);
+    } finally {
+      set({ syncing: false });
+    }
   },
 
   // ── mergeBranch ──
   mergeBranch: async (projectRoot: string, sourceBranch: string) => {
     invalidateStatusCache();
     const branch = get().branch;
-    const result = await window.electronAPI.gitMerge(projectRoot, sourceBranch);
+    const result = await gitDesktop.gitMerge(projectRoot, sourceBranch);
     if (!result.success) {
       // Merge conflicts or other failure
       const detail = result.output || result.error || i18n.t("git.toast.mergeFailed");
@@ -767,7 +1246,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── abortMerge ──
   abortMerge: async (projectRoot: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitAbortMerge(projectRoot);
+    const result = await gitDesktop.gitAbortMerge(projectRoot);
     if (!result.success) {
       toast.error(result.error || i18n.t("git.toast.abortFailed"));
       set({ error: result.error || i18n.t("git.toast.abortFailed") });
@@ -783,7 +1262,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── revertCommit ──
   revertCommit: async (projectRoot: string, hash: string) => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitRevert(projectRoot, hash);
+    const result = await gitDesktop.gitRevert(projectRoot, hash);
     if (!result.success) {
       toast.error(result.error || "Failed to revert commit");
       set({ error: result.error || "Failed to revert commit" });
@@ -801,7 +1280,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── resetToCommit ──
   resetToCommit: async (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => {
     invalidateStatusCache();
-    const result = await window.electronAPI.gitReset(projectRoot, hash, mode);
+    const result = await gitDesktop.gitReset(projectRoot, hash, mode);
     if (!result.success) {
       toast.error(result.error || "Failed to reset");
       set({ error: result.error || "Failed to reset" });
@@ -821,7 +1300,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   initRepo: async (projectRoot: string) => {
     set({ loading: true, error: null });
     try {
-      const result = await window.electronAPI.gitInit(projectRoot);
+      const result = await gitDesktop.gitInit(projectRoot);
       if (!result.success) {
         toast.error(result.error || "Failed to initialize git repository");
         set({ error: result.error || "Failed to initialize git repository", loading: false });
@@ -853,6 +1332,21 @@ export const useGitStore = create<GitState>()((set, get) => ({
       branch: "",
       branches: [],
       files: [],
+      tracking: EMPTY_TRACKING,
+      remotes: [],
+      pendingRemotePick: false,
+      pendingAddRemote: false,
+      addingRemote: false,
+      changesLens: workingLens(filterMode),
+      branchCommits: [],
+      branchCommitsLoading: false,
+      branchCommitsForBranch: null,
+      branchChanges: null,
+      ghAuth: EMPTY_GH_AUTH,
+      pendingCreatePr: false,
+      createPrDefaults: null,
+      creatingPr: false,
+      syncing: false,
       filterMode,
       loading: false,
       error: null,
@@ -876,7 +1370,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
 /** Persist hydrates async — sync filterMode once localStorage is ready. */
 function syncFilterModeFromPrefs() {
-  useGitStore.setState({ filterMode: useGitDiffPrefsStore.getState().filterMode });
+  const mode = useGitDiffPrefsStore.getState().filterMode;
+  useGitStore.setState((s) => ({
+    filterMode: mode,
+    changesLens: s.changesLens.kind === "working" ? workingLens(mode) : s.changesLens,
+  }));
 }
 if (useGitDiffPrefsStore.persist.hasHydrated()) {
   syncFilterModeFromPrefs();

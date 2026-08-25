@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { TemplateMeta, TemplateFull, TemplateCategory } from "./types";
+import { templateDesktop } from "@/lib/desktop-api/template";
 import { getTemplates, invalidateTemplatesCache } from "@/lib/templates/template-data";
 import { TemplateSidebar, DetailSidebar } from "./template-sidebar";
 import { GalleryView } from "./template-gallery";
@@ -235,7 +236,7 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               setSearch={setSearch}
               currentTemplateId={currentTemplate?.id ?? null}
               onSelect={async (t) => {
-                const full = await window.electronAPI.templateGet(t.id);
+                const full = await templateDesktop.templateGet(t.id);
                 if (full) setSelected(full);
               }}
               onUse={handleUse}

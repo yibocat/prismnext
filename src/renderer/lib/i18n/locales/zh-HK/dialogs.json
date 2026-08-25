@@ -1,0 +1,86 @@
+{
+  "tabClose": {
+    "closeTab": "關閉分頁",
+    "closeAiTerminal": "關閉 AI 終端",
+    "closeJobMonitor": "關閉作業監視",
+    "closeTerminal": "關閉終端",
+    "closeTerminals": "關閉終端",
+    "closeFile": "關閉檔案",
+    "closeWithoutSaving": "不儲存並關閉",
+    "closeAll": "全部關閉",
+    "aiRunningKill": "仍有命令在執行。關閉將取消該命令。",
+    "aiRunningKeep": "仍有命令在執行。分頁會關閉，但命令會在後臺繼續執行。",
+    "aiDetailKill": "可從會話面板或 bash 元件重新開啟終端。",
+    "aiDetailKeep": "可使用會話標題選單檢視進度或重新開啟終端。",
+    "jobRunningKill": "此作業仍在執行。關閉將取消它。",
+    "jobRunningKeep": "此作業仍在執行。監視器會關閉，但作業繼續。",
+    "jobDetailKill": "可從對話或實驗重新開啟監視器。",
+    "jobDetailKeep": "可從對話或實驗重新開啟監視器檢視進度。",
+    "terminalRunning": "此終端仍有命令在執行。",
+    "terminalDetail": "關閉將中斷正在執行的程序。",
+    "terminalsRunning": "仍有 {{count}} 個終端的命令在執行。",
+    "terminalsDetail": "關閉將中斷正在執行的程序。",
+    "fileUnsaved": "「{{label}}」有未儲存的更改。",
+    "fileDetail": "除非先儲存，否則編輯內容將丟失。"
+  },
+  "projectSwitch": {
+    "title": "離開目前專案？",
+    "description": "仍有實驗在執行。可以繼續在後臺執行，或先停止再切換。",
+    "detail": "目前專案的對話 bash 作業會停止。後臺實驗仍可透過作業監視查看。",
+    "continue": "繼續後臺執行",
+    "stop": "停止實驗"
+  },
+  "permission": {
+    "shellCommand": "Shell 命令",
+    "applyPatch": "應用補丁",
+    "deleteFile": "刪除檔案",
+    "moveFile": "移動檔案",
+    "actionDelete": "刪除",
+    "actionMove": "移動",
+    "writeFile": "寫入檔案",
+    "editFile": "編輯檔案",
+    "required": "需要許可權",
+    "awaiting": "等待批准",
+    "filesCount": "{{count}} 個檔案",
+    "deny": "拒絕",
+    "skip": "取消",
+    "always": "始終允許",
+    "allow": "允許",
+    "alwaysBash": "始終允許類似命令（字首匹配）",
+    "alwaysTool": "始終允許 {{tool}}，不再詢問",
+    "alwaysGeneric": "始終允許此工具",
+    "autoDeny": "{{seconds}} 秒後自動拒絕"
+  },
+  "worktree": {
+    "discardTitle": "丟棄未合併的工作？",
+    "discardBody": "此工作樹有 {{count}} 個未合併提交，將被永久刪除。",
+    "discardHint": "請先合併到分支 {{branch}} 以整合更改，或在不再需要時丟棄。",
+    "discardConfirm": "丟棄並關閉",
+    "mergeTitle": "合併工作樹：{{name}}",
+    "mergeBody": "將分支「{{branch}}」合併到 {{target}}。成功後將移除此工作樹。",
+    "mergeSuccess": "合併成功！工作樹已移除。",
+    "mergeFailed": "合併失敗：{{error}}",
+    "mergeInto": "合併到 {{branch}}"
+  },
+  "git": {
+    "revertTitle": "還原提交",
+    "resetTitle": "重置到提交",
+    "mergeWorktreeTitle": "將工作樹合併到分支",
+    "confirmMerge": "確認合併",
+    "mergeBranch": "合併分支",
+    "commitChanges": "提交更改",
+    "createBranch": "建立新分支"
+  },
+  "files": {
+    "deleteFolder": "刪除資料夾",
+    "renameFolder": "重新命名資料夾",
+    "rename": "重新命名",
+    "deleteBody": "確定要永久刪除「{{name}}」嗎？",
+    "deleteFolderBody": "確定要永久刪除資料夾「{{name}}」及其全部內容嗎？",
+    "workspaceWarn": "此資料夾在工作區設定中配置為 {{function}}。",
+    "manuscriptWarn": "這是唯一的手稿資料夾 — 在配置另一個之前，TeX 工作區功能可能無法使用。"
+  },
+  "experiments": {
+    "deleteTitle": "刪除實驗？"
+  }
+}

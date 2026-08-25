@@ -5,22 +5,21 @@ import { PlanArtifactCard } from "./plan-artifact-card";
 import { ToolWidget } from "./tools/tool-widget-dispatcher";
 import { ThinkingWidget } from "./tools/thinking-widget";
 import { ActivityFold } from "./tools/activity-fold";
-import {
-  artifactPathMatchesAny,
-  buildArtifactFallbackMarkdown,
-} from "@/lib/markdown/chat-artifact";
+import { buildArtifactFallbackMarkdown } from "@/lib/markdown/chat-artifact";
 import {
   resolveMissingArtifactPathsForReply,
   resolveSuppressArtifactPathsForToolCards,
 } from "@/lib/chat/experiment-run-figures";
 import {
   buildInteractionReplyFallbackMarkdown,
-  collectInteractionResourcePathsFromBlocks,
 } from "@/lib/chat/interaction-fence-fallback";
 import { buildPlanReplyFallbackMarkdown } from "@/lib/chat/plan-reply-fallback";
 import { InteractionFenceDedupeProvider } from "@/lib/interaction/interaction-fence-dedupe";
+import { ChatVisualDedupeProvider } from "@/lib/markdown/chat-visual-dedupe";
 import { planPathFromToolUse } from "@/lib/chat/plan-artifact-ui";
 import {
+  activityFoldPersistKey,
+  isActivityBurstStreaming,
   isThinkingBlockStreaming,
   segmentAssistantBlocks,
 } from "@/lib/chat/segment-assistant-blocks";
@@ -53,19 +52,10 @@ export const AssistantBlockList = memo(function AssistantBlockList({
   const thinkingComplete = blocks.some(
     (b) => b.type === "text" || b.type === "tool_use",
   );
-  const settled = !isStreamingMsg;
-  const phase = settled ? "settled" : "live";
 
-  // Paths already displayed as interactions (spec resources) must not
-  // re-appear as plain artifact previews — one surface per file.
-  const interactionResourcePaths = isStreamingMsg
-    ? []
-    : collectInteractionResourcePathsFromBlocks(blocks, toolResultMap);
   const missingArtifacts = isStreamingMsg
     ? []
-    : resolveMissingArtifactPathsForReply(blocks, toolResultMap).filter(
-        (p) => !artifactPathMatchesAny(p, interactionResourcePaths),
-      );
+    : resolveMissingArtifactPathsForReply(blocks, toolResultMap);
   const fallbackReply = buildArtifactFallbackMarkdown(missingArtifacts);
   const interactionFallbackReply = isStreamingMsg
     ? ""
@@ -76,30 +66,17 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       : buildPlanReplyFallbackMarkdown(blocks, planReplyFallbackSummary);
   const suppressArtifactPaths = isStreamingMsg
     ? []
-    : [
-        ...resolveSuppressArtifactPathsForToolCards(
-          blocks,
-          toolResultMap,
-          missingArtifacts,
-        ),
-        ...interactionResourcePaths,
-      ];
+    : resolveSuppressArtifactPathsForToolCards(
+        blocks,
+        toolResultMap,
+        missingArtifacts,
+      );
 
   const segments = useMemo(
-    () => (foldActivity ? segmentAssistantBlocks(blocks, { phase }) : null),
-    [blocks, foldActivity, phase],
+    () => (foldActivity ? segmentAssistantBlocks(blocks) : null),
+    [blocks, foldActivity],
   );
 
-  const lastActivitySegmentIndex = useMemo(() => {
-    if (!segments) return -1;
-    for (let i = segments.length - 1; i >= 0; i--) {
-      const kind = segments[i]?.kind;
-      if (kind === "activity" || kind === "worked") return i;
-    }
-    return -1;
-  }, [segments]);
-
-  // Streaming caret only on the tip of the turn — not every interim prose block.
   const lastFlatTextIndex = useMemo(() => {
     for (let i = blocks.length - 1; i >= 0; i--) {
       const b = blocks[i]!;
@@ -162,10 +139,12 @@ export const AssistantBlockList = memo(function AssistantBlockList({
     return null;
   };
 
-  const foldPersistBase = turnKey ?? (sessionId ? `${sessionId}:${msgIndex}` : String(msgIndex));
+  const foldTurnId = turnKey ?? (sessionId ? `${sessionId}:${msgIndex}` : String(msgIndex));
 
+  const messageKey = `${sessionId}:${msgIndex}`;
   return (
-    <InteractionFenceDedupeProvider messageKey={`${sessionId}:${msgIndex}`}>
+    <InteractionFenceDedupeProvider messageKey={messageKey}>
+    <ChatVisualDedupeProvider messageKey={messageKey}>
       {foldActivity && segments
         ? segments.map((segment, segIndex) => {
             if (segment.kind === "text") {
@@ -184,7 +163,6 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 </div>
               );
             }
-            // Task / subagent — own card while live (settled: nested under Worked for).
             if (segment.kind === "tool") {
               const result = toolResultMap.get(segment.block.id || "");
               return (
@@ -197,37 +175,19 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 </div>
               );
             }
-            if (segment.kind === "worked") {
-              return (
-                <ActivityFold
-                  key={`worked-${foldPersistBase}`}
-                  blocks={segment.blocks}
-                  blockIndices={segment.blockIndices}
-                  toolResultMap={toolResultMap}
-                  sessionId={sessionId}
-                  persistKey={`${foldPersistBase}:worked`}
-                  isStreamingSegment={false}
-                  messageThinkingComplete={thinkingComplete}
-                  suppressArtifactPaths={suppressArtifactPaths}
-                  turnSettled
-                  childrenSegments={segment.children}
-                />
-              );
-            }
-            const foldKey = segment.blockIndices[0] ?? segIndex;
-            const isStreamingSegment =
-              !!isStreamingMsg
-              && segIndex === lastActivitySegmentIndex
-              && segments[segments.length - 1]?.kind === "activity";
+            if (segment.kind !== "activity") return null;
+            const firstIndex = segment.blockIndices[0] ?? segIndex;
             return (
               <ActivityFold
-                key={`activity-${foldKey}`}
+                key={`activity-${firstIndex}`}
                 blocks={segment.blocks}
                 blockIndices={segment.blockIndices}
                 toolResultMap={toolResultMap}
                 sessionId={sessionId}
-                persistKey={`${foldPersistBase}:a${foldKey}`}
-                isStreamingSegment={isStreamingSegment}
+                persistKey={activityFoldPersistKey(foldTurnId, firstIndex)}
+                isStreamingSegment={isActivityBurstStreaming(segment.blocks, !!isStreamingMsg, {
+                  hasLaterSegment: segIndex < segments.length - 1,
+                })}
                 messageThinkingComplete={thinkingComplete}
                 suppressArtifactPaths={suppressArtifactPaths}
                 turnSettled={false}
@@ -259,6 +219,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
           <MarkdownRenderer content={planFallbackReply} sessionId={sessionId} />
         </div>
       ) : null}
+    </ChatVisualDedupeProvider>
     </InteractionFenceDedupeProvider>
   );
 });

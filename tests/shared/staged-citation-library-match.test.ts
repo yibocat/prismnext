@@ -4,7 +4,7 @@ import {
   findLibraryPaperForStagedCitation,
   findLibraryPaperInIdentityIndex,
   literatureIdentitiesMatch,
-} from "../../src/shared/staged-citation-library-match";
+} from "../../src/shared/literature/staged-citation-library-match";
 
 describe("staged-citation-library-match", () => {
   const paperByDoi = {

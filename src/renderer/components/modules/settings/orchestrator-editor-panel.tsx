@@ -8,10 +8,15 @@ import type {
   SubagentInfo,
   OrchestratorInfo,
   SaveCustomOrchestratorPayload,
-} from "@shared/agent-subagents";
+} from "@shared/agent/subagents";
 import { FALLBACK_ORCHESTRATOR_FQID } from "@shared/teams/types";
-import { buildSubagentRosterMarkdown } from "@shared/subagent-roster";
+import { buildSubagentRosterMarkdown } from "@shared/agent/subagent-roster";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
+import {
+  getOrchestratorDetail,
+  listProjectSubagents,
+  saveCustomOrchestrator,
+} from "@/lib/settings";
 import { SETTINGS_DETAIL_SHELL, SETTINGS_ROW_DESC } from "./settings-tokens";
 import {
   ProfileEditorForm,
@@ -124,7 +129,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
       setLoading(true);
       setReady(false);
       try {
-        const expertList = await window.electronAPI.subagentsList(root);
+        const expertList = await listProjectSubagents(root);
         if (cancelled) return;
         setExperts(expertList.filter((e) => e.enabled));
 
@@ -140,7 +145,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           setSafetyNet(isSafetyNetLeadFqid(detail.fqid));
         };
 
-        const detail = await window.electronAPI.orchestratorsGetDetail(root, orchestratorId!);
+        const detail = await getOrchestratorDetail(root, orchestratorId!);
         if (cancelled) return;
         if (!detail) {
           toast.error(t("settings.editor.orchestrator.toast.notFound"));
@@ -211,7 +216,7 @@ export function OrchestratorEditorPanel({ slot }: { slot: AgentOrchestratorSlot 
           roster: allowedExpertsField,
           rosterMode: currentRosterMode,
         };
-        const result = await window.electronAPI.orchestratorsSaveCustom(
+        const result = await saveCustomOrchestrator(
           projectRoot,
           payload,
           currentTarget ?? undefined,

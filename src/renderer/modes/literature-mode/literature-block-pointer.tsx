@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePdf } from "@anaralabs/lector";
-import { hitTestBlock } from "../../../shared/paper-extract-block";
+import { hitTestBlock } from "../../../shared/literature/paper-extract-block";
 import {
   findLiteraturePdfScrollRoot,
   pageInfoFromPoint,

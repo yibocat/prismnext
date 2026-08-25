@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/tool-names";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /**
  * Experiments — empirical design, islands, runs, and results.
@@ -31,7 +31,7 @@ export const EXPERIMENTS_PROMPT = [
   "",
   "### Runtime environments",
   "",
-  "- Python runs use the shared project venv **`.prismnext/.venv`** — never system Python;",
+  "- Python runs use the shared project venv **`.workbench/.venv`** — never system Python;",
   "  other runtimes prefer project-local toolchains. Gates live on the experiment tools.",
   "",
   "### Cost before compute",

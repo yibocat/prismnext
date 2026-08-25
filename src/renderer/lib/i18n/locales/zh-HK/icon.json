@@ -1,0 +1,23 @@
+{
+  "picker": {
+    "choose": "選擇圖示",
+    "clear": "清除",
+    "default": "使用預設",
+    "tab": {
+      "emoji": "表情",
+      "lucide": "圖示",
+      "image": "圖片"
+    },
+    "search": "搜尋圖示…",
+    "emoji": {
+      "paste": "貼上 emoji"
+    },
+    "image": {
+      "badType": "不是有效的圖片檔案。",
+      "failed": "無法讀取該圖片。",
+      "current": "目前圖示",
+      "replace": "取代",
+      "drop": "點擊選擇圖片"
+    }
+  }
+}

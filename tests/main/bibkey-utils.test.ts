@@ -5,7 +5,7 @@ import {
   resolveIncomingBibkey,
   resolveStoredBibkey,
   suggestBibkey,
-} from "../../src/shared/bibkey-utils";
+} from "../../src/shared/literature/bibkey-utils";
 
 describe("isOpaqueBibkey", () => {
   it("flags Zotero random keys", () => {

@@ -2,11 +2,15 @@
  * Pending interactive tools: Question (composer chrome) + TodoWrite (message drawer).
  */
 import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
+import type { Conversation } from "@shared/agent/conversation";
 import { contentBlocks } from "@/components/modules/chat/tools/tool-result-map";
+import {
+  conversationDisplayTurns,
+} from "@/lib/chat/conversation-view";
 import {
   isHiddenToolResultCarrier,
   isToolResultUserMessage,
-} from "@/components/modules/chat/chat-turns";
+} from "@/lib/chat/chat-turns";
 
 export type ComposerPendingQuestion = {
   toolUse: ContentBlock;
@@ -20,7 +24,9 @@ export type ComposerPendingTodo = {
 /** Todo plan shown under a user message bubble (drawer). */
 export type MessageTodoPlan = {
   toolUse: ContentBlock;
-  /** Index into committed `messages` (not display) for the anchor user bubble. */
+  /** Conversation turn that hosts the drawer. */
+  turnIndex: number;
+  /** @deprecated same as turnIndex after Chat messages went Conversation-native. */
   anchorUserMessageIndex: number;
 };
 
@@ -174,7 +180,7 @@ export function findMessageTodoPlan(args: {
   });
   if (anchorUserMessageIndex < 0) return null;
 
-  return { toolUse: block, anchorUserMessageIndex };
+  return { toolUse: block, turnIndex: anchorUserMessageIndex, anchorUserMessageIndex };
 }
 
 /**
@@ -331,11 +337,119 @@ export function isComposerHostedToolId(
   );
 }
 
+export function findMessageTodoPlanFromConversation(
+  conv: Conversation | null | undefined,
+): MessageTodoPlan | null {
+  if (!conv) return null;
+  const turns = conversationDisplayTurns(conv);
+  let found: { block: ContentBlock; turnIndex: number } | null = null;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i]!;
+    for (let j = turn.assistantBlocks.length - 1; j >= 0; j--) {
+      const block = turn.assistantBlocks[j]!;
+      if (block.type !== "tool_use" || !isTodoWriteToolName(block.name) || !block.id) continue;
+      const todos = block.input?.todos;
+      if (!Array.isArray(todos) || todos.length === 0) continue;
+      found = { block, turnIndex: turn.turnIndex };
+      break;
+    }
+    if (found) break;
+  }
+  if (!found || isTodoPlanDismissed(found.block.id)) return null;
+  const todos: Array<{ status?: string }> = found.block.input?.todos ?? [];
+  const open = todoPlanHasOpenWork(todos);
+  const latestUserTurn = [...turns].reverse().find((turn) => turn.userBlocks.length > 0);
+  const turnIndex = open ? (latestUserTurn?.turnIndex ?? found.turnIndex) : found.turnIndex;
+  return {
+    toolUse: found.block,
+    turnIndex,
+    anchorUserMessageIndex: turnIndex,
+  };
+}
+
+function toolResultMapFromBlocks(blocks: ContentBlock[]): Map<string, ContentBlock> {
+  const map = new Map<string, ContentBlock>();
+  for (const block of blocks) {
+    if (block.type === "tool_result" && block.tool_use_id) {
+      map.set(block.tool_use_id, block);
+    }
+  }
+  return map;
+}
+
+function syntheticPendingQuestionTool(pending: NonNullable<Conversation["pendingQuestion"]>): ContentBlock {
+  return {
+    type: "tool_use",
+    id: pending.requestId,
+    name: "question",
+    input: {
+      question: pending.prompt,
+      options: pending.options,
+    },
+  };
+}
+
+function unansweredQuestionInBlocks(
+  blocks: ContentBlock[],
+  isStreaming: boolean,
+): ComposerPendingQuestion | null {
+  const toolResultMap = toolResultMapFromBlocks(blocks);
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    const block = blocks[i]!;
+    if (block.type !== "tool_use" || !isQuestionToolName(block.name)) continue;
+    const toolResult = block.id ? toolResultMap.get(block.id) : undefined;
+    if (!questionNeedsUserAnswer(block, toolResult, isStreaming)) continue;
+    return { toolUse: block, toolResult };
+  }
+  return null;
+}
+
+/**
+ * The live hang is Conversation.pendingQuestion. Never overlay that hang onto a
+ * different unanswered question tool — that is what made two prompts look like
+ * one unstable card.
+ */
+export function findComposerPendingQuestionFromConversation(
+  conv: Conversation | null | undefined,
+  isStreaming: boolean,
+): ComposerPendingQuestion | null {
+  if (!conv) return null;
+  const liveBlocks = conv.live?.assistant.blocks ?? [];
+  const pending = conv.pendingQuestion;
+  if (pending) {
+    const matched = liveBlocks.find(
+      (block) => block.type === "tool_use" && block.id === pending.requestId,
+    );
+    if (!matched) {
+      return { toolUse: syntheticPendingQuestionTool(pending) };
+    }
+    const prev =
+      matched.input
+      && typeof matched.input === "object"
+      && !Array.isArray(matched.input)
+        ? matched.input as Record<string, unknown>
+        : {};
+    return {
+      toolUse: {
+        ...matched,
+        input: {
+          ...prev,
+          question: pending.prompt,
+          options: pending.options ?? prev.options,
+        },
+      },
+      toolResult: toolResultMapFromBlocks(liveBlocks).get(matched.id || ""),
+    };
+  }
+  return unansweredQuestionInBlocks(liveBlocks, isStreaming);
+}
+
 /** Minimal chat-store slice for composer pending selectors (return primitives only). */
 export type ComposerPendingStoreSlice = {
   activeTabId: string;
   tabs: Array<{
     id: string;
+    conversation?: Conversation;
     messages: ChatStreamMessage[];
     streamingMessage: ChatStreamMessage | null;
     isStreaming: boolean;
@@ -359,6 +473,13 @@ export function selectComposerHostedQuestionId(
 ): string | null {
   const tab = activeChatTab(state);
   if (!tab || !composerChromeLive(tab)) return null;
+  if (tab.conversation) {
+    return (
+      tab.conversation.pendingQuestion?.requestId
+      ?? findComposerPendingQuestionFromConversation(tab.conversation, tab.isStreaming)?.toolUse.id
+      ?? null
+    );
+  }
   return (
     findComposerPendingQuestion({
       messages: tab.messages,
@@ -377,6 +498,9 @@ export function selectComposerHostedTodoId(state: ComposerPendingStoreSlice): st
   if (!tab) return null;
   // epoch in deps via store subscription when bumped
   void state.todoPlanDismissEpoch;
+  if (tab.conversation) {
+    return findMessageTodoPlanFromConversation(tab.conversation)?.toolUse.id ?? null;
+  }
   return (
     findMessageTodoPlan({
       messages: tab.messages,
@@ -391,11 +515,13 @@ export function selectMessageTodoAnchorUserIndex(
   const tab = activeChatTab(state);
   if (!tab) return null;
   void state.todoPlanDismissEpoch;
-  const plan = findMessageTodoPlan({
-    messages: tab.messages,
-    streamingMessage: tab.streamingMessage,
-  });
-  return plan?.anchorUserMessageIndex ?? null;
+  const plan = tab.conversation
+    ? findMessageTodoPlanFromConversation(tab.conversation)
+    : findMessageTodoPlan({
+        messages: tab.messages,
+        streamingMessage: tab.streamingMessage,
+      });
+  return plan?.turnIndex ?? plan?.anchorUserMessageIndex ?? null;
 }
 
 export function resolveComposerPendingQuestion(
@@ -403,6 +529,9 @@ export function resolveComposerPendingQuestion(
 ): ComposerPendingQuestion | null {
   const tab = activeChatTab(state);
   if (!tab || !composerChromeLive(tab)) return null;
+  if (tab.conversation) {
+    return findComposerPendingQuestionFromConversation(tab.conversation, tab.isStreaming);
+  }
   return findComposerPendingQuestion({
     messages: tab.messages,
     streamingMessage: tab.streamingMessage,
@@ -416,10 +545,12 @@ export function resolveComposerPendingTodo(
   const tab = activeChatTab(state);
   if (!tab) return null;
   void state.todoPlanDismissEpoch;
-  const plan = findMessageTodoPlan({
-    messages: tab.messages,
-    streamingMessage: tab.streamingMessage,
-  });
+  const plan = tab.conversation
+    ? findMessageTodoPlanFromConversation(tab.conversation)
+    : findMessageTodoPlan({
+        messages: tab.messages,
+        streamingMessage: tab.streamingMessage,
+      });
   return plan ? { toolUse: plan.toolUse } : null;
 }
 
@@ -429,6 +560,7 @@ export function resolveMessageTodoPlan(
   const tab = activeChatTab(state);
   if (!tab) return null;
   void state.todoPlanDismissEpoch;
+  if (tab.conversation) return findMessageTodoPlanFromConversation(tab.conversation);
   return findMessageTodoPlan({
     messages: tab.messages,
     streamingMessage: tab.streamingMessage,

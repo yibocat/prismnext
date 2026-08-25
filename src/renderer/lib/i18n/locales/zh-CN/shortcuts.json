@@ -1,0 +1,57 @@
+{
+  "shell": {
+    "newWindow": "新建窗口",
+    "close": "关闭：工作区标签 → 聊天标签 → 新空白对话 → 窗口",
+    "closeWindow": "关闭窗口",
+    "saveFile": "保存当前工作区文件",
+    "toggleLeftSidebar": "切换左侧边栏",
+    "toggleRightArea": "切换 RightArea",
+    "toggleRightAreaMaximize": "打开或关闭最大化 RightArea",
+    "openSettings": "打开设置",
+    "commandPalette": "打开命令面板"
+  },
+  "editor": {
+    "find": "在文件中查找",
+    "bold": "加粗（\\textbf{}）",
+    "italic": "斜体（\\textit{}）",
+    "comment": "切换注释",
+    "closeSearch": "关闭搜索面板"
+  },
+  "workspace": {
+    "nextTab": "下一个工作区标签",
+    "prevTab": "上一个工作区标签",
+    "gitRefresh": "刷新 Git 状态或历史",
+    "insertToChat": "将选区插入聊天",
+    "openTexWorkspace": "打开 TeX 工作区（分栏）",
+    "openTexWorkspaceMaximize": "打开 TeX 工作区（最大化）",
+    "openLiterature": "打开文献库（分栏）",
+    "openLiteratureMaximize": "打开文献库（最大化）",
+    "openExperiments": "打开实验（分栏）",
+    "openExperimentsMaximize": "打开实验（最大化）",
+    "openFiles": "打开文件（分栏）",
+    "openFilesMaximize": "打开文件（最大化）",
+    "openGit": "打开 Git（分栏）",
+    "openGitMaximize": "打开 Git（最大化）",
+    "openBrowser": "打开浏览器（分栏）",
+    "openBrowserMaximize": "打开浏览器（最大化）",
+    "openTerminal": "打开终端（分栏）",
+    "openTerminalMaximize": "打开终端（最大化）"
+  },
+  "product": {
+    "focusAiBar": "聚焦聊天输入框",
+    "newChat": "新建聊天标签",
+    "nextChat": "下一个聊天标签",
+    "prevChat": "上一个聊天标签",
+    "compile": "编译文档",
+    "acceptChange": "接受当前更改",
+    "rejectChange": "拒绝当前更改",
+    "acceptAll": "接受全部更改",
+    "rejectAll": "拒绝全部更改",
+    "togglePlanMode": "切换 Plan 模式",
+    "openModelPicker": "打开模型选择",
+    "cycleMessageWidth": "循环切换消息宽度",
+    "undoRename": "撤销会话重命名",
+    "cycleThemePack": "循环切换主题",
+    "cycleChatBackdrop": "循环切换聊天背景"
+  }
+}

@@ -6,6 +6,7 @@ import {
   Loader2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 import {
   buildLibraryIdentityIndex,
   findLibraryPaperInIdentityIndex,
-} from "../../../shared/staged-citation-library-match";
+} from "../../../shared/literature/staged-citation-library-match";
 import {
   PAPER_CITATION_UI_MAX_ROWS,
   type PaperCitationEntry,
@@ -22,11 +23,11 @@ import {
   type PaperCitationSectionKind,
   describePaperCitationIdentifier,
   paperCitationSourceLabel,
-} from "../../../shared/paper-citation-network";
+} from "../../../shared/literature/paper-citation-network";
 import type { LiteraturePaper, PaperCitationSection } from "@/types/electron.d";
 import { openUrlInBrowser } from "@/lib/browser-link/open-in-browser";
 import { openPaperInMainLibrary, openPaperPdfReader } from "@/lib/literature/open-paper-in-library";
-import { paperHasReadablePdf } from "./literature-format";
+import { paperHasReadablePdf } from "@/lib/literature/literature-format";
 import { useLiteratureCitationNetwork } from "./use-literature-citation-network";
 
 const headerBtn = cn(
@@ -316,7 +317,7 @@ export function LiteratureSidebarCitationPanel({
       const rowKey = entry.openAlexId || entry.doi || entry.title;
       setAddingKey(rowKey);
       try {
-        const created = await window.electronAPI.literatureCreateFromIdentifier(projectRoot, {
+        const created = await literatureDesktop.literatureCreateFromIdentifier(projectRoot, {
           doi: entry.doi ?? undefined,
           arxivId: entry.arxivId ?? undefined,
         });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderAgentsMdFromDigest } from "../../src/main/services/agents-md-scaffold";
+import { renderAgentsMdFromDigest } from "../../src/main/project/agents-md-scaffold";
 
 describe("renderAgentsMdFromDigest", () => {
   it("includes tree and package sections", () => {

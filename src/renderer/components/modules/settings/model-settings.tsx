@@ -21,7 +21,7 @@ import {
   getConfiguredVisionModels,
   getAllEnabledModels,
   modelSupportsVision,
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   type ProviderConfig,
   type ModelConfig,
 } from "@/lib/providers";
@@ -95,7 +95,7 @@ export function ModelSettings() {
   const [catalogTick, setCatalogTick] = useState(0);
 
   useEffect(() => {
-    void prefetchOpenCodeModelsCatalog().then((entries) => {
+    void prefetchPiModelsCatalog().then((entries) => {
       if (entries) setCatalogTick((t) => t + 1);
     });
   }, []);

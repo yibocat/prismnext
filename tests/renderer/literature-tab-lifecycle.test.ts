@@ -7,6 +7,7 @@ import {
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureReaderStore } from "@/stores/literature-reader-store";
 import type { RightTab } from "@/lib/workspace/mode-registry";
+import { shouldRefreshLiteratureOnActivate } from "@/stores/literature-store";
 
 describe("literature tab lifecycle", () => {
   const litTab: RightTab = {
@@ -54,5 +55,11 @@ describe("literature tab lifecycle", () => {
   it("is clean when no active note", () => {
     expect(isTabDirty(litTab, new Set())).toBe(false);
     expect(tabDisplayTitle(litTab, new Set())).toBe("Attention Is All You Need");
+  });
+
+  it("does not refresh literature on first activate before bootstrap", () => {
+    expect(shouldRefreshLiteratureOnActivate(null, "/paper")).toBe(false);
+    expect(shouldRefreshLiteratureOnActivate("/paper", "/paper")).toBe(true);
+    expect(shouldRefreshLiteratureOnActivate("/paper", "/other")).toBe(false);
   });
 });

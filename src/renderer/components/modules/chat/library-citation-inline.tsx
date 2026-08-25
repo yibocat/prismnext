@@ -8,7 +8,7 @@ import {
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import { inlineTokenClassName, INLINE_TOKEN_CLICKABLE } from "./inline-tokens/styles";
-import { formatPaperMentionLabel } from "../../../../shared/bibkey-utils";
+import { formatPaperMentionLabel } from "../../../../shared/literature/bibkey-utils";
 import {
   openPaperInMainLibrary,
   openPaperPdfReader,
@@ -16,7 +16,7 @@ import {
 import {
   formatLiteratureAuthorsShort,
   paperHasReadablePdf,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { cn } from "@/lib/utils";
 

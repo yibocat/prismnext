@@ -1,62 +1,28 @@
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import { SquareIcon } from "lucide-react";
-import type { ChatStreamMessage } from "@/stores/chat-store";
+import type { ContentBlock } from "@/stores/chat-store";
 import { AssistantBlockList } from "./assistant-block-list";
-import { contentBlocks } from "./tools/tool-result-map";
-
-/** Merge consecutive assistant bubbles in one turn into a single block stream. */
-export function mergeAssistantResponseBlocks(
-  responses: Array<{ msg: ChatStreamMessage }>,
-): { blocks: ReturnType<typeof contentBlocks>; hasStopped: boolean } {
-  const blocks: ReturnType<typeof contentBlocks> = [];
-  let hasStopped = false;
-  for (const { msg } of responses) {
-    if (msg.type !== "assistant") continue;
-    if (msg.stopped) hasStopped = true;
-    blocks.push(...contentBlocks(msg.message?.content));
-  }
-  return { blocks, hasStopped };
-}
 
 export const TurnAssistantContent = memo(function TurnAssistantContent({
-  responses,
+  blocks,
   toolResultMap,
   sessionId,
   turnIndex,
-  streamingMessage,
-  /** True for the whole user turn while the tab is still streaming (incl. gaps between assistant rounds). */
-  turnLive = false,
+  turnId,
+  isStreamingMsg,
   planReplyFallbackSummary,
+  stopped = false,
 }: {
-  responses: Array<{ msg: ChatStreamMessage; displayIdx: number }>;
-  toolResultMap: Map<string, import("@/stores/chat-store").ContentBlock>;
+  blocks: ContentBlock[];
+  toolResultMap: Map<string, ContentBlock>;
   sessionId: string;
   turnIndex: number;
-  streamingMessage: ChatStreamMessage | null;
-  turnLive?: boolean;
+  turnId?: string;
+  isStreamingMsg: boolean;
   planReplyFallbackSummary?: string | null;
+  stopped?: boolean;
 }) {
-  const { blocks, hasStopped } = useMemo(
-    () => mergeAssistantResponseBlocks(responses),
-    [responses],
-  );
-
-  // Prefer turnLive: OpenCode often commits assistant message N and briefly
-  // clears streamingMessage before N+1 — treating that as "settled" mounted
-  // Worked-for mid-turn, remounted burst folds, and scroll jumps.
-  const isStreamingMsg = useMemo(
-    () =>
-      turnLive
-      || (
-        !!streamingMessage
-        && responses.some(({ msg }) => msg === streamingMessage)
-      ),
-    [turnLive, responses, streamingMessage],
-  );
-
-  const msgIndex = responses[0]?.displayIdx ?? turnIndex;
-
-  if (blocks.length === 0 && !hasStopped) return null;
+  if (blocks.length === 0 && !stopped) return null;
 
   return (
     <div className="group w-full min-w-0 max-w-full overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-200">
@@ -64,15 +30,15 @@ export const TurnAssistantContent = memo(function TurnAssistantContent({
         <AssistantBlockList
           blocks={blocks}
           toolResultMap={toolResultMap}
-          msgIndex={msgIndex}
+          msgIndex={turnIndex}
           isStreamingMsg={isStreamingMsg}
           sessionId={sessionId}
           foldActivity
-          turnKey={`${sessionId}:${turnIndex}`}
+          turnKey={turnId || `${sessionId}:${turnIndex}`}
           planReplyFallbackSummary={planReplyFallbackSummary}
         />
       </div>
-      {hasStopped ? (
+      {stopped ? (
         <div className="mt-1 flex items-center gap-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
           <SquareIcon className="size-3 shrink-0 fill-current" />
           <span>已停止</span>

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useChatStore } from "@/stores/chat-store";
 import { useCheckpointStore } from "@/stores/checkpoint-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { truncateChatMessagesToTurn } from "@/components/modules/chat/chat-turns";
+import { truncateChatMessagesToTurn } from "@/lib/chat/chat-turns";
+import { emptyConversation, type Conversation } from "../../src/shared/agent/conversation";
 
 const PROJECT = "/proj";
 
@@ -12,6 +13,19 @@ function user(text: string) {
 
 function assistant(text: string) {
   return { type: "assistant" as const, message: { content: [{ type: "text" as const, text }] } };
+}
+
+function conversationWithTurns(count: number): Conversation {
+  return {
+    ...emptyConversation({ conversationId: "tab-1" }),
+    turns: Array.from({ length: count }, (_, i) => ({
+      turnId: `t${i}`,
+      turnIndex: i,
+      user: { blocks: [{ type: "text", text: `u${i}` }] },
+      assistant: { blocks: [{ type: "text", text: `a${i}` }] },
+      status: "completed" as const,
+    })),
+  };
 }
 
 describe("checkpoint regret / surviveNextFinalize", () => {
@@ -32,6 +46,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
           sessionCwd: PROJECT,
           title: "Test",
           messages: [user("a"), assistant("A"), user("b"), assistant("B")],
+          conversation: conversationWithTurns(2),
           streamingMessage: null,
           error: null,
           isStreaming: false,
@@ -44,9 +59,24 @@ describe("checkpoint regret / surviveNextFinalize", () => {
         useChatStore.setState((s) => ({
           tabs: s.tabs.map((t) =>
             t.id === tabId
-              ? { ...t, messages: truncateChatMessagesToTurn(t.messages, turnIndex) }
+              ? {
+                  ...t,
+                  messages: truncateChatMessagesToTurn(t.messages, turnIndex),
+                  conversation: t.conversation
+                    ? {
+                        ...t.conversation,
+                        turns: t.conversation.turns.filter((turn) => turn.turnIndex <= turnIndex),
+                        live: null,
+                      }
+                    : t.conversation,
+                }
               : t,
           ),
+        }));
+      },
+      restoreConversation: (tabId: string, conversation: Conversation) => {
+        useChatStore.setState((s) => ({
+          tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, conversation } : t)),
         }));
       },
       restoreMessages: (tabId: string, messages: unknown[]) => {
@@ -63,9 +93,61 @@ describe("checkpoint regret / surviveNextFinalize", () => {
       fsWrite: vi.fn(),
       fsMkdir: vi.fn(),
       fsDelete: vi.fn(),
-      sessionTruncateToTurn: vi.fn(),
-      sessionUndoTruncate: vi.fn(),
+      agentTruncateToTurn: vi.fn().mockResolvedValue({ ok: true, keptCount: 1 }),
+      agentUndoTruncate: vi.fn().mockResolvedValue({ ok: true, restoredCount: 2 }),
     });
+  });
+
+  it("allows rollback when only Conversation has turns (Pi send path leaves messages empty)", () => {
+    useCheckpointStore.setState({
+      byTab: {
+        "tab-1": {
+          sessionId: null,
+          checkpoints: [],
+          pendingTurn: null,
+          regret: null,
+          boundCheckoutPath: PROJECT,
+        },
+      },
+    });
+    useChatStore.setState({
+      tabs: [
+        {
+          ...(useChatStore.getState().tabs[0] as any),
+          messages: [],
+          conversation: conversationWithTurns(2),
+        },
+      ],
+    } as any);
+
+    expect(useCheckpointStore.getState().canRollbackToTurn("tab-1", 0)).toBe(true);
+    expect(useCheckpointStore.getState().canRollbackToTurn("tab-1", 1)).toBe(true);
+    expect(useCheckpointStore.getState().canRollbackToTurn("tab-1", 2)).toBe(false);
+  });
+
+  it("does not treat leftover OpenCode messages as rollback turns", () => {
+    useCheckpointStore.setState({
+      byTab: {
+        "tab-1": {
+          sessionId: null,
+          checkpoints: [],
+          pendingTurn: null,
+          regret: null,
+          boundCheckoutPath: PROJECT,
+        },
+      },
+    });
+    useChatStore.setState({
+      tabs: [
+        {
+          ...(useChatStore.getState().tabs[0] as any),
+          messages: [user("a"), assistant("A"), user("b"), assistant("B")],
+          conversation: conversationWithTurns(0),
+        },
+      ],
+    } as any);
+
+    expect(useCheckpointStore.getState().canRollbackToTurn("tab-1", 0)).toBe(false);
   });
 
   it("allows chat-only rollback when later turns exist", () => {
@@ -102,6 +184,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
         {
           ...(useChatStore.getState().tabs[0] as any),
           messages: [user("only"), assistant("one")],
+          conversation: conversationWithTurns(1),
         },
       ],
     } as any);
@@ -202,7 +285,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
   });
 
   it("restores UI/files when sessionUndoTruncate fails", async () => {
-    (window.electronAPI as any).sessionUndoTruncate = vi.fn().mockRejectedValue(
+    (window.electronAPI as any).agentUndoTruncate = vi.fn().mockRejectedValue(
       new Error("No session backup available for undo"),
     );
     (window.electronAPI as any).fsWrite = vi.fn().mockResolvedValue(undefined);
@@ -276,6 +359,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
               },
             ],
             messages: [user("a"), assistant("A"), user("b"), assistant("B")],
+            conversation: conversationWithTurns(2),
           },
           boundCheckoutPath: PROJECT,
         },
@@ -285,6 +369,7 @@ describe("checkpoint regret / surviveNextFinalize", () => {
     const result = await useCheckpointStore.getState().undoLastRollback("tab-1");
     expect(result.ok).toBe(true);
     expect(result.sessionRestored).toBe(false);
+    expect(useChatStore.getState().tabs[0]!.conversation.turns).toHaveLength(2);
     expect(useChatStore.getState().tabs[0]!.messages).toHaveLength(4);
     expect(window.electronAPI.fsWrite).toHaveBeenCalledWith(
       `${PROJECT}/main.tex`,

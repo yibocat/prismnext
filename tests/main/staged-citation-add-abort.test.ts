@@ -4,7 +4,7 @@ import {
   cancelStagedCitationAdd,
   endStagedCitationAdd,
   hasPendingStagedCitationAddCancel,
-} from "../../src/main/services/staged-citation-add-abort";
+} from "../../src/main/literature/citation/staged-citation-add-abort";
 
 describe("staged-citation-add-abort", () => {
   it("cancels an in-flight add via AbortSignal", () => {

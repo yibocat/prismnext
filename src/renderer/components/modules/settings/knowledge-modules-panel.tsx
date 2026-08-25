@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatTokenCount } from "@shared/token-estimate";
+import { formatTokenCount } from "@shared/providers/token-estimate";
 import { useTranslation } from "react-i18next";
 import { Loader2Icon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
+import { fetchKnowledgeModules, type KnowledgeModuleInfo } from "@/lib/settings/knowledge-modules";
 import {
   SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SHELL,
@@ -14,10 +15,6 @@ import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0 bg-muted text-muted-foreground";
-
-type KnowledgeModuleInfo = Awaited<
-  ReturnType<typeof window.electronAPI.settingsGetKnowledgeModules>
->[number];
 
 function ModuleBlock({ mod }: { mod: KnowledgeModuleInfo }) {
   const { t } = useTranslation();
@@ -84,13 +81,9 @@ export function KnowledgeModulesPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.electronAPI
-      .settingsGetKnowledgeModules(projectRoot ?? undefined)
+    void fetchKnowledgeModules(projectRoot)
       .then((list) => {
         if (!cancelled) setModules(list);
-      })
-      .catch(() => {
-        if (!cancelled) setModules([]);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

@@ -1,44 +1,43 @@
-% architecture-diagram.tex — layered block diagram template (standalone).
-% Compile: pdflatex/lualatex/xelatex. Output: cropped vector PDF.
+% Generic layered architecture (standalone).
+% Replace Input / Block A / Block B / Output and the layer labels.
+% Add or drop nodes with right=of / below=of only — no absolute coords.
+% Compile with latex-compile-standalone; PDF lands next to this file.
 \documentclass[tikz,border=4pt]{standalone}
 \usetikzlibrary{positioning,arrows.meta}
 
-% ---- one style block; edit here, not per-node -----------------------------
 \tikzset{
   block/.style={
     draw, rounded corners=2pt, align=center,
-    minimum width=2.6cm, minimum height=0.9cm, font=\small,
+    minimum width=2.4cm, minimum height=0.85cm, font=\small,
   },
-  encoder/.style={block, fill=blue!8},
-  head/.style={block, fill=orange!12},
-  loss/.style={block, fill=green!10},
-  data/.style={block, fill=gray!10},
+  io/.style={block, fill=gray!12},
+  stage/.style={block, fill=blue!8},
+  alt/.style={block, fill=orange!10},
   flow/.style={-{Stealth[length=2.5mm]}, thick},
   skip/.style={flow, dashed, gray},
-  stage/.style={font=\footnotesize\itshape, text=gray},
+  layer/.style={font=\footnotesize\itshape, text=gray},
 }
 
 \begin{document}
-\begin{tikzpicture}[node distance=0.55cm and 1.1cm]
+\begin{tikzpicture}[node distance=0.55cm and 1.0cm]
 
-% ---- main chain (positioning, not absolute coords) ------------------------
-\node[data]    (input)  {Input $x$};
-\node[encoder, right=of input]  (enc)   {Encoder\\$f_\theta$};
-\node[head,    right=of enc]    (head)  {Prediction\\head $g_\phi$};
-\node[loss,    right=of head]   (loss)  {Loss\\$\mathcal{L}$};
+\node[io] (in) {Input};
+\node[stage, right=of in] (a) {Block A};
+\node[stage, right=of a] (b) {Block B};
+\node[io, right=of b] (out) {Output};
 
-\draw[flow] (input) -- (enc);
-\draw[flow] (enc)   -- (head);
-\draw[flow] (head)  -- (loss);
+\draw[flow] (in) -- (a);
+\draw[flow] (a) -- (b);
+\draw[flow] (b) -- (out);
 
-% ---- side branch ----------------------------------------------------------
-\node[encoder, below=of enc] (target) {Target encoder\\$\bar{f}$ (EMA)};
-\draw[flow] (input.south) |- (target.west);
-\draw[flow] (target.east) -| (loss.south);
+\node[alt, below=of a] (ap) {Block A$'$};
+\draw[flow] (in.south) |- (ap.west);
+\draw[flow] (ap.east) -| (b.south);
 
-% ---- stage labels ----------------------------------------------------------
-\node[stage, above=0.15cm of enc]  {representation};
-\node[stage, above=0.15cm of head] {prediction};
+\draw[skip] (a.north) to[out=35, in=145] (out.north);
+
+\node[layer, above=0.22cm of a] {stage 1};
+\node[layer, above=0.22cm of b] {stage 2};
 
 \end{tikzpicture}
 \end{document}

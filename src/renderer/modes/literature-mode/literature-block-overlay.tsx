@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { usePDFPageNumber } from "@anaralabs/lector";
-import type { ExtractBlockType } from "../../../shared/paper-extract-block";
-import { collectEmphasizedBlockIds } from "../../../shared/paper-extract-block";
+import type { ExtractBlockType } from "../../../shared/literature/paper-extract-block";
+import { collectEmphasizedBlockIds } from "../../../shared/literature/paper-extract-block";
 import { cn } from "@/lib/utils";
 import { useLiteratureBlocks } from "./literature-block-context";
 

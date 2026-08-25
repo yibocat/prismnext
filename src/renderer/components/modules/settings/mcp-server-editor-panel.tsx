@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useDocumentStore } from "@/stores/document-store";
 import { closeSettingsPanel, openSettingsPanel } from "@/stores/settings-panel-store";
+import { listTeamAssets } from "@/stores/teams-store";
 import { useMcpServersStore } from "@/stores/mcp-servers-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import {
@@ -82,7 +83,7 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
           return;
         }
         try {
-          const list = await window.electronAPI.teamsListAssets(projectRoot, "mcp");
+          const list = await listTeamAssets(projectRoot, "mcp");
           const asset = list.find(
             (a) =>
               a.teamId === teamId
@@ -110,7 +111,7 @@ export function McpServerEditorPanel({ slot }: { slot: McpServerSlot }) {
       if (!found) {
         // Fallback: asset list (store may be mid-reload after install).
         try {
-          const list = await window.electronAPI.teamsListAssets(projectRoot!, "mcp");
+          const list = await listTeamAssets(projectRoot!, "mcp");
           const asset = list.find(
             (a) =>
               a.teamId === teamId

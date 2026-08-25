@@ -144,7 +144,10 @@ function JobMonitorInsertHost({
 export function JobMonitorView({ tabId, executionId }: JobMonitorViewProps) {
   const { t } = useTranslation();
   const chatTabId = useRightPanelStore(
-    (s) => s.tabs.find((tab) => tab.id === tabId)?.linkedChatTabId,
+    (s) => {
+      const tab = s.tabs.find((t) => t.id === tabId);
+      return tab?.kind === "terminal" ? tab.linkedChatTabId : undefined;
+    },
   );
   const byId = useExecutionStore((s) => s.byId);
   const sessionViews = useMemo(() => {

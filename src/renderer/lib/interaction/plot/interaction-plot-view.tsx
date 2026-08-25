@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { InteractionSpec } from "../../../../shared/interaction-spec";
-import { pickCsvResourcePath, type PlotDataResult } from "../../../../shared/interaction-plot";
+import type { InteractionSpec } from "../../../../shared/interaction/spec";
+import { pickCsvResourcePath, type PlotDataResult } from "../../../../shared/interaction/plot";
 import { buildPlotOptions } from "./build-plot-spec";
 import { loadInteractionPlotData } from "./load-interaction-plot-data";
 import { SETTINGS_ROW_DESC } from "@/components/modules/settings/settings-tokens";

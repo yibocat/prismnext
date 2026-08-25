@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ProjectLifecycleAuthority,
   type ProjectLifecycleFs,
-} from "../../src/main/services/project-lifecycle-authority";
+} from "../../src/main/project/project-lifecycle-authority";
 
 const home = "/fake-home";
 const project = `${home}/research`;

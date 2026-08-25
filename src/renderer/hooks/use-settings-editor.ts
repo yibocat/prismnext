@@ -58,7 +58,7 @@ export function useActiveSettingsEditorSlot(): SettingsPanelSlot | null {
 export function useOpenSettingsEditorSlot(): SettingsPanelSlot | null {
   return useRightPanelStore((s) => {
     const tab = s.tabs.find((t) => t.kind === "settings-editor" && t.settingsSlot);
-    return tab?.settingsSlot ?? null;
+    return tab?.kind === "settings-editor" ? tab.settingsSlot ?? null : null;
   });
 }
 
@@ -69,7 +69,7 @@ export function useSettingsEditorSlotOfKind<K extends SettingsPanelSlot["kind"]>
     const tab = s.tabs.find(
       (t) => t.kind === "settings-editor" && t.settingsSlot?.kind === kind,
     );
-    return (tab?.settingsSlot as Extract<SettingsPanelSlot, { kind: K }>) ?? null;
+    return (tab?.kind === "settings-editor" ? tab.settingsSlot : null) as Extract<SettingsPanelSlot, { kind: K }> | null;
   });
 }
 

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { maybeWriteFullLog } from "../../src/main/services/experiment-run-executor";
-import { RUN_OUTPUT_TAIL_BYTES } from "../../src/shared/experiment-log";
+import { maybeWriteFullLog } from "../../src/main/experiment/experiment-run-executor";
+import { RUN_OUTPUT_TAIL_BYTES } from "../../src/shared/experiments/log";
 
 describe("maybeWriteFullLog", () => {
   let root: string;

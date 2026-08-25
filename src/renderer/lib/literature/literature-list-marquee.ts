@@ -28,15 +28,21 @@ export function rectsIntersect(a: MarqueeRect, b: DOMRect): boolean {
   return !(b.right < a.left || b.left > right || b.bottom < a.top || b.top > bottom);
 }
 
+const DEFAULT_ROW_SELECTOR = "[data-literature-row-shell]";
+const DEFAULT_ID_DATASET_KEY = "literatureRowId";
+const DEFAULT_IGNORE_SELECTOR =
+  'input, button, a, textarea, select, [data-literature-pdf-open], [data-literature-composer-drag], [contenteditable="true"]';
+
 export function collectRowIdsInMarquee(
   root: ParentNode,
   marquee: MarqueeRect,
-  rowSelector = "[data-literature-row-shell]",
+  rowSelector = DEFAULT_ROW_SELECTOR,
+  idDatasetKey = DEFAULT_ID_DATASET_KEY,
 ): string[] {
   const ids: string[] = [];
   for (const el of root.querySelectorAll(rowSelector)) {
     if (!(el instanceof HTMLElement)) continue;
-    const id = el.dataset.literatureRowId;
+    const id = el.dataset[idDatasetKey];
     if (!id) continue;
     if (rectsIntersect(marquee, el.getBoundingClientRect())) {
       ids.push(id);
@@ -45,13 +51,9 @@ export function collectRowIdsInMarquee(
   return ids;
 }
 
-function isMarqueeIgnoredTarget(target: EventTarget | null): boolean {
+function isMarqueeIgnoredTarget(target: EventTarget | null, ignoreSelector: string): boolean {
   if (!(target instanceof HTMLElement)) return true;
-  return Boolean(
-    target.closest(
-      'input, button, a, textarea, select, [data-literature-pdf-open], [data-literature-composer-drag], [contenteditable="true"]',
-    ),
-  );
+  return Boolean(target.closest(ignoreSelector));
 }
 
 function autoScrollNearEdge(scrollEl: HTMLElement, clientY: number): void {
@@ -70,8 +72,20 @@ export function useLiteratureListMarquee(opts: {
   checkedPaperIds: string[];
   setCheckedPaperIds: (ids: string[]) => void;
   enabled?: boolean;
+  rowSelector?: string;
+  idDatasetKey?: string;
+  ignoreSelector?: string;
 }) {
-  const { scrollRef, listBodyRef, checkedPaperIds, setCheckedPaperIds, enabled = true } = opts;
+  const {
+    scrollRef,
+    listBodyRef,
+    checkedPaperIds,
+    setCheckedPaperIds,
+    enabled = true,
+    rowSelector = DEFAULT_ROW_SELECTOR,
+    idDatasetKey = DEFAULT_ID_DATASET_KEY,
+    ignoreSelector = DEFAULT_IGNORE_SELECTOR,
+  } = opts;
   const [marqueeRect, setMarqueeRect] = useState<MarqueeRect | null>(null);
   const suppressRowClickRef = useRef(false);
   const checkedRef = useRef(checkedPaperIds);
@@ -80,8 +94,8 @@ export function useLiteratureListMarquee(opts: {
   useEffect(() => {
     if (!enabled) return;
     const scrollEl = scrollRef.current;
-    const listEl = listBodyRef.current;
-    if (!scrollEl || !listEl) return;
+    if (!scrollEl) return;
+    const resolveList = () => listBodyRef.current ?? scrollEl;
 
     type Session = {
       active: boolean;
@@ -118,7 +132,7 @@ export function useLiteratureListMarquee(opts: {
 
     const onMouseDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
-      if (isMarqueeIgnoredTarget(e.target)) return;
+      if (isMarqueeIgnoredTarget(e.target, ignoreSelector)) return;
       const target = e.target;
       if (!(target instanceof Node)) return;
       if (!scrollEl.contains(target)) return;
@@ -149,7 +163,7 @@ export function useLiteratureListMarquee(opts: {
       const rect = normalizeMarqueeRect(session.startX, session.startY, e.clientX, e.clientY);
       setMarqueeRect(rect);
 
-      const hitIds = collectRowIdsInMarquee(listEl, rect);
+      const hitIds = collectRowIdsInMarquee(resolveList(), rect, rowSelector, idDatasetKey);
       const merged = new Set([...(session.additive ? session.baseIds : []), ...hitIds]);
       setCheckedPaperIds([...merged]);
 
@@ -170,7 +184,7 @@ export function useLiteratureListMarquee(opts: {
       document.removeEventListener("blur", finish);
       finish();
     };
-  }, [enabled, listBodyRef, scrollRef, setCheckedPaperIds]);
+  }, [enabled, idDatasetKey, ignoreSelector, listBodyRef, rowSelector, scrollRef, setCheckedPaperIds]);
 
   return { marqueeRect, suppressRowClickRef };
 }

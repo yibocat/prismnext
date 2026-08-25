@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeLibraryCiteMarkers } from "../../src/shared/normalize-library-cite-markers";
+import { normalizeLibraryCiteMarkers } from "../../src/shared/literature/normalize-library-cite-markers";
 
 describe("normalizeLibraryCiteMarkers", () => {
   it("canonicalizes whitespace inside bracketed cites", () => {

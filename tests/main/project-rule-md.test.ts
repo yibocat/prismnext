@@ -3,7 +3,7 @@ import {
   isValidRuleName,
   resolveProjectRuleWrite,
   buildProjectRuleMarkdown,
-} from "../../src/shared/project-rule-md";
+} from "../../src/shared/workbench/project-rule-md";
 
 describe("project-rule-md", () => {
   it("rejects invalid names", () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useOpenCodeEvents } from "@/hooks/use-opencode-events";
+import { useAgentEvents } from "@/hooks/use-agent-events";
 import { useTrayStatusSync } from "@/hooks/use-tray-status-sync";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
@@ -13,9 +13,10 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
-  prefetchOpenCodeModelsCatalog,
+  prefetchPiModelsCatalog,
   resolveSelectedModelContextTokens,
-  subscribeOpenCodeModelsCatalog,
+  resolveSelectedModelContextTokensIfKnown,
+  subscribePiModelsCatalog,
 } from "@/lib/providers";
 import { GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,14 +46,14 @@ import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, 
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
+import { ProjectSelector } from "@/components/modules/chat/project-selector";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
-import { SUBAGENT_PANEL_EXIT_MS } from "@/components/modules/chat/subagent-run-panel";
 import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
 export function LeftMainArea() {
   const { t } = useTranslation();
-  useOpenCodeEvents();
+  useAgentEvents();
   useTrayStatusSync();
 
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
@@ -78,29 +79,17 @@ export function LeftMainArea() {
     return unsub;
   }, []);
 
-  const messages = useChatStore((s) => s.messages);
+  const hasConversation = useChatStore((s) => {
+    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const conv = tab?.conversation;
+    return Boolean(conv && (conv.turns.length > 0 || conv.live));
+  });
   const isStreaming = useChatStore((s) => s.isStreaming);
-  const openSubAgentPanelToolUseId = useChatStore(
-    (s) => s.tabs.find((t) => t.id === s.activeTabId)?.openSubAgentPanelToolUseId ?? null,
-  );
-  /** Smooth scrim enter/exit — keep mounted through opacity transition. */
-  const [subAgentScrimMounted, setSubAgentScrimMounted] = useState(false);
-  const [subAgentScrimOn, setSubAgentScrimOn] = useState(false);
-  useEffect(() => {
-    if (openSubAgentPanelToolUseId) {
-      setSubAgentScrimMounted(true);
-      const raf = requestAnimationFrame(() => {
-        requestAnimationFrame(() => setSubAgentScrimOn(true));
-      });
-      return () => cancelAnimationFrame(raf);
-    }
-    setSubAgentScrimOn(false);
-    const t = window.setTimeout(() => setSubAgentScrimMounted(false), SUBAGENT_PANEL_EXIT_MS);
-    return () => window.clearTimeout(t);
-  }, [openSubAgentPanelToolUseId]);
   const contextTokens = useChatStore((s) => s.contextTokens);
   const contextWindowSize = useChatStore((s) => s.contextWindowSize);
   const contextUsageSource = useChatStore((s) => s.contextUsageSource);
+  const contextCostUsd = useChatStore((s) => s.contextCostUsd);
+  const contextBreakdown = useChatStore((s) => s.contextBreakdown);
   const promptStale = useChatStore((s) => s.promptStale);
   const sessionId = useChatStore((s) => s.sessionId);
   const isLoadingSession = useChatStore((s) => s.isLoadingSession);
@@ -110,10 +99,28 @@ export function LeftMainArea() {
   });
   const setSessionAgent = useChatStore((s) => s.setSessionAgent);
   const showHomepage =
-    messages.length === 0 && !isStreaming && !isLoadingSession;
+    !hasConversation && !isStreaming && !isLoadingSession;
   /** New empty session shortcut — same as slash Modes → Plan; hide once in Plan. */
   const showPlanNewIdea = showHomepage && sessionAgent !== "plan";
   const editorMaximized = useLayoutStore((s) => s.editorMaximized);
+  const [homepageComposerMotion, setHomepageComposerMotion] = useState(false);
+  useEffect(() => {
+    if (!showHomepage) {
+      setHomepageComposerMotion(false);
+      return;
+    }
+    // First paint must already be docked or centered. Enabling the
+    // flex-grow transition earlier would interpolate from the
+    // unmatched @xl class (grow 0) on every empty-chat mount.
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setHomepageComposerMotion(true));
+    });
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [showHomepage]);
   const {
     dragActive: chatFileDragActive,
     zoneRef: chatFileDropZoneRef,
@@ -134,23 +141,31 @@ export function LeftMainArea() {
   const aiCustomProviders = useSettingsStore((s) => s.settings.aiCustomProviders);
   const [catalogTick, setCatalogTick] = useState(0);
   useEffect(() => {
-    void prefetchOpenCodeModelsCatalog().then(() => {
+    void prefetchPiModelsCatalog().then(() => {
       setCatalogTick((n) => n + 1);
     });
-    return subscribeOpenCodeModelsCatalog(() => {
+    return subscribePiModelsCatalog(() => {
       setCatalogTick((n) => n + 1);
     });
   }, []);
   const contextTotal = useMemo(() => {
     void catalogTick;
-    if (typeof contextWindowSize === "number" && contextWindowSize > 0) {
-      return contextWindowSize;
-    }
     const custom = aiCustomModelsData
       ? Object.fromEntries(
           Object.entries(aiCustomModelsData).map(([k, v]) => [k, v as any]),
         )
       : undefined;
+    const selected = resolveSelectedModelContextTokensIfKnown(
+      aiProvider,
+      aiModel ?? undefined,
+      aiEnabledModels,
+      custom,
+      aiCustomProviders,
+    );
+    if (typeof selected === "number" && selected > 0) return selected;
+    if (typeof contextWindowSize === "number" && contextWindowSize > 0) {
+      return contextWindowSize;
+    }
     return resolveSelectedModelContextTokens(
       aiProvider,
       aiModel ?? undefined,
@@ -267,13 +282,19 @@ export function LeftMainArea() {
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm bg-background">
           <ChatHomeBackdrop />
           {showHomepage ? (
-          /* ── Homepage ── */
+          /* ── Homepage ──
+           * Narrow: trail flex-grow 0 (docked). @xl+: trail flex-grow 1
+           * and titlebar padding (optical center). justify-content cannot
+           * interpolate, so the two states are the same flex column with
+           * a trailing spacer — same 220ms flex-grow as the shell panels. */
           <div
             ref={chatFileDropZoneRef}
             className={cn(
-              "relative z-10 flex min-w-0 flex-1 flex-col items-center justify-end overflow-x-hidden @xl:justify-center @xl:pb-[var(--height-titlebar)]",
+              "relative z-10 flex min-w-0 flex-1 flex-col items-center overflow-x-hidden pb-0 @xl:pb-[var(--height-titlebar)]",
               chatFileDragActive && chatFileDropZoneClass,
             )}
+            data-homepage-composer=""
+            data-homepage-composer-motion={homepageComposerMotion ? "" : undefined}
             {...chatFileDropHandlers}
           >
             {chatFileDragActive ? (
@@ -281,11 +302,12 @@ export function LeftMainArea() {
                 {t("chat.aibar.dropFiles")}
               </span>
             ) : null}
+            <div aria-hidden data-homepage-composer-lead="" className="pointer-events-none min-h-0 flex-1" />
             <div className="relative z-10 flex w-full flex-col items-center">
-              {/* Branch / worktree — sits directly above the centered composer */}
+              {/* Project / branch / worktree — sits directly above the centered composer */}
               <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
+                <ProjectSelector />
                 <BranchSelector />
-
                 <WorktreeSelector />
               </div>
 
@@ -316,6 +338,11 @@ export function LeftMainArea() {
               <span className="flex-1" />
               </div>
             </div>
+            <div
+              aria-hidden
+              data-homepage-composer-trail=""
+              className="pointer-events-none min-h-0 basis-0 grow-0 @xl:grow"
+            />
           </div>
         ) : (
           /* ── Chat view ── */
@@ -341,29 +368,6 @@ export function LeftMainArea() {
               </div>
             )}
 
-            {/*
-              Full-bleed focus scrim over the chat column (covers sticky user
-              bubbles). Composer + Task panel sit above it — same layering as
-              Cursor: dim the transcript, keep the bottom shell crisp.
-              AiBar path never mounts this (editorMaximized).
-            */}
-            {subAgentScrimMounted ? (
-              <div
-                aria-hidden
-                className={cn(
-                  // Theme-aware scrim: light wash in light mode, soft dim in dark
-                  // (not a heavy always-black slab).
-                  "absolute inset-0 z-40 bg-background/55 backdrop-blur-[0.25px]",
-                  "transition-opacity ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  subAgentScrimOn
-                    ? "pointer-events-auto opacity-100"
-                    : "pointer-events-none opacity-0",
-                )}
-                style={{ transitionDuration: `${SUBAGENT_PANEL_EXIT_MS}ms` }}
-              />
-            ) : null}
-
-            {/* Above scrim: Task panel + composer + status chrome */}
             <div className="relative z-50 shrink-0">
               <div data-chat-width className="w-full">
                 {!editorMaximized && <ChatComposer />}
@@ -389,11 +393,13 @@ export function LeftMainArea() {
                   </>
                 )}
                 <span className="flex-1" />
-                {(contextTokens != null || contextWindowSize != null || sessionId) && (
+                {(contextTokens != null || contextWindowSize != null || contextCostUsd != null || sessionId) && (
                   <ContextWindowIndicator
                     used={contextTokens}
                     total={contextTotal}
                     source={contextUsageSource}
+                    costUsd={contextCostUsd}
+                    breakdown={contextBreakdown}
                     promptStale={promptStale}
                     isStreaming={isStreaming}
                   />

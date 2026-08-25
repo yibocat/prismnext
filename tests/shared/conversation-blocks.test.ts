@@ -1,0 +1,277 @@
+import { describe, expect, it } from "vitest";
+import {
+  applyAssistantEventToBlocks,
+  applySubagentEventToRuns,
+  collectTaskRunsFromBlocks,
+  deriveFlattenedAssistant,
+  sealTurnBlockTimings,
+} from "../../src/shared/agent/conversation-blocks";
+import {
+  entityToolOutcome,
+  fileToolOutcome,
+  parseToolOutcome,
+  type AgentEvent,
+} from "../../src/shared/agent/runtime";
+import type { ContentBlock } from "../../src/shared/agent/conversation";
+
+const ids = {
+  runtimeSessionId: "rt-1",
+  tabId: "tab-1",
+  turnId: "turn-1",
+};
+
+function ev<T extends AgentEvent>(event: T): T {
+  return event;
+}
+
+describe("applyAssistantEventToBlocks", () => {
+  it("seals thinking when a tool or reply starts so the live timer stops", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "先想",
+    }));
+    expect(blocks[0]).toMatchObject({ type: "thinking", thinking: "先想" });
+    expect((blocks[0] as { timeEnd?: number }).timeEnd).toBeUndefined();
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-read",
+      toolName: "read",
+      args: { path: "a.md" },
+    }));
+    expect(typeof (blocks[0] as { timeEnd?: number }).timeEnd).toBe("number");
+    expect(typeof (blocks[0] as { duration?: number }).duration).toBe("number");
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "再想",
+    }));
+    expect(blocks.map((block) => block.type)).toEqual(["thinking", "tool_use", "thinking"]);
+    expect((blocks[2] as { timeEnd?: number }).timeEnd).toBeUndefined();
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "text_delta",
+      text: "结论",
+    }));
+    expect(typeof (blocks[2] as { timeEnd?: number }).timeEnd).toBe("number");
+  });
+
+  it("keeps thinking → tool → thinking → text in arrival order", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "先看目录",
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-ls",
+      toolName: "ls",
+      args: { path: "." },
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_finished",
+      toolCallId: "c-ls",
+      toolName: "ls",
+      ok: true,
+      result: "main.tex\n",
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "再找 tex",
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "text_delta",
+      text: "找到 main.tex",
+    }));
+
+    expect(blocks.map((block) => block.type)).toEqual([
+      "thinking",
+      "tool_use",
+      "tool_result",
+      "thinking",
+      "text",
+    ]);
+    expect(blocks[0]).toMatchObject({ type: "thinking", thinking: "先看目录" });
+    expect(blocks[3]).toMatchObject({ type: "thinking", thinking: "再找 tex" });
+    expect(blocks[4]).toMatchObject({ type: "text", text: "找到 main.tex" });
+    expect(typeof (blocks[0] as { timeEnd?: number }).timeEnd).toBe("number");
+    expect(typeof (blocks[3] as { timeEnd?: number }).timeEnd).toBe("number");
+
+    const flatten = deriveFlattenedAssistant(sealTurnBlockTimings(blocks));
+    expect(flatten.text).toBe("找到 main.tex");
+    expect(flatten.thinking).toBe("先看目录再找 tex");
+    expect(flatten.toolCalls).toHaveLength(1);
+    expect(flatten.toolCalls[0]).toMatchObject({
+      toolCallId: "c-ls",
+      toolName: "ls",
+      args: { path: "." },
+      result: "main.tex\n",
+    });
+  });
+
+  it("copies tool_finished outcome onto the tool_result block", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-tex",
+      toolName: "latex-compile-standalone",
+      args: { mainFile: "fig.tex" },
+    }));
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_finished",
+      toolCallId: "c-tex",
+      toolName: "latex-compile-standalone",
+      ok: true,
+      result: { success: true, pdfPath: "fig.pdf" },
+      outcome: { resources: [{ type: "file", path: "fig.pdf" }] },
+    }));
+    const result = blocks.find((block) => block.type === "tool_result");
+    expect(result?.outcome).toEqual({ resources: [{ type: "file", path: "fig.pdf" }] });
+  });
+
+  it("shows a preparing tool card, then keeps args and timeStart when execution starts", () => {
+    let blocks: ContentBlock[] = [];
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-write",
+      toolName: "write",
+      args: {},
+      preparing: true,
+    }));
+    expect(blocks[0]).toMatchObject({
+      type: "tool_use",
+      id: "c-write",
+      name: "write",
+      status: "preparing",
+    });
+    const startedAt = blocks[0].timeStart;
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-write",
+      toolName: "write",
+      args: { path: "notes/world-models.md" },
+      preparing: true,
+    }));
+    expect(blocks[0]).toMatchObject({
+      status: "running",
+      input: { path: "notes/world-models.md" },
+      timeStart: startedAt,
+    });
+
+    blocks = applyAssistantEventToBlocks(blocks, ev({
+      ...ids,
+      type: "tool_started",
+      toolCallId: "c-write",
+      toolName: "write",
+      args: { path: "notes/world-models.md", content: "# notes" },
+    }));
+    expect(blocks[0]).toMatchObject({
+      status: "running",
+      input: { path: "notes/world-models.md", content: "# notes" },
+      timeStart: startedAt,
+    });
+  });
+});
+
+describe("collectTaskRunsFromBlocks", () => {
+  it("rebuilds a finished Task run from tool_use plus result text", () => {
+    const runs = collectTaskRunsFromBlocks([
+      {
+        type: "tool_use",
+        id: "task-1",
+        name: "task",
+        input: { expertId: "literature-synthesizer", prompt: "核查" },
+      },
+      {
+        type: "tool_result",
+        tool_use_id: "task-1",
+        name: "task",
+        content: { ok: true, result: "方向仍开放" },
+      },
+    ]);
+    expect(runs).toEqual([{
+      parentToolCallId: "task-1",
+      expertFqid: "literature-synthesizer",
+      expertName: "literature-synthesizer",
+      status: "done",
+      prompt: "核查",
+      blocks: [{ type: "text", text: "方向仍开放" }],
+    }]);
+  });
+});
+
+describe("applySubagentEventToRuns", () => {
+  it("accumulates child thinking/text and seals the run on turn_finished", () => {
+    const subagent = {
+      parentToolCallId: "task-1",
+      expertFqid: "literature-synthesizer",
+      expertName: "literature-synthesizer",
+    };
+    let runs = applySubagentEventToRuns({}, ev({
+      ...ids,
+      type: "thinking_delta",
+      text: "先看三篇",
+      subagent,
+    }));
+    runs = applySubagentEventToRuns(runs, ev({
+      ...ids,
+      type: "text_delta",
+      text: "三个方向仍开放",
+      subagent,
+    }));
+    runs = applySubagentEventToRuns(runs, ev({
+      ...ids,
+      type: "turn_finished",
+      subagent,
+    }));
+    expect(runs["task-1"]).toMatchObject({
+      expertName: "literature-synthesizer",
+      status: "done",
+      blocks: [
+        { type: "thinking", thinking: "先看三篇" },
+        { type: "text", text: "三个方向仍开放" },
+      ],
+    });
+  });
+});
+
+describe("parseToolOutcome", () => {
+  it("keeps file and entity resources and drops junk", () => {
+    expect(fileToolOutcome("figures\\cell.pdf", " Cell ")).toEqual({
+      resources: [{ type: "file", path: "figures/cell.pdf", title: "Cell" }],
+    });
+    expect(entityToolOutcome("interaction", "loss-curve", "Loss")).toEqual({
+      resources: [{ type: "entity", system: "interaction", id: "loss-curve", title: "Loss" }],
+    });
+    expect(parseToolOutcome({
+      resources: [
+        { type: "file", path: "  a.pdf  " },
+        { type: "entity", system: "literature", id: "paper-1" },
+        { type: "entity", system: "unknown", id: "x" },
+        { type: "file", path: "" },
+        { media: "pdf" },
+      ],
+    })).toEqual({
+      resources: [
+        { type: "file", path: "a.pdf" },
+        { type: "entity", system: "literature", id: "paper-1" },
+      ],
+    });
+    expect(parseToolOutcome({ media: "pdf" })).toBeUndefined();
+  });
+});

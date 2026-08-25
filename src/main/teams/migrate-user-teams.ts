@@ -20,7 +20,7 @@ import {
 import { dirname, join } from "node:path";
 import { appTeamsDir } from "./scope";
 import { USER_TEAM_PUBLISHER } from "../../shared/teams/types";
-import { createLogger } from "../services/logger";
+import { createLogger } from "../app/logger";
 
 const log = createLogger("teams-migrate-user", "agent");
 const USER_PACKS_REL = "user-packs";
@@ -147,10 +147,7 @@ export function migrateUserTeams(options: UserTeamsMigrationOptions): UserTeamsM
   return result;
 }
 
-/** Run M2 against the real application data directories. */
+/** Retired: user teams are created in ~/.prismnext/teams/. Do not copy user-packs. */
 export function ensureUserTeamsMigrated(): UserTeamsMigrationResult {
-  return migrateUserTeams({
-    legacyRoot: legacyUserTeamsDir(),
-    teamsRoot: appTeamsDir(),
-  });
+  return { moved: [], conflicts: [] };
 }

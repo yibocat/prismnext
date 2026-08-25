@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CHAT_CHROME_BUTTON_TEXT } from "../worktree-selector";
 import { StatusIcon, param } from "./shared";
-import { isBackgroundTaskStartedResult } from "@shared/opencode-background-task";
+import { isBackgroundTaskStartedResult } from "@shared/chat/background-task";
 
 /** OpenCode built-in subagent types */
 const OPENCODE_AGENT_META: Record<string, { label: string; desc: string }> = {
@@ -86,7 +86,7 @@ export function taskActivityEmptyHint(run: {
 }
 
 /**
- * Task / subagent row — two lines, opens the composer-above run panel (not an
+ * Task / subagent row — two lines, opens the overlay run panel (not an
  * inline ToolCard expand). Stop aborts the child session for the main agent.
  */
 export const TaskWidget = memo(function TaskWidget({
@@ -130,7 +130,8 @@ export const TaskWidget = memo(function TaskWidget({
     || subAgentRun?.prompt
     || "";
   const rawAgent = (
-    param(toolUse.input, "agent")
+    param(toolUse.input, "expertId")
+    || param(toolUse.input, "agent")
     || param(toolUse.input, "subagent_type")
     || (subAgentRun?.expertId && subAgentRun.expertId !== "expert" ? subAgentRun.expertId : "")
     || subAgentRun?.expertId
@@ -141,8 +142,11 @@ export const TaskWidget = memo(function TaskWidget({
   const agentType = rawAgent || "expert";
   const meta = resolveTaskAgentMeta(agentType);
   const activityHintKey = taskActivityEmptyHint(subAgentRun);
+  const isPreparing = toolUse.status === "preparing";
   const statusLine = isStopping
     ? t("chat.subagent.stopping")
+    : isPreparing
+      ? t("chat.subagent.preparing")
     : isLoading
       ? (isBackground
         ? t("chat.subagent.backgroundRunning")

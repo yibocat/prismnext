@@ -13,12 +13,11 @@ import {
   upsertZoteroPaperRow,
   openLibraryDb,
   type PaperRow,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "prism-identity-"));
-  fs.mkdirSync(path.join(dir, ".prismnext", "library"), { recursive: true });
-  return dir;
+  return tempLiteratureProject();
 }
 
 const SAMPLE_PDF = Buffer.from("%PDF-1.4 sample content");

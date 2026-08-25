@@ -4,7 +4,7 @@ import {
   mergeBibliographicMetadata,
   STAGING_ABSTRACT_MIN_LENGTH,
 } from "../../src/shared/bibliographic-metadata/sources/resolver-helpers";
-import { resolveByDoi, resolveByArxiv } from "../../src/shared/bibliographic-metadata/sources";
+import { resolveByDoi, resolveByArxiv } from "../../src/main/literature/catalog";
 
 describe("staging abstract enrichment", () => {
   const originalFetch = global.fetch;

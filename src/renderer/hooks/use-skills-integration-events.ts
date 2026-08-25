@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { agentDesktop } from "@/lib/desktop-api/agent";
 import { useDocumentStore } from "@/stores/document-store";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
 
@@ -7,7 +8,7 @@ export function useSkillsIntegrationEvents(): void {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onSkillsIntegrationChanged(({ projectPath }) => {
+    const unsubscribe = agentDesktop.onSkillsIntegrationChanged(({ projectPath }) => {
       if (!projectRoot || projectPath !== projectRoot) return;
       bumpSkillsRefresh();
     });

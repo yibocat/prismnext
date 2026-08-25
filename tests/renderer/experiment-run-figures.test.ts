@@ -3,6 +3,7 @@ import type { ContentBlock } from "../../src/renderer/stores/chat-store";
 import {
   extractExperimentArtifactPaths,
   extractExperimentImageArtifactPaths,
+  extractLatexCompileArtifactPaths,
   collectExperimentArtifactPathsFromBlocks,
   isExperimentFigureToolUse,
   assistantTextEmbedsImagePath,
@@ -113,14 +114,14 @@ describe("extractExperimentArtifactPaths", () => {
           cwd: "experiment/exp-demo",
           artifacts: ["manuscript/benchmark.png", "out/metrics.json"],
           artifactSnapshots: [
-            ".prismnext/experiments/exp-demo/artifacts/run-1/benchmark.png",
+            ".workbench/experiments/exp-demo/artifacts/run-1/benchmark.png",
           ],
           exitCode: 0,
         },
       }),
     };
     expect(extractExperimentArtifactPaths(toolUse, toolResult)).toEqual([
-      ".prismnext/experiments/exp-demo/artifacts/run-1/benchmark.png",
+      ".workbench/experiments/exp-demo/artifacts/run-1/benchmark.png",
       "out/metrics.json",
     ]);
   });
@@ -164,6 +165,104 @@ describe("extractExperimentArtifactPaths", () => {
         content: JSON.stringify({ ok: false, error: "fail" }),
         is_error: false,
       }),
+    ).toEqual([]);
+  });
+});
+
+describe("extractLatexCompileArtifactPaths", () => {
+  const toolUse: ContentBlock = {
+    type: "tool_use",
+    id: "tex1",
+    name: "latex-compile-standalone",
+    input: { mainFile: "figures/lstm-cell.tex" },
+  };
+
+  it("reads pdfPath from a successful compile result", () => {
+    expect(
+      extractLatexCompileArtifactPaths(toolUse, {
+        type: "tool_result",
+        tool_use_id: "tex1",
+        content: {
+          success: true,
+          mainFile: "figures/lstm-cell.tex",
+          pdfPath: "figures/lstm-cell.pdf",
+        },
+      }),
+    ).toEqual(["figures/lstm-cell.pdf"]);
+  });
+
+  it("unwraps ToolHost { result: compile } payloads", () => {
+    expect(
+      extractLatexCompileArtifactPaths(toolUse, {
+        type: "tool_result",
+        tool_use_id: "tex1",
+        content: JSON.stringify({
+          ok: true,
+          result: {
+            success: true,
+            pdfPath: "figures/lstm-cell.pdf",
+          },
+        }),
+      }),
+    ).toEqual(["figures/lstm-cell.pdf"]);
+  });
+
+  it("prefers host outcome file resources over scraped pdfPath", () => {
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tex1",
+      content: { success: true, pdfPath: "figures/ignored.pdf" },
+      outcome: { resources: [{ type: "file", path: "figures/lstm-cell.pdf" }] },
+    };
+    const map = new Map<string, ContentBlock>([["tex1", toolResult]]);
+    expect(
+      resolveMissingArtifactPathsForReply(
+        [toolUse, { type: "text", text: "编译好了。" }],
+        map,
+      ),
+    ).toEqual(["figures/lstm-cell.pdf"]);
+  });
+
+  it("does not treat entity outcome resources as file previews", () => {
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tex1",
+      content: { success: true, pdfPath: "figures/ignored.pdf" },
+      outcome: {
+        resources: [
+          { type: "file", path: "figures/lstm-cell.pdf" },
+          { type: "entity", system: "interaction", id: "lstm-cell", title: "LSTM" },
+          { type: "entity", system: "experiment", id: "exp-1" },
+        ],
+      },
+    };
+    const map = new Map<string, ContentBlock>([["tex1", toolResult]]);
+    expect(
+      resolveMissingArtifactPathsForReply(
+        [toolUse, { type: "text", text: "编译好了。" }],
+        map,
+      ),
+    ).toEqual(["figures/lstm-cell.pdf"]);
+  });
+
+  it("falls back into the reply when the model did not embed the figure", () => {
+    const toolResult: ContentBlock = {
+      type: "tool_result",
+      tool_use_id: "tex1",
+      content: { success: true, pdfPath: "figures/lstm-cell.pdf" },
+    };
+    const map = new Map<string, ContentBlock>([["tex1", toolResult]]);
+    expect(
+      resolveMissingArtifactPathsForReply(
+        [toolUse, { type: "text", text: "图已经编译好了，你可以在文件管理器里查看。" }],
+        map,
+      ),
+    ).toEqual(["figures/lstm-cell.pdf"]);
+    expect(
+      resolveMissingArtifactPathsForReply(
+        [toolUse, { type: "text", text: "PNG: `figures/lstm-cell.png`" }],
+        map,
+      ),
     ).toEqual([]);
   });
 });
@@ -291,13 +390,13 @@ describe("one chat preview per logical figure", () => {
             "experiments/e1/results/fig.pdf",
             "experiments/e1/results/fig.png",
           ],
-          artifactSnapshots: [".prismnext/experiments/e1/artifacts/run-1/fig.png"],
+          artifactSnapshots: [".workbench/experiments/e1/artifacts/run-1/fig.png"],
           exitCode: 0,
         },
       }),
     };
     expect(extractExperimentArtifactPaths(toolUse, toolResult)).toEqual([
-      ".prismnext/experiments/e1/artifacts/run-1/fig.png",
+      ".workbench/experiments/e1/artifacts/run-1/fig.png",
     ]);
   });
 
@@ -319,13 +418,13 @@ describe("one chat preview per logical figure", () => {
       },
     ];
     const [tu1, tr1] = mk("tu1");
-    const [tu2, tr2] = mk("tu2", [".prismnext/experiments/e1/artifacts/run-2/fig.svg"]);
+    const [tu2, tr2] = mk("tu2", [".workbench/experiments/e1/artifacts/run-2/fig.svg"]);
     const map = new Map<string, ContentBlock>([
       ["tu1", tr1],
       ["tu2", tr2],
     ]);
     expect(collectExperimentArtifactPathsFromBlocks([tu1, tu2], map)).toEqual([
-      ".prismnext/experiments/e1/artifacts/run-2/fig.svg",
+      ".workbench/experiments/e1/artifacts/run-2/fig.svg",
     ]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { dblpSource } from "../../src/shared/bibliographic-metadata/sources/dblp";
+import { dblpSource } from "../../src/main/literature/catalog/sources/dblp";
 
 const DBLP_NEURIPS_HIT = {
   result: {

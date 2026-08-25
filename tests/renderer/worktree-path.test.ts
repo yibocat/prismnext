@@ -8,7 +8,7 @@ import {
 import type { WorktreeInfo } from "@/types/electron";
 
 const PROJECT = "/Users/test/my-paper";
-const WT_PATH = `${PROJECT}/.prismnext/worktrees/calm-owl`;
+const WT_PATH = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
 
 const worktrees: WorktreeInfo[] = [
   {
@@ -22,7 +22,7 @@ const worktrees: WorktreeInfo[] = [
   },
   {
     name: "quick-fox",
-    path: `${PROJECT}/.prismnext/worktrees/quick-fox`,
+    path: "/Users/test/.prismnext/projects/p_paper/worktrees/quick-fox/checkout",
     branch: "wt-quick-fox",
     baseBranch: "main",
     head: "def456",
@@ -43,8 +43,8 @@ describe("worktree path helpers", () => {
   });
 
   it("finds worktree by name when path prefix differs", () => {
-    const altPath = `${PROJECT}/.prismnext/worktrees/calm-owl`;
-    const gitResolved = `${PROJECT}/.prismnext/worktrees/calm-owl`;
+    const altPath = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
+    const gitResolved = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
     const list: WorktreeInfo[] = [
       { ...worktrees[0], path: gitResolved },
     ];
@@ -53,7 +53,7 @@ describe("worktree path helpers", () => {
   });
 
   it("does not mark other worktrees as closed when one is removed from list", () => {
-    const foxPath = `${PROJECT}/.prismnext/worktrees/quick-fox`;
+    const foxPath = "/Users/test/.prismnext/projects/p_paper/worktrees/quick-fox/checkout";
     const remaining = worktrees.filter((w) => w.name === "quick-fox");
     expect(isWorktreeDirectoryActive(foxPath, remaining, PROJECT)).toBe(true);
     expect(isWorktreeDirectoryActive(WT_PATH, remaining, PROJECT)).toBe(false);

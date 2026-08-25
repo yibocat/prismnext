@@ -8,7 +8,7 @@ import {
   installProjectRule,
   listProjectRules,
   setProjectRuleEnabled,
-} from "../../src/main/services/rules-sync";
+} from "../../src/main/prompts/rules-sync";
 
 describe("rules-sync", () => {
   let root: string;
@@ -19,7 +19,7 @@ describe("rules-sync", () => {
 
   it("lists rules from subdirectories with RULE.md", () => {
     root = mkdtempSync(join(tmpdir(), "prism-rules-"));
-    const ruleDir = join(root, ".prismnext/agent/rules/latex-style");
+    const ruleDir = join(root, ".workbench/agent/rules/latex-style");
     mkdirSync(ruleDir, { recursive: true });
     writeFileSync(
       join(ruleDir, "RULE.md"),
@@ -57,7 +57,7 @@ Run pnpm test before finishing.
 `;
     installProjectRule(root, "tests", content);
 
-    const path = join(root, ".prismnext/agent/rules/tests/RULE.md");
+    const path = join(root, ".workbench/agent/rules/tests/RULE.md");
     expect(existsSync(path)).toBe(true);
     expect(readFileSync(path, "utf-8")).toContain("Run pnpm test");
   });
@@ -78,7 +78,7 @@ Body
     );
 
     setProjectRuleEnabled(root, "tests", false);
-    const updated = readFileSync(join(root, ".prismnext/agent/rules/tests/RULE.md"), "utf-8");
+    const updated = readFileSync(join(root, ".workbench/agent/rules/tests/RULE.md"), "utf-8");
     expect(updated).toMatch(/enabled:\s*false/);
     expect(listProjectRules(root)[0].enabled).toBe(false);
   });
@@ -87,7 +87,7 @@ Body
     root = mkdtempSync(join(tmpdir(), "prism-rules-"));
     installProjectRule(root, "gone", "---\nname: gone\ndescription: x\napply: always\nenabled: true\n---\n");
     deleteProjectRule(root, "gone");
-    expect(existsSync(join(root, ".prismnext/agent/rules/gone"))).toBe(false);
+    expect(existsSync(join(root, ".workbench/agent/rules/gone"))).toBe(false);
   });
 
   it("getPromptProjectRules returns only enabled always rules with body", () => {

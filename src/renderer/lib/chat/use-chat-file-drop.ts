@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type DragEventHandler } from "react";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { bindChatFileDragZone, hasChatDropDrag } from "./chat-file-drag-overlay";
@@ -18,7 +19,7 @@ function hasComposerInsertDrag(dataTransfer: DataTransfer | null): boolean {
 function collectFilePaths(dataTransfer: DataTransfer): string[] {
   const paths: string[] = [];
   for (const file of Array.from(dataTransfer.files)) {
-    const p = window.electronAPI.getPathForFile?.(file);
+    const p = fsDesktop.getPathForFile(file);
     if (typeof p === "string" && p.trim()) paths.push(p);
   }
   return paths;

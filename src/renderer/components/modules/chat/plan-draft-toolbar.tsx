@@ -6,7 +6,7 @@ import { useChatStore } from "@/stores/chat-store";
 import {
   draftPlanPathBelongsToSession,
   isResearchPlanDraftPath,
-} from "../../../../shared/research-plan";
+} from "../../../../shared/research/plan";
 import { CHAT_CHROME_BUTTON_TEXT } from "./worktree-selector";
 import { cn } from "@/lib/utils";
 

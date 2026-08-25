@@ -39,7 +39,7 @@ import {
   normalizeVersionManifest,
   toLegacyResult,
   type UpdaterStatus,
-} from "../../src/main/services/update-checker";
+} from "../../src/main/app/update-checker";
 
 describe("normalizeVersionManifest", () => {
   it("accepts classic {version, path}", () => {

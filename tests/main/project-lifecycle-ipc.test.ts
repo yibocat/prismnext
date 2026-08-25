@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ProjectLifecycleFs } from "../../src/main/services/project-lifecycle-authority";
+import type { ProjectLifecycleFs } from "../../src/main/project/project-lifecycle-authority";
 
 type IpcHandler = (event: unknown, args?: { rootPath: string }) => Promise<unknown>;
 const handlers = new Map<string, IpcHandler>();
@@ -16,7 +16,7 @@ vi.mock("electron", () => ({
 
 import { registerFsHandlers } from "../../src/main/ipc/fs";
 import { registerProjectLifecycleHandlers } from "../../src/main/ipc/project-lifecycle";
-import { ProjectLifecycleAuthority } from "../../src/main/services/project-lifecycle-authority";
+import { ProjectLifecycleAuthority } from "../../src/main/project/project-lifecycle-authority";
 
 const home = "/fake-home";
 const project = `${home}/research`;
@@ -35,7 +35,7 @@ function createAuthority(paths: Record<string, string>): ProjectLifecycleAuthori
 }
 
 function registerHandlers(authority: ProjectLifecycleAuthority) {
-  registerProjectLifecycleHandlers(watcher, authority);
+  registerProjectLifecycleHandlers(watcher, authority, () => []);
   registerFsHandlers(watcher, authority);
 }
 

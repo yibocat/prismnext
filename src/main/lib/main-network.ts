@@ -8,14 +8,13 @@
  * | Node (default) | `globalThis.fetch` | Node/undici — often **ignores macOS/Windows system proxy** |
  * | Chromium (prismnext) | `electron.net.fetch` via {@link mainNetFetch} | Same as in-app browser — **follows system proxy/VPN** |
  *
- * Use {@link mainNetFetch} (or injected {@link catalogFetch} in shared bibliographic sources)
+ * Use {@link mainNetFetch} (or injected {@link catalogFetch} in literature catalog sources)
  * for all user-facing catalog / citation APIs in main. Do **not** rely on bare Node fetch
  * for Crossref, arXiv, OpenAlex, Semantic Scholar, etc.
  *
- * Call {@link installMainProcessNetwork} once at app startup (before literature bridge).
+ * Call {@link setCatalogFetch}(`mainNetFetch`) once at app startup (before literature bridge).
  */
 import { net } from "electron";
-import { setCatalogFetch } from "../../shared/bibliographic-metadata/catalog-fetch";
 
 const DEFAULT_HEADERS = {
   Accept: "application/json",
@@ -47,7 +46,3 @@ export async function mainNetFetch(
   }
 }
 
-/** Wire shared bibliographic catalog sources to {@link mainNetFetch}. Idempotent. */
-export function installMainProcessNetwork(): void {
-  setCatalogFetch(mainNetFetch as typeof fetch);
-}

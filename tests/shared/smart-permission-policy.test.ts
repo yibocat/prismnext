@@ -3,7 +3,7 @@ import {
   isPathInsideProject,
   resolveSmartBashAction,
   resolveSmartPermissionAction,
-} from "../../src/shared/smart-permission-policy";
+} from "../../src/shared/permissions/smart-policy";
 
 const ROOT = "/Users/me/paper";
 
@@ -52,16 +52,24 @@ describe("smart-permission-policy", () => {
     })).toBe("prompt");
   });
 
-  it("auto-allows git and package installs inside project bash cwd", () => {
+  it("auto-allows git writes inside project bash cwd; package installs still ask", () => {
     expect(resolveSmartBashAction("git commit -m test", ROOT, ROOT)).toBe("allow");
-    expect(resolveSmartBashAction("pnpm install lodash", ROOT, ROOT)).toBe("allow");
     expect(resolveSmartBashAction("git status", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("pnpm install lodash", ROOT, ROOT)).toBe("prompt");
+    expect(resolveSmartBashAction("pip install requests", ROOT, ROOT)).toBe("prompt");
   });
 
-  it("allows read-only bash outside project but prompts installs", () => {
-    expect(resolveSmartBashAction("git status", ROOT, "/tmp")).toBe("allow");
+  it("treats cwd outside the project as out of the cage", () => {
+    expect(resolveSmartBashAction("git status", ROOT, "/tmp")).toBe("prompt");
+    expect(resolveSmartBashAction("make build", ROOT, "/tmp")).toBe("prompt");
     expect(resolveSmartBashAction("pip install numpy", ROOT, "/tmp")).toBe("prompt");
     expect(resolveSmartBashAction("rm -rf /tmp/x", ROOT, "/tmp")).toBe("deny");
+  });
+
+  it("allows unlisted in-project bash without naming the command", () => {
+    expect(resolveSmartBashAction("make build", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("python train.py", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("pytest", ROOT, ROOT)).toBe("allow");
   });
 
   it("auto-allows experiment-run inside project cwd", () => {
@@ -91,10 +99,42 @@ describe("smart-permission-policy", () => {
     expect(resolveSmartBashAction("cat src/a.ts", ROOT, ROOT)).toBe("allow");
     expect(resolveSmartBashAction("cat notes.md", ROOT, ROOT)).toBe("allow");
     expect(resolveSmartBashAction("find . -name '*.md'", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("mkdir -p figures/out", ROOT, ROOT)).toBe("allow");
+    expect(resolveSmartBashAction("rm figures/old.png", ROOT, ROOT)).toBe("deny");
+    expect(resolveSmartBashAction(
+      `python3 -c "from PIL import Image; Image.open('a.png').resize((400,400)).save('a.jpg')"`,
+      ROOT,
+      ROOT,
+    )).toBe("deny");
   });
 
   it("exempts outside bash paths under user allowedPaths", () => {
     expect(resolveSmartBashAction("cat /refs/x.bib", ROOT, ROOT, ["/refs"])).toBe("allow");
+  });
+
+  it("allows read-only bash against enabled skill folders", () => {
+    const skill = "/app/resources/teams/prismnext.core/skills/figure-tikz";
+    expect(resolveSmartBashAction(
+      `ls ${skill}/library`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("allow");
+    expect(resolveSmartBashAction(
+      `cat ${skill}/library/catalog.json`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("allow");
+    expect(resolveSmartBashAction(
+      `cp ${skill}/library/catalog.json figures/catalog.json`,
+      ROOT,
+      ROOT,
+      undefined,
+      [skill],
+    )).toBe("prompt");
   });
 
   it("reads stay silent allow inside and outside the project (deliberate)", () => {

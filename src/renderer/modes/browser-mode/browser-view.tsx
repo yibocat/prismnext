@@ -15,9 +15,12 @@ import {
 } from "./webview-registry";
 import { BrowserHome } from "./browser-home";
 import { BrowserLinkMenu } from "./browser-link-menu";
+import {
+  OMNIBOX_PANEL_MAX_PX,
+  webviewOmniboxClipPath,
+} from "@/lib/browser/omnibox";
 import { AlertTriangleIcon, RefreshCwIcon } from "lucide-react";
 
-const MAGIC = "__PRISM_NEW_TAB__";
 const LINK_MAGIC = "__PRISM_LINK_MENU__";
 
 type PrismWebview = HTMLWebViewElement & {
@@ -68,8 +71,8 @@ export function syncWebviewGuestSize(
 export function BrowserView() {
   const { tab, isActive } = useTabContext();
   const tabId = tab.id;
-  const url = tab.url ?? "";
-  const hibernated = tab.hibernated ?? false;
+  const url = tab.kind === "browser" ? tab.url ?? "" : "";
+  const hibernated = tab.kind === "browser" ? tab.hibernated ?? false : false;
 
   const webviewRef = useRef<HTMLWebViewElement>(null);
   const webviewElRef = useRef<HTMLDivElement>(null);
@@ -154,6 +157,7 @@ export function BrowserView() {
       return;
     }
     lastLoadedRef.current = url;
+    mountSrcRef.current = url;
     setLoadError(null);
     try {
       webview.loadURL(url);
@@ -187,7 +191,8 @@ export function BrowserView() {
       if (!e.url) return;
       // Address bar only — never re-assign <webview src> for guest redirects.
       lastLoadedRef.current = e.url;
-      const current = useRightPanelStore.getState().tabs.find((t) => t.id === tabId)?.url;
+      const currentTab = useRightPanelStore.getState().tabs.find((t) => t.id === tabId);
+      const current = currentTab?.kind === "browser" ? currentTab.url : undefined;
       if (current === e.url) return;
       syncingFromWebviewRef.current = true;
       syncBrowserTabUrl(tabId, e.url);
@@ -243,66 +248,30 @@ export function BrowserView() {
     const webview = getPrismWebview(webviewRef);
     if (!webview) return;
 
-    const handleNewWindow = (e: Event & { preventDefault?: () => void; url?: string }) => {
-      e.preventDefault?.();
-      if (e.url && isBrowsableUrl(e.url)) {
-        openUrlInBrowser(e.url, { newTab: true });
-      }
-    };
-
     const handleConsoleMessage = (e: Event & { message?: string }) => {
       const msg = e.message ?? "";
-      if (msg.startsWith(LINK_MAGIC)) {
-        const parts = msg.slice(LINK_MAGIC.length).split("__");
-        if (parts.length >= 3) {
-          const x = parseInt(parts[0], 10);
-          const y = parseInt(parts[1], 10);
-          const linkUrl = parts.slice(2).join("__");
-          if (linkUrl && isBrowsableUrl(linkUrl)) {
-            const rect = webviewElRef.current?.getBoundingClientRect();
-            setLinkMenu({
-              x: rect ? rect.left + x : x,
-              y: rect ? rect.top + y : y,
-              url: linkUrl,
-            });
-          }
-        }
-        return;
-      }
-      if (msg.startsWith(MAGIC)) {
-        const newUrl = msg.slice(MAGIC.length);
-        if (newUrl && isBrowsableUrl(newUrl)) {
-          openUrlInBrowser(newUrl, { newTab: true });
-        }
+      if (!msg.startsWith(LINK_MAGIC)) return;
+      const parts = msg.slice(LINK_MAGIC.length).split("__");
+      if (parts.length < 3) return;
+      const x = parseInt(parts[0], 10);
+      const y = parseInt(parts[1], 10);
+      const linkUrl = parts.slice(2).join("__");
+      if (linkUrl && isBrowsableUrl(linkUrl)) {
+        const rect = webviewElRef.current?.getBoundingClientRect();
+        setLinkMenu({
+          x: rect ? rect.left + x : x,
+          y: rect ? rect.top + y : y,
+          url: linkUrl,
+        });
       }
     };
 
     const injectInterceptor = () => {
       webview.executeJavaScript?.(`
         (function() {
-          if (window.__prismInterceptorInstalled) return;
-          window.__prismInterceptorInstalled = true;
-          var MAGIC = "${MAGIC}";
+          if (window.__prismLinkMenuInstalled) return;
+          window.__prismLinkMenuInstalled = true;
           var LINK_MAGIC = "${LINK_MAGIC}";
-
-          window.open = function(url) {
-            if (url && url !== "about:blank" && url !== "") {
-              console.log(MAGIC + url);
-            }
-            return null;
-          };
-
-          document.addEventListener("click", function(e) {
-            var el = e.target;
-            while (el && el.tagName !== "A") el = el.parentElement;
-            if (el && el.target === "_blank" && el.href) {
-              if (!el.href.startsWith("javascript:") && el.href !== "#" && !el.href.startsWith("#")) {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log(MAGIC + el.href);
-              }
-            }
-          }, true);
 
           document.addEventListener("contextmenu", function(e) {
             var el = e.target;
@@ -317,19 +286,93 @@ export function BrowserView() {
       `).catch(() => {});
     };
 
-    webview.addEventListener("new-window", handleNewWindow);
     webview.addEventListener("dom-ready", injectInterceptor);
     webview.addEventListener("console-message", handleConsoleMessage);
     return () => {
-      webview.removeEventListener("new-window", handleNewWindow);
       webview.removeEventListener("dom-ready", injectInterceptor);
       webview.removeEventListener("console-message", handleConsoleMessage);
     };
   }, [tabId, hibernated, loadError]);
 
-  const isLoading = useRightPanelStore(
-    (s) => s.tabs.find((t) => t.id === tabId)?.isLoading ?? false,
-  );
+  const isLoading = useRightPanelStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.kind === "browser" ? tab.isLoading ?? false : false;
+  });
+  const reloadToken = useRightPanelStore((s) => {
+    const tab = s.tabs.find((t) => t.id === tabId);
+    return tab?.kind === "browser" ? tab.reloadToken ?? 0 : 0;
+  });
+  const omniboxOpen = useBrowserStore((s) => s.omniboxOpen);
+  const omniboxAnchor = useBrowserStore((s) => s.omniboxAnchor);
+  const appliedReloadTokenRef = useRef(reloadToken);
+
+  useEffect(() => {
+    if (reloadToken === appliedReloadTokenRef.current) return;
+    appliedReloadTokenRef.current = reloadToken;
+    if (!url) {
+      setBrowserTabLoading(tabId, false);
+      return;
+    }
+    const target = url;
+    mountSrcRef.current = target;
+    lastLoadedRef.current = target;
+    setLoadError(null);
+    setBrowserTabLoading(tabId, true);
+    const tryReload = () => {
+      const wv = getPrismWebview(webviewRef);
+      if (wv?.reload) {
+        try {
+          wv.reload();
+          return;
+        } catch {
+          /* guest may be gone; remount path below */
+        }
+      }
+      if (wv?.loadURL) {
+        try {
+          wv.loadURL(target);
+        } catch {
+          /* remount will use src */
+        }
+      }
+    };
+    tryReload();
+    requestAnimationFrame(tryReload);
+  }, [reloadToken, url, tabId, setBrowserTabLoading]);
+
+  useEffect(() => {
+    const host = guestHostRef.current;
+    const webview = webviewRef.current;
+    if (!host || !webview) return;
+    const applyClip = () => {
+      if (!omniboxOpen || !omniboxAnchor) {
+        webview.style.clipPath = "";
+        webview.style.visibility = "";
+        return;
+      }
+      const clip = webviewOmniboxClipPath(
+        host.getBoundingClientRect(),
+        omniboxAnchor,
+        OMNIBOX_PANEL_MAX_PX,
+      );
+      if (clip) {
+        webview.style.clipPath = clip;
+        webview.style.visibility = "";
+      } else {
+        webview.style.clipPath = "";
+        webview.style.visibility = "hidden";
+      }
+    };
+    applyClip();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(applyClip);
+    observer.observe(host);
+    return () => {
+      observer.disconnect();
+      webview.style.clipPath = "";
+      webview.style.visibility = "";
+    };
+  }, [omniboxOpen, omniboxAnchor, tabId, hibernated, loadError, Boolean(url)]);
 
   if (!url) {
     return <BrowserHome tabId={tabId} />;
@@ -379,23 +422,26 @@ export function BrowserView() {
   const guestSrc = mountSrcRef.current || url;
 
   return (
-    <div ref={webviewElRef} className="flex h-full flex-col min-h-0">
+    <div ref={webviewElRef} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
       {isLoading && (
         <div className="h-0.5 shrink-0 bg-primary/30 overflow-hidden">
           <div className="h-full w-1/3 bg-primary animate-[loading-bar_1.2s_ease-in-out_infinite]" />
         </div>
       )}
-      <div ref={guestHostRef} className="min-h-0 flex-1">
+      <div ref={guestHostRef} className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-background">
         <webview
           ref={webviewRef}
           src={guestSrc}
           className={BROWSER_WEBVIEW_CLASS}
+          style={{ width: "100%", height: "100%", backgroundColor: "var(--background)" }}
           {...{
             webpreferences: "contextIsolation=yes",
             // Isolate browser cookies/storage from the renderer's default session
             // (and from any CSP set on default session). Must match BROWSER_PARTITION
             // in src/main/ipc/browser.ts.
             partition: "persist:browser",
+            // Required for target=_blank / window.open to reach setWindowOpenHandler.
+            allowpopups: "true",
           } as React.HTMLAttributes<HTMLElement>}
         />
       </div>

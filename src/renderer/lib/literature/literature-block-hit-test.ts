@@ -3,7 +3,7 @@ import { PDF_PAGE_CLASS, PDF_PAGES_CLASS } from "@/components/modules/preview/pd
 import {
   blockRegions,
   type PaperExtractBlock,
-} from "../../../shared/paper-extract-block";
+} from "../../../shared/literature/paper-extract-block";
 
 export interface PageHitInfo {
   pageIdx: number;

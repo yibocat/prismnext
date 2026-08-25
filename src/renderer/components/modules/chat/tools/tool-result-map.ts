@@ -1,13 +1,5 @@
-import type { ChatStreamMessage, ContentBlock } from "@/stores/chat-store";
-
-/** Safely iterate content blocks, handling both array and string formats. */
-export function contentBlocks(
-  content: string | ContentBlock[] | undefined,
-): ContentBlock[] {
-  if (!content) return [];
-  if (typeof content === "string") return [{ type: "text", text: content }];
-  return content;
-}
+import { contentBlocks, type ChatStreamMessage, type ContentBlock } from "@/lib/chat/types";
+export { contentBlocks };
 
 const ACTIVE_TOOL_STATUSES = new Set([
   "",

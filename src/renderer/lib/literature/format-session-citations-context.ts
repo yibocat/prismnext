@@ -1,4 +1,4 @@
-import type { StagedCitation } from "@shared/citation-staging";
+import type { StagedCitation } from "@shared/literature/citation-staging";
 
 const APPENDIX_MARKER = "## Session citations (this chat)";
 

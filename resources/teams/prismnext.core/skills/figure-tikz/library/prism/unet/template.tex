@@ -1,0 +1,68 @@
+\documentclass[border=6pt]{standalone}
+
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta}
+
+\definecolor{otblue}{HTML}{0072B2}
+\definecolor{otorange}{HTML}{E69F00}
+\definecolor{otteal}{HTML}{009E73}
+\definecolor{otpurple}{HTML}{CC79A7}
+\definecolor{otgray}{HTML}{5A5A5A}
+
+\begin{document}
+% ==== parameters (edit these) ============================================
+\def\colgap{1.35}
+\def\rowgap{0.85}
+\def\inputlabel{Input}
+\def\encelabel{Enc 1}
+\def\enctlabel{Enc 2}
+\def\bottlabel{Bottleneck}
+\def\dectlabel{Dec 2}
+\def\decelabel{Dec 1}
+\def\outputlabel{Output}
+% =========================================================================
+
+\begin{tikzpicture}[
+  >={Stealth[length=2.4mm]},
+  node distance=\rowgap cm and \colgap cm,
+  enc/.style={
+    draw=otblue!75!black, fill=otblue!16, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  bot/.style={
+    draw=otorange!80!black, fill=otorange!20, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  dec/.style={
+    draw=otteal!75!black, fill=otteal!16, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  io/.style={
+    draw=otgray!60, fill=otgray!12, rounded corners=2pt,
+    minimum width=1.7cm, minimum height=0.7cm,
+    align=center, font=\sffamily\small,
+  },
+  flow/.style={draw=otgray!70, line width=0.9pt, ->},
+  skip/.style={draw=otpurple!80!black, line width=0.8pt, ->, dashed},
+]
+  \node[io] (input) {\inputlabel};
+  \node[enc, right=of input] (e1) {\encelabel};
+  \node[enc, below right=of e1] (e2) {\enctlabel};
+  \node[bot, below right=of e2] (botn) {\bottlabel};
+  \node[dec, above right=of botn] (d2) {\dectlabel};
+  \node[dec, above right=of d2] (d1) {\decelabel};
+  \node[io, right=of d1] (output) {\outputlabel};
+
+  \draw[flow] (input) -- (e1);
+  \draw[flow] (e1) -- (e2);
+  \draw[flow] (e2) -- (botn);
+  \draw[flow] (botn) -- (d2);
+  \draw[flow] (d2) -- (d1);
+  \draw[flow] (d1) -- (output);
+  \draw[skip] (e1) -- (d1);
+  \draw[skip] (e2) -- (d2);
+\end{tikzpicture}
+\end{document}

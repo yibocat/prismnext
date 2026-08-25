@@ -8,7 +8,8 @@ import {
 import { AskUserQuestionWidget } from "./tools/ask-question-widget";
 
 /**
- * Active Question tool — full interactive panel above the composer (PlanChrome pattern).
+ * Active Question hang — one card above the composer. The hang id is
+ * Conversation.pendingQuestion.requestId (or the live unanswered tool).
  */
 export function QuestionComposerPanel() {
   const { t } = useTranslation();

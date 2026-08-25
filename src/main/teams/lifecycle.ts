@@ -15,7 +15,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   CORE_TEAM_ID,
   MY_CONTENT_TEAM_ID,
@@ -32,10 +32,10 @@ import {
   iconSpecToJSON,
   normalizeIconSpec,
   type IconSpec,
-} from "../../shared/icon-spec";
-import { createLogger } from "../services/logger";
-import { _registeredRoots } from "../services/active-project-roots";
-import { licenseGrants } from "../services/teams-license";
+} from "../../shared/platform/icon-spec";
+import { createLogger } from "../app/logger";
+import { _registeredRoots } from "../project/active-project-roots";
+import { licenseGrants } from "./teams-license";
 import { getTeamRecord, invalidateCatalog, scanAllTeams } from "./catalog";
 import {
   getAsset,
@@ -57,9 +57,7 @@ import {
 import {
   readProjectTeamsState,
   saveProjectAssetOverride,
-  setProjectAssetEnabled,
   setProjectDefaultTeam,
-  setProjectTeamEnabled,
   writeProjectTeamsState,
 } from "./state-project";
 import { appTeamsDir, canReference, projectTeamsDir } from "./scope";
@@ -318,23 +316,18 @@ export function setTeamEnabled(
     );
   }
 
-  if (scope === "app") {
-    setAppTeamEnabled(teamId, value);
-  } else {
-    if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
-    setProjectTeamEnabled(projectRoot, teamId, value);
-    // Disabling the active team's pack → move default to My Content / Core.
-    if (value === false) {
-      const current = readProjectTeamsState(projectRoot).defaultTeam;
-      if (current === teamId) {
-        const next = fallbackLeadTeamId(teamId);
-        setProjectDefaultTeam(projectRoot, next ?? null);
-        defaultMovedTo = next;
-      }
+  setAppTeamEnabled(teamId, value);
+  // Disabling the active team's pack → move that project's default lead.
+  if (value === false && projectRoot) {
+    const current = readProjectTeamsState(projectRoot).defaultTeam;
+    if (current === teamId) {
+      const next = fallbackLeadTeamId(teamId);
+      setProjectDefaultTeam(projectRoot, next ?? null);
+      defaultMovedTo = next;
     }
   }
 
-  notifyTeamsChanged(scope === "project" ? projectRoot : undefined);
+  notifyTeamsChanged();
   return {
     suggestedActiveTeam: value === true ? activeTeamSuggestion(teamId, projectRoot) : undefined,
     defaultMovedTo,
@@ -351,13 +344,8 @@ export function setAssetEnabled(
   if (value === false && isMyContentLeadFqid(fqid)) {
     throw new Error("Common Team's chat lead cannot be disabled.");
   }
-  if (scope === "app") {
-    setAppAssetEnabled(fqid, value);
-  } else {
-    if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
-    setProjectAssetEnabled(projectRoot, fqid, value);
-  }
-  notifyTeamsChanged(scope === "project" ? projectRoot : undefined);
+  setAppAssetEnabled(fqid, value);
+  notifyTeamsChanged();
 }
 
 /** Save an asset override at the given layer (all-undefined patch removes the key). */
@@ -388,14 +376,20 @@ export function setActiveTeam(
     if (!projectRoot) throw new Error("projectRoot is required for project-scope changes");
     const view = getTeam(projectRoot, teamId);
     if (!view?.enabled || !view.hasOrchestrator) {
-      log.warn("setActiveTeam rejected", { teamId, scope, projectRoot, enabled: view?.enabled, hasOrchestrator: view?.hasOrchestrator });
+      log.warn("setActiveTeam rejected", {
+        teamId,
+        scope,
+        project: basename(projectRoot),
+        enabled: view?.enabled,
+        hasOrchestrator: view?.hasOrchestrator,
+      });
       throw new Error(`Team has no usable lead agent: ${teamId}`);
     }
     setProjectDefaultTeam(projectRoot, teamId);
-    log.info("setActiveTeam", {
+    log.debug("setActiveTeam", {
       teamId,
       scope,
-      projectRoot,
+      project: basename(projectRoot),
       lead: view.orchestratorId,
       teamName: view.manifest.name,
     });
@@ -413,7 +407,7 @@ export function setActiveTeam(
       throw new Error(`Team has no lead agent: ${teamId}`);
     }
     setAppDefaultTeam(teamId);
-    log.info("setActiveTeam", { teamId, scope, lead: record.orchestratorId });
+    log.debug("setActiveTeam", { teamId, scope, lead: record.orchestratorId });
     // Same as project scope: state write invalidates; skip content-refresh fan-out.
   }
 }

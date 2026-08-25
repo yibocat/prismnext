@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildProjectSubagentsAgentPlan } from "../../src/main/services/subagents-sync";
+import { buildProjectSubagentsAgentPlan } from "../../src/main/teams/subagents-sync";
 import { buildAgentsPlan, __resetAgentsSyncForTests } from "../../src/main/teams/agents-sync";
 import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
 import { setAppTeamsStateDataDir } from "../../src/main/teams/state-app";

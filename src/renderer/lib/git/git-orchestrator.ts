@@ -1,10 +1,13 @@
+import type { GitFileStatusData } from "@shared/git/types";
 import type { WorktreeInfo } from "@/types/electron";
+import { gitDesktop } from "@/lib/desktop-api/git";
 import { useDocumentStore } from "@/stores/document-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { applyCheckoutTransition } from "./checkout-context";
 import { worktreePathsEqual } from "./worktree-path";
 import { finalizeWorktreeMergeClose, syncAfterWorktreeMerge } from "./git-sync";
+import { mergeFollowUpFromStatus } from "./git-publish";
 import { rehomeWorktreeSessions } from "./worktree-sessions";
 import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
 
@@ -44,6 +47,9 @@ export interface WorktreeMergeResult {
   error?: string;
   changeSummary?: string;
   rollbackWarnings?: string[];
+  mergedBranch?: string;
+  aheadAfterMerge?: number;
+  hasRemote?: boolean;
 }
 
 /** @deprecated Use WorktreeMergeInput */
@@ -67,10 +73,19 @@ interface PushRollbackState {
 
 async function readProjectBranch(projectRoot: string): Promise<string> {
   try {
-    const status = await window.electronAPI.gitStatus(projectRoot);
+    const status = await gitDesktop.gitStatus(projectRoot);
     return status.branch || "";
   } catch {
     return "";
+  }
+}
+
+async function readMergeFollowUp(projectRoot: string, mergedBranch: string) {
+  try {
+    const status = await gitDesktop.gitStatus(projectRoot);
+    return mergeFollowUpFromStatus(mergedBranch, status.tracking);
+  } catch {
+    return mergeFollowUpFromStatus(mergedBranch, undefined);
   }
 }
 
@@ -141,11 +156,11 @@ export const canPushWorktree = canMergeWorktree;
 export async function loadWorktreeChangedFiles(worktreeRoot: string): Promise<WorktreeChangedFile[]> {
   try {
     await useDocumentStore.getState().saveAllFiles();
-    const result = await window.electronAPI.gitStatus(worktreeRoot);
+    const result = await gitDesktop.gitStatus(worktreeRoot);
     if (!result.files) return [];
     return result.files
-      .filter((f) => f.staged || f.unstaged || f.untracked)
-      .map((f) => ({
+      .filter((f: GitFileStatusData) => f.staged || f.unstaged || f.untracked)
+      .map((f: GitFileStatusData) => ({
         path: f.path,
         status: f.untracked ? "?" : f.staged ? f.indexStatus : f.worktreeStatus,
       }));
@@ -156,7 +171,7 @@ export async function loadWorktreeChangedFiles(worktreeRoot: string): Promise<Wo
 
 async function tryStashProject(projectRoot: string, message: string): Promise<boolean> {
   try {
-    const stashResult = await window.electronAPI.gitStash(projectRoot, message);
+    const stashResult = await gitDesktop.gitStash(projectRoot, message);
     return stashResult.success;
   } catch {
     return false;
@@ -171,7 +186,7 @@ async function rollbackMergeToBranch(
 
   if (state.mergeStaged) {
     try {
-      const abort = await window.electronAPI.gitAbortMerge(projectRoot);
+      const abort = await gitDesktop.gitAbortMerge(projectRoot);
       if (!abort.success) {
         warnings.push("Could not abort in-progress merge — resolve manually in the Git panel.");
       }
@@ -184,7 +199,7 @@ async function rollbackMergeToBranch(
     try {
       const current = await readProjectBranch(projectRoot);
       if (current !== state.originalBranch) {
-        const checkout = await window.electronAPI.gitCheckout(projectRoot, state.originalBranch);
+        const checkout = await gitDesktop.gitCheckout(projectRoot, state.originalBranch);
         if (!checkout.success) {
           warnings.push(`Could not restore branch ${state.originalBranch}.`);
         }
@@ -196,7 +211,7 @@ async function rollbackMergeToBranch(
 
   if (state.didStash) {
     try {
-      const pop = await window.electronAPI.gitStashPop(projectRoot);
+      const pop = await gitDesktop.gitStashPop(projectRoot);
       if (!pop.success) {
         warnings.push("Stashed project changes were not restored — use Stash Pop in the Git panel.");
       }
@@ -254,7 +269,7 @@ export async function mergeWorktreeToBase(
 
     emitProgress(onProgress, labels, 1, "commit-worktree");
     if (changedFiles.length > 0) {
-      const commitResult = await window.electronAPI.gitCommitAll(
+      const commitResult = await gitDesktop.gitCommitAll(
         worktreeRoot,
         changedFiles,
         `worktree(${worktree.name}): ${changedFiles.length} file${changedFiles.length !== 1 ? "s" : ""}`,
@@ -272,7 +287,7 @@ export async function mergeWorktreeToBase(
 
     if (!alreadyOnBase) {
       emitProgress(onProgress, labels, 3, "checkout-base");
-      const checkoutResult = await window.electronAPI.gitCheckout(projectRoot, baseBranch);
+      const checkoutResult = await gitDesktop.gitCheckout(projectRoot, baseBranch);
       if (!checkoutResult.success) {
         throw new Error(`Failed to checkout ${baseBranch}: ${checkoutResult.error}`);
       }
@@ -281,7 +296,7 @@ export async function mergeWorktreeToBase(
 
     const mergeIndex = alreadyOnBase ? 3 : 4;
     emitProgress(onProgress, labels, mergeIndex, "merge");
-    const mergeResult = await window.electronAPI.gitMergeNoCommit(projectRoot, worktree.branch);
+    const mergeResult = await gitDesktop.gitMergeNoCommit(projectRoot, worktree.branch);
     if (!mergeResult.success) {
       throw new Error(`Merge failed: ${mergeResult.error}`);
     }
@@ -291,7 +306,7 @@ export async function mergeWorktreeToBase(
     emitProgress(onProgress, labels, commitIndex, "commit-merge");
     const changeSummary = formatWorktreeChangeSummary(worktree.name, changedFiles.length, aheadCount);
     const mergeCommitMsg = `Merge worktree ${worktree.name} into ${baseBranch}\n\n${changeSummary}`;
-    const mergeCommitResult = await window.electronAPI.gitCommit(projectRoot, mergeCommitMsg);
+    const mergeCommitResult = await gitDesktop.gitCommit(projectRoot, mergeCommitMsg);
     if (!mergeCommitResult.success) {
       throw new Error(`Failed to commit merge: ${mergeCommitResult.error}`);
     }
@@ -300,14 +315,16 @@ export async function mergeWorktreeToBase(
     if (rollback.didStash) {
       const popIndex = alreadyOnBase ? 5 : 6;
       emitProgress(onProgress, labels, popIndex, "stash-pop");
-      const popResult = await window.electronAPI.gitStashPop(projectRoot);
+      const popResult = await gitDesktop.gitStashPop(projectRoot);
       rollback.didStash = false;
       if (!popResult.success) {
         await syncAfterWorktreeMerge(projectRoot, worktreeRoot, worktree.name);
         await clearCheckpointsForWorktree(worktree, "merged");
+        const followUp = await readMergeFollowUp(projectRoot, baseBranch);
         return {
           success: true,
           changeSummary,
+          ...followUp,
           rollbackWarnings: [
             "Merge succeeded but stashed project changes could not be auto-restored — use Stash Pop in the Git panel.",
           ],
@@ -318,8 +335,9 @@ export async function mergeWorktreeToBase(
     emitProgress(onProgress, labels, labels.length - 1, "sync");
     await syncAfterWorktreeMerge(projectRoot, worktreeRoot, worktree.name);
     await clearCheckpointsForWorktree(worktree, "merged");
+    const followUp = await readMergeFollowUp(projectRoot, baseBranch);
 
-    return { success: true, changeSummary };
+    return { success: true, changeSummary, ...followUp };
   } catch (err: unknown) {
     const rollbackWarnings = await rollbackMergeToBranch(projectRoot, rollback);
     return {
@@ -361,7 +379,7 @@ export async function mergeAndCloseWorktree(
 
     if (!alreadyOnTarget) {
       emitProgress(onProgress, labels, 2, "checkout-base");
-      const checkout = await window.electronAPI.gitCheckout(projectRoot, targetBranch);
+      const checkout = await gitDesktop.gitCheckout(projectRoot, targetBranch);
       if (!checkout.success) {
         throw new Error(`Failed to checkout ${targetBranch}: ${checkout.error}`);
       }
@@ -370,7 +388,7 @@ export async function mergeAndCloseWorktree(
 
     const mergeIndex = alreadyOnTarget ? 2 : 3;
     emitProgress(onProgress, labels, mergeIndex, "merge");
-    const mergeResult = await window.electronAPI.gitMerge(projectRoot, worktree.branch);
+    const mergeResult = await gitDesktop.gitMerge(projectRoot, worktree.branch);
     if (!mergeResult.success) {
       useRightPanelStore.getState().ensureTab("git-overview");
       const detail = mergeResult.error || mergeResult.output || "Merge failed";
@@ -389,12 +407,12 @@ export async function mergeAndCloseWorktree(
     await clearCheckpointsForWorktree(worktree, "closed");
     await rehomeWorktreeSessions(projectRoot, worktree.path);
     try {
-      await window.electronAPI.gitDeleteBranch(projectRoot, worktree.branch);
+      await gitDesktop.gitDeleteBranch(projectRoot, worktree.branch);
     } catch {
       // Branch may already be gone after fast-forward merge
     }
     try {
-      await window.electronAPI.worktreeRemove(projectRoot, worktree.name);
+      await gitDesktop.worktreeRemove(projectRoot, worktree.name);
     } catch {
       // Best-effort — finalize still resets app state
     }
@@ -402,7 +420,7 @@ export async function mergeAndCloseWorktree(
 
     if (didStash) {
       emitProgress(onProgress, labels, labels.length - 1, "stash-pop");
-      const pop = await window.electronAPI.gitStashPop(projectRoot);
+      const pop = await gitDesktop.gitStashPop(projectRoot);
       didStash = !pop.success;
     }
 
@@ -413,14 +431,14 @@ export async function mergeAndCloseWorktree(
   } catch (err: unknown) {
     if (didCheckout && originalBranch && originalBranch !== targetBranch) {
       try {
-        await window.electronAPI.gitCheckout(projectRoot, originalBranch);
+        await gitDesktop.gitCheckout(projectRoot, originalBranch);
       } catch {
         // Non-fatal
       }
     }
     if (didStash) {
       try {
-        await window.electronAPI.gitStashPop(projectRoot);
+        await gitDesktop.gitStashPop(projectRoot);
       } catch {
         // Non-fatal
       }

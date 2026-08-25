@@ -9,10 +9,11 @@ import {
   mapPaperForRenderer,
   openLibraryDb,
   updatePaper,
-} from "../../src/main/services/literature-service";
+} from "../../src/main/literature/facade";
+import { tempLiteratureProject } from "./helpers/temp-literature-project";
 
 function tempProject(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "prism-lit-mig-"));
+  return tempLiteratureProject();
 }
 
 describe("literature tag migration v9", () => {

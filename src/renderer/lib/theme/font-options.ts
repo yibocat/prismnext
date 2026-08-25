@@ -2,6 +2,35 @@
 // System font stacks for Appearance → Typography.
 // Bundled @fontsource faces were removed — pick any installed family via the system picker.
 
+import { settingsDesktop } from "@/lib/desktop-api/settings";
+
+export type SystemFontEntry = { family: string; monospace: boolean };
+
+let fontsCache: SystemFontEntry[] | null = null;
+let fontsPromise: Promise<SystemFontEntry[]> | null = null;
+
+export function getCachedSystemFonts(): SystemFontEntry[] | null {
+  return fontsCache;
+}
+
+export function listSystemFonts(): Promise<SystemFontEntry[]> {
+  if (fontsCache) return Promise.resolve(fontsCache);
+  if (!fontsPromise) {
+    fontsPromise = settingsDesktop
+      .themeListSystemFonts()
+      .then((list) => {
+        fontsCache = list;
+        fontsPromise = null;
+        return list;
+      })
+      .catch((err: unknown) => {
+        fontsPromise = null;
+        throw err;
+      });
+  }
+  return fontsPromise;
+}
+
 export interface FontOption {
   id: string;
   label: string;

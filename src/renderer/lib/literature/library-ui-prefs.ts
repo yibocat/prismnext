@@ -2,9 +2,10 @@ import type { LiteratureCollection, LiteratureLibraryView } from "@/types/electr
 import type {
   LiteratureSortColumn,
   LiteratureSortDirection,
-} from "@/modes/literature-mode/literature-format";
+} from "@/lib/literature/literature-format";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { settingsDesktop } from "@/lib/desktop-api/settings";
 
 export interface LiteratureUiPrefs {
   libraryView: LiteratureLibraryView;
@@ -56,7 +57,7 @@ export async function persistLiteratureUiPrefs(
   useSettingsStore.setState((s) => ({
     settings: { ...s.settings, literatureUiByProject: map },
   }));
-  await window.electronAPI.settingsSet({ literatureUiByProject: map });
+  await settingsDesktop.settingsSet({ literatureUiByProject: map });
 }
 
 export function applyLiteratureUiPrefs(projectRoot: string): void {

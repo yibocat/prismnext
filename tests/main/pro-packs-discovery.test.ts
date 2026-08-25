@@ -7,14 +7,14 @@ import {
   handleProLicenseChanged,
   resolveTeamsRootDir,
   resolveProPackageDir,
-} from "../../src/main/services/pro-teams-discovery";
+} from "../../src/main/teams/pro-teams-discovery";
 import {
   getTeamRecord,
   listExternalTeamRoots,
   unregisterExternalTeamRoot,
 } from "../../src/main/teams/catalog";
 import { __resetTeamsResolverForTests } from "../../src/main/teams/resolver";
-import { licenseStateVersion } from "../../src/main/services/teams-license";
+import { licenseStateVersion } from "../../src/main/teams/teams-license";
 import { baseManifest, makePack, makeTempDir } from "./packs-test-utils";
 
 const tempDirs: string[] = [];

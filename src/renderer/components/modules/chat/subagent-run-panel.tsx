@@ -14,6 +14,32 @@ import { resolveTaskAgentMeta, taskActivityEmptyHint } from "./tools/task-widget
 /** Exit duration — keep in sync with `duration-150` classes; slightly past anim to avoid snap. */
 export const SUBAGENT_PANEL_EXIT_MS = 180;
 
+function promptFromConversation(
+  conversation:
+    | {
+        turns?: Array<{ assistant?: { blocks?: ContentBlock[] } }>;
+        live?: { assistant?: { blocks?: ContentBlock[] } } | null;
+      }
+    | undefined,
+  taskToolUseId: string,
+  fallback: string,
+): string {
+  if (!conversation) return fallback.trim();
+  const turns = [conversation.live, ...[...(conversation.turns ?? [])].reverse()];
+  for (const turn of turns) {
+    if (!turn) continue;
+    for (const block of turn.assistant?.blocks ?? []) {
+      if (block.type !== "tool_use" || block.id !== taskToolUseId) continue;
+      const fromInput =
+        param(block.input, "prompt")
+        || param(block.input, "description")
+        || "";
+      if (fromInput.trim()) return fromInput.trim();
+    }
+  }
+  return fallback.trim();
+}
+
 /** Prefer live tool_use.input.prompt (no staging preface) over tracked run.prompt. */
 function resolveDelegationPrompt(
   taskToolUseId: string,
@@ -154,8 +180,8 @@ export const SubAgentRunPanel = memo(function SubAgentRunPanel({
         taskToolUseId,
         [...(tab?.messages ?? []), tab?.streamingMessage],
         run?.prompt ?? "",
-      ),
-    [taskToolUseId, tab?.messages, tab?.streamingMessage, run?.prompt],
+      ) || promptFromConversation(tab?.conversation, taskToolUseId, run?.prompt ?? ""),
+    [taskToolUseId, tab?.messages, tab?.streamingMessage, tab?.conversation, run?.prompt],
   );
 
   const hasAssistantContent = blocks.some((b) => {
@@ -342,8 +368,7 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
   const closeAnimated = useCallback(() => {
     if (closingRef.current || !displayedId) return;
     setClosing(true);
-    // Clear store id immediately so the panel-chat message scrim can fade
-    // in sync with this exit; keep `displayedId` until the anim finishes.
+    // Clear store id immediately; keep `displayedId` until the exit anim finishes.
     closeSubAgentPanel();
     blurKeyboardFocus();
     window.setTimeout(() => {
@@ -359,6 +384,9 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
       const target = e.target as HTMLElement;
       if (hostRef.current?.contains(target)) return;
       if (target.closest("[data-subagent-run-panel]")) return;
+      if (target.closest("[data-right-area]")) return;
+      if (target.closest("[data-ai-bar]")) return;
+      if (target.closest("[data-ai-bar-capsule]")) return;
       if (
         target.closest("[data-radix-menu-content]")
         || target.closest("[data-radix-popper-content-wrapper]")
@@ -397,8 +425,6 @@ export const SubAgentRunPanelHost = memo(function SubAgentRunPanelHost() {
       ref={hostRef}
       className={cn(
         "mb-2 w-full min-w-0 pointer-events-auto",
-        // Prefer opacity/transform transitions over animate-in↔out class swaps
-        // (swapping classes mid-flight was a source of flicker).
         "transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)]",
         closing
           ? "opacity-0 translate-y-2"

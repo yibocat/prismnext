@@ -7,9 +7,20 @@ import { Button } from "@/components/ui/button";
 import { useDocumentStore } from "@/stores/document-store";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { bumpSkillsRefresh } from "@/lib/settings/skills-refresh";
+import {
+  addSkillLibrarySource,
+  fetchSkillLibraryCatalog,
+  installAllSkillsFromLibrarySource,
+  installSkillLibraryItem,
+  listProjectSkills,
+  listSkillLibrarySources,
+  removeSkillLibrarySource,
+  setSkillLibrarySourceConnected,
+  type SkillLibrarySource,
+} from "@/lib/settings";
 import { SKILL_CATEGORY_LABELS } from "@/lib/agent/skill-categories";
 import { GITHUB_SKILL_PRESETS } from "@/lib/agent/skill-libraries";
-import type { LibraryCatalogItem } from "../../../../shared/skill-library-types";
+import type { LibraryCatalogItem } from "../../../../shared/skills/library-types";
 import { useInlineDeleteConfirm } from "@/hooks/use-inline-delete-confirm";
 import { InlineDeleteButton } from "./inline-delete-button";
 import { cn } from "@/lib/utils";
@@ -29,18 +40,6 @@ const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 const INPUT =
   "w-full rounded-md border border-input bg-transparent px-3 py-1.5 text-[length:var(--font-size-13)] outline-none focus:border-primary/40";
-
-interface LibrarySource {
-  id: string;
-  kind: "bundled" | "remote" | "github";
-  url?: string;
-  repo?: string;
-  ref?: string;
-  connected: boolean;
-  name: string;
-  description: string;
-  removable: boolean;
-}
 
 function filterCatalogItems(
   items: LibraryCatalogItem[],
@@ -80,7 +79,7 @@ export function SkillLibraryPanel() {
   const loadedSourceIdsRef = useRef<Set<string>>(new Set());
 
   const [librarySearch, setLibrarySearch] = useState("");
-  const [librarySources, setLibrarySources] = useState<LibrarySource[]>([]);
+  const [librarySources, setLibrarySources] = useState<SkillLibrarySource[]>([]);
   const [addSourceUrl, setAddSourceUrl] = useState("");
   const [addSourceError, setAddSourceError] = useState<string | null>(null);
   const sourceRemoveConfirm = useInlineDeleteConfirm();
@@ -113,8 +112,8 @@ export function SkillLibraryPanel() {
         return;
       }
       const [list, sources] = await Promise.all([
-        window.electronAPI.agentListSkills(projectRoot),
-        window.electronAPI.agentListSkillLibrarySources(projectRoot),
+        listProjectSkills(projectRoot),
+        listSkillLibrarySources(projectRoot),
       ]);
       setInstalledIds(new Set(list.map((s) => s.id)));
       setLibrarySources(sources);
@@ -134,10 +133,7 @@ export function SkillLibraryPanel() {
     try {
       for (const source of connectedSources) {
         loadedSourceIdsRef.current.add(source.id);
-        const batch = await window.electronAPI.agentFetchSkillLibraryCatalog(
-          projectRoot,
-          source.id,
-        );
+        const batch = await fetchSkillLibraryCatalog(projectRoot, source.id);
         setCatalogItems((prev) => [...prev, ...batch]);
       }
     } catch (err) {
@@ -186,8 +182,7 @@ export function SkillLibraryPanel() {
     if (!projectRoot || installedIds.has(item.skillId)) return;
     setSaving(true);
     try {
-      const result = await window.electronAPI.agentInstallLibraryCatalogItem(projectRoot, item);
-      await window.electronAPI.chatPrewarm(projectRoot);
+      const result = await installSkillLibraryItem(projectRoot, item);
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(t("settings.editor.skills.toast.installed", { name: item.name }));
@@ -200,15 +195,11 @@ export function SkillLibraryPanel() {
     }
   };
 
-  const installAllFromSource = async (source: LibrarySource) => {
+  const installAllFromSource = async (source: SkillLibrarySource) => {
     if (!projectRoot || source.kind !== "github") return;
     setSaving(true);
     try {
-      const result = await window.electronAPI.agentInstallAllFromLibrarySource(
-        projectRoot,
-        source.id,
-      );
-      await window.electronAPI.chatPrewarm(projectRoot);
+      const result = await installAllSkillsFromLibrarySource(projectRoot, source.id);
       bumpSkillsRefresh();
       setInstalledIds((prev) => new Set([...prev, ...result.installedIds]));
       toast.success(
@@ -231,10 +222,9 @@ export function SkillLibraryPanel() {
     setSaving(true);
     setAddSourceError(null);
     try {
-      const result = await window.electronAPI.agentAddSkillLibrarySource(projectRoot, input);
+      const result = await addSkillLibrarySource(projectRoot, input);
       setLibrarySources(result.sources);
       setAddSourceUrl("");
-      await window.electronAPI.chatPrewarm(projectRoot);
       toast.success(
         t("settings.editor.skills.toast.githubAdded", { count: result.skillCount }),
       );
@@ -247,12 +237,12 @@ export function SkillLibraryPanel() {
     }
   };
 
-  const toggleLibrarySource = async (source: LibrarySource, connected: boolean) => {
+  const toggleLibrarySource = async (source: SkillLibrarySource, connected: boolean) => {
     if (!projectRoot) return;
     sourceRemoveConfirm.clearPending();
     setSaving(true);
     try {
-      const result = await window.electronAPI.agentSetSkillLibrarySourceConnected(
+      const result = await setSkillLibrarySourceConnected(
         projectRoot,
         source.id,
         connected,
@@ -262,25 +252,23 @@ export function SkillLibraryPanel() {
         loadedSourceIdsRef.current.delete(source.id);
         setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
       }
-      await window.electronAPI.chatPrewarm(projectRoot);
     } finally {
       setSaving(false);
     }
   };
 
-  const removeLibrarySource = async (source: LibrarySource) => {
+  const removeLibrarySource = async (source: SkillLibrarySource) => {
     if (!projectRoot || !source.removable) return;
     sourceRemoveConfirm.clearPending();
     setSaving(true);
     try {
-      const result = await window.electronAPI.agentRemoveSkillLibrarySource(
+      const result = await removeSkillLibrarySource(
         projectRoot,
         source.id,
       );
       setLibrarySources(result.sources);
       loadedSourceIdsRef.current.delete(source.id);
       setCatalogItems((prev) => prev.filter((item) => item.sourceId !== source.id));
-      await window.electronAPI.chatPrewarm(projectRoot);
       toast.success(t("settings.editor.skills.toast.sourceRemoved", { name: source.name }));
     } catch (err) {
       toast.error(

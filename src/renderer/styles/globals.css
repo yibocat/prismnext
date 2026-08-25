@@ -134,11 +134,6 @@
   --sidebar-edge-line: color-mix(in oklch, oklch(0.86 0 0) 52%, var(--sidebar));
   --sidebar-edge-shadow: var(--shell-edge-shadow-right);
 
-  /* ── Glass effect tokens ── */
-  --glass-blur-sm: 8px;
-  --glass-blur: 16px;
-  --glass-blur-lg: 24px;
-
   /* ── Semantic (theme-independent) ── */
   --destructive: oklch(0.577 0.245 27.325);
   --success: oklch(0.58 0.17 150);
@@ -231,14 +226,15 @@
   }
   body {
     @apply h-full overflow-x-hidden font-sans text-foreground;
-    /* bg-background removed — body is semi-transparent for desktop glass */
-  }
-  /* Glass body — CSS vars from theme generator. Falls back to solid background. */
-  body {
-    background-color: var(--glass-body-bg, var(--background));
+    background-color: var(--background);
   }
   #root {
     @apply h-full min-w-0 overflow-hidden;
+  }
+  /* Glass on: leave body/#root unpainted so the left sidebar hole shows the desktop. */
+  html[data-glass="on"] body,
+  html[data-glass="on"] #root {
+    background-color: transparent;
   }
   button:not(:disabled),
   summary {
@@ -275,6 +271,181 @@
   -webkit-app-region: no-drag;
 }
 
+/* Paint-only overlay. Hits go through to [data-sidebar-hit-chrome] inside .drag-region. */
+[data-left-sidebar-pinned-chrome],
+[data-right-area-pinned-chrome] {
+  pointer-events: none;
+}
+
+/* Hide glyphs only — hover/selected fills must stay visible under the paint overlay. */
+[data-sidebar-hit-chrome] svg,
+[data-right-area-hit-chrome] svg {
+  opacity: 0;
+}
+
+/* Live collapse: traffic-light gap only. Do not mark this no-drag — that class
+   is used on large title-bar clusters and must stay inert for window-move. */
+[data-deferred-mac-spacer] {
+  display: none;
+  width: 68px;
+  flex-shrink: 0;
+}
+html[data-left-sidebar-collapsed] [data-deferred-mac-spacer] {
+  display: block;
+}
+
+/*
+ * Pinned left-sidebar chrome (window overlay):
+ * toggle + search stay put; + and the content spacer ease on the collapse mark.
+ * size-6 = 1.5rem, gap-1 = 0.25rem, Mac traffic-light gap = 68px.
+ */
+html {
+  --lsb-btn: 1.5rem;
+  --lsb-gap: 0.25rem;
+  --lsb-mac: 68px;
+  --left-sidebar-width: 280px;
+  --lsb-pin-core: calc(var(--lsb-btn) + var(--lsb-gap) + var(--lsb-btn));
+  --lsb-pin-plus: calc(var(--lsb-gap) + var(--lsb-btn));
+  --lsb-pin-collapsed: calc(var(--lsb-pin-core) + var(--lsb-pin-plus));
+  --lsb-toggle-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+html[data-platform="darwin"]:not([data-fullscreen]) {
+  --lsb-pin-core: calc(var(--lsb-mac) + var(--lsb-gap) + var(--lsb-btn) + var(--lsb-gap) + var(--lsb-btn));
+  --lsb-pin-collapsed: calc(var(--lsb-pin-core) + var(--lsb-pin-plus));
+}
+
+[data-content-sidebar-spacer] {
+  width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+html[data-left-sidebar-collapsed] [data-content-sidebar-spacer] {
+  width: var(--lsb-pin-collapsed);
+}
+
+[data-pinned-new-agent] {
+  display: flex;
+  width: 0;
+  margin-left: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+html[data-left-sidebar-collapsed] [data-pinned-new-agent] {
+  width: var(--lsb-btn);
+  margin-left: var(--lsb-gap);
+  opacity: 1;
+}
+html[data-left-sidebar-collapsed] [data-sidebar-hit-chrome] [data-pinned-new-agent] {
+  pointer-events: auto;
+}
+/* Align spacer must never steal the + hit — hover fill lives under the paint glyph. */
+html[data-left-sidebar-collapsed] [data-pinned-status-dot] [data-pinned-new-agent] {
+  pointer-events: none;
+}
+
+/* Paint overlay on #main-area. Hits stay on the in-flow copy. */
+[data-pinned-status-dot] {
+  pointer-events: none;
+}
+[data-status-dot-hit] button > * {
+  opacity: 0;
+}
+
+[data-content-right-spacer] {
+  width: var(--lsb-btn);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+html[data-right-area-open] [data-content-right-spacer] {
+  width: 0;
+}
+
+[data-pinned-right-extra] {
+  display: flex;
+  width: 0;
+  margin-right: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+html[data-right-area-open] [data-pinned-right-extra] {
+  width: var(--lsb-btn);
+  margin-right: var(--lsb-gap);
+  opacity: 1;
+}
+html[data-right-area-open] [data-right-area-hit-chrome] [data-pinned-right-extra] {
+  pointer-events: auto;
+}
+
+/*
+ * Slab fills the column. Window squeeze and sash drag share one width, so
+ * labels reflow/truncate. Click toggle keeps the slab at the preferred width
+ * so the column clips it as a sliding board.
+ */
+[data-left-sidebar-slab] {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin-left: 0;
+}
+html[data-left-sidebar-animating] [data-left-sidebar-slab] {
+  width: var(--left-sidebar-width);
+  min-width: var(--left-sidebar-width);
+}
+
+/* Click/shortcut toggle only. Sash drag must stay 1:1 with the pointer. */
+html[data-left-sidebar-animating] #left-sidebar {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
+/*
+ * Left toggle writes the final column pixels immediately. #main-area is flex-1,
+ * so if #center jumps while #left-sidebar is still easing, an already-open
+ * RightArea is clipped then revealed — it looks like RightArea is opening.
+ * Ease the leftover (#center, or maximized #right-area) with the left rail.
+ */
+html[data-left-sidebar-animating] #center,
+html[data-left-sidebar-animating] #right-area {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
+html[data-right-area-animating] #right-area,
+html[data-right-area-animating] #center {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
+html[data-left-sidebar-animating] [data-content-sidebar-spacer] {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
+html[data-left-sidebar-animating] [data-pinned-new-agent] {
+  transition:
+    width 220ms var(--lsb-toggle-ease),
+    margin-left 220ms var(--lsb-toggle-ease),
+    opacity 220ms var(--lsb-toggle-ease);
+}
+html[data-right-area-animating] [data-content-right-spacer] {
+  transition: width 220ms var(--lsb-toggle-ease);
+}
+html[data-right-area-animating] [data-pinned-right-extra] {
+  transition:
+    width 220ms var(--lsb-toggle-ease),
+    margin-right 220ms var(--lsb-toggle-ease),
+    opacity 220ms var(--lsb-toggle-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-left-sidebar-animating] #left-sidebar,
+  html[data-left-sidebar-animating] #center,
+  html[data-left-sidebar-animating] #right-area,
+  html[data-left-sidebar-animating] [data-content-sidebar-spacer],
+  html[data-left-sidebar-animating] [data-pinned-new-agent],
+  html[data-right-area-animating] #right-area,
+  html[data-right-area-animating] #center,
+  html[data-right-area-animating] [data-content-right-spacer],
+  html[data-right-area-animating] [data-pinned-right-extra] {
+    transition: none;
+  }
+}
+
 /* Sidebar scrollbar styling */
 .bg-sidebar ::-webkit-scrollbar {
   width: 6px;
@@ -303,9 +474,7 @@
   scrollbar-color: var(--sidebar-border) transparent;
 }
 
-  /* ── Glass surfaces — CSS vars from theme generator ── */
-  /* When glass is off, --glass-*-bg vars are not set → fall back to solid colors. */
-  /* Sidebar surfaces */
+  /* ── Chrome glass — left sidebar only. Title bars and content stay opaque. ── */
   [data-surface="sidebar"] {
     background-color: var(--glass-sidebar-bg, var(--sidebar));
     border-color: var(--glass-border, var(--border));
@@ -325,15 +494,10 @@
     box-shadow: var(--shell-edge-shadow-right);
   }
 
-  /* Toolbar surfaces */
-  [data-surface="toolbar"] {
-    background-color: var(--glass-toolbar-bg, var(--background));
-    border-color: var(--glass-border, var(--border));
-  }
-
-  /* Content surfaces */
+  /* Title bars sit on the workspace — same opaque fill as content. */
+  [data-surface="toolbar"],
   [data-surface="content"] {
-    background-color: var(--glass-content-bg, var(--background));
+    background-color: var(--background);
   }
 
 /* ── Global scrollbar ── */
@@ -449,6 +613,27 @@
 .literature-pdf-reader .colored-highlight span,
 .literature-pdf-reader .colored-highlight button {
   pointer-events: auto;
+}
+
+/* Slow blink for a running session (dot or icon-corner badge). */
+@keyframes session-status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.28;
+  }
+}
+
+.session-status-pulse {
+  animation: session-status-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-status-pulse {
+    animation: none;
+  }
 }
 
 /* ── Shiki dual-theme support ── */

@@ -24,9 +24,10 @@ import type {
   ExperimentRunResult,
   ExperimentRunStartedEvent,
   ExperimentSummary,
-} from "../../shared/experiment-log";
-import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiment-log";
-import type { ExperimentResultsSnapshot } from "../../main/services/experiment-results-snapshot";
+} from "../../shared/experiments/log";
+import { RUN_OUTPUT_TAIL_BYTES, stripAnsi, tailBytes } from "../../shared/experiments/log";
+import type { ExperimentResultsSnapshot } from "@shared/experiments/results-snapshot";
+import { experimentDesktop } from "@/lib/desktop-api/experiment";
 import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { navigateFileTreeToPath } from "@/lib/files/navigate-file-tree";
@@ -36,7 +37,7 @@ import "@/modes/experiments-mode/open-experiment";
 import {
   DEFAULT_RUNS_QUERY,
   type RunsQuery,
-} from "@/modes/experiments-mode/experiments-runs-query";
+} from "@/lib/experiments/runs-query";
 
 /**
  * Max runs loaded per experiment detail. The service default is 20 (tail-newest);
@@ -241,7 +242,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       // Archived toggle = archived-only view (not “include archived”).
       // IPC `includeArchived: true` returns the union; filter client-side.
       const archivedOnly = get().showArchived;
-      const res = await window.electronAPI.experimentList(projectRoot, archivedOnly);
+      const res = await experimentDesktop.experimentList(projectRoot, archivedOnly);
       if (!res.ok) {
         set({ experiments: [], corruptIds: [], loading: false, error: res.error });
         return;
@@ -296,7 +297,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   archiveExperiment: async (projectRoot, id) => {
     if (!projectRoot || !id) return false;
     try {
-      const res = await window.electronAPI.experimentArchive({ projectRoot, id });
+      const res = await experimentDesktop.experimentArchive({ projectRoot, id });
       if (!res.ok) {
         set({ error: res.error });
         return false;
@@ -315,7 +316,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   restoreExperiment: async (projectRoot, id) => {
     if (!projectRoot || !id) return false;
     try {
-      const res = await window.electronAPI.experimentRestore({ projectRoot, id });
+      const res = await experimentDesktop.experimentRestore({ projectRoot, id });
       if (!res.ok) {
         set({ error: res.error });
         return false;
@@ -334,7 +335,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   deleteExperiment: async (projectRoot, id, opts) => {
     if (!projectRoot || !id) return false;
     try {
-      const res = await window.electronAPI.experimentDelete({
+      const res = await experimentDesktop.experimentDelete({
         projectRoot,
         id,
         removeLab: opts?.removeLab,
@@ -362,7 +363,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
       return null;
     }
     try {
-      const res = await window.electronAPI.experimentCreate({
+      const res = await experimentDesktop.experimentCreate({
         projectRoot,
         title: trimmed,
         tags: opts?.tags,
@@ -387,7 +388,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   updateExperiment: async (projectRoot, id, input) => {
     if (!projectRoot || !id) return false;
     try {
-      const res = await window.electronAPI.experimentUpdate({
+      const res = await experimentDesktop.experimentUpdate({
         projectRoot,
         id,
         ...input,
@@ -416,7 +417,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   updateRunNotes: async (projectRoot, id, runId, notes) => {
     if (!projectRoot || !id || !runId) return false;
     try {
-      const res = await window.electronAPI.experimentUpdateRun({
+      const res = await experimentDesktop.experimentUpdateRun({
         projectRoot,
         id,
         runId,
@@ -471,8 +472,8 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     });
     try {
       const [readRes, envRes] = await Promise.all([
-        window.electronAPI.experimentRead({ projectRoot, id, runsLimit: RUNS_LOAD_LIMIT }),
-        window.electronAPI.experimentDetectEnv({ projectRoot, id }),
+        experimentDesktop.experimentRead({ projectRoot, id, runsLimit: RUNS_LOAD_LIMIT }),
+        experimentDesktop.experimentDetectEnv({ projectRoot, id }),
       ]);
       if (!readRes.ok) {
         // Clear selection so the detail view does not spin forever on a
@@ -506,7 +507,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     if (!projectRoot || !id || !command) return null;
     try {
       const chatSessionId = useChatStore.getState().sessionId ?? null;
-      const res = await window.electronAPI.experimentRun({
+      const res = await experimentDesktop.experimentRun({
         projectRoot,
         id,
         command,
@@ -645,7 +646,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
 
   cancelRun: async (projectRoot, id, runId) => {
     try {
-      await window.electronAPI.experimentCancelRun({ projectRoot, id, runId });
+      await experimentDesktop.experimentCancelRun({ projectRoot, id, runId });
     } catch {
       // Keep the in-flight card; the final event still clears it.
     }
@@ -662,7 +663,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
     if (!projectRoot || !id) return;
     set({ resultsSnapshotLoading: true });
     try {
-      const res = await window.electronAPI.experimentSnapshot({ projectRoot, id });
+      const res = await experimentDesktop.experimentSnapshot({ projectRoot, id });
       if (get().selectedId !== id) {
         set({ resultsSnapshotLoading: false });
         return;
@@ -685,7 +686,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
   getPaths: async (projectRoot, id) => {
     if (!projectRoot || !id) return null;
     try {
-      const res = await window.electronAPI.experimentGetPaths({
+      const res = await experimentDesktop.experimentGetPaths({
         projectRoot,
         id,
       });
@@ -722,25 +723,25 @@ const gRunEvents = globalThis as typeof globalThis & {
   __prismExperimentRunStartedUnsub?: (() => void) | null;
   __prismExperimentRunOutputUnsub?: (() => void) | null;
 };
-if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunComplete) {
+if (typeof window !== "undefined" && experimentDesktop?.onExperimentRunComplete) {
   gRunEvents.__prismExperimentRunCompleteUnsub?.();
-  gRunEvents.__prismExperimentRunCompleteUnsub = window.electronAPI.onExperimentRunComplete(
+  gRunEvents.__prismExperimentRunCompleteUnsub = experimentDesktop.onExperimentRunComplete(
     (data) => {
       useExperimentStore.getState().handleRunComplete(data);
     },
   );
 }
-if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunStarted) {
+if (typeof window !== "undefined" && experimentDesktop?.onExperimentRunStarted) {
   gRunEvents.__prismExperimentRunStartedUnsub?.();
-  gRunEvents.__prismExperimentRunStartedUnsub = window.electronAPI.onExperimentRunStarted(
+  gRunEvents.__prismExperimentRunStartedUnsub = experimentDesktop.onExperimentRunStarted(
     (data) => {
       useExperimentStore.getState().handleRunStarted(data);
     },
   );
 }
-if (typeof window !== "undefined" && window.electronAPI?.onExperimentRunOutput) {
+if (typeof window !== "undefined" && experimentDesktop?.onExperimentRunOutput) {
   gRunEvents.__prismExperimentRunOutputUnsub?.();
-  gRunEvents.__prismExperimentRunOutputUnsub = window.electronAPI.onExperimentRunOutput((data) => {
+  gRunEvents.__prismExperimentRunOutputUnsub = experimentDesktop.onExperimentRunOutput((data) => {
     useExperimentStore.getState().handleRunOutput(data);
   });
 }

@@ -9,9 +9,9 @@ import {
   parsePlotParams,
   parseSimpleCsv,
   pickCsvResourcePath,
-} from "../../src/shared/interaction-plot";
-import { resolvePlotAbsPath, validatePlotSpec } from "../../src/shared/interaction-plot-fs";
-import type { InteractionSpec } from "../../src/shared/interaction-spec";
+} from "../../src/shared/interaction/plot";
+import { resolvePlotAbsPath, validatePlotSpec } from "../../src/main/lib/interaction-plot-fs";
+import type { InteractionSpec } from "../../src/shared/interaction/spec";
 
 function baseSpec(over: Partial<InteractionSpec> = {}): InteractionSpec {
   return {

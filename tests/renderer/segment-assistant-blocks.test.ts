@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { ContentBlock } from "../../src/renderer/stores/chat-store";
 import {
+  activityFoldPersistKey,
+  isActivityBurstStreaming,
   segmentAssistantBlocks,
   buildActivitySummaryLine,
   collectActivityBurstInventory,
@@ -8,7 +10,28 @@ import {
   countActivityTools,
   formatActivityDuration,
   formatActivityInventoryLine,
+  type AssistantSegment,
 } from "../../src/renderer/lib/chat/segment-assistant-blocks";
+import { toolUseContextTitle } from "../../src/renderer/components/modules/chat/tools/shared";
+
+/** Fold identity must stay `a|t|x` + first index. A `worked` remount is a contract break. */
+function foldIdentityKeys(segments: AssistantSegment[]): string[] {
+  const keys: string[] = [];
+  const walk = (segs: readonly AssistantSegment[]) => {
+    for (const seg of segs) {
+      if (seg.kind === "worked") {
+        keys.push("WORKED-REMOUNT");
+        walk(seg.children);
+        continue;
+      }
+      if (seg.kind === "activity") keys.push(`a${seg.blockIndices[0]}`);
+      else if (seg.kind === "tool") keys.push(`t${seg.blockIndex}`);
+      else if (seg.kind === "text") keys.push(`x${seg.blockIndex}`);
+    }
+  };
+  walk(segments);
+  return keys;
+}
 
 const labels = {
   thinking: "Thinking…",
@@ -125,7 +148,27 @@ describe("segmentAssistantBlocks", () => {
     });
   });
 
-  it("settled: Worked-for wraps bursts + interim prose + Task; keeps inner folds", () => {
+  it("live: keeps question outside the activity fold (composer chrome owns it)", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "ask" },
+      {
+        type: "tool_use",
+        id: "q1",
+        name: "question",
+        input: { question: "Pick one?", options: ["A", "B"] },
+      },
+      { type: "text", text: "Thanks." },
+    ];
+    const segments = segmentAssistantBlocks(blocks, { phase: "live" });
+    expect(segments.map((s) => s.kind)).toEqual(["activity", "tool", "text"]);
+    expect(segments[0]).toMatchObject({ kind: "activity", blockIndices: [0] });
+    expect(segments[1]).toMatchObject({
+      kind: "tool",
+      block: { name: "question", id: "q1" },
+    });
+  });
+
+  it("settled uses the same burst tree as live — no Worked-for remount", () => {
     const blocks: ContentBlock[] = [
       { type: "thinking", thinking: "delegate" },
       { type: "tool_use", id: "r1", name: "read", input: { file_path: "a.tex" } },
@@ -138,45 +181,77 @@ describe("segmentAssistantBlocks", () => {
       },
       { type: "text", text: "Task finished — here is the synthesis." },
     ];
-    const segments = segmentAssistantBlocks(blocks, { phase: "settled" });
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
-    if (segments[0]?.kind === "worked") {
-      expect(segments[0].children.map((c) => c.kind)).toEqual([
-        "activity",
-        "text",
-        "tool",
-      ]);
-      expect(segments[0].children[0]).toMatchObject({
-        kind: "activity",
-        blockIndices: [0, 1],
-      });
-      expect(segments[0].children[2]).toMatchObject({
-        kind: "tool",
-        block: { name: "task", id: "task1" },
-      });
-    }
-    expect(segments[1]).toMatchObject({
-      kind: "text",
-      block: { text: "Task finished — here is the synthesis." },
-    });
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
+    expect(foldIdentityKeys(live)).toEqual(["a0", "x2", "t3", "x4"]);
+    expect(foldIdentityKeys(settled)).toEqual(foldIdentityKeys(live));
+    expect(settled.map((s) => s.kind)).toEqual(["activity", "text", "tool", "text"]);
+    expect(settled.some((s) => s.kind === "worked")).toBe(false);
   });
 
-  it("settled is the default phase (history turns) and preserves burst children", () => {
+  it("history default matches live keys so reopen does not remount folds", () => {
     const blocks: ContentBlock[] = [
       { type: "tool_use", id: "t1", name: "read" },
       { type: "text", text: "Mid." },
       { type: "tool_use", id: "t2", name: "grep" },
       { type: "text", text: "Final." },
     ];
-    const segments = segmentAssistantBlocks(blocks);
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
-    if (segments[0]?.kind === "worked") {
-      expect(segments[0].children.map((c) => c.kind)).toEqual([
-        "activity",
-        "text",
-        "activity",
-      ]);
-    }
+    const live = foldIdentityKeys(segmentAssistantBlocks(blocks, { phase: "live" }));
+    const history = foldIdentityKeys(segmentAssistantBlocks(blocks));
+    expect(live).toEqual(["a0", "x1", "a2", "x3"]);
+    expect(history).toEqual(live);
+  });
+
+  it("prose-only turns never grow a Worked-for shell", () => {
+    const blocks: ContentBlock[] = [
+      { type: "text", text: "Hello." },
+    ];
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
+    expect(live.map((s) => s.kind)).toEqual(["text"]);
+    expect(settled.map((s) => s.kind)).toEqual(["text"]);
+  });
+});
+
+describe("activity fold identity", () => {
+  it("persist keys only depend on turnId + first block index", () => {
+    expect(activityFoldPersistKey("turn-9", 0)).toBe("turn-9:a0");
+    expect(activityFoldPersistKey("turn-9", 3)).toBe("turn-9:a3");
+  });
+
+  it("a burst stays streaming while a tool is running, even after later prose exists", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan", duration: 1 },
+      { type: "tool_use", id: "t1", name: "read", status: "running" },
+    ];
+    expect(isActivityBurstStreaming(blocks, true)).toBe(true);
+    expect(isActivityBurstStreaming(blocks, false)).toBe(false);
+  });
+
+  it("a burst stays streaming while the last thinking is unsealed", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "still going" },
+    ];
+    expect(isActivityBurstStreaming(blocks, true)).toBe(true);
+    expect(isActivityBurstStreaming(
+      [{ type: "thinking", thinking: "done", duration: 1.2 }],
+      true,
+    )).toBe(false);
+  });
+
+  it("a thinking burst is sealed once a later segment has started", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan" },
+    ];
+    expect(isActivityBurstStreaming(blocks, true, { hasLaterSegment: true })).toBe(false);
+  });
+
+  it("a finished burst is not streaming once tools have completed", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan", duration: 0.4 },
+      { type: "tool_use", id: "t1", name: "read", status: "completed", duration: 1 },
+    ];
+    expect(isActivityBurstStreaming(blocks, true)).toBe(false);
   });
 });
 
@@ -196,6 +271,43 @@ describe("describeLatestActivityBlock", () => {
         input: { command: "pnpm test" },
       }),
     ).toBe("pnpm test");
+  });
+
+  it("summarizes Pi find and ls from args, not ACP title", () => {
+    expect(
+      describeLatestActivityBlock({
+        type: "tool_use",
+        name: "find",
+        input: { pattern: "**/*.tex", path: "manuscript" },
+      }),
+    ).toBe("**/*.tex");
+    expect(
+      describeLatestActivityBlock({
+        type: "tool_use",
+        name: "ls",
+        input: { path: "notes/archive" },
+      }),
+    ).toBe("archive");
+    expect(
+      describeLatestActivityBlock({
+        type: "tool_use",
+        name: "ls",
+        input: {},
+      }),
+    ).toBe(".");
+  });
+});
+
+describe("toolUseContextTitle", () => {
+  it("uses args when Pi sends no ACP title, and skips a bare tool name", () => {
+    expect(toolUseContextTitle({
+      name: "find",
+      input: { pattern: "*.md" },
+    })).toBe("*.md");
+    expect(toolUseContextTitle({
+      name: "mystery",
+      input: {},
+    })).toBe("");
   });
 });
 

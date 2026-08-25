@@ -27,7 +27,7 @@ vi.mock("electron", () => ({
 import {
   getSettings,
   pruneOrphanProviderSettings,
-} from "../../src/main/services/settings";
+} from "../../src/main/app/settings";
 
 describe("pruneOrphanProviderSettings", () => {
   beforeEach(() => {

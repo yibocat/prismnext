@@ -180,18 +180,23 @@ export const GitChangeFileRow = memo(function GitChangeFileRow({
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 overflow-hidden"
           onClick={handleRowClick}
         >
-          <Hint label={t("git.changes.openInEditor", { path: file.path })}>
-            <button
-              type="button"
-              className={cn(
-                "w-fit max-w-full truncate min-w-0 shrink text-left font-medium text-foreground hover:underline",
-                gitChangeRowTextClass,
-              )}
-              onClick={handleOpenInEditor}
+          <div className="min-w-0 w-fit max-w-full overflow-hidden">
+            <Hint
+              label={t("git.changes.openInEditor", { path: file.path })}
+              triggerClassName="max-w-full justify-start"
             >
-              {file.path}
-            </button>
-          </Hint>
+              <button
+                type="button"
+                className={cn(
+                  "block max-w-full truncate text-left font-medium text-foreground hover:underline",
+                  gitChangeRowTextClass,
+                )}
+                onClick={handleOpenInEditor}
+              >
+                {file.path}
+              </button>
+            </Hint>
+          </div>
           <GitChangeLineCounts added={file.added} deleted={file.deleted} />
         </div>
 

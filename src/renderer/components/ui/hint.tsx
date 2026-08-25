@@ -16,6 +16,7 @@ export type HintProps = {
   side?: "top" | "bottom" | "left" | "right";
   delayDuration?: number;
   contentClassName?: string;
+  triggerClassName?: string;
 };
 
 /**
@@ -27,8 +28,9 @@ export function Hint({
   label,
   shortcutId,
   side = "bottom",
-  delayDuration = 400,
+  delayDuration,
   contentClassName,
+  triggerClassName,
 }: HintProps) {
   const resolved = shortcutId ? resolveShortcut(shortcutId) : null;
   const text = (label ?? resolved?.label ?? "").trim();
@@ -38,7 +40,16 @@ export function Hint({
 
   return (
     <Tooltip delayDuration={delayDuration}>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger asChild>
+        {/*
+          Own box — do not asChild onto the child. TooltipTrigger already
+          nests Popper.Anchor asChild + Primitive asChild; merging onto
+          another Radix asChild trigger (AppMenu / context menu) puts
+          composeRefs(setTrigger) on the same node twice. React 19 then
+          detach(null)/attach(node) in a loop.
+        */}
+        <span className={cn("inline-flex max-w-full items-center justify-center", triggerClassName)}>{children}</span>
+      </TooltipTrigger>
       <TooltipContent side={side} className={cn(contentClassName)}>
         <span className="inline-flex items-center gap-2">
           {text ? <span className="text-popover-foreground">{text}</span> : null}

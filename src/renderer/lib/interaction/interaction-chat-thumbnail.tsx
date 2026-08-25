@@ -4,16 +4,19 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { ChartLineIcon, ImageIcon } from "lucide-react";
+import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { resolveProjectRelativePath } from "@/lib/files/project-path";
-import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction-figure";
-import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction-plot";
+import { pickFigureResourcePath, isFigureStaticKind } from "../../../shared/interaction/figure";
+import { ChatArtifactPdf } from "@/lib/markdown/chat-artifact-pdf";
+import { isInteractionPlotKind, type PlotDataResult } from "../../../shared/interaction/plot";
 import { buildPlotOptions } from "./plot/build-plot-spec";
-import type { InteractionSpec } from "../../../shared/interaction-spec";
+import type { InteractionSpec } from "../../../shared/interaction/spec";
 import {
   artifactBasename,
   chatImagePathCandidates,
-} from "../../../shared/artifact-path";
+  isPdfArtifactPath,
+} from "../../../shared/interaction/artifact-path";
 import {
   CHAT_ARTIFACT_INLINE_IMAGE_CLASS,
   CHAT_ARTIFACT_PEEK_BODY_CLASS,
@@ -134,6 +137,21 @@ function PeekPlaceholder({
 
 function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot: string }) {
   const rel = pickFigureResourcePath(spec);
+  if (rel && isPdfArtifactPath(rel)) {
+    return <ChatArtifactPdf path={rel} title={spec.title} embedded />;
+  }
+  return <FigureImagePeek spec={spec} projectRoot={projectRoot} rel={rel} />;
+}
+
+function FigureImagePeek({
+  spec,
+  projectRoot,
+  rel,
+}: {
+  spec: InteractionSpec;
+  projectRoot: string;
+  rel: string | null;
+}) {
   const workspaceHintsKey = useExperimentStore((s) => {
     const hints = new Set<string>();
     const detailWs = s.detail?.meta.workspacePath;
@@ -165,8 +183,8 @@ function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot:
       const abs = resolveProjectRelativePath(projectRoot, candidate);
       if (!abs) return null;
       try {
-        if (!(await window.electronAPI.fsExists(abs))) return null;
-        const { dataUrl: url } = await window.electronAPI.fsReadImage(abs);
+        if (!(await fsDesktop.fsExists(abs))) return null;
+        const { dataUrl: url } = await fsDesktop.fsReadImage(abs);
         return url || null;
       } catch {
         return null;
@@ -188,7 +206,7 @@ function FigurePeek({ spec, projectRoot }: { spec: InteractionSpec; projectRoot:
       const base = artifactBasename(rel);
       if (base && !cancelled) {
         try {
-          const found = await window.electronAPI.fsFindByBasename(projectRoot, base);
+          const found = await fsDesktop.fsFindByBasename(projectRoot, base);
           if (found && !cancelled) {
             const url = await tryRead(found);
             if (url && !cancelled) {

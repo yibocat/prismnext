@@ -1,0 +1,86 @@
+{
+  "tabClose": {
+    "closeTab": "关闭标签页",
+    "closeAiTerminal": "关闭 AI 终端",
+    "closeJobMonitor": "关闭作业监视",
+    "closeTerminal": "关闭终端",
+    "closeTerminals": "关闭终端",
+    "closeFile": "关闭文件",
+    "closeWithoutSaving": "不保存并关闭",
+    "closeAll": "全部关闭",
+    "aiRunningKill": "仍有命令在运行。关闭将取消该命令。",
+    "aiRunningKeep": "仍有命令在运行。标签页会关闭，但命令会在后台继续执行。",
+    "aiDetailKill": "可从会话面板或 bash 组件重新打开终端。",
+    "aiDetailKeep": "可使用会话标题菜单查看进度或重新打开终端。",
+    "jobRunningKill": "此作业仍在运行。关闭将取消它。",
+    "jobRunningKeep": "此作业仍在运行。监视器会关闭，但作业继续。",
+    "jobDetailKill": "可从对话或实验重新打开监视器。",
+    "jobDetailKeep": "可从对话或实验重新打开监视器查看进度。",
+    "terminalRunning": "此终端仍有命令在运行。",
+    "terminalDetail": "关闭将中断正在运行的进程。",
+    "terminalsRunning": "仍有 {{count}} 个终端的命令在运行。",
+    "terminalsDetail": "关闭将中断正在运行的进程。",
+    "fileUnsaved": "「{{label}}」有未保存的更改。",
+    "fileDetail": "除非先保存，否则编辑内容将丢失。"
+  },
+  "projectSwitch": {
+    "title": "离开当前项目？",
+    "description": "仍有实验在运行。可以继续在后台运行，或先停止再切换。",
+    "detail": "当前项目的对话 bash 作业会停止。后台实验仍可通过作业监视查看。",
+    "continue": "继续后台运行",
+    "stop": "停止实验"
+  },
+  "permission": {
+    "shellCommand": "Shell 命令",
+    "applyPatch": "应用补丁",
+    "deleteFile": "删除文件",
+    "moveFile": "移动文件",
+    "actionDelete": "删除",
+    "actionMove": "移动",
+    "writeFile": "写入文件",
+    "editFile": "编辑文件",
+    "required": "需要权限",
+    "awaiting": "等待批准",
+    "filesCount": "{{count}} 个文件",
+    "deny": "拒绝",
+    "skip": "取消",
+    "always": "始终允许",
+    "allow": "允许",
+    "alwaysBash": "始终允许类似命令（前缀匹配）",
+    "alwaysTool": "始终允许 {{tool}}，不再询问",
+    "alwaysGeneric": "始终允许此工具",
+    "autoDeny": "{{seconds}} 秒后自动拒绝"
+  },
+  "worktree": {
+    "discardTitle": "丢弃未合并的工作？",
+    "discardBody": "此工作树有 {{count}} 个未合并提交，将被永久删除。",
+    "discardHint": "请先合并到分支 {{branch}} 以整合更改，或在不再需要时丢弃。",
+    "discardConfirm": "丢弃并关闭",
+    "mergeTitle": "合并工作树：{{name}}",
+    "mergeBody": "将分支「{{branch}}」合并到 {{target}}。成功后将移除此工作树。",
+    "mergeSuccess": "合并成功！工作树已移除。",
+    "mergeFailed": "合并失败：{{error}}",
+    "mergeInto": "合并到 {{branch}}"
+  },
+  "git": {
+    "revertTitle": "还原提交",
+    "resetTitle": "重置到提交",
+    "mergeWorktreeTitle": "将工作树合并到分支",
+    "confirmMerge": "确认合并",
+    "mergeBranch": "合并分支",
+    "commitChanges": "提交更改",
+    "createBranch": "创建新分支"
+  },
+  "files": {
+    "deleteFolder": "删除文件夹",
+    "renameFolder": "重命名文件夹",
+    "rename": "重命名",
+    "deleteBody": "确定要永久删除「{{name}}」吗？",
+    "deleteFolderBody": "确定要永久删除文件夹「{{name}}」及其全部内容吗？",
+    "workspaceWarn": "此文件夹在工作区设置中配置为 {{function}}。",
+    "manuscriptWarn": "这是唯一的手稿文件夹 — 在配置另一个之前，TeX 工作区功能可能无法使用。"
+  },
+  "experiments": {
+    "deleteTitle": "删除实验？"
+  }
+}
