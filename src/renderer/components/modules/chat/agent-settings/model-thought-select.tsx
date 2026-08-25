@@ -817,9 +817,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
           sideOffset={6}
           collisionPadding={16}
           style={{ width: menuWidth }}
-          // Keep AppMenu chrome (p-0.5 / gap-0.5). Scroll the panel itself so the
-          // scrollbar sits on the border — not an inner scroller inside the padding.
-          className="min-w-0 w-auto max-w-none max-h-[min(24rem,calc(100vh-6rem))] overflow-x-hidden overflow-y-auto overscroll-contain [overflow-anchor:none]"
+          className="min-w-0 w-auto max-w-none max-h-[min(24rem,calc(100vh-6rem))] flex flex-col gap-0 overflow-hidden p-0"
           onPointerDownOutside={(e) => {
             if (editOpenKey && isModelEditPanelTarget(e.target)) {
               e.preventDefault();
@@ -848,12 +846,12 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
           onKeyDownCapture={(e) => {
             // Capture before Radix moves focus — save scroll to undo center-jumps.
             if (!isModelMenuArrowNavKey(e.key)) return;
-            const scroller = menuContentRef.current;
+            const scroller = menuBodyRef.current;
             if (!scroller) return;
             arrowNavScrollTopRef.current = scroller.scrollTop;
           }}
           onFocusCapture={(e) => {
-            const scroller = menuContentRef.current;
+            const scroller = menuBodyRef.current;
             const locked = arrowNavScrollTopRef.current;
             arrowNavScrollTopRef.current = null;
             if (scroller == null || locked == null) return;
@@ -866,7 +864,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
           }}
           onCloseAutoFocus={appMenuNestedFocusHandlers.onCloseAutoFocus}
         >
-          <div className="sticky top-0 z-10 flex items-center gap-1 border-b border-border/50 bg-popover px-1.5 py-0.5">
+          <div className="flex shrink-0 items-center gap-1 border-b border-border/50 bg-popover px-1.5 py-0.5">
             <input
               ref={searchRef}
               type="text"
@@ -906,7 +904,10 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
             </Hint>
           </div>
 
-          <div ref={menuBodyRef}>
+          <div
+            ref={menuBodyRef}
+            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-0.5 pt-0 [overflow-anchor:none]"
+          >
             {isEmpty && (
               <p className={cn("px-2 py-3 text-center text-muted-foreground", appMenuFontClass)}>
                 Enable models in Settings → AI&amp;APIs
