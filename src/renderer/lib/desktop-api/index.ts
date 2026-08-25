@@ -23,3 +23,4 @@ export { teamsDesktop } from "./teams";
 export { mcpDesktop } from "./mcp";
 export { browserDesktop } from "./browser";
 export { proDesktop } from "./pro";
+export { remoteDesktop } from "./remote";

@@ -74,7 +74,9 @@
     "recents": "最近專案",
     "more": "更多",
     "openFolder": "開啟資料夾",
-    "defaultBadge": "預設"
+    "defaultBadge": "預設",
+    "remote": "遠端",
+    "noSshHosts": "~/.ssh/config 裡還沒有主機"
   },
   "project": {
     "noProject": "未開啟專案",

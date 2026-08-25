@@ -74,7 +74,9 @@
     "recents": "Recents",
     "more": "More",
     "openFolder": "Open Folder",
-    "defaultBadge": "Default"
+    "defaultBadge": "Default",
+    "remote": "Remote",
+    "noSshHosts": "No hosts in ~/.ssh/config"
   },
   "project": {
     "noProject": "No Project Open",

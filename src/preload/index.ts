@@ -35,6 +35,7 @@ import { worktreeApi } from "./worktree";
 import { skillsApi } from "./skills";
 import { logApi } from "./log";
 import { themeApi } from "./theme";
+import { remoteApi } from "./remote";
 
 contextBridge.exposeInMainWorld("electronAPI", {
 	...platformApi,
@@ -73,4 +74,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	...skillsApi,
 	...logApi,
 	...themeApi,
+	...remoteApi,
 });

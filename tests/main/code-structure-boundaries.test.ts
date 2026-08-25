@@ -137,6 +137,7 @@ describe("code structure shared packages (Phase 2)", () => {
     "platform",
     "git",
     "git-hosting",
+    "remote",
   ];
 
   it("keeps required domain folders", () => {
@@ -281,6 +282,7 @@ describe("code structure host port (Phase 3)", () => {
       "src/preload/experiment.ts",
       "src/preload/git.ts",
       "src/preload/agent.ts",
+      "src/preload/remote.ts",
     ]) {
       expect(existsSync(join(REPO, rel)), rel).toBe(true);
     }
@@ -291,8 +293,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(401);
-    expect(new Set(keys).size).toBe(401);
+    expect(keys).toHaveLength(408);
+    expect(new Set(keys).size).toBe(408);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -318,6 +320,8 @@ describe("code structure host port (Phase 3)", () => {
       "updateCheck",
       "aboutGetVersions",
       "gitDeleteBranch",
+      "remoteListHosts",
+      "remoteConnect",
     ]));
     expect(keys).not.toEqual(expect.arrayContaining([
       "chatSend",
@@ -615,6 +619,7 @@ describe("code structure host port (Phase 3)", () => {
       "src/main/skills",
       "src/main/research",
       "src/main/interaction",
+      "src/main/remote",
     ]) {
       expect(existsSync(join(REPO, dir)), dir).toBe(true);
     }
@@ -768,6 +773,10 @@ describe("code structure renderer direction (Phase 4)", () => {
     expect(sourceOf("src/renderer/stores/pro-license-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/pro["']/,
     );
+    expect(sourceOf("src/renderer/stores/remote-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/remote["']/,
+    );
+    expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/remote.ts"))).toBe(true);
     expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/settings.ts"))).toBe(true);
     for (const file of walkTsFiles(join(REPO, "src/renderer/stores"))) {
       const rel = relative(REPO, file);
@@ -959,6 +968,16 @@ describe("code structure renderer direction (Phase 4)", () => {
     for (const file of walkTsFiles(join(REPO, "src/renderer/components/layout"))) {
       const rel = relative(REPO, file);
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);
+    }
+  });
+
+  it("keeps src/host and src/main/remote free of electron imports", () => {
+    for (const dir of ["src/host", "src/main/remote"]) {
+      expect(existsSync(join(REPO, dir)), dir).toBe(true);
+      for (const file of walkTsFiles(join(REPO, dir))) {
+        const rel = relative(REPO, file);
+        expect(sourceOf(rel), rel).not.toMatch(/from\s+["']electron["']/);
+      }
     }
   });
 

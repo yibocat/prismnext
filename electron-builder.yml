@@ -12,6 +12,12 @@ asarUnpack:
 extraResources:
   - from: "resources"
     to: "resources"
+  # Host runtime pushed over SSH (D19). Run `pnpm host:pack` before dist.
+  - from: "out/host"
+    to: "host"
+    filter:
+      - "prismnext-host-*.tar.gz"
+      - "current/**"
 
 # Tectonic LaTeX engine — one platform per build.
 # Layout matches resolveBundledTectonicBinaryPath():

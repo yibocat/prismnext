@@ -9,9 +9,15 @@ import {
   WORKBENCH_HOME_DIRNAME,
   WORKBENCH_JSON_FILENAME,
   WORKTREES_DIRNAME,
+  HOST_INSTALL_DIRNAME,
+  REMOTE_CACHE_DIRNAME,
+  hostCurrentRel,
+  hostInstallRel,
+  hostStampRel,
   libraryRel,
   projectSlotMetaRel,
   projectSlotRel,
+  remoteCacheRel,
   workbenchJsonRel,
   worktreeCheckoutRel,
   worktreeSlotRel,
@@ -78,6 +84,17 @@ describe("workbench-paths", () => {
       `${PROJECTS_DIRNAME}/p_abc/${WORKTREES_DIRNAME}/wt1/checkout`,
     );
     expect(libraryRel("p_abc")).not.toContain(".prismnext");
+  });
+
+  it("keeps Host install and remote cache off the paper-side .prismnext layout", () => {
+    expect(HOST_INSTALL_DIRNAME).toBe(".prismnext-host");
+    expect(REMOTE_CACHE_DIRNAME).toBe("remote-cache");
+    expect(hostInstallRel()).toBe(".prismnext-host");
+    expect(hostCurrentRel()).toBe(".prismnext-host/current");
+    expect(hostStampRel()).toBe(".prismnext-host/current/stamp.json");
+    expect(remoteCacheRel("ssh_1", "p_abc")).toBe("remote-cache/ssh_1/p_abc");
+    expect(hostInstallRel()).not.toBe(".prismnext");
+    expect(remoteCacheRel("ssh_1", "p_abc")).not.toContain(".prismnext");
   });
 
   it("parses home worktree checkout paths and rejects the old paper-side layout", () => {

@@ -1,0 +1,28 @@
+{
+  "title": "遠端",
+  "upgrade": "遠端工作區是 Pro 功能。啟用授權後，即可透過本機 SSH 主機連線。",
+  "trustHost": "信任此主機金鑰",
+  "hostKeyPrompt": "未知主機金鑰：{{fingerprint}}",
+  "stamp": "執行時 {{version}} · {{sha}}",
+  "phase": {
+    "idle": "未連線",
+    "connecting": "正在連線",
+    "awaiting_host_key": "確認主機金鑰",
+    "bootstrapping": "正在推送執行時",
+    "ready": "已連線",
+    "error": "出錯",
+    "disconnected": "已中斷"
+  },
+  "gate": {
+    "entitlement": "授權",
+    "payload": "本機執行時",
+    "ssh": "SSH",
+    "host_key": "主機金鑰",
+    "home": "遠端家目錄",
+    "bootstrap": "推送執行時",
+    "runtime": "遠端 Node",
+    "host_serve": "Host 行程",
+    "handshake": "握手",
+    "doctor": "體質檢查"
+  }
+}

@@ -229,6 +229,16 @@ export type {
   GhPrViewWebResult,
 } from "@shared/git-hosting";
 
+export type {
+  HostHandshake,
+  RemoteBootstrapLogLine,
+  RemoteConnectResult,
+  RemoteConnectionSnapshot,
+  RemoteConnectionState,
+  SshConfigHost,
+  SshProfile,
+} from "@shared/remote";
+
 
 export interface ElectronAPI {
   // Filesystem operations
@@ -1857,6 +1867,22 @@ export interface ElectronAPI {
   worktreeMergeStatus: (projectRoot: string, name: string) => Promise<MergeStatus>;
   worktreeMoveSessions: (projectRoot: string, worktreeName: string) => Promise<number>;
   worktreeBranches: (projectRoot: string) => Promise<BranchInfo[]>;
+
+  // Remote workspace — hosts come from ~/.ssh/config
+  remoteListHosts: () => Promise<import("@shared/remote").SshConfigHost[]>;
+  remoteTrustHost: (input: { host: string; port: number; fingerprint: string }) => Promise<void>;
+  remoteConnect: (profileId: string) => Promise<import("@shared/remote").RemoteConnectResult>;
+  remoteDisconnect: (profileId: string) => Promise<void>;
+  remoteConnectionStatus: (
+    profileId?: string,
+  ) => Promise<import("@shared/remote").RemoteConnectionState | import("@shared/remote").RemoteConnectionSnapshot>;
+  onRemoteLog: (callback: (line: import("@shared/remote").RemoteBootstrapLogLine) => void) => () => void;
+  onRemoteConnection: (
+    callback: (payload: {
+      profileId: string;
+      state: import("@shared/remote").RemoteConnectionState;
+    }) => void,
+  ) => () => void;
 }
 
 declare global {

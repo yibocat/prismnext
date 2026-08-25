@@ -37,6 +37,14 @@ export const HOME_RUNTIME_SESSIONS_DIRNAME = "runtime-sessions";
 export const HOME_SETTINGS_FILENAME = "settings.json";
 export const HOME_SKILLS_MANIFEST_FILENAME = "skills-manifest.json";
 export const HOME_TEAMS_STATE_FILENAME = "teams-state.json";
+/** Remote Host install root on the *server* (`~/.prismnext-host`), not app home. */
+export const HOST_INSTALL_DIRNAME = ".prismnext-host";
+export const HOST_CURRENT_DIRNAME = "current";
+export const HOST_STAMP_FILENAME = "stamp.json";
+/** Local on-demand cache under `~/.prismnext/remote-cache/`. */
+export const REMOTE_CACHE_DIRNAME = "remote-cache";
+export const HOME_SSH_DIRNAME = "ssh";
+export const HOME_KNOWN_HOSTS_FILENAME = "known_hosts";
 export const PROJECT_SLOT_META_FILENAME = "meta.json";
 /** Built-in first-run folder under the platform Documents directory (D-18). */
 export const BUILTIN_DEFAULT_PROJECT_DIRNAME = "PrismNext";
@@ -121,6 +129,27 @@ export function libraryRel(projectId: string): string {
 
 export function homeSkillsRel(skillId?: string): string {
   return skillId ? posixJoin(HOME_SKILLS_DIRNAME, skillId) : HOME_SKILLS_DIRNAME;
+}
+
+/** Remote install root name only — lives next to the user's home, not under `.prismnext`. */
+export function hostInstallRel(): string {
+  return HOST_INSTALL_DIRNAME;
+}
+
+export function hostCurrentRel(): string {
+  return posixJoin(HOST_INSTALL_DIRNAME, HOST_CURRENT_DIRNAME);
+}
+
+export function hostStampRel(): string {
+  return posixJoin(HOST_INSTALL_DIRNAME, HOST_CURRENT_DIRNAME, HOST_STAMP_FILENAME);
+}
+
+export function remoteCacheRel(profileId: string, projectId: string): string {
+  return posixJoin(REMOTE_CACHE_DIRNAME, profileId, projectId);
+}
+
+export function homeKnownHostsRel(): string {
+  return posixJoin(HOME_SSH_DIRNAME, HOME_KNOWN_HOSTS_FILENAME);
 }
 
 /** Session citation scratch next to the product session json (not Application Support). */

@@ -1,0 +1,28 @@
+{
+  "title": "远程",
+  "upgrade": "远程工作区是 Pro 功能。激活许可证后，即可通过本机 SSH 主机连接。",
+  "trustHost": "信任此主机密钥",
+  "hostKeyPrompt": "未知主机密钥：{{fingerprint}}",
+  "stamp": "运行时 {{version}} · {{sha}}",
+  "phase": {
+    "idle": "未连接",
+    "connecting": "正在连接",
+    "awaiting_host_key": "确认主机密钥",
+    "bootstrapping": "正在推送运行时",
+    "ready": "已连接",
+    "error": "出错",
+    "disconnected": "已断开"
+  },
+  "gate": {
+    "entitlement": "许可证",
+    "payload": "本机运行时",
+    "ssh": "SSH",
+    "host_key": "主机密钥",
+    "home": "远程家目录",
+    "bootstrap": "推送运行时",
+    "runtime": "远程 Node",
+    "host_serve": "Host 进程",
+    "handshake": "握手",
+    "doctor": "体质检查"
+  }
+}

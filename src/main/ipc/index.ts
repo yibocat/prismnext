@@ -35,11 +35,13 @@ import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
 import { registerWorkbenchHandlers } from "./workbench";
+import { registerRemoteHandlers } from "./remote";
 
 export function registerIpcHandlers(): void {
   installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
   registerWorkbenchHandlers();
+  registerRemoteHandlers();
   registerFsHandlers();
   registerDialogHandlers();
   registerProjectScaffoldHandlers();

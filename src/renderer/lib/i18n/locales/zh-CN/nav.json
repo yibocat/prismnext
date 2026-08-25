@@ -74,7 +74,9 @@
     "recents": "最近项目",
     "more": "更多",
     "openFolder": "打开文件夹",
-    "defaultBadge": "默认"
+    "defaultBadge": "默认",
+    "remote": "远程",
+    "noSshHosts": "~/.ssh/config 里还没有主机"
   },
   "project": {
     "noProject": "未打开项目",

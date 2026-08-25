@@ -1,0 +1,28 @@
+{
+  "title": "Remote",
+  "upgrade": "Remote Workspace is a Pro feature. Activate a license to connect through your SSH hosts.",
+  "trustHost": "Trust this host key",
+  "hostKeyPrompt": "Unknown host key: {{fingerprint}}",
+  "stamp": "Runtime {{version}} · {{sha}}",
+  "phase": {
+    "idle": "Idle",
+    "connecting": "Connecting",
+    "awaiting_host_key": "Confirm host key",
+    "bootstrapping": "Pushing runtime",
+    "ready": "Connected",
+    "error": "Error",
+    "disconnected": "Disconnected"
+  },
+  "gate": {
+    "entitlement": "License",
+    "payload": "Local runtime",
+    "ssh": "SSH",
+    "host_key": "Host key",
+    "home": "Remote home",
+    "bootstrap": "Push runtime",
+    "runtime": "Remote Node",
+    "host_serve": "Host process",
+    "handshake": "Handshake",
+    "doctor": "Doctor"
+  }
+}
