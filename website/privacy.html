@@ -76,7 +76,7 @@
     <main class="sheet sheet--legal">
       <article class="legal" data-legal-lang="en">
         <header class="legal-head">
-          <p class="legal-meta">Effective 19 August 2026</p>
+          <p class="legal-meta">Effective 25 August 2026</p>
           <h1>Privacy Policy</h1>
           <p class="legal-lede">
             This Privacy Policy explains how the PrismNext desktop application and this website
@@ -141,15 +141,35 @@
         <h2>4. Information stored on your device</h2>
         <h3>4.1 Project directory</h3>
         <p>
-          When you open or create a project, PrismNext writes project-bound state under
-          <code>.prismnext/</code> inside that project. This may include a literature library,
-          notes, experiment records, agent instructions and skills, browser bookmarks, git
-          worktrees, project-level teams, and an optional project Python environment. You control
-          this directory as part of the project folder.
+          When you open or create a project, your manuscript and Git history remain in the project
+          folder you chose. PrismNext writes project-bound metadata under
+          <code>.workbench/</code> inside that folder. This may include agent instructions and
+          rules, compile cache, experiment records, project settings, and project-level teams. You
+          control this directory as part of the project folder.
         </p>
-        <h3>4.2 Application data folder</h3>
         <p>
-          Cross-project settings are stored in the application data folder provided by the
+          Older installs may still have a legacy <code>.prismnext/</code> folder beside the
+          manuscript. Current builds do not read or write it as a configuration source.
+        </p>
+        <h3>4.2 Application home</h3>
+        <p>
+          Cross-project state lives in the application home directory
+          <code>~/.prismnext/</code> under your user profile. This may include:
+        </p>
+        <ul>
+          <li>chat session records under <code>sessions/</code>;</li>
+          <li>per-project literature libraries and agent worktree checkouts under
+            <code>projects/&lt;id&gt;/</code>;</li>
+          <li>user skills, teams, browser bookmarks, and the workbench project list
+            (<code>settings.json</code>).</li>
+        </ul>
+        <p>
+          Deleting a project folder does not delete that project’s session records or library slot
+          in <code>~/.prismnext/</code>.
+        </p>
+        <h3>4.3 Application data folder</h3>
+        <p>
+          Global application settings are stored in the Electron user-data folder provided by the
           operating system:
         </p>
         <ul>
@@ -158,13 +178,11 @@
           <li>Linux: <code>~/.config/prismnext/</code></li>
         </ul>
         <p>
-          That folder may contain settings and API keys, application-level teams, a Pro license
-          file, Agent session records, execution history, a composer attachment
-          cache, and the Chromium profile used by the application (including the in-app Browser
-          partition). Older installs may still have leftover OpenCode runtime files in this
-          folder; current chat does not use them.
+          That folder may contain encrypted API keys and preferences, application-level teams, a
+          Pro license file, a composer attachment cache, and the Chromium profile used by the
+          application (including the in-app Browser partition).
         </p>
-        <h3>4.3 Logs and temporary files</h3>
+        <h3>4.4 Logs and temporary files</h3>
         <p>The following locations are outside the two homes above, but are created by the software:</p>
         <ul>
           <li>
@@ -181,11 +199,7 @@
             <code>~/.cache/uv</code>), which are not managed by PrismNext.
           </li>
         </ul>
-        <p>
-          Deleting a project folder does not delete that project’s Agent session records in the
-          application data folder.
-        </p>
-        <h3>4.4 This website</h3>
+        <h3>4.5 This website</h3>
         <p>
           The website stores theme, language, and backdrop preferences in your browser’s
           <code>localStorage</code>. It does not create an account.
@@ -194,9 +208,8 @@
         <h2>5. Information transmitted automatically</h2>
         <p>
           Official builds contact the Publisher’s software-update feed (hosted on Cloudflare R2)
-          when Welcome runs its status checks, when the sidebar update affordance refreshes, and
-          when you use Check for updates. The feed operator may observe an IP address, a
-          user-agent string, the requested object (for example <code>version.json</code> or a
+          at startup, when the sidebar update affordance refreshes, and when you use Check for
+          updates. The feed operator may observe an IP address, a user-agent string, the requested object (for example <code>version.json</code> or a
           platform manifest), and the approximate time of the request. From that, it may be
           inferred that a given application version checked for updates.
         </p>
@@ -334,13 +347,13 @@
           <li>decline to configure API keys or third-party integrations;</li>
           <li>refuse agent permissions that would access the network or upload files;</li>
           <li>disable automatic update downloads in Settings → About;</li>
-          <li>delete project folders, the application data folder, and log folders; and</li>
+          <li>delete project folders, <code>~/.prismnext/</code>, the application data folder, and log folders; and</li>
           <li>clear this website’s <code>localStorage</code> in your browser.</li>
         </ul>
         <p>
-          Uninstalling the application does not always remove application data, logs, project
-          <code>.prismnext/</code> directories, Downloads, or third-party caches. If you wish those
-          deleted, you must delete them yourself.
+          Uninstalling the application does not always remove application data,
+          <code>~/.prismnext/</code>, logs, project <code>.workbench/</code> directories, Downloads,
+          or third-party caches. If you wish those deleted, you must delete them yourself.
         </p>
         <p>
           Because the Publisher does not hold your project data, the Publisher cannot remotely
@@ -371,7 +384,7 @@
 
       <article class="legal" data-legal-lang="zh" hidden>
         <header class="legal-head">
-          <p class="legal-meta">生效日期：2026 年 8 月 19 日</p>
+          <p class="legal-meta">生效日期：2026 年 8 月 25 日</p>
           <h1>隐私政策</h1>
           <p class="legal-lede">
             本隐私政策说明 PrismNext 桌面应用及本网站如何处理信息。请与
@@ -424,19 +437,33 @@
         <h2>4. 存储在您设备上的信息</h2>
         <h3>4.1 项目目录</h3>
         <p>
-          当您打开或创建项目时，PrismNext 会在该项目下的 <code>.prismnext/</code> 写入与项目绑定的状态，可能包括文献库、笔记、实验记录、Agent 说明与技能、浏览器书签、Git worktree、项目级团队，以及可选的项目 Python 环境。该目录作为项目文件夹的一部分，由您自行控制。
+          当您打开或创建项目时，手稿与 Git 历史保留在您选择的项目文件夹中。PrismNext 在该文件夹下的
+          <code>.workbench/</code> 写入与项目绑定的元数据，可能包括 Agent 说明与规则、编译缓存、实验记录、项目设置与项目级团队。该目录作为项目文件夹的一部分，由您自行控制。
         </p>
-        <h3>4.2 应用数据文件夹</h3>
-        <p>跨项目设置保存在操作系统提供的应用数据文件夹中：</p>
+        <p>
+          较旧安装可能在手稿旁仍留有 legacy 目录 <code>.prismnext/</code>。当前构建不再将其作为配置源读取或写入。
+        </p>
+        <h3>4.2 应用家目录</h3>
+        <p>
+          跨项目状态保存在用户主目录下的应用家 <code>~/.prismnext/</code>，可能包括：
+        </p>
+        <ul>
+          <li><code>sessions/</code> 下的 Chat 会话记录；</li>
+          <li><code>projects/&lt;id&gt;/</code> 下按项目隔离的文献库与 Agent worktree 签出；</li>
+          <li>用户技能、团队、浏览器书签，以及 Workbench 项目列表（<code>settings.json</code>）。</li>
+        </ul>
+        <p>删除项目文件夹，并不会删除 <code>~/.prismnext/</code> 中该项目的会话记录或文献槽位。</p>
+        <h3>4.3 应用数据文件夹</h3>
+        <p>全局应用设置保存在 Electron 用户数据文件夹中：</p>
         <ul>
           <li>macOS：<code>~/Library/Application Support/prismnext/</code></li>
           <li>Windows：<code>%APPDATA%\prismnext\</code></li>
           <li>Linux：<code>~/.config/prismnext/</code></li>
         </ul>
         <p>
-          该文件夹可能包含设置与 API Key、应用级团队、Pro 许可证文件、Agent 会话记录、任务历史、对话附件缓存，以及应用程序使用的 Chromium 配置（含内置 Browser 分区）。较旧安装可能仍留有 OpenCode 运行时文件；当前聊天不再使用它们。
+          该文件夹可能包含加密保存的 API Key 与偏好、应用级团队、Pro 许可证文件、对话附件缓存，以及应用程序使用的 Chromium 配置（含内置 Browser 分区）。
         </p>
-        <h3>4.3 日志与临时文件</h3>
+        <h3>4.4 日志与临时文件</h3>
         <p>下列位置不在上述两个「家」中，但由本软件产生：</p>
         <ul>
           <li>
@@ -449,15 +476,14 @@
             您运行的工具产生的包缓存（例如 <code>uv</code> 位于 <code>~/.cache/uv</code>），不由 PrismNext 管理。
           </li>
         </ul>
-        <p>删除项目文件夹，并不会删除应用数据文件夹中该项目的 Agent 会话记录。</p>
-        <h3>4.4 本网站</h3>
+        <h3>4.5 本网站</h3>
         <p>
           本网站将主题、语言与背景偏好保存在浏览器的 <code>localStorage</code> 中，不创建账号。
         </p>
 
         <h2>5. 自动传输的信息</h2>
         <p>
-          官方构建在欢迎页运行状态检查、侧栏更新入口刷新，以及您使用「检查更新」时，会访问发布者的软件更新源（托管于 Cloudflare R2）。更新源运营方可观察到 IP 地址、User-Agent、被请求的对象（例如 <code>version.json</code> 或平台清单）以及大致请求时间，并可能据此推断某一应用版本进行了更新检查。
+          官方构建在启动时、侧栏更新入口刷新，以及您使用「检查更新」时，会访问发布者的软件更新源（托管于 Cloudflare R2）。更新源运营方可观察到 IP 地址、User-Agent、被请求的对象（例如 <code>version.json</code> 或平台清单）以及大致请求时间，并可能据此推断某一应用版本进行了更新检查。
         </p>
         <p>
           本网站首页（不含这些法律页面）会请求同一份公开更新源，以便显示当前版本与下载链接。该请求由您的浏览器发出，而非桌面应用。
@@ -540,11 +566,11 @@
           <li>拒绝配置 API Key 或第三方集成；</li>
           <li>拒绝会使 Agent 访问网络或上传文件的权限；</li>
           <li>在「设置 → 关于」中关闭自动下载更新；</li>
-          <li>删除项目文件夹、应用数据文件夹与日志文件夹；以及</li>
+          <li>删除项目文件夹、<code>~/.prismnext/</code>、应用数据文件夹与日志文件夹；以及</li>
           <li>在浏览器中清除本网站的 <code>localStorage</code>。</li>
         </ul>
         <p>
-          卸载应用并不总是删除应用数据、日志、项目中的 <code>.prismnext/</code>、「下载」中的文件或第三方缓存。若需清除，须由您自行删除。
+          卸载应用并不总是删除应用数据、<code>~/.prismnext/</code>、日志、项目中的 <code>.workbench/</code>、「下载」中的文件或第三方缓存。若需清除，须由您自行删除。
         </p>
         <p>由于发布者并不持有您的项目数据，发布者无法远程为您擦除这些数据。</p>
 
@@ -578,6 +604,6 @@
     </main>
 
     <script src="./theme-preview.js?v=20260815b"></script>
-    <script src="./site.js?v=20260816c"></script>
+    <script src="./site.js?v=20260825a"></script>
   </body>
 </html>

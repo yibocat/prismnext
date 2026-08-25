@@ -24,13 +24,14 @@
       footCopy: "© 2026 yibocat",
       pubMeta: "Preprint",
       versionLabel: "Version",
-      authors: "A local-first scientific research environment powered by collaborative AI teams.",
+      authors:
+        "A local-first, multi-project research workbench — powered by a research-enhanced embedded Pi agent and Teams v2.",
       abstractTitle: "Abstract",
       abstractText:
-        "PrismNext unifies read → design → run → write → review on a single local desk. Structured around a Teams v2 multi-agent architecture and a unified terminal execution plane, a modular research team (Lead orchestrator + domain specialists + MCP tools) operates directly across a Zotero/MinerU-synced SQLite library, monitored experiment runs, notes, git, and native LaTeX. Distributed as one single installer across all platforms: free core loop out of the box, with specialty pro teams unlocked instantly via local license verification.",
+        "PrismNext unifies read → design → run → write → review on a multi-project local desk. A research-enhanced embedded Pi agent and Teams v2 (Lead orchestrator + specialists + skills + MCP) operate across per-project libraries, monitored experiment runs, notes, Git with remote sync and agent-turn change lenses, and native LaTeX. Manuscripts stay in your Git tree; project metadata in .workbench/; cross-project state in ~/.prismnext/. One installer across platforms: free core out of the box, pro specialty teams via local license verification.",
       keywordsLabel: "Keywords",
       keywords:
-        "local-first · Teams v2 · execution plane · LaTeX · literature · provenance · gated multi-agent",
+        "local-first · Workbench · embedded Pi · Teams v2 · execution plane · LaTeX · provenance · gated multi-agent",
       pillars: "Local-first · Open-Core · Bring your own API key · Zero telemetry",
       mn1: "co-drive, not autopilot →",
       loopTitle: "The research loop",
@@ -48,26 +49,29 @@
       mn2: "read → design → run → write",
       archTitle: "System Architecture",
       archLede:
-        "PrismNext is built on four core engineering pillars designed for rigorous, reproducible scientific computing.",
-      archDesk: "The Desk & Security Boundary",
-      archDeskDef:
-        "A project is a directory on your local filesystem. All structured metadata, SQLite databases, and caches live inside .prismnext/. File watchers and markdown links are strictly locked to the authorized project root.",
-      archTeams: "Teams v2 Multi-Agent Engine",
-      archTeamsDef:
-        "Agency is structured into modular Teams (exactly 1 Lead orchestrator + specialist subagents + skills + MCP tools). Supports global App-level suites and project-level repos (project.local), resolved via deterministic precedence. Always-on hangars (Common & Project Team) guarantee zero-downtime chat fallbacks.",
+        "PrismNext is engineered around five pillars for rigorous, reproducible scientific computing on a multi-project desk.",
+      archWorkbench: "Multi-Project Workbench",
+      archWorkbenchDef:
+        "Several paper folders stay open on one desk — each with its own chats, file tree, library slot, and modes. Switching focus changes the center and right panels without killing background agents.",
+      archStorage: "Local-First Storage Boundary",
+      archStorageDef:
+        "Your manuscript lives in the project Git tree. Structured metadata — agent instructions, compile cache, experiments, teams — lives in .workbench/. Cross-project state — chat sessions, per-project libraries, agent worktree checkouts, skills, and teams — lives in ~/.prismnext/. File watchers stay locked to authorized roots.",
+      archPi: "Embedded Pi Agent + Teams v2",
+      archPiDef:
+        "Chat runs on a research-enhanced Pi host in the main process (agent:* IPC). Teams v2 staffs the desk: one Lead voice, Task-delegated specialists, skills, slash commands, and team MCP servers. PermissionGate keeps consequential tools behind explicit Allow / Deny cards.",
       archJobs: "Unified Terminal Execution Plane",
       archJobsDef:
         "Chat bash commands and experiment runs share a unified executionId state machine. The read-only Job Monitor attaches directly to active process streams. Auto-logs receipts (command, exit code, duration, transcript, outputs) into runs.jsonl for direct citation in Methods.",
       archOneApp: "Open-Core & Unified Single Installer",
       archOneAppDef:
         "The core desktop shell and compiler engine are open source (Apache-2.0). Official releases ship as one unified binary across macOS, Windows, and Linux. Free features are unlocked out of the box; pro specialty teams are verified locally without cloud roundtrips.",
-      mn8: "modular teams on one desk →",
+      mn8: "several papers, one desk →",
       showcaseTitle: "Capabilities",
       showcaseLede:
         "Evidence over adjectives — nine integrated surfaces shipping in today's build, themed live by the header palette.",
       shotHomeTitle: "One prompt box, staffed by the active Team",
       shotHomeText:
-        "Select a Team, model, and allowed skills. Aim the composer across literature discovery, mathematical derivations, experiment execution, or LaTeX drafting.",
+        "Select a Team, model, and allowed skills. The embedded Pi agent staffs the composer across literature discovery, mathematical derivations, experiment execution, or LaTeX drafting — per project, on one workbench.",
       figHome: "The session composer — Team, model, and skills at hand. Drag for light vs dark.",
       shotLitTitle: "Literature, searched and shelved",
       shotLitText:
@@ -91,7 +95,7 @@
       figExp: "A finished run with its full provenance receipt.",
       shotGitTitle: "Git & Worktrees, built into the workspace",
       shotGitText:
-        "Every step lands in Git. Side-by-side visual diffs, branch management, and isolated worktree checkouts directly inside the desktop environment.",
+        "Every step lands in Git. Visual diffs, remote fetch/pull/publish, GitHub PR creation, agent-turn change lenses, branch management, and isolated worktree checkouts — all inside the workspace.",
       figGit: "Visual diff viewer and commit management.",
       shotWritingTitle: "First-class LaTeX authoring",
       shotWritingText:
@@ -202,7 +206,7 @@
       eaText:
         "During the public preview, all Pro specialty teams can be activated for free. Go to Settings (⌘, / Ctrl+,) → About, enter the test key PRISM-PRO-DEV-TEST, and click Activate.",
       mn9: "unlocked via PRISM-PRO-DEV-TEST →",
-      mn3: "all local — check .prismnext/",
+      mn3: "all local — .workbench/ + ~/.prismnext/",
       mn5: "fork it on GitHub →",
       mn6: "figures wear the current pack →",
       mn7: "runnable, not rhetoric ↓",
@@ -278,12 +282,14 @@
       footCopy: "© 2026 yibocat",
       pubMeta: "预印本",
       versionLabel: "版本",
-      authors: "本地优先的集成式科研工作台 —— 由有闸门的多智能体科学团队协同驱动。",
+      authors:
+        "本地优先的多项目科研工作台 —— 由科研增强型嵌入式 Pi Agent 与 Teams v2 协同驱动。",
       abstractTitle: "摘要",
       abstractText:
-        "PrismNext 将读 → 规划 → 实验 → 撰写 → 审阅全流程收拢于本地书桌。基于 Teams v2 多智能体架构与统一作业执行控制平面，模块化科学团队（Lead 主脑 + 专科专家 + MCP 工具）直接操作 Zotero/MinerU 同步的 SQLite 文献库、可监视的实验运行、笔记、Git 与原生 LaTeX。全平台采用单一安装包分发：免费核心能力开箱即用，Pro 专科团队通过本地许可证即时求值解锁。",
+        "PrismNext 将读 → 规划 → 实验 → 撰写 → 审阅收拢于多项目本地书桌。科研增强型嵌入式 Pi Agent 与 Teams v2（Lead 主脑 + 专科专家 + 技能 + MCP）直接操作按项目隔离的文献库、可监视的实验运行、笔记、带远程同步与 Agent 轮次变更透镜的 Git，以及原生 LaTeX。手稿留在 Git 树；项目元数据在 .workbench/；跨项目状态在 ~/.prismnext/。全平台单一安装包：免费核心开箱即用，Pro 专科团队本地许可证即时解锁。",
       keywordsLabel: "关键词",
-      keywords: "本地优先 · Teams v2 · 执行控制平面 · LaTeX · 文献库 · 实验溯源 · 有闸门的多智能体",
+      keywords:
+        "本地优先 · Workbench · 嵌入式 Pi · Teams v2 · 执行控制平面 · LaTeX · 实验溯源 · 有闸门的多智能体",
       pillars: "本地优先 · 开源核心 · 自备 API Key · 零数据遥测",
       mn1: "共驾，不是自动驾驶 →",
       loopTitle: "科研闭环",
@@ -299,24 +305,28 @@
       figManifold: "科研流形——拖拽旋转，曲面是实时渲染的。",
       mn2: "读 → 设计 → 跑 → 写",
       archTitle: "系统架构",
-      archLede: "PrismNext 基于四大工程支柱构建，专为严密、可复现的科学研究计算而设计。",
-      archDesk: "科研书桌与安全隔离",
-      archDeskDef:
-        "项目即本地文件系统中的普通文件夹。所有结构化元数据、SQLite 数据库与编译缓存均存储于 .prismnext/。文件监听与 Markdown 链接严格限制于当前打开的项目根目录，杜绝越界访问。",
-      archTeams: "Teams v2 多智能体编排引擎",
-      archTeamsDef:
-        "智能体能力以模块化 Team 组织（严格限制 1 位 Lead 主脑 + 专科 Subagents + 技能 + MCP 工具）。支持跨项目的应用级套件与随仓库提交的项目级团队（project.local），由确定性优先级表仲裁。通用团队与本项目团队挂架确保主脑永不离线。",
+      archLede: "PrismNext 围绕五大工程支柱构建，在多项目书桌上实现严密、可复现的科学研究计算。",
+      archWorkbench: "多项目 Workbench",
+      archWorkbenchDef:
+        "多张论文文件夹同时驻留于同一书桌——各自拥有独立的对话、文件树、文献槽位与模式面板。切换焦点时，中心区与右侧面板随之切换，后台 Agent 不被终止。",
+      archStorage: "本地优先存储边界",
+      archStorageDef:
+        "手稿位于项目 Git 树。结构化元数据——Agent 说明、编译缓存、实验、团队——存于 .workbench/。跨项目状态——对话会话、按项目文献库、Agent worktree 签出、技能与团队——存于 ~/.prismnext/。文件监听严格锁定于授权根目录。",
+      archPi: "嵌入式 Pi Agent + Teams v2",
+      archPiDef:
+        "Chat 由主进程内的科研增强型 Pi 宿主驱动（agent:* IPC）。Teams v2 坐镇书桌：单一 Lead 对话声线、Task 委派专科、技能、斜杠命令与团队 MCP。PermissionGate 将高风险工具置于显式 Allow / Deny 卡片之后。",
       archJobs: "统一作业执行控制平面",
       archJobsDef:
         "Chat 中的 Bash 命令与实验运行共享统一 executionId 状态机。只读 Job Monitor 直连进程实时输出流。运行回执（命令、退出码、时长、日志、产物）自动固化至 runs.jsonl，可直接引用至论文 Methods。",
       archOneApp: "开源核心与统一二进制分发",
       archOneAppDef:
         "桌面客户端与编译内核完全开源（Apache-2.0）。官方发布为全平台（macOS、Windows、Linux）单一统一安装包。核心免费能力开箱即用；Pro 专科能力由本地许可证即时求值生效，无需云端往返。",
-      mn8: "模块化团队坐镇同一张书桌 →",
+      mn8: "多篇论文，一张书桌 →",
       showcaseTitle: "核心能力一览",
       showcaseLede: "证据胜于形容词——九大集成科研工作面，每张截图均实时适配顶栏选中的出版级主题包与手绘背景。",
       shotHomeTitle: "一个输入框，调动当前 Team 全局能力",
-      shotHomeText: "选择活跃 Team、模型与可用技能。同一个 Composer 可自如发起文献检索、数学推导、实验运行或手稿起草。",
+      shotHomeText:
+        "选择活跃 Team、模型与可用技能。嵌入式 Pi Agent 在同一 Workbench 上，按项目驱动 Composer 发起文献检索、数学推导、实验运行或手稿起草。",
       figHome: "会话 Composer——Team、模型与技能随取。拖动对比浅色与深色。",
       shotLitTitle: "文献库：检索、解析与入库",
       shotLitText: "跨 Crossref、arXiv、OpenAlex 全量检索。Zotero 双向同步与 MinerU 高精度 PDF 解析。实时健康检查保证 .tex ↔ .bib ↔ 文献库三向一致。",
@@ -334,7 +344,8 @@
       shotExpText: "当前 Team 协助制定实验矩阵、派发作业，并自动将完整回执写入 runs.jsonl——包含命令、退出码、时长、日志与图表产物。",
       figExp: "一次完成的实验运行及其完整科研收据。",
       shotGitTitle: "内置 Git 差异审阅与工作树隔离",
-      shotGitText: "每一步探索均进入 Git。在工作区内部直接进行并排差异比对、分支管理与独立工作树（Worktree）隔离签出。",
+      shotGitText:
+        "每一步探索均进入 Git。在工作区内部进行可视化差异、远程 fetch/pull/publish、GitHub PR 创建、Agent 轮次变更透镜、分支管理与独立 worktree 签出。",
       figGit: "并排差异对比与版本提交管理。",
       shotWritingTitle: "一等公民的原生 LaTeX 撰写",
       shotWritingText: "原生 TeX 工作台：大纲导航、实时 PDF 快速同步、内置 Tectonic 编译，以及审阅修改稿件专用的 Proposed Changes 差异视图。",
@@ -432,7 +443,7 @@
       eaHead: "抢先体验：免费激活",
       eaText: "在公开测试期间，全部 Pro 专题团队均可免费体验。进入「设置」（⌘, / Ctrl+,）→「关于」，输入测试密钥 PRISM-PRO-DEV-TEST，再点击「激活」即可立即解锁。",
       mn9: "测试密钥 PRISM-PRO-DEV-TEST →",
-      mn3: "数据 100% 本地 —— 查验 .prismnext/",
+      mn3: "数据 100% 本地 —— .workbench/ + ~/.prismnext/",
       mn5: "欢迎 Star 与 Fork →",
       mn6: "截图随主题实时变装 →",
       mn7: "条条皆可运行，绝非概念口号 ↓",

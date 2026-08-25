@@ -6,7 +6,7 @@
     <meta name="prismnext-version" content="0.0.0-dev" />
     <meta
       name="description"
-      content="PrismNext — an integrated, local-first research environment powered by multi-agent scientific teams: literature, gated execution, notes, git, and first-class LaTeX in one unified installer."
+      content="PrismNext — a local-first, multi-project research workbench with an embedded Pi agent, Teams v2, literature, gated execution, Git remote sync, and first-class LaTeX."
     />
     <meta name="theme-color" content="#0b0c10" id="theme-color" />
     <title>PrismNext — a local-first research desk</title>
@@ -223,30 +223,39 @@
           <span data-i18n="archTitle">System Architecture</span>
         </h2>
         <p class="sec-lede reveal-on-scroll" data-i18n="archLede">
-          PrismNext is built on four core engineering pillars designed for rigorous, reproducible scientific computing.
+          PrismNext is engineered around five pillars for rigorous, reproducible scientific computing on a multi-project desk.
         </p>
 
         <ol class="loop-def arch-def reveal-on-scroll">
           <li>
             <span class="loop-idx">01</span>
             <div>
-              <strong data-i18n="archDesk">The Desk &amp; Security Boundary</strong>
-              <p data-i18n="archDeskDef">
-                A project is a directory on your local filesystem. All structured metadata, SQLite databases, and caches live inside .prismnext/. File watchers and markdown links are strictly locked to the authorized project root.
+              <strong data-i18n="archWorkbench">Multi-Project Workbench</strong>
+              <p data-i18n="archWorkbenchDef">
+                Several paper folders stay open on one desk — each with its own chats, file tree, library slot, and modes. Switching focus changes the center and right panels without killing background agents.
               </p>
             </div>
           </li>
           <li>
             <span class="loop-idx">02</span>
             <div>
-              <strong data-i18n="archTeams">Teams v2 Multi-Agent Engine</strong>
-              <p data-i18n="archTeamsDef">
-                Agency is structured into modular Teams (exactly 1 Lead orchestrator + specialist subagents + skills + MCP tools). Supports global App-level suites and project-level repos (project.local), resolved via deterministic precedence. Always-on hangars (Common &amp; Project Team) guarantee zero-downtime chat fallbacks.
+              <strong data-i18n="archStorage">Local-First Storage Boundary</strong>
+              <p data-i18n="archStorageDef">
+                Your manuscript lives in the project Git tree. Structured metadata lives in .workbench/; cross-project state in ~/.prismnext/. File watchers stay locked to authorized roots.
               </p>
             </div>
           </li>
           <li>
             <span class="loop-idx">03</span>
+            <div>
+              <strong data-i18n="archPi">Embedded Pi Agent + Teams v2</strong>
+              <p data-i18n="archPiDef">
+                Chat runs on a research-enhanced Pi host in the main process. Teams v2 staffs the desk with one Lead voice, Task-delegated specialists, skills, and PermissionGate.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="loop-idx">04</span>
             <div>
               <strong data-i18n="archJobs">Unified Terminal Execution Plane</strong>
               <p data-i18n="archJobsDef">
@@ -255,7 +264,7 @@
             </div>
           </li>
           <li>
-            <span class="loop-idx">04</span>
+            <span class="loop-idx">05</span>
             <div>
               <strong data-i18n="archOneApp">Open-Core &amp; Unified Single Installer</strong>
               <p data-i18n="archOneAppDef">
@@ -485,7 +494,7 @@
           </div>
         </div>
 
-        <span class="margin-note mn-3 reveal-on-scroll" data-i18n="mn3">all local — check .prismnext/</span>
+        <span class="margin-note mn-3 reveal-on-scroll" data-i18n="mn3">all local — .workbench/ + ~/.prismnext/</span>
         <span class="margin-note mn-6 reveal-on-scroll" data-i18n="mn6">figures wear the current pack →</span>
         <span class="margin-note mn-7 reveal-on-scroll" data-i18n="mn7">runnable, not rhetoric ↓</span>
       </section>
@@ -615,7 +624,7 @@
     <script src="./config.js"></script>
     <script src="./backdrops.js?v=20260815b"></script>
     <script src="./theme-preview.js?v=20260815b"></script>
-    <script src="./site.js?v=20260816c"></script>
+    <script src="./site.js?v=20260825a"></script>
     <script src="./manuscript.js?v=20260815b"></script>
   </body>
 </html>

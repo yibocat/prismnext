@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <strong>An integrated, local-first research environment — powered by a gated multi-agent scientific team.</strong><br />
-  Literature · design · experiments · notes · Git · LaTeX, on one unified desk.
+  <strong>A local-first, multi-project research workbench — built around a research-enhanced embedded Pi agent and Teams v2.</strong><br />
+  Literature · design · experiments · notes · Git · LaTeX — several papers, one desk.
 </p>
 
 <p align="center">
@@ -27,14 +27,15 @@
 
 PrismNext is a **local-first integrated research environment (IRE)** — not a LaTeX editor with a chat sidebar, and not a generic coding agent pointed at a `.tex` file.
 
-Every artifact of a scientific endeavor exists as a first-class object in one local workspace:
-- **Literature Library**: SQLite-backed, with Zotero library/collection synchronization, optional MinerU PDF processing, and continuous `.tex` ↔ `.bib` ↔ library citation health auditing.
+Every artifact of a scientific endeavor exists as a first-class object on your desk:
+- **Multi-Project Workbench**: Keep several paper folders open at once — each with its own chats, file tree, library, and modes. Switching projects changes the center and right panels without killing background agents.
+- **Literature Library**: Per-project SQLite libraries (under the app home), Zotero library/collection sync, optional MinerU PDF processing, and continuous `.tex` ↔ `.bib` ↔ library citation health auditing.
 - **Ideation & Governance**: Structured Research Briefs, interactive Plans (`⌥P`), permission modes, and review checkpoints for consequential work.
-- **Experiment Workspaces**: Execution control plane, live process monitoring, and experiment receipts for Methods-grade provenance.
+- **Experiment Workspaces**: Unified execution control plane, live Job Monitor, and experiment receipts for Methods-grade provenance.
 - **First-Class LaTeX Writing**: Live PDF compilation (bundled Tectonic or system TeXLive), symbol palettes, and interactive **Proposed Changes** merge views.
-- **Integrated Version Control**: Built-in Git repository browser and worktree orchestration.
+- **Integrated Version Control**: Built-in Git with remote sync, pull/publish, GitHub PR creation (`gh`), agent-turn change lenses, and isolated worktree checkouts.
 
-All capabilities are coordinated through a **Teams v2 multi-agent architecture** hosted through ACP with a bundled [opencode](https://github.com/anomalyco/opencode) runtime. Instead of a single static chatbot, your research desk is staffed by modular scientific teams (Lead orchestrator + specialist subagents + skills + MCP tools). Switching the active team instantly restaffs the desk with domain-specific methodologies.
+Chat runs on a **research-enhanced embedded Pi agent** inside the desktop app. **Teams v2** staffs the desk: one Lead voice in chat, specialist subagents delegated via Task, plus skills, slash commands, and team MCP servers. Switching the active team restaffs the session; PermissionGate keeps consequential tools behind explicit Allow / Deny cards.
 
 ---
 
@@ -43,7 +44,7 @@ All capabilities are coordinated through a **Teams v2 multi-agent architecture**
 | Dimension | Generic Coding Agents | Literature Q&A / Auto-Scientists | **PrismNext** |
 | :--- | :--- | :--- | :--- |
 | **Research Loop** | Fragmented across IDE, terminals, and chat | Overnight automated hallucination | **Full closed loop: Read → Design → Run → Write → Review** |
-| **Agent Paradigm** | Single generic chatbot | Fixed prompt persona | **Teams v2: Lead orchestrator + domain specialists + MCP** |
+| **Agent Paradigm** | Single generic chatbot | Fixed prompt persona | **Embedded Pi + Teams v2: Lead, Task experts, skills, MCP** |
 | **Execution** | Ephemeral unmonitored subshells | Blackbox cloud VMs | **Unified Execution Control Plane & read-only Job Monitor** |
 | **Artifacts** | Plain text buffers | Chat attachments | **Library, Briefs, Plans, Runs, Notes, Manuscript on disk** |
 | **Scientific Writing** | Markdown or naive text editing | Unchecked generated text | **First-class LaTeX, Tectonic preview, Proposed Changes diff** |
@@ -58,76 +59,107 @@ All capabilities are coordinated through a **Teams v2 multi-agent architecture**
 
 ## Architecture
 
-PrismNext is engineered around four core architectural pillars:
+PrismNext is engineered around five pillars:
 
 ```mermaid
 flowchart TB
-  subgraph Desk ["1. The Desk (Local-First Data Layer)"]
+  subgraph Workbench ["0. Multi-Project Workbench"]
     direction LR
-    Lib["SQLite Library<br/>(Zotero / MinerU)"]
-    Brief["Brief & Plan<br/>(⌥P Governance)"]
-    Tex["LaTeX Workspace<br/>(Tectonic / TeXLive)"]
-    Git["Git & Worktrees<br/>(Diff & Commits)"]
+    Rail["Left sidebar project tree"]
+    Chats["Per-project chat tabs"]
+    Focus["Focus switch<br/>(files · library · modes)"]
+    Rail --> Focus
+    Chats --> Focus
   end
 
-  subgraph Teams ["2. Teams v2 Agent Architecture"]
+  subgraph Desk ["1. Local-First Storage"]
+    direction LR
+    Paper["Manuscript and repo<br/>(your Git tree)"]
+    Meta["Project metadata<br/>(.workbench/)"]
+    Home["App home<br/>(~/.prismnext/)"]
+    Paper --- Meta
+    Meta --- Home
+  end
+
+  subgraph Pi ["2. Embedded Pi Agent + Teams v2"]
     direction TB
-    ActiveTeam["Active Team (e.g. PrismNext Core / Pro Specialty)"]
-    Lead["Lead Orchestrator (Single Voice in Chat)"]
-    Roster["Specialist Subagents (Roster Delegation)"]
-    Tools["Allowed Skills · Commands · Team MCPs"]
-    Hangars["Always-On Hangars: Common Team & Project Team (project.local)"]
-    ActiveTeam --> Lead
-    Lead --> Roster
-    Lead --> Tools
+    Host["Pi host (agent:* IPC)"]
+    Teams["Active Team · Skills · MCP"]
+    Lead["Lead (single chat voice)"]
+    Task["Task to Pi child sessions"]
+    Gate["PermissionGate · Plans · Conversation doc"]
+    Host --> Teams
+    Teams --> Lead
+    Lead --> Task
+    Host --> Gate
   end
 
-  subgraph Exec ["3. Unified Terminal Execution Plane"]
+  subgraph Exec ["3. Unified Execution Plane"]
     direction LR
-    JobId["Unified executionId & State Machine"]
-    JobMonitor["Job Monitor (Live Attach / Detach)"]
-    Provenance["Experiment Receipts<br/>(runs.jsonl / Methods)"]
+    JobId["executionId state machine"]
+    JobMonitor["Job Monitor (attach/detach)"]
+    Provenance["Experiment receipts<br/>(.workbench/experiments/)"]
     JobId --> JobMonitor
     JobId --> Provenance
   end
 
-  subgraph Dist ["4. Open-Core & Official Unified Distribution"]
+  subgraph Dist ["4. Open-Core Distribution"]
     direction LR
-    Host["Open-Source Host (Apache-2.0)"]
-    ProPacks["Pro Specialty Packs (Private Source)"]
-    OneInstaller["One official installer per platform<br/>(not Free / Pro SKUs)"]
-    Host --- OneInstaller
+    HostOSS["Open-source Host (Apache-2.0)"]
+    ProPacks["Pro specialty packs (private)"]
+    OneInstaller["One installer per platform"]
+    HostOSS --- OneInstaller
     ProPacks --- OneInstaller
   end
 
-  Desk <--> Teams
-  Teams --> Exec
+  Workbench <--> Desk
+  Workbench <--> Pi
+  Pi --> Exec
   Exec --> Desk
 ```
 
-### 1. The Desk (Local-First Workspace & Project Boundary)
-A project is simply a directory on your local filesystem. PrismNext stores project state in `.prismnext/` (including the library, experiment receipts, project-team definitions, and compile caches). Write and delete operations are constrained to registered project roots; this is a project boundary, not a general filesystem sandbox.
+### 0. Multi-Project Workbench
+The left sidebar is a **workbench**, not a single-project file tree with a project picker on top. Each folder you add keeps its own chat list underneath; clicking a chat switches the paper on the right (files, library, TeX, experiments, Git) **without** stopping agents still running in other projects. Sessions persist across restarts; reopening the app restores the projects and tabs you had when you quit.
 
-### 2. Teams v2 Multi-Agent Architecture
-The agent system is structured around modular **Teams**:
-- **Team Composition**: Exactly one **Lead** (the orchestrator that speaks in Chat) + specialist **Subagents** (domain experts delegated via Task) + **Skills** + **Slash Commands** + **MCP Servers**.
-- **Dual-Scope Model**:
-  - *App-level*: Global teams shared across all workspaces (e.g., built-in `PrismNext Core` with 29 codified scientific skills, or Pro specialty teams).
-  - *Project-level*: Project-specific teams defined in `.prismnext/agent/teams/project.local/` that version-control with the repository.
-- **TeamResolver & Single Precedence**: Resolves conflicts and active rosters via a deterministic precedence chain (`Project > User > Registry > Pro > Bundled > Core`).
-- **Always-On Hangars**: `Common Team` (user app hangar) and `Project Team` (`project.local`) remain available as fallback homes; the resolver selects an available Lead from the active scope and fallbacks.
+A background chat that needs approval marks its row and surfaces a title-bar chip — you jump there when ready instead of being yanked away from the manuscript you are editing.
+
+### 1. Local-First Storage (two homes, one desk)
+PrismNext splits **application state** from **project metadata**:
+
+| Layer | Location | Holds |
+| :--- | :--- | :--- |
+| **App home** | `~/.prismnext/` | Workbench list, chat sessions, user skills/teams, browser bookmarks, per-project libraries & agent worktrees |
+| **Project metadata** | `<project>/.workbench/` | `workbench.json`, settings, agent instructions & rules, compile cache, experiments, interactions, terminal config |
+| **Your paper** | project root (Git) | `.tex`, `.bib`, figures, notes — version with the repository |
+
+Per-project literature libraries live at `~/.prismnext/projects/<id>/library/`. Agent worktree checkouts live at `~/.prismnext/projects/<id>/worktrees/<name>/checkout/`. Chat sessions live at `~/.prismnext/sessions/`.
+
+Legacy paper-side `.prismnext/` folders from earlier builds are **not** read or migrated automatically — new projects use `.workbench/` only.
+
+Write and delete operations stay inside registered project roots; this is a project boundary, not a general filesystem sandbox.
+
+### 2. Embedded Pi Agent + Teams v2
+Product chat is hosted by an **embedded Pi agent** in the main process (`agent:*` IPC). Settings fetches model catalogs, thinking-effort options, and API-key tests through the same Pi host.
+
+Teams v2 still defines *who* is on the desk:
+- **Team composition**: one **Lead** (the voice in chat) + specialist **Subagents** (delegated via Task as Pi child sessions) + **Skills** + **Slash commands** + **MCP servers**.
+- **Scopes**: app-level teams (bundled Core, user teams in `~/.prismnext/teams/`, Pro packs) and project-level teams you create under `.workbench/agent/teams/` (version-controlled with the repo when you ask for them).
+- **TeamResolver**: deterministic precedence (`Project > User > Registry > Pro > Bundled > Core`).
+- **Common Team** stays the always-on user hangar; project teams are created only when you explicitly add project-scoped teams, commands, or MCP — opening a folder does not plant an empty `project.local`.
+
+The UI reads a **Conversation document** (turns, live tool folds, permission cards) rather than flattening agent events into a legacy message list. Plan mode, rollback, compress-context, and vision attachments all route through the Pi host.
 
 ### 3. Unified Terminal Execution Control Plane
 Chat bash commands and experiment runs share a unified main-process execution state machine (`executionId`):
-- **Job Monitor**: Clicking any bash or experiment card attaches a read-only Job Monitor directly to the running process stream. Closing the monitor leaves the background job running safely.
-- **Lifecycle Guarantees**: Closing a chat tab terminates only its child bash jobs while preserving long-running experiments; closing a project prompts for background execution or graceful cancellation.
-- **Scientific Provenance**: Experiment runs file auditable receipts (command line, execution duration, exit code, stdout/stderr, input arguments, and output artifacts) in `.prismnext/experiments/<id>/runs.jsonl`, ready to support paper Methods. Chat Bash execution uses the same registry but keeps its own execution history.
+- **Job Monitor**: Clicking any bash or experiment card attaches a read-only Job Monitor to the live process stream. Closing the monitor leaves background jobs running.
+- **Lifecycle**: Closing a chat tab terminates only its child bash jobs; long-running experiments keep going. Closing a project prompts for background work.
+- **Scientific provenance**: Experiment runs write auditable receipts (command, duration, exit code, logs, inputs, artifacts) under `.workbench/experiments/<id>/runs.jsonl`.
 
 ### 4. Open-Core Architecture & Unified Single Distribution
-- **Open-Core Host**: The entire desktop shell, LaTeX compiler engine, literature manager, Git client, ACP/OpenCode runtime, and Core research skills are open source under the **Apache-2.0** license.
-- **Pro Specialty Suites**: Advanced domain teams are built as modular Pro packages; the official beta contains eight optional suites alongside the open-source Core team.
-- **Official Unified Installer**: Official releases provide one installer for each supported platform rather than separate Free and Pro downloads. Free features are available with no registration. Pro capabilities are present only in builds that bundle the private Pro package, then evaluated locally at runtime.
-- **Early Access Testing**: In a build that includes Pro, enter the documented test key **`PRISM-PRO-DEV-TEST`** in **Settings → About** to activate the Early Access suite. Open-source builds without Pro packs remain fully usable as Core builds.
+- **Open-Core Host**: The desktop shell, embedded Pi agent host, LaTeX engine (Tectonic), literature manager, Git client, and Core research skills are open source under **Apache-2.0**. Official installers bundle **Pi and Tectonic**.
+- **Pro specialty suites**: Advanced domain teams ship as modular Pro packages; the official beta includes eight optional suites alongside Core.
+- **One installer per platform** — not separate Free/Pro SKUs. Pro capabilities exist only in builds that bundle the private Pro package and are evaluated locally.
+- **Early Access**: In a Pro-enabled build, enter **`PRISM-PRO-DEV-TEST`** in **Settings → About** to activate the Early Access suite.
 
 ---
 
@@ -136,7 +168,7 @@ Chat bash commands and experiment runs share a unified main-process execution st
 > Screenshots adapt to your GitHub color scheme. The application includes five switchable theme packs (see [Themes & Appearance](#themes--appearance)).
 
 ### 1. Read — Literature as a First-Class Workspace Object
-A dedicated project SQLite library with Zotero library/collection synchronization, Crossref / arXiv / OpenAlex bibliographic metadata enrichment, and continuous **citation health auditing** (`.tex` ↔ `.bib` ↔ library consistency). MinerU processing is optional and sends a selected PDF to the MinerU service; local PDF.js remains available. Margin notes stay attached to paper sections, while Intensive Reading provides a focused paper-reading workflow.
+Each focused project has its own SQLite library (stored under the app home), with Zotero library/collection synchronization, Crossref / arXiv / OpenAlex bibliographic metadata enrichment, and continuous **citation health auditing** (`.tex` ↔ `.bib` ↔ library consistency). MinerU processing is optional and sends a selected PDF to the MinerU service; local PDF.js remains available. Margin notes stay attached to paper sections, while Intensive Reading provides a focused paper-reading workflow.
 
 <p align="center">
   <picture>
@@ -157,7 +189,7 @@ A dedicated project SQLite library with Zotero library/collection synchronizatio
 </p>
 
 ### 2. Design & Run — Experiments with Provenance
-Capture problem statements and execution roadmaps in the **Research Brief** and **Plan** (`⌥P`), then use the permission mode appropriate to the work. Experiment runs are tracked in real time via the **Job Monitor** and record their concrete command, duration, exit code, logs, inputs, and artifact outputs.
+Capture problem statements and execution roadmaps in the **Research Brief** and **Plan** (`⌥P`), then use the permission mode appropriate to the work. Experiment runs are tracked in real time via the **Job Monitor** and record their concrete command, duration, exit code, logs, inputs, and artifact outputs under `.workbench/experiments/`.
 
 <p align="center">
   <picture>
@@ -167,7 +199,7 @@ Capture problem statements and execution roadmaps in the **Research Brief** and 
 </p>
 
 ### 3. Write — First-Class LaTeX Authoring
-A dedicated TeX workspace: bundled Tectonic engine or system TeXLive, `% !TEX root` / `% !TEX program` directives, instant PDF preview, and interactive **Proposed Changes** merge views for reviewing agent edits before applying them to your manuscript.
+A dedicated TeX workspace: bundled Tectonic engine or system TeXLive, `% !TEX root` / `% !TEX program` directives, instant PDF preview, and interactive **Proposed Changes** merge views for reviewing agent edits before applying them to your manuscript. Standalone figures compile beside the source; the paper pipeline stays separate.
 
 <p align="center">
   <picture>
@@ -176,8 +208,8 @@ A dedicated TeX workspace: bundled Tectonic engine or system TeXLive, `% !TEX ro
   </picture>
 </p>
 
-### 4. Orchestrate — Staffing the Desk with Specialized Teams
-Select your model provider (including DeepSeek, Anthropic Claude, OpenAI, Google Gemini, Kimi, Qwen, MiniMax, OpenRouter, Zhipu, OpenCode Zen/Go, or custom OpenAI-compatible endpoints) and pair it with the active **Team**. The team operates across your library, terminal jobs, and LaTeX drafts, returning structured text and research figures.
+### 4. Orchestrate — Pi Agents, Teams, and Models
+Configure a provider in **Settings → Models** (DeepSeek, Anthropic, OpenAI, Google Gemini, Kimi, Qwen, MiniMax, OpenRouter, Zhipu, or custom OpenAI-compatible endpoints) and pair it with the active **Team**. The embedded Pi host runs the session; Task delegates to specialist subagents as child sessions. The team operates across your library, terminal jobs, and LaTeX drafts, returning structured text, compiled figures, and reopenable Interaction cards.
 
 <p align="center">
   <picture>
@@ -190,8 +222,8 @@ Select your model provider (including DeepSeek, Anthropic Claude, OpenAI, Google
   <img src="./assets/shots/interactive.webp" alt="Interactive research visualization" width="92%" />
 </p>
 
-### 5. Track — Versioned Notes & Git Worktrees
-Notes and derivations live alongside the research trail. Full built-in Git management with side-by-side visual diffs, branch management, and isolated worktree checkouts.
+### 5. Track — Git, Remotes, and Worktrees
+Built-in Git with visual diffs, branch switching, ahead/behind tracking against any remote, fetch/pull/publish, optional GitHub PR creation via `gh`, and **Changes lenses** (last agent turn, staged/unstaged, per-commit, net branch diff on feature branches). Agent worktrees check out under the app home while staying tied to the parent project session.
 
 <p align="center">
   <picture>
@@ -239,7 +271,7 @@ In addition to the open-source Core team, PrismNext includes specialized multi-a
 
 ## Local-First & Privacy Axioms
 
-1. **Locality**: Manuscripts, project metadata, literature databases, experiments, and project-team configuration remain on your local disk. Project state lives under `.prismnext/`.
+1. **Locality**: Manuscripts stay in your Git tree. Project metadata lives in `<project>/.workbench/`. Chat sessions, workbench membership, per-project libraries, worktrees, and user skills/teams live in `~/.prismnext/`. Nothing is uploaded to a PrismNext cloud.
 2. **BYOK (Bring Your Own Key)**: Model API calls go directly between your machine and your chosen provider. PrismNext has no model proxy or Prism cloud.
 3. **Explicit Third-Party Requests**: Literature metadata lookups and optional MinerU PDF processing use third-party services after a user starts that literature action; MinerU receives the selected PDF for processing.
 4. **Zero Telemetry**: No tracking or user analytics. Update checks and user-started third-party requests are documented in the [Privacy note](https://prismnext.pages.dev/privacy.html).
@@ -269,13 +301,15 @@ Download the latest release for your operating system from [GitHub Releases](htt
 > ```
 
 ### 2. Configure Model Provider
-Open **Settings (`⌘,` / `Ctrl+,`) → Models** and configure an API key for a supported provider or a compatible custom endpoint.
+Open **Settings (`⌘,` / `Ctrl+,`) → Models** and configure an API key for a supported provider or a compatible custom endpoint. Model lists are fetched live from the embedded Pi catalog.
 
 ### 3. (Optional) Unlock Pro Teams
 In an official build that includes Pro, go to **Settings → About**, paste **`PRISM-PRO-DEV-TEST`**, and click **Activate**.
 
-### 4. Create or Open a Project
-Open any directory containing LaTeX documents, or initialize a new project from a workspace template (Paper, Research Lab, or Minimal).
+### 4. Workbench & Projects
+First launch opens a default project at `Documents/PrismNext` (created if needed). Use the workbench **+** to open an existing folder or start from a template (Paper, Research Lab, or Minimal). Each project gets a `.workbench/` metadata folder; your `.tex` files stay in the repo root. Add more projects to the sidebar — each keeps its own chats while sharing one app install.
+
+Project agent instructions live at `.workbench/agent/AGENTS.md` (Settings → Prompts & Rules). Open a **new chat tab** after creating or editing skills so the Pi session picks them up.
 
 ---
 
