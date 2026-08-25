@@ -62,7 +62,9 @@ describe("tooltip delay and focus", () => {
 
   it("does not merge Hint onto another Radix asChild trigger", () => {
     const hint = sourceOf("src/renderer/components/ui/hint.tsx");
-    expect(hint).toContain('<span className="inline-flex max-w-full">{children}</span>');
+    expect(hint).toContain(
+      'cn("inline-flex max-w-full items-center justify-center", triggerClassName)',
+    );
     expect(hint).not.toContain("<TooltipTrigger asChild>{children}</TooltipTrigger>");
   });
 

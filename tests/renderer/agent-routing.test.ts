@@ -9,15 +9,31 @@ vi.mock("@/stores/document-store", () => ({
   useDocumentStore: { getState: () => ({ projectRoot: "/tmp/project" }) },
 }));
 
-vi.mock("@/stores/settings-store", () => ({
-  useSettingsStore: {
-    getState: () => ({
-      settings: {
-        aiProvider: "anthropic",
-        aiModel: "claude-sonnet-4-5",
-        aiApiKeys: { anthropic: "sk-test" },
+vi.mock("@/stores/settings-store", () => {
+  let settings = {
+    aiProvider: "anthropic",
+    aiModel: "claude-sonnet-4-5",
+    aiApiKeys: { anthropic: "sk-test" },
+    sessionChromeByProject: {} as Record<string, Record<string, unknown>>,
+  };
+  return {
+    useSettingsStore: {
+      getState: () => ({ settings }),
+      setState: (
+        updater:
+          | { settings?: typeof settings }
+          | ((s: { settings: typeof settings }) => { settings?: typeof settings }),
+      ) => {
+        const patch = typeof updater === "function" ? updater({ settings }) : updater;
+        if (patch.settings) settings = { ...settings, ...patch.settings };
       },
-    }),
+    },
+  };
+});
+
+vi.mock("@/lib/desktop-api/settings", () => ({
+  settingsDesktop: {
+    settingsSet: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

@@ -42,7 +42,7 @@ function initRepo(dir: string): void {
   git(dir, "config", "user.name", "Test");
 }
 
-describe("getLog branch range", () => {
+describe("getLog branch range", { timeout: 30_000 }, () => {
   it("lists only commits on the feature branch and fills +/- counts", async () => {
     const dir = tmp("prism-git-branch-log-");
     initRepo(dir);

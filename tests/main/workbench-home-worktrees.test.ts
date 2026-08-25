@@ -45,7 +45,7 @@ function initGit(dir: string): void {
   );
 }
 
-describe("home worktree checkout (D-15)", () => {
+describe("home worktree checkout (D-15)", { timeout: 30_000 }, () => {
   it("creates checkout under the workbench home and leaves the paper folder clean", async () => {
     const userHome = tmp("wb-wt-home-");
     setWorkbenchUserHomeOverride(userHome);

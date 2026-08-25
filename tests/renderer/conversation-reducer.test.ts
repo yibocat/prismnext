@@ -54,7 +54,13 @@ describe("applyConversationEvent", () => {
     const live = blocksOf(conv);
     expect(live?.user.blocks).toEqual([{ type: "text", text: "review this paper" }]);
     expect(live?.assistant.blocks).toEqual([
-      { type: "thinking", thinking: "hmm...", timeStart: expect.any(Number) },
+      {
+        type: "thinking",
+        thinking: "hmm...",
+        timeStart: expect.any(Number),
+        timeEnd: expect.any(Number),
+        duration: expect.any(Number),
+      },
       { type: "text", text: "Hello world" },
     ]);
     expect(live?.status).toBe("streaming");

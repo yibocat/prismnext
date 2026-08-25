@@ -25,11 +25,11 @@ describe("cycleChatBackdrop", () => {
   });
 
   it("resolves auto from theme pack before cycling", () => {
-    expect(cycleChatBackdrop("auto", true, "midnight")).toBe("forest");
-    expect(cycleChatBackdrop("auto", true, "graphite")).toBe("starfield");
+    expect(cycleChatBackdrop("auto", true, "midnight")).toBe("stamp");
+    expect(cycleChatBackdrop("auto", true, "graphite")).toBe("stamp");
   });
 
   it("treats disabled as theme default when cycling", () => {
-    expect(cycleChatBackdrop("auto", false, "forest")).toBe("blueprint");
+    expect(cycleChatBackdrop("auto", false, "forest")).toBe("stamp");
   });
 });

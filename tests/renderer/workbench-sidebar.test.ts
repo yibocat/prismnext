@@ -193,7 +193,7 @@ describe("workbench sidebar wiring", () => {
     expect(sidebar).toContain("showProject: true");
     expect(sidebar).toContain("SessionContextCard");
     expect(sidebar).toContain('side="right"');
-    expect(sidebar).toContain("showProject && \"h-[1lh] w-3.5\"");
+    expect(sidebar).toContain("showProject && \"h-[1lh] w-4\"");
     expect(sidebar).toContain("project.id === defaultProjectId");
     expect(sidebar).toContain("DefaultProjectBadge");
     expect(sidebar).toContain("showProject ? sessionTrailing : null");
@@ -202,7 +202,8 @@ describe("workbench sidebar wiring", () => {
     expect(sidebar).toContain("!showArchived && pinnedSessions");
     expect(sidebar).not.toContain("AppContextMenuSeparator");
     expect(sidebar).not.toContain("AppMenuSeparator");
-    expect(sidebar).toContain("absolute inset-0 flex items-center justify-center opacity-0");
+    expect(sidebar).toContain("SessionStatusIndicator");
+    expect(sidebar).toContain("pinSession(s.id)");
     expect(sidebar).not.toContain("absolute opacity-0 group-hover/session:opacity-100");
   });
 
