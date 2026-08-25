@@ -149,6 +149,11 @@ function sessionsListEqual(a: SessionInfo[], b: SessionInfo[]): boolean {
 }
 
 function shortProjectPath(lastPath: string): string {
+  if (lastPath.startsWith("remote://")) {
+    const abs = lastPath.replace(/^remote:\/\/[^/]+/, "");
+    const parts = abs.split("/").filter(Boolean);
+    return parts.slice(-2).join("/") || abs;
+  }
   const normalized = lastPath.replace(/\\/g, "/").replace(/\/+$/, "");
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return parts.join("/") || normalized;
@@ -1272,7 +1277,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
                           <WorkbenchFolderGlyph open={expanded} muted={missing} />
                           <span className="flex min-w-0 flex-1 items-center gap-1">
                             <span className="min-w-0 truncate font-medium">
-                              {member.displayName}
+                              {member.lastPath.startsWith("remote://")
+                                ? `${member.displayName} · ${t("nav.workbench.remote")}`
+                                : member.displayName}
                             </span>
                             {member.id === defaultProjectId ? <DefaultProjectBadge /> : null}
                           </span>

@@ -67,6 +67,11 @@ async function hostTarball(dir: string): Promise<{ path: string; sha256: string 
   mkdirSync(join(dir, "current", "bin"), { recursive: true });
   writeFileSync(join(dir, "current", "bin", "prismnext-host"), FAKE_HOST, { mode: 0o755 });
   writeFileSync(
+    join(dir, "current", "bin", "node"),
+    `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "$@"\n`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
     join(dir, "current", "stamp.json"),
     `${JSON.stringify({ desktopVersion: "0.9.0", payloadSha256: "pending" }, null, 2)}\n`,
   );
@@ -113,7 +118,7 @@ describe("RemoteSessionBroker", () => {
       getLicense: () => proAll,
       getProfile: () => ({ ...profile, strictHostKey: false }),
       ssh: createAuthFailSshClient(),
-      resolvePayload: () => ({ path: "/tmp/missing.tar.gz", sha256: "x", arch: "arm64" }),
+      resolvePayload: () => ({ path: "/tmp/missing.tar.gz", sha256: "x", arch: "linux-x64" }),
     });
     const result = await broker.connect("ssh_lab");
     expect(result.code).toBe("ssh_auth");
@@ -129,7 +134,7 @@ describe("RemoteSessionBroker", () => {
       getLicense: () => ({ ...proAll, features: [WORKSPACE_REMOTE_FEATURE] }),
       getProfile: () => ({ ...profile, strictHostKey: false }),
       ssh: createDirectoryBackedSshClient(remoteHome),
-      resolvePayload: () => tarball,
+      resolvePayload: () => ({ ...tarball, arch: "linux-arm64" }),
       knownHostsPath,
     });
     const result = await broker.connect("ssh_lab");
@@ -150,6 +155,8 @@ describe("RemoteSessionBroker", () => {
     ]);
     expect(result.constitution?.gates.every((item) => item.ok)).toBe(true);
     expect(result.constitution?.doctor?.ok).toBe(true);
+    expect(result.constitution?.gates.find((item) => item.gate === "runtime")?.detail).toMatch(/dedicated/);
+    expect(broker.snapshot().logs.some((line) => /PATH has no `node`/.test(line.message))).toBe(false);
     expect(broker.snapshot().logs.some((line) => line.gate === "handshake" && line.level === "ok")).toBe(true);
     await broker.disconnect("ssh_lab");
   });

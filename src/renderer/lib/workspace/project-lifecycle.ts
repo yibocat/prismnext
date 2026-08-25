@@ -25,6 +25,7 @@ import { loadWorkbenchSessionUiPrefs } from "@/lib/chat/session-ui-prefs";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import { remoteDesktop } from "@/lib/desktop-api/remote";
 import { gitDesktop } from "@/lib/desktop-api/git";
 import { projectDesktop } from "@/lib/desktop-api/project";
 import { executionDesktop } from "@/lib/desktop-api/execution";
@@ -32,6 +33,7 @@ import { getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { i18n } from "@/lib/i18n";
 import { createLogger } from "@/services/logger";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
+import { isRemoteProjectRoot } from "../../../shared/remote";
 
 const log = createLogger("project-lifecycle");
 
@@ -138,14 +140,18 @@ export async function switchWorkbenchFocus(opts: {
   const result = await fsDesktop.fsScanMetadata(canonicalRoot);
   if (shouldAbort()) return;
 
-  gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
+  if (!isRemoteProjectRoot(canonicalRoot)) {
+    gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
+  }
   await useWorkspaceConfigStore.getState().loadConfig(canonicalRoot);
   if (shouldAbort()) return;
 
-  void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
-    if (shouldAbort()) return;
-    void useLiteratureStore.getState().refresh(canonicalRoot);
-  });
+  if (!isRemoteProjectRoot(canonicalRoot)) {
+    void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+      if (shouldAbort()) return;
+      void useLiteratureStore.getState().refresh(canonicalRoot);
+    });
+  }
 
   const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
   const expandedFolders = (() => {
@@ -366,6 +372,7 @@ export function filterRecentWorkbenchProjects(
   const list = [...recents];
   if (
     defaultProject?.path.trim()
+    && !isRemoteProjectRoot(defaultProject.path)
     && !list.some((item) => sameProjectPath(item.path, defaultProject.path))
   ) {
     list.unshift({
@@ -376,6 +383,7 @@ export function filterRecentWorkbenchProjects(
   }
   return list
     .filter((item) => {
+      if (isRemoteProjectRoot(item.path)) return false;
       if (!q) return true;
       return item.name.toLowerCase().includes(q) || item.path.toLowerCase().includes(q);
     })
@@ -421,6 +429,17 @@ export async function joinWorkbenchFolder(path: string): Promise<boolean> {
   if (!ok) return false;
   const { useDocumentStore } = await import("@/stores/document-store");
   await useDocumentStore.getState().openProject(path);
+  return true;
+}
+
+export async function openRemoteWorkbenchProject(
+  profileId: string,
+  remoteRoot: string,
+): Promise<boolean> {
+  const opened = await remoteDesktop.remoteOpenProject({ profileId, remoteRoot });
+  await useWorkbenchStore.getState().hydrate();
+  const { useDocumentStore } = await import("@/stores/document-store");
+  await useDocumentStore.getState().focusProject(opened.lastPath);
   return true;
 }
 

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { LicenseSnapshot } from "../../shared/pro";
 import {
   RemoteOperationError,
+  encodeRemoteAbs,
   emptyConnectConstitution,
   hasRemoteWorkspaceEntitlement,
   isHostDoctorReport,
@@ -23,7 +24,13 @@ import { createLogger } from "../app/logger";
 import { ensureHostPayload } from "./bootstrap";
 import { NdjsonFrameCodec } from "./frame-codec";
 import { checkStoredHostKey, trustHostKey } from "./known-hosts";
-import { resolveBundledHostPayload, type HostPayloadRef } from "./payload-path";
+import {
+  hasBundledLinuxHostPayload,
+  parseRemoteUnameMachine,
+  resolveBundledHostPayload,
+  type HostLinuxArch,
+  type HostPayloadRef,
+} from "./payload-path";
 import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
 
@@ -36,11 +43,12 @@ export interface RemoteSessionBrokerDeps {
   getLicense: () => LicenseSnapshot | null;
   getProfile?: (id: string) => SshProfile | null;
   ssh?: SshClient;
-  resolvePayload?: () => HostPayloadRef | { error: "payload_missing_local" };
+  resolvePayload?: (arch?: HostLinuxArch) => HostPayloadRef | { error: "payload_missing_local" };
   knownHostsPath?: string;
   now?: () => number;
   onLog?: (line: RemoteBootstrapLogLine) => void;
   onConnection?: (profileId: string, state: RemoteConnectionState) => void;
+  onEvent?: (channel: string, payload: unknown) => void;
 }
 
 interface LiveConnection {
@@ -51,6 +59,8 @@ interface LiveConnection {
   codec: NdjsonFrameCodec;
   pending: Map<string, { resolve: (value: unknown) => void; reject: (err: Error) => void }>;
   handshake: HostHandshake | null;
+  remoteRoot: string | null;
+  projectId: string | null;
 }
 
 export class RemoteSessionBroker {
@@ -100,21 +110,23 @@ export class RemoteSessionBroker {
       return this.failConnect(profileId, "not_connected", "SSH profile not found.", constitution);
     }
 
-    const payload = (this.deps.resolvePayload ?? resolveBundledHostPayload)();
-    if ("error" in payload) {
+    const payloadReady = this.deps.resolvePayload
+      ? !("error" in this.deps.resolvePayload())
+      : hasBundledLinuxHostPayload();
+    if (!payloadReady) {
       mark(
         "payload",
         false,
-        "This app build has no Host payload to push. Pack it with this desktop; the server does not download Host.",
+        "This app build has no Linux Host payload (Node + prismnext-host) to push. Pack it with this desktop; the server does not download Host.",
       );
       return this.failConnect(
         profileId,
         "payload_missing_local",
-        "This app build has no Host payload to push. Pack it with this desktop; the server does not download Host.",
+        "This app build has no Linux Host payload (Node + prismnext-host) to push. Pack it with this desktop; the server does not download Host.",
         constitution,
       );
     }
-    mark("payload", true, "Local Host payload is present.");
+    mark("payload", true, "Local Linux Host payload is present.");
 
     await this.disconnect(profileId, { silent: true });
     this.setState(profileId, { phase: "connecting", profileId });
@@ -164,6 +176,35 @@ export class RemoteSessionBroker {
       mark("ssh", true, `System ssh reached ${profile.id}.`);
       mark("host_key", true, "SSH host key accepted.");
 
+      const uname = await session.exec("uname -m");
+      const linuxArch = parseRemoteUnameMachine(uname.stdout);
+      if (!linuxArch) {
+        mark(
+          "runtime",
+          false,
+          `Remote machine is ${uname.stdout.trim() || "unknown"}. v1 Host ships Linux x64/arm64 Node only.`,
+        );
+        throw new RemoteOperationError(
+          "host_runtime",
+          `Remote machine is ${uname.stdout.trim() || "unknown"}. v1 Host ships Linux x64/arm64 Node only.`,
+        );
+      }
+
+      const payload = this.deps.resolvePayload
+        ? this.deps.resolvePayload(linuxArch)
+        : resolveBundledHostPayload({ arch: linuxArch });
+      if ("error" in payload) {
+        mark(
+          "payload",
+          false,
+          `This app has no Host payload for ${linuxArch}. Pack linux-x64 and linux-arm64 with this desktop.`,
+        );
+        throw new RemoteOperationError(
+          "payload_missing_local",
+          `This app has no Host payload for ${linuxArch}. Pack linux-x64 and linux-arm64 with this desktop.`,
+        );
+      }
+
       const connectionId = `conn_${randomUUID()}`;
       this.setState(profileId, { phase: "bootstrapping", profileId, connectionId });
       const boot = await ensureHostPayload({
@@ -184,22 +225,24 @@ export class RemoteSessionBroker {
           : "Host runtime pushed from this computer.",
       );
 
-      const node = await session.exec("command -v node");
-      if (node.code !== 0 || !node.stdout.trim()) {
+      const node = await session.exec(`"${boot.nodeBin}" --version`);
+      if (node.code !== 0 || !node.stdout.trim().startsWith("v")) {
         mark(
           "runtime",
           false,
-          "Remote PATH has no `node`. This Host payload does not ship a bundled Node yet — install Node 20+ on the server.",
+          node.stderr.trim()
+          || "Bundled Host Node could not start. The payload must include current/bin/node for this Linux arch.",
         );
         throw new RemoteOperationError(
           "host_runtime",
-          "Remote PATH has no `node`. This Host payload does not ship a bundled Node yet — install Node 20+ on the server.",
+          node.stderr.trim()
+          || "Bundled Host Node could not start. The payload must include current/bin/node for this Linux arch.",
         );
       }
-      mark("runtime", true, `Remote node is ${node.stdout.trim()}.`);
+      mark("runtime", true, `Host Node is ${node.stdout.trim()} (${linuxArch}, dedicated).`);
 
       this.log(profileId, "Starting prismnext-host serve --stdio…");
-      const pipe = await session.openStdio(`"${boot.hostBin}" serve --stdio`);
+      const pipe = await session.openStdio(`"${boot.nodeBin}" "${boot.hostBin}" serve --stdio`);
       mark("host_serve", true, "prismnext-host serve --stdio is running.");
       const live: LiveConnection = {
         profileId,
@@ -209,6 +252,8 @@ export class RemoteSessionBroker {
         codec: new NdjsonFrameCodec(),
         pending: new Map(),
         handshake: null,
+        remoteRoot: null,
+        projectId: null,
       };
       this.live.set(profileId, live);
       this.attachPipe(live);
@@ -270,6 +315,48 @@ export class RemoteSessionBroker {
     }
   }
 
+  async openProject(
+    profileId: string,
+    remoteRoot: string,
+  ): Promise<{
+    projectId: string;
+    remoteRoot: string;
+    connectionId: string;
+    lastPath: string;
+    handle: import("../../shared/remote").RemoteProjectHandle;
+  }> {
+    const live = this.live.get(profileId);
+    if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
+    const raw = await this.invokeOn(live, "project.open", { remoteRoot }) as {
+      projectId?: string;
+      remoteRoot?: string;
+    };
+    if (!raw.projectId || !raw.remoteRoot) {
+      throw new RemoteOperationError("protocol", "project.open did not return a project id.");
+    }
+    live.remoteRoot = raw.remoteRoot;
+    live.projectId = raw.projectId;
+    const lastPath = encodeRemoteAbs(profileId, raw.remoteRoot);
+    if (!lastPath) throw new RemoteOperationError("protocol", "Could not encode remote project root.");
+    this.log(profileId, `Opened remote project ${raw.projectId} at ${raw.remoteRoot}`, {
+      level: "ok",
+      gate: "handshake",
+    });
+    return {
+      projectId: raw.projectId,
+      remoteRoot: raw.remoteRoot,
+      connectionId: live.connectionId,
+      lastPath,
+      handle: {
+        kind: "remote",
+        projectId: raw.projectId,
+        profileId,
+        remoteRoot: raw.remoteRoot,
+        connectionId: live.connectionId,
+      },
+    };
+  }
+
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {
     const live = this.live.get(profileId);
     if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
@@ -301,6 +388,9 @@ export class RemoteSessionBroker {
             live.pending.delete(frame.id);
             if (frame.ok) pending.resolve(frame.result);
             else pending.reject(new RemoteOperationError(toCode(frame.error.code), frame.error.message));
+          }
+          if (frame.kind === "event") {
+            this.deps.onEvent?.(frame.channel, frame.payload);
           }
         }
       } catch (err) {

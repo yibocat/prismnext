@@ -13,6 +13,9 @@ async function makeHostTarball(dir: string): Promise<{ tarballPath: string; sha2
   writeFileSync(join(current, "prismnext-host"), "#!/usr/bin/env node\nconsole.log('host')\n", {
     mode: 0o755,
   });
+  writeFileSync(join(current, "node"), `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "$@"\n`, {
+    mode: 0o755,
+  });
   const tarballPath = join(dir, "payload.tar.gz");
   await tarCreate({ gzip: true, file: tarballPath, cwd: dir }, ["current"]);
   return { tarballPath, sha256: sha256File(tarballPath) };
@@ -41,6 +44,8 @@ describe("ensureHostPayload", () => {
     });
     expect(first.action).toBe("pushed");
     expect(first.stamp.payloadSha256).toBe(tarball.sha256);
+    expect(first.nodeBin).toContain("/bin/node");
+    expect(first.hostBin).toContain("/bin/prismnext-host");
 
     const second = await ensureHostPayload({
       session,

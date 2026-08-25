@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { workbenchJsonRel, normalizeWorkbenchPath } from "../../shared/workbench/paths";
 
 const ID_HEX_BYTES = 10;
@@ -33,6 +34,7 @@ function workbenchJsonAbs(projectRoot: string): string {
 }
 
 export function readWorkbenchJson(projectRoot: string): WorkbenchJson | null {
+  if (isRemoteProjectRoot(projectRoot)) return null;
   const file = workbenchJsonAbs(projectRoot);
   if (!existsSync(file)) return null;
   let raw: unknown;
@@ -53,6 +55,9 @@ export function readWorkbenchJson(projectRoot: string): WorkbenchJson | null {
 }
 
 export function ensureWorkbenchId(projectRoot: string): string {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
   const existing = readWorkbenchJson(projectRoot);
   if (existing) return existing.id;
   const id = mintProjectId();
@@ -61,6 +66,9 @@ export function ensureWorkbenchId(projectRoot: string): string {
 }
 
 export function writeWorkbenchJson(projectRoot: string, doc: WorkbenchJson): void {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
   const id = doc.id?.trim();
   if (!id) throw new Error("workbench.json requires id");
   const payload: WorkbenchJson = { id };

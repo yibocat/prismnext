@@ -17,6 +17,19 @@ export const remoteApi = {
 		ipcRenderer.invoke("remote:disconnect", { profileId }),
 	remoteConnectionStatus: (profileId?: string): Promise<RemoteConnectionState | RemoteConnectionSnapshot> =>
 		ipcRenderer.invoke("remote:connectionStatus", profileId ? { profileId } : {}),
+	remoteListDir: (
+		input: { profileId: string; path: string },
+	): Promise<import("../shared/remote").RemoteDirListing> =>
+		ipcRenderer.invoke("remote:listDir", input),
+	remoteOpenProject: (
+		input: { profileId: string; remoteRoot: string },
+	): Promise<{
+		projectId: string;
+		remoteRoot: string;
+		connectionId: string;
+		lastPath: string;
+		handle: import("../shared/remote").RemoteProjectHandle;
+	}> => ipcRenderer.invoke("remote:openProject", input),
 	onRemoteLog: (listener: (line: RemoteBootstrapLogLine) => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, line: RemoteBootstrapLogLine) => listener(line);
 		ipcRenderer.on("remote:log", handler);

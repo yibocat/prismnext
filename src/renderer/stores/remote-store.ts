@@ -20,6 +20,10 @@ interface RemoteState {
     alias: string,
     hostKey: { host: string; port: number; fingerprint: string },
   ) => Promise<RemoteConnectResult>;
+  openProject: (
+    alias: string,
+    remoteRoot: string,
+  ) => Promise<{ lastPath: string; projectId: string }>;
 }
 
 let subscribed = false;
@@ -75,5 +79,10 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
   trustHostAndConnect: async (alias, hostKey) => {
     await remoteDesktop.remoteTrustHost(hostKey);
     return get().connect(alias);
+  },
+
+  openProject: async (alias, remoteRoot) => {
+    const opened = await remoteDesktop.remoteOpenProject({ profileId: alias, remoteRoot });
+    return { lastPath: opened.lastPath, projectId: opened.projectId };
   },
 }));

@@ -27,7 +27,12 @@ describe("prismnext-host serve --stdio", () => {
     const lines = chunks.join("").split("\n").filter(Boolean);
     expect(lines.length).toBeGreaterThan(0);
     const frame = parseRemoteFrame(lines[0]!);
-    expect(frame).toEqual({ kind: "res", id: "h1", ok: true, result: handshake });
+    expect(frame).toEqual({
+      kind: "res",
+      id: "h1",
+      ok: true,
+      result: { ...handshake, features: ["control", "fs", "terminal"] },
+    });
   });
 
   it("answers host.doctor with a constitution report", async () => {

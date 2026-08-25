@@ -13,6 +13,8 @@ export const REMOTE_ERROR_CODES = [
   "host_key_mismatch",
   "host_runtime",
   "protocol",
+  "path_escaped",
+  "agent_not_on_remote_yet",
 ] as const;
 
 export type RemoteErrorCode = (typeof REMOTE_ERROR_CODES)[number];

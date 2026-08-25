@@ -4,6 +4,8 @@ import * as terminalConfig from "../terminal/terminal-config";
 import { registerBashJobIntent } from "../terminal/ai-bash-runner";
 import { destroyAllAiPty } from "../terminal/ai-pty";
 import type { TerminalConfig } from "../terminal/terminal-config";
+import { getRemoteSessionBroker } from "./remote";
+import { firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
 
 export function registerTerminalHandlers(): void {
   // ─── Session management ───
@@ -14,6 +16,14 @@ export function registerTerminalHandlers(): void {
       event,
       args: { sessionId: string; tabId: string; projectRoot: string; cwd: string },
     ) => {
+      const remote = firstRemoteAbs(args.projectRoot, args.cwd);
+      if (remote) {
+        return getRemoteSessionBroker().invoke(
+          remote.profileId,
+          "terminal:create",
+          toHostFsParams({ ...args }),
+        );
+      }
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window available");
 
@@ -41,6 +51,12 @@ export function registerTerminalHandlers(): void {
     "terminal:destroy",
     async (_event, args: { sessionId: string }) => {
       terminalService.destroySession(args.sessionId);
+      const broker = getRemoteSessionBroker();
+      for (const [profileId, state] of Object.entries(broker.snapshot().byProfileId)) {
+        if (state.phase === "ready") {
+          await broker.invoke(profileId, "terminal:destroy", args).catch(() => undefined);
+        }
+      }
     },
   );
 
@@ -79,6 +95,12 @@ export function registerTerminalHandlers(): void {
     "terminal:write",
     async (_event, args: { sessionId: string; data: string }) => {
       terminalService.writeToSession(args.sessionId, args.data);
+      const broker = getRemoteSessionBroker();
+      for (const [profileId, state] of Object.entries(broker.snapshot().byProfileId)) {
+        if (state.phase === "ready") {
+          await broker.invoke(profileId, "terminal:write", args).catch(() => undefined);
+        }
+      }
     },
   );
 

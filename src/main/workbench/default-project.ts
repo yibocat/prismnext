@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import {
   sameIdSet,
   type WorkbenchProjectMember,
@@ -87,8 +88,9 @@ export function readProjectSlotMeta(
   const lastPath = (raw as { lastPath?: unknown }).lastPath;
   if (typeof lastPath !== "string" || !lastPath.trim()) return null;
   const displayName = (raw as { displayName?: unknown }).displayName;
+  const stored = lastPath.trim();
   const out: WorkbenchProjectMeta = {
-    lastPath: normalizeWorkbenchPath(resolve(lastPath.trim())),
+    lastPath: isRemoteProjectRoot(stored) ? stored : normalizeWorkbenchPath(resolve(stored)),
   };
   if (typeof displayName === "string" && displayName.trim()) {
     out.displayName = displayName.trim();
@@ -105,7 +107,9 @@ export function writeProjectSlotMeta(
   const file = join(home, projectSlotMetaRel(projectId));
   mkdirSync(join(home, projectSlotRel(projectId)), { recursive: true });
   const payload: WorkbenchProjectMeta = {
-    lastPath: normalizeWorkbenchPath(resolve(meta.lastPath)),
+    lastPath: isRemoteProjectRoot(meta.lastPath)
+      ? meta.lastPath
+      : normalizeWorkbenchPath(resolve(meta.lastPath)),
   };
   if (meta.displayName?.trim()) payload.displayName = meta.displayName.trim();
   writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
@@ -151,6 +155,16 @@ export function ensureDefaultProject(opts?: DefaultProjectOpts): DefaultProjectR
   if (settings.defaultProjectId) {
     const meta = readProjectSlotMeta(settings.defaultProjectId, opts);
     if (meta?.lastPath) {
+      if (isRemoteProjectRoot(meta.lastPath)) {
+        rememberMember(
+          settings.defaultProjectId,
+          meta.lastPath,
+          opts,
+          settings.defaultProjectId,
+          joinExisting,
+        );
+        return { projectId: settings.defaultProjectId, lastPath: meta.lastPath };
+      }
       mkdirSync(meta.lastPath, { recursive: true });
       scaffoldWorkbenchProject(meta.lastPath, settings.defaultProjectId);
       rememberMember(
@@ -218,9 +232,30 @@ function liveMemberPaths(opts?: DefaultProjectOpts): string[] {
     .filter((lastPath) => existsSync(lastPath));
 }
 
+export function registerRemoteWorkbenchProject(
+  input: { projectId: string; lastPath: string; displayName?: string },
+  opts?: DefaultProjectOpts,
+): WorkbenchState {
+  if (!isRemoteProjectRoot(input.lastPath)) {
+    throw new Error("not_a_remote_project_root");
+  }
+  rememberMember(input.projectId, input.lastPath, opts);
+  if (input.displayName?.trim()) {
+    writeProjectSlotMeta(input.projectId, {
+      lastPath: input.lastPath,
+      displayName: input.displayName.trim(),
+    }, opts);
+  }
+  return getWorkbenchState(opts);
+}
+
 export function syncWorkbenchRegisteredRoots(opts?: DefaultProjectOpts): void {
   try {
-    replaceRegisteredRoots(listWorkbenchMembers(opts).map((member) => member.lastPath));
+    replaceRegisteredRoots(
+      listWorkbenchMembers(opts)
+        .map((member) => member.lastPath)
+        .filter((lastPath) => !isRemoteProjectRoot(lastPath)),
+    );
   } catch {
     // Missing home / tests without a real user home.
   }

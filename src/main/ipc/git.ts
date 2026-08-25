@@ -1,9 +1,11 @@
 import { ipcMain } from "electron";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import * as gitService from "../git/facade";
 
 export function registerGitHandlers(): void {
   // ── git:warmup — directory-level warmup to absorb TCC / code-signing ──
   ipcMain.handle("git:warmup", async (_event, args: { projectRoot: string }) => {
+    if (isRemoteProjectRoot(args.projectRoot)) return { ok: true };
     await gitService.queueWarmup(args.projectRoot);
     return { ok: true };
   });

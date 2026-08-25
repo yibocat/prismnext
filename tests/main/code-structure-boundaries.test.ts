@@ -293,8 +293,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(408);
-    expect(new Set(keys).size).toBe(408);
+    expect(keys).toHaveLength(410);
+    expect(new Set(keys).size).toBe(410);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -322,6 +322,8 @@ describe("code structure host port (Phase 3)", () => {
       "gitDeleteBranch",
       "remoteListHosts",
       "remoteConnect",
+      "remoteListDir",
+      "remoteOpenProject",
     ]));
     expect(keys).not.toEqual(expect.arrayContaining([
       "chatSend",

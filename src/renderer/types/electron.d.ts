@@ -1876,6 +1876,20 @@ export interface ElectronAPI {
   remoteConnectionStatus: (
     profileId?: string,
   ) => Promise<import("@shared/remote").RemoteConnectionState | import("@shared/remote").RemoteConnectionSnapshot>;
+  remoteListDir: (input: {
+    profileId: string;
+    path: string;
+  }) => Promise<import("@shared/remote").RemoteDirListing>;
+  remoteOpenProject: (input: {
+    profileId: string;
+    remoteRoot: string;
+  }) => Promise<{
+    projectId: string;
+    remoteRoot: string;
+    connectionId: string;
+    lastPath: string;
+    handle: import("@shared/remote").RemoteProjectHandle;
+  }>;
   onRemoteLog: (callback: (line: import("@shared/remote").RemoteBootstrapLogLine) => void) => () => void;
   onRemoteConnection: (
     callback: (payload: {

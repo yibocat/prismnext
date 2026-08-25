@@ -1,20 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { i18n } from "@/lib/i18n";
 import {
   JOINABLE_RECENT_PREVIEW_COUNT,
   filterRecentWorkbenchProjects,
   openRecentFromAddPanel,
+  openRemoteWorkbenchProject,
   pickAndJoinWorkbenchFolder,
   visibleJoinableRecentProjects,
 } from "@/lib/workspace/project-lifecycle";
+import type { RemoteHostNextAction } from "@/lib/remote/host-projects";
 import { useProjectStore } from "@/stores/project-store";
 import { defaultProjectAsMember, useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
-import { useProLicenseStore } from "@/stores/pro-license-store";
-import { WORKSPACE_REMOTE_FEATURE } from "@shared/remote";
-import { logsForProfile, shortPayloadSha } from "@/lib/remote/display";
 import {
   AppMenu,
   AppMenuContent,
@@ -28,8 +28,11 @@ import {
   LEFT_SIDEBAR_SECTION_ACTION_ICON,
 } from "@/components/layout/left-nav-button";
 import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
+import { RemoteConnectDialog } from "@/components/modules/remote/remote-connect-dialog";
+import { RemoteFolderDialog } from "@/components/modules/remote/remote-folder-dialog";
+import { RemoteHostsMenuSection } from "@/components/modules/remote/remote-hosts-menu";
 import { Hint } from "@/components/ui/hint";
-import { FolderIcon, FolderOpen, FolderPlus, TerminalIcon } from "lucide-react";
+import { FolderIcon, FolderOpen, FolderPlus } from "lucide-react";
 
 const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
@@ -44,6 +47,16 @@ const pickerPanelClass = cn(
   "max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))]",
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
+
+async function openRemoteAndToast(
+  alias: string,
+  remoteRoot: string,
+  created: boolean,
+): Promise<void> {
+  await openRemoteWorkbenchProject(alias, remoteRoot);
+  const name = remoteRoot.split("/").filter(Boolean).at(-1) || remoteRoot;
+  toast.success(i18n.t(created ? "remote.createdProject" : "remote.openedProject", { name }));
+}
 
 export function WorkbenchProjectPicker({
   children,
@@ -66,6 +79,10 @@ export function WorkbenchProjectPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [connect, setConnect] = useState<{ alias: string; next: RemoteHostNextAction } | null>(null);
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
+  const [folder, setFolder] = useState<{ alias: string; mode: "open" | "create" } | null>(null);
 
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const members = useWorkbenchStore((s) => s.members);
@@ -95,6 +112,46 @@ export function WorkbenchProjectPicker({
     if (!next) {
       setQuery("");
       setExpanded(false);
+    }
+  };
+
+  const requestRemote = (alias: string, next: RemoteHostNextAction) => {
+    setOpen(false);
+    const ready = useRemoteStore.getState().byProfileId[alias]?.phase === "ready";
+    if (ready && next.type === "open-path") {
+      void openRemoteAndToast(alias, next.remoteRoot, false).catch((err) => {
+        toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
+      });
+      return;
+    }
+    if (ready && next.type === "open-folder") {
+      setFolder({ alias, mode: "open" });
+      return;
+    }
+    if (ready && next.type === "create") {
+      setFolder({ alias, mode: "create" });
+      return;
+    }
+    if (ready && next.type === "idle") return;
+    setConnect({ alias, next });
+  };
+
+  const afterConnectReady = () => {
+    const pending = connectRef.current;
+    setConnect(null);
+    if (!pending) return;
+    if (pending.next.type === "open-path") {
+      void openRemoteAndToast(pending.alias, pending.next.remoteRoot, false).catch((err) => {
+        toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
+      });
+      return;
+    }
+    if (pending.next.type === "open-folder") {
+      setFolder({ alias: pending.alias, mode: "open" });
+      return;
+    }
+    if (pending.next.type === "create") {
+      setFolder({ alias: pending.alias, mode: "create" });
     }
   };
 
@@ -184,7 +241,7 @@ export function WorkbenchProjectPicker({
                 {t("nav.workbench.more")}
               </AppMenuItem>
             ) : null}
-            <RemoteHostsMenuSection query={query} visible={open} />
+            <RemoteHostsMenuSection query={query} visible={open} onRequest={requestRemote} />
           </div>
           <div className="shrink-0 bg-popover px-0.5 pt-0.5 pb-0.5">
             <AppMenuItem
@@ -207,148 +264,26 @@ export function WorkbenchProjectPicker({
       <NewProjectDialog onCreated={onProjectCreated}>
         <button ref={newProjectTriggerRef} type="button" className="hidden" />
       </NewProjectDialog>
-    </>
-  );
-}
-
-function hostMatchesQuery(
-  alias: string,
-  hostname: string,
-  query: string,
-): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return alias.toLowerCase().includes(q) || hostname.toLowerCase().includes(q);
-}
-
-function RemoteHostsMenuSection({ query, visible }: { query: string; visible: boolean }) {
-  const { t } = useTranslation();
-  const entitled = useProLicenseStore((s) => s.hasFeature(WORKSPACE_REMOTE_FEATURE));
-  const hosts = useRemoteStore((s) => s.hosts);
-  const logs = useRemoteStore((s) => s.logs);
-  const byProfileId = useRemoteStore((s) => s.byProfileId);
-  const hydrate = useRemoteStore((s) => s.hydrate);
-  const connect = useRemoteStore((s) => s.connect);
-  const trustHostAndConnect = useRemoteStore((s) => s.trustHostAndConnect);
-  const [busyAlias, setBusyAlias] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (visible) void hydrate();
-  }, [visible, hydrate]);
-
-  const filtered = useMemo(
-    () => hosts.filter((host) => hostMatchesQuery(host.alias, host.hostname, query)),
-    [hosts, query],
-  );
-
-  const runConnect = async (alias: string) => {
-    setBusyAlias(alias);
-    try {
-      const result = await connect(alias);
-      if (result.ok) {
-        toast.success(
-          t("remote.stamp", {
-            version: result.handshake?.desktopVersion ?? "",
-            sha: shortPayloadSha(result.handshake?.payloadSha256 ?? ""),
-          }),
-        );
-        return;
-      }
-      if (result.code === "host_key_unknown" && result.hostKey) return;
-      toast.error(result.message ?? t("remote.phase.error"));
-    } finally {
-      setBusyAlias(null);
-    }
-  };
-
-  return (
-    <>
-      <AppMenuLabel className="normal-case tracking-normal">
-        {t("nav.workbench.remote")}
-      </AppMenuLabel>
-      {!entitled ? (
-        <p className="px-2 py-1.5 text-muted-foreground">{t("remote.upgrade")}</p>
-      ) : filtered.length === 0 ? (
-        <p className="px-2 py-1.5 text-muted-foreground">{t("nav.workbench.noSshHosts")}</p>
-      ) : (
-        filtered.map((host) => {
-          const state = byProfileId[host.alias];
-          const awaiting = state?.phase === "awaiting_host_key" ? state : null;
-          const description =
-            state?.phase === "ready" && state.handshake
-              ? t("remote.stamp", {
-                  version: state.handshake.desktopVersion,
-                  sha: shortPayloadSha(state.handshake.payloadSha256),
-                })
-              : state
-                ? t(`remote.phase.${state.phase}`)
-                : host.hostname === host.alias
-                  ? undefined
-                  : host.hostname;
-          const recentLogs = logsForProfile(logs, host.alias);
-          const constitution =
-            state && (state.phase === "error" || state.phase === "ready")
-              ? state.constitution
-              : undefined;
-          return (
-            <div key={host.alias}>
-              <AppMenuItem
-                className={cn(recentRowClass, busyAlias === host.alias && "opacity-70")}
-                leading={<TerminalIcon className="mt-0.5 size-3.5 shrink-0 opacity-70" />}
-                description={description}
-                disabled={busyAlias === host.alias}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  if (busyAlias) return;
-                  void runConnect(host.alias);
-                }}
-              >
-                {host.alias}
-              </AppMenuItem>
-              {constitution || recentLogs.length > 0 ? (
-                <div className="max-w-[20rem] px-2 pb-1 text-muted-foreground">
-                  {constitution?.gates.map((item) => (
-                    <p key={item.gate} className="truncate" title={item.detail}>
-                      {item.ok ? "ok" : "fail"} {t(`remote.gate.${item.gate}`)}
-                      {item.ok ? "" : ` — ${item.detail}`}
-                    </p>
-                  ))}
-                  {constitution ? null : recentLogs.map((line) => (
-                    <p key={`${line.ts}-${line.message}`} className="truncate" title={line.message}>
-                      {line.message}
-                    </p>
-                  ))}
-                </div>
-              ) : null}
-              {awaiting ? (
-                <AppMenuItem
-                  className={sidebarItemClass}
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    setBusyAlias(host.alias);
-                    void trustHostAndConnect(host.alias, awaiting.hostKey)
-                      .then((result) => {
-                        if (result.ok) {
-                          toast.success(
-                            t("remote.stamp", {
-                              version: result.handshake?.desktopVersion ?? "",
-                              sha: shortPayloadSha(result.handshake?.payloadSha256 ?? ""),
-                            }),
-                          );
-                          return;
-                        }
-                        toast.error(result.message ?? t("remote.phase.error"));
-                      })
-                      .finally(() => setBusyAlias(null));
-                  }}
-                >
-                  {t("remote.trustHost")}
-                </AppMenuItem>
-              ) : null}
-            </div>
-          );
-        })
-      )}
+      <RemoteConnectDialog
+        alias={connect?.alias ?? null}
+        open={Boolean(connect)}
+        onOpenChange={(next) => {
+          if (!next) setConnect(null);
+        }}
+        onReady={afterConnectReady}
+      />
+      <RemoteFolderDialog
+        alias={folder?.alias ?? null}
+        mode={folder?.mode ?? "open"}
+        open={Boolean(folder)}
+        onOpenChange={(next) => {
+          if (!next) setFolder(null);
+        }}
+        onConfirm={async (remoteRoot) => {
+          if (!folder) return;
+          await openRemoteAndToast(folder.alias, remoteRoot, folder.mode === "create");
+        }}
+      />
     </>
   );
 }

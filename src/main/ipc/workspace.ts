@@ -10,6 +10,7 @@ import {
   createConfiguredFolders,
 } from "../project/workspace-config";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { promptManager } from "../prompts";
 
 export function registerWorkspaceHandlers(): void {
@@ -30,6 +31,7 @@ export function registerWorkspaceHandlers(): void {
       args: { projectRoot: string; dirs: WorkspaceFolder[] },
     ): Promise<{ success: boolean; errors?: string[] }> => {
       // Validate server-side as safety net
+      if (isRemoteProjectRoot(args.projectRoot)) return { success: true };
       const errors = validateWorkspaceDirs(args.dirs);
       if (errors.length > 0) {
         return { success: false, errors };
@@ -48,6 +50,7 @@ export function registerWorkspaceHandlers(): void {
       _event,
       args: { projectRoot: string; dirs?: WorkspaceFolder[] },
     ): Promise<{ created: string[]; errors: { folder: string; error: string }[] }> => {
+      if (isRemoteProjectRoot(args.projectRoot)) return { created: [], errors: [] };
       const dirs = args.dirs ?? readWorkspaceDirs(args.projectRoot);
       return createConfiguredFolders(args.projectRoot, dirs);
     },
@@ -59,6 +62,7 @@ export function registerWorkspaceHandlers(): void {
       _event,
       args: { projectRoot: string },
     ): Promise<{ created: boolean; relativePath?: string }> => {
+      if (isRemoteProjectRoot(args.projectRoot)) return { created: false };
       const dirs = readWorkspaceDirs(args.projectRoot);
       const manuscript = dirs.find(
         (d): d is import("../../renderer/types/workspace").ManuscriptFolder =>

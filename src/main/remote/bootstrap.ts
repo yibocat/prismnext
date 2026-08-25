@@ -27,6 +27,7 @@ export interface BootstrapResult {
   hostRoot: string;
   appHome: string;
   hostBin: string;
+  nodeBin: string;
 }
 
 async function remoteHome(session: SshSession): Promise<string> {
@@ -60,6 +61,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
   const incoming = join(hostRoot, "incoming.tar.gz");
   const currentDir = join(home, hostCurrentRel());
   const hostBin = join(currentDir, "bin", "prismnext-host");
+  const nodeBin = join(currentDir, "bin", "node");
   const wanted: HostStamp = {
     desktopVersion: input.local.desktopVersion,
     payloadSha256: input.local.sha256,
@@ -68,11 +70,12 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
   const existing = parseStamp(await input.session.sftpRead(stampPath));
   if (existing && existing.payloadSha256 === wanted.payloadSha256) {
     input.log("Host payload already matches this app — skipping transfer.");
-    const bin = await input.session.sftpStat(hostBin);
-    if (bin) {
-      return { action: "skipped", stamp: existing, hostRoot, appHome, hostBin };
+    const host = await input.session.sftpStat(hostBin);
+    const node = await input.session.sftpStat(nodeBin);
+    if (host && node) {
+      return { action: "skipped", stamp: existing, hostRoot, appHome, hostBin, nodeBin };
     }
-    input.log("stamp matched but binary missing — pushing again.");
+    input.log("stamp matched but Host or Node binary missing — pushing again.");
   } else if (existing) {
     input.log("Remote stamp does not match this app — pushing the copy from this computer.");
   } else {
@@ -88,7 +91,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
   await input.session.sftpPut(input.local.tarballPath, incoming);
 
   const extract = await input.session.exec(
-    `tar -xzf "${incoming}" -C "${hostRoot}" && chmod +x "${hostBin}" 2>/dev/null || true`,
+    `tar -xzf "${incoming}" -C "${hostRoot}" && chmod +x "${hostBin}" "${nodeBin}" 2>/dev/null || true`,
   );
   if (extract.code !== 0) {
     throw new RemoteOperationError(
@@ -97,11 +100,12 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
     );
   }
 
-  const bin = await input.session.sftpStat(hostBin);
-  if (!bin) {
+  const host = await input.session.sftpStat(hostBin);
+  const node = await input.session.sftpStat(nodeBin);
+  if (!host || !node) {
     throw new RemoteOperationError(
       "bootstrap_checksum",
-      "extracted payload is missing current/bin/prismnext-host",
+      "extracted payload is missing current/bin/prismnext-host or current/bin/node",
     );
   }
 
@@ -112,7 +116,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
   }
 
   input.log(`Host ready (${wanted.desktopVersion}, ${wanted.payloadSha256.slice(0, 8)}).`);
-  return { action: "pushed", stamp: wanted, hostRoot, appHome, hostBin };
+  return { action: "pushed", stamp: wanted, hostRoot, appHome, hostBin, nodeBin };
 }
 
 export { HOST_CURRENT_DIRNAME, HOST_INSTALL_DIRNAME, HOST_STAMP_FILENAME };

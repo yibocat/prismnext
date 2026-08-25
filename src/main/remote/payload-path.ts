@@ -3,20 +3,31 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAppPath, getResourcesPath, isAppPackaged } from "../app/paths";
 
+export type HostLinuxArch = "linux-x64" | "linux-arm64";
+
 export interface HostPayloadRef {
   path: string;
   sha256: string;
-  arch: string;
+  arch: HostLinuxArch;
 }
 
-export function normalizeHostArch(arch: string = process.arch): string {
-  if (arch === "arm64" || arch === "aarch64") return "arm64";
-  if (arch === "x64" || arch === "x86_64" || arch === "amd64") return "x64";
-  return arch;
+export function parseRemoteUnameMachine(raw: string): HostLinuxArch | null {
+  const machine = raw.trim().toLowerCase();
+  if (machine === "x86_64" || machine === "amd64") return "linux-x64";
+  if (machine === "aarch64" || machine === "arm64") return "linux-arm64";
+  return null;
 }
 
-export function hostPayloadFileName(arch: string = process.arch): string {
-  return `prismnext-host-${normalizeHostArch(arch)}.tar.gz`;
+export function normalizeHostLinuxArch(arch: string): HostLinuxArch | null {
+  const raw = arch.trim().toLowerCase();
+  if (raw === "linux-x64" || raw === "x64" || raw === "x86_64" || raw === "amd64") return "linux-x64";
+  if (raw === "linux-arm64" || raw === "arm64" || raw === "aarch64") return "linux-arm64";
+  return null;
+}
+
+export function hostPayloadFileName(arch: string): string {
+  const linux = normalizeHostLinuxArch(arch);
+  return `prismnext-host-${linux ?? "unknown"}.tar.gz`;
 }
 
 export function sha256File(filePath: string): string {
@@ -27,9 +38,10 @@ export function resolveBundledHostPayload(opts?: {
   packaged?: boolean;
   resourcesPath?: string;
   appPath?: string;
-  arch?: string;
+  arch: string;
 }): HostPayloadRef | { error: "payload_missing_local" } {
-  const arch = normalizeHostArch(opts?.arch ?? process.arch);
+  const arch = normalizeHostLinuxArch(opts?.arch ?? "");
+  if (!arch) return { error: "payload_missing_local" };
   const name = hostPayloadFileName(arch);
   const packaged = opts?.packaged ?? isAppPackaged();
   const candidates: string[] = [];
@@ -47,4 +59,15 @@ export function resolveBundledHostPayload(opts?: {
     }
   }
   return { error: "payload_missing_local" };
+}
+
+export function hasBundledLinuxHostPayload(opts?: {
+  packaged?: boolean;
+  resourcesPath?: string;
+  appPath?: string;
+}): boolean {
+  return (
+    !("error" in resolveBundledHostPayload({ ...opts, arch: "linux-x64" }))
+    || !("error" in resolveBundledHostPayload({ ...opts, arch: "linux-arm64" }))
+  );
 }

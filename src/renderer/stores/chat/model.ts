@@ -74,6 +74,7 @@ import {
 
 export function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
+  if (reason === "agent_not_on_remote_yet") return i18n.t("remote.agentNotReady");
   if (reason === "turn_idle_timeout") return i18n.t("chat.errors.turn_timeout");
   if (reason === "terminated" || reason === "aborted") {
     return i18n.t("chat.errors.turn_aborted");

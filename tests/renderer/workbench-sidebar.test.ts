@@ -86,6 +86,18 @@ describe("workbench add recents", () => {
     ]);
   });
 
+  it("keeps remote recents out of the local add-panel list", () => {
+    expect(filterRecentWorkbenchProjects(
+      [
+        ...recents,
+        { path: "remote://lab/home/ubuntu/paper", name: "paper", lastOpened: 9 },
+      ],
+      [],
+      "",
+      { path: "remote://lab/home/ubuntu", name: "ubuntu" },
+    ).map((item) => item.path)).toEqual(["/a/one", "/b/two", "/c/three"]);
+  });
+
   it("always lists the default project in the add-panel recents", () => {
     const listed = filterRecentWorkbenchProjects(
       recents,
@@ -276,6 +288,10 @@ describe("workbench sidebar wiring", () => {
     expect(menu).not.toContain("nav.project.openProject");
     expect(lib).toContain("dialogDesktop");
     expect(lib).toContain("JOINABLE_RECENT_PREVIEW_COUNT = 8");
+    const hosts = sourceOf("src/renderer/components/modules/remote/remote-hosts-menu.tsx");
+    expect(hosts).toContain("AppMenuSub");
+    expect(hosts).not.toMatch(/desktop-api/);
+    expect(menu).not.toContain("REMOTE_CONNECT_GATES");
   });
 
   it("moves the empty homepage composer with interpolatable flex-grow, not justify-content", () => {

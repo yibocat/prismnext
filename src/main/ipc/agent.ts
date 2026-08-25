@@ -27,6 +27,7 @@ import type {
   AgentTestConnectionInput,
 } from "../../shared/agent/api";
 import { getAgentService } from "../agent/agent-service";
+import { remoteAgentBlocked } from "../remote/agent-safety";
 
 export function registerAgentHandlers(): void {
   ipcMain.handle("agent:status", async (event, args?: { projectRoot?: string }) => {
@@ -36,6 +37,9 @@ export function registerAgentHandlers(): void {
   });
 
   ipcMain.handle("agent:send", async (event, args: AgentSendInput) => {
+    if (remoteAgentBlocked(args)) {
+      return { ok: false, error: "agent_not_on_remote_yet" };
+    }
     const agent = await getAgentService();
     agent.attachOwner(event.sender);
     const result = await agent.send({

@@ -11,20 +11,77 @@ import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
+import { isRemoteProjectRoot, parseRemoteAbs } from "../../shared/remote";
+import { encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
+import { getRemoteSessionBroker } from "./remote";
+
+const BLOB_CHUNK = 4 * 1024 * 1024;
+
+function imageMime(absPath: string): string {
+  const lower = absPath.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".svg")) return "image/svg+xml";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  return "application/octet-stream";
+}
+
+async function readRemoteBlobs(profileId: string, absPath: string): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let offset = 0;
+  for (;;) {
+    const raw = await getRemoteSessionBroker().invoke(profileId, "fs:readBlob", {
+      path: absPath,
+      offset,
+      length: BLOB_CHUNK,
+    }) as { bytes?: string; eof?: boolean };
+    chunks.push(Buffer.from(String(raw.bytes ?? ""), "base64"));
+    if (raw.eof || !raw.bytes) break;
+    offset += BLOB_CHUNK;
+  }
+  return Buffer.concat(chunks);
+}
+
+async function invokeHostFs(method: string, args: Record<string, unknown>): Promise<
+  { profileId: string; result: unknown } | null
+> {
+  const remote = firstRemoteAbs(
+    typeof args.rootPath === "string" ? args.rootPath : null,
+    typeof args.absPath === "string" ? args.absPath : null,
+    typeof args.oldPath === "string" ? args.oldPath : null,
+    typeof args.projectRoot === "string" ? args.projectRoot : null,
+    typeof args.path === "string" ? args.path : null,
+  );
+  if (!remote) return null;
+  const result = await getRemoteSessionBroker().invoke(
+    remote.profileId,
+    method,
+    toHostFsParams(args),
+  );
+  return { profileId: remote.profileId, result };
+}
 
 export function registerFsHandlers(
   watcher: Pick<typeof fs, "startWatching" | "stopWatching"> = fs,
   authority: ProjectLifecycleAuthority = projectLifecycleAuthority,
 ): void {
   ipcMain.handle("fs:scan", async (_event, args: { rootPath: string }) => {
+    const remote = await invokeHostFs("fs:scan", args);
+    if (remote) return encodeRemoteScan(remote.profileId, remote.result as { files: Array<{ absolutePath: string }>; folders: string[] });
     return fs.scanProjectFolder(args.rootPath);
   });
 
   ipcMain.handle("fs:scanMetadata", async (_event, args: { rootPath: string }) => {
+    const remote = await invokeHostFs("fs:scanMetadata", args);
+    if (remote) return encodeRemoteScan(remote.profileId, remote.result as { files: Array<{ absolutePath: string }>; folders: string[] });
     return fs.scanMetadata(args.rootPath);
   });
 
   ipcMain.handle("fs:read", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:read", args);
+    if (remote) return remote.result;
     assertUnderHome(args.absPath, "fs:read");
     try {
       const content = await fs.readTexFileContent(args.absPath);
@@ -44,6 +101,20 @@ export function registerFsHandlers(
     const results: Record<string, string> = {};
     await Promise.all(
       args.absPaths.map(async (absPath) => {
+        const remote = firstRemoteAbs(absPath);
+        if (remote) {
+          try {
+            const read = await getRemoteSessionBroker().invoke(
+              remote.profileId,
+              "fs:read",
+              { absPath: remote.abs },
+            ) as { content?: string };
+            if (typeof read.content === "string") results[absPath] = read.content;
+          } catch {
+            // Skip files that can't be read
+          }
+          return;
+        }
         if (!isPathUnderHome(absPath)) return; // skip paths outside home (security)
         try {
           results[absPath] = await fs.readTexFileContent(absPath);
@@ -56,6 +127,14 @@ export function registerFsHandlers(
   });
 
   ipcMain.handle("fs:readImage", async (_event, args: { absPath: string }) => {
+    const remote = firstRemoteAbs(args.absPath);
+    if (remote) {
+      const bytes = await readRemoteBlobs(remote.profileId, remote.abs);
+      return {
+        dataUrl: `data:${imageMime(remote.abs)};base64,${bytes.toString("base64")}`,
+        mtimeMs: null as number | null,
+      };
+    }
     assertUnderHome(args.absPath, "fs:readImage");
     const { existsSync } = require("node:fs");
     if (!existsSync(args.absPath)) {
@@ -77,6 +156,8 @@ export function registerFsHandlers(
   });
 
   ipcMain.handle("fs:stat", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:stat", args);
+    if (remote) return remote.result;
     if (!isPathUnderHome(args.absPath)) return null;
     const { existsSync, statSync } = require("node:fs");
     try {
@@ -94,6 +175,11 @@ export function registerFsHandlers(
   });
 
   ipcMain.handle("fs:readBytes", async (_event, args: { absPath: string }) => {
+    if (firstRemoteAbs(args.absPath)) {
+      const remote = firstRemoteAbs(args.absPath)!;
+      const bytes = await readRemoteBlobs(remote.profileId, remote.abs);
+      return { bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+    }
     assertUnderHome(args.absPath, "fs:readBytes");
     const bytes = await fs.readFileBytes(args.absPath);
     // Structured clone: return a plain ArrayBuffer for the renderer.
@@ -103,6 +189,8 @@ export function registerFsHandlers(
   ipcMain.handle(
     "fs:write",
     async (_event, args: { absPath: string; content: string }) => {
+      const remote = await invokeHostFs("fs:write", args);
+      if (remote) return remote.result;
       assertContained(args.absPath, "fs:write");
       await fs.writeTexFileContent(args.absPath, args.content);
       const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
@@ -116,6 +204,15 @@ export function registerFsHandlers(
       _event,
       args: { rootPath: string; relativePath: string; content: string },
     ) => {
+      const remote = await invokeHostFs("fs:create", args);
+      if (remote) {
+        const created = remote.result as { absPath?: string };
+        return {
+          absPath: created.absPath
+            ? encodeRemoteAbs(remote.profileId, created.absPath) ?? created.absPath
+            : created.absPath,
+        };
+      }
       assertSafeRelativePath(args.relativePath);
       assertContained(args.rootPath, "fs:create");
       const absPath = await fs.createFileOnDisk(
@@ -130,6 +227,8 @@ export function registerFsHandlers(
   );
 
   ipcMain.handle("fs:delete", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:delete", args);
+    if (remote) return remote.result;
     assertContained(args.absPath, "fs:delete");
     await fs.deleteFileFromDisk(args.absPath);
     const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
@@ -139,6 +238,8 @@ export function registerFsHandlers(
   ipcMain.handle(
     "fs:deleteFolder",
     async (_event, args: { absPath: string }) => {
+      const remote = await invokeHostFs("fs:deleteFolder", args);
+      if (remote) return remote.result;
       assertContained(args.absPath, "fs:deleteFolder");
       await fs.deleteFolderFromDisk(args.absPath);
       const { scheduleSkillsRefreshFromAgentPath } = await import("../skills/project-skills-refresh");
@@ -149,6 +250,18 @@ export function registerFsHandlers(
   ipcMain.handle(
     "fs:rename",
     async (_event, args: { oldPath: string; newPath: string }) => {
+      const oldRemote = parseRemoteAbs(args.oldPath);
+      const newRemote = parseRemoteAbs(args.newPath);
+      if (oldRemote || newRemote) {
+        if (!oldRemote || !newRemote || oldRemote.profileId !== newRemote.profileId) {
+          throw new Error("Rename must stay on the same remote host.");
+        }
+        return getRemoteSessionBroker().invoke(
+          oldRemote.profileId,
+          "fs:rename",
+          toHostFsParams(args),
+        );
+      }
       assertContained(args.oldPath, "fs:rename");
       assertContained(args.newPath, "fs:rename");
       await fs.renameFileOnDisk(args.oldPath, args.newPath);
@@ -159,6 +272,8 @@ export function registerFsHandlers(
   );
 
   ipcMain.handle("fs:mkdir", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:mkdir", args);
+    if (remote) return remote.result;
     assertContained(args.absPath, "fs:mkdir");
     await fs.createDirectory(args.absPath);
   });
@@ -170,6 +285,7 @@ export function registerFsHandlers(
     if (!rootPath) {
       throw new Error("Cannot watch an unopened project");
     }
+    if (isRemoteProjectRoot(rootPath)) return;
     await watcher.startWatching(rootPath);
     if (authority.currentRoot !== rootPath) {
       throw new Error("Cannot watch an unopened project");
@@ -183,12 +299,16 @@ export function registerFsHandlers(
   // ─── Path check ───
 
   ipcMain.handle("fs:exists", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:exists", args);
+    if (remote) return remote.result;
     if (!isPathUnderHome(args.absPath)) return false;
     const { existsSync } = require("node:fs");
     return existsSync(args.absPath);
   });
 
   ipcMain.handle("fs:isFile", async (_event, args: { absPath: string }) => {
+    const remote = await invokeHostFs("fs:isFile", args);
+    if (remote) return remote.result;
     if (!isPathUnderHome(args.absPath)) return false;
     const { existsSync, statSync } = require("node:fs");
     try {

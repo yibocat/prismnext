@@ -9,6 +9,9 @@ __pycache__/
 *.pyc
 src/renderer/public/pdfjs-dist/
 
+# Official Node tarballs used only when packing Host (not committed)
+scripts/host/.node-cache/
+
 # Tectonic binaries (downloaded or manually placed)
 bin/tectonic/
 # Leftover local OpenCode agent binary — unused; do not commit if still present

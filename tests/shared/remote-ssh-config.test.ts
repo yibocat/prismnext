@@ -6,7 +6,7 @@ const SAMPLE = `
 Host *
   IdentitiesOnly yes
 
-Host hz-4.matpool.com px-wj-1.matpool.com
+Host gpu-a.example.com gpu-b.example.com
   User ubuntu
   IdentityFile ~/.ssh/id_ed25519
   Port 22
@@ -36,8 +36,8 @@ describe("parseSshConfig", () => {
     const parsed = parseSshConfig(SAMPLE);
     const aliases = parsed.hosts.map((h) => h.alias);
     expect(aliases).toEqual([
-      "hz-4.matpool.com",
-      "px-wj-1.matpool.com",
+      "gpu-a.example.com",
+      "gpu-b.example.com",
       "github",
       "jump-lab",
     ]);

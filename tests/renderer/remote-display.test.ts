@@ -4,6 +4,7 @@ import {
   connectionPhaseLabelKey,
   constitutionLines,
   logsForProfile,
+  resolveConnectGateStatus,
   shortPayloadSha,
 } from "../../src/renderer/lib/remote/display";
 
@@ -43,6 +44,9 @@ describe("remote display helpers", () => {
         { gate: "runtime", ok: false, detail: "no node" },
       ],
     })).toEqual(["ok ssh — up", "fail runtime — no node"]);
+    expect(resolveConnectGateStatus("ssh", undefined, logs)).toBe("ok");
+    expect(resolveConnectGateStatus("runtime", undefined, logs)).toBe("fail");
+    expect(resolveConnectGateStatus("doctor", undefined, logs)).toBe("pending");
   });
 });
 

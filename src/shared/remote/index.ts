@@ -2,10 +2,25 @@ export {
   isLocalProjectHandle,
   isRemoteProjectHandle,
   parseProjectHandle,
+  projectHandleFromFocus,
   type LocalProjectHandle,
   type ProjectHandle,
   type RemoteProjectHandle,
 } from "./handle";
+export {
+  REMOTE_ROOT_SCHEME,
+  encodeRemoteAbs,
+  isRemoteDirListing,
+  isRemoteProjectRoot,
+  joinPosixSegment,
+  normalizePosixAbs,
+  parseRemoteAbs,
+  posixContained,
+  remoteHomeFromAppHome,
+  type RemoteDirEntry,
+  type RemoteDirKind,
+  type RemoteDirListing,
+} from "./path";
 export { sanitizeSshProfile, sanitizeSshProfileList, type SshProfile } from "./profile";
 export {
   parseSshConfig,

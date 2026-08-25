@@ -6,6 +6,7 @@ import {
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
 import { clearRoots, replaceRegisteredRoots } from "../project/active-project-roots";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { listWorkbenchMembers } from "../workbench/default-project";
 import { createLogger, shortLogDetail } from "../app/logger";
 
@@ -35,12 +36,22 @@ export function registerProjectLifecycleHandlers(
   memberRoots: () => string[] = defaultMemberRoots,
 ): void {
   ipcMain.handle("project:open", async (_event, args: { rootPath: string }) => {
+    if (isRemoteProjectRoot(args.rootPath)) return { rootPath: args.rootPath };
     const rootPath = await authority.resolveRoot(args.rootPath);
     return { rootPath };
   });
 
   ipcMain.handle("project:activate", async (_event, args: { rootPath: string }) => {
     try {
+      if (isRemoteProjectRoot(args.rootPath)) {
+        const previousRoot = authority.currentRoot;
+        if (previousRoot !== args.rootPath && previousRoot) {
+          await watcher.stopWatching();
+        }
+        authority.activate(args.rootPath);
+        replaceRegisteredRoots(memberRoots().filter((root) => !isRemoteProjectRoot(root)));
+        return { rootPath: args.rootPath };
+      }
       const rootPath = await authority.resolveRoot(args.rootPath);
       const previousRoot = authority.currentRoot;
       if (previousRoot !== rootPath && previousRoot) {

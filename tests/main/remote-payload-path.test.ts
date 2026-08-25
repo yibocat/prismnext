@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  hasBundledLinuxHostPayload,
   hostPayloadFileName,
+  parseRemoteUnameMachine,
   resolveBundledHostPayload,
   sha256File,
 } from "../../src/main/remote/payload-path";
@@ -23,16 +25,26 @@ describe("resolveBundledHostPayload", () => {
     const root = mkdtempSync(join(tmpdir(), "prism-host-payload-"));
     const hostDir = join(root, "host");
     mkdirSync(hostDir, { recursive: true });
-    const file = join(hostDir, hostPayloadFileName("arm64"));
+    const file = join(hostDir, hostPayloadFileName("linux-arm64"));
     writeFileSync(file, "fake-tarball");
     const result = resolveBundledHostPayload({
       packaged: true,
       resourcesPath: root,
-      arch: "arm64",
+      arch: "linux-arm64",
     });
     expect("error" in result).toBe(false);
     if ("error" in result) return;
     expect(result.sha256).toBe(sha256File(file));
     expect(result.path).toBe(file);
+    expect(result.arch).toBe("linux-arm64");
+  });
+
+  it("maps uname -m to the Linux payload arch, not the laptop arch", () => {
+    expect(parseRemoteUnameMachine("x86_64")).toBe("linux-x64");
+    expect(parseRemoteUnameMachine("aarch64")).toBe("linux-arm64");
+    expect(parseRemoteUnameMachine("arm64")).toBe("linux-arm64");
+    expect(parseRemoteUnameMachine("ppc64le")).toBeNull();
+    expect(hostPayloadFileName("x86_64")).toBe("prismnext-host-linux-x64.tar.gz");
+    expect(hasBundledLinuxHostPayload({ packaged: true, resourcesPath: "/no-such-resources" })).toBe(false);
   });
 });

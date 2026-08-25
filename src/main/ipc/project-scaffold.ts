@@ -1,6 +1,7 @@
 import { ipcMain } from "electron";
 import { basename, join } from "node:path";
 import { createLogger, shortLogDetail } from "../app/logger";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { buildAgentsMdScaffold } from "../project/agents-md-scaffold";
 import {
@@ -56,6 +57,7 @@ export function registerProjectScaffoldHandlers(): void {
   });
 
   ipcMain.handle("project:ensure", async (_event, args: { rootPath: string }) => {
+    if (isRemoteProjectRoot(args.rootPath)) return { success: true };
     ensureWorkbenchProjectMeta(args.rootPath);
     return { success: true };
   });
@@ -67,6 +69,7 @@ export function registerProjectScaffoldHandlers(): void {
   });
 
   ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {
+    if (isRemoteProjectRoot(args.rootPath)) return { missing: [] };
     return checkWorkbenchProject(args.rootPath);
   });
 }

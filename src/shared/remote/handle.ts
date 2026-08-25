@@ -1,3 +1,5 @@
+import { parseRemoteAbs } from "./path";
+
 /**
  * Project identity that is not “a local absolute path”.
  * v1: local disk or a remote folder behind an SSH Host connection.
@@ -57,4 +59,28 @@ export function isLocalProjectHandle(value: unknown): value is LocalProjectHandl
 
 export function isRemoteProjectHandle(value: unknown): value is RemoteProjectHandle {
   return parseProjectHandle(value)?.kind === "remote";
+}
+
+/** Workbench focus id + persisted lastPath → handle. Remote needs a live connectionId. */
+export function projectHandleFromFocus(input: {
+  projectId: string;
+  lastPath: string;
+  connectionId?: string;
+}): ProjectHandle | null {
+  const projectId = input.projectId.trim();
+  const lastPath = input.lastPath.trim();
+  if (!projectId || !lastPath) return null;
+  const remote = parseRemoteAbs(lastPath);
+  if (remote) {
+    const connectionId = input.connectionId?.trim();
+    if (!connectionId) return null;
+    return {
+      kind: "remote",
+      projectId,
+      profileId: remote.profileId,
+      remoteRoot: remote.abs,
+      connectionId,
+    };
+  }
+  return { kind: "local", projectId, projectRoot: lastPath };
 }
