@@ -7,6 +7,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { applyCheckoutTransition } from "./checkout-context";
 import { worktreePathsEqual } from "./worktree-path";
 import { finalizeWorktreeMergeClose, syncAfterWorktreeMerge } from "./git-sync";
+import { mergeFollowUpFromStatus } from "./git-publish";
 import { rehomeWorktreeSessions } from "./worktree-sessions";
 import { clearCheckpointsForWorktree } from "@/lib/chat/worktree-checkpoint-lifecycle";
 
@@ -46,6 +47,9 @@ export interface WorktreeMergeResult {
   error?: string;
   changeSummary?: string;
   rollbackWarnings?: string[];
+  mergedBranch?: string;
+  aheadAfterMerge?: number;
+  hasRemote?: boolean;
 }
 
 /** @deprecated Use WorktreeMergeInput */
@@ -73,6 +77,15 @@ async function readProjectBranch(projectRoot: string): Promise<string> {
     return status.branch || "";
   } catch {
     return "";
+  }
+}
+
+async function readMergeFollowUp(projectRoot: string, mergedBranch: string) {
+  try {
+    const status = await gitDesktop.gitStatus(projectRoot);
+    return mergeFollowUpFromStatus(mergedBranch, status.tracking);
+  } catch {
+    return mergeFollowUpFromStatus(mergedBranch, undefined);
   }
 }
 
@@ -307,9 +320,11 @@ export async function mergeWorktreeToBase(
       if (!popResult.success) {
         await syncAfterWorktreeMerge(projectRoot, worktreeRoot, worktree.name);
         await clearCheckpointsForWorktree(worktree, "merged");
+        const followUp = await readMergeFollowUp(projectRoot, baseBranch);
         return {
           success: true,
           changeSummary,
+          ...followUp,
           rollbackWarnings: [
             "Merge succeeded but stashed project changes could not be auto-restored — use Stash Pop in the Git panel.",
           ],
@@ -320,8 +335,9 @@ export async function mergeWorktreeToBase(
     emitProgress(onProgress, labels, labels.length - 1, "sync");
     await syncAfterWorktreeMerge(projectRoot, worktreeRoot, worktree.name);
     await clearCheckpointsForWorktree(worktree, "merged");
+    const followUp = await readMergeFollowUp(projectRoot, baseBranch);
 
-    return { success: true, changeSummary };
+    return { success: true, changeSummary, ...followUp };
   } catch (err: unknown) {
     const rollbackWarnings = await rollbackMergeToBranch(projectRoot, rollback);
     return {

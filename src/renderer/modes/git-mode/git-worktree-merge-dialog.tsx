@@ -20,7 +20,7 @@ import {
   type WorktreeChangedFile,
 } from "@/lib/git/git-orchestrator";
 import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
-import { syncAfterWorktreeMerge } from "@/lib/git/git-sync";
+import { showWorktreeMergeFollowUpToast, syncAfterWorktreeMerge } from "@/lib/git/git-sync";
 
 interface GitWorktreeMergeDialogProps {
   open: boolean;
@@ -85,7 +85,13 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
         }
       }
       await syncAfterWorktreeMerge(projectRoot, worktreeRoot, resolvedWorktree.name);
-      toast.success(`Merged ${result.changeSummary} into ${baseBranch}`);
+      showWorktreeMergeFollowUpToast({
+        projectRoot,
+        changeSummary: result.changeSummary,
+        mergedBranch: result.mergedBranch ?? baseBranch,
+        aheadAfterMerge: result.aheadAfterMerge ?? 0,
+        hasRemote: result.hasRemote ?? false,
+      });
       onOpenChange(false);
     } else {
       setError(result.error || "Merge failed");

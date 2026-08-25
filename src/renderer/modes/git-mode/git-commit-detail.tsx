@@ -136,9 +136,10 @@ export function GitCommitDetail({ gitRoot, commit }: GitCommitDetailProps) {
               ? t("git.commitDetail.hideMeta")
               : t("git.commitDetail.showMeta")
           }
+          triggerClassName="min-w-0 flex-1 w-full justify-start"
         >
           <div
-            className="flex min-w-0 flex-1 items-center gap-2 px-1 -mx-1 cursor-pointer"
+            className="flex min-w-0 w-full items-center gap-2 px-1 -mx-1 cursor-pointer"
             onClick={() => setMetaExpanded((v) => !v)}
             role="button"
             tabIndex={0}

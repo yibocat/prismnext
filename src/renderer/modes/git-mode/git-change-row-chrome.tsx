@@ -73,10 +73,18 @@ export function GitChangeDeletedLabel() {
 export function GitChangeLineCounts({
   added,
   deleted,
+  tone = "solid",
 }: {
   added: number;
   deleted: number;
+  /** `hover`: gray until the parent `.group` is hovered / open (filter chip + menu). */
+  tone?: "solid" | "hover";
 }) {
+  if (added <= 0 && deleted <= 0) return null;
+  const hoverTone =
+    "text-muted-foreground group-hover:text-success group-focus:text-success group-data-[highlighted]:text-success group-data-[state=open]:text-success";
+  const hoverToneDeleted =
+    "text-muted-foreground group-hover:text-destructive group-focus:text-destructive group-data-[highlighted]:text-destructive group-data-[state=open]:text-destructive";
   return (
     <span
       className={cn(
@@ -84,8 +92,14 @@ export function GitChangeLineCounts({
         "text-[length:var(--font-size-11)]",
       )}
     >
-      {added > 0 && <span className="text-success">+{added}</span>}
-      {deleted > 0 && <span className="text-destructive">-{deleted}</span>}
+      {added > 0 && (
+        <span className={tone === "hover" ? hoverTone : "text-success"}>+{added}</span>
+      )}
+      {deleted > 0 && (
+        <span className={tone === "hover" ? hoverToneDeleted : "text-destructive"}>
+          -{deleted}
+        </span>
+      )}
     </span>
   );
 }

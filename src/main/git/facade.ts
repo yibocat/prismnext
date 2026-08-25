@@ -6,3 +6,5 @@ export * from "./branch";
 export * from "./log";
 export * from "./merge";
 export * from "./commit";
+export * from "./sync";
+export * from "./remotes";

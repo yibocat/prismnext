@@ -30,6 +30,7 @@ import { browserApi } from "./browser";
 import { terminalApi } from "./terminal";
 import { executionApi } from "./execution";
 import { gitApi } from "./git";
+import { gitHostingApi } from "./git-hosting";
 import { worktreeApi } from "./worktree";
 import { skillsApi } from "./skills";
 import { logApi } from "./log";
@@ -67,6 +68,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	...terminalApi,
 	...executionApi,
 	...gitApi,
+	...gitHostingApi,
 	...worktreeApi,
 	...skillsApi,
 	...logApi,

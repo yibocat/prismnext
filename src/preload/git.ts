@@ -43,8 +43,16 @@ export const gitApi = {
 		ipcRenderer.invoke("git:diffStats", { projectRoot }),
 	gitLog: (projectRoot: string, maxCount?: number) =>
 		ipcRenderer.invoke("git:log", { projectRoot, maxCount }),
-	gitPush: (projectRoot: string) =>
-		ipcRenderer.invoke("git:push", { projectRoot }),
+	gitPush: (projectRoot: string, remote?: string) =>
+		ipcRenderer.invoke("git:push", { projectRoot, remote }),
+	gitRemotes: (projectRoot: string) =>
+		ipcRenderer.invoke("git:remotes", { projectRoot }),
+	gitAddRemote: (projectRoot: string, name: string, url: string) =>
+		ipcRenderer.invoke("git:addRemote", { projectRoot, name, url }),
+	gitFetch: (projectRoot: string, opts?: { remote?: string; all?: boolean }) =>
+		ipcRenderer.invoke("git:fetch", { projectRoot, remote: opts?.remote, all: opts?.all }),
+	gitPull: (projectRoot: string) =>
+		ipcRenderer.invoke("git:pull", { projectRoot }),
 	gitMerge: (projectRoot: string, sourceBranch: string) =>
 		ipcRenderer.invoke("git:merge", { projectRoot, sourceBranch }),
 	gitMergeNoCommit: (projectRoot: string, sourceBranch: string) =>

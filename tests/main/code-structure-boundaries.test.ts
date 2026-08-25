@@ -136,6 +136,7 @@ describe("code structure shared packages (Phase 2)", () => {
     "providers",
     "platform",
     "git",
+    "git-hosting",
   ];
 
   it("keeps required domain folders", () => {
@@ -290,8 +291,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(394);
-    expect(new Set(keys).size).toBe(394);
+    expect(keys).toHaveLength(401);
+    expect(new Set(keys).size).toBe(401);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -302,6 +303,13 @@ describe("code structure host port (Phase 3)", () => {
       "literatureList",
       "experimentList",
       "gitStatus",
+      "gitFetch",
+      "gitPull",
+      "gitRemotes",
+      "gitAddRemote",
+      "gitHostingAuthStatus",
+      "gitHostingPrCreate",
+      "gitHostingPrViewWeb",
       "agentSend",
       "agentGenerateSessionTitle",
       "agentReassignSessionProject",
@@ -600,6 +608,7 @@ describe("code structure host port (Phase 3)", () => {
       "src/main/experiment",
       "src/main/compile",
       "src/main/git",
+      "src/main/git-hosting",
       "src/main/terminal",
       "src/main/project",
       "src/main/session",
@@ -634,6 +643,10 @@ describe("code structure host port (Phase 3)", () => {
     expect(sourceOf("src/renderer/stores/git-store.ts")).toMatch(
       /from\s+["']@\/lib\/desktop-api\/git["']/,
     );
+    expect(sourceOf("src/renderer/stores/git-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/git-hosting["']/,
+    );
+    expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/git-hosting.ts"))).toBe(true);
     expect(sourceOf("src/renderer/stores/literature-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/experiment-store.ts")).not.toMatch(/window\.electronAPI/);
     expect(sourceOf("src/renderer/stores/git-store.ts")).not.toMatch(/window\.electronAPI/);

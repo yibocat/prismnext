@@ -1,6 +1,7 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowUpFromLineIcon,
   ChevronDownIcon,
   GitCommitHorizontalIcon,
   GitMergeIcon,
@@ -12,6 +13,7 @@ import {
   AppMenuItem,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
+import { derivePushAction, derivePushLabel } from "@/lib/git/git-publish";
 import { useGitStore } from "@/stores/git-store";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
@@ -37,7 +39,7 @@ const shellClass = cn(
   "bg-primary text-primary-foreground text-[length:var(--font-menu-item)] font-medium shadow-sm",
 );
 
-/** Local: Cursor-style split button (Commit + Merge / Push menu). Worktree: single Merge to Branch. */
+/** Local: Commit | Push/Publish | menu. Worktree: single Merge to Branch. */
 export function GitToolbarChangesAction({
   mode,
   projectRoot,
@@ -47,17 +49,19 @@ export function GitToolbarChangesAction({
   onCommit,
 }: GitToolbarChangesActionProps) {
   const { t } = useTranslation();
-  const [pushing, setPushing] = useState(false);
+  const tracking = useGitStore((s) => s.tracking);
+  const syncing = useGitStore((s) => s.syncing);
+  const pushAction = derivePushAction(tracking);
+  const pushLabel = derivePushLabel(tracking, {
+    push: t("git.toolbar.push"),
+    publish: t("git.toolbar.publish"),
+  });
+  const pushing = syncing === "push";
 
   const handlePush = useCallback(async () => {
-    if (!projectRoot || pushing) return;
-    setPushing(true);
-    try {
-      await useGitStore.getState().pushRemote(projectRoot);
-    } finally {
-      setPushing(false);
-    }
-  }, [projectRoot, pushing]);
+    if (!projectRoot || syncing) return;
+    await useGitStore.getState().pushRemote(projectRoot);
+  }, [projectRoot, syncing]);
 
   if (mode === "worktree") {
     return (
@@ -88,6 +92,27 @@ export function GitToolbarChangesAction({
         </button>
       </Hint>
 
+      {pushAction && pushLabel ? (
+        <Hint label={pushLabel}>
+          <button
+            type="button"
+            onClick={() => void handlePush()}
+            disabled={Boolean(syncing)}
+            className={cn(primaryBtnClass, "border-l border-primary-foreground/20")}
+          >
+            {pushing ? (
+              <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+            ) : (
+              <ArrowUpFromLineIcon className="size-3.5 shrink-0" />
+            )}
+            {!compact && <span>{pushLabel}</span>}
+            {compact && pushAction.kind === "push" && pushAction.aheadCount > 0 ? (
+              <span>↑{pushAction.aheadCount}</span>
+            ) : null}
+          </button>
+        </Hint>
+      ) : null}
+
       <AppMenu>
         <AppMenuTrigger asChild>
           <button
@@ -106,15 +131,17 @@ export function GitToolbarChangesAction({
           <AppMenuItem onClick={onCommit} disabled={stagedCount === 0}>
             {t("git.toolbar.commit")}
           </AppMenuItem>
-          <AppMenuItem
-            onClick={() => void handlePush()}
-            disabled={pushing}
-            trailing={
-              pushing ? <Loader2Icon className="size-3 animate-spin opacity-80" /> : null
-            }
-          >
-            {t("git.toolbar.push")}
-          </AppMenuItem>
+          {pushAction && pushLabel ? (
+            <AppMenuItem
+              onClick={() => void handlePush()}
+              disabled={Boolean(syncing)}
+              trailing={
+                pushing ? <Loader2Icon className="size-3 animate-spin opacity-80" /> : null
+              }
+            >
+              {pushLabel}
+            </AppMenuItem>
+          ) : null}
         </AppMenuContent>
       </AppMenu>
     </div>

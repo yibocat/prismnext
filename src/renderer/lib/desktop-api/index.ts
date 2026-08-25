@@ -1,6 +1,7 @@
 export { literatureDesktop } from "./literature";
 export { experimentDesktop } from "./experiment";
 export { gitDesktop } from "./git";
+export { gitHostingDesktop } from "./git-hosting";
 export { fsDesktop } from "./fs";
 export { templateDesktop } from "./template";
 export { projectDesktop } from "./project";

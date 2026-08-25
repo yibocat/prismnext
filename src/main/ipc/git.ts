@@ -260,8 +260,32 @@ export function registerGitHandlers(): void {
   }) => gitService.deleteBranch(args.projectRoot, args.branch));
 
   // ── git:push ──
-  ipcMain.handle("git:push", async (_e, args: { projectRoot: string }) =>
-    gitService.pushBranch(args.projectRoot),
+  ipcMain.handle(
+    "git:push",
+    async (_e, args: { projectRoot: string; remote?: string }) =>
+      gitService.pushBranch(args.projectRoot, { remote: args.remote }),
+  );
+
+  ipcMain.handle("git:remotes", async (_e, args: { projectRoot: string }) =>
+    gitService.listRemotes(args.projectRoot),
+  );
+
+  ipcMain.handle(
+    "git:addRemote",
+    async (_e, args: { projectRoot: string; name: string; url: string }) =>
+      gitService.addRemote(args.projectRoot, { name: args.name, url: args.url }),
+  );
+
+  // ── git:fetch ──
+  ipcMain.handle(
+    "git:fetch",
+    async (_e, args: { projectRoot: string; remote?: string; all?: boolean }) =>
+      gitService.fetchRemote(args.projectRoot, { remote: args.remote, all: args.all }),
+  );
+
+  // ── git:pull ──
+  ipcMain.handle("git:pull", async (_e, args: { projectRoot: string }) =>
+    gitService.pullRemote(args.projectRoot),
   );
 
   // ── git:checkIgnore ──

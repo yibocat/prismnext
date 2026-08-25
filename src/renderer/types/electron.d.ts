@@ -211,11 +211,23 @@ export type {
   GitFileDiffData,
   GitFileStatusData,
   GitMergeResultData,
+  GitAddRemoteResultData,
+  GitPushResultData,
+  GitRemoteInfo,
   GitResultData,
   GitStatusData,
+  GitSyncResultData,
+  GitTrackingData,
   MergeStatus,
   WorktreeInfo,
 } from "@shared/git";
+
+export type {
+  GhAuthStatus,
+  GhPrCreateInput,
+  GhPrCreateResult,
+  GhPrViewWebResult,
+} from "@shared/git-hosting";
 
 
 export interface ElectronAPI {
@@ -1808,7 +1820,14 @@ export interface ElectronAPI {
   }>;
   gitLog: (projectRoot: string, maxCount?: number) => Promise<Array<{ hash: string; message: string; author: string; date: string; graph: string; refs: string; insertions: number; deletions: number }>>;
   gitDiscard: (projectRoot: string, filePath: string, staged: boolean, untracked: boolean, worktreeStatus: string) => Promise<GitResultData>;
-  gitPush: (projectRoot: string) => Promise<GitResultData & { output?: string }>;
+  gitPush: (projectRoot: string, remote?: string) => Promise<GitPushResultData>;
+  gitRemotes: (projectRoot: string) => Promise<GitRemoteInfo[]>;
+  gitAddRemote: (projectRoot: string, name: string, url: string) => Promise<GitAddRemoteResultData>;
+  gitFetch: (
+    projectRoot: string,
+    opts?: { remote?: string; all?: boolean },
+  ) => Promise<GitSyncResultData>;
+  gitPull: (projectRoot: string) => Promise<GitSyncResultData>;
   gitMerge: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
   gitMergeNoCommit: (projectRoot: string, sourceBranch: string) => Promise<GitMergeResultData>;
   gitAbortMerge: (projectRoot: string) => Promise<GitResultData>;
@@ -1818,6 +1837,11 @@ export interface ElectronAPI {
   gitCommitFiles: (projectRoot: string, hash: string) => Promise<Array<{ path: string; added: number; deleted: number }>>;
   gitCommitFileDiff: (projectRoot: string, hash: string, filePath: string) => Promise<{ path: string; oldContent: string; newContent: string }>;
   gitCheckIgnore: (projectRoot: string, relativePaths: string[]) => Promise<string[]>;
+
+  // Git hosting (gh CLI — GitHub PRs)
+  gitHostingAuthStatus: (projectRoot: string) => Promise<GhAuthStatus>;
+  gitHostingPrCreate: (input: GhPrCreateInput) => Promise<GhPrCreateResult>;
+  gitHostingPrViewWeb: (projectRoot: string, url?: string) => Promise<GhPrViewWebResult>;
 
   // Theme — native glass (Electron 43 vibrancy / mica)
   themeApplyGlass: (payload: { enabled: boolean; opaqueBackground?: string }) => Promise<void>;

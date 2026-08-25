@@ -26,6 +26,26 @@ export function filterGitFilesByMode(
   }
 }
 
+export function sumGitLineCounts(files: GitFileItem[]): { added: number; deleted: number } {
+  let added = 0;
+  let deleted = 0;
+  for (const file of files) {
+    added += file.added;
+    deleted += file.deleted;
+  }
+  return { added, deleted };
+}
+
+export function gitFilterModeLineCounts(
+  files: GitFileItem[],
+): Record<GitFilterMode, { added: number; deleted: number }> {
+  return {
+    all: sumGitLineCounts(files),
+    staged: sumGitLineCounts(filterGitFilesByMode(files, "staged")),
+    unstaged: sumGitLineCounts(filterGitFilesByMode(files, "unstaged")),
+  };
+}
+
 export function gitFilesToTreeInputs(files: GitFileItem[]): {
   pseudoFiles: ProjectFile[];
   folders: string[];

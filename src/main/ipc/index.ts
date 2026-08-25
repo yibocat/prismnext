@@ -9,6 +9,7 @@ import { registerBrowserHandlers } from "./browser";
 import { registerTerminalHandlers } from "./terminal";
 import { registerExecutionHandlers } from "./execution";
 import { registerGitHandlers } from "./git";
+import { registerGitHostingHandlers } from "./git-hosting";
 import { registerWorktreeHandlers } from "./worktree";
 import { installIpcHandlerErrorGuard, registerLogHandlers } from "./log";
 import { registerThemeHandlers } from "./theme";
@@ -52,6 +53,7 @@ export function registerIpcHandlers(): void {
   registerTerminalHandlers();
   registerExecutionHandlers();
   registerGitHandlers();
+  registerGitHostingHandlers();
   registerWorktreeHandlers();
   registerLogHandlers();
   registerThemeHandlers();

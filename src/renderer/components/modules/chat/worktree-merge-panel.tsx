@@ -14,7 +14,7 @@ import {
   type WorktreeChangedFile,
 } from "@/lib/git/git-orchestrator";
 import { useResolvedWorktree } from "@/lib/git/use-resolved-worktree";
-import { syncAfterWorktreeMerge } from "@/lib/git/git-sync";
+import { showWorktreeMergeFollowUpToast, syncAfterWorktreeMerge } from "@/lib/git/git-sync";
 
 interface WorktreeMergePanelProps {
   onClose: () => void;
@@ -75,10 +75,13 @@ export function WorktreeMergePanel({ onClose }: WorktreeMergePanelProps) {
         }
       }
       await syncAfterWorktreeMerge(projectRoot, worktreeRoot, resolvedWorktree.name);
-      toast.success(t("chat.worktree.mergeSuccess", {
-        summary: result.changeSummary,
-        branch: baseBranch,
-      }));
+      showWorktreeMergeFollowUpToast({
+        projectRoot,
+        changeSummary: result.changeSummary,
+        mergedBranch: result.mergedBranch ?? baseBranch,
+        aheadAfterMerge: result.aheadAfterMerge ?? 0,
+        hasRemote: result.hasRemote ?? false,
+      });
       onClose();
     } else {
       setError(result.error || t("git.toast.mergeFailed"));

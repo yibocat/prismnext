@@ -7,8 +7,20 @@ import type {
   GitStatusData,
   GitBranchesData,
   GitFileDiffData,
+  GitRemoteInfo,
+  GitTrackingData,
+  GhAuthStatus,
 } from "@/types/electron";
+import { EMPTY_TRACKING, isFastForwardPullError, isNonFastForwardPushError } from "@shared/git";
+import {
+  EMPTY_GH_AUTH,
+  firstCommitSubject,
+  pickDefaultBranch,
+} from "@shared/git-hosting";
+import { derivePushLabel, shouldOfferCreatePr, shouldOfferPushAfterCommit } from "@/lib/git/git-publish";
 import { gitDesktop } from "@/lib/desktop-api/git";
+import { gitHostingDesktop } from "@/lib/desktop-api/git-hosting";
+import { openExternalUrl } from "@/lib/desktop-api/shell";
 import { useDocumentStore } from "./document-store";
 import { useWorktreeStore } from "./worktree-store";
 import { useGitDiffPrefsStore } from "./git-diff-prefs-store";
@@ -18,6 +30,19 @@ const log = createLogger("git-store", "git");
 // ─── Types ───
 
 export type GitFilterMode = "unstaged" | "staged" | "all";
+export type GitSyncing = false | "fetch" | "pull" | "push";
+
+function toastGitDetail(text: string | undefined): string | undefined {
+  const detail = text?.trim();
+  if (!detail) return undefined;
+  return detail.length > 300 ? `${detail.slice(0, 300)}...` : detail;
+}
+
+export interface GitCreatePrDefaults {
+  title: string;
+  base: string;
+  head: string;
+}
 
 export interface GitCommitData {
   hash: string;
@@ -53,6 +78,16 @@ interface GitState {
   branch: string;
   branches: string[];
   files: GitFileItem[];
+  tracking: GitTrackingData;
+  remotes: GitRemoteInfo[];
+  pendingRemotePick: boolean;
+  pendingAddRemote: boolean;
+  addingRemote: boolean;
+  ghAuth: GhAuthStatus;
+  pendingCreatePr: boolean;
+  createPrDefaults: GitCreatePrDefaults | null;
+  creatingPr: boolean;
+  syncing: GitSyncing;
   filterMode: GitFilterMode;
 
   // ── Status ──
@@ -116,7 +151,21 @@ interface GitState {
   switchBranch: (projectRoot: string, branch: string) => Promise<void>;
   createBranch: (projectRoot: string, branchName: string) => Promise<void>;
   mergeBranch: (projectRoot: string, sourceBranch: string) => Promise<void>;
-  pushRemote: (projectRoot: string) => Promise<void>;
+  pushRemote: (projectRoot: string, opts?: { remote?: string }) => Promise<void>;
+  cancelRemotePick: () => void;
+  openAddRemote: () => void;
+  cancelAddRemote: () => void;
+  addRemote: (projectRoot: string, input: { name: string; url: string }) => Promise<boolean>;
+  refreshGhAuth: (projectRoot: string) => Promise<void>;
+  openCreatePr: (projectRoot: string) => Promise<void>;
+  cancelCreatePr: () => void;
+  createPullRequest: (
+    projectRoot: string,
+    input: { title: string; base: string; head: string; body?: string; draft?: boolean },
+  ) => Promise<void>;
+  openPrInBrowser: (projectRoot: string, url?: string) => Promise<void>;
+  fetchRemote: (projectRoot: string, opts?: { remote?: string; all?: boolean }) => Promise<void>;
+  pullRemote: (projectRoot: string) => Promise<void>;
   abortMerge: (projectRoot: string) => Promise<void>;
   revertCommit: (projectRoot: string, hash: string) => Promise<void>;
   resetToCommit: (projectRoot: string, hash: string, mode: "soft" | "mixed" | "hard") => Promise<void>;
@@ -189,6 +238,16 @@ export const useGitStore = create<GitState>()((set, get) => ({
   branch: "",
   branches: [],
   files: [],
+  tracking: EMPTY_TRACKING,
+  remotes: [],
+  pendingRemotePick: false,
+  pendingAddRemote: false,
+  addingRemote: false,
+  ghAuth: EMPTY_GH_AUTH,
+  pendingCreatePr: false,
+  createPrDefaults: null,
+  creatingPr: false,
+  syncing: false,
   filterMode: useGitDiffPrefsStore.getState().filterMode,
   loading: false,
   error: null,
@@ -313,6 +372,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
         // Parallel would cause a race condition on the `branch` field.
         await get().refreshStatus(projectRoot);
         await get().refreshBranches(projectRoot);
+        void get().refreshGhAuth(projectRoot);
       } else {
         // Clear stale git data from previous project to prevent cross-project pollution
         set({
@@ -321,6 +381,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
           files: [],
           branch: "",
           branches: [],
+          tracking: EMPTY_TRACKING,
+          remotes: [],
+          ghAuth: EMPTY_GH_AUTH,
+          pendingCreatePr: false,
+          createPrDefaults: null,
           commits: [],
           selectedCommitHash: null,
           error: null,
@@ -333,6 +398,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
         files: [],
         branch: "",
         branches: [],
+        tracking: EMPTY_TRACKING,
+        remotes: [],
+        ghAuth: EMPTY_GH_AUTH,
+        pendingCreatePr: false,
+        createPrDefaults: null,
         commits: [],
         selectedCommitHash: null,
         error: null,
@@ -355,11 +425,14 @@ export const useGitStore = create<GitState>()((set, get) => ({
     } else {
       set({ loading: true, error: null });
       try {
+        const remotesPromise = gitDesktop.gitRemotes(projectRoot).catch(() => get().remotes);
         [data, stats] = await Promise.all([
           gitDesktop.gitStatus(projectRoot),
           gitDesktop.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
         ]);
+        const remotes = await remotesPromise;
         _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
+        set({ remotes });
       } catch (err: unknown) {
         const msg = (err as Error).message || "Failed to get git status";
         // Non-repo roots should not surface a fatal toast (Git mode empty state handles CTA).
@@ -371,6 +444,8 @@ export const useGitStore = create<GitState>()((set, get) => ({
             files: [],
             branch: "",
             branches: [],
+            tracking: EMPTY_TRACKING,
+            remotes: [],
           });
           return;
         }
@@ -440,6 +515,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       set({
         branch: data.branch,
         files,
+        tracking: data.tracking ?? EMPTY_TRACKING,
         loading: false,
       });
 
@@ -661,6 +737,23 @@ export const useGitStore = create<GitState>()((set, get) => ({
     await get().refreshStatus(projectRoot);
     // Commit does not modify files on disk — no reload needed
     set({ error: null });
+    const tracking = get().tracking;
+    const pushLabel = shouldOfferPushAfterCommit(tracking)
+      ? derivePushLabel(tracking, {
+          push: i18n.t("git.toolbar.push"),
+          publish: i18n.t("git.toolbar.publish"),
+        })
+      : null;
+    toast.success(i18n.t("git.toast.committed"), {
+      action: pushLabel
+        ? {
+            label: pushLabel,
+            onClick: () => {
+              void get().pushRemote(projectRoot);
+            },
+          }
+        : undefined,
+    });
   },
 
   // ── switchBranch ──
@@ -715,18 +808,271 @@ export const useGitStore = create<GitState>()((set, get) => ({
     ]);
   },
 
-  // ── pushRemote ──
-  pushRemote: async (projectRoot: string) => {
-    invalidateStatusCache();
-    const result = await gitDesktop.gitPush(projectRoot);
-    if (!result.success) {
-      toast.error(result.error || "Push failed");
-      set({ error: result.error || "Push failed" });
+  cancelRemotePick: () => set({ pendingRemotePick: false }),
+
+  openAddRemote: () => set({ pendingAddRemote: true }),
+
+  cancelAddRemote: () => set({ pendingAddRemote: false, addingRemote: false }),
+
+  addRemote: async (projectRoot, input) => {
+    if (get().addingRemote) return false;
+    set({ addingRemote: true });
+    try {
+      const result = await gitDesktop.gitAddRemote(projectRoot, input.name, input.url);
+      if (!result?.success) {
+        const code = result?.error ?? "";
+        const message =
+          code === "invalid_remote_name"
+            ? i18n.t("git.remoteAdd.invalidName")
+            : code === "invalid_remote_url"
+              ? i18n.t("git.remoteAdd.invalidUrl")
+              : code === "remote_exists"
+                ? i18n.t("git.remoteAdd.exists")
+                : toastGitDetail(code) || i18n.t("git.remoteAdd.failed");
+        toast.error(i18n.t("git.remoteAdd.failed"), { description: message });
+        return false;
+      }
+      set({
+        remotes: result.remotes ?? [],
+        pendingAddRemote: false,
+      });
+      invalidateStatusCache();
+      await get().forceRefreshStatus(projectRoot);
+      toast.success(i18n.t("git.remoteAdd.added", { name: input.name.trim() }));
+      return true;
+    } finally {
+      set({ addingRemote: false });
+    }
+  },
+
+  refreshGhAuth: async (projectRoot: string) => {
+    try {
+      const ghAuth = await gitHostingDesktop.gitHostingAuthStatus(projectRoot);
+      set({ ghAuth: ghAuth ?? EMPTY_GH_AUTH });
+    } catch {
+      set({ ghAuth: EMPTY_GH_AUTH });
+    }
+  },
+
+  openCreatePr: async (projectRoot: string) => {
+    await get().refreshGhAuth(projectRoot);
+    const commits = await gitDesktop.gitLog(projectRoot, 1).catch(() => []);
+    const head = get().branch;
+    const title = firstCommitSubject(commits[0]?.message ?? "") || head;
+    set({
+      createPrDefaults: {
+        title,
+        base: pickDefaultBranch(get().branches),
+        head,
+      },
+      pendingCreatePr: true,
+    });
+  },
+
+  cancelCreatePr: () => set({ pendingCreatePr: false, creatingPr: false }),
+
+  createPullRequest: async (projectRoot, input) => {
+    if (get().creatingPr) return;
+    const title = input.title.trim();
+    const base = input.base.trim();
+    const head = input.head.trim();
+    if (!title || !base || !head) {
+      toast.error(i18n.t("git.prCreate.missingFields"));
       return;
     }
-    const summary = result.output?.trim();
-    toast.success(summary || "Pushed successfully");
-    await get().refreshBranches(projectRoot);
+    set({ creatingPr: true });
+    try {
+      const result = await gitHostingDesktop.gitHostingPrCreate({
+        projectRoot,
+        title,
+        base,
+        head,
+        body: input.body,
+        draft: input.draft,
+      });
+      if (!result?.success) {
+        toast.error(i18n.t("git.toast.createPrFailed"), {
+          description: toastGitDetail(result?.output || result?.error),
+        });
+        return;
+      }
+      set({ pendingCreatePr: false });
+      toast.success(i18n.t("git.toast.prCreated"), {
+        action: {
+          label: i18n.t("git.toast.openPr"),
+          onClick: () => {
+            void get().openPrInBrowser(projectRoot, result.url);
+          },
+        },
+      });
+    } finally {
+      set({ creatingPr: false });
+    }
+  },
+
+  openPrInBrowser: async (projectRoot, url) => {
+    if (url) {
+      await openExternalUrl(url).catch(() => {});
+      return;
+    }
+    const result = await gitHostingDesktop.gitHostingPrViewWeb(projectRoot);
+    if (!result?.success) {
+      toast.error(i18n.t("git.toast.openPrFailed"), {
+        description: toastGitDetail(result?.error),
+      });
+    }
+  },
+
+  // ── pushRemote ──
+  pushRemote: async (projectRoot: string, opts) => {
+    if (get().syncing) return;
+    const tracking = get().tracking;
+    if (tracking.isDetached) {
+      toast.error(i18n.t("git.toast.detachedHead"));
+      return;
+    }
+    if (!tracking.hasRemote && !opts?.remote) {
+      get().openAddRemote();
+      return;
+    }
+
+    set({ syncing: "push", pendingRemotePick: false });
+    invalidateStatusCache();
+    try {
+      const result = await gitDesktop.gitPush(projectRoot, opts?.remote);
+      if (result.needsRemoteChoice) {
+        set({
+          remotes: result.remotes ?? [],
+          pendingRemotePick: true,
+          syncing: false,
+        });
+        return;
+      }
+      if (!result.success) {
+        const raw = result.output || result.error || "";
+        toast.error(i18n.t("git.toast.pushFailed"), {
+          description: isNonFastForwardPushError(raw)
+            ? i18n.t("git.toast.pushNeedPull")
+            : toastGitDetail(raw),
+        });
+        set({ error: result.error || raw || "Push failed" });
+        return;
+      }
+      const branch = get().branch;
+      const afterTracking = {
+        ...get().tracking,
+        aheadCount: 0,
+        hasRemote: true,
+        upstreamRef:
+          get().tracking.upstreamRef
+          ?? (result.publishedRemote && branch
+            ? `${result.publishedRemote}/${branch}`
+            : get().tracking.upstreamRef),
+        remoteName: get().tracking.remoteName ?? result.publishedRemote ?? null,
+      };
+      const offerPr = shouldOfferCreatePr(afterTracking, {
+        currentBranch: branch,
+        defaultBranch: pickDefaultBranch(get().branches),
+        ghInstalled: get().ghAuth.installed,
+        ghAuthenticated: get().ghAuth.authenticated,
+      });
+      const prAction = offerPr
+        ? {
+            label: i18n.t("git.toast.createPr"),
+            onClick: () => {
+              void get().openCreatePr(projectRoot);
+            },
+          }
+        : undefined;
+      if (result.publishedRemote) {
+        toast.success(
+          i18n.t("git.toast.published", { remote: result.publishedRemote }),
+          {
+            action: prAction ?? (branch
+              ? {
+                  label: i18n.t("git.toast.copyBranch"),
+                  onClick: () => {
+                    void navigator.clipboard.writeText(branch).catch(() => {});
+                  },
+                }
+              : undefined),
+          },
+        );
+      } else {
+        const summary = result.output?.trim();
+        toast.success(summary || i18n.t("git.toast.pushed"), {
+          action: prAction,
+        });
+      }
+      await Promise.all([
+        get().forceRefreshStatus(projectRoot),
+        get().refreshBranches(projectRoot),
+      ]);
+    } finally {
+      if (get().syncing === "push") set({ syncing: false });
+    }
+  },
+
+  // ── fetchRemote ──
+  fetchRemote: async (projectRoot: string, opts) => {
+    if (get().syncing) return;
+    set({ syncing: "fetch" });
+    try {
+      const result = await gitDesktop.gitFetch(projectRoot, {
+        remote: opts?.all ? undefined : (opts?.remote ?? get().tracking.remoteName ?? undefined),
+        all: opts?.all,
+      });
+      if (!result.success) {
+        toast.error(i18n.t("git.toast.fetchFailed"), {
+          description: toastGitDetail(result.output || result.error),
+        });
+        set({ error: result.error || "Fetch failed" });
+        return;
+      }
+      if (result.noop) {
+        toast.message(i18n.t("git.sync.noRemote"));
+      } else {
+        const summary = result.output?.trim();
+        toast.success(
+          summary && summary !== "Fetched."
+            ? summary
+            : i18n.t("git.toast.fetched"),
+        );
+      }
+      await get().forceRefreshStatus(projectRoot);
+    } finally {
+      set({ syncing: false });
+    }
+  },
+
+  // ── pullRemote ──
+  pullRemote: async (projectRoot: string) => {
+    if (get().syncing) return;
+    set({ syncing: "pull" });
+    invalidateStatusCache();
+    try {
+      const result = await gitDesktop.gitPull(projectRoot);
+      if (!result.success) {
+        const raw = result.output || result.error || "";
+        const needRebase = isFastForwardPullError(raw);
+        toast.error(i18n.t("git.toast.pullFailed"), {
+          description: needRebase
+            ? i18n.t("git.toast.pullNeedRebase")
+            : toastGitDetail(raw),
+        });
+        set({ error: result.error || "Pull failed" });
+        await get().forceRefreshStatus(projectRoot);
+        return;
+      }
+      const summary = result.output?.trim();
+      toast.success(summary || i18n.t("git.toast.pulled"));
+      await Promise.all([
+        get().forceRefreshStatus(projectRoot),
+        get().refreshBranches(projectRoot),
+      ]);
+    } finally {
+      set({ syncing: false });
+    }
   },
 
   // ── mergeBranch ──
@@ -852,6 +1198,16 @@ export const useGitStore = create<GitState>()((set, get) => ({
       branch: "",
       branches: [],
       files: [],
+      tracking: EMPTY_TRACKING,
+      remotes: [],
+      pendingRemotePick: false,
+      pendingAddRemote: false,
+      addingRemote: false,
+      ghAuth: EMPTY_GH_AUTH,
+      pendingCreatePr: false,
+      createPrDefaults: null,
+      creatingPr: false,
+      syncing: false,
       filterMode,
       loading: false,
       error: null,

@@ -5,7 +5,6 @@ import { GitChangeFileRow } from "./git-change-file-row";
 import { GitChangesFilterDropdown } from "./git-changes-filter-dropdown";
 import {
   GitChangeHeaderDiscardButton,
-  GitChangeLineCounts,
   GitChangeStageCheckbox,
   gitPanelListBodyClass,
   gitPanelListHeaderClass,
@@ -24,14 +23,6 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
   const { t } = useTranslation();
   const expandedChangeIds = useGitStore((s) => s.expandedChangeIds);
   const expandedSet = useMemo(() => new Set(expandedChangeIds), [expandedChangeIds]);
-
-  const { totalAdded, totalDeleted } = useMemo(
-    () => ({
-      totalAdded: files.reduce((s, f) => s + f.added, 0),
-      totalDeleted: files.reduce((s, f) => s + f.deleted, 0),
-    }),
-    [files],
-  );
 
   const allStaged =
     files.length > 0 && files.every((f) => f.staged);
@@ -85,7 +76,6 @@ export function GitChangesDiffList({ files, gitRoot }: GitChangesDiffListProps) 
     >
       <div className={gitPanelListHeaderClass}>
         <GitChangesFilterDropdown fileCount={files.length} />
-        <GitChangeLineCounts added={totalAdded} deleted={totalDeleted} />
         <span className="flex-1 min-w-0" />
         <GitChangeHeaderDiscardButton
           visible={canDiscardAll}

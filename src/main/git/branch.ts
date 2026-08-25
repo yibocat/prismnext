@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { GitBranchesResult, GitResult } from "./types";
+import { resolvePushRemote } from "../../shared/git";
+import { listRemotes, readBranchPushRemote } from "./remotes";
+import type { GitBranchesResult, GitPushResult, GitResult } from "./types";
 import { execGit, execGitOrNull } from "./exec";
 
 /**
@@ -74,21 +76,56 @@ export async function createBranch(projectRoot: string, branchName: string): Pro
 }
 
 /**
- * Push current branch to its upstream, or set upstream via `origin` on first push.
+ * Push current branch to its upstream, or publish with `git push -u <remote>`.
+ * Does not hardcode `origin` — see resolvePushRemote.
  */
 export async function pushBranch(
   projectRoot: string,
-): Promise<GitResult & { output?: string }> {
+  opts: { remote?: string } = {},
+): Promise<GitPushResult> {
   try {
     const branch = (await execGit(projectRoot, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
     if (!branch || branch === "HEAD") {
       return { success: false, error: "Detached HEAD — cannot push" };
     }
-    const upstream = await execGitOrNull(projectRoot, ["rev-parse", "--abbrev-ref", "@{upstream}"]);
-    const output = upstream
-      ? await execGit(projectRoot, ["push"])
-      : await execGit(projectRoot, ["push", "-u", "origin", branch]);
-    return { success: true, output: output.trim() || "Pushed successfully." };
+
+    const [upstream, remotes, branchPushRemote] = await Promise.all([
+      execGitOrNull(projectRoot, ["rev-parse", "--abbrev-ref", "@{upstream}"]),
+      listRemotes(projectRoot),
+      readBranchPushRemote(projectRoot, branch),
+    ]);
+
+    const decision = resolvePushRemote({
+      remotes,
+      hasUpstream: Boolean(upstream?.trim()),
+      isDetached: false,
+      branchPushRemote,
+      explicitRemote: opts.remote,
+    });
+
+    if (decision.kind === "detached") {
+      return { success: false, error: "Detached HEAD — cannot push" };
+    }
+    if (decision.kind === "no-remote") {
+      return {
+        success: false,
+        error: "No remote configured. Run: git remote add origin <url>",
+      };
+    }
+    if (decision.kind === "choose") {
+      return { success: false, needsRemoteChoice: true, remotes: decision.remotes };
+    }
+
+    const output =
+      decision.kind === "push-upstream"
+        ? await execGit(projectRoot, ["push"])
+        : await execGit(projectRoot, ["push", "-u", decision.remote, branch]);
+
+    return {
+      success: true,
+      output: output.trim() || "Pushed successfully.",
+      publishedRemote: decision.kind === "publish" ? decision.remote : undefined,
+    };
   } catch (err: unknown) {
     const msg = (err as Error).message || "Push failed";
     return { success: false, error: msg, output: msg };

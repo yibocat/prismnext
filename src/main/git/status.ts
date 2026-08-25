@@ -3,6 +3,11 @@ import { existsSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { createLogger } from "../app/logger";
+import {
+  buildTracking,
+  parsePorcelainHeader,
+  parseRemoteNames,
+} from "../../shared/git";
 import type { GitFileDiff, GitFileEntry, GitStatusResult } from "./types";
 import { enqueueGitTask, execGit, execGitOrNull, GIT_TIMEOUT_MS } from "./exec";
 
@@ -59,18 +64,18 @@ async function readFileContent(projectRoot: string, filePath: string): Promise<s
  *   appear as "D" (delete) + "??" (new untracked). We handle the common cases.
  */
 export async function getStatus(projectRoot: string): Promise<GitStatusResult> {
-  // Single spawn: `git status --porcelain -b` returns branch info on line 1
-  // (## branch-name) followed by file entries — avoids a second git process.
-  const output = await execGit(projectRoot, ["status", "--porcelain", "-b"]);
+  // Porcelain -b carries branch + ahead/behind; remotes is a cheap second spawn
+  // so hasRemote / remoteName work when there is no upstream yet.
+  const [output, remotesOut] = await Promise.all([
+    execGit(projectRoot, ["status", "--porcelain", "-b"]),
+    execGitOrNull(projectRoot, ["remote"]),
+  ]);
 
   const lines = output.split("\n").filter((l) => l.length > 0);
-
-  // Parse branch from line 1: "## branch-name" or "## branch-name...origin/branch [ahead N]"
-  let branch = "unknown";
-  if (lines.length > 0 && lines[0].startsWith("## ")) {
-    const head = lines[0].slice(3).split("...")[0].split(" ")[0].trim();
-    branch = head || "(no branch)";
-  }
+  const header = parsePorcelainHeader(lines[0] ?? "");
+  const remotes = parseRemoteNames(remotesOut);
+  const tracking = buildTracking(header, remotes);
+  const branch = header.branch || "unknown";
 
   // Parse file entries (skip branch line)
   const files: GitFileEntry[] = [];
@@ -170,7 +175,7 @@ export async function getStatus(projectRoot: string): Promise<GitStatusResult> {
     });
   }
 
-  return { branch, files };
+  return { branch, files, tracking };
 }
 
 /** Remove C-style quoting from git porcelain paths */
@@ -323,9 +328,34 @@ export async function getFileDiff(
   };
 }
 
+/** Match git numstat: trailing newline does not add an extra line. */
+function countTextLines(content: string): number {
+  if (!content) return 0;
+  const parts = content.split("\n");
+  return parts[parts.length - 1] === "" ? parts.length - 1 : parts.length;
+}
+
+const UNTRACKED_STAT_MAX_BYTES = 1_048_576;
+
+async function countUntrackedStat(projectRoot: string, file: string): Promise<DiffStat> {
+  if (isBinaryFilename(file)) return { added: 0, deleted: 0 };
+  const absPath = join(projectRoot, file);
+  try {
+    const info = await stat(absPath);
+    if (!info.isFile() || info.size > UNTRACKED_STAT_MAX_BYTES) {
+      return { added: 0, deleted: 0 };
+    }
+    const content = await readFile(absPath, "utf-8");
+    if (isBinaryContent(content)) return { added: 0, deleted: 0 };
+    return { added: countTextLines(content), deleted: 0 };
+  } catch {
+    return { added: 0, deleted: 0 };
+  }
+}
+
 /**
  * Get diff stats: `git diff --numstat` for unstaged + `--cached` for staged.
- * Returns { added, deleted } per file path. Untracked files not included (0/0).
+ * Untracked text files are counted from disk (same +N a new-file numstat would show).
  */
 export interface DiffStat {
   added: number;
@@ -348,11 +378,16 @@ export async function getDiffStats(
   if (unstagedOut.status === "fulfilled") parseNumstat(unstagedOut.value, unstaged);
   if (stagedOut.status === "fulfilled") parseNumstat(stagedOut.value, staged);
 
-  // Untracked files — list but skip reading file contents.
   if (untrackedOut.status === "fulfilled") {
-    for (const file of untrackedOut.value.split("\n")) {
-      if (file.trim()) unstaged[file] = { added: 0, deleted: 0 };
-    }
+    const untracked = untrackedOut.value
+      .split("\n")
+      .map((file) => file.trim())
+      .filter(Boolean);
+    await Promise.all(
+      untracked.map(async (file) => {
+        unstaged[file] = await countUntrackedStat(projectRoot, file);
+      }),
+    );
   }
 
   // Fallback: if there are no commits yet, `diff --cached` fails.

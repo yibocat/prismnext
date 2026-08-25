@@ -105,7 +105,7 @@ export const GitCommitFileRow = memo(function GitCommitFileRow({
         <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
           <span
             className={cn(
-              "truncate font-medium text-foreground",
+              "min-w-0 truncate font-medium text-foreground",
               gitChangeRowTextClass,
             )}
           >

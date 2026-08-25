@@ -82,7 +82,7 @@ export async function getCommitFiles(
   hash: string,
 ): Promise<CommitFileStat[]> {
   const output = await execGit(projectRoot, [
-    "diff-tree", "--no-commit-id", "--numstat", "-r", hash,
+    "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", hash,
   ]);
   const files: CommitFileStat[] = [];
   for (const line of output.split("\n")) {
