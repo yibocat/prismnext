@@ -51,7 +51,11 @@ export function RemoteConnectDialog({
     onReady();
   }, [onReady, open, state?.phase]);
 
-  const constitution = state && (state.phase === "ready" || state.phase === "error")
+  const constitution = state && (
+    state.phase === "ready"
+    || state.phase === "error"
+    || state.phase === "reconnecting"
+  )
     ? state.constitution
     : undefined;
   const profileLogs = useMemo(
@@ -67,7 +71,10 @@ export function RemoteConnectDialog({
 
   const phase = state?.phase ?? "connecting";
   const awaiting = state?.phase === "awaiting_host_key" ? state : null;
-  const errorMessage = state?.phase === "error" && state.message ? state.message : null;
+  const errorMessage = state?.phase === "error"
+    ? (state.code && t(`remote.error.${state.code}`, { defaultValue: state.message }))
+      || state.message
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

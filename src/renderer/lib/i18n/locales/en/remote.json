@@ -10,8 +10,15 @@
     "awaiting_host_key": "Confirm host key",
     "bootstrapping": "Pushing runtime",
     "ready": "Connected",
+    "reconnecting": "Reconnecting",
     "error": "Error",
     "disconnected": "Disconnected"
+  },
+  "error": {
+    "payload_missing_local": "This copy of PrismNext is missing the remote runtime. Reinstall PrismNext. The server does not download Host.",
+    "ssh_missing": "OpenSSH `ssh` is not on this computer’s PATH. Install it, then connect again.",
+    "ssh_jump": "SSH jump host failed. Check ProxyJump / ProxyCommand in ~/.ssh/config.",
+    "displaced": "Another computer took over this Host. Connect again from this computer if you need it."
   },
   "gate": {
     "entitlement": "Access",
@@ -74,11 +81,9 @@
     "skillsDone": "Pushed {{count}} skill files to the server.",
     "modeOnDemand": "Sync mode: on demand (default)",
     "modeOnlineOnly": "Sync mode: online only",
-    "modeLiveMirror": "Sync mode: live mirror (experimental)",
     "modeSet": {
       "on-demand": "Remote sync is on demand.",
-      "online-only": "Remote sync is online only. Session copies will not update automatically.",
-      "live-mirror": "Live mirror is experimental. Session copies still update; files stay on demand."
+      "online-only": "Remote sync is online only. Session copies will not update automatically."
     }
   }
 }

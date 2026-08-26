@@ -12,7 +12,7 @@ import {
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
 import { isRemoteProjectRoot, parseRemoteAbs, RemoteOperationError } from "../../shared/remote";
-import { disconnectedHostFsProbe, encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, hostFsNeedsProjectBind, toHostFsParams } from "../remote/fs-bridge";
+import { disconnectedHostFsProbe, encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, hostFsNeedsProjectBind, hostListingCacheKey, invalidateHostListingCache, readHostListingCache, toHostFsParams, writeHostListingCache } from "../remote/fs-bridge";
 import { getRemoteSessionBroker } from "./remote";
 
 const BLOB_CHUNK = 4 * 1024 * 1024;
@@ -66,6 +66,19 @@ async function invokeHostFs(method: string, args: Record<string, unknown>): Prom
     if (root) {
       await broker.ensureProjectOpen(root.profileId, root.abs);
     }
+    const cacheKey = hostListingCacheKey(
+      remote.profileId,
+      method,
+      typeof args.rootPath === "string" ? args.rootPath : "",
+    );
+    const cached = readHostListingCache(cacheKey);
+    if (cached) return { profileId: remote.profileId, result: cached };
+    const result = await broker.invoke(remote.profileId, method, toHostFsParams(args));
+    writeHostListingCache(cacheKey, result);
+    return { profileId: remote.profileId, result };
+  }
+  if (method === "fs:write" || method === "fs:create" || method === "fs:delete" || method === "fs:rename") {
+    invalidateHostListingCache(remote.profileId);
   }
   const result = await broker.invoke(
     remote.profileId,

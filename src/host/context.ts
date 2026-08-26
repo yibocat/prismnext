@@ -5,4 +5,6 @@ export interface HostHandlerContext {
   agent?: import("../main/agent/agent-service").AgentService;
   modelKeys?: "gateway" | "remote";
   extraBaseUrls?: string[];
+  /** Laptop that currently owns this listen process. */
+  ownerConnectionId?: string | null;
 }

@@ -26,6 +26,7 @@ import {
 } from "../remote/sync-client";
 import { pullAndMirrorSession } from "../remote/session-mirror";
 import { pushLaptopSkillsToHost } from "../remote/skills-push";
+import { hostListingCacheKey, readHostListingCache, writeHostListingCache } from "../remote/fs-bridge";
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -111,12 +112,16 @@ export function registerRemoteHandlers(): void {
   ipcMain.handle(
     "remote:listDir",
     async (_e, args: { profileId: string; path: string }) => {
+      const cacheKey = hostListingCacheKey(args.profileId, "fs:listDir", args.path);
+      const cached = readHostListingCache(cacheKey);
+      if (cached && isRemoteDirListing(cached)) return cached;
       const listing = await getRemoteSessionBroker().invoke(args.profileId, "fs:listDir", {
         path: args.path,
       });
       if (!isRemoteDirListing(listing)) {
         throw new RemoteOperationError("protocol", "fs:listDir returned an unexpected payload.");
       }
+      writeHostListingCache(cacheKey, listing);
       return listing;
     },
   );

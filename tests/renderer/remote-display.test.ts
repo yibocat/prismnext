@@ -29,6 +29,11 @@ describe("remote display helpers", () => {
       hostRoot: "/r",
       features: ["control"],
     } })).toBe("remote.phase.ready");
+    expect(connectionPhaseLabelKey({
+      phase: "reconnecting",
+      profileId: "p",
+      connectionId: "c",
+    })).toBe("remote.phase.reconnecting");
   });
 
   it("keeps per-host logs and formats constitution lines", () => {

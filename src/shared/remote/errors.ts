@@ -4,6 +4,8 @@
  */
 export const REMOTE_ERROR_CODES = [
   "ssh_auth",
+  "ssh_missing",
+  "ssh_jump",
   "payload_stale",
   "payload_missing_local",
   "entitlement",
@@ -19,7 +21,12 @@ export const REMOTE_ERROR_CODES = [
   "sync_too_large",
   "sync_cancelled",
   "compile_engine_unavailable",
+  "displaced",
 ] as const;
+
+/** Packaged app, not “run pnpm host:pack”. The server never downloads Host. */
+export const PAYLOAD_MISSING_LOCAL_MESSAGE =
+  "This copy of PrismNext is missing the remote runtime. Reinstall PrismNext. The server does not download Host.";
 
 export type RemoteErrorCode = (typeof REMOTE_ERROR_CODES)[number];
 

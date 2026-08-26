@@ -67,7 +67,7 @@ export async function pushRemoteSkillsAction(lastPath: string): Promise<void> {
 
 export async function setRemoteSyncModeAction(
   lastPath: string,
-  mode: "on-demand" | "live-mirror" | "online-only",
+  mode: "on-demand" | "online-only",
 ): Promise<void> {
   const parsed = parseRemoteAbs(lastPath);
   if (!parsed) return;

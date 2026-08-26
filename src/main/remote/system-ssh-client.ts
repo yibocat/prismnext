@@ -39,8 +39,28 @@ export function systemSshArgv(dest: string, remoteCommand: string): string[] {
   return [...batchArgs(), "--", dest, remoteCommand];
 }
 
-function classifySshError(stderr: string, code: number | string | null): "ssh_auth" | "host_key_unknown" | "host_key_mismatch" | "host_runtime" {
+export function classifySshError(
+  stderr: string,
+  code: number | string | null,
+): "ssh_auth" | "ssh_missing" | "ssh_jump" | "host_key_unknown" | "host_key_mismatch" | "host_runtime" {
   const text = stderr.toLowerCase();
+  if (
+    text.includes("enoent")
+    || text.includes("not found")
+    || text.includes("no such file")
+    || (typeof code === "string" && code === "ENOENT")
+  ) {
+    return "ssh_missing";
+  }
+  if (
+    text.includes("proxyjump")
+    || text.includes("proxycommand")
+    || text.includes("channel 0: open failed")
+    || (text.includes("unable to connect to") && text.includes("jump"))
+    || text.includes("kex_exchange_identification")
+  ) {
+    return "ssh_jump";
+  }
   if (text.includes("identification has changed") || (text.includes("host key for") && text.includes("has changed"))) {
     return "host_key_mismatch";
   }
@@ -69,9 +89,16 @@ async function runSsh(
       return { stdout: String(stdout), stderr: String(stderr), code: 0 };
     } catch (err) {
       const failure = err as { stdout?: string; stderr?: string; code?: number | string };
+      const nodeCode = err && typeof err === "object" && "code" in err
+        ? String((err as { code: unknown }).code)
+        : "";
       return {
         stdout: String(failure.stdout ?? ""),
-        stderr: String(failure.stderr ?? (err instanceof Error ? err.message : String(err))),
+        stderr: String(
+          failure.stderr
+          || (nodeCode === "ENOENT" ? "spawn ssh ENOENT" : "")
+          || (err instanceof Error ? err.message : String(err)),
+        ),
         code: typeof failure.code === "number" ? failure.code : 255,
       };
     }
@@ -164,6 +191,18 @@ export function createSystemSshClient(): SshClient {
         if (kind === "ssh_auth") {
           throw new RemoteOperationError("ssh_auth", probe.stderr.trim() || "Permission denied.");
         }
+        if (kind === "ssh_missing") {
+          throw new RemoteOperationError(
+            "ssh_missing",
+            "OpenSSH `ssh` is not on this computer’s PATH. Install it, then connect again.",
+          );
+        }
+        if (kind === "ssh_jump") {
+          throw new RemoteOperationError(
+            "ssh_jump",
+            probe.stderr.trim() || "SSH jump host failed. Check ProxyJump / ProxyCommand in ~/.ssh/config.",
+          );
+        }
         throw new RemoteOperationError("host_runtime", probe.stderr.trim() || `ssh exited ${probe.code}`);
       }
       return new SystemSshSession(dest);
@@ -215,6 +254,49 @@ class SystemSshSession implements SshSession {
     if (write.code !== 0) {
       throw new RemoteOperationError("host_runtime", write.stderr || "remote write failed");
     }
+  }
+
+  async openForwardedTcp(remotePort: number): Promise<SshStdioPipe> {
+    const { createServer } = await import("node:net");
+    const localPort = await new Promise<number>((resolve, reject) => {
+      const probe = createServer();
+      probe.once("error", reject);
+      probe.listen(0, "127.0.0.1", () => {
+        const addr = probe.address();
+        const port = addr && typeof addr === "object" ? addr.port : 0;
+        probe.close(() => resolve(port));
+      });
+    });
+    const child = spawn("ssh", [
+      ...batchArgs(),
+      "-N",
+      "-o",
+      "ExitOnForwardFailure=yes",
+      "-L",
+      `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`,
+      "--",
+      this.dest,
+    ], { stdio: ["ignore", "ignore", "pipe"] });
+    const { waitForTcp, tcpPipe } = await import("./host-listen");
+    try {
+      await waitForTcp(localPort);
+    } catch (err) {
+      child.kill("SIGTERM");
+      throw new RemoteOperationError(
+        "host_runtime",
+        err instanceof Error ? err.message : "SSH local forward did not come up.",
+      );
+    }
+    const pipe = await tcpPipe(localPort);
+    return {
+      stdin: pipe.stdin,
+      stdout: pipe.stdout,
+      stderr: child.stderr ?? pipe.stderr,
+      close: async () => {
+        await pipe.close();
+        if (!child.killed) child.kill("SIGTERM");
+      },
+    };
   }
 
   async openStdio(command: string): Promise<SshStdioPipe> {

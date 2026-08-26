@@ -48,6 +48,8 @@ export interface SshSession {
   sftpRead(remotePath: string): Promise<string | null>;
   sftpWrite(remotePath: string, contents: string): Promise<void>;
   openStdio(command: string): Promise<SshStdioPipe>;
+  /** RW-4: SSH -L to Host listen. Same-machine tests may net.connect. */
+  openForwardedTcp?(remotePort: number): Promise<SshStdioPipe>;
   dispose(): Promise<void>;
 }
 

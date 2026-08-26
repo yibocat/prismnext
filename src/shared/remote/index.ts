@@ -49,6 +49,7 @@ export {
   DEFAULT_REMOTE_SYNC_MODE,
   REMOTE_SYNC_PROGRESS_CHANNEL,
   SESSION_MUTATED_CHANNEL,
+  effectiveRemoteSyncMode,
   isRemoteSyncMode,
   isSessionMutatedEvent,
   remoteWinsSessionConflict,
@@ -83,6 +84,7 @@ export {
   type RemoteLogLevel,
 } from "./doctor";
 export {
+  PAYLOAD_MISSING_LOCAL_MESSAGE,
   REMOTE_ERROR_CODES,
   RemoteOperationError,
   isRemoteErrorCode,

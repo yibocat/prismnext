@@ -17,6 +17,11 @@ export function isRemoteSyncMode(value: unknown): value is RemoteSyncMode {
   return value === "on-demand" || value === "live-mirror" || value === "online-only";
 }
 
+/** live-mirror is a stored leftover — it does not watch files. Treat as on-demand. */
+export function effectiveRemoteSyncMode(value: unknown): Exclude<RemoteSyncMode, "live-mirror"> {
+  return value === "online-only" ? "online-only" : "on-demand";
+}
+
 export type RemoteSyncKind = "file" | "pdf" | "experiment" | "sessions" | "skills";
 
 export interface RemoteSyncProgress {

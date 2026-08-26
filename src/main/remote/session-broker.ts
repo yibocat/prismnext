@@ -10,6 +10,7 @@ import {
   isHostModelConfigureResult,
   isRemoteErrorCode,
   normalizePosixAbs,
+  PAYLOAD_MISSING_LOCAL_MESSAGE,
   recordConnectGate,
   type DesktopModelSeed,
   type HostHandshake,
@@ -34,6 +35,7 @@ import {
   type HostLinuxArch,
   type HostPayloadRef,
 } from "./payload-path";
+import { ensureRemoteListenPort } from "./host-listen";
 import { profileModelKeys } from "./profile-overrides";
 import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
@@ -89,6 +91,11 @@ interface LiveConnection {
   handshake: HostHandshake | null;
   remoteRoot: string | null;
   projectId: string | null;
+  listenPort: number | null;
+  transport: "listen" | "stdio";
+  ready: boolean;
+  closing: boolean;
+  reconnecting: boolean;
 }
 
 export class RemoteSessionBroker {
@@ -139,12 +146,12 @@ export class RemoteSessionBroker {
       mark(
         "payload",
         false,
-        "This app build has no Linux Host payload (Node + prismnext-host) to push. Pack it with this desktop; the server does not download Host.",
+        PAYLOAD_MISSING_LOCAL_MESSAGE,
       );
       return this.failConnect(
         profileId,
         "payload_missing_local",
-        "This app build has no Linux Host payload (Node + prismnext-host) to push. Pack it with this desktop; the server does not download Host.",
+        PAYLOAD_MISSING_LOCAL_MESSAGE,
         constitution,
       );
     }
@@ -219,11 +226,11 @@ export class RemoteSessionBroker {
         mark(
           "payload",
           false,
-          `This app has no Host payload for ${linuxArch}. Pack linux-x64 and linux-arm64 with this desktop.`,
+          PAYLOAD_MISSING_LOCAL_MESSAGE,
         );
         throw new RemoteOperationError(
           "payload_missing_local",
-          `This app has no Host payload for ${linuxArch}. Pack linux-x64 and linux-arm64 with this desktop.`,
+          PAYLOAD_MISSING_LOCAL_MESSAGE,
         );
       }
 
@@ -263,24 +270,30 @@ export class RemoteSessionBroker {
       }
       mark("runtime", true, `Host Node is ${node.stdout.trim()} (${linuxArch}, dedicated).`);
 
-      this.log(profileId, "Starting prismnext-host serve --stdio…");
-      const pipe = await session.openStdio(buildHostServeStdioCommand(boot));
-      mark("host_serve", true, "prismnext-host serve --stdio is running.");
+      this.log(profileId, `OpenSSH destination ${profile.id} (ProxyJump from ~/.ssh/config if set).`, {
+        gate: "ssh",
+      });
       const live: LiveConnection = {
         profileId,
         connectionId,
         session,
-        pipe,
+        pipe: null,
         codec: new NdjsonFrameCodec(),
         pending: new Map(),
         handshake: null,
         remoteRoot: null,
         projectId: null,
+        listenPort: null,
+        transport: "stdio",
+        ready: false,
+        closing: false,
+        reconnecting: false,
       };
       this.live.set(profileId, live);
+      await this.openHostTransport(live, boot, mark);
       this.attachPipe(live);
 
-      const handshakeRaw = await this.invokeOn(live, "host.handshake", {});
+      const handshakeRaw = await this.invokeOn(live, "host.handshake", { connectionId });
       if (!isHostHandshake(handshakeRaw)) {
         mark("handshake", false, "Host handshake was not a HostHandshake.");
         throw new RemoteOperationError("protocol", "Host handshake was not a HostHandshake.");
@@ -311,6 +324,7 @@ export class RemoteSessionBroker {
 
       constitution = await this.attachHostDoctor(live, constitution);
 
+      live.ready = true;
       this.setState(profileId, {
         phase: "ready",
         profileId,
@@ -339,6 +353,7 @@ export class RemoteSessionBroker {
 
   async disconnect(profileId: string, opts?: { silent?: boolean }): Promise<void> {
     const live = this.live.get(profileId);
+    if (live) live.closing = true;
     this.live.delete(profileId);
     if (live) {
       for (const pending of live.pending.values()) {
@@ -483,6 +498,13 @@ export class RemoteSessionBroker {
     return this.invokeOn(live, method, params);
   }
 
+  /** Close the NDJSON pipe only. A listen Host stays up so the broker can reattach. */
+  async dropControlPlane(profileId: string): Promise<void> {
+    const live = this.live.get(profileId.trim());
+    if (!live?.pipe) return;
+    await live.pipe.close().catch(() => undefined);
+  }
+
   private invokeOn(live: LiveConnection, method: string, params: unknown): Promise<unknown> {
     if (!live.pipe) throw new RemoteOperationError("not_connected", "Host stdio is not open.");
     const id = randomUUID();
@@ -497,7 +519,43 @@ export class RemoteSessionBroker {
     });
   }
 
+  private async openHostTransport(
+    live: LiveConnection,
+    boot: { nodeBin: string; hostBin: string; currentDir?: string },
+    mark?: (gate: RemoteConnectGate, ok: boolean, detail: string, level?: RemoteLogLevel) => void,
+  ): Promise<void> {
+    const listenPort = live.session.openForwardedTcp
+      ? await ensureRemoteListenPort(live.session, boot)
+      : null;
+    if (listenPort && live.session.openForwardedTcp) {
+      try {
+        live.pipe = await live.session.openForwardedTcp(listenPort);
+        live.listenPort = listenPort;
+        live.transport = "listen";
+        mark?.(
+          "host_serve",
+          true,
+          `prismnext-host listen 127.0.0.1:${listenPort} (SSH local forward).`,
+        );
+        return;
+      } catch {
+        live.listenPort = null;
+        live.transport = "stdio";
+      }
+    }
+    this.log(live.profileId, "Starting prismnext-host serve --stdio…");
+    live.pipe = await live.session.openStdio(buildHostServeStdioCommand(boot));
+    live.transport = "stdio";
+    mark?.("host_serve", true, "prismnext-host serve --stdio is running.");
+  }
+
   private attachPipe(live: LiveConnection): void {
+    const onDead = () => {
+      void this.onTransportDead(live);
+    };
+    live.pipe?.stdout?.once("close", onDead);
+    live.pipe?.stdout?.once("end", onDead);
+    live.pipe?.stdin?.once("error", onDead);
     const onData = (chunk: Buffer | string) => {
       try {
         const frames = live.codec.push(chunk);
@@ -510,6 +568,17 @@ export class RemoteSessionBroker {
             else pending.reject(mapHostFrameError(frame.error.code, frame.error.message));
           }
           if (frame.kind === "event") {
+            if (frame.channel === "remote:displaced") {
+              live.closing = true;
+              this.live.delete(live.profileId);
+              this.setState(live.profileId, {
+                phase: "error",
+                profileId: live.profileId,
+                code: "displaced",
+                message: "Another computer took over this Host.",
+              });
+              this.log(live.profileId, "Another computer took over this Host.", { level: "error" });
+            }
             this.deps.onEvent?.(frame.channel, frame.payload, live.profileId);
           }
         }
@@ -522,6 +591,77 @@ export class RemoteSessionBroker {
       const text = String(chunk).trim();
       if (text) this.log(live.profileId, text);
     });
+  }
+
+  private async onTransportDead(live: LiveConnection): Promise<void> {
+    if (
+      live.closing
+      || live.reconnecting
+      || this.live.get(live.profileId) !== live
+      || !live.ready
+    ) {
+      return;
+    }
+    live.reconnecting = true;
+    live.ready = false;
+    live.pipe = null;
+    for (const pending of live.pending.values()) {
+      pending.reject(new RemoteOperationError("not_connected", "Host control plane dropped. Reconnecting…"));
+    }
+    live.pending.clear();
+    const prev = this.byProfile.get(live.profileId);
+    const constitution = prev && "constitution" in prev ? prev.constitution : undefined;
+    this.setState(live.profileId, {
+      phase: "reconnecting",
+      profileId: live.profileId,
+      connectionId: live.connectionId,
+      handshake: live.handshake ?? undefined,
+      constitution,
+    });
+    this.log(live.profileId, "Control plane dropped — reconnecting…", { level: "warn" });
+    if (live.transport !== "listen" || !live.listenPort || !live.session.openForwardedTcp) {
+      this.live.delete(live.profileId);
+      this.setState(live.profileId, { phase: "disconnected", profileId: live.profileId });
+      this.log(live.profileId, "stdio Host died with the SSH pipe. Connect again.", { level: "error" });
+      return;
+    }
+    try {
+      live.pipe = await live.session.openForwardedTcp(live.listenPort);
+      live.codec = new NdjsonFrameCodec();
+      this.attachPipe(live);
+      const reattached = await this.invokeOn(live, "host.reattach", {
+        connectionId: live.connectionId,
+      }) as { remoteRoot?: string | null; projectId?: string | null };
+      if (typeof reattached.remoteRoot === "string") live.remoteRoot = reattached.remoteRoot;
+      if (typeof reattached.projectId === "string") live.projectId = reattached.projectId;
+      if (!live.handshake) throw new RemoteOperationError("protocol", "Reconnect lost the Host handshake.");
+      live.ready = true;
+      live.reconnecting = false;
+      this.setState(live.profileId, {
+        phase: "ready",
+        profileId: live.profileId,
+        connectionId: live.connectionId,
+        handshake: live.handshake,
+        constitution,
+      });
+      this.log(live.profileId, "Reattached to the Host listen process.", { level: "ok" });
+    } catch (err) {
+      if (err instanceof RemoteOperationError && err.code === "displaced") {
+        live.closing = true;
+        this.live.delete(live.profileId);
+        this.setState(live.profileId, {
+          phase: "error",
+          profileId: live.profileId,
+          code: "displaced",
+          message: err.message,
+        });
+        this.log(live.profileId, err.message, { level: "error" });
+        return;
+      }
+      this.live.delete(live.profileId);
+      this.setState(live.profileId, { phase: "disconnected", profileId: live.profileId });
+      this.log(live.profileId, err instanceof Error ? err.message : String(err), { level: "error" });
+    }
   }
 
   private failConnect(

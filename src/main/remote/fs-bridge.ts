@@ -40,6 +40,33 @@ export function hostFsNeedsProjectBind(method: string): boolean {
   return method === "fs:scan" || method === "fs:scanMetadata";
 }
 
+const LISTING_TTL_MS = 1_500;
+const listingCache = new Map<string, { at: number; result: unknown }>();
+
+export function hostListingCacheKey(profileId: string, method: string, path: string): string {
+  return `${profileId}:${method}:${path}`;
+}
+
+export function readHostListingCache(key: string, now = Date.now()): unknown | null {
+  const hit = listingCache.get(key);
+  if (!hit || now - hit.at > LISTING_TTL_MS) return null;
+  return hit.result;
+}
+
+export function writeHostListingCache(key: string, result: unknown, now = Date.now()): void {
+  listingCache.set(key, { at: now, result });
+}
+
+export function invalidateHostListingCache(profileId?: string): void {
+  if (!profileId) {
+    listingCache.clear();
+    return;
+  }
+  for (const key of [...listingCache.keys()]) {
+    if (key.startsWith(`${profileId}:`)) listingCache.delete(key);
+  }
+}
+
 export function toHostFsParams(params: Record<string, unknown>): Record<string, unknown> {
   const next = { ...params };
   for (const key of ["absPath", "rootPath", "oldPath", "newPath", "path"]) {

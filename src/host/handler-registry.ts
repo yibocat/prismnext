@@ -1,4 +1,4 @@
-import { hostModelProviderIds, sanitizeHostModelKeyMap } from "../shared/remote";
+import { hostModelProviderIds, RemoteOperationError, sanitizeHostModelKeyMap } from "../shared/remote";
 import type { HostHandlerContext } from "./context";
 import { compileHandlers } from "./compile-handlers";
 import { experimentHandlers, installExperimentEvents } from "./experiment-handlers";
@@ -56,6 +56,22 @@ const handlers: Record<string, HostHandler> = {
       persisted: ctx.modelKeys === "remote" && wrapOk && providerIds.length > 0,
     };
   },
+  async "host.reattach"(params, ctx) {
+    const incoming = typeof params.connectionId === "string" ? params.connectionId.trim() : "";
+    if (ctx.ownerConnectionId && incoming && ctx.ownerConnectionId !== incoming) {
+      throw new RemoteOperationError(
+        "displaced",
+        "Another computer took over this Host. Disconnect and connect again from this computer if you need it.",
+      );
+    }
+    if (incoming) ctx.ownerConnectionId = incoming;
+    return {
+      ok: true,
+      remoteRoot: ctx.remoteRoot,
+      projectId: ctx.projectId,
+      ownerConnectionId: ctx.ownerConnectionId ?? incoming,
+    };
+  },
 };
 
 export function createHostContext(): HostHandlerContext {
@@ -64,6 +80,7 @@ export function createHostContext(): HostHandlerContext {
     projectId: null,
     emit: () => undefined,
     modelKeys: "remote",
+    ownerConnectionId: null,
   };
 }
 

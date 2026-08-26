@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REMOTE_SYNC_MODE,
+  effectiveRemoteSyncMode,
   isRemoteSyncMode,
   remoteWinsSessionConflict,
   shouldExcludeRemoteSyncPath,
@@ -13,6 +14,9 @@ describe("remote sync contracts", () => {
     expect(isRemoteSyncMode("live-mirror")).toBe(true);
     expect(isRemoteSyncMode("online-only")).toBe(true);
     expect(isRemoteSyncMode("rsync-all")).toBe(false);
+    expect(effectiveRemoteSyncMode("live-mirror")).toBe("on-demand");
+    expect(effectiveRemoteSyncMode("online-only")).toBe("online-only");
+    expect(effectiveRemoteSyncMode("on-demand")).toBe("on-demand");
   });
 
   it("excludes venv, node_modules, and git objects", () => {

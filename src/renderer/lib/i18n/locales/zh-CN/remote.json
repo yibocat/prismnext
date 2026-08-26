@@ -10,8 +10,15 @@
     "awaiting_host_key": "确认主机密钥",
     "bootstrapping": "正在推送运行时",
     "ready": "已连接",
+    "reconnecting": "正在重连",
     "error": "出错",
     "disconnected": "已断开"
+  },
+  "error": {
+    "payload_missing_local": "这份 PrismNext 缺少远程运行时。请重装 PrismNext。服务器不会自行下载 Host。",
+    "ssh_missing": "这台电脑的 PATH 里没有 OpenSSH 的 `ssh`。装好后再连。",
+    "ssh_jump": "SSH 跳板失败。请检查 ~/.ssh/config 里的 ProxyJump / ProxyCommand。",
+    "displaced": "另一台电脑接管了这台 Host。若还要用，请从这台电脑再连一次。"
   },
   "gate": {
     "entitlement": "访问",
@@ -74,11 +81,9 @@
     "skillsDone": "已把 {{count}} 个技能文件推到服务器。",
     "modeOnDemand": "同步档位：按需（默认）",
     "modeOnlineOnly": "同步档位：仅在线",
-    "modeLiveMirror": "同步档位：实时镜像（实验性）",
     "modeSet": {
       "on-demand": "远程同步已设为按需。",
-      "online-only": "远程同步已设为仅在线。对话副本不会自动更新。",
-      "live-mirror": "实时镜像仍是实验性。对话副本会更新，文件仍按需拉取。"
+      "online-only": "远程同步已设为仅在线。对话副本不会自动更新。"
     }
   }
 }

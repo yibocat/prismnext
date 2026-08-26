@@ -32,6 +32,13 @@ export type RemoteConnectionState =
     constitution?: RemoteConnectConstitution;
   }
   | {
+    phase: "reconnecting";
+    profileId: string;
+    connectionId: string;
+    handshake?: HostHandshake;
+    constitution?: RemoteConnectConstitution;
+  }
+  | {
     phase: "error";
     profileId: string;
     code: RemoteErrorCode;

@@ -1357,11 +1357,6 @@ export const LeftSidebar = memo(function LeftSidebar() {
                             >
                               {t("remote.sync.modeOnlineOnly")}
                             </AppContextMenuItem>
-                            <AppContextMenuItem
-                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "live-mirror")}
-                            >
-                              {t("remote.sync.modeLiveMirror")}
-                            </AppContextMenuItem>
                           </>
                         ) : null}
                         <AppContextMenuDestructiveItem

@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   DEFAULT_REMOTE_SYNC_MODE,
+  effectiveRemoteSyncMode,
   isRemoteSyncMode,
   type RemoteModelKeysMode,
   type RemoteSyncMode,
@@ -61,7 +62,7 @@ export function writeProfileSyncMode(profileId: string, syncMode: RemoteSyncMode
   const id = profileId.trim();
   if (!id || !isRemoteSyncMode(syncMode)) return;
   const all = readProfileOverrides();
-  all[id] = { ...all[id], syncMode };
+  all[id] = { ...all[id], syncMode: effectiveRemoteSyncMode(syncMode) };
   const path = overridesPath();
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(all, null, 2)}\n`, "utf8");
@@ -70,7 +71,7 @@ export function writeProfileSyncMode(profileId: string, syncMode: RemoteSyncMode
 export function profileSyncMode(profileId: string): RemoteSyncMode {
   const extra = readProfileOverrides()[profileId.trim()];
   return extra?.syncMode && isRemoteSyncMode(extra.syncMode)
-    ? extra.syncMode
+    ? effectiveRemoteSyncMode(extra.syncMode)
     : DEFAULT_REMOTE_SYNC_MODE;
 }
 

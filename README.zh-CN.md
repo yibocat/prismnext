@@ -34,6 +34,7 @@ PrismNext 是一套 **本地优先的集成式科研环境（Integrated Research
 - **实验工作区（Experiment Workspace）**：统一执行控制平面、实时 Job Monitor，以及论文 Methods 级别的实验运行收据（Provenance）。
 - **一等公民的 LaTeX 写作**：内置 Tectonic 或系统 TeXLive，实时 PDF 预览，以及 **Proposed Changes** 差异合并视图。
 - **内置版本控制**：Git 远程同步、拉取/发布、GitHub PR 创建（`gh`）、Agent 轮次变更透镜（Changes lens），以及隔离的工作树（Worktree）签出。
+- **远程工作区**：从本机 `~/.ssh/config` 连接实验室机器。PrismNext 把 Host 运行时从这台 App 推上去（服务器不会自己下载 Host）。Chat、文件、文献、编译、实验都在服务器上跑。模型 Key 以 AES-256-GCM 信封写入服务器，解钥留在笔记本。默认同同步是按需。这是核心能力，不是 Pro。
 
 产品聊天由桌面应用内的 **科研增强型嵌入式 Pi Agent** 承载。**Teams v2** 决定「谁坐在书桌上」：Chat 中一位 Lead 发声，Task 委派专科 Subagent，外加 Skills、斜杠命令与团队 MCP。切换 Team 即切换整套方法论；PermissionGate 将 consequential 工具置于明确的 Allow / Deny 卡片之后。
 
