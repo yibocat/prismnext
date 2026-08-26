@@ -28,6 +28,7 @@
  */
 import { resolve, relative, isAbsolute } from "node:path";
 import { homedir } from "node:os";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("active-roots", "security");
@@ -62,6 +63,7 @@ function isSafeRoot(abs: string): boolean {
 
 /** Register the active project root. Returns false (and logs) if rejected. */
 export function registerProjectRoot(abs: string): boolean {
+  if (isRemoteProjectRoot(abs)) return false;
   if (!isSafeRoot(abs)) {
     log.warn("rejected project root registration", { abs });
     return false;
@@ -74,6 +76,7 @@ export function registerProjectRoot(abs: string): boolean {
 /** Register additional workspace roots (absolute). Skips unsafe entries. */
 export function registerWorkspaceRoots(absList: string[]): void {
   for (const a of absList) {
+    if (isRemoteProjectRoot(a)) continue;
     if (isSafeRoot(a)) {
       _roots.add(resolve(a));
     } else {

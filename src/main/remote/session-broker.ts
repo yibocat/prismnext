@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { LicenseSnapshot } from "../../shared/pro";
 import {
   RemoteOperationError,
   encodeRemoteAbs,
   emptyConnectConstitution,
-  hasRemoteWorkspaceEntitlement,
   isHostDoctorReport,
   isHostHandshake,
   isRemoteErrorCode,
@@ -31,6 +29,7 @@ import {
   type HostLinuxArch,
   type HostPayloadRef,
 } from "./payload-path";
+import { profileModelKeys, readDesktopModelSeed } from "./profile-overrides";
 import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
 
@@ -40,7 +39,6 @@ const LOG_CAP = 400;
 
 export interface RemoteSessionBrokerDeps {
   desktopVersion: string;
-  getLicense: () => LicenseSnapshot | null;
   getProfile?: (id: string) => SshProfile | null;
   ssh?: SshClient;
   resolvePayload?: (arch?: HostLinuxArch) => HostPayloadRef | { error: "payload_missing_local" };
@@ -48,7 +46,7 @@ export interface RemoteSessionBrokerDeps {
   now?: () => number;
   onLog?: (line: RemoteBootstrapLogLine) => void;
   onConnection?: (profileId: string, state: RemoteConnectionState) => void;
-  onEvent?: (channel: string, payload: unknown) => void;
+  onEvent?: (channel: string, payload: unknown, profileId: string) => void;
 }
 
 interface LiveConnection {
@@ -96,12 +94,6 @@ export class RemoteSessionBroker {
       constitution = recordConnectGate(constitution, { gate, ok, detail });
       this.log(profileId, detail, { level: level ?? (ok ? "ok" : "error"), gate });
     };
-
-    if (!hasRemoteWorkspaceEntitlement(this.deps.getLicense())) {
-      mark("entitlement", false, "Remote Workspace requires a Pro license.");
-      return this.failConnect(profileId, "entitlement", "Remote Workspace requires a Pro license.", constitution);
-    }
-    mark("entitlement", true, "Pro entitlement workspace.remote is present.");
 
     const profile = this.deps.getProfile
       ? this.deps.getProfile(profileId)
@@ -269,6 +261,17 @@ export class RemoteSessionBroker {
         true,
         `Handshake ok — ${handshakeRaw.desktopVersion} ${handshakeRaw.payloadSha256.slice(0, 8)}`,
       );
+      if (handshakeRaw.features.includes("agent")) {
+        const modelKeys = profileModelKeys(this.deps.getProfile?.(profileId) ?? null);
+        const seed = readDesktopModelSeed();
+        await this.invokeOn(live, "host.configure", {
+          modelKeys,
+          extraBaseUrls: seed.extraBaseUrls,
+          ...(modelKeys === "remote"
+            ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
+            : {}),
+        });
+      }
 
       constitution = await this.attachHostDoctor(live, constitution);
 
@@ -357,6 +360,20 @@ export class RemoteSessionBroker {
     };
   }
 
+  profileIdForProjectId(projectId: string): string | null {
+    const id = projectId.trim();
+    if (!id) return null;
+    for (const [profileId, live] of this.live) {
+      if (live.projectId === id) return profileId;
+    }
+    return null;
+  }
+
+  isBound(profileId: string): boolean {
+    const live = this.live.get(profileId.trim());
+    return Boolean(live?.pipe);
+  }
+
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {
     const live = this.live.get(profileId);
     if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
@@ -390,15 +407,15 @@ export class RemoteSessionBroker {
             else pending.reject(new RemoteOperationError(toCode(frame.error.code), frame.error.message));
           }
           if (frame.kind === "event") {
-            this.deps.onEvent?.(frame.channel, frame.payload);
+            this.deps.onEvent?.(frame.channel, frame.payload, live.profileId);
           }
         }
       } catch (err) {
         this.log(live.profileId, err instanceof Error ? err.message : String(err));
       }
     };
-    live.pipe?.stdout.on("data", onData);
-    live.pipe?.stderr.on("data", (chunk: Buffer | string) => {
+    live.pipe?.stdout?.on("data", onData);
+    live.pipe?.stderr?.on("data", (chunk: Buffer | string) => {
       const text = String(chunk).trim();
       if (text) this.log(live.profileId, text);
     });

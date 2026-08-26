@@ -361,6 +361,8 @@ export interface PiSdkSessionFactoryInput {
   providerId: string;
   modelId: string;
   apiKey?: string;
+  /** Host Gateway: never write a real key into Pi's credential store. */
+  modelTransport?: "direct" | "proxy";
   systemPrompt: string;
   toolHost: Pick<ToolHost, "execute">;
   gate: PermissionGate;
@@ -456,7 +458,7 @@ type PiModelRuntimeLike = Pick<
 /** Resolve a Pi model, refreshing the provider catalog when the bundled snapshot is stale. */
 export async function resolvePiModelFromRuntime(
   runtime: PiModelRuntimeLike,
-  input: { providerId: string; modelId: string; apiKey?: string },
+  input: { providerId: string; modelId: string; apiKey?: string; modelTransport?: "direct" | "proxy" },
 ): Promise<NonNullable<ReturnType<ModelRuntime["getModel"]>>> {
   const providerId = input.providerId.trim();
   const modelId = input.modelId.trim();
@@ -466,6 +468,10 @@ export async function resolvePiModelFromRuntime(
 
   let model = runtime.getModel(providerId, modelId);
   if (model) return model;
+
+  if (input.modelTransport === "proxy") {
+    throw new Error(`unknown_pi_model:${providerId}/${modelId}`);
+  }
 
   const apiKey = input.apiKey?.trim();
   if (apiKey) {
@@ -504,6 +510,7 @@ export function createPiSdkSessionFactory(
       providerId: input.providerId,
       modelId: input.modelId,
       apiKey,
+      modelTransport: input.modelTransport,
     });
 
     const getContext = (): PiToolExecutionContext => turnContext;
@@ -646,6 +653,7 @@ export function createPiSdkSessionFactory(
           providerId: next.provider,
           modelId: next.modelId,
           apiKey: key,
+          modelTransport: input.modelTransport,
         });
         await session.setModel(model);
         syncImageDescribeTool(session, model, imageDescribeTool);
@@ -661,6 +669,7 @@ export function createPiSubagentRunnerFactory(input: {
   gate: PermissionGate;
   interactions?: InteractionBroker;
   agentRoot: string;
+  modelTransport?: "direct" | "proxy";
 }): SubagentSessionRunnerFactory {
   return async (opts) => {
     const provider = opts.modelRef?.provider ?? input.fallbackProvider;
@@ -672,6 +681,7 @@ export function createPiSubagentRunnerFactory(input: {
       providerId: provider,
       modelId,
       apiKey,
+      modelTransport: input.modelTransport,
       systemPrompt: opts.systemPrompt,
       toolHost: opts.scopedToolHost,
       gate: input.gate,

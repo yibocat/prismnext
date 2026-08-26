@@ -75,6 +75,11 @@ import {
 export function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
   if (reason === "agent_not_on_remote_yet") return i18n.t("remote.agentNotReady");
+  if (reason === "entitlement") return i18n.t("remote.agentEntitlement");
+  if (reason === "missing_local_key") return i18n.t("remote.missingLocalKey");
+  if (reason === "remote_attachment_not_uploaded") return i18n.t("remote.attachmentNotUploaded");
+  if (reason === "remote_attachment_too_large") return i18n.t("remote.attachmentTooLarge");
+  if (reason === "remote_module_pending") return i18n.t("remote.modulePending");
   if (reason === "turn_idle_timeout") return i18n.t("chat.errors.turn_timeout");
   if (reason === "terminated" || reason === "aborted") {
     return i18n.t("chat.errors.turn_aborted");

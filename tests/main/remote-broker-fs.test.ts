@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../../src/main/remote/fs-bridge";
+import { disconnectedHostFsProbe, encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../../src/main/remote/fs-bridge";
 
 describe("desktop fs bridge", () => {
   it("keeps IPC method names and strips the remote:// prefix for Host", () => {
@@ -12,6 +12,11 @@ describe("desktop fs bridge", () => {
       absPath: "/home/ubuntu/paper/main.tex",
       rootPath: "/home/ubuntu/paper",
     });
+    expect(disconnectedHostFsProbe("fs:exists")).toBe(false);
+    expect(disconnectedHostFsProbe("fs:isFile")).toBe(false);
+    expect(disconnectedHostFsProbe("fs:scan")).toEqual({ files: [], folders: [] });
+    expect(disconnectedHostFsProbe("fs:scanMetadata")).toEqual({ files: [], folders: [] });
+    expect(disconnectedHostFsProbe("fs:read")).toBeNull();
     expect(
       encodeRemoteScan("lab", {
         folders: ["src"],

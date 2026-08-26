@@ -34,3 +34,6 @@ docs-private/
 # Brainstorm mockups
 .superpowers/
 .claude/
+
+# Accidental local mkdir of a remote:// URI (Node path.resolve)
+/remote:

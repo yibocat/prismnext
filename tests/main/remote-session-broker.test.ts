@@ -3,19 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { create as tarCreate } from "tar";
 import { describe, expect, it } from "vitest";
-import type { LicenseSnapshot } from "../../src/shared/pro";
-import { WORKSPACE_REMOTE_FEATURE, type SshProfile } from "../../src/shared/remote";
+import { type SshProfile } from "../../src/shared/remote";
 import { sha256File } from "../../src/main/remote/payload-path";
 import { RemoteSessionBroker } from "../../src/main/remote/session-broker";
 import { createAuthFailSshClient, createDirectoryBackedSshClient } from "../../src/main/remote/ssh-client";
-
-const proAll: LicenseSnapshot = {
-  key: "PRISM-PRO-TEST",
-  plan: "pro",
-  expiresAt: null,
-  activatedAt: "2026-08-25T00:00:00.000Z",
-  features: [],
-};
 
 const profile: SshProfile = {
   id: "ssh_lab",
@@ -86,25 +77,26 @@ async function hostTarball(dir: string): Promise<{ path: string; sha256: string 
 }
 
 describe("RemoteSessionBroker", () => {
-  it("refuses connect without workspace.remote", async () => {
+  it("is not bound before connect", () => {
+    const broker = new RemoteSessionBroker({ desktopVersion: "0.9.0" });
+    expect(broker.isBound("ssh_lab")).toBe(false);
+  });
+
+  it("connects without a Pro license", async () => {
     const broker = new RemoteSessionBroker({
       desktopVersion: "0.9.0",
-      getLicense: () => null,
       getProfile: () => profile,
       resolvePayload: () => ({ error: "payload_missing_local" }),
     });
     const result = await broker.connect("ssh_lab");
     expect(result.ok).toBe(false);
-    expect(result.code).toBe("entitlement");
-    expect(result.constitution?.gates).toEqual([
-      { gate: "entitlement", ok: false, detail: "Remote Workspace requires a Pro license." },
-    ]);
+    expect(result.code).toBe("payload_missing_local");
+    expect(result.constitution?.gates.some((item) => item.gate === "entitlement")).toBe(false);
   });
 
   it("returns payload_missing_local without downloading", async () => {
     const broker = new RemoteSessionBroker({
       desktopVersion: "0.9.0",
-      getLicense: () => proAll,
       getProfile: () => profile,
       resolvePayload: () => ({ error: "payload_missing_local" }),
     });
@@ -115,7 +107,6 @@ describe("RemoteSessionBroker", () => {
   it("maps SSH auth failure", async () => {
     const broker = new RemoteSessionBroker({
       desktopVersion: "0.9.0",
-      getLicense: () => proAll,
       getProfile: () => ({ ...profile, strictHostKey: false }),
       ssh: createAuthFailSshClient(),
       resolvePayload: () => ({ path: "/tmp/missing.tar.gz", sha256: "x", arch: "linux-x64" }),
@@ -131,7 +122,6 @@ describe("RemoteSessionBroker", () => {
     const tarball = await hostTarball(staging);
     const broker = new RemoteSessionBroker({
       desktopVersion: "0.9.0",
-      getLicense: () => ({ ...proAll, features: [WORKSPACE_REMOTE_FEATURE] }),
       getProfile: () => ({ ...profile, strictHostKey: false }),
       ssh: createDirectoryBackedSshClient(remoteHome),
       resolvePayload: () => ({ ...tarball, arch: "linux-arm64" }),
@@ -142,7 +132,6 @@ describe("RemoteSessionBroker", () => {
     expect(result.handshake?.payloadSha256).toBe(tarball.sha256);
     expect(result.handshake?.features).toContain("control");
     expect(result.constitution?.gates.map((item) => item.gate)).toEqual([
-      "entitlement",
       "payload",
       "ssh",
       "host_key",

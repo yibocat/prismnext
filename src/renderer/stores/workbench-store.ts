@@ -8,6 +8,7 @@ export {
   applyVisibleIdReorder,
   moveListItem,
 } from "../../shared/workbench/api";
+import { recoverRemoteAbs } from "@shared/remote";
 import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
 export function sameProjectPath(
@@ -15,7 +16,7 @@ export function sameProjectPath(
   b: string | null | undefined,
 ): boolean {
   if (!a?.trim() || !b?.trim()) return false;
-  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const norm = (p: string) => recoverRemoteAbs(p) ?? p.replace(/\\/g, "/").replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 

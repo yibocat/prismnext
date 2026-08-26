@@ -7,6 +7,7 @@ import {
 } from "../shared/remote";
 import { runDoctor } from "./doctor";
 import { createHostContext, dispatchHostMethod } from "./handler-registry";
+import { installHostModelProxyFetch } from "./model-proxy-transport";
 
 const MAX_BUFFER = 8 * 1024 * 1024;
 
@@ -22,6 +23,7 @@ export async function serveStdio(opts: {
   ctx.emit = (channel, payload) => {
     write({ kind: "event", channel, payload });
   };
+  installHostModelProxyFetch(ctx.emit);
 
   const handle = async (frame: RemoteFrame) => {
     if (frame.kind !== "req") return;
@@ -33,7 +35,7 @@ export async function serveStdio(opts: {
           ok: true,
           result: {
             ...opts.handshake,
-            features: Array.from(new Set([...opts.handshake.features, "fs", "terminal", "control"])),
+            features: Array.from(new Set([...opts.handshake.features, "fs", "terminal", "control", "agent"])),
           },
         });
         return;

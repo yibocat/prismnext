@@ -21,6 +21,7 @@ import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { create as tarCreate, extract as tarExtract } from "tar";
+import { hostEsbuildOptions } from "./esbuild-options.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const desktopVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
@@ -39,18 +40,7 @@ const LINUX_ARCHS = [
 mkdirSync(join(currentDir, "bin"), { recursive: true });
 mkdirSync(cacheDir, { recursive: true });
 
-await build({
-  absWorkingDir: root,
-  entryPoints: [join(root, "src/host/main.ts")],
-  outfile: hostJsPath,
-  bundle: true,
-  platform: "node",
-  format: "cjs",
-  target: "node24",
-  banner: { js: "#!/usr/bin/env node\n" },
-  alias: { "@shared": join(root, "src/shared") },
-  logLevel: "info",
-});
+await build(hostEsbuildOptions({ root, outfile: hostJsPath }));
 
 try {
   chmodSync(hostJsPath, 0o755);

@@ -1,14 +1,16 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { RemoteBootstrapLogLine, RemoteConnectionState, SshConfigHost } from "../../shared/remote";
 import {
+  MODEL_PROXY_START_CHANNEL,
   RemoteOperationError,
   isRemoteDirListing,
   normalizePosixAbs,
 } from "../../shared/remote";
-import { listSshProfiles } from "../remote/profiles";
+import { parseModelProxyStart, runModelProxyStart } from "../remote/model-gateway";
+import { profileModelKeys } from "../remote/profile-overrides";
+import { getSshProfile, listSshProfiles } from "../remote/profiles";
 import { loadUserSshConfigHosts } from "../remote/ssh-config";
 import { RemoteSessionBroker } from "../remote/session-broker";
-import { readProLicense } from "../teams/pro-license";
 import { registerRemoteWorkbenchProject } from "../workbench/default-project";
 
 function broadcastRemoteLog(line: RemoteBootstrapLogLine): void {
@@ -29,11 +31,20 @@ export function getRemoteSessionBroker(): RemoteSessionBroker {
   if (!broker) {
     broker = new RemoteSessionBroker({
       desktopVersion: app.getVersion(),
-      getLicense: () => readProLicense(),
       getProfile: (id) => listSshProfiles().find((item) => item.id === id) ?? null,
       onLog: broadcastRemoteLog,
       onConnection: broadcastRemoteConnection,
-      onEvent: (channel, payload) => {
+      onEvent: (channel, payload, profileId) => {
+        if (channel === MODEL_PROXY_START_CHANNEL) {
+          if (profileModelKeys(getSshProfile(profileId)) === "remote") return;
+          const start = parseModelProxyStart(payload);
+          if (start && profileId) {
+            void runModelProxyStart(start, (chunk) =>
+              getRemoteSessionBroker().invoke(profileId, "model.proxy.push", chunk).then(() => undefined),
+            );
+          }
+          return;
+        }
         for (const win of BrowserWindow.getAllWindows()) {
           if (!win.isDestroyed()) win.webContents.send(channel, payload);
         }

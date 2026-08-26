@@ -5,6 +5,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { parseRemoteAbs } from "../../shared/remote";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   PROJECT_COMPILE_DIRNAME,
@@ -81,8 +82,15 @@ export const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
 \end{document}
 `;
 
+function localProjectRoot(projectRoot: string): string {
+  if (parseRemoteAbs(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
+  return resolve(projectRoot);
+}
+
 export function projectMetaAbs(projectRoot: string): string {
-  return join(resolve(projectRoot), PROJECT_META_DIR);
+  return join(localProjectRoot(projectRoot), PROJECT_META_DIR);
 }
 
 export interface CreateWorkbenchProjectArgs {
@@ -95,7 +103,7 @@ export interface WorkbenchProjectRef {
 }
 
 export function scaffoldWorkbenchProject(projectRoot: string, projectId: string): void {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   mkdirSync(root, { recursive: true });
   const metaDir = projectMetaAbs(root);
   mkdirSync(join(metaDir, PROJECT_COMPILE_DIRNAME), { recursive: true });
@@ -157,7 +165,7 @@ function writeManuscriptStub(projectRoot: string, workspaceDirs: WorkspaceFolder
 }
 
 export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): WorkbenchProjectRef {
-  const root = resolve(args.rootPath);
+  const root = localProjectRoot(args.rootPath);
   mkdirSync(root, { recursive: true });
   if (existsSync(join(root, workbenchJsonRel()))) {
     throw new Error(
@@ -191,7 +199,7 @@ export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): 
 }
 
 export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjectRef {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   mkdirSync(root, { recursive: true });
   const projectId = ensureWorkbenchId(root);
   scaffoldWorkbenchProject(root, projectId);
@@ -209,7 +217,7 @@ export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjec
 }
 
 export function checkWorkbenchProject(projectRoot: string): { missing: string[] } {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   const missing: string[] = [];
   const jsonPath = join(root, workbenchJsonRel());
   if (!existsSync(jsonPath)) missing.push(`${PROJECT_META_DIR}/${WORKBENCH_JSON_FILENAME}`);

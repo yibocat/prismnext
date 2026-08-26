@@ -40,4 +40,22 @@ describe("projectHandleFromFocus", () => {
       lastPath: "remote://lab/home/ubuntu/paper",
     })).toBeNull();
   });
+
+  it("does not treat a path.resolve leftover as a local folder", () => {
+    expect(projectHandleFromFocus({
+      projectId: "p_lab",
+      lastPath: "/Users/me/code/remote:/lab/home/ubuntu/paper",
+    })).toBeNull();
+    expect(projectHandleFromFocus({
+      projectId: "p_lab",
+      lastPath: "/Users/me/code/remote:/lab/home/ubuntu/paper",
+      connectionId: "conn_1",
+    })).toEqual({
+      kind: "remote",
+      projectId: "p_lab",
+      profileId: "lab",
+      remoteRoot: "/home/ubuntu/paper",
+      connectionId: "conn_1",
+    });
+  });
 });

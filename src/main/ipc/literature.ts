@@ -55,7 +55,12 @@ import type { StagedCitationImportInput, StagedCitationPayload, StageResult } fr
 
 export function registerLiteratureHandlers(): void {
   ipcMain.handle("literature:list", async (_event, args: { projectRoot: string }) => {
-    return listPapersForRenderer(args.projectRoot);
+    try {
+      return listPapersForRenderer(args.projectRoot);
+    } catch (err) {
+      if (err instanceof Error && err.message === "literature_not_on_remote_yet") return [];
+      throw err;
+    }
   });
 
   ipcMain.handle(

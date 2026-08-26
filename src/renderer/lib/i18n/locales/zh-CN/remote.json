@@ -1,6 +1,6 @@
 {
   "title": "远程",
-  "upgrade": "远程工作区是 Pro 功能。激活许可证后，即可通过本机 SSH 主机连接。",
+  "upgrade": "通过这台电脑 ~/.ssh/config 里的主机连接远程。",
   "trustHost": "信任此主机密钥",
   "hostKeyPrompt": "未知主机密钥：{{fingerprint}}",
   "stamp": "运行时 {{version}} · {{sha}}",
@@ -14,7 +14,7 @@
     "disconnected": "已断开"
   },
   "gate": {
-    "entitlement": "许可证",
+    "entitlement": "访问",
     "payload": "本机运行时",
     "ssh": "SSH",
     "host_key": "主机密钥",
@@ -26,6 +26,13 @@
     "doctor": "体质检查"
   },
   "agentNotReady": "远程 Agent 还没接通。现在可以浏览文件、使用终端。",
+  "agentEntitlement": "远程 Agent 没能启动。",
+  "missingLocalKey": "这台电脑上没有所选模型的 API Key。请到设置 → AI 里添加。",
+  "attachmentNotUploaded": "请先把附件放到远程文件夹，或直接发送内嵌图片。",
+  "attachmentTooLarge": "附件超过 5 MB。请先复制到远程文件夹再发送。",
+  "modelKeysNote": "远程 Host 直连模型厂商。服务器上只存 AES-256-GCM 密文，解钥留在这台电脑。",
+  "gatewayNote": "远程 Host 直连模型厂商。服务器上只存 AES-256-GCM 密文，解钥留在这台电脑。",
+  "modulePending": "这个工具还不能在远程 Agent 上用。",
   "close": "关闭",
   "connect": "连接",
   "retry": "重试",

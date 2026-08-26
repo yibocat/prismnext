@@ -37,9 +37,25 @@ export function encodeRemoteAbs(profileId: string, posixAbs: string): string | n
   return `${REMOTE_ROOT_SCHEME}${encodeURIComponent(alias)}${abs}`;
 }
 
+/**
+ * `path.normalize` / `path.resolve` collapse `remote://alias/abs` to
+ * `remote:/alias/abs` or `${cwd}/remote:/alias/abs`. Recover the URI so a
+ * laptop mkdir cannot treat the Host path as a folder in this repo.
+ */
+function coerceRemoteUri(raw: string): string | null {
+  const normalized = raw.replace(/\\/g, "/");
+  if (normalized.startsWith(REMOTE_ROOT_SCHEME)) return normalized;
+  const marker = "remote:/";
+  const idx = normalized.indexOf(marker);
+  if (idx < 0) return null;
+  const fromMarker = normalized.slice(idx);
+  if (fromMarker.startsWith(REMOTE_ROOT_SCHEME)) return fromMarker;
+  return `${REMOTE_ROOT_SCHEME}${fromMarker.slice(marker.length)}`;
+}
+
 export function parseRemoteAbs(value: string): { profileId: string; abs: string } | null {
-  const raw = value.trim();
-  if (!raw.startsWith(REMOTE_ROOT_SCHEME)) return null;
+  const raw = coerceRemoteUri(value.trim());
+  if (!raw) return null;
   const rest = raw.slice(REMOTE_ROOT_SCHEME.length);
   const slash = rest.indexOf("/");
   if (slash <= 0) return null;
@@ -51,6 +67,13 @@ export function parseRemoteAbs(value: string): { profileId: string; abs: string 
   } catch {
     return null;
   }
+}
+
+/** Canonical `remote://alias/abs`, including collapsed `remote:/` leftovers. */
+export function recoverRemoteAbs(value: string): string | null {
+  const parsed = parseRemoteAbs(value);
+  if (!parsed) return null;
+  return encodeRemoteAbs(parsed.profileId, parsed.abs);
 }
 
 export function isRemoteProjectRoot(value: string | null | undefined): boolean {

@@ -13,7 +13,6 @@ import {
   resolveExperimentCtx,
 } from "../../experiment/facade";
 import { parseExperimentRunKind, EXPERIMENT_REGISTRY_REL } from "../../../shared/experiments/log";
-import { kickoffExperimentRun } from "../../experiment/experiment-run-executor";
 import {
   dispatchExperimentLog,
   dispatchProvenanceQuery,
@@ -115,6 +114,7 @@ export const experimentRunTool: NativeToolDefinition = {
     const artifacts = Array.isArray(args.artifacts)
       ? args.artifacts.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : [];
+    const { kickoffExperimentRun } = await import("../../experiment/experiment-run-executor");
     const started = await kickoffExperimentRun({
       ctx: ctxResult,
       id,

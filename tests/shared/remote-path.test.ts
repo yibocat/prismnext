@@ -6,6 +6,7 @@ import {
   joinPosixSegment,
   parseRemoteAbs,
   posixContained,
+  recoverRemoteAbs,
   remoteHomeFromAppHome,
 } from "../../src/shared/remote";
 
@@ -18,6 +19,21 @@ describe("remote path encoding", () => {
     });
     expect(isRemoteProjectRoot("remote://lab/home/ubuntu/paper")).toBe(true);
     expect(isRemoteProjectRoot("/Users/me/paper")).toBe(false);
+  });
+
+  it("recovers a remote:// URI after path.resolve collapses the scheme", () => {
+    expect(parseRemoteAbs("remote:/lab/home/ubuntu/paper")).toEqual({
+      profileId: "lab",
+      abs: "/home/ubuntu/paper",
+    });
+    expect(parseRemoteAbs("/Users/me/code/remote:/lab/home/ubuntu/paper")).toEqual({
+      profileId: "lab",
+      abs: "/home/ubuntu/paper",
+    });
+    expect(recoverRemoteAbs("/Users/me/code/remote:/lab/home/ubuntu/paper")).toBe(
+      "remote://lab/home/ubuntu/paper",
+    );
+    expect(isRemoteProjectRoot("/Users/me/code/remote:/lab/home/ubuntu/paper")).toBe(true);
   });
 
   it("rejects path escape and keeps aliases with dots", () => {

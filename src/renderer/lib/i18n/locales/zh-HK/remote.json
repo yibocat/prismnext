@@ -1,6 +1,6 @@
 {
   "title": "遠端",
-  "upgrade": "遠端工作區是 Pro 功能。啟用授權後，即可透過本機 SSH 主機連線。",
+  "upgrade": "透過這台電腦 ~/.ssh/config 裡的主機連線遠端。",
   "trustHost": "信任此主機金鑰",
   "hostKeyPrompt": "未知主機金鑰：{{fingerprint}}",
   "stamp": "執行時 {{version}} · {{sha}}",
@@ -14,7 +14,7 @@
     "disconnected": "已中斷"
   },
   "gate": {
-    "entitlement": "授權",
+    "entitlement": "存取",
     "payload": "本機執行時",
     "ssh": "SSH",
     "host_key": "主機金鑰",
@@ -26,6 +26,13 @@
     "doctor": "體質檢查"
   },
   "agentNotReady": "遠端 Agent 尚未接通。現在可以瀏覽檔案、使用終端。",
+  "agentEntitlement": "遠端 Agent 未能啟動。",
+  "missingLocalKey": "這台電腦上沒有所選模型的 API Key。請到設定 → AI 新增。",
+  "attachmentNotUploaded": "請先把附件放到遠端資料夾，或直接傳送內嵌圖片。",
+  "attachmentTooLarge": "附件超過 5 MB。請先複製到遠端資料夾再傳送。",
+  "modelKeysNote": "遠端 Host 直連模型廠商。伺服器上只存 AES-256-GCM 密文，解鑰留在這台電腦。",
+  "gatewayNote": "遠端 Host 直連模型廠商。伺服器上只存 AES-256-GCM 密文，解鑰留在這台電腦。",
+  "modulePending": "這個工具還不能在遠端 Agent 上用。",
   "close": "關閉",
   "connect": "連線",
   "retry": "重試",

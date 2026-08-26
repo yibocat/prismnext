@@ -33,7 +33,7 @@ import { getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { i18n } from "@/lib/i18n";
 import { createLogger } from "@/services/logger";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
-import { isRemoteProjectRoot } from "../../../shared/remote";
+import { isRemoteProjectRoot, recoverRemoteAbs } from "../../../shared/remote";
 
 const log = createLogger("project-lifecycle");
 
@@ -302,8 +302,10 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
 
     const { useDocumentStore } = await import("@/stores/document-store");
     if (!useDocumentStore.getState().projectRoot && target.projectPath) {
+      const remote = recoverRemoteAbs(target.projectPath);
       const onWorkbench = state.members.some((member) => member.id === target.projectId);
-      if (onWorkbench) await useDocumentStore.getState().openProject(target.projectPath);
+      if (remote) await useDocumentStore.getState().focusProject(remote);
+      else if (onWorkbench) await useDocumentStore.getState().openProject(target.projectPath);
       else await useDocumentStore.getState().focusProject(target.projectPath);
     }
 

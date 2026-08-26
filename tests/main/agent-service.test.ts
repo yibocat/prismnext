@@ -34,6 +34,23 @@ describe("agent auth and prompt assembly", () => {
     });
   });
 
+  it("allows a placeholder key in Host Gateway mode", () => {
+    const result = resolveAgentAuth({
+      allowMissingKey: true,
+      settings: {
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: {},
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-5",
+    });
+    if (result.ok) expect(result.apiKey).toBe("prismnext-gateway");
+  });
+
   it("reads the decrypted settings key when the send payload omits apiKey", () => {
     const result = resolveAgentAuth({
       settings: {

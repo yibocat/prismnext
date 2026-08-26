@@ -76,6 +76,7 @@ export function RemoteConnectDialog({
               : null}
           </DialogDescription>
         </DialogHeader>
+        <p className="text-muted-foreground text-[length:var(--font-size-12)]">{t("remote.modelKeysNote")}</p>
         <ol className="max-h-56 space-y-1 overflow-y-auto text-[length:var(--font-size-12)]">
           {REMOTE_CONNECT_GATES.map((gate) => {
             const status = resolveConnectGateStatus(gate, constitution, profileLogs);

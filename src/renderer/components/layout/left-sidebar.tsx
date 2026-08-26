@@ -9,6 +9,7 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import { isRemoteProjectRoot } from "@shared/remote";
 import {
   PinIcon,
   MessageSquareIcon,
@@ -382,6 +383,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
     void Promise.all(
       members.map(async (member) => {
         try {
+          if (isRemoteProjectRoot(member.lastPath)) return [member.id, true] as const;
           const ok = await fsDesktop.fsExists(member.lastPath);
           return [member.id, ok] as const;
         } catch {

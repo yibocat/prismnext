@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import Store from "electron-store";
 import { safeStorage } from "electron";
 import {
@@ -104,6 +105,8 @@ export interface AppSettings {
   aiVisionFallbackModel?: string | null;
   /** Provider API keys keyed by provider id. */
   aiApiKeys?: Record<string, string>;
+  /** AES-256 wrap key (base64, 32 bytes) for remote Host model files. Laptop only. */
+  remoteHostWrapKey?: string;
   /** Provider base URLs keyed by provider id. */
   aiBaseUrls?: Record<string, string>;
   /** User-added custom API providers. */
@@ -245,6 +248,7 @@ const SENSITIVE_KEYS = [
   "zoteroApiKey",
   "zoteroUserId",
   "aiApiKeys",
+  "remoteHostWrapKey",
   "mineruApiToken",
   "semanticScholarApiKey",
   "pubmedApiKey",
@@ -327,6 +331,12 @@ export function getSettings(): AppSettings {
     settings.aiApiKeys = {};
   }
 
+  const encryptedWrap = store.get("remoteHostWrapKey") as string | undefined;
+  if (encryptedWrap) {
+    const decrypted = decryptIfAvailable(encryptedWrap);
+    if (decrypted.trim()) settings.remoteHostWrapKey = decrypted.trim();
+  }
+
   // Start with explicitly-read settings, then overlay all raw store keys
   // so that renderer-side dynamic keys (editorSyntaxTheme, etc.) survive
   // round-trips without needing manual enumeration here.
@@ -344,6 +354,8 @@ export function getSettings(): AppSettings {
     result.pubmedApiKey = settings.pubmedApiKey;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
+  if (settings.remoteHostWrapKey !== undefined)
+    result.remoteHostWrapKey = settings.remoteHostWrapKey;
 
   // One-shot: v1 `"auto"` meant edit-auto; v2 makes `"auto"` full OpenCode auto.
   const migrated = migratePermissionModeSetting(
@@ -364,6 +376,20 @@ export function getSettings(): AppSettings {
 
   applyLogMinLevel(result.logMinLevel);
   return result as AppSettings;
+}
+
+export function getOrCreateRemoteHostWrapKey(): string {
+  const current = (getSettings().remoteHostWrapKey ?? "").trim();
+  if (current) {
+    try {
+      if (Buffer.from(current, "base64").length === 32) return current;
+    } catch {
+      // regenerate below
+    }
+  }
+  const next = randomBytes(32).toString("base64");
+  updateSettings({ remoteHostWrapKey: next });
+  return next;
 }
 
 export function updateSettings(patch: Partial<AppSettings>): void {

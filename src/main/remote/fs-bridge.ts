@@ -26,6 +26,15 @@ export function encodeRemoteScan(
   };
 }
 
+const EMPTY_SCAN = { files: [] as Array<{ absolutePath: string }>, folders: [] as string[] };
+
+/** Quiet replies while a remembered remote folder is focused before SSH is up. */
+export function disconnectedHostFsProbe(method: string): unknown {
+  if (method === "fs:exists" || method === "fs:isFile") return false;
+  if (method === "fs:scan" || method === "fs:scanMetadata") return EMPTY_SCAN;
+  return null;
+}
+
 export function toHostFsParams(params: Record<string, unknown>): Record<string, unknown> {
   const next = { ...params };
   for (const key of ["absPath", "rootPath", "oldPath", "newPath", "path"]) {

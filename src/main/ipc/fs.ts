@@ -11,8 +11,8 @@ import {
   projectLifecycleAuthority,
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
-import { isRemoteProjectRoot, parseRemoteAbs } from "../../shared/remote";
-import { encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
+import { isRemoteProjectRoot, parseRemoteAbs, RemoteOperationError } from "../../shared/remote";
+import { disconnectedHostFsProbe, encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
 import { getRemoteSessionBroker } from "./remote";
 
 const BLOB_CHUNK = 4 * 1024 * 1024;
@@ -55,7 +55,13 @@ async function invokeHostFs(method: string, args: Record<string, unknown>): Prom
     typeof args.path === "string" ? args.path : null,
   );
   if (!remote) return null;
-  const result = await getRemoteSessionBroker().invoke(
+  const broker = getRemoteSessionBroker();
+  if (!broker.isBound(remote.profileId)) {
+    const probe = disconnectedHostFsProbe(method);
+    if (probe !== null) return { profileId: remote.profileId, result: probe };
+    throw new RemoteOperationError("not_connected", "Not connected.");
+  }
+  const result = await broker.invoke(
     remote.profileId,
     method,
     toHostFsParams(args),

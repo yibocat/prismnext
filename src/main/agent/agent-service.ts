@@ -3,8 +3,10 @@
  */
 
 import { join } from "node:path";
-import type { WebContents } from "electron";
 import type { AgentEvent } from "../../shared/agent/runtime";
+import type { AgentEventSink } from "../../shared/remote";
+import { GATEWAY_PLACEHOLDER_KEY } from "../../shared/remote";
+import { createElectronSink, type ElectronSinkTarget } from "../remote/event-sink";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
 import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
@@ -124,7 +126,12 @@ export function resolveAgentAuth(input: AgentAuthInput): AgentAuthResult {
 
   if (!provider) return { ok: false, reason: "missing_pi_provider" };
   if (!modelId) return { ok: false, reason: "missing_pi_model" };
-  if (!apiKey) return { ok: false, reason: "missing_pi_api_key" };
+  if (!apiKey) {
+    if (input.allowMissingKey) {
+      return { ok: true, provider, modelId, apiKey: GATEWAY_PLACEHOLDER_KEY };
+    }
+    return { ok: false, reason: "missing_pi_api_key" };
+  }
 
   return {
     ok: true,
@@ -164,23 +171,41 @@ export function buildAgentUserText(input: {
   return rules ? `${rules}\n\n${text}` : text;
 }
 
+export const REMOTE_MODULE_PENDING = "remote_module_pending";
+
+function isRemotePendingModule(name: string): boolean {
+  return name.startsWith("literature-")
+    || name.startsWith("latex-")
+    || name.startsWith("interaction-")
+    || name === "citation-health"
+    || name === "results-snapshot"
+    || name === "provenance-query";
+}
+
 export function createAgentNativeTools(deps?: {
   runExperiment?: ExperimentRunFn;
+  /** RW-2: literature / latex / interaction fail clearly until RW-3. */
+  pendingRemoteModules?: boolean;
+  /** Host experiment-run: tell the model SSH drop kills the job. */
+  remoteJobNote?: boolean;
 }): NativeToolDefinition[] {
   const catalog = ALL_NATIVE_TOOLS.filter((tool) => !isPiPrimitiveToolName(tool.name));
-  if (!deps?.runExperiment) {
-    return [...catalog];
-  }
-  const customRun = deps.runExperiment;
   return catalog.map((tool) => {
-    if (tool.name === "experiment-run") {
+    if (deps?.pendingRemoteModules && isRemotePendingModule(tool.name)) {
+      return {
+        ...tool,
+        execute: async () => ({ ok: false, error: REMOTE_MODULE_PENDING }),
+      };
+    }
+    if (tool.name === "experiment-run" && deps?.runExperiment) {
+      const customRun = deps.runExperiment;
       return {
         ...tool,
         execute: async (args, ctx) => {
           const id = typeof args.id === "string" ? args.id.trim() : "";
           const command = typeof args.command === "string" ? args.command : "";
           if (!id || !command) return { ok: false, error: "missing_id_or_command" };
-          return customRun({
+          const result = await customRun({
             experimentId: id,
             command,
             toolCallId: ctx.toolCallId,
@@ -194,6 +219,22 @@ export function createAgentNativeTools(deps?: {
             interpreter: typeof args.interpreter === "string" ? args.interpreter : undefined,
             pythonPath: typeof args.pythonPath === "string" ? args.pythonPath : undefined,
           });
+          if (deps.remoteJobNote && result && typeof result === "object") {
+            return { ...result, remoteNote: "ssh_drop_kills_job" };
+          }
+          return result;
+        },
+      };
+    }
+    if (tool.name === "experiment-run" && deps?.remoteJobNote) {
+      return {
+        ...tool,
+        execute: async (args, ctx) => {
+          const result = await tool.execute(args, ctx);
+          if (result && typeof result === "object") {
+            return { ...result as Record<string, unknown>, remoteNote: "ssh_drop_kills_job" };
+          }
+          return result;
         },
       };
     }
@@ -217,6 +258,10 @@ export interface AgentServiceDeps {
   composeAgentsMd: (projectRoot: string) => Promise<string>;
   resolveTeamBinding?: (input: TeamPiBindingInput) => TeamPiBindingResult;
   registry?: RuntimeRegistry;
+  /** Host default is proxy — no real API key on the server. */
+  modelTransport?: "direct" | "proxy";
+  pendingRemoteModules?: boolean;
+  remoteJobNote?: boolean;
 }
 
 export class AgentService {
@@ -232,7 +277,8 @@ export class AgentService {
   private readonly sendEpoch = new Map<string, number>();
   private sink: ((event: AgentEvent) => void) | null = null;
   private permissionSink: ((request: PermissionGateRequest) => void) | null = null;
-  private owner: WebContents | null = null;
+  private ownerSink: AgentEventSink | null = null;
+  private owner: ElectronSinkTarget | null = null;
   private activeTabId: string = AGENT_FALLBACK_CONVERSATION_ID;
   private activeConversationId: string | null = null;
   private readonly registry: RuntimeRegistry;
@@ -261,7 +307,10 @@ export class AgentService {
 
   status(projectRoot?: string | null, sessionTeamId?: string | null): AgentStatus {
     const settings = this.deps.getSettings();
-    const auth = resolveAgentAuth({ settings: settings as AgentAuthInput["settings"] });
+    const auth = resolveAgentAuth({
+      settings: settings as AgentAuthInput["settings"],
+      allowMissingKey: this.deps.modelTransport === "proxy",
+    });
     const probe = probePiEmbedCompatibility({
       hostNode: process.versions.node,
       electronNode: process.versions.node,
@@ -279,16 +328,17 @@ export class AgentService {
       }
     }
 
+    const proxy = this.deps.modelTransport === "proxy";
     const ready = Boolean(
       probe.canEmbedInElectronMain
-      && auth.ok
       && root
-      && (!teamBinding || teamBinding.ok),
+      && (!teamBinding || teamBinding.ok)
+      && (proxy || auth.ok),
     );
     let reason: string | undefined;
     if (!probe.canEmbedInElectronMain) reason = "electron_node_incompatible";
     else if (!root) reason = "missing_project";
-    else if (!auth.ok) reason = auth.reason;
+    else if (!proxy && !auth.ok) reason = auth.reason;
     else if (teamBinding && !teamBinding.ok) reason = teamBinding.error;
 
     return {
@@ -351,6 +401,7 @@ export class AgentService {
       provider: effectiveProvider,
       modelId: effectiveModelId,
       apiKey: input.apiKey,
+      allowMissingKey: this.deps.modelTransport === "proxy",
       settings: settings as AgentAuthInput["settings"],
     });
     if (!auth.ok) return { ok: false, error: auth.reason };
@@ -783,15 +834,31 @@ export class AgentService {
     return result;
   }
 
-  attachOwner(contents: WebContents): void {
+  attachSink(eventSink: AgentEventSink): void {
+    this.owner = null;
+    this.ownerSink = eventSink;
+    this.bindEventPipes();
+  }
+
+  attachOwner(contents?: ElectronSinkTarget | null): void {
+    if (!contents || typeof contents.send !== "function") return;
     if (this.owner !== contents) {
       this.owner = contents;
       const drop = () => {
-        if (this.owner === contents) this.owner = null;
+        if (this.owner === contents) {
+          this.owner = null;
+          this.ownerSink = null;
+        }
       };
-      contents.once?.("destroyed", drop);
-      contents.once?.("render-process-gone", drop);
+      const once = (contents as { once?: (event: string, listener: () => void) => void }).once?.bind(contents);
+      once?.("destroyed", drop);
+      once?.("render-process-gone", drop);
     }
+    this.ownerSink = createElectronSink(contents);
+    this.bindEventPipes();
+  }
+
+  private bindEventPipes(): void {
     this.sink = (event) => {
       if (event.subagent) {
         const parentRt =
@@ -854,21 +921,21 @@ export class AgentService {
     };
   }
 
-  /** Renderer may be gone while WebContents.isDestroyed() is still false (reload / HMR). */
   private emitToOwner(channel: string, payload: unknown): void {
-    const owner = this.owner;
-    if (!owner || owner.isDestroyed()) return;
+    if (channel !== "agent:event" && channel !== "agent:permission") return;
     try {
-      owner.send(channel, payload);
+      this.ownerSink?.emit(channel, payload);
     } catch {
+      this.ownerSink = null;
       this.owner = null;
       log.warn("owner.send.drop", { channel, reason: "render_frame_gone" });
     }
   }
 
-  detachOwner(contents?: WebContents): void {
+  detachOwner(contents?: ElectronSinkTarget): void {
     if (contents && this.owner !== contents) return;
     this.owner = null;
+    this.ownerSink = null;
     this.sink = null;
     this.permissionSink = null;
   }
@@ -885,7 +952,7 @@ export class AgentService {
     });
   }
 
-  isOwnedBy(contents: WebContents): boolean {
+  isOwnedBy(contents: ElectronSinkTarget): boolean {
     return this.owner === contents;
   }
 
@@ -964,7 +1031,10 @@ export class AgentService {
       gate,
       onEvent: (event) => this.sink?.(event),
     });
-    toolHost.registerAll(createAgentNativeTools());
+    toolHost.registerAll(createAgentNativeTools({
+      pendingRemoteModules: this.deps.pendingRemoteModules,
+      remoteJobNote: this.deps.remoteJobNote,
+    }));
 
     if (ctx.roster && ctx.roster.length > 0) {
       const { buildPromptContext } = await import("../prompts/context");
@@ -988,6 +1058,7 @@ export class AgentService {
           gate,
           interactions,
           agentRoot,
+          modelTransport: this.deps.modelTransport,
         }),
         skills: ctx.skills?.map((skill) => ({ dir: skill.dir, source: skill.fqid })),
         profileModules,
@@ -1023,6 +1094,7 @@ export class AgentService {
         providerId: ctx.provider,
         modelId: ctx.modelId,
         apiKey: ctx.apiKey,
+        modelTransport: this.deps.modelTransport,
         systemPrompt,
         toolHost,
         gate,

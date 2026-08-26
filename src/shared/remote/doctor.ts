@@ -4,7 +4,6 @@
  */
 
 export const REMOTE_CONNECT_GATES = [
-  "entitlement",
   "payload",
   "ssh",
   "host_key",

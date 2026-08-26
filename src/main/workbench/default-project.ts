@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { isRemoteProjectRoot } from "../../shared/remote";
+import { isRemoteProjectRoot, recoverRemoteAbs } from "../../shared/remote";
 import {
   sameIdSet,
   type WorkbenchProjectMember,
@@ -89,11 +89,19 @@ export function readProjectSlotMeta(
   if (typeof lastPath !== "string" || !lastPath.trim()) return null;
   const displayName = (raw as { displayName?: unknown }).displayName;
   const stored = lastPath.trim();
+  const remote = recoverRemoteAbs(stored);
   const out: WorkbenchProjectMeta = {
-    lastPath: isRemoteProjectRoot(stored) ? stored : normalizeWorkbenchPath(resolve(stored)),
+    lastPath: remote ?? normalizeWorkbenchPath(resolve(stored)),
   };
   if (typeof displayName === "string" && displayName.trim()) {
     out.displayName = displayName.trim();
+  }
+  if (remote && remote !== stored) {
+    try {
+      writeProjectSlotMeta(projectId, out, opts);
+    } catch {
+      // In-memory lastPath is already the remote:// URI.
+    }
   }
   return out;
 }
@@ -107,9 +115,8 @@ export function writeProjectSlotMeta(
   const file = join(home, projectSlotMetaRel(projectId));
   mkdirSync(join(home, projectSlotRel(projectId)), { recursive: true });
   const payload: WorkbenchProjectMeta = {
-    lastPath: isRemoteProjectRoot(meta.lastPath)
-      ? meta.lastPath
-      : normalizeWorkbenchPath(resolve(meta.lastPath)),
+    lastPath: recoverRemoteAbs(meta.lastPath)
+      ?? normalizeWorkbenchPath(resolve(meta.lastPath)),
   };
   if (meta.displayName?.trim()) payload.displayName = meta.displayName.trim();
   writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
@@ -262,7 +269,11 @@ export function syncWorkbenchRegisteredRoots(opts?: DefaultProjectOpts): void {
 }
 
 export function openWorkbenchFolder(absPath: string, opts?: DefaultProjectOpts): DefaultProjectRef {
-  const lastPath = normalizeWorkbenchPath(resolve(absPath.trim()));
+  const trimmed = absPath.trim();
+  if (recoverRemoteAbs(trimmed)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
+  const lastPath = normalizeWorkbenchPath(resolve(trimmed));
   if (!lastPath || lastPath === "/") throw new Error("missing_folder");
   const checkout = parseHomeWorktreeCheckout(lastPath, opts);
   if (checkout) {

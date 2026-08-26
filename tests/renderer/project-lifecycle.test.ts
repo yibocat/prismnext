@@ -531,6 +531,28 @@ describe("restoreWorkbenchLaunch", () => {
     expect(useDocumentStore.getState().openProject).not.toHaveBeenCalled();
     expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/default");
   });
+
+  it("does not join a remembered remote project as a local folder", async () => {
+    workbenchGetState.mockResolvedValue({
+      defaultProjectId: "p_def",
+      defaultLastPath: "/papers/default",
+      workbenchProjectIds: ["p_lab"],
+      members: [{
+        id: "p_lab",
+        lastPath: "remote://lab/home/ubuntu/paper",
+        displayName: "paper",
+      }],
+    });
+    useSettingsStore.setState({
+      settings: { lastFocusProjectId: "p_lab", lastFocusConversationId: "" },
+      loaded: true,
+    });
+    await restoreWorkbenchLaunch({ watch: false });
+    expect(useDocumentStore.getState().openProject).not.toHaveBeenCalled();
+    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith(
+      "remote://lab/home/ubuntu/paper",
+    );
+  });
 });
 
 describe("app launch wiring", () => {

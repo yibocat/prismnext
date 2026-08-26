@@ -27,6 +27,9 @@ export function registerProjectScaffoldHandlers(): void {
     let failLogged = false;
 
     try {
+    if (isRemoteProjectRoot(args.rootPath)) {
+      throw new Error("remote_project_root_is_not_local");
+    }
     createWorkbenchProjectOnDisk({
       rootPath: args.rootPath,
       workspaceDirs: args.workspaceDirs,
@@ -63,6 +66,9 @@ export function registerProjectScaffoldHandlers(): void {
   });
 
   ipcMain.handle("project:scaffoldAgentsMd", async (_event, args: { rootPath: string }) => {
+    if (isRemoteProjectRoot(args.rootPath)) {
+      throw new Error("remote_project_root_is_not_local");
+    }
     const { mkdirSync } = require("node:fs");
     mkdirSync(join(projectMetaAbs(args.rootPath), "agent"), { recursive: true });
     return await buildAgentsMdScaffold(args.rootPath);

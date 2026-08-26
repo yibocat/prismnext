@@ -22,6 +22,7 @@ import {
 } from "@/lib/files/project-path";
 import { trackRecentOpenedFile } from "@/lib/files/recent-files";
 import { switchWorkbenchFocus } from "@/lib/workspace/project-lifecycle";
+import { recoverRemoteAbs } from "@shared/remote";
 import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import {
   focusPathAfterOpenFolder,
@@ -264,6 +265,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const remote = recoverRemoteAbs(rootPath);
+    if (remote) {
+      await get().focusProject(remote);
+      return;
+    }
     const opened = await workbenchDesktop.workbenchOpenFolder(rootPath);
     useWorkbenchStore.setState({
       ...workbenchStateFromOpenResult(opened),

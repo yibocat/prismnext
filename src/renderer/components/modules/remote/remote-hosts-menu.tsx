@@ -5,8 +5,6 @@ import { filterRemoteHostProjects, listRemoteHostProjects, type RemoteHostNextAc
 import { useProjectStore } from "@/stores/project-store";
 import { useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
-import { useProLicenseStore } from "@/stores/pro-license-store";
-import { WORKSPACE_REMOTE_FEATURE } from "@shared/remote";
 import {
   AppMenuItem,
   AppMenuLabel,
@@ -47,7 +45,6 @@ export function RemoteHostsMenuSection({
   onRequest: (alias: string, next: RemoteHostNextAction) => void;
 }) {
   const { t } = useTranslation();
-  const entitled = useProLicenseStore((s) => s.hasFeature(WORKSPACE_REMOTE_FEATURE));
   const hosts = useRemoteStore((s) => s.hosts);
   const byProfileId = useRemoteStore((s) => s.byProfileId);
   const hydrate = useRemoteStore((s) => s.hydrate);
@@ -69,9 +66,7 @@ export function RemoteHostsMenuSection({
       <AppMenuLabel className="normal-case tracking-normal">
         {t("nav.workbench.remote")}
       </AppMenuLabel>
-      {!entitled ? (
-        <p className="px-2 py-1.5 text-muted-foreground">{t("remote.upgrade")}</p>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="px-2 py-1.5 text-muted-foreground">{t("nav.workbench.noSshHosts")}</p>
       ) : (
         filtered.map((host) => {

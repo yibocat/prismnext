@@ -16,6 +16,11 @@ export interface SshProfile {
   jumpProfileId?: string;
   /** Unknown host keys must be confirmed. Default true. */
   strictHostKey: boolean;
+  /**
+   * Where model HTTP happens. Default `remote` = Host talks to the vendor
+   * (keys in remote `~/.prismnext/host-model.json`). `gateway` = laptop proxy.
+   */
+  modelKeys?: "gateway" | "remote";
 }
 
 const SECRET_KEYS = ["password", "passphrase", "privateKey", "privateKeyPem"] as const;
@@ -58,6 +63,9 @@ export function sanitizeSshProfile(value: unknown): SshProfile | null {
   if (identityFile) profile.identityFile = identityFile;
   const jumpProfileId = optionalString(rec.jumpProfileId);
   if (jumpProfileId) profile.jumpProfileId = jumpProfileId;
+  if (rec.modelKeys === "remote" || rec.modelKeys === "gateway") {
+    profile.modelKeys = rec.modelKeys;
+  }
   for (const key of SECRET_KEYS) {
     if (key in rec) {
       // Secrets are never copied onto the returned object.

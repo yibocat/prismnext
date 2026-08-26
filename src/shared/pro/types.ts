@@ -2,8 +2,7 @@
  * Open-core Pro license + feature ids (shared main ↔ renderer).
  *
  * Do not pre-list product feature ids here. Add them when a Pro SKU ships.
- * Remote Workspace ids (`workspace.remote`, `agent.remote`) live in
- * `src/shared/remote/entitlements.ts` until that SKU is listed.
+ * Remote Workspace / Remote Agent are core product — not Pro entitlements.
  */
 
 /** Feature entitlement ids — grow with real products; never rename shipped ids. */

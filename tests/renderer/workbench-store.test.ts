@@ -165,6 +165,13 @@ describe("sameProjectPath", () => {
     expect(sameProjectPath("/tmp/PrismNext/", "/tmp/PrismNext")).toBe(true);
     expect(sameProjectPath("/tmp/a", "/tmp/b")).toBe(false);
   });
+
+  it("treats a path.resolve leftover as the same remote folder", () => {
+    expect(sameProjectPath(
+      "remote://lab/home/ubuntu/paper",
+      "/Users/me/code/remote:/lab/home/ubuntu/paper",
+    )).toBe(true);
+  });
 });
 
 describe("resolveWorkbenchMemberByPath", () => {

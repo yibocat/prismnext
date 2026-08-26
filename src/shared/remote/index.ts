@@ -15,6 +15,7 @@ export {
   joinPosixSegment,
   normalizePosixAbs,
   parseRemoteAbs,
+  recoverRemoteAbs,
   posixContained,
   remoteHomeFromAppHome,
   type RemoteDirEntry,
@@ -71,8 +72,26 @@ export {
   type RemoteErrorCode,
 } from "./errors";
 export {
-  AGENT_REMOTE_FEATURE,
-  WORKSPACE_REMOTE_FEATURE,
-  hasRemoteAgentEntitlement,
-  hasRemoteWorkspaceEntitlement,
-} from "./entitlements";
+  agentInputHasLaptopAttachments,
+  attachmentPathNeedsRemoteUpload,
+  isLaptopAbsolutePath,
+  stripAgentSecrets,
+} from "./strip-secrets";
+export {
+  hostnameOfUrl,
+  isAllowedModelProxyUrl,
+  isBlockedModelProxyHost,
+  piModelProxyHosts,
+  providerIdForModelProxyUrl,
+} from "./model-allowlist";
+export {
+  GATEWAY_PLACEHOLDER_KEY,
+  MODEL_PROXY_START_CHANNEL,
+  isModelProxyPush,
+  isModelProxyStart,
+  sanitizeHostModelKeyMap,
+  stripProxyHeaders,
+  type ModelProxyPush,
+  type ModelProxyPushKind,
+  type ModelProxyStart,
+} from "./model-proxy";

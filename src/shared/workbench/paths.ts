@@ -35,6 +35,8 @@ export const HOME_BROWSER_DIRNAME = "browser";
 export const HOME_JOBS_DIRNAME = "jobs";
 export const HOME_RUNTIME_SESSIONS_DIRNAME = "runtime-sessions";
 export const HOME_SETTINGS_FILENAME = "settings.json";
+/** Remote Host BYOK envelope (`~/.prismnext/host-model.json`, AES-256-GCM). Not the desktop electron-store. */
+export const HOME_HOST_MODEL_FILENAME = "host-model.json";
 export const HOME_SKILLS_MANIFEST_FILENAME = "skills-manifest.json";
 export const HOME_TEAMS_STATE_FILENAME = "teams-state.json";
 /** Remote Host install root on the *server* (`~/.prismnext-host`), not app home. */

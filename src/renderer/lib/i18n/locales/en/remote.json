@@ -1,6 +1,6 @@
 {
   "title": "Remote",
-  "upgrade": "Remote Workspace is a Pro feature. Activate a license to connect through your SSH hosts.",
+  "upgrade": "Connect through the SSH hosts in this computer’s ~/.ssh/config.",
   "trustHost": "Trust this host key",
   "hostKeyPrompt": "Unknown host key: {{fingerprint}}",
   "stamp": "Runtime {{version}} · {{sha}}",
@@ -14,7 +14,7 @@
     "disconnected": "Disconnected"
   },
   "gate": {
-    "entitlement": "License",
+    "entitlement": "Access",
     "payload": "Local runtime",
     "ssh": "SSH",
     "host_key": "Host key",
@@ -26,6 +26,13 @@
     "doctor": "Doctor"
   },
   "agentNotReady": "Remote Agent is not connected yet. You can browse files and use the terminal.",
+  "agentEntitlement": "Remote Agent could not start.",
+  "missingLocalKey": "No API key on this computer for the selected model. Add it in Settings → AI.",
+  "attachmentNotUploaded": "Move the attachment into the remote folder, or send the image inline.",
+  "attachmentTooLarge": "That attachment is larger than 5 MB. Copy it into the remote folder first.",
+  "modelKeysNote": "The remote Host calls the model vendor directly. Keys are stored on the server as AES-256-GCM ciphertext; the unwrap key stays on this computer.",
+  "gatewayNote": "The remote Host calls the model vendor directly. Keys are stored on the server as AES-256-GCM ciphertext; the unwrap key stays on this computer.",
+  "modulePending": "This tool is not available on Remote Agent yet.",
   "close": "Close",
   "connect": "Connect",
   "retry": "Retry",
