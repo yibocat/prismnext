@@ -1891,11 +1891,45 @@ export interface ElectronAPI {
     handle: import("@shared/remote").RemoteProjectHandle;
   }>;
   onRemoteLog: (callback: (line: import("@shared/remote").RemoteBootstrapLogLine) => void) => () => void;
+  remoteZoteroCancel: () => Promise<{ ok: boolean }>;
+  onRemoteZoteroProgress: (
+    callback: (progress: { current: number; total: number; title: string }) => void,
+  ) => () => void;
   onRemoteConnection: (
     callback: (payload: {
       profileId: string;
       state: import("@shared/remote").RemoteConnectionState;
     }) => void,
+  ) => () => void;
+  remoteGetSyncMode: (profileId: string) => Promise<{ mode: import("@shared/remote").RemoteSyncMode }>;
+  remoteSetSyncMode: (
+    profileId: string,
+    mode: import("@shared/remote").RemoteSyncMode,
+  ) => Promise<{ mode: import("@shared/remote").RemoteSyncMode }>;
+  remoteSyncFile: (input: {
+    profileId: string;
+    projectId: string;
+    remoteAbs: string;
+    destRel?: string;
+  }) => Promise<{ ok: true; path: string; skipped?: string } | { ok: false; error: string }>;
+  remoteSyncPaperPdf: (input: {
+    projectRoot: string;
+    paperId: string;
+    projectId: string;
+  }) => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+  remoteSyncExperimentArtifacts: (input: {
+    projectRoot: string;
+    projectId: string;
+    experimentId: string;
+  }) => Promise<{ ok: true; paths: string[]; skipped: number }>;
+  remoteSyncSessions: (input: {
+    profileId: string;
+    projectId: string;
+  }) => Promise<{ ok: true; count: number }>;
+  remoteSyncCancel: () => Promise<{ ok: boolean }>;
+  remotePushSkills: (profileId: string) => Promise<{ ok: true; files: number } | { ok: false; error: string }>;
+  onRemoteSyncProgress: (
+    callback: (progress: import("@shared/remote").RemoteSyncProgress) => void,
   ) => () => void;
 }
 

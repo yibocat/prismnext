@@ -12,6 +12,7 @@ export const REMOTE_CONNECT_GATES = [
   "runtime",
   "host_serve",
   "handshake",
+  "model",
   "doctor",
 ] as const;
 

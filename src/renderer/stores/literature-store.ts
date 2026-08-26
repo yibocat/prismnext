@@ -27,6 +27,7 @@ import { paperTagKey } from "../../shared/literature/paper-tags";
 import { formatPdfDownloadFailure } from "../../shared/literature/pdf-download-messages";
 import { useDocumentStore } from "@/stores/document-store";
 import { literatureDesktop } from "@/lib/desktop-api/literature";
+import { remoteDesktop } from "@/lib/desktop-api/remote";
 import type {
   LiteratureSortColumn,
   LiteratureSortDirection,
@@ -73,6 +74,7 @@ interface LiteratureState {
   boundCollectionName: string | null;
   lastZoteroSyncAt: number | null;
   pullingFromZotero: boolean;
+  zoteroPullProgress: { current: number; total: number; title: string } | null;
   collectionWritePending: boolean;
   pdfCacheStatus: Record<string, { cached: boolean; stale: boolean }>;
   bbtBannerDismissed: boolean;
@@ -287,6 +289,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
   boundCollectionName: null,
   lastZoteroSyncAt: null,
   pullingFromZotero: false,
+  zoteroPullProgress: null,
   collectionWritePending: false,
   pdfCacheStatus: {},
   bbtBannerDismissed: false,
@@ -405,7 +408,10 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
 
   pullFromZotero: async (projectRoot, options) => {
     const silent = options?.silent ?? false;
-    set({ pullingFromZotero: true, error: null });
+    set({ pullingFromZotero: true, zoteroPullProgress: null, error: null });
+    const stopProgress = remoteDesktop.onRemoteZoteroProgress((progress) => {
+      set({ zoteroPullProgress: progress });
+    });
     try {
       const result = await literatureDesktop.zoteroPullCollection(projectRoot);
       const { lastSyncAt } = await literatureDesktop.zoteroGetLastSync(projectRoot);
@@ -424,7 +430,8 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
       if (!silent) toast.error(message);
       throw err;
     } finally {
-      set({ pullingFromZotero: false });
+      stopProgress();
+      set({ pullingFromZotero: false, zoteroPullProgress: null });
     }
   },
 

@@ -109,6 +109,26 @@ export interface RemoteDirListing {
   entries: RemoteDirEntry[];
 }
 
+const HOST_EVENT_PATH_KEYS = ["projectRoot", "targetRoot", "sourceRoot"] as const;
+
+/** Host events carry POSIX abs; the renderer compares `remote://alias/abs`. */
+export function rewriteHostEventPaths(payload: unknown, profileId: string): unknown {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  const rec = payload as Record<string, unknown>;
+  const next = { ...rec };
+  let changed = false;
+  for (const key of HOST_EVENT_PATH_KEYS) {
+    const value = next[key];
+    if (typeof value !== "string") continue;
+    if (parseRemoteAbs(value)) continue;
+    const encoded = encodeRemoteAbs(profileId, value);
+    if (!encoded) continue;
+    next[key] = encoded;
+    changed = true;
+  }
+  return changed ? next : payload;
+}
+
 export function isRemoteDirListing(value: unknown): value is RemoteDirListing {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const rec = value as Record<string, unknown>;

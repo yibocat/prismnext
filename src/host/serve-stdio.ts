@@ -35,7 +35,16 @@ export async function serveStdio(opts: {
           ok: true,
           result: {
             ...opts.handshake,
-            features: Array.from(new Set([...opts.handshake.features, "fs", "terminal", "control", "agent"])),
+            features: Array.from(new Set([
+              ...opts.handshake.features,
+              "fs",
+              "terminal",
+              "control",
+              "agent",
+              "literature",
+              "experiment",
+              "compile",
+            ])),
           },
         });
         return;

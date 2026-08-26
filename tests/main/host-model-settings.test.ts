@@ -67,7 +67,13 @@ describe("host model settings", () => {
       aiApiKeys: { anthropic: "sk-from-laptop" },
       wrapKey,
     }, ctx);
-    expect(result).toEqual({ ok: true, modelKeys: "remote" });
+    expect(result).toEqual({
+      ok: true,
+      modelKeys: "remote",
+      providerIds: ["anthropic"],
+      wrapOk: true,
+      persisted: true,
+    });
     expect(readHostModelSettings().aiApiKeys).toEqual({ anthropic: "sk-from-laptop" });
     expect(readFileSync(join(home, ".prismnext", HOME_HOST_MODEL_FILENAME), "utf8")).not.toContain("sk-from-laptop");
   });

@@ -293,8 +293,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(410);
-    expect(new Set(keys).size).toBe(410);
+    expect(keys).toHaveLength(421);
+    expect(new Set(keys).size).toBe(421);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -980,6 +980,15 @@ describe("code structure renderer direction (Phase 4)", () => {
         const rel = relative(REPO, file);
         expect(sourceOf(rel), rel).not.toMatch(/from\s+["']electron["']/);
       }
+    }
+  });
+
+  it("keeps Host source off the laptop Zotero connector", () => {
+    for (const file of walkTsFiles(join(REPO, "src/host"))) {
+      const rel = relative(REPO, file);
+      const src = sourceOf(rel);
+      expect(src, rel).not.toMatch(/23119/);
+      expect(src, rel).not.toMatch(/ZOTERO_LOCAL_BASE/);
     }
   });
 

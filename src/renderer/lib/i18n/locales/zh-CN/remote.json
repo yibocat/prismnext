@@ -23,11 +23,14 @@
     "runtime": "远程 Node",
     "host_serve": "Host 进程",
     "handshake": "握手",
+    "model": "模型密钥",
     "doctor": "体质检查"
   },
   "agentNotReady": "远程 Agent 还没接通。现在可以浏览文件、使用终端。",
   "agentEntitlement": "远程 Agent 没能启动。",
   "missingLocalKey": "这台电脑上没有所选模型的 API Key。请到设置 → AI 里添加。",
+  "hostModelUnconfigured": "远程 Host 上还没有任何 API Key。请断开再连接，让这台电脑把「设置 → 模型」里的密钥送上去。连接步骤里的「模型密钥」必须是通过。",
+  "missingHostApiKey": "远程 Host 没有 {{provider}} 的 API Key。请在「设置 → 模型」保存该厂商密钥，然后断开再连（或在保持连接时再保存一次设置）。",
   "attachmentNotUploaded": "请先把附件放到远程文件夹，或直接发送内嵌图片。",
   "attachmentTooLarge": "附件超过 5 MB。请先复制到远程文件夹再发送。",
   "modelKeysNote": "远程 Host 直连模型厂商。服务器上只存 AES-256-GCM 密文，解钥留在这台电脑。",
@@ -56,5 +59,26 @@
   "gatePending": "…",
   "gateOk": "ok",
   "gateFail": "fail",
-  "folderPlaceholder": "/home/ubuntu/project"
+  "connectSteps": "步骤",
+  "connectLog": "日志",
+  "folderPlaceholder": "/home/ubuntu/project",
+  "permissionsSavedOnServer": "这个远程项目的「始终允许」规则保存在服务器上。",
+  "sessionReadOnlyCache": "这是离线副本。重新连接后才能继续对话。",
+  "sync": {
+    "toThisComputer": "同步到这台电脑…",
+    "pushSkills": "把本机用户技能推到这台服务器",
+    "fileDone": "文件已复制到本机缓存。",
+    "pdfDone": "PDF 已复制到本机缓存。",
+    "sessionsDone": "已同步 {{count}} 条对话到这台电脑。",
+    "experimentDone": "已复制 {{count}} 个实验文件到这台电脑。",
+    "skillsDone": "已把 {{count}} 个技能文件推到服务器。",
+    "modeOnDemand": "同步档位：按需（默认）",
+    "modeOnlineOnly": "同步档位：仅在线",
+    "modeLiveMirror": "同步档位：实时镜像（实验性）",
+    "modeSet": {
+      "on-demand": "远程同步已设为按需。",
+      "online-only": "远程同步已设为仅在线。对话副本不会自动更新。",
+      "live-mirror": "实时镜像仍是实验性。对话副本会更新，文件仍按需拉取。"
+    }
+  }
 }

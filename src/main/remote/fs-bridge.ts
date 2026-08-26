@@ -35,6 +35,11 @@ export function disconnectedHostFsProbe(method: string): unknown {
   return null;
 }
 
+/** These Host methods walk the open project. Connection alone is not a bind. */
+export function hostFsNeedsProjectBind(method: string): boolean {
+  return method === "fs:scan" || method === "fs:scanMetadata";
+}
+
 export function toHostFsParams(params: Record<string, unknown>): Record<string, unknown> {
   const next = { ...params };
   for (const key of ["absPath", "rootPath", "oldPath", "newPath", "path"]) {

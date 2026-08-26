@@ -6,9 +6,10 @@ import {
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
 import { clearRoots, replaceRegisteredRoots } from "../project/active-project-roots";
-import { isRemoteProjectRoot, recoverRemoteAbs } from "../../shared/remote";
+import { isRemoteProjectRoot, parseRemoteAbs, recoverRemoteAbs } from "../../shared/remote";
 import { listWorkbenchMembers } from "../workbench/default-project";
 import { createLogger, shortLogDetail } from "../app/logger";
+import { getRemoteSessionBroker } from "./remote";
 
 const log = createLogger("project-lifecycle", "startup");
 
@@ -37,7 +38,13 @@ export function registerProjectLifecycleHandlers(
 ): void {
   ipcMain.handle("project:open", async (_event, args: { rootPath: string }) => {
     const remote = recoverRemoteAbs(args.rootPath);
-    if (remote) return { rootPath: remote };
+    if (remote) {
+      const parsed = parseRemoteAbs(remote);
+      if (parsed) {
+        await getRemoteSessionBroker().ensureProjectOpen(parsed.profileId, parsed.abs);
+      }
+      return { rootPath: remote };
+    }
     const rootPath = await authority.resolveRoot(args.rootPath);
     return { rootPath };
   });

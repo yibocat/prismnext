@@ -1,7 +1,13 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import { basename, extname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
+import { parseRemoteAbs } from "../../shared/remote";
+import { getRemoteSessionBroker } from "./remote";
+import { pullRemoteBlob } from "../remote/sync-client";
+import { projectLifecycleAuthority } from "../project/project-lifecycle-authority";
 import { createLogger } from "../app/logger";
 import {
   fileExists,
@@ -39,6 +45,30 @@ export function registerCompileHandlers(): void {
         skipSynctex: args.skipSynctex ?? false,
         fast: args.fast ?? false,
       });
+      const remote = parseRemoteAbs(args.projectDir);
+      if (remote) {
+        const broker = getRemoteSessionBroker();
+        const raw = await broker.invoke(remote.profileId, "compile:execute", {
+          ...args,
+          projectDir: remote.abs,
+          pdfOnDisk: true,
+        }) as {
+          pdfPath?: string;
+          stdout?: string;
+          error?: string;
+          buildDir?: string;
+        };
+        if (raw.error) return { error: raw.error, stdout: raw.stdout };
+        if (raw.pdfPath) {
+          const bytes = await pullRemoteBlob(broker, remote.profileId, "fs:readBlob", {
+            path: raw.pdfPath,
+          });
+          const tmp = join(tmpdir(), `prismnext-remote-${remote.profileId}-${basename(raw.pdfPath)}`);
+          writeFileSync(tmp, bytes);
+          return { pdfPath: tmp, stdout: raw.stdout, buildDir: raw.buildDir };
+        }
+        return { error: raw.error || "Compilation failed", stdout: raw.stdout };
+      }
       const result = await compileLatex(
         args.projectDir,
         args.mainFile,
@@ -71,6 +101,11 @@ export function registerCompileHandlers(): void {
   );
 
   ipcMain.handle("compile:detectTexlive", async () => {
+    const current = projectLifecycleAuthority.currentRoot;
+    const remote = current ? parseRemoteAbs(current) : null;
+    if (remote) {
+      return getRemoteSessionBroker().invoke(remote.profileId, "compile:detectTexlive", {});
+    }
     const texliveStatus = await detectTexlive();
     const tectonicAvailable = await detectTectonic();
     return {

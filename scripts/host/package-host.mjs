@@ -10,6 +10,7 @@ import { createWriteStream } from "node:fs";
 import {
   chmodSync,
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -41,6 +42,24 @@ mkdirSync(join(currentDir, "bin"), { recursive: true });
 mkdirSync(cacheDir, { recursive: true });
 
 await build(hostEsbuildOptions({ root, outfile: hostJsPath }));
+
+const pdfJsWorker = join(root, "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs");
+if (!existsSync(pdfJsWorker)) {
+  throw new Error("pdfjs-dist worker missing; cannot pack Host extract.");
+}
+copyFileSync(pdfJsWorker, join(currentDir, "bin", "pdf.worker.mjs"));
+
+const coreTeamJson = join(root, "resources", "teams", "prismnext.core", "team.json");
+if (!existsSync(coreTeamJson)) {
+  throw new Error("resources/teams/prismnext.core missing; remote Chat needs the Core lead agent.");
+}
+rmSync(join(currentDir, "resources"), { recursive: true, force: true });
+cpSync(join(root, "resources", "teams"), join(currentDir, "resources", "teams"), { recursive: true });
+if (existsSync(join(root, "resources", "commands"))) {
+  cpSync(join(root, "resources", "commands"), join(currentDir, "resources", "commands"), {
+    recursive: true,
+  });
+}
 
 try {
   chmodSync(hostJsPath, 0o755);

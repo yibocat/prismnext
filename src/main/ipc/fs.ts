@@ -12,7 +12,7 @@ import {
   type ProjectLifecycleAuthority,
 } from "../project/project-lifecycle-authority";
 import { isRemoteProjectRoot, parseRemoteAbs, RemoteOperationError } from "../../shared/remote";
-import { disconnectedHostFsProbe, encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
+import { disconnectedHostFsProbe, encodeRemoteAbs, encodeRemoteScan, firstRemoteAbs, hostFsNeedsProjectBind, toHostFsParams } from "../remote/fs-bridge";
 import { getRemoteSessionBroker } from "./remote";
 
 const BLOB_CHUNK = 4 * 1024 * 1024;
@@ -60,6 +60,12 @@ async function invokeHostFs(method: string, args: Record<string, unknown>): Prom
     const probe = disconnectedHostFsProbe(method);
     if (probe !== null) return { profileId: remote.profileId, result: probe };
     throw new RemoteOperationError("not_connected", "Not connected.");
+  }
+  if (hostFsNeedsProjectBind(method)) {
+    const root = typeof args.rootPath === "string" ? parseRemoteAbs(args.rootPath) : null;
+    if (root) {
+      await broker.ensureProjectOpen(root.profileId, root.abs);
+    }
   }
   const result = await broker.invoke(
     remote.profileId,

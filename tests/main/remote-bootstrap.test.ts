@@ -46,6 +46,7 @@ describe("ensureHostPayload", () => {
     expect(first.stamp.payloadSha256).toBe(tarball.sha256);
     expect(first.nodeBin).toContain("/bin/node");
     expect(first.hostBin).toContain("/bin/prismnext-host");
+    expect(first.currentDir).toContain("/.prismnext-host/current");
 
     const second = await ensureHostPayload({
       session,

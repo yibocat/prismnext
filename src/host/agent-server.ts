@@ -6,10 +6,12 @@ import {
   type AgentService,
 } from "../main/agent/agent-service";
 import { resolveWorkbenchHome } from "../main/workbench/home";
-import { parseRemoteAbs } from "../shared/remote";
+import { hostModelProviderIds, parseRemoteAbs, remapHostMissingApiKey } from "../shared/remote";
 import type { HostHandlerContext } from "./context";
 import { createFrameSink } from "./frame-sink";
 import { readHostModelSettings } from "./model-settings";
+import { readHostPermissions } from "./host-permissions";
+import { SESSION_MUTATED_CHANNEL } from "../shared/remote";
 import { acceptModelProxyPush } from "./model-proxy-transport";
 
 async function readOptional(path: string): Promise<string> {
@@ -27,8 +29,8 @@ export function bootHostAgent(ctx: HostHandlerContext): AgentService {
     userDataDir: home,
     modelTransport: remoteKeys ? "direct" : "proxy",
     pendingRemoteModules: true,
-    remoteJobNote: true,
-    getSettings: () => readHostModelSettings(),
+    remoteJobNote: false,
+    getSettings: () => ({ ...readHostModelSettings(), ...readHostPermissions() }),
     composeStableSystem: async () => HOST_SYSTEM_IDENTITY,
     composeProjectRules: async (projectRoot) => (
       readOptional(join(projectRoot, ".workbench", "agent", "rules", "project", "RULE.md"))
@@ -37,7 +39,23 @@ export function bootHostAgent(ctx: HostHandlerContext): AgentService {
       readOptional(join(projectRoot, ".workbench", "agent", "AGENTS.md"))
     ),
   });
-  agent.attachSink(createFrameSink(ctx));
+  const sink = createFrameSink(ctx);
+  agent.attachSink({
+    emit(channel, payload) {
+      sink.emit(channel, payload);
+      if (channel !== "agent:event" || !payload || typeof payload !== "object") return;
+      const rec = payload as { type?: string; conversationId?: string; sessionId?: string };
+      if (rec.type !== "turn_finished") return;
+      const conversationId = rec.conversationId || rec.sessionId;
+      if (!conversationId) return;
+      ctx.emit(SESSION_MUTATED_CHANNEL, {
+        conversationId,
+        projectId: ctx.projectId ?? "",
+        updatedAt: new Date().toISOString(),
+        action: "turn_finished",
+      });
+    },
+  });
   ctx.agent = agent;
   return agent;
 }
@@ -71,7 +89,19 @@ export const agentHandlers: Record<
     );
   },
   async "agent:send"(input, ctx) {
-    return requireAgent(ctx).send(params(input, ctx) as never);
+    const localized = params(input, ctx);
+    const result = await requireAgent(ctx).send(localized as never) as { ok?: boolean; error?: string };
+    if (result && result.ok === false && typeof result.error === "string") {
+      return {
+        ...result,
+        error: remapHostMissingApiKey(
+          result.error,
+          typeof localized.provider === "string" ? localized.provider : "",
+          hostModelProviderIds(readHostModelSettings().aiApiKeys),
+        ),
+      };
+    }
+    return result;
   },
   async "agent:cancel"(input, ctx) {
     await requireAgent(ctx).cancel(String(input.conversationId ?? ""));
@@ -105,7 +135,14 @@ export const agentHandlers: Record<
     return requireAgent(ctx).loadSession(params(input, ctx) as never);
   },
   async "agent:renameSession"(input, ctx) {
-    return requireAgent(ctx).renameSession(input as never);
+    const result = requireAgent(ctx).renameSession(input as never);
+    ctx.emit(SESSION_MUTATED_CHANNEL, {
+      conversationId: String(input.conversationId ?? ""),
+      projectId: ctx.projectId ?? "",
+      updatedAt: new Date().toISOString(),
+      action: "rename",
+    });
+    return result;
   },
   async "agent:generateSessionTitle"(input, ctx) {
     return requireAgent(ctx).generateSessionTitle(input as never);
@@ -114,7 +151,14 @@ export const agentHandlers: Record<
     return requireAgent(ctx).reassignSessionProject(params(input, ctx) as never);
   },
   async "agent:deleteSession"(input, ctx) {
-    return requireAgent(ctx).deleteSession(input as never);
+    const result = requireAgent(ctx).deleteSession(input as never);
+    ctx.emit(SESSION_MUTATED_CHANNEL, {
+      conversationId: String(input.conversationId ?? input.tabId ?? ""),
+      projectId: ctx.projectId ?? "",
+      updatedAt: new Date().toISOString(),
+      action: "delete",
+    });
+    return result;
   },
   async "agent:answerQuestion"(input, ctx) {
     return { ok: requireAgent(ctx).answerQuestion(input as never) };

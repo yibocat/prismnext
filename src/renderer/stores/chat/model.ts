@@ -77,6 +77,11 @@ export function formatAgentSendError(reason?: string): string {
   if (reason === "agent_not_on_remote_yet") return i18n.t("remote.agentNotReady");
   if (reason === "entitlement") return i18n.t("remote.agentEntitlement");
   if (reason === "missing_local_key") return i18n.t("remote.missingLocalKey");
+  if (reason === "host_model_unconfigured") return i18n.t("remote.hostModelUnconfigured");
+  if (reason.startsWith("missing_host_api_key")) {
+    const provider = reason.slice("missing_host_api_key:".length).trim() || "this model";
+    return i18n.t("remote.missingHostApiKey", { provider });
+  }
   if (reason === "remote_attachment_not_uploaded") return i18n.t("remote.attachmentNotUploaded");
   if (reason === "remote_attachment_too_large") return i18n.t("remote.attachmentTooLarge");
   if (reason === "remote_module_pending") return i18n.t("remote.modulePending");

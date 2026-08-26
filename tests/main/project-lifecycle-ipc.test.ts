@@ -8,10 +8,26 @@ const watcher = vi.hoisted(() => ({
   stopWatching: vi.fn(),
 }));
 
+vi.mock("electron-store", () => ({
+  default: class MockStore {
+    store = {};
+    get() {
+      return undefined;
+    }
+    set() {}
+  },
+}));
+
 vi.mock("electron", () => ({
   ipcMain: { handle: (channel: string, handler: IpcHandler) => handlers.set(channel, handler) },
   BrowserWindow: { getAllWindows: () => [], getFocusedWindow: () => undefined },
   dialog: {},
+  app: { getVersion: () => "0.9.0", getPath: () => "/tmp" },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (s: string) => Buffer.from(s, "utf8"),
+    decryptString: (b: Buffer) => b.toString("utf8"),
+  },
 }));
 
 import { registerFsHandlers } from "../../src/main/ipc/fs";
@@ -146,5 +162,14 @@ describe("project lifecycle watcher authority IPC", () => {
 
     expect(watcher.stopWatching).not.toHaveBeenCalled();
     expect(authority.currentRoot).toBe(project);
+  });
+
+  it("returns a remote:// root without requiring a live Host bind", async () => {
+    const authority = createAuthority({ [home]: home, [project]: project });
+    registerHandlers(authority);
+    await expect(
+      handlers.get("project:open")!({}, { rootPath: "remote://lab/home/ubuntu/paper" }),
+    ).resolves.toEqual({ rootPath: "remote://lab/home/ubuntu/paper" });
+    expect(authority.currentRoot).toBeNull();
   });
 });

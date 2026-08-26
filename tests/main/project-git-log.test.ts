@@ -14,11 +14,26 @@ const { info, warn, debug, error } = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
+vi.mock("electron-store", () => ({
+  default: class MockStore {
+    store = {};
+    get() {
+      return undefined;
+    }
+    set() {}
+  },
+}));
+
 vi.mock("electron", () => ({
-  app: { getPath: () => "/tmp" },
+  app: { getPath: () => "/tmp", getVersion: () => "0.9.0" },
   ipcMain: { handle: (channel: string, handler: IpcHandler) => handlers.set(channel, handler) },
   BrowserWindow: { getAllWindows: () => [], getFocusedWindow: () => undefined },
   dialog: {},
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (s: string) => Buffer.from(s, "utf8"),
+    decryptString: (b: Buffer) => b.toString("utf8"),
+  },
 }));
 
 vi.mock("../../src/main/app/logger", () => ({

@@ -1,11 +1,17 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { sanitizeHostModelKeyMap, type SshProfile } from "../../shared/remote";
+import {
+  DEFAULT_REMOTE_SYNC_MODE,
+  isRemoteSyncMode,
+  type RemoteModelKeysMode,
+  type RemoteSyncMode,
+  type SshProfile,
+} from "../../shared/remote";
 import { resolveWorkbenchHome } from "../workbench/home";
 
-export type RemoteModelKeysMode = "gateway" | "remote";
+export type { RemoteModelKeysMode };
 
-type OverrideRow = { modelKeys?: RemoteModelKeysMode };
+type OverrideRow = { modelKeys?: RemoteModelKeysMode; syncMode?: RemoteSyncMode };
 
 function overridesPath(): string {
   return join(resolveWorkbenchHome(), "ssh", "profile-overrides.json");
@@ -19,9 +25,11 @@ export function readProfileOverrides(): Record<string, OverrideRow> {
     for (const [id, row] of Object.entries(parsed as Record<string, unknown>)) {
       if (!row || typeof row !== "object" || Array.isArray(row)) continue;
       const modelKeys = (row as OverrideRow).modelKeys;
-      if (modelKeys === "remote" || modelKeys === "gateway") {
-        out[id] = { modelKeys };
-      }
+      const syncMode = (row as OverrideRow).syncMode;
+      const next: OverrideRow = {};
+      if (modelKeys === "remote" || modelKeys === "gateway") next.modelKeys = modelKeys;
+      if (isRemoteSyncMode(syncMode)) next.syncMode = syncMode;
+      if (next.modelKeys || next.syncMode) out[id] = next;
     }
     return out;
   } catch {
@@ -49,31 +57,23 @@ export function profileModelKeys(profile: SshProfile | null | undefined): Remote
   return profile?.modelKeys === "gateway" ? "gateway" : "remote";
 }
 
-export function readDesktopModelSeed(): {
-  aiApiKeys: Record<string, string>;
-  aiBaseUrls: Record<string, string>;
-  extraBaseUrls: string[];
-  wrapKey: string;
-} {
-  try {
-    const settingsMod = require("../app/settings") as typeof import("../app/settings");
-    const settings = settingsMod.getSettings() as {
-      aiApiKeys?: Record<string, string>;
-      aiBaseUrls?: Record<string, string>;
-    };
-    const aiApiKeys = sanitizeHostModelKeyMap(settings.aiApiKeys);
-    const aiBaseUrls = Object.fromEntries(
-      Object.entries(settings.aiBaseUrls ?? {}).filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0,
-      ),
-    );
-    return {
-      aiApiKeys,
-      aiBaseUrls,
-      extraBaseUrls: Object.values(aiBaseUrls),
-      wrapKey: settingsMod.getOrCreateRemoteHostWrapKey(),
-    };
-  } catch {
-    return { aiApiKeys: {}, aiBaseUrls: {}, extraBaseUrls: [], wrapKey: "" };
-  }
+export function writeProfileSyncMode(profileId: string, syncMode: RemoteSyncMode): void {
+  const id = profileId.trim();
+  if (!id || !isRemoteSyncMode(syncMode)) return;
+  const all = readProfileOverrides();
+  all[id] = { ...all[id], syncMode };
+  const path = overridesPath();
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(all, null, 2)}\n`, "utf8");
+}
+
+export function profileSyncMode(profileId: string): RemoteSyncMode {
+  const extra = readProfileOverrides()[profileId.trim()];
+  return extra?.syncMode && isRemoteSyncMode(extra.syncMode)
+    ? extra.syncMode
+    : DEFAULT_REMOTE_SYNC_MODE;
+}
+
+export function sessionMirrorEnabled(profileId: string): boolean {
+  return profileSyncMode(profileId) !== "online-only";
 }

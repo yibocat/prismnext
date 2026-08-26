@@ -15,6 +15,10 @@ export const REMOTE_ERROR_CODES = [
   "protocol",
   "path_escaped",
   "agent_not_on_remote_yet",
+  "extract_parser_unavailable",
+  "sync_too_large",
+  "sync_cancelled",
+  "compile_engine_unavailable",
 ] as const;
 
 export type RemoteErrorCode = (typeof REMOTE_ERROR_CODES)[number];

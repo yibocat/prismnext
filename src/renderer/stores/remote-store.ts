@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import type {
-  RemoteBootstrapLogLine,
-  RemoteConnectResult,
-  RemoteConnectionState,
-  SshConfigHost,
+import {
+  parseRemoteAbs,
+  type RemoteBootstrapLogLine,
+  type RemoteConnectResult,
+  type RemoteConnectionState,
+  type SshConfigHost,
 } from "@shared/remote";
 import { clipBootstrapLogs } from "@/lib/remote/display";
 import { remoteDesktop } from "@/lib/desktop-api/remote";
@@ -24,6 +25,16 @@ interface RemoteState {
     alias: string,
     remoteRoot: string,
   ) => Promise<{ lastPath: string; projectId: string }>;
+}
+
+async function rebindFocusedRemoteProject(alias: string): Promise<void> {
+  const { useDocumentStore } = await import("@/stores/document-store");
+  const parsed = parseRemoteAbs(useDocumentStore.getState().projectRoot ?? "");
+  if (!parsed || parsed.profileId !== alias) return;
+  await remoteDesktop.remoteOpenProject({
+    profileId: alias,
+    remoteRoot: parsed.abs,
+  });
 }
 
 let subscribed = false;
@@ -68,6 +79,9 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
           [alias]: { phase: "awaiting_host_key", profileId: alias, hostKey: result.hostKey },
         },
       });
+    }
+    if (result.ok) {
+      await rebindFocusedRemoteProject(alias).catch(() => undefined);
     }
     return result;
   },

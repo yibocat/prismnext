@@ -34,6 +34,22 @@ export function constitutionLines(constitution: RemoteConnectConstitution | unde
   return constitution.gates.map((item) => `${item.ok ? "ok" : "fail"} ${item.gate} — ${item.detail}`);
 }
 
+export function latestGateDetail(
+  gate: RemoteConnectGate,
+  constitution: RemoteConnectConstitution | undefined,
+  logs: ReadonlyArray<RemoteBootstrapLogLine>,
+): string | undefined {
+  const recorded = constitution?.gates.find((item) => item.gate === gate)?.detail?.trim();
+  if (recorded) return recorded;
+  for (let i = logs.length - 1; i >= 0; i -= 1) {
+    const line = logs[i];
+    if (line?.gate !== gate) continue;
+    const message = line.message.trim();
+    if (message) return message;
+  }
+  return undefined;
+}
+
 export function resolveConnectGateStatus(
   gate: RemoteConnectGate,
   constitution: RemoteConnectConstitution | undefined,

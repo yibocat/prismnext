@@ -23,11 +23,14 @@
     "runtime": "遠端 Node",
     "host_serve": "Host 行程",
     "handshake": "握手",
+    "model": "模型金鑰",
     "doctor": "體質檢查"
   },
   "agentNotReady": "遠端 Agent 尚未接通。現在可以瀏覽檔案、使用終端。",
   "agentEntitlement": "遠端 Agent 未能啟動。",
   "missingLocalKey": "這台電腦上沒有所選模型的 API Key。請到設定 → AI 新增。",
+  "hostModelUnconfigured": "遠端 Host 上還沒有任何 API Key。請中斷再連線，讓這台電腦把「設定 → 模型」裡的金鑰送上去。連線步驟裡的「模型金鑰」必須通過。",
+  "missingHostApiKey": "遠端 Host 沒有 {{provider}} 的 API Key。請在「設定 → 模型」儲存該廠商金鑰，然後中斷再連（或在保持連線時再儲存一次設定）。",
   "attachmentNotUploaded": "請先把附件放到遠端資料夾，或直接傳送內嵌圖片。",
   "attachmentTooLarge": "附件超過 5 MB。請先複製到遠端資料夾再傳送。",
   "modelKeysNote": "遠端 Host 直連模型廠商。伺服器上只存 AES-256-GCM 密文，解鑰留在這台電腦。",
@@ -56,5 +59,26 @@
   "gatePending": "…",
   "gateOk": "ok",
   "gateFail": "fail",
-  "folderPlaceholder": "/home/ubuntu/project"
+  "connectSteps": "步驟",
+  "connectLog": "日誌",
+  "folderPlaceholder": "/home/ubuntu/project",
+  "permissionsSavedOnServer": "這個遠端專案的「一律允許」規則保存在伺服器上。",
+  "sessionReadOnlyCache": "這是離線副本。重新連線後才能繼續對話。",
+  "sync": {
+    "toThisComputer": "同步到這部電腦…",
+    "pushSkills": "把本機使用者技能推到這台伺服器",
+    "fileDone": "檔案已複製到本機快取。",
+    "pdfDone": "PDF 已複製到本機快取。",
+    "sessionsDone": "已同步 {{count}} 則對話到這部電腦。",
+    "experimentDone": "已複製 {{count}} 個實驗檔案到這部電腦。",
+    "skillsDone": "已把 {{count}} 個技能檔案推到伺服器。",
+    "modeOnDemand": "同步模式：按需（預設）",
+    "modeOnlineOnly": "同步模式：僅線上",
+    "modeLiveMirror": "同步模式：即時鏡像（實驗性）",
+    "modeSet": {
+      "on-demand": "遠端同步已設為按需。",
+      "online-only": "遠端同步已設為僅線上。對話副本不會自動更新。",
+      "live-mirror": "即時鏡像仍是實驗性。對話副本會更新，檔案仍按需拉取。"
+    }
+  }
 }

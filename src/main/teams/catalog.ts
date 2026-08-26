@@ -16,9 +16,9 @@
  * Legacy fallback only: plugin.json + experts/ (still readable; do not author new packs this way).
  */
 
-import { app } from "electron";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { getAppPath, getResourcesPath } from "../app/paths";
 import type {
   AssetKind,
   Fqid,
@@ -79,20 +79,53 @@ export interface TeamRecord {
 
 // ── Roots ─────────────────────────────────────────────────
 
-/** first-party teams dir (dev + packaged; vitest falls back to repo layout). */
+/**
+ * Candidate roots for first-party `resources/teams` or `resources/commands`.
+ * Host is packaged Node: `process.resourcesPath` is empty, so `getAppPath()`
+ * (`~/.prismnext-host/current`) must be tried — not only Electron extraResources.
+ */
+export function bundledResourceDirCandidates(
+  kind: "teams" | "commands",
+  opts?: {
+    override?: string;
+    appPath?: string;
+    resourcesPath?: string;
+    cwd?: string;
+  },
+): string[] {
+  const override = opts?.override?.trim();
+  if (override) return [override];
+  const resourcesPath = opts?.resourcesPath ?? getResourcesPath();
+  const appPath = opts?.appPath ?? getAppPath();
+  const cwd = opts?.cwd ?? process.cwd();
+  const out: string[] = [];
+  const add = (base: string) => {
+    if (!base) return;
+    const dir = join(base, "resources", kind);
+    if (!out.includes(dir)) out.push(dir);
+  };
+  add(resourcesPath);
+  add(appPath);
+  add(cwd);
+  return out;
+}
+
+export function firstExistingDir(candidates: string[], fallback: string): string {
+  for (const dir of candidates) {
+    if (dir && existsSync(dir)) return dir;
+  }
+  return fallback;
+}
+
+/** first-party teams dir (dev + packaged + Host payload; vitest can override). */
 export function getBundledTeamsDir(): string {
   const override = process.env.PRISM_FIRST_PARTY_TEAMS_DIR?.trim()
     ?? process.env.PRISM_FIRST_PARTY_PACKS_DIR?.trim();
-  if (override) return override;
-  const devFallback = join(process.cwd(), "resources", "teams");
-  try {
-    if (!app) return devFallback;
-    if (app.isPackaged) return join(process.resourcesPath, "resources", "teams");
-    const appPath = app.getAppPath();
-    return existsSync(appPath) ? join(appPath, "resources", "teams") : devFallback;
-  } catch {
-    return devFallback;
-  }
+  const candidates = bundledResourceDirCandidates("teams", { override });
+  return firstExistingDir(
+    candidates,
+    candidates[candidates.length - 1] ?? join(process.cwd(), "resources", "teams"),
+  );
 }
 
 /**
@@ -106,15 +139,11 @@ export function getBundledAppCommandsDir(): string {
   // …/resources/teams → …/resources/commands
   const sibling = join(teamsDir, "..", "commands");
   if (existsSync(sibling)) return sibling;
-  const devFallback = join(process.cwd(), "resources", "commands");
-  try {
-    if (!app) return devFallback;
-    if (app.isPackaged) return join(process.resourcesPath, "resources", "commands");
-    const appPath = app.getAppPath();
-    return existsSync(appPath) ? join(appPath, "resources", "commands") : devFallback;
-  } catch {
-    return devFallback;
-  }
+  const candidates = bundledResourceDirCandidates("commands");
+  return firstExistingDir(
+    candidates,
+    candidates[candidates.length - 1] ?? join(process.cwd(), "resources", "commands"),
+  );
 }
 
 /** External roots registered at runtime (pro packs + test fixtures). */

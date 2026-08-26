@@ -1,12 +1,17 @@
 import { randomUUID } from "node:crypto";
 import {
   RemoteOperationError,
+  describeModelSeedGate,
   encodeRemoteAbs,
   emptyConnectConstitution,
+  emptyDesktopModelSeed,
   isHostDoctorReport,
   isHostHandshake,
+  isHostModelConfigureResult,
   isRemoteErrorCode,
+  normalizePosixAbs,
   recordConnectGate,
+  type DesktopModelSeed,
   type HostHandshake,
   type RemoteBootstrapLogLine,
   type RemoteConnectConstitution,
@@ -29,13 +34,37 @@ import {
   type HostLinuxArch,
   type HostPayloadRef,
 } from "./payload-path";
-import { profileModelKeys, readDesktopModelSeed } from "./profile-overrides";
+import { profileModelKeys } from "./profile-overrides";
 import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
 
 const log = createLogger("remote");
 
 const LOG_CAP = 400;
+
+/** Start Host with first-party teams/commands from the payload, not the SSH cwd. */
+export function buildHostServeStdioCommand(boot: {
+  nodeBin: string;
+  hostBin: string;
+  currentDir?: string;
+}): string {
+  const hostBin = boot.hostBin.replace(/\\/g, "/");
+  const nodeBin = boot.nodeBin.replace(/\\/g, "/");
+  const currentDir = (boot.currentDir ?? hostBin.replace(/\/bin\/prismnext-host$/, "")).replace(
+    /\\/g,
+    "/",
+  );
+  const teamsDir = `${currentDir}/resources/teams`;
+  const commandsDir = `${currentDir}/resources/commands`;
+  return [
+    "env",
+    `PRISM_FIRST_PARTY_TEAMS_DIR="${teamsDir}"`,
+    `PRISM_APP_COMMANDS_DIR="${commandsDir}"`,
+    `"${nodeBin}"`,
+    `"${hostBin}"`,
+    "serve --stdio",
+  ].join(" ");
+}
 
 export interface RemoteSessionBrokerDeps {
   desktopVersion: string;
@@ -47,6 +76,7 @@ export interface RemoteSessionBrokerDeps {
   onLog?: (line: RemoteBootstrapLogLine) => void;
   onConnection?: (profileId: string, state: RemoteConnectionState) => void;
   onEvent?: (channel: string, payload: unknown, profileId: string) => void;
+  readModelSeed?: () => DesktopModelSeed;
 }
 
 interface LiveConnection {
@@ -234,7 +264,7 @@ export class RemoteSessionBroker {
       mark("runtime", true, `Host Node is ${node.stdout.trim()} (${linuxArch}, dedicated).`);
 
       this.log(profileId, "Starting prismnext-host serve --stdio…");
-      const pipe = await session.openStdio(`"${boot.nodeBin}" "${boot.hostBin}" serve --stdio`);
+      const pipe = await session.openStdio(buildHostServeStdioCommand(boot));
       mark("host_serve", true, "prismnext-host serve --stdio is running.");
       const live: LiveConnection = {
         profileId,
@@ -256,21 +286,27 @@ export class RemoteSessionBroker {
         throw new RemoteOperationError("protocol", "Host handshake was not a HostHandshake.");
       }
       live.handshake = handshakeRaw;
+      const missing = (["literature", "experiment"] as const).filter(
+        (feature) => !handshakeRaw.features.includes(feature),
+      );
+      if (missing.length > 0) {
+        mark(
+          "handshake",
+          false,
+          `Remote Host is missing ${missing.join(", ")}. Disconnect and reconnect so this app can push the current Host.`,
+        );
+        throw new RemoteOperationError(
+          "payload_stale",
+          `Remote Host is missing ${missing.join(", ")}. Disconnect and reconnect so this app can push the current Host.`,
+        );
+      }
       mark(
         "handshake",
         true,
         `Handshake ok — ${handshakeRaw.desktopVersion} ${handshakeRaw.payloadSha256.slice(0, 8)}`,
       );
       if (handshakeRaw.features.includes("agent")) {
-        const modelKeys = profileModelKeys(this.deps.getProfile?.(profileId) ?? null);
-        const seed = readDesktopModelSeed();
-        await this.invokeOn(live, "host.configure", {
-          modelKeys,
-          extraBaseUrls: seed.extraBaseUrls,
-          ...(modelKeys === "remote"
-            ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
-            : {}),
-        });
+        await this.configureHostModels(live, mark);
       }
 
       constitution = await this.attachHostDoctor(live, constitution);
@@ -360,6 +396,50 @@ export class RemoteSessionBroker {
     };
   }
 
+  boundRemoteRoot(profileId: string): string | null {
+    return this.live.get(profileId.trim())?.remoteRoot ?? null;
+  }
+
+  /**
+   * SSH stdio up is not a project bind. Host fs/agent need `project.open` first.
+   * No-op when this folder is already the live remoteRoot.
+   */
+  async ensureProjectOpen(
+    profileId: string,
+    remoteRoot: string,
+  ): Promise<{
+    projectId: string;
+    remoteRoot: string;
+    connectionId: string;
+    lastPath: string;
+    handle: import("../../shared/remote").RemoteProjectHandle;
+  } | null> {
+    const live = this.live.get(profileId);
+    if (!live?.pipe) return null;
+    const abs = normalizePosixAbs(remoteRoot);
+    if (!abs) {
+      throw new RemoteOperationError("protocol", "Choose a remote folder.");
+    }
+    if (live.remoteRoot === abs && live.projectId) {
+      const lastPath = encodeRemoteAbs(profileId, abs);
+      if (!lastPath) throw new RemoteOperationError("protocol", "Could not encode remote project root.");
+      return {
+        projectId: live.projectId,
+        remoteRoot: abs,
+        connectionId: live.connectionId,
+        lastPath,
+        handle: {
+          kind: "remote",
+          projectId: live.projectId,
+          profileId,
+          remoteRoot: abs,
+          connectionId: live.connectionId,
+        },
+      };
+    }
+    return this.openProject(profileId, abs);
+  }
+
   profileIdForProjectId(projectId: string): string | null {
     const id = projectId.trim();
     if (!id) return null;
@@ -372,6 +452,29 @@ export class RemoteSessionBroker {
   isBound(profileId: string): boolean {
     const live = this.live.get(profileId.trim());
     return Boolean(live?.pipe);
+  }
+
+  /** Push the current Settings keys to every live Host (Settings save, or reconnect). */
+  async reconfigureModelKeys(): Promise<void> {
+    for (const live of this.live.values()) {
+      if (!live.handshake?.features.includes("agent") || !live.pipe) continue;
+      try {
+        const { seed, mode } = await this.pushHostModelSeed(live);
+        this.log(
+          live.profileId,
+          `Updated Host model keys (${seed.providerIds.join(", ") || "none"}).`,
+          {
+            level: mode === "gateway" || seed.providerIds.length > 0 ? "ok" : "warn",
+            gate: "model",
+          },
+        );
+      } catch (err) {
+        this.log(live.profileId, err instanceof Error ? err.message : String(err), {
+          level: "error",
+          gate: "model",
+        });
+      }
+    }
   }
 
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {
@@ -404,7 +507,7 @@ export class RemoteSessionBroker {
             if (!pending) continue;
             live.pending.delete(frame.id);
             if (frame.ok) pending.resolve(frame.result);
-            else pending.reject(new RemoteOperationError(toCode(frame.error.code), frame.error.message));
+            else pending.reject(mapHostFrameError(frame.error.code, frame.error.message));
           }
           if (frame.kind === "event") {
             this.deps.onEvent?.(frame.channel, frame.payload, live.profileId);
@@ -431,6 +534,41 @@ export class RemoteSessionBroker {
     this.setState(profileId, { phase: "error", profileId, code, message, constitution });
     this.log(profileId, message, { level: "error" });
     return { ok: false, profileId, code, message, hostKey, constitution };
+  }
+
+  private readSeed(): DesktopModelSeed {
+    if (this.deps.readModelSeed) return this.deps.readModelSeed();
+    return emptyDesktopModelSeed("Desktop model seed reader is not installed.");
+  }
+
+  private async pushHostModelSeed(live: LiveConnection): Promise<{
+    seed: DesktopModelSeed;
+    mode: "remote" | "gateway";
+    hostProviderIds: string[];
+  }> {
+    const mode = profileModelKeys(this.deps.getProfile?.(live.profileId) ?? null);
+    const seed = this.readSeed();
+    const configured = await this.invokeOn(live, "host.configure", {
+      modelKeys: mode,
+      extraBaseUrls: seed.extraBaseUrls,
+      ...(mode === "remote"
+        ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
+        : {}),
+    });
+    return {
+      seed,
+      mode,
+      hostProviderIds: isHostModelConfigureResult(configured) ? configured.providerIds : [],
+    };
+  }
+
+  private async configureHostModels(
+    live: LiveConnection,
+    mark: (gate: RemoteConnectGate, ok: boolean, detail: string, level?: RemoteLogLevel) => void,
+  ): Promise<void> {
+    const { seed, mode, hostProviderIds } = await this.pushHostModelSeed(live);
+    const gate = describeModelSeedGate({ mode, seed, hostProviderIds });
+    mark("model", gate.ok, gate.detail, gate.ok ? "ok" : "error");
   }
 
   private async attachHostDoctor(
@@ -503,6 +641,16 @@ export class RemoteSessionBroker {
 
 function toCode(code: string): RemoteErrorCode {
   return isRemoteErrorCode(code) ? code : "protocol";
+}
+
+function mapHostFrameError(code: string, message: string): RemoteOperationError {
+  if (message.startsWith("unknown method:")) {
+    return new RemoteOperationError(
+      "payload_stale",
+      `${message}. The Host on this server is older than this app — disconnect and reconnect so PrismNext can push the current Host.`,
+    );
+  }
+  return new RemoteOperationError(toCode(code), message);
 }
 
 function mapError(err: unknown): {

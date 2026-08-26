@@ -30,4 +30,18 @@ describe("host agent boot does not load node-pty", () => {
     expect(agent.listSessionsByProjectId("p_test")).toEqual([]);
     expect(agent.status("/tmp/project").ready).toBe(true);
   });
+
+  it("registers literature:list and experiment:list without importing node-pty", async () => {
+    const { createHostContext, dispatchHostMethod, listRegisteredHostMethods } = await import(
+      "../../src/host/handler-registry"
+    );
+    expect(listRegisteredHostMethods()).toEqual(
+      expect.arrayContaining(["literature:list", "experiment:list"]),
+    );
+    const home = mkdtempSync(join(tmpdir(), "prism-host-npty-list-"));
+    setWorkbenchUserHomeOverride(home);
+    const ctx = createHostContext();
+    ctx.remoteRoot = home;
+    await expect(dispatchHostMethod("experiment:list", { projectRoot: home }, ctx)).resolves.toBeDefined();
+  });
 });

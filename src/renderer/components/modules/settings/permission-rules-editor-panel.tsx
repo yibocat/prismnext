@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { isRemoteProjectRoot } from "@shared/remote";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 import { permissionGatedToolsByGroup } from "@shared/permissions/tool-catalog";
@@ -185,6 +187,9 @@ export function PermissionRulesEditorPanel({ slot }: { slot: PermissionRulesSlot
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>{t(`settings.permissions.editor.${field}.intro`)}</p>
+        {isRemoteProjectRoot(useDocumentStore.getState().projectRoot ?? "") ? (
+          <p className={SETTINGS_ROW_DESC}>{t("remote.permissionsSavedOnServer")}</p>
+        ) : null}
 
         <Textarea
           id={`perm-editor-${field}`}

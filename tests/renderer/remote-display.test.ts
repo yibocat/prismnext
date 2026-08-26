@@ -3,6 +3,7 @@ import {
   clipBootstrapLogs,
   connectionPhaseLabelKey,
   constitutionLines,
+  latestGateDetail,
   logsForProfile,
   resolveConnectGateStatus,
   shortPayloadSha,
@@ -47,6 +48,11 @@ describe("remote display helpers", () => {
     expect(resolveConnectGateStatus("ssh", undefined, logs)).toBe("ok");
     expect(resolveConnectGateStatus("runtime", undefined, logs)).toBe("fail");
     expect(resolveConnectGateStatus("doctor", undefined, logs)).toBe("pending");
+    expect(latestGateDetail("runtime", undefined, logs)).toBe("two");
+    expect(latestGateDetail("ssh", {
+      doctor: null,
+      gates: [{ gate: "ssh", ok: true, detail: "up" }],
+    }, logs)).toBe("up");
   });
 });
 

@@ -8,6 +8,7 @@ import {
   posixContained,
   recoverRemoteAbs,
   remoteHomeFromAppHome,
+  rewriteHostEventPaths,
 } from "../../src/shared/remote";
 
 describe("remote path encoding", () => {
@@ -65,5 +66,20 @@ describe("remote path encoding", () => {
       entries: [{ name: "paper", kind: "dir" }],
     })).toBe(true);
     expect(isRemoteDirListing({ path: "/home/ubuntu", parent: "/home", entries: [{ name: "x" }] })).toBe(false);
+  });
+
+  it("rewrites Host extract event POSIX roots back to remote://", () => {
+    expect(rewriteHostEventPaths(
+      { projectRoot: "/home/ubuntu/paper", paperId: "p1" },
+      "lab",
+    )).toEqual({
+      projectRoot: "remote://lab/home/ubuntu/paper",
+      paperId: "p1",
+    });
+    expect(rewriteHostEventPaths(
+      { projectRoot: "remote://lab/home/ubuntu/paper" },
+      "lab",
+    )).toEqual({ projectRoot: "remote://lab/home/ubuntu/paper" });
+    expect(rewriteHostEventPaths("ok", "lab")).toBe("ok");
   });
 });

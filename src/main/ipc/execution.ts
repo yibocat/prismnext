@@ -1,4 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
+import { parseRemoteAbs } from "../../shared/remote";
+import { getRemoteSessionBroker } from "./remote";
 import type {
   ExecutionApplyProjectSwitchArgs,
   ExecutionApplyProjectSwitchResult,
@@ -23,6 +25,15 @@ export interface ExecutionIpcOptions {
 }
 
 const NOT_AVAILABLE = { ok: false as const, error: "execution_not_available" };
+
+async function routeIfRemote(method: string, args: Record<string, unknown> = {}): Promise<unknown | undefined> {
+  const root = projectLifecycleAuthority.currentRoot;
+  const parsed = root ? parseRemoteAbs(root) : null;
+  if (!parsed) return undefined;
+  const broker = getRemoteSessionBroker();
+  if (!broker.isBound(parsed.profileId)) return NOT_AVAILABLE;
+  return broker.invoke(parsed.profileId, method, { ...args, projectId: parsed.abs });
+}
 
 let stopBroadcast: (() => void) | undefined;
 
@@ -79,6 +90,8 @@ export function registerExecutionHandlers(options: ExecutionIpcOptions = {}): vo
   startExecutionEventBroadcast(options);
 
   ipcMain.handle("execution:get", async (_event, args: { executionId?: string }): Promise<ExecutionGetResult> => {
+    const remote = await routeIfRemote("execution:get", args ?? {});
+    if (remote !== undefined) return remote as ExecutionGetResult;
     const registry = resolveRegistry(options);
     if (!registry) return NOT_AVAILABLE;
     const summary = authorize(registry, args?.executionId ?? "", getCallerProjectId());
@@ -89,6 +102,8 @@ export function registerExecutionHandlers(options: ExecutionIpcOptions = {}): vo
   ipcMain.handle(
     "execution:findByToolCallId",
     async (_event, args: { toolCallId?: string }): Promise<ExecutionFindByToolCallIdResult> => {
+      const remote = await routeIfRemote("execution:findByToolCallId", args ?? {});
+      if (remote !== undefined) return remote as ExecutionFindByToolCallIdResult;
       const registry = resolveRegistry(options);
       if (!registry) return NOT_AVAILABLE;
       const summary = registry.findByToolCallId((args?.toolCallId ?? "").trim());
@@ -101,6 +116,8 @@ export function registerExecutionHandlers(options: ExecutionIpcOptions = {}): vo
   ipcMain.handle(
     "execution:replay",
     async (_event, args: ExecutionReplayArgs): Promise<ExecutionReplayResult> => {
+      const remote = await routeIfRemote("execution:replay", args as unknown as Record<string, unknown>);
+      if (remote !== undefined) return remote as ExecutionReplayResult;
       const registry = resolveRegistry(options);
       if (!registry) return NOT_AVAILABLE;
       const summary = authorize(registry, args?.executionId ?? "", getCallerProjectId());
@@ -113,6 +130,8 @@ export function registerExecutionHandlers(options: ExecutionIpcOptions = {}): vo
   ipcMain.handle(
     "execution:cancel",
     async (_event, args: { executionId?: string }): Promise<ExecutionCancelResult> => {
+      const remote = await routeIfRemote("execution:cancel", args ?? {});
+      if (remote !== undefined) return remote as ExecutionCancelResult;
       const registry = resolveRegistry(options);
       if (!registry) return NOT_AVAILABLE;
       const summary = authorize(registry, args?.executionId ?? "", getCallerProjectId());
@@ -145,11 +164,27 @@ export function registerExecutionHandlers(options: ExecutionIpcOptions = {}): vo
   );
 
   ipcMain.handle("execution:listRunning", async (): Promise<ExecutionListRunningResult> => {
+    const remote = await routeIfRemote("execution:listRunning", {});
+    if (remote !== undefined) return remote as ExecutionListRunningResult;
     const registry = resolveRegistry(options);
     const projectId = getCallerProjectId();
     if (!registry || !projectId) return NOT_AVAILABLE;
     return { ok: true, summaries: registry.listRunning(projectId) };
   });
+
+  ipcMain.handle(
+    "execution:attach",
+    async (_event, args: { executionId?: string; fromSequence?: number }) => {
+      const remote = await routeIfRemote("execution:attach", args ?? {});
+      if (remote !== undefined) return remote;
+      const registry = resolveRegistry(options);
+      if (!registry) return NOT_AVAILABLE;
+      const summary = authorize(registry, args?.executionId ?? "", getCallerProjectId());
+      if (!summary) return NOT_AVAILABLE;
+      const replay = await registry.replay(summary.executionId, args?.fromSequence ?? 0);
+      return { ok: true, summary: replay.summary, events: replay.events, running: false };
+    },
+  );
 
   ipcMain.handle(
     "execution:applyProjectSwitch",

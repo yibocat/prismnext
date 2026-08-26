@@ -174,17 +174,14 @@ export function buildAgentUserText(input: {
 export const REMOTE_MODULE_PENDING = "remote_module_pending";
 
 function isRemotePendingModule(name: string): boolean {
-  return name.startsWith("literature-")
-    || name.startsWith("latex-")
-    || name.startsWith("interaction-")
-    || name === "citation-health"
+  return name.startsWith("interaction-")
     || name === "results-snapshot"
     || name === "provenance-query";
 }
 
 export function createAgentNativeTools(deps?: {
   runExperiment?: ExperimentRunFn;
-  /** RW-2: literature / latex / interaction fail clearly until RW-3. */
+  /** RW-2 leftover: interaction / provenance fail clearly until later steps. */
   pendingRemoteModules?: boolean;
   /** Host experiment-run: tell the model SSH drop kills the job. */
   remoteJobNote?: boolean;

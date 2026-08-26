@@ -10,7 +10,7 @@ import {
   type TerminalExecutionState,
   type TerminalExecutionSummary,
 } from "../../shared/execution";
-import { cancelAiCommandForSession, runAiCommand } from "./ai-pty";
+// node-pty is desktop/native. Host list/handshake must not load it.
 
 export interface ExecutionTransportHandlers {
   onOutput(data: string): void;
@@ -55,6 +55,8 @@ export interface ExecutionRegistryOptions {
   now?: () => number;
   generateId?: () => string;
   maxCachedEvents?: number;
+  /** Host detach: keep a disk-backed job running across stdio restarts. */
+  recoverLive?: (summary: TerminalExecutionSummary) => boolean;
 }
 
 export interface ExecutionReplayView {
@@ -248,12 +250,16 @@ export function createExecutionRegistry(options: ExecutionRegistryOptions): Exec
       const nextSequence = events.reduce((max, event) => Math.max(max, event.sequence), 0) + 1;
       let finalized = terminalExecutionIsFinal(summary.state);
       if (!finalized) {
-        summary = {
-          ...summary,
-          state: "lost",
-          endedAt: summary.endedAt ?? now(),
-        };
-        finalized = true;
+        if (options.recoverLive?.(summary)) {
+          summary = { ...summary, state: "running" };
+        } else {
+          summary = {
+            ...summary,
+            state: "lost",
+            endedAt: summary.endedAt ?? now(),
+          };
+          finalized = true;
+        }
       }
       const record: ExecutionRecord = {
         summary,
@@ -473,6 +479,7 @@ export function createAiPtyExecutionTransport(): ExecutionTransport {
   const sessionByExecution = new Map<string, string>();
   return {
     async start(execution, handlers, context) {
+      const { runAiCommand } = await import("./ai-pty");
       const sessionId = execution.opencodeSessionId ?? execution.executionId;
       sessionByExecution.set(execution.executionId, sessionId);
       void runAiCommand({
@@ -495,6 +502,7 @@ export function createAiPtyExecutionTransport(): ExecutionTransport {
       );
     },
     async cancel(executionId) {
+      const { cancelAiCommandForSession } = await import("./ai-pty");
       cancelAiCommandForSession(sessionByExecution.get(executionId) ?? executionId);
     },
   };
@@ -502,8 +510,12 @@ export function createAiPtyExecutionTransport(): ExecutionTransport {
 
 let singleton: ExecutionRegistry | undefined;
 
-export function initExecutionRegistry(historyRoot: string, transport = createAiPtyExecutionTransport()): ExecutionRegistry {
-  singleton = createExecutionRegistry({ transport, historyRoot });
+export function initExecutionRegistry(
+  historyRoot: string,
+  transport = createAiPtyExecutionTransport(),
+  extras?: Pick<ExecutionRegistryOptions, "recoverLive">,
+): ExecutionRegistry {
+  singleton = createExecutionRegistry({ transport, historyRoot, ...extras });
   return singleton;
 }
 

@@ -146,12 +146,10 @@ export async function switchWorkbenchFocus(opts: {
   await useWorkspaceConfigStore.getState().loadConfig(canonicalRoot);
   if (shouldAbort()) return;
 
-  if (!isRemoteProjectRoot(canonicalRoot)) {
-    void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
-      if (shouldAbort()) return;
-      void useLiteratureStore.getState().refresh(canonicalRoot);
-    });
-  }
+  void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+    if (shouldAbort()) return;
+    void useLiteratureStore.getState().refresh(canonicalRoot);
+  });
 
   const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
   const expandedFolders = (() => {

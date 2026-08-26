@@ -4,10 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createAgentNativeTools, REMOTE_MODULE_PENDING } from "../../src/main/agent/agent-service";
-import { createHostContext, dispatchHostMethod } from "../../src/host/handler-registry";
+import { createHostContext, dispatchHostMethod, listRegisteredHostMethods } from "../../src/host/handler-registry";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
 
 describe("host agent methods", () => {
+  it("registers literature and experiment list on the Host (not via lazy import)", () => {
+    expect(listRegisteredHostMethods()).toEqual(
+      expect.arrayContaining(["literature:list", "experiment:list", "compile:execute"]),
+    );
+  });
+
   afterEach(() => {
     setWorkbenchUserHomeOverride(null);
   });
@@ -36,24 +42,28 @@ describe("host agent methods", () => {
     expect(echoed).toBe("remote-ok");
   });
 
-  it("returns remote_module_pending for literature until RW-3", async () => {
+  it("no longer stubs latex-compile as pending", async () => {
     const tools = createAgentNativeTools({ pendingRemoteModules: true });
-    const search = tools.find((tool) => tool.name === "literature-search");
-    expect(search).toBeTruthy();
-    const result = await search!.execute({}, {
-      runtimeSessionId: "rt",
-      tabId: "tab",
-      turnId: "t1",
-      toolCallId: "c1",
-      projectRoot: "/tmp/paper",
-      permissionMode: "auto",
-    });
-    expect(result).toEqual({ ok: false, error: REMOTE_MODULE_PENDING });
+    const compile = tools.find((tool) => tool.name === "latex-compile");
+    expect(compile).toBeTruthy();
+    expect(compile!.execute).not.toEqual(undefined);
+    const interaction = tools.find((tool) => tool.name === "interaction-open");
+    if (interaction) {
+      const result = await interaction.execute({}, {
+        runtimeSessionId: "rt",
+        tabId: "tab",
+        turnId: "t1",
+        toolCallId: "c1",
+        projectRoot: "/tmp/paper",
+        permissionMode: "auto",
+      });
+      expect(result).toEqual({ ok: false, error: REMOTE_MODULE_PENDING });
+    }
   });
 
-  it("keeps experiment-run registered and marks SSH-drop honesty", async () => {
+  it("keeps experiment-run registered without the SSH-drop kill note", async () => {
     const tools = createAgentNativeTools({
-      remoteJobNote: true,
+      remoteJobNote: false,
       runExperiment: async () => ({ ok: true, started: true }),
     });
     const run = tools.find((tool) => tool.name === "experiment-run");
@@ -65,7 +75,8 @@ describe("host agent methods", () => {
       projectRoot: "/tmp/paper",
       permissionMode: "auto",
     });
-    expect(result).toMatchObject({ ok: true, started: true, remoteNote: "ssh_drop_kills_job" });
+    expect(result).toMatchObject({ ok: true, started: true });
+    expect(result).not.toHaveProperty("remoteNote");
   });
 });
 
@@ -74,7 +85,13 @@ describe("host.configure", () => {
     const ctx = createHostContext();
     expect(ctx.modelKeys).toBe("remote");
     const gateway = await dispatchHostMethod("host.configure", { modelKeys: "gateway" }, ctx);
-    expect(gateway).toEqual({ ok: true, modelKeys: "gateway" });
+    expect(gateway).toEqual({
+      ok: true,
+      modelKeys: "gateway",
+      providerIds: [],
+      wrapOk: false,
+      persisted: false,
+    });
     expect(ctx.modelKeys).toBe("gateway");
   });
 });

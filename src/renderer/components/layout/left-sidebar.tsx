@@ -24,6 +24,8 @@ import {
   PlusIcon,
   Pencil,
   SlidersHorizontal,
+  Download,
+  CloudUpload,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { SidebarHitChrome } from "@/components/layout/sidebar-controls";
@@ -78,8 +80,19 @@ import {
   AppContextMenuContent,
   AppContextMenuDestructiveItem,
   AppContextMenuItem,
+  AppContextMenuSeparator,
   AppContextMenuTrigger,
 } from "@/components/ui/app-context-menu";
+import {
+  pushRemoteSkillsAction,
+  setRemoteSyncModeAction,
+  syncRemoteExperimentAction,
+  syncRemoteFileAction,
+  syncRemotePaperPdfAction,
+  syncRemoteSessionsAction,
+} from "@/lib/remote/sync-actions";
+import { useLiteratureStore } from "@/stores/literature-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   ensureWorkbenchProjectExpanded,
@@ -1306,6 +1319,51 @@ export const LeftSidebar = memo(function LeftSidebar() {
                         >
                           {t("nav.project.archiveAll")}
                         </AppContextMenuItem>
+                        {member.lastPath.startsWith("remote://") ? (
+                          <>
+                            <AppContextMenuSeparator />
+                            <AppContextMenuItem
+                              leading={<Download className="size-3.5" />}
+                              onSelect={() => {
+                                void syncRemoteSessionsAction(member);
+                                const fileId = useDocumentStore.getState().activeFileId;
+                                const file = fileId
+                                  ? useDocumentStore.getState().fileMetadata.get(fileId)
+                                  : null;
+                                if (file?.absolutePath.startsWith("remote://")) {
+                                  void syncRemoteFileAction(member, file.absolutePath);
+                                }
+                                const paperId = useLiteratureStore.getState().selectedPaperId;
+                                if (paperId) void syncRemotePaperPdfAction(member, paperId);
+                                const experimentId = useExperimentStore.getState().selectedId;
+                                if (experimentId) void syncRemoteExperimentAction(member, experimentId);
+                              }}
+                            >
+                              {t("remote.sync.toThisComputer")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              leading={<CloudUpload className="size-3.5" />}
+                              onSelect={() => void pushRemoteSkillsAction(member.lastPath)}
+                            >
+                              {t("remote.sync.pushSkills")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "on-demand")}
+                            >
+                              {t("remote.sync.modeOnDemand")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "online-only")}
+                            >
+                              {t("remote.sync.modeOnlineOnly")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "live-mirror")}
+                            >
+                              {t("remote.sync.modeLiveMirror")}
+                            </AppContextMenuItem>
+                          </>
+                        ) : null}
                         <AppContextMenuDestructiveItem
                           leading={<Trash2Icon className="size-3.5" />}
                           onSelect={() => {

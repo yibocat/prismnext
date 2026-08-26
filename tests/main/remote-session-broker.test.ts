@@ -30,7 +30,7 @@ const handshake = {
   payloadSha256: stamp.payloadSha256,
   appHome: (process.env.HOME || "") + "/.prismnext",
   hostRoot: (process.env.HOME || "") + "/.prismnext-host",
-  features: ["control"],
+  features: ["control", "literature", "experiment", "agent"],
 };
 let buf = "";
 process.stdin.setEncoding("utf8");
@@ -46,9 +46,29 @@ process.stdin.on("data", (chunk) => {
     if (msg.kind === "req" && msg.method === "host.handshake") {
       process.stdout.write(JSON.stringify({ kind: "res", id: msg.id, ok: true, result: handshake }) + "\\n");
     }
+    if (msg.kind === "req" && msg.method === "host.configure") {
+      const keys = msg.params && msg.params.aiApiKeys && typeof msg.params.aiApiKeys === "object"
+        ? Object.keys(msg.params.aiApiKeys)
+        : [];
+      process.stdout.write(JSON.stringify({
+        kind: "res",
+        id: msg.id,
+        ok: true,
+        result: { ok: true, modelKeys: "remote", providerIds: keys, wrapOk: true, persisted: keys.length > 0 },
+      }) + "\\n");
+    }
     if (msg.kind === "req" && msg.method === "host.doctor") {
       const doctor = { ok: true, node: process.version, home: handshake.appHome, homeWritable: true, git: true };
       process.stdout.write(JSON.stringify({ kind: "res", id: msg.id, ok: true, result: doctor }) + "\\n");
+    }
+    if (msg.kind === "req" && msg.method === "project.open") {
+      const remoteRoot = msg.params && msg.params.remoteRoot ? msg.params.remoteRoot : "/home/alice/paper";
+      process.stdout.write(JSON.stringify({
+        kind: "res",
+        id: msg.id,
+        ok: true,
+        result: { projectId: "p_test", remoteRoot },
+      }) + "\\n");
     }
   }
 });
@@ -126,6 +146,14 @@ describe("RemoteSessionBroker", () => {
       ssh: createDirectoryBackedSshClient(remoteHome),
       resolvePayload: () => ({ ...tarball, arch: "linux-arm64" }),
       knownHostsPath,
+      readModelSeed: () => ({
+        aiApiKeys: { deepseek: "sk-test" },
+        aiBaseUrls: {},
+        extraBaseUrls: [],
+        wrapKey: "",
+        providerIds: ["deepseek"],
+        wrapOk: true,
+      }),
     });
     const result = await broker.connect("ssh_lab");
     expect(result.ok).toBe(true);
@@ -140,13 +168,21 @@ describe("RemoteSessionBroker", () => {
       "runtime",
       "host_serve",
       "handshake",
+      "model",
       "doctor",
     ]);
     expect(result.constitution?.gates.every((item) => item.ok)).toBe(true);
     expect(result.constitution?.doctor?.ok).toBe(true);
     expect(result.constitution?.gates.find((item) => item.gate === "runtime")?.detail).toMatch(/dedicated/);
+    expect(result.constitution?.gates.find((item) => item.gate === "model")?.detail).toMatch(/deepseek/);
     expect(broker.snapshot().logs.some((line) => /PATH has no `node`/.test(line.message))).toBe(false);
     expect(broker.snapshot().logs.some((line) => line.gate === "handshake" && line.level === "ok")).toBe(true);
+    expect(broker.boundRemoteRoot("ssh_lab")).toBeNull();
+    const opened = await broker.ensureProjectOpen("ssh_lab", "/home/alice/paper");
+    expect(opened?.projectId).toBe("p_test");
+    expect(broker.boundRemoteRoot("ssh_lab")).toBe("/home/alice/paper");
+    const again = await broker.ensureProjectOpen("ssh_lab", "/home/alice/paper");
+    expect(again?.projectId).toBe("p_test");
     await broker.disconnect("ssh_lab");
   });
 });

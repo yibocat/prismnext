@@ -23,11 +23,14 @@
     "runtime": "Remote Node",
     "host_serve": "Host process",
     "handshake": "Handshake",
+    "model": "Model keys",
     "doctor": "Doctor"
   },
   "agentNotReady": "Remote Agent is not connected yet. You can browse files and use the terminal.",
   "agentEntitlement": "Remote Agent could not start.",
   "missingLocalKey": "No API key on this computer for the selected model. Add it in Settings → AI.",
+  "hostModelUnconfigured": "The remote Host has no API keys. Disconnect and reconnect so this computer can send the keys from Settings → Models. Connection steps must show the Model keys gate as ok.",
+  "missingHostApiKey": "The remote Host has no API key for {{provider}}. Save that vendor’s key in Settings → Models, then disconnect and reconnect (or save Settings again while connected).",
   "attachmentNotUploaded": "Move the attachment into the remote folder, or send the image inline.",
   "attachmentTooLarge": "That attachment is larger than 5 MB. Copy it into the remote folder first.",
   "modelKeysNote": "The remote Host calls the model vendor directly. Keys are stored on the server as AES-256-GCM ciphertext; the unwrap key stays on this computer.",
@@ -56,5 +59,26 @@
   "gatePending": "…",
   "gateOk": "ok",
   "gateFail": "fail",
-  "folderPlaceholder": "/home/ubuntu/project"
+  "connectSteps": "Steps",
+  "connectLog": "Log",
+  "folderPlaceholder": "/home/ubuntu/project",
+  "permissionsSavedOnServer": "Allow-always rules for this remote project are stored on the server.",
+  "sessionReadOnlyCache": "Offline copy — reconnect to edit this chat.",
+  "sync": {
+    "toThisComputer": "Sync to this computer…",
+    "pushSkills": "Push this computer’s user skills to the server",
+    "fileDone": "File copied to the local cache.",
+    "pdfDone": "PDF copied to the local cache.",
+    "sessionsDone": "Synced {{count}} chats to this computer.",
+    "experimentDone": "Copied {{count}} experiment files to this computer.",
+    "skillsDone": "Pushed {{count}} skill files to the server.",
+    "modeOnDemand": "Sync mode: on demand (default)",
+    "modeOnlineOnly": "Sync mode: online only",
+    "modeLiveMirror": "Sync mode: live mirror (experimental)",
+    "modeSet": {
+      "on-demand": "Remote sync is on demand.",
+      "online-only": "Remote sync is online only. Session copies will not update automatically.",
+      "live-mirror": "Live mirror is experimental. Session copies still update; files stay on demand."
+    }
+  }
 }

@@ -58,7 +58,53 @@ async function routeIfRemote(method: string, args: unknown): Promise<unknown | u
       return disconnectedRemoteAgentStatus(typeof rec.projectRoot === "string" ? rec.projectRoot : null);
     }
     if (method === "agent:listSessions" || method === "agent:listSessionsByProjectId") {
+      const { listWorkbenchMembers } = await import("../workbench/default-project");
+      const { listMirroredSessions } = await import("../remote/session-mirror");
+      const rec = args && typeof args === "object" && !Array.isArray(args)
+        ? args as { projectRoot?: string; projectId?: string }
+        : {};
+      const members = listWorkbenchMembers();
+      const projectId = rec.projectId
+        || members.find((item) => item.lastPath === rec.projectRoot)?.id
+        || "";
+      if (projectId) {
+        return listMirroredSessions(profileId, projectId).map((item) => ({
+          conversationId: item.conversationId,
+          title: item.title,
+          updatedAt: Date.parse(item.updatedAt) || 0,
+          createdAt: Date.parse(item.updatedAt) || 0,
+          fromCache: true,
+          readOnly: true,
+        }));
+      }
       return [];
+    }
+    if (method === "agent:loadSession") {
+      const { listWorkbenchMembers } = await import("../workbench/default-project");
+      const { readMirroredSession } = await import("../remote/session-mirror");
+      const { hydrateSessionRecordToConversation } = await import("../agent/session-hydrator");
+      const rec = args && typeof args === "object" && !Array.isArray(args)
+        ? args as { conversationId?: string; projectRoot?: string; projectId?: string }
+        : {};
+      const members = listWorkbenchMembers();
+      const projectId = rec.projectId
+        || members.find((item) => item.lastPath === rec.projectRoot)?.id
+        || "";
+      const cached = projectId && rec.conversationId
+        ? readMirroredSession(profileId, projectId, rec.conversationId)
+        : null;
+      if (cached) {
+        return {
+          ok: true,
+          conversationId: rec.conversationId,
+          title: typeof cached.title === "string" ? cached.title : "Chat",
+          conversation: hydrateSessionRecordToConversation(cached as never),
+          directory: typeof cached.boundCheckoutPath === "string" ? cached.boundCheckoutPath : undefined,
+          planEvents: Array.isArray(cached.planEvents) ? cached.planEvents : [],
+          readOnly: true,
+          fromCache: true,
+        };
+      }
     }
   }
   let payload: unknown = args ?? {};

@@ -1,9 +1,14 @@
-import { sanitizeHostModelKeyMap } from "../shared/remote";
+import { hostModelProviderIds, sanitizeHostModelKeyMap } from "../shared/remote";
 import type { HostHandlerContext } from "./context";
+import { compileHandlers } from "./compile-handlers";
+import { experimentHandlers, installExperimentEvents } from "./experiment-handlers";
 import { fsHandlers } from "./fs-handlers";
-import { mergeHostModelSettings } from "./model-settings";
+import { literatureHandlers, installLiteratureEvents } from "./literature-handlers";
+import { decodeHostModelWrapKey, mergeHostModelSettings, readHostModelSettings } from "./model-settings";
 import { setHostModelProxyEnabled, setHostModelProxyExtraBaseUrls } from "./model-proxy-transport";
 import { projectHandlers } from "./project-handlers";
+import { sessionHandlers } from "./session-handlers";
+import { settingsHandlers } from "./settings-handlers";
 import { terminalHandlers } from "./terminal-handlers";
 
 export type { HostHandlerContext };
@@ -14,6 +19,11 @@ const handlers: Record<string, HostHandler> = {
   ...fsHandlers,
   ...projectHandlers,
   ...terminalHandlers,
+  ...literatureHandlers,
+  ...experimentHandlers,
+  ...compileHandlers,
+  ...settingsHandlers,
+  ...sessionHandlers,
   async "host.configure"(params, ctx) {
     ctx.modelKeys = params.modelKeys === "gateway" ? "gateway" : "remote";
     const seededUrls = params.aiBaseUrls && typeof params.aiBaseUrls === "object" && !Array.isArray(params.aiBaseUrls)
@@ -36,7 +46,15 @@ const handlers: Record<string, HostHandler> = {
     }
     setHostModelProxyEnabled(ctx.modelKeys === "gateway");
     setHostModelProxyExtraBaseUrls(ctx.extraBaseUrls);
-    return { ok: true, modelKeys: ctx.modelKeys };
+    const providerIds = hostModelProviderIds(readHostModelSettings().aiApiKeys);
+    const wrapOk = Boolean(decodeHostModelWrapKey(params.wrapKey));
+    return {
+      ok: true,
+      modelKeys: ctx.modelKeys,
+      providerIds,
+      wrapOk,
+      persisted: ctx.modelKeys === "remote" && wrapOk && providerIds.length > 0,
+    };
   },
 };
 
@@ -49,6 +67,10 @@ export function createHostContext(): HostHandlerContext {
   };
 }
 
+export function listRegisteredHostMethods(): string[] {
+  return Object.keys(handlers);
+}
+
 export async function dispatchHostMethod(
   method: string,
   params: unknown,
@@ -58,6 +80,12 @@ export async function dispatchHostMethod(
     const { agentHandlers, bootHostAgent } = await import("./agent-server");
     if (!ctx.agent) bootHostAgent(ctx);
     Object.assign(handlers, agentHandlers);
+  }
+  if (method.startsWith("literature:") || method.startsWith("extract:")) {
+    installLiteratureEvents(ctx);
+  }
+  if (method.startsWith("experiment:") || method.startsWith("execution:")) {
+    installExperimentEvents(ctx);
   }
   const handler = handlers[method];
   if (!handler) {

@@ -26,6 +26,7 @@ export interface BootstrapResult {
   stamp: HostStamp;
   hostRoot: string;
   appHome: string;
+  currentDir: string;
   hostBin: string;
   nodeBin: string;
 }
@@ -73,7 +74,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
     const host = await input.session.sftpStat(hostBin);
     const node = await input.session.sftpStat(nodeBin);
     if (host && node) {
-      return { action: "skipped", stamp: existing, hostRoot, appHome, hostBin, nodeBin };
+      return { action: "skipped", stamp: existing, hostRoot, appHome, currentDir, hostBin, nodeBin };
     }
     input.log("stamp matched but Host or Node binary missing — pushing again.");
   } else if (existing) {
@@ -116,7 +117,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
   }
 
   input.log(`Host ready (${wanted.desktopVersion}, ${wanted.payloadSha256.slice(0, 8)}).`);
-  return { action: "pushed", stamp: wanted, hostRoot, appHome, hostBin, nodeBin };
+  return { action: "pushed", stamp: wanted, hostRoot, appHome, currentDir, hostBin, nodeBin };
 }
 
 export { HOST_CURRENT_DIRNAME, HOST_INSTALL_DIRNAME, HOST_STAMP_FILENAME };

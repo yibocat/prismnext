@@ -1,5 +1,19 @@
 export type PaperExtractSource = "mineru" | "pdfjs" | "html";
 
+/** Host or laptop has neither a MinerU token nor a loadable pdfjs worker. */
+export const EXTRACT_PARSER_UNAVAILABLE = "extract_parser_unavailable";
+
+export class ExtractParserUnavailableError extends Error {
+  readonly code = EXTRACT_PARSER_UNAVAILABLE;
+
+  constructor(
+    message = "No extract engine available (MinerU token missing or PDF parser unavailable).",
+  ) {
+    super(message);
+    this.name = "ExtractParserUnavailableError";
+  }
+}
+
 export type PaperExtractStatus =
   | "idle"
   | "queued"

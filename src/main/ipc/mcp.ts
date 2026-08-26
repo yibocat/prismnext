@@ -1,5 +1,7 @@
 import { join } from "node:path";
 import { ipcMain } from "electron";
+import { getRemoteSessionBroker } from "./remote";
+import { remoteProfileFromArgs, routeHostDomainMethod } from "../remote/domain-route";
 import { ensureDefaultMcpServers } from "../teams/project-mcp-defaults";
 import {
   readWritableTeamMcpJson,
@@ -15,6 +17,14 @@ function refreshMcpCatalog(projectPath: string): void {
   invalidateResolver(projectPath);
 }
 
+async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
+  if (!remoteProfileFromArgs(args, ["projectPath", "projectRoot"])) return undefined;
+  return routeHostDomainMethod(method, args, {
+    keys: ["projectPath", "projectRoot"],
+    broker: getRemoteSessionBroker(),
+  });
+}
+
 export function registerMcpHandlers(): void {
   /**
    * Seed/repair mcp.json. Pi connects selected servers on send;
@@ -23,6 +33,8 @@ export function registerMcpHandlers(): void {
   ipcMain.handle(
     "mcp:ensure",
     async (_e, args: { projectPath: string }) => {
+      const remote = await routeIfRemote("mcp:ensure", args);
+      if (remote !== undefined) return remote;
       const projectPath = args.projectPath?.trim();
       if (!projectPath) {
         return { ok: false as const };
@@ -43,6 +55,8 @@ export function registerMcpHandlers(): void {
   ipcMain.handle(
     "mcp:apply",
     async (_e, args: { projectPath: string }) => {
+      const remote = await routeIfRemote("mcp:apply", args);
+      if (remote !== undefined) return remote;
       const projectPath = args.projectPath?.trim();
       if (!projectPath) {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
@@ -57,6 +71,8 @@ export function registerMcpHandlers(): void {
   ipcMain.handle(
     "mcp:readTeamJson",
     async (_e, args: { projectPath: string; teamId?: string }) => {
+      const remote = await routeIfRemote("mcp:readTeamJson", args);
+      if (remote !== undefined) return remote;
       const projectPath = args.projectPath?.trim();
       if (!projectPath) throw new Error("missing projectPath");
       const teamId = args.teamId?.trim() || PROJECT_DEFAULT_TEAM_ID;
@@ -71,6 +87,8 @@ export function registerMcpHandlers(): void {
   ipcMain.handle(
     "mcp:writeTeamJson",
     async (_e, args: { projectPath: string; teamId?: string; content: string }) => {
+      const remote = await routeIfRemote("mcp:writeTeamJson", args);
+      if (remote !== undefined) return remote;
       const projectPath = args.projectPath?.trim();
       if (!projectPath) {
         return { ok: false as const, reloadedSessions: 0, error: "missing projectPath" };
