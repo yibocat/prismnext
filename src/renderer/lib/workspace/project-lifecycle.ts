@@ -302,7 +302,7 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
     if (!useDocumentStore.getState().projectRoot && target.projectPath) {
       const remote = recoverRemoteAbs(target.projectPath);
       const onWorkbench = state.members.some((member) => member.id === target.projectId);
-      if (remote) await useDocumentStore.getState().focusProject(remote);
+      if (remote) await useDocumentStore.getState().focusProject(remote, { connectRemote: false });
       else if (onWorkbench) await useDocumentStore.getState().openProject(target.projectPath);
       else await useDocumentStore.getState().focusProject(target.projectPath);
     }
@@ -332,11 +332,11 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
       : null;
     for (const id of toLoad.filter((id) => id !== active)) {
       const path = pathFor(id);
-      if (path) await useChatStore.getState().loadSession(id, undefined, path);
+      if (path) await useChatStore.getState().loadSession(id, undefined, path, { connectRemote: false });
     }
     if (active) {
       const path = pathFor(active);
-      if (path) await useChatStore.getState().loadSession(active, undefined, path);
+      if (path) await useChatStore.getState().loadSession(active, undefined, path, { connectRemote: false });
     } else if (target.projectId) {
       const tabId = useChatStore.getState().activeTabId;
       if (tabId) useWorkbenchStore.getState().recordSessionProject(tabId, target.projectId);

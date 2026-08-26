@@ -5,16 +5,34 @@
  * 本判定在 resolver 每次求值时执行，license 失效 → 内容即时失活，恢复 → 自动复活。
  *
  * `readProLicense` 在 Electron 之外（vitest）会因 app 缺失而抛错 → 按无授权处理。
+ *
+ * Host session mode: prismnext-host ignores leftover `~/.prismnext/pro/license.json`.
+ * Only the laptop-sent HostProGrant (no raw key) counts for that connection.
  */
 
-import { licenseGrantsFeature } from "../../shared/pro";
+import type { HostProGrant } from "../../shared/pro";
+import { isHostProGrantActive, licenseGrantsFeature } from "../../shared/pro";
 import { readProLicense } from "./pro-license";
 
 let cached: { granted: boolean; grantAll: boolean; features: string[] } | null = null;
 let version = 0;
+let hostSessionMode = false;
+let hostGrant: HostProGrant | null = null;
 
 function load(): { granted: boolean; grantAll: boolean; features: string[] } {
   if (cached) return cached;
+  if (hostSessionMode) {
+    if (hostGrant && isHostProGrantActive(hostGrant)) {
+      cached = {
+        granted: true,
+        grantAll: !hostGrant.features || hostGrant.features.length === 0,
+        features: hostGrant.features ?? [],
+      };
+    } else {
+      cached = { granted: false, grantAll: false, features: [] };
+    }
+    return cached;
+  }
   try {
     const license = readProLicense(); // 非 null 即 active pro（服务内部已过滤）
     if (license) {
@@ -55,6 +73,33 @@ export function licenseStateVersion(): number {
 
 /** license 变化后调用（pro 激活/清除 IPC —— Phase 5 接线） */
 export function invalidateLicenseCache(): void {
+  cached = null;
+  version += 1;
+}
+
+/** Host process: disk license.json is not an entitlement. */
+export function enableHostLicenseSessionMode(): void {
+  hostSessionMode = true;
+  invalidateLicenseCache();
+}
+
+export function isHostLicenseSessionMode(): boolean {
+  return hostSessionMode;
+}
+
+export function applyHostProGrant(grant: HostProGrant | null): void {
+  hostGrant = grant && isHostProGrantActive(grant) ? grant : null;
+  invalidateLicenseCache();
+}
+
+export function readHostProGrant(): HostProGrant | null {
+  return hostGrant && isHostProGrantActive(hostGrant) ? hostGrant : null;
+}
+
+/** Test-only: return to desktop license-file semantics. */
+export function __resetHostLicenseSessionForTests(): void {
+  hostSessionMode = false;
+  hostGrant = null;
   cached = null;
   version += 1;
 }

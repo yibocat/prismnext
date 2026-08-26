@@ -6,6 +6,8 @@ import {
   type RemoteFrame,
 } from "../shared/remote";
 import { runDoctor } from "./doctor";
+import { ensureMyContentTeam } from "../main/teams/my-content";
+import { enableHostLicenseSessionMode } from "../main/teams/teams-license";
 import { createHostContext, dispatchHostMethod, type HostHandlerContext } from "./handler-registry";
 import { installHostModelProxyFetch } from "./model-proxy-transport";
 
@@ -18,6 +20,8 @@ export interface HostRuntime {
 
 /** One Host process, one context. Attach/detach the current control-plane stream. */
 export function createHostRuntime(handshake: HostHandshake): HostRuntime {
+  enableHostLicenseSessionMode();
+  ensureMyContentTeam();
   const ctx = createHostContext();
   let write: (frame: RemoteFrame) => void = () => undefined;
   ctx.emit = (channel, payload) => {

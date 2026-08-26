@@ -1,0 +1,6 @@
+# Portable Git for Host pack (desktop/dugite-native).
+# Bump tag, archive, and sha256 together. {arch} is x64 or arm64.
+tag v2.53.0-3
+archive dugite-native-v2.53.0-f49d009-ubuntu-{arch}.tar.gz
+sha256-x64 b3a85433c8dfde76d21b90938ad2f971653deff4340b1b4d347258c63250eafc
+sha256-arm64 d562ad433ed0dc1907f44a92fc701597bc577c48d07fe69ee7adddfee836ef4c

@@ -185,3 +185,22 @@ export function RemoteConnectDialog({
     </Dialog>
   );
 }
+
+/** Shown when a remembered remote project needs a host key or hit an error. */
+export function RemoteConnectHost() {
+  const alias = useRemoteStore((s) => s.connectDialogAlias);
+  const closeConnectDialog = useRemoteStore((s) => s.closeConnectDialog);
+
+  return (
+    <RemoteConnectDialog
+      alias={alias}
+      open={Boolean(alias)}
+      onOpenChange={(next) => {
+        if (!next) closeConnectDialog();
+      }}
+      onReady={() => {
+        closeConnectDialog();
+      }}
+    />
+  );
+}

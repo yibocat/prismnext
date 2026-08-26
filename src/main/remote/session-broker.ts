@@ -39,6 +39,9 @@ import { ensureRemoteListenPort } from "./host-listen";
 import { profileModelKeys } from "./profile-overrides";
 import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
+import { licenseToHostProGrant, type HostProGrant } from "../../shared/pro";
+import { readProLicense } from "../teams/pro-license";
+import { pushLaptopProPackageToHost } from "./pro-push";
 
 const log = createLogger("remote");
 
@@ -58,10 +61,13 @@ export function buildHostServeStdioCommand(boot: {
   );
   const teamsDir = `${currentDir}/resources/teams`;
   const commandsDir = `${currentDir}/resources/commands`;
+  const hostRoot = currentDir.replace(/\/current\/?$/, "") || currentDir;
+  const proDir = `${hostRoot}/pro-package`;
   return [
     "env",
     `PRISM_FIRST_PARTY_TEAMS_DIR="${teamsDir}"`,
     `PRISM_APP_COMMANDS_DIR="${commandsDir}"`,
+    `PRISM_HOST_PRO_PACKAGE_DIR="${proDir}"`,
     `"${nodeBin}"`,
     `"${hostBin}"`,
     "serve --stdio",
@@ -79,6 +85,7 @@ export interface RemoteSessionBrokerDeps {
   onConnection?: (profileId: string, state: RemoteConnectionState) => void;
   onEvent?: (channel: string, payload: unknown, profileId: string) => void;
   readModelSeed?: () => DesktopModelSeed;
+  readProGrant?: () => HostProGrant | null;
 }
 
 interface LiveConnection {
@@ -211,11 +218,11 @@ export class RemoteSessionBroker {
         mark(
           "runtime",
           false,
-          `Remote machine is ${uname.stdout.trim() || "unknown"}. v1 Host ships Linux x64/arm64 Node only.`,
+          `Remote machine is ${uname.stdout.trim() || "unknown"}. Host runtime downloads Linux x64/arm64 Node only.`,
         );
         throw new RemoteOperationError(
           "host_runtime",
-          `Remote machine is ${uname.stdout.trim() || "unknown"}. v1 Host ships Linux x64/arm64 Node only.`,
+          `Remote machine is ${uname.stdout.trim() || "unknown"}. Host runtime downloads Linux x64/arm64 Node only.`,
         );
       }
 
@@ -243,6 +250,7 @@ export class RemoteSessionBroker {
           sha256: payload.sha256,
           desktopVersion: this.deps.desktopVersion,
         },
+        linuxArch,
         log: (message) => this.log(profileId, message),
       });
       mark("home", true, `Remote home resolved (${boot.appHome}).`);
@@ -250,8 +258,10 @@ export class RemoteSessionBroker {
         "bootstrap",
         true,
         boot.action === "skipped"
-          ? "Remote Host stamp already matches this app."
-          : "Host runtime pushed from this computer.",
+          ? "Remote Host program already matches this app."
+          : boot.action === "provisioned"
+            ? "Server downloaded Node, Git, and Tectonic."
+            : "Host program pushed; server downloaded Node, Git, and Tectonic.",
       );
 
       const node = await session.exec(`"${boot.nodeBin}" --version`);
@@ -260,12 +270,12 @@ export class RemoteSessionBroker {
           "runtime",
           false,
           node.stderr.trim()
-          || "Bundled Host Node could not start. The payload must include current/bin/node for this Linux arch.",
+          || "Host Node could not start. The server should have downloaded it during connect.",
         );
         throw new RemoteOperationError(
           "host_runtime",
           node.stderr.trim()
-          || "Bundled Host Node could not start. The payload must include current/bin/node for this Linux arch.",
+          || "Host Node could not start. The server should have downloaded it during connect.",
         );
       }
       mark("runtime", true, `Host Node is ${node.stdout.trim()} (${linuxArch}, dedicated).`);
@@ -319,7 +329,7 @@ export class RemoteSessionBroker {
         `Handshake ok — ${handshakeRaw.desktopVersion} ${handshakeRaw.payloadSha256.slice(0, 8)}`,
       );
       if (handshakeRaw.features.includes("agent")) {
-        await this.configureHostModels(live, mark);
+        await this.syncHostPro(live, mark);
       }
 
       constitution = await this.attachHostDoctor(live, constitution);
@@ -353,6 +363,12 @@ export class RemoteSessionBroker {
 
   async disconnect(profileId: string, opts?: { silent?: boolean }): Promise<void> {
     const live = this.live.get(profileId);
+    if (live?.pipe && !live.closing) {
+      await this.invokeOn(live, "host.configure", {
+        modelKeys: profileModelKeys(this.deps.getProfile?.(profileId) ?? null),
+        proGrant: null,
+      }).catch(() => undefined);
+    }
     if (live) live.closing = true;
     this.live.delete(profileId);
     if (live) {
@@ -467,6 +483,20 @@ export class RemoteSessionBroker {
   isBound(profileId: string): boolean {
     const live = this.live.get(profileId.trim());
     return Boolean(live?.pipe);
+  }
+
+  /** Push the current laptop Pro grant (and packs, if licensed) to every live Host. */
+  async syncProOnLiveHosts(): Promise<void> {
+    for (const live of this.live.values()) {
+      if (!live.pipe) continue;
+      try {
+        await this.syncHostPro(live);
+      } catch (err) {
+        this.log(live.profileId, err instanceof Error ? err.message : String(err), {
+          level: "warn",
+        });
+      }
+    }
   }
 
   /** Push the current Settings keys to every live Host (Settings save, or reconnect). */
@@ -635,6 +665,9 @@ export class RemoteSessionBroker {
       if (typeof reattached.remoteRoot === "string") live.remoteRoot = reattached.remoteRoot;
       if (typeof reattached.projectId === "string") live.projectId = reattached.projectId;
       if (!live.handshake) throw new RemoteOperationError("protocol", "Reconnect lost the Host handshake.");
+      if (live.handshake.features.includes("agent")) {
+        await this.syncHostPro(live);
+      }
       live.ready = true;
       live.reconnecting = false;
       this.setState(live.profileId, {
@@ -691,6 +724,7 @@ export class RemoteSessionBroker {
     const configured = await this.invokeOn(live, "host.configure", {
       modelKeys: mode,
       extraBaseUrls: seed.extraBaseUrls,
+      proGrant: this.currentProGrant(),
       ...(mode === "remote"
         ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
         : {}),
@@ -702,13 +736,51 @@ export class RemoteSessionBroker {
     };
   }
 
+  private currentProGrant(): HostProGrant | null {
+    if (this.deps.readProGrant) return this.deps.readProGrant();
+    try {
+      return licenseToHostProGrant(readProLicense());
+    } catch {
+      return null;
+    }
+  }
+
+  private async syncHostPro(
+    live: LiveConnection,
+    mark?: (gate: RemoteConnectGate, ok: boolean, detail: string, level?: RemoteLogLevel) => void,
+  ): Promise<void> {
+    const grant = this.currentProGrant();
+    if (grant) {
+      try {
+        const pushed = await pushLaptopProPackageToHost({
+          invoke: (profileId, method, params) => {
+            void profileId;
+            return this.invokeOn(live, method, params);
+          },
+        }, live.profileId);
+        if (pushed.ok && pushed.action === "pushed") {
+          this.log(live.profileId, `Pushed Pro packs (${pushed.files} files).`);
+        } else if (pushed.ok && pushed.action === "skipped") {
+          this.log(live.profileId, "Pro packs already match this computer.");
+        }
+      } catch (err) {
+        this.log(
+          live.profileId,
+          `Pro packs were not pushed: ${err instanceof Error ? err.message : String(err)}`,
+          { level: "warn" },
+        );
+      }
+    }
+    await this.configureHostModels(live, mark);
+  }
+
   private async configureHostModels(
     live: LiveConnection,
-    mark: (gate: RemoteConnectGate, ok: boolean, detail: string, level?: RemoteLogLevel) => void,
+    mark?: (gate: RemoteConnectGate, ok: boolean, detail: string, level?: RemoteLogLevel) => void,
   ): Promise<void> {
     const { seed, mode, hostProviderIds } = await this.pushHostModelSeed(live);
     const gate = describeModelSeedGate({ mode, seed, hostProviderIds });
-    mark("model", gate.ok, gate.detail, gate.ok ? "ok" : "error");
+    mark?.("model", gate.ok, gate.detail, gate.ok ? "ok" : "error");
   }
 
   private async attachHostDoctor(

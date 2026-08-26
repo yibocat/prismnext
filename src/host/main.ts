@@ -1,7 +1,10 @@
 import { runDoctor } from "./doctor";
+import { applyHostRuntimePath } from "./runtime-path";
 import { buildHandshake, readHostStamp } from "./stamp";
 import { serveListen } from "./serve-listen";
 import { serveStdio } from "./serve-stdio";
+
+applyHostRuntimePath();
 
 function listenBindFrom(args: string[]): string | null {
   const flag = args.indexOf("--listen");

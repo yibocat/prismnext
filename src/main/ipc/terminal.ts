@@ -7,6 +7,21 @@ import type { TerminalConfig } from "../terminal/terminal-config";
 import { getRemoteSessionBroker } from "./remote";
 import { firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
 
+/** Host terminal sessions — write/resize/destroy must not fan out to every profile. */
+const remoteSessions = new Map<string, string>();
+
+function remoteProfileForSession(sessionId: string): string | undefined {
+  return remoteSessions.get(sessionId);
+}
+
+async function invokeRemoteTerminal(
+  profileId: string,
+  method: "terminal:write" | "terminal:resize" | "terminal:destroy",
+  args: Record<string, unknown>,
+): Promise<unknown> {
+  return getRemoteSessionBroker().invoke(profileId, method, args).catch(() => undefined);
+}
+
 export function registerTerminalHandlers(): void {
   // ─── Session management ───
 
@@ -14,16 +29,25 @@ export function registerTerminalHandlers(): void {
     "terminal:create",
     async (
       event,
-      args: { sessionId: string; tabId: string; projectRoot: string; cwd: string },
+      args: {
+        sessionId: string;
+        tabId: string;
+        projectRoot: string;
+        cwd: string;
+        cols?: number;
+        rows?: number;
+      },
     ) => {
       const remote = firstRemoteAbs(args.projectRoot, args.cwd);
       if (remote) {
+        remoteSessions.set(args.sessionId, remote.profileId);
         return getRemoteSessionBroker().invoke(
           remote.profileId,
           "terminal:create",
           toHostFsParams({ ...args }),
         );
       }
+      remoteSessions.delete(args.sessionId);
       const win = BrowserWindow.fromWebContents(event.sender);
       if (!win) throw new Error("No window available");
 
@@ -41,6 +65,8 @@ export function registerTerminalHandlers(): void {
         tabId: args.tabId,
         projectRoot: args.projectRoot,
         cwd: args.cwd,
+        cols: args.cols,
+        rows: args.rows,
         onData,
         onExit,
       });
@@ -50,13 +76,13 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     "terminal:destroy",
     async (_event, args: { sessionId: string }) => {
-      terminalService.destroySession(args.sessionId);
-      const broker = getRemoteSessionBroker();
-      for (const [profileId, state] of Object.entries(broker.snapshot().byProfileId)) {
-        if (state.phase === "ready") {
-          await broker.invoke(profileId, "terminal:destroy", args).catch(() => undefined);
-        }
+      const profileId = remoteProfileForSession(args.sessionId);
+      remoteSessions.delete(args.sessionId);
+      if (profileId) {
+        await invokeRemoteTerminal(profileId, "terminal:destroy", args);
+        return;
       }
+      terminalService.destroySession(args.sessionId);
     },
   );
 
@@ -64,7 +90,13 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     "terminal:destroyTab",
     async (_event, args: { tabId: string }) => {
-      terminalService.destroySessionsByPrefix(args.tabId + ":");
+      const prefix = args.tabId + ":";
+      const doomed = [...remoteSessions.entries()].filter(([sessionId]) => sessionId.startsWith(prefix));
+      for (const [sessionId] of doomed) remoteSessions.delete(sessionId);
+      terminalService.destroySessionsByPrefix(prefix);
+      for (const [sessionId, profileId] of doomed) {
+        await invokeRemoteTerminal(profileId, "terminal:destroy", { sessionId });
+      }
     },
   );
 
@@ -72,6 +104,14 @@ export function registerTerminalHandlers(): void {
     "terminal:destroyTabs",
     async (_event, args: { tabIds: string[] }) => {
       terminalService.destroySessionsByTabIds(args.tabIds);
+      for (const tabId of args.tabIds) {
+        const prefix = tabId + ":";
+        const doomed = [...remoteSessions.entries()].filter(([sessionId]) => sessionId.startsWith(prefix));
+        for (const [sessionId, profileId] of doomed) {
+          remoteSessions.delete(sessionId);
+          await invokeRemoteTerminal(profileId, "terminal:destroy", { sessionId });
+        }
+      }
     },
   );
 
@@ -94,19 +134,23 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     "terminal:write",
     async (_event, args: { sessionId: string; data: string }) => {
-      terminalService.writeToSession(args.sessionId, args.data);
-      const broker = getRemoteSessionBroker();
-      for (const [profileId, state] of Object.entries(broker.snapshot().byProfileId)) {
-        if (state.phase === "ready") {
-          await broker.invoke(profileId, "terminal:write", args).catch(() => undefined);
-        }
+      const profileId = remoteProfileForSession(args.sessionId);
+      if (profileId) {
+        await invokeRemoteTerminal(profileId, "terminal:write", args);
+        return;
       }
+      terminalService.writeToSession(args.sessionId, args.data);
     },
   );
 
   ipcMain.handle(
     "terminal:resize",
     async (_event, args: { sessionId: string; cols: number; rows: number }) => {
+      const profileId = remoteProfileForSession(args.sessionId);
+      if (profileId) {
+        await invokeRemoteTerminal(profileId, "terminal:resize", args);
+        return;
+      }
       terminalService.resizeSession(args.sessionId, args.cols, args.rows);
     },
   );
@@ -137,4 +181,5 @@ export function registerTerminalHandlers(): void {
 /** Kill all PTY sessions — call on window close / app quit. */
 export function destroyAllTerminalSessions(): void {
   terminalService.destroyAllSessions();
+  remoteSessions.clear();
 }

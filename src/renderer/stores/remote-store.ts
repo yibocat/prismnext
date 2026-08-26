@@ -14,6 +14,7 @@ interface RemoteState {
   byProfileId: Record<string, RemoteConnectionState>;
   logs: RemoteBootstrapLogLine[];
   hydrated: boolean;
+  connectDialogAlias: string | null;
   hydrate: () => Promise<void>;
   connect: (alias: string) => Promise<RemoteConnectResult>;
   disconnect: (alias: string) => Promise<void>;
@@ -21,6 +22,8 @@ interface RemoteState {
     alias: string,
     hostKey: { host: string; port: number; fingerprint: string },
   ) => Promise<RemoteConnectResult>;
+  openConnectDialog: (alias: string) => void;
+  closeConnectDialog: () => void;
   openProject: (
     alias: string,
     remoteRoot: string,
@@ -36,6 +39,8 @@ async function rebindFocusedRemoteProject(alias: string): Promise<void> {
     remoteRoot: parsed.abs,
   });
 }
+
+const connectInFlight = new Map<string, Promise<RemoteConnectResult>>();
 
 let subscribed = false;
 
@@ -58,6 +63,7 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
   byProfileId: {},
   logs: [],
   hydrated: false,
+  connectDialogAlias: null,
 
   hydrate: async () => {
     ensureSubscriptions(set);
@@ -71,19 +77,35 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
   },
 
   connect: async (alias) => {
-    const result = await remoteDesktop.remoteConnect(alias);
-    if (result.hostKey) {
-      set({
-        byProfileId: {
-          ...get().byProfileId,
-          [alias]: { phase: "awaiting_host_key", profileId: alias, hostKey: result.hostKey },
-        },
-      });
-    }
-    if (result.ok) {
-      await rebindFocusedRemoteProject(alias).catch(() => undefined);
-    }
-    return result;
+    const existing = connectInFlight.get(alias);
+    if (existing) return existing;
+    const pending = (async () => {
+      const result = await remoteDesktop.remoteConnect(alias);
+      if (result.hostKey) {
+        set({
+          byProfileId: {
+            ...get().byProfileId,
+            [alias]: { phase: "awaiting_host_key", profileId: alias, hostKey: result.hostKey },
+          },
+        });
+      }
+      if (result.ok) {
+        await rebindFocusedRemoteProject(alias).catch(() => undefined);
+      }
+      return result;
+    })().finally(() => {
+      connectInFlight.delete(alias);
+    });
+    connectInFlight.set(alias, pending);
+    return pending;
+  },
+
+  openConnectDialog: (alias) => {
+    set({ connectDialogAlias: alias });
+  },
+
+  closeConnectDialog: () => {
+    set({ connectDialogAlias: null });
   },
 
   disconnect: async (alias) => {

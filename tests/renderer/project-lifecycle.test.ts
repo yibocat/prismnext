@@ -498,11 +498,13 @@ describe("restoreWorkbenchLaunch", () => {
       "conv-other",
       undefined,
       "/papers/a",
+      { connectRemote: false },
     );
     expect(useChatStore.getState().loadSession).toHaveBeenCalledWith(
       "conv-old",
       undefined,
       "/papers/b",
+      { connectRemote: false },
     );
     const loadOrder = (useChatStore.getState().loadSession as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0]);
@@ -551,6 +553,7 @@ describe("restoreWorkbenchLaunch", () => {
     expect(useDocumentStore.getState().openProject).not.toHaveBeenCalled();
     expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith(
       "remote://lab/home/ubuntu/paper",
+      { connectRemote: false },
     );
   });
 });

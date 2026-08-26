@@ -3,6 +3,7 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { isJobMonitorTab } from "@/lib/workspace/mode-registry";
 import { shellDisplayName, isGenericTerminalTabTitle } from "@/lib/terminal/shell-label";
+import { isRemoteProjectRoot } from "@shared/remote";
 import { terminalTabLabelFromCommand } from "@/lib/terminal/root";
 import type {
   TerminalQuickCommand,
@@ -105,6 +106,7 @@ export const useTerminalStore = create<TerminalState>()((set, get) => ({
     try {
       const info = await terminalDesktop.terminalEnvInfo();
       set({ envInfo: info });
+      if (isRemoteProjectRoot(getProjectRoot() ?? "")) return;
       const label = shellDisplayName(info.shell);
       for (const tab of useRightPanelStore.getState().tabs) {
         if (

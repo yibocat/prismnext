@@ -500,12 +500,17 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
     });
   },
 
-  loadSession: async (conversationId: string, sessionDirectory?: string, projectLastPath?: string) => {
+  loadSession: async (
+    conversationId: string,
+    sessionDirectory?: string,
+    projectLastPath?: string,
+    opts?: { connectRemote?: boolean },
+  ) => {
     if (!conversationId.trim()) return;
     const mappedPath = projectLastPath || lastPathForSession(conversationId);
     const currentRoot = useDocumentStore.getState().projectRoot || "";
     if (mappedPath && !sameProjectPath(mappedPath, currentRoot)) {
-      await useDocumentStore.getState().focusProject(mappedPath);
+      await useDocumentStore.getState().focusProject(mappedPath, opts);
     }
     const projectPath = useDocumentStore.getState().projectRoot || mappedPath || "";
     if (!projectPath) return;

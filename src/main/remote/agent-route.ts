@@ -85,14 +85,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function rewriteAgentParamsForHost(params: unknown, remoteRoot?: string): Record<string, unknown> {
   const rec = asRecord(params) ?? {};
   const next = { ...rec };
-  const rootFromParam = typeof rec.projectRoot === "string" ? parseRemoteAbs(rec.projectRoot) : null;
-  const boundFromParam = typeof rec.boundCheckoutPath === "string"
-    ? parseRemoteAbs(rec.boundCheckoutPath)
-    : null;
-  const abs = remoteRoot || rootFromParam?.abs || boundFromParam?.abs;
-  if (abs) {
-    if (typeof rec.projectRoot === "string") next.projectRoot = abs;
-    if (typeof rec.boundCheckoutPath === "string") next.boundCheckoutPath = abs;
+  for (const key of ["projectRoot", "boundCheckoutPath"] as const) {
+    const value = rec[key];
+    if (typeof value !== "string") continue;
+    const parsed = parseRemoteAbs(value);
+    if (parsed) next[key] = parsed.abs;
+  }
+  if (remoteRoot && typeof next.projectRoot !== "string") {
+    next.projectRoot = remoteRoot;
   }
   return next;
 }

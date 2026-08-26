@@ -14,8 +14,8 @@ import {
   RemoteOperationError,
   type RemoteDirEntry,
 } from "../shared/remote";
-import { assertContained } from "./path-guard";
 import type { HostHandlerContext } from "./context";
+import { requireRemoteRoot, resolveHostProjectPath } from "./project-path";
 
 const HIDDEN_DIRECTORY_NAMES = new Set([
   ".git",
@@ -66,15 +66,8 @@ async function walkMetadata(root: string, dir: string, prefix: string, files: un
   }
 }
 
-function requireRoot(ctx: HostHandlerContext): string {
-  if (!ctx.remoteRoot) {
-    throw new RemoteOperationError("not_connected", "No remote project is bound on this connection.");
-  }
-  return ctx.remoteRoot;
-}
-
 function resolveInRoot(ctx: HostHandlerContext, absPath: string): string {
-  return assertContained(requireRoot(ctx), absPath);
+  return resolveHostProjectPath(ctx, absPath);
 }
 
 export const fsHandlers: Record<string, (params: Record<string, unknown>, ctx: HostHandlerContext) => Promise<unknown>> = {
@@ -134,7 +127,7 @@ export const fsHandlers: Record<string, (params: Record<string, unknown>, ctx: H
   },
 
   async "fs:create"(params, ctx) {
-    const root = requireRoot(ctx);
+    const root = requireRemoteRoot(ctx);
     const relative = String(params.relativePath ?? "").replace(/\\/g, "/").replace(/^\/+/, "");
     if (!relative || relative.split("/").includes("..")) {
       throw new RemoteOperationError("path_escaped", "Unsafe relative path.");

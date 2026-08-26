@@ -46,5 +46,8 @@ describe("remote security invariants", () => {
     const broker = readFileSync(join(REPO, "src/main/remote/session-broker.ts"), "utf8");
     expect(broker).not.toMatch(/checkLicense|requirePro|workspace\.remote|agent\.remote/);
     expect(broker).not.toMatch(/entitlement/);
+    const pack = readFileSync(join(REPO, "scripts/host/package-host.mjs"), "utf8");
+    expect(pack).toContain("Never copy resources/pro-package");
+    expect(pack).not.toMatch(/pro-package.*cpSync|cpSync.*pro-package/);
   });
 });

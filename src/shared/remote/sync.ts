@@ -22,7 +22,7 @@ export function effectiveRemoteSyncMode(value: unknown): Exclude<RemoteSyncMode,
   return value === "online-only" ? "online-only" : "on-demand";
 }
 
-export type RemoteSyncKind = "file" | "pdf" | "experiment" | "sessions" | "skills";
+export type RemoteSyncKind = "file" | "pdf" | "experiment" | "sessions" | "skills" | "pro";
 
 export interface RemoteSyncProgress {
   current: number;

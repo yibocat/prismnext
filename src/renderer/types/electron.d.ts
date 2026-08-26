@@ -1768,6 +1768,8 @@ export interface ElectronAPI {
     tabId: string;
     projectRoot: string;
     cwd: string;
+    cols?: number;
+    rows?: number;
   }) => Promise<{ shell: string; cwd: string; pid: number; tabId: string }>;
   terminalDestroy: (args: { sessionId: string }) => Promise<void>;
   terminalDestroyTab: (args: { tabId: string }) => Promise<void>;

@@ -23,7 +23,9 @@ import {
   registerExternalTeamRoot,
   unregisterExternalTeamRoot,
 } from "./catalog";
-import { invalidateLicenseCache } from "./teams-license";
+import { invalidateLicenseCache, isHostLicenseSessionMode, licenseGrants } from "./teams-license";
+import { resolveHostProPackageDir } from "../workbench/home";
+import { installTeam } from "./lifecycle";
 import { notifyTeamsChanged } from "./resolver";
 import { _registeredRoots } from "../project/active-project-roots";
 import { createLogger } from "../app/logger";
@@ -81,6 +83,10 @@ export function resolveProPackageDir(env: string | undefined = process.env.PRISM
     const dir = findProPackageDirUp(resolve(raw));
     if (dir) return dir;
     log.warn("PRISM_PRO_PATH is set but the pro package directory was not found");
+  }
+  if (isHostLicenseSessionMode()) {
+    const hostDir = resolveHostProPackageDir();
+    if (existsSync(join(hostDir, "package.json"))) return hostDir;
   }
   try {
     if (isAppPackaged()) {
@@ -169,6 +175,25 @@ export function discoverAndRegisterProTeams(): { registered: string[]; skipped: 
     });
   }
   return { registered, skipped };
+}
+
+/**
+ * Host: packs on disk are not usable until they have an install record.
+ * Laptop already installed them; the server `teams-state.json` starts empty.
+ * Call after grant + discover. No-op without a live grant.
+ */
+export function installDiscoveredProTeams(teamIds: string[]): string[] {
+  if (!licenseGrants() || teamIds.length === 0) return [];
+  const installed: string[] = [];
+  for (const teamId of teamIds) {
+    try {
+      installTeam(teamId);
+      installed.push(teamId);
+    } catch (err) {
+      log.warn("discovered pro team could not be installed", { teamId, error: String(err) });
+    }
+  }
+  return installed;
 }
 
 /**

@@ -13,6 +13,8 @@ import {
   emptyProjectTeamsState,
   normalizeAppTeamsState,
   normalizeProjectTeamsState,
+  projectDefaultTeamFromRaw,
+  projectTeamsStateWithDefaultTeam,
   resolveTri,
   isProjectEnableOverridden,
 } from "../../src/shared/teams/state";
@@ -27,6 +29,7 @@ import {
 } from "../../src/main/teams/state-app";
 import {
   onProjectTeamsStateWritten,
+  projectTeamsStateMtime,
   projectTeamsStateWriteCounter,
   readProjectTeamsState,
   setProjectAssetEnabled,
@@ -59,6 +62,29 @@ describe("resolveTri — the single layer-merge function", () => {
 
   it("project=false overrides app=true", () => {
     expect(resolveTri(false, true, true)).toBe(false);
+  });
+});
+
+describe("project teams.json defaultTeam helpers", () => {
+  it("reads and merges defaultTeam without dropping other keys", () => {
+    const raw = projectTeamsStateWithDefaultTeam(
+      JSON.stringify({
+        version: 1,
+        defaultTeam: "prismnext.core",
+        teamEnabled: { "user.my-content": true },
+      }),
+      "prismnext.pro.idea-arena",
+    );
+    expect(projectDefaultTeamFromRaw(raw)).toBe("prismnext.pro.idea-arena");
+    expect(JSON.parse(raw).teamEnabled["user.my-content"]).toBe(true);
+  });
+
+  it("treats missing or invalid JSON as empty", () => {
+    expect(projectDefaultTeamFromRaw(null)).toBeNull();
+    expect(projectDefaultTeamFromRaw("{")).toBeNull();
+    expect(projectDefaultTeamFromRaw(projectTeamsStateWithDefaultTeam(null, "user.my-content"))).toBe(
+      "user.my-content",
+    );
   });
 });
 
@@ -240,6 +266,14 @@ describe("state-app / state-project — IO, counter, listeners", () => {
     expect(state.teamEnabled).toEqual({ "project.local": true });
     expect(state.assetEnabled).toEqual({ "project.local:review": false });
     expect(state.assetOverrides["project.local:lead"]?.temperature).toBe(0.2);
+  });
+
+  it("remote:// is not a local teams.json path", () => {
+    expect(readProjectTeamsState("remote://lab/home/ubuntu/paper")).toEqual(emptyProjectTeamsState());
+    expect(projectTeamsStateMtime("remote://lab/home/ubuntu/paper")).toBe(0);
+    expect(() =>
+      writeProjectTeamsState("remote://lab/home/ubuntu/paper", emptyProjectTeamsState()),
+    ).toThrow(/Host/);
   });
 
   it("app state: corrupt file is backed up before an empty state is written", () => {

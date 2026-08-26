@@ -36,6 +36,13 @@ describe("remote agent IPC routing", () => {
       projectRoot: "/home/ubuntu/paper",
       text: "hi",
     });
+    expect(rewriteAgentParamsForHost({
+      projectRoot: "remote://lab/home/ubuntu/paper",
+      boundCheckoutPath: "remote://lab/home/ubuntu/.prismnext/projects/p_ab/worktrees/calm-owl/checkout",
+    })).toEqual({
+      projectRoot: "/home/ubuntu/paper",
+      boundCheckoutPath: "/home/ubuntu/.prismnext/projects/p_ab/worktrees/calm-owl/checkout",
+    });
   });
 
   it("does not route a local folder", () => {

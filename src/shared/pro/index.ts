@@ -1,5 +1,6 @@
 export type {
   ActivateLicenseResult,
+  HostProGrant,
   LicenseSnapshot,
   ProFeatureId,
   ProLicensePlan,
@@ -16,3 +17,8 @@ export {
   normalizeLicenseKey,
   validateActivationKey,
 } from "./license";
+export {
+  isHostProGrantActive,
+  licenseToHostProGrant,
+  parseHostProGrant,
+} from "./grant";

@@ -34,6 +34,11 @@ export interface SshExecResult {
   code: number;
 }
 
+export interface SshExecOptions {
+  /** Defaults to the client’s usual short timeout. Runtime downloads need minutes. */
+  timeoutMs?: number;
+}
+
 export interface SshStdioPipe {
   stdin: Writable;
   stdout: Readable;
@@ -42,7 +47,7 @@ export interface SshStdioPipe {
 }
 
 export interface SshSession {
-  exec(command: string): Promise<SshExecResult>;
+  exec(command: string, extra?: SshExecOptions): Promise<SshExecResult>;
   sftpPut(localPath: string, remotePath: string): Promise<void>;
   sftpStat(remotePath: string): Promise<{ size: number } | null>;
   sftpRead(remotePath: string): Promise<string | null>;
@@ -109,12 +114,12 @@ class DirectorySshSession implements SshSession {
     return join(this.root, normalized);
   }
 
-  async exec(command: string): Promise<SshExecResult> {
+  async exec(command: string, extra?: SshExecOptions): Promise<SshExecResult> {
     try {
       const { stdout, stderr } = await execFileAsync("/bin/sh", ["-c", command], {
         cwd: this.root,
         env: { ...process.env, HOME: this.root },
-        timeout: 60_000,
+        timeout: extra?.timeoutMs ?? 60_000,
         maxBuffer: 8 * 1024 * 1024,
       });
       return { stdout: String(stdout), stderr: String(stderr), code: 0 };

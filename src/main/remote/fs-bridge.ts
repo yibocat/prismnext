@@ -69,7 +69,7 @@ export function invalidateHostListingCache(profileId?: string): void {
 
 export function toHostFsParams(params: Record<string, unknown>): Record<string, unknown> {
   const next = { ...params };
-  for (const key of ["absPath", "rootPath", "oldPath", "newPath", "path"]) {
+  for (const key of ["absPath", "rootPath", "oldPath", "newPath", "path", "cwd", "projectRoot"]) {
     const value = next[key];
     if (typeof value !== "string") continue;
     const parsed = parseRemoteAbs(value);

@@ -84,6 +84,7 @@
   "terminal": {
     "label": "Terminal",
     "initialTitle": "Shell",
+    "remoteTitle": "{{shell}} · Remote",
     "openProject": "Open a project to start a terminal",
     "noRoot": "Unable to resolve a working directory for the terminal",
     "createSession": "Create a terminal session to get started",

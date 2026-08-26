@@ -12,6 +12,13 @@ describe("desktop fs bridge", () => {
       absPath: "/home/ubuntu/paper/main.tex",
       rootPath: "/home/ubuntu/paper",
     });
+    expect(toHostFsParams({
+      projectRoot: "remote://lab/home/ubuntu/paper",
+      cwd: "remote://lab/home/ubuntu/.prismnext/projects/p_ab/worktrees/calm-owl/checkout",
+    })).toEqual({
+      projectRoot: "/home/ubuntu/paper",
+      cwd: "/home/ubuntu/.prismnext/projects/p_ab/worktrees/calm-owl/checkout",
+    });
     expect(disconnectedHostFsProbe("fs:exists")).toBe(false);
     expect(disconnectedHostFsProbe("fs:isFile")).toBe(false);
     expect(disconnectedHostFsProbe("fs:scan")).toEqual({ files: [], folders: [] });

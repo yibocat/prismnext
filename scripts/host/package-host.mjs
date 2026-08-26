@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 /**
- * Bundle prismnext-host + a dedicated Linux Node into extraResources / out/host.
- * This is not a separate Host product — stamp = desktop version + tarball sha256.
- * Node is downloaded only at pack time (nodejs.org). Connect never hits the network.
+ * Bundle prismnext-host (JS + Core teams + runtime pins + install-runtime).
+ * Node, Git, and Tectonic are not packed here — the Linux server downloads
+ * them from the pin files on first connect. Pack does not hit the network.
  */
 
 import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
 import {
   chmodSync,
   copyFileSync,
@@ -18,10 +17,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { create as tarCreate, extract as tarExtract } from "tar";
+import { create as tarCreate } from "tar";
 import { hostEsbuildOptions } from "./esbuild-options.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -29,17 +27,67 @@ const desktopVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8
 const outDir = join(root, "out", "host");
 const currentDir = join(outDir, "current");
 const hostJsPath = join(currentDir, "bin", "prismnext-host");
-const cacheDir = join(root, "scripts/host/.node-cache");
+const tarballName = "prismnext-host.tar.gz";
 
-/** Pinned official Node 24 LTS — matches esbuild target: node24 and Electron 43. Bump here on purpose. */
-const NODE_VERSION = "24.19.0";
-const LINUX_ARCHS = [
-  { payload: "linux-x64", node: "x64" },
-  { payload: "linux-arm64", node: "arm64" },
-];
+function readPinLines(filePath) {
+  return readFileSync(filePath, "utf8")
+    .split("\n")
+    .map((line) => line.replace(/#.*$/, "").trim())
+    .filter(Boolean);
+}
 
+function readKeyPin(filePath) {
+  const map = {};
+  for (const line of readPinLines(filePath)) {
+    const space = line.indexOf(" ");
+    if (space < 0) continue;
+    map[line.slice(0, space)] = line.slice(space + 1).trim();
+  }
+  return map;
+}
+
+function requireSha(pin, key, filePath) {
+  const value = pin[key] ?? "";
+  if (!/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error(`${filePath} needs a 64-hex ${key} (got ${value || "empty"})`);
+  }
+}
+
+const NODE_PIN = readKeyPin(join(root, "scripts/host/node-version.txt"));
+const HOST_GIT = readKeyPin(join(root, "scripts/host/git-version.txt"));
+const TECTONIC_LINUX = readKeyPin(join(root, "scripts/host/tectonic-linux.txt"));
+const TECTONIC_VERSION = readPinLines(join(root, "scripts/tectonic-version.txt"))[0].replace(/^v/, "");
+
+if (!NODE_PIN.version || !NODE_PIN.archive) {
+  throw new Error("scripts/host/node-version.txt needs version and archive");
+}
+requireSha(NODE_PIN, "sha256-x64", "scripts/host/node-version.txt");
+requireSha(NODE_PIN, "sha256-arm64", "scripts/host/node-version.txt");
+if (!HOST_GIT.tag || !HOST_GIT.archive) {
+  throw new Error("scripts/host/git-version.txt needs tag and archive");
+}
+requireSha(HOST_GIT, "sha256-x64", "scripts/host/git-version.txt");
+requireSha(HOST_GIT, "sha256-arm64", "scripts/host/git-version.txt");
+if (TECTONIC_LINUX.version !== TECTONIC_VERSION) {
+  throw new Error(
+    `scripts/host/tectonic-linux.txt version ${TECTONIC_LINUX.version} must match scripts/tectonic-version.txt ${TECTONIC_VERSION}`,
+  );
+}
+if (!TECTONIC_LINUX["triple-x64"] || !TECTONIC_LINUX["triple-arm64"]) {
+  throw new Error("scripts/host/tectonic-linux.txt needs triple-x64 and triple-arm64");
+}
+requireSha(TECTONIC_LINUX, "sha256-x64", "scripts/host/tectonic-linux.txt");
+requireSha(TECTONIC_LINUX, "sha256-arm64", "scripts/host/tectonic-linux.txt");
+
+const installSrc = join(root, "scripts/host/install-runtime.sh");
+if (!existsSync(installSrc)) {
+  throw new Error("scripts/host/install-runtime.sh missing");
+}
+
+rmSync(join(currentDir, "bin"), { recursive: true, force: true });
+rmSync(join(currentDir, "vendor"), { recursive: true, force: true });
 mkdirSync(join(currentDir, "bin"), { recursive: true });
-mkdirSync(cacheDir, { recursive: true });
+mkdirSync(join(currentDir, "runtime"), { recursive: true });
 
 await build(hostEsbuildOptions({ root, outfile: hostJsPath }));
 
@@ -53,6 +101,7 @@ const coreTeamJson = join(root, "resources", "teams", "prismnext.core", "team.js
 if (!existsSync(coreTeamJson)) {
   throw new Error("resources/teams/prismnext.core missing; remote Chat needs the Core lead agent.");
 }
+// Core teams + commands only. Never copy resources/pro-package into the public Host tarball.
 rmSync(join(currentDir, "resources"), { recursive: true, force: true });
 cpSync(join(root, "resources", "teams"), join(currentDir, "resources", "teams"), { recursive: true });
 if (existsSync(join(root, "resources", "commands"))) {
@@ -61,105 +110,54 @@ if (existsSync(join(root, "resources", "commands"))) {
   });
 }
 
+copyFileSync(installSrc, join(currentDir, "bin", "install-runtime"));
+copyFileSync(join(root, "scripts/host/node-version.txt"), join(currentDir, "runtime", "node-version.txt"));
+copyFileSync(join(root, "scripts/host/git-version.txt"), join(currentDir, "runtime", "git-version.txt"));
+copyFileSync(
+  join(root, "scripts/host/tectonic-linux.txt"),
+  join(currentDir, "runtime", "tectonic-linux.txt"),
+);
+
 try {
   chmodSync(hostJsPath, 0o755);
+  chmodSync(join(currentDir, "bin", "install-runtime"), 0o755);
 } catch {
   // Windows
-}
-
-async function download(url, dest) {
-  const { get } = await import("node:https");
-  await new Promise((resolveDownload, reject) => {
-    const request = (target) => {
-      get(target, (response) => {
-        const code = response.statusCode ?? 0;
-        if (code >= 300 && code < 400 && response.headers.location) {
-          response.resume();
-          request(response.headers.location);
-          return;
-        }
-        if (code !== 200) {
-          reject(new Error(`download failed ${code} ${target}`));
-          response.resume();
-          return;
-        }
-        pipeline(response, createWriteStream(dest)).then(resolveDownload).catch(reject);
-      }).on("error", reject);
-    };
-    request(url);
-  });
 }
 
 function sha256File(filePath) {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
-async function ensureOfficialNode(nodeArch) {
-  const folder = `node-v${NODE_VERSION}-linux-${nodeArch}`;
-  const tarName = `${folder}.tar.gz`;
-  const tarPath = join(cacheDir, tarName);
-  const sumsPath = join(cacheDir, `SHASUMS256-${NODE_VERSION}.txt`);
-  const extractedNode = join(cacheDir, folder, "bin", "node");
-  if (existsSync(extractedNode)) return extractedNode;
+const stampPath = join(currentDir, "stamp.json");
+writeFileSync(
+  stampPath,
+  `${JSON.stringify({ desktopVersion, payloadSha256: "pending-tarball" }, null, 2)}\n`,
+);
 
-  if (!existsSync(sumsPath)) {
-    process.stdout.write(`downloading Node ${NODE_VERSION} checksums…\n`);
-    await download(`https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt`, sumsPath);
-  }
-  if (!existsSync(tarPath)) {
-    process.stdout.write(`downloading ${tarName}…\n`);
-    await download(`https://nodejs.org/dist/v${NODE_VERSION}/${tarName}`, tarPath);
-  }
-  const sums = readFileSync(sumsPath, "utf8");
-  const line = sums.split("\n").find((row) => row.endsWith(`  ${tarName}`));
-  const expected = line?.slice(0, 64);
-  if (!expected) throw new Error(`no checksum for ${tarName}`);
-  const actual = sha256File(tarPath);
-  if (actual !== expected) {
-    throw new Error(`Node tarball checksum mismatch for ${tarName}`);
-  }
-
-  const extractRoot = join(cacheDir, `extract-${nodeArch}`);
-  rmSync(extractRoot, { recursive: true, force: true });
-  mkdirSync(extractRoot, { recursive: true });
-  await tarExtract({ file: tarPath, cwd: extractRoot });
-  const from = join(extractRoot, folder, "bin", "node");
-  if (!existsSync(from)) throw new Error(`official Node archive missing bin/node (${tarName})`);
-  mkdirSync(join(cacheDir, folder, "bin"), { recursive: true });
-  copyFileSync(from, extractedNode);
-  chmodSync(extractedNode, 0o755);
-  rmSync(extractRoot, { recursive: true, force: true });
-  return extractedNode;
+for (const leftover of [
+  "prismnext-host-linux-x64.tar.gz",
+  "prismnext-host-linux-arm64.tar.gz",
+  "prismnext-host-arm64.tar.gz",
+  "prismnext-host-x64.tar.gz",
+]) {
+  rmSync(join(outDir, leftover), { force: true });
 }
 
-for (const item of LINUX_ARCHS) {
-  const nodeBin = await ensureOfficialNode(item.node);
-  const destNode = join(currentDir, "bin", "node");
-  copyFileSync(nodeBin, destNode);
-  chmodSync(destNode, 0o755);
-
-  const stampPath = join(currentDir, "stamp.json");
-  writeFileSync(
-    stampPath,
-    `${JSON.stringify({ desktopVersion, payloadSha256: "pending-tarball" }, null, 2)}\n`,
-  );
-
-  const tarballName = `prismnext-host-${item.payload}.tar.gz`;
-  const tarballPath = join(outDir, tarballName);
-  await tarCreate(
-    {
-      gzip: true,
-      file: tarballPath,
-      cwd: outDir,
-    },
-    ["current"],
-  );
-  const sha256 = sha256File(tarballPath);
-  writeFileSync(
-    stampPath,
-    `${JSON.stringify({ desktopVersion, payloadSha256: sha256 }, null, 2)}\n`,
-  );
-  process.stdout.write(
-    `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} node=${NODE_VERSION}-${item.node}\n`,
-  );
-}
+const tarballPath = join(outDir, tarballName);
+await tarCreate(
+  {
+    gzip: true,
+    file: tarballPath,
+    cwd: outDir,
+  },
+  ["current"],
+);
+const sha256 = sha256File(tarballPath);
+writeFileSync(
+  stampPath,
+  `${JSON.stringify({ desktopVersion, payloadSha256: sha256 }, null, 2)}\n`,
+);
+process.stdout.write(
+  `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} (slim; server downloads node=${NODE_PIN.version} git=${HOST_GIT.tag} tectonic=${TECTONIC_VERSION})\n`,
+);

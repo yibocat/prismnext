@@ -6,7 +6,7 @@
 
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { getAppPath, isAppPackaged, getResourcesPath } from "../app/paths";
 
 export interface TectonicBinaryInfo {
@@ -31,6 +31,19 @@ function platformArchDir(): { platformDir: string; archDir: string } {
   else archDir = arch;
 
   return { platformDir, archDir };
+}
+
+/** Host runtime: `~/.prismnext-host/current/bin/tectonic` next to the dedicated Node. */
+export function resolveHostPayloadTectonicPath(): string | null {
+  const binName = process.platform === "win32" ? "tectonic.exe" : "tectonic";
+  const fromEnv = process.env.PRISM_HOST_BIN_DIR?.trim();
+  if (fromEnv) {
+    const candidate = join(fromEnv, binName);
+    if (existsSync(candidate)) return candidate;
+  }
+  const besideNode = join(dirname(process.execPath), binName);
+  if (existsSync(besideNode)) return besideNode;
+  return null;
 }
 
 export function resolveBundledTectonicBinaryPath(): string {
@@ -109,6 +122,17 @@ export function resetTectonicBinaryCacheForTests(): void {
 /** Resolve bundled Tectonic first, then system install. */
 export async function resolveTectonicBinary(opts?: { force?: boolean }): Promise<TectonicBinaryInfo> {
   if (cached && !opts?.force) return cached;
+
+  const hostPayload = resolveHostPayloadTectonicPath();
+  if (hostPayload) {
+    cached = {
+      available: true,
+      path: hostPayload,
+      bundled: true,
+      version: probeVersion(hostPayload),
+    };
+    return cached;
+  }
 
   const bundledPath = resolveBundledTectonicBinaryPath();
   if (existsSync(bundledPath)) {

@@ -24,9 +24,9 @@ export const REMOTE_ERROR_CODES = [
   "displaced",
 ] as const;
 
-/** Packaged app, not “run pnpm host:pack”. The server never downloads Host. */
+/** Packaged app, not “run pnpm host:pack”. The server downloads Node/Git/Tectonic, not the Host program. */
 export const PAYLOAD_MISSING_LOCAL_MESSAGE =
-  "This copy of PrismNext is missing the remote runtime. Reinstall PrismNext. The server does not download Host.";
+  "This copy of PrismNext is missing the remote Host program. Reinstall PrismNext. The server downloads Node, Git, and Tectonic itself; it does not download the Host program.";
 
 export type RemoteErrorCode = (typeof REMOTE_ERROR_CODES)[number];
 

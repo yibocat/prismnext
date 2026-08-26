@@ -42,6 +42,36 @@ import {
   setTeamIconImage,
 } from "../teams/lifecycle";
 import type { AssetOverride } from "../../shared/teams/types";
+import { isRemoteProjectRoot } from "../../shared/remote";
+import { routeHostDomainMethod } from "../remote/domain-route";
+import {
+  readRemoteProjectDefaultTeam,
+  writeRemoteProjectDefaultTeam,
+} from "../remote/project-teams-state";
+import { getRemoteSessionBroker } from "./remote";
+
+/**
+ * Laptop catalog is the picker / Settings list (Core, Pro, 通用团队).
+ * Host only stores this remote project's active team and runs Chat.
+ * Do not route `teams:list` (or other catalog reads) to the server.
+ */
+async function routeTeamsIfRemote(
+  method: string,
+  args: unknown,
+  opts?: { query?: boolean },
+): Promise<unknown | undefined> {
+  return routeHostDomainMethod(method, args, {
+    keys: ["projectRoot", "projectPath"],
+    broker: getRemoteSessionBroker(),
+    disconnected: opts?.query
+      ? () => ({ hit: true as const, result: null })
+      : undefined,
+  });
+}
+
+function isProjectScope(scope: string | undefined, fallback: "project" | "app"): boolean {
+  return (scope ?? fallback) === "project";
+}
 
 function requireProjectRoot(projectRoot: string | null | undefined): string {
   if (!projectRoot) throw new Error("No project root");
@@ -129,10 +159,24 @@ export function registerPacksHandlers(): void {
   );
 
   // The active team (session → project → app → core fallback).
+  // Remote: Host teams.json stores only the id; the view comes from this computer.
   ipcMain.handle(
     "teams:getActiveTeam",
     async (_event, args?: { projectRoot?: string | null; sessionTeamId?: string | null }) => {
       if (!args?.projectRoot) return null;
+      if (isRemoteProjectRoot(args.projectRoot)) {
+        const sessionId = args.sessionTeamId?.trim();
+        if (sessionId) {
+          const sessionTeam = getTeam(args.projectRoot, sessionId);
+          if (sessionTeam?.enabled && sessionTeam.hasOrchestrator) return sessionTeam;
+        }
+        const defaultId = await readRemoteProjectDefaultTeam(args.projectRoot);
+        if (defaultId) {
+          const projectTeam = getTeam(args.projectRoot, defaultId);
+          if (projectTeam?.enabled && projectTeam.hasOrchestrator) return projectTeam;
+        }
+        return resolveActiveTeam(args.projectRoot, args.sessionTeamId);
+      }
       return resolveActiveTeam(args.projectRoot, args.sessionTeamId);
     },
   );
@@ -188,7 +232,7 @@ export function registerPacksHandlers(): void {
 
   // ── Mutations (lifecycle; the single write exit) ──
 
-  // Install is app-level (no projectRoot needed for the write itself).
+  // Install / enable stay on this computer — one Pro catalog, not a Host copy.
   ipcMain.handle("teams:install", async (_event, args: { teamId: string }) => {
     return installTeam(args.teamId);
   });
@@ -233,11 +277,16 @@ export function registerPacksHandlers(): void {
         throw new Error("Invalid override payload");
       }
       const scope: TeamScope = args.scope ?? "project";
+      if (isProjectScope(scope, "project")) {
+        const remote = await routeTeamsIfRemote("teams:saveAssetOverride", args);
+        if (remote !== undefined) return remote;
+      }
       saveAssetOverride(args.fqid, args.patch, scope, args.projectRoot ?? undefined);
     },
   );
 
-  // Set the active team (project or app layer).
+  // Project default for a remote folder is an id in Host teams.json.
+  // Do not ask Host catalog whether the team has a lead — that list is incomplete.
   ipcMain.handle(
     "teams:setActiveTeam",
     async (
@@ -245,6 +294,17 @@ export function registerPacksHandlers(): void {
       args: { projectRoot?: string | null; teamId: string; scope?: "project" | "app" },
     ) => {
       const scope = args.scope ?? "project";
+      if (scope === "project") {
+        if (!args.projectRoot) throw new Error("No project root");
+        const local = getTeam(args.projectRoot, args.teamId);
+        if (!local?.enabled || !local.hasOrchestrator) {
+          throw new Error(`Team has no usable lead agent: ${args.teamId}`);
+        }
+        if (isRemoteProjectRoot(args.projectRoot)) {
+          await writeRemoteProjectDefaultTeam(args.projectRoot, args.teamId);
+          return;
+        }
+      }
       if (scope === "app" && args.teamId === PROJECT_DEFAULT_TEAM_ID) {
         throw new Error("Project-scoped teams cannot be app defaults.");
       }
@@ -271,6 +331,10 @@ export function registerPacksHandlers(): void {
         iconImagePngBase64?: string;
       },
     ) => {
+      if (args.scope === "project") {
+        const remote = await routeTeamsIfRemote("teams:create", args);
+        if (remote !== undefined) return remote;
+      }
       return createTeam({
         name: args.name,
         description: args.description,
@@ -321,6 +385,8 @@ export function registerPacksHandlers(): void {
   ipcMain.handle(
     "teams:promote",
     async (_event, args: { teamId: string; projectRoot: string }) => {
+      const remote = await routeTeamsIfRemote("teams:promote", args);
+      if (remote !== undefined) return remote;
       return promoteTeam(args.teamId, requireProjectRoot(args.projectRoot));
     },
   );
@@ -328,6 +394,8 @@ export function registerPacksHandlers(): void {
   ipcMain.handle(
     "teams:demote",
     async (_event, args: { teamId: string; projectRoot: string }) => {
+      const remote = await routeTeamsIfRemote("teams:demote", args);
+      if (remote !== undefined) return remote;
       return demoteTeam(args.teamId, requireProjectRoot(args.projectRoot));
     },
   );
@@ -335,6 +403,8 @@ export function registerPacksHandlers(): void {
   ipcMain.handle(
     "teams:moveAsset",
     async (_event, args: { projectRoot: string; fqid: Fqid; targetTeamId: string }) => {
+      const remote = await routeTeamsIfRemote("teams:moveAsset", args);
+      if (remote !== undefined) return remote;
       return moveAsset(args.fqid, args.targetTeamId, requireProjectRoot(args.projectRoot));
     },
   );
@@ -349,6 +419,10 @@ export function registerPacksHandlers(): void {
       const asset = getAsset(root, args.fqid);
       if (!asset || asset.kind !== "orchestrator" || !asset.enabled) {
         throw new Error(`Orchestrator is not active: ${args.fqid}`);
+      }
+      if (isRemoteProjectRoot(root)) {
+        await writeRemoteProjectDefaultTeam(root, asset.teamId);
+        return;
       }
       setActiveTeam(asset.teamId, "project", root);
     },
@@ -400,6 +474,8 @@ export function registerPacksHandlers(): void {
   ipcMain.handle(
     "teams:resetCoreDefaults",
     async (_event, args: { projectRoot: string; kind: "subagent" | "orchestrator" }) => {
+      const remote = await routeTeamsIfRemote("teams:resetCoreDefaults", args);
+      if (remote !== undefined) return remote;
       const root = requireProjectRoot(args.projectRoot);
       if (args.kind !== "subagent" && args.kind !== "orchestrator") {
         throw new Error("Invalid kind");

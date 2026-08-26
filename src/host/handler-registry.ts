@@ -3,13 +3,22 @@ import type { HostHandlerContext } from "./context";
 import { compileHandlers } from "./compile-handlers";
 import { experimentHandlers, installExperimentEvents } from "./experiment-handlers";
 import { fsHandlers } from "./fs-handlers";
+import { gitHandlers } from "./git-handlers";
 import { literatureHandlers, installLiteratureEvents } from "./literature-handlers";
 import { decodeHostModelWrapKey, mergeHostModelSettings, readHostModelSettings } from "./model-settings";
 import { setHostModelProxyEnabled, setHostModelProxyExtraBaseUrls } from "./model-proxy-transport";
+import { parseHostProGrant } from "../shared/pro";
+import { ensureMyContentTeam } from "../main/teams/my-content";
+import { applyHostProGrant, enableHostLicenseSessionMode } from "../main/teams/teams-license";
+import { discoverAndRegisterProTeams, installDiscoveredProTeams } from "../main/teams/pro-teams-discovery";
+import { resolveHostProPackageDir } from "../main/workbench/home";
+import { proHandlers } from "./pro-handlers";
 import { projectHandlers } from "./project-handlers";
 import { sessionHandlers } from "./session-handlers";
 import { settingsHandlers } from "./settings-handlers";
+import { teamsHandlers } from "./teams-handlers";
 import { terminalHandlers } from "./terminal-handlers";
+import { worktreeHandlers } from "./worktree-handlers";
 
 export type { HostHandlerContext };
 
@@ -17,6 +26,8 @@ type HostHandler = (params: Record<string, unknown>, ctx: HostHandlerContext) =>
 
 const handlers: Record<string, HostHandler> = {
   ...fsHandlers,
+  ...gitHandlers,
+  ...worktreeHandlers,
   ...projectHandlers,
   ...terminalHandlers,
   ...literatureHandlers,
@@ -24,7 +35,17 @@ const handlers: Record<string, HostHandler> = {
   ...compileHandlers,
   ...settingsHandlers,
   ...sessionHandlers,
+  ...teamsHandlers,
+  ...proHandlers,
   async "host.configure"(params, ctx) {
+    ensureMyContentTeam();
+    if (Object.prototype.hasOwnProperty.call(params, "proGrant")) {
+      enableHostLicenseSessionMode();
+      applyHostProGrant(parseHostProGrant(params.proGrant));
+      process.env.PRISM_HOST_PRO_PACKAGE_DIR = resolveHostProPackageDir();
+      const discovered = discoverAndRegisterProTeams();
+      installDiscoveredProTeams(discovered.registered);
+    }
     ctx.modelKeys = params.modelKeys === "gateway" ? "gateway" : "remote";
     const seededUrls = params.aiBaseUrls && typeof params.aiBaseUrls === "object" && !Array.isArray(params.aiBaseUrls)
       ? Object.values(params.aiBaseUrls).filter((item): item is string => typeof item === "string" && item.trim().length > 0)

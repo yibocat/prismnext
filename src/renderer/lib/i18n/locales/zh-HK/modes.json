@@ -84,6 +84,7 @@
   "terminal": {
     "label": "終端",
     "initialTitle": "Shell",
+    "remoteTitle": "{{shell}} · 遠端",
     "openProject": "開啟專案後可使用終端",
     "noRoot": "無法解析終端工作目錄",
     "createSession": "建立終端會話以開始",

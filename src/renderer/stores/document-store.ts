@@ -91,7 +91,7 @@ interface DocumentState {
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
   /** Switch the focused workbench project without joining or tearing down agents. */
-  focusProject: (rootPath: string) => Promise<void>;
+  focusProject: (rootPath: string, opts?: { connectRemote?: boolean }) => Promise<void>;
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
@@ -278,14 +278,24 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     await get().focusProject(focusPathAfterOpenFolder(opened.openedLastPath, rootPath));
   },
 
-  focusProject: async (rootPath: string) => {
+  focusProject: async (rootPath: string, opts?: { connectRemote?: boolean }) => {
     const previousRoot = get().projectRoot;
     if (sameProjectPath(previousRoot, rootPath) && get().initialized) {
-      const member = useWorkbenchStore.getState().members.find((item) =>
-        sameProjectPath(item.lastPath, rootPath),
-      );
-      if (member) useWorkbenchStore.getState().setFocusProject(member.id);
-      return;
+      if (!recoverRemoteAbs(rootPath)) {
+        const member = useWorkbenchStore.getState().members.find((item) =>
+          sameProjectPath(item.lastPath, rootPath),
+        );
+        if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+        return;
+      }
+      const { remoteFocusNeedsBind } = await import("@/lib/remote/ensure-connected");
+      if (!remoteFocusNeedsBind(rootPath)) {
+        const member = useWorkbenchStore.getState().members.find((item) =>
+          sameProjectPath(item.lastPath, rootPath),
+        );
+        if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+        return;
+      }
     }
 
     const generation = ++openProjectGeneration;
@@ -295,6 +305,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const firstOpen = !previousRoot;
     if (firstOpen) set({ isOpeningProject: true });
     try {
+      if (recoverRemoteAbs(rootPath) && opts?.connectRemote !== false) {
+        const { ensureRemoteProjectReady } = await import("@/lib/remote/ensure-connected");
+        await ensureRemoteProjectReady(rootPath);
+        if (generation !== openProjectGeneration) return;
+      }
       ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
       if (generation !== openProjectGeneration) return;
 

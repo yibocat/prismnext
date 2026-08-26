@@ -7,7 +7,7 @@
  * deleted or disabled by lifecycle mutations (enforced in lifecycle.ts).
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   MY_CONTENT_LEAD_ID,
@@ -162,8 +162,13 @@ function ensureLead(dir: string): boolean {
     return repairChatRoster(singularJson);
   }
   if (existsSync(legacyRoot)) {
-    // Some other lead dir exists — leave it; do not invent a second lead.
-    return false;
+    const entries = readdirSync(legacyRoot, { withFileTypes: true }).filter((e) => e.isDirectory());
+    const hasLeadJson = entries.some((entry) =>
+      existsSync(join(legacyRoot, entry.name, "orchestrator.json")),
+    );
+    // A leftover empty orchestrators/ must not block the Chat lead — Host
+    // catalog then treats 通用团队 as having no usable lead.
+    if (hasLeadJson) return false;
   }
 
   const orchDir = join(legacyRoot, MY_CONTENT_LEAD_ID);

@@ -12,6 +12,8 @@ import {
   HOME_SKILLS_MANIFEST_FILENAME,
   HOME_TEAMS_DIRNAME,
   HOME_TEAMS_STATE_FILENAME,
+  HOST_INSTALL_DIRNAME,
+  HOST_PRO_PACKAGE_DIRNAME,
   PROJECT_META_DIR,
   PROJECTS_DIRNAME,
   WORKBENCH_HOME_DIRNAME,
@@ -40,6 +42,18 @@ function resolveUserHome(opts?: WorkbenchHomeOpts): string {
 
 export function resolveWorkbenchHome(opts?: WorkbenchHomeOpts): string {
   return normalizeWorkbenchPath(join(resolveUserHome(opts), WORKBENCH_HOME_DIRNAME));
+}
+
+/** Server Host install root (`~/.prismnext-host`), sibling of app home. */
+export function resolveHostInstallDir(opts?: WorkbenchHomeOpts): string {
+  return normalizeWorkbenchPath(join(resolveUserHome(opts), HOST_INSTALL_DIRNAME));
+}
+
+/** Pushed Pro packs on the server — not inside the Host tarball `current/`. */
+export function resolveHostProPackageDir(opts?: WorkbenchHomeOpts): string {
+  const env = process.env.PRISM_HOST_PRO_PACKAGE_DIR?.trim();
+  if (env) return normalizeWorkbenchPath(env);
+  return join(resolveHostInstallDir(opts), HOST_PRO_PACKAGE_DIRNAME);
 }
 
 export function homeSkillsDir(opts?: WorkbenchHomeOpts): string {

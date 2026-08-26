@@ -84,6 +84,7 @@
   "terminal": {
     "label": "终端",
     "initialTitle": "Shell",
+    "remoteTitle": "{{shell}} · 远程",
     "openProject": "打开项目后可使用终端",
     "noRoot": "无法解析终端工作目录",
     "createSession": "创建终端会话以开始",

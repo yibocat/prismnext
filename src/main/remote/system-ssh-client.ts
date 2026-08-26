@@ -213,8 +213,8 @@ export function createSystemSshClient(): SshClient {
 class SystemSshSession implements SshSession {
   constructor(private readonly dest: string) {}
 
-  async exec(command: string): Promise<SshExecResult> {
-    return runSsh(this.dest, command, { timeout: 60_000 });
+  async exec(command: string, extra?: { timeoutMs?: number }): Promise<SshExecResult> {
+    return runSsh(this.dest, command, { timeout: extra?.timeoutMs ?? 60_000 });
   }
 
   async sftpPut(localPath: string, remotePath: string): Promise<void> {

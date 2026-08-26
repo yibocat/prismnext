@@ -37,8 +37,16 @@ export interface CreateSessionArgs {
   tabId: string;
   projectRoot: string;
   cwd: string;
+  cols?: number;
+  rows?: number;
   onData: (sessionId: string, tabId: string, data: string) => void;
   onExit: (sessionId: string, tabId: string, exitCode: number) => void;
+}
+
+function sanePtySize(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 2 && value <= 1000
+    ? Math.floor(value)
+    : fallback;
 }
 
 // ─── State ───
@@ -70,6 +78,8 @@ export function createSession(
   args: CreateSessionArgs,
 ): { shell: string; cwd: string; pid: number; tabId: string } {
   const { sessionId, tabId, projectRoot, cwd, onData, onExit } = args;
+  const cols = sanePtySize(args.cols, 80);
+  const rows = sanePtySize(args.rows, 24);
 
   // Replace duplicate sessionId if a late cleanup races with a new mount.
   if (sessions.has(sessionId)) {
@@ -83,13 +93,14 @@ export function createSession(
   try {
     ptyProcess = pty.spawn(shell, integration.args, {
       name: "xterm-256color",
-      cols: 80,
-      rows: 24,
+      cols,
+      rows,
       cwd,
       env: {
         ...process.env,
         ...integration.env,
         TERM: "xterm-256color",
+        COLORTERM: process.env.COLORTERM || "truecolor",
       } as { [key: string]: string },
     });
   } catch (err) {

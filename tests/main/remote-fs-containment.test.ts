@@ -34,6 +34,35 @@ describe("host fs containment", () => {
     ).rejects.toMatchObject({ code: "path_escaped" });
   });
 
+  it("allows the bound project's worktree hangar, not another project's", async () => {
+    const home = mkdtempSync(join(tmpdir(), "prism-host-home-"));
+    const paper = mkdtempSync(join(tmpdir(), "prism-host-paper-"));
+    const hangar = join(home, ".prismnext", "projects", "lab-paper", "worktrees", "wt-a", "checkout");
+    mkdirSync(hangar, { recursive: true });
+    writeFileSync(join(hangar, "draft.tex"), "wt\n");
+    const other = join(home, ".prismnext", "projects", "other", "worktrees", "wt-b", "checkout");
+    mkdirSync(other, { recursive: true });
+    writeFileSync(join(other, "secret.tex"), "no\n");
+    const { setWorkbenchUserHomeOverride } = await import("../../src/main/workbench/home");
+    setWorkbenchUserHomeOverride(home);
+    try {
+      const ctx = createHostContext();
+      ctx.remoteRoot = paper;
+      ctx.projectId = "lab-paper";
+      const inside = await dispatchHostMethod(
+        "fs:read",
+        { absPath: join(hangar, "draft.tex") },
+        ctx,
+      ) as { content: string };
+      expect(inside.content).toBe("wt\n");
+      await expect(
+        dispatchHostMethod("fs:read", { absPath: join(other, "secret.tex") }, ctx),
+      ).rejects.toMatchObject({ code: "path_escaped" });
+    } finally {
+      setWorkbenchUserHomeOverride(null);
+    }
+  });
+
   it("lists directories without a bound remoteRoot", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-host-list-"));
     mkdirSync(join(root, "paper"), { recursive: true });

@@ -34,7 +34,7 @@ Every artifact of a scientific endeavor exists as a first-class object on your d
 - **Experiment Workspaces**: Unified execution control plane, live Job Monitor, and experiment receipts for Methods-grade provenance.
 - **First-Class LaTeX Writing**: Live PDF compilation (bundled Tectonic or system TeXLive), symbol palettes, and interactive **Proposed Changes** merge views.
 - **Integrated Version Control**: Built-in Git with remote sync, pull/publish, GitHub PR creation (`gh`), agent-turn change lenses, and isolated worktree checkouts.
-- **Remote Workspace**: Open a lab machine from this computer’s `~/.ssh/config`. PrismNext pushes its Host runtime from the app (the server does not download Host). Chat, files, literature, compile, and experiments run on the server. Model keys are seeded as AES-256-GCM ciphertext; the unwrap key stays on the laptop. Sync is on-demand. This is a core capability — not a Pro add-on.
+- **Remote Workspace**: Open a lab machine from this computer’s `~/.ssh/config`. PrismNext pushes the Host program from the app; the server then downloads Node, Git, and Tectonic itself. Chat, files, literature, compile, and experiments run on the server. Model keys are seeded as AES-256-GCM ciphertext; the unwrap key stays on the laptop. Sync is on-demand. This is a core capability — not a Pro add-on.
 
 Chat runs on a **research-enhanced embedded Pi agent** inside the desktop app. **Teams v2** staffs the desk: one Lead voice in chat, specialist subagents delegated via Task, plus skills, slash commands, and team MCP servers. Switching the active team restaffs the session; PermissionGate keeps consequential tools behind explicit Allow / Deny cards.
 

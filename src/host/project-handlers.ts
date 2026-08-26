@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { posix } from "node:path";
 import { randomBytes } from "node:crypto";
 import { normalizePosixAbs, RemoteOperationError } from "../shared/remote";
+import { registerProjectRoot } from "../main/project/active-project-roots";
 import type { HostHandlerContext } from "./context";
 
 function mintProjectId(): string {
@@ -31,6 +32,7 @@ export const projectHandlers: Record<
     writeFileSync(jsonPath, `${JSON.stringify({ id: projectId }, null, 2)}\n`, "utf8");
     ctx.remoteRoot = requested;
     ctx.projectId = projectId;
+    registerProjectRoot(requested);
     return { projectId, remoteRoot: requested };
   },
 };

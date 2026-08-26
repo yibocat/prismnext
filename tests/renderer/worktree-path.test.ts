@@ -42,6 +42,14 @@ describe("worktree path helpers", () => {
     expect(found?.name).toBe("calm-owl");
   });
 
+  it("finds a remote:// worktree checkout by path", () => {
+    const remotePath = "remote://lab/home/ubuntu/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
+    const list: WorktreeInfo[] = [{ ...worktrees[0], path: remotePath }];
+    expect(
+      findWorktreeForDirectory(remotePath, list, "remote://lab/home/ubuntu/paper")?.name,
+    ).toBe("calm-owl");
+  });
+
   it("finds worktree by name when path prefix differs", () => {
     const altPath = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
     const gitResolved = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";

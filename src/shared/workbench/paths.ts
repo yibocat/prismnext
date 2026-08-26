@@ -43,6 +43,13 @@ export const HOME_TEAMS_STATE_FILENAME = "teams-state.json";
 export const HOST_INSTALL_DIRNAME = ".prismnext-host";
 export const HOST_CURRENT_DIRNAME = "current";
 export const HOST_STAMP_FILENAME = "stamp.json";
+/** Server-side download cache for Node / Git / Tectonic (`~/.prismnext-host/cache/`). */
+export const HOST_CACHE_DIRNAME = "cache";
+/** Versions the server already downloaded. Text pin format, not JSON. */
+export const HOST_RUNTIME_STAMP_FILENAME = "runtime-stamp.txt";
+/** Pro teams data pushed beside the Host payload — never inside `current/` / the public tarball. */
+export const HOST_PRO_PACKAGE_DIRNAME = "pro-package";
+export const HOST_PRO_SYNC_STAMP_FILENAME = ".sync-stamp.json";
 /** Local on-demand cache under `~/.prismnext/remote-cache/`. */
 export const REMOTE_CACHE_DIRNAME = "remote-cache";
 export const HOME_SSH_DIRNAME = "ssh";
@@ -144,6 +151,18 @@ export function hostCurrentRel(): string {
 
 export function hostStampRel(): string {
   return posixJoin(HOST_INSTALL_DIRNAME, HOST_CURRENT_DIRNAME, HOST_STAMP_FILENAME);
+}
+
+export function hostCacheRel(): string {
+  return posixJoin(HOST_INSTALL_DIRNAME, HOST_CACHE_DIRNAME);
+}
+
+export function hostRuntimeStampRel(): string {
+  return posixJoin(HOST_INSTALL_DIRNAME, HOST_RUNTIME_STAMP_FILENAME);
+}
+
+export function hostProPackageRel(): string {
+  return posixJoin(HOST_INSTALL_DIRNAME, HOST_PRO_PACKAGE_DIRNAME);
 }
 
 export function remoteCacheRel(profileId: string, projectId: string): string {

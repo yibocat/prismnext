@@ -5,6 +5,11 @@ import {
   readProLicense,
 } from "../teams/pro-license";
 import { handleProLicenseChanged } from "../teams/pro-teams-discovery";
+import { getRemoteSessionBroker } from "./remote";
+
+function syncLiveHostPro(): void {
+  void getRemoteSessionBroker().syncProOnLiveHosts();
+}
 
 export function registerProLicenseHandlers(): void {
   ipcMain.handle("pro:getLicense", async () => {
@@ -14,7 +19,10 @@ export function registerProLicenseHandlers(): void {
   ipcMain.handle("pro:activate", async (_event, rawKey: string) => {
     const result = activateProLicense(typeof rawKey === "string" ? rawKey : "");
     // 激活成功 → 授权门翻转：catalog locked 标记 + 全项目内容再同步（§8.3）
-    if (result.ok) handleProLicenseChanged();
+    if (result.ok) {
+      handleProLicenseChanged();
+      syncLiveHostPro();
+    }
     return result;
   });
 
@@ -22,6 +30,7 @@ export function registerProLicenseHandlers(): void {
     clearProLicense();
     // license 清除 → pro pack 内容即时失活（即使历史上装过；§8.3 第 4 行）
     handleProLicenseChanged();
+    syncLiveHostPro();
     return { ok: true as const };
   });
 }

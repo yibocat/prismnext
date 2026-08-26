@@ -23,6 +23,7 @@ import {
   type AssetOverride,
 } from "../../shared/teams/types";
 import { emptyProjectTeamsState, normalizeProjectTeamsState } from "../../shared/teams/state";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { createLogger } from "../app/logger";
 
 const log = createLogger("teams-state-project");
@@ -64,6 +65,7 @@ function hasLegacyProjectLocalIdentity(state: ProjectTeamsState): boolean {
 
 /** Read project state. Missing or leftover paper-side files → empty. */
 export function readProjectTeamsState(projectRoot: string): ProjectTeamsState {
+  if (isRemoteProjectRoot(projectRoot)) return emptyProjectTeamsState();
   const path = statePath(projectRoot);
   if (existsSync(path)) {
     try {
@@ -101,6 +103,9 @@ export function readProjectTeamsState(projectRoot: string): ProjectTeamsState {
 
 /** Atomic write (tmp + rename) + write counter + change event for this project. */
 export function writeProjectTeamsState(projectRoot: string, state: ProjectTeamsState): ProjectTeamsState {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("Remote project team state is stored on the Host.");
+  }
   const path = statePath(projectRoot);
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
@@ -138,6 +143,7 @@ export function projectTeamsStateWriteCounter(): number {
 
 /** File mtime (0 when absent) — part of the resolver viewKey. */
 export function projectTeamsStateMtime(projectRoot: string): number {
+  if (isRemoteProjectRoot(projectRoot)) return 0;
   try {
     return statSync(statePath(projectRoot)).mtimeMs;
   } catch {

@@ -1,18 +1,14 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { RemoteOperationError } from "../shared/remote";
 import type { HostHandlerContext } from "./context";
+import { requireRemoteRoot, resolveHostProjectPath } from "./project-path";
+import { spawnHostPty, type HostPty } from "./terminal-pty";
 
-interface LivePty {
-  child: ChildProcessWithoutNullStreams;
-}
+const sessions = new Map<string, HostPty>();
 
-const sessions = new Map<string, LivePty>();
-
-function requireRoot(ctx: HostHandlerContext): string {
-  if (!ctx.remoteRoot) {
-    throw new RemoteOperationError("not_connected", "No remote project is bound on this connection.");
-  }
-  return ctx.remoteRoot;
+function resolveTerminalCwd(params: Record<string, unknown>, ctx: HostHandlerContext): string {
+  const requested = typeof params.cwd === "string" ? params.cwd.trim() : "";
+  if (requested) return resolveHostProjectPath(ctx, requested);
+  return requireRemoteRoot(ctx);
 }
 
 export const terminalHandlers: Record<
@@ -20,44 +16,51 @@ export const terminalHandlers: Record<
   (params: Record<string, unknown>, ctx: HostHandlerContext) => Promise<unknown>
 > = {
   async "terminal:create"(params, ctx) {
-    const cwd = requireRoot(ctx);
+    const cwd = resolveTerminalCwd(params, ctx);
     const sessionId = String(params.sessionId ?? "");
     const tabId = String(params.tabId ?? "");
     if (!sessionId) throw new RemoteOperationError("protocol", "terminal sessionId required");
     const existing = sessions.get(sessionId);
     if (existing) {
-      existing.child.kill("SIGTERM");
+      existing.kill();
       sessions.delete(sessionId);
     }
-    const child = spawn("/bin/bash", ["-i"], {
+    const cols = Number(params.cols);
+    const rows = Number(params.rows);
+    const pty = spawnHostPty(
       cwd,
-      env: { ...process.env, TERM: "xterm-256color", PWD: cwd },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    const send = (data: string) => {
+      Number.isFinite(cols) && cols > 0 ? cols : 80,
+      Number.isFinite(rows) && rows > 0 ? rows : 24,
+    );
+    pty.onData((data) => {
       ctx.emit("terminal:data", { sessionId, tabId, data });
-    };
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => send(chunk));
-    child.stderr.on("data", (chunk: string) => send(chunk));
-    child.on("exit", (code) => {
-      sessions.delete(sessionId);
-      ctx.emit("terminal:exit", { sessionId, tabId, exitCode: code ?? 0 });
     });
-    sessions.set(sessionId, { child });
-    return { ok: true, cwd };
+    pty.onExit((code) => {
+      sessions.delete(sessionId);
+      ctx.emit("terminal:exit", { sessionId, tabId, exitCode: code });
+    });
+    sessions.set(sessionId, pty);
+    return { ok: true, cwd, shell: pty.shell, pid: pty.pid, backend: pty.backend };
   },
 
   async "terminal:write"(params) {
     const sessionId = String(params.sessionId ?? "");
     const live = sessions.get(sessionId);
     if (!live) return { ok: false };
-    live.child.stdin.write(String(params.data ?? ""));
+    live.write(String(params.data ?? ""));
     return { ok: true };
   },
 
-  async "terminal:resize"() {
+  async "terminal:resize"(params) {
+    const sessionId = String(params.sessionId ?? "");
+    const live = sessions.get(sessionId);
+    if (!live) return { ok: false };
+    const cols = Number(params.cols);
+    const rows = Number(params.rows);
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+      return { ok: false };
+    }
+    live.resize(Math.floor(cols), Math.floor(rows));
     return { ok: true };
   },
 
@@ -65,7 +68,7 @@ export const terminalHandlers: Record<
     const sessionId = String(params.sessionId ?? "");
     const live = sessions.get(sessionId);
     if (live) {
-      live.child.kill("SIGTERM");
+      live.kill();
       sessions.delete(sessionId);
     }
     return { ok: true };

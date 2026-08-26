@@ -98,6 +98,11 @@ export {
   stripAgentSecrets,
 } from "./strip-secrets";
 export {
+  hostPayloadBinDir,
+  hostPayloadGitBinDir,
+  hostPayloadGitExecDir,
+} from "./host-runtime-env";
+export {
   hostnameOfUrl,
   isAllowedModelProxyUrl,
   isBlockedModelProxyHost,

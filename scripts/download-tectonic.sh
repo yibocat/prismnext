@@ -26,7 +26,7 @@ usage() {
   cat <<'EOF'
 Usage: ./scripts/download-tectonic.sh [--all] [version]
 
-  --all   Download darwin-arm64, linux-x64, windows-x64
+  --all   Download darwin-arm64, linux-x64, linux-arm64, windows-x64
   version Override pin in scripts/tectonic-version.txt
 EOF
 }
@@ -126,6 +126,7 @@ download_all_platforms() {
   # Release trio: darwin-arm64, linux-x64, windows-x64
   download_one darwin arm64 "tectonic-${VERSION}-aarch64-apple-darwin.tar.gz" tectonic
   download_one linux x64 "tectonic-${VERSION}-x86_64-unknown-linux-musl.tar.gz" tectonic
+  download_one linux arm64 "tectonic-${VERSION}-aarch64-unknown-linux-musl.tar.gz" tectonic
   download_one windows x64 "tectonic-${VERSION}-x86_64-pc-windows-msvc.zip" tectonic.exe
   echo "All platforms installed under $BINARIES_DIR"
 }

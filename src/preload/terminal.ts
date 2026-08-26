@@ -7,6 +7,8 @@ export const terminalApi = {
 		tabId: string;
 		projectRoot: string;
 		cwd: string;
+		cols?: number;
+		rows?: number;
 	}) => ipcRenderer.invoke("terminal:create", args),
 	terminalDestroy: (args: { sessionId: string }) =>
 		ipcRenderer.invoke("terminal:destroy", args),

@@ -57,4 +57,59 @@ describe("ensureHostPayload", () => {
     const kept = await session.sftpRead(join(remoteHome, ".prismnext", "sessions", "keep-me.json"));
     expect(kept).toContain("ok");
   });
+
+  it("runs install-runtime on the server when Node is not in the tarball", async () => {
+    const staging = mkdtempSync(join(tmpdir(), "prism-boot-slim-"));
+    const remoteHome = mkdtempSync(join(tmpdir(), "prism-boot-slim-home-"));
+    const current = join(staging, "current", "bin");
+    mkdirSync(current, { recursive: true });
+    writeFileSync(join(current, "prismnext-host"), "#!/usr/bin/env node\nconsole.log('host')\n", {
+      mode: 0o755,
+    });
+    writeFileSync(
+      join(current, "install-runtime"),
+      `#!/bin/sh
+set -eu
+CURRENT=""
+STEP="all"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --current) CURRENT=$2; shift 2 ;;
+    --step) STEP=$2; shift 2 ;;
+    --arch) shift 2 ;;
+    *) shift ;;
+  esac
+done
+mkdir -p "$CURRENT/bin"
+if [ "$STEP" = "node" ] || [ "$STEP" = "all" ]; then
+  printf '%s\\n' '#!/bin/sh' 'echo v24.19.0' > "$CURRENT/bin/node"
+  chmod +x "$CURRENT/bin/node"
+fi
+echo "stub $STEP"
+`,
+      { mode: 0o755 },
+    );
+    const tarballPath = join(staging, "payload.tar.gz");
+    await tarCreate({ gzip: true, file: tarballPath, cwd: staging }, ["current"]);
+    const tarball = { tarballPath, sha256: sha256File(tarballPath) };
+    const ssh = createDirectoryBackedSshClient(remoteHome);
+    const session = await ssh.connect({
+      host: "lab",
+      port: 22,
+      user: "me",
+      onHostKey: () => "accept",
+    });
+    const logs: string[] = [];
+    const first = await ensureHostPayload({
+      session,
+      local: { ...tarball, desktopVersion: "0.9.0" },
+      linuxArch: "linux-x64",
+      log: (m) => logs.push(m),
+    });
+    expect(first.action).toBe("pushed");
+    expect(await session.sftpStat(first.nodeBin)).not.toBeNull();
+    expect(logs.some((line) => /downloading Node|Remote runtime: node|stub node/i.test(line))).toBe(
+      true,
+    );
+  });
 });

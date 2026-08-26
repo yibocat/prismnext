@@ -14,6 +14,7 @@ import {
   type SshClient,
 } from "../../src/main/remote/ssh-client";
 import { setWorkbenchUserHomeOverride } from "../../src/main/workbench/home";
+import { __resetHostLicenseSessionForTests } from "../../src/main/teams/teams-license";
 
 const profile: SshProfile = {
   id: "ssh_lab",
@@ -76,6 +77,17 @@ process.stdin.on("data", (chunk) => {
         ok: true,
         result: { projectId: "p_test", remoteRoot },
       }) + "\\n");
+    }
+    if (msg.kind === "req" && msg.method === "pro:beginSync") {
+      process.stdout.write(JSON.stringify({
+        kind: "res",
+        id: msg.id,
+        ok: true,
+        result: { action: "skipped", sha256: msg.params && msg.params.sha256 },
+      }) + "\\n");
+    }
+    if (msg.kind === "req" && (msg.method === "pro:writeFile" || msg.method === "pro:commitSync")) {
+      process.stdout.write(JSON.stringify({ kind: "res", id: msg.id, ok: true, result: { ok: true, action: "committed" } }) + "\\n");
     }
     if (msg.kind === "req" && msg.method === "host.reattach") {
       process.stdout.write(JSON.stringify({
@@ -171,6 +183,11 @@ describe("RemoteSessionBroker", () => {
         wrapKey: "",
         providerIds: ["deepseek"],
         wrapOk: true,
+      }),
+      readProGrant: () => ({
+        plan: "pro",
+        activatedAt: "2026-08-26T00:00:00.000Z",
+        expiresAt: null,
       }),
     });
     const result = await broker.connect("ssh_lab");
@@ -268,6 +285,8 @@ function testSeed() {
 describe("RemoteSessionBroker listen transport", () => {
   afterEach(() => {
     setWorkbenchUserHomeOverride(null);
+    __resetHostLicenseSessionForTests();
+    delete process.env.PRISM_HOST_PRO_PACKAGE_DIR;
   });
 
   it("reattaches after the control plane drops and can still call agent:status", async () => {

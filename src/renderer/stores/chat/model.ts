@@ -645,7 +645,12 @@ export interface ChatState {
   newPiSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
-  loadSession: (sessionId: string, sessionDirectory?: string, projectLastPath?: string) => Promise<void>;
+  loadSession: (
+    sessionId: string,
+    sessionDirectory?: string,
+    projectLastPath?: string,
+    opts?: { connectRemote?: boolean },
+  ) => Promise<void>;
   /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
   checkPromptStale: (tabId?: string) => Promise<void>;
   /** Truncate in-memory Conversation (and leftover messages) to a turn. */

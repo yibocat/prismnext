@@ -12,6 +12,7 @@ import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog } from "@/components/modules/project";
+import { RemoteConnectHost } from "@/components/modules/remote/remote-connect-dialog";
 import { PrismRibbonMark } from "@/components/brand/prism-ribbon-mark";
 import { Toaster } from "@/components/ui/sonner";
 import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
@@ -236,6 +237,7 @@ export function App() {
         <LocaleSync />
         <GlassNativeSync />
         <ProjectSetupDialog />
+        <RemoteConnectHost />
         <AppCommandPalette isMobile={isMobile} />
         <Toaster />
         <TabCloseConfirmDialog />

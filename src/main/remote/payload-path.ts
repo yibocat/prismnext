@@ -5,6 +5,9 @@ import { getAppPath, getResourcesPath, isAppPackaged } from "../app/paths";
 
 export type HostLinuxArch = "linux-x64" | "linux-arm64";
 
+/** Arch-independent Host program tarball. Node / Git / Tectonic are downloaded on the server. */
+export const HOST_PAYLOAD_FILE_NAME = "prismnext-host.tar.gz";
+
 export interface HostPayloadRef {
   path: string;
   sha256: string;
@@ -25,35 +28,44 @@ export function normalizeHostLinuxArch(arch: string): HostLinuxArch | null {
   return null;
 }
 
-export function hostPayloadFileName(arch: string): string {
-  const linux = normalizeHostLinuxArch(arch);
-  return `prismnext-host-${linux ?? "unknown"}.tar.gz`;
+export function hostPayloadFileName(_arch?: string): string {
+  return HOST_PAYLOAD_FILE_NAME;
 }
 
 export function sha256File(filePath: string): string {
   return createHash("sha256").update(readFileSync(filePath)).digest("hex");
 }
 
+function payloadCandidates(opts?: {
+  packaged?: boolean;
+  resourcesPath?: string;
+  appPath?: string;
+}): string[] {
+  const packaged = opts?.packaged ?? isAppPackaged();
+  const names = [
+    HOST_PAYLOAD_FILE_NAME,
+    "prismnext-host-linux-x64.tar.gz",
+    "prismnext-host-linux-arm64.tar.gz",
+  ];
+  const dirs: string[] = [];
+  if (packaged) {
+    dirs.push(join(opts?.resourcesPath ?? getResourcesPath(), "host"));
+  } else {
+    const appPath = opts?.appPath ?? getAppPath();
+    dirs.push(join(appPath, "out", "host"));
+    dirs.push(join(process.cwd(), "out", "host"));
+  }
+  return dirs.flatMap((dir) => names.map((name) => join(dir, name)));
+}
+
 export function resolveBundledHostPayload(opts?: {
   packaged?: boolean;
   resourcesPath?: string;
   appPath?: string;
-  arch: string;
+  arch?: string;
 }): HostPayloadRef | { error: "payload_missing_local" } {
-  const arch = normalizeHostLinuxArch(opts?.arch ?? "");
-  if (!arch) return { error: "payload_missing_local" };
-  const name = hostPayloadFileName(arch);
-  const packaged = opts?.packaged ?? isAppPackaged();
-  const candidates: string[] = [];
-  if (packaged) {
-    candidates.push(join(opts?.resourcesPath ?? getResourcesPath(), "host", name));
-  } else {
-    const appPath = opts?.appPath ?? getAppPath();
-    candidates.push(join(appPath, "out", "host", name));
-    candidates.push(join(process.cwd(), "out", "host", name));
-  }
-
-  for (const path of candidates) {
+  const arch = normalizeHostLinuxArch(opts?.arch ?? "") ?? "linux-x64";
+  for (const path of payloadCandidates(opts)) {
     if (existsSync(path)) {
       return { path, sha256: sha256File(path), arch };
     }
@@ -66,8 +78,5 @@ export function hasBundledLinuxHostPayload(opts?: {
   resourcesPath?: string;
   appPath?: string;
 }): boolean {
-  return (
-    !("error" in resolveBundledHostPayload({ ...opts, arch: "linux-x64" }))
-    || !("error" in resolveBundledHostPayload({ ...opts, arch: "linux-arm64" }))
-  );
+  return !("error" in resolveBundledHostPayload(opts));
 }

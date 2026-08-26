@@ -13,6 +13,18 @@ export const PRO_FEATURE_IDS = [] as const satisfies readonly ProFeatureId[];
 
 export type ProLicensePlan = "pro" | "none";
 
+/**
+ * Laptop → Host session grant. No activation key.
+ * Host trusts this only for the current SSH owner; disk license.json is ignored in Host mode.
+ */
+export interface HostProGrant {
+  plan: "pro";
+  expiresAt?: string | null;
+  features?: ProFeatureId[];
+  activatedAt: string;
+  label?: string | null;
+}
+
 /** Persisted / IPC license snapshot (no secrets beyond the key itself). */
 export interface LicenseSnapshot {
   /** Raw activation key as entered (trimmed). */

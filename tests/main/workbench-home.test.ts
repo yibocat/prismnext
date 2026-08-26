@@ -11,8 +11,10 @@ import {
   WORKTREES_DIRNAME,
   HOST_INSTALL_DIRNAME,
   REMOTE_CACHE_DIRNAME,
+  hostCacheRel,
   hostCurrentRel,
   hostInstallRel,
+  hostRuntimeStampRel,
   hostStampRel,
   libraryRel,
   projectSlotMetaRel,
@@ -92,6 +94,8 @@ describe("workbench-paths", () => {
     expect(hostInstallRel()).toBe(".prismnext-host");
     expect(hostCurrentRel()).toBe(".prismnext-host/current");
     expect(hostStampRel()).toBe(".prismnext-host/current/stamp.json");
+    expect(hostCacheRel()).toBe(".prismnext-host/cache");
+    expect(hostRuntimeStampRel()).toBe(".prismnext-host/runtime-stamp.txt");
     expect(remoteCacheRel("ssh_1", "p_abc")).toBe("remote-cache/ssh_1/p_abc");
     expect(hostInstallRel()).not.toBe(".prismnext");
     expect(remoteCacheRel("ssh_1", "p_abc")).not.toContain(".prismnext");
@@ -104,6 +108,11 @@ describe("workbench-paths", () => {
       ),
     ).toEqual({ projectId: "p_abc", worktreeId: "calm-owl" });
     expect(isHomeWorktreeCheckoutPath("/Users/me/.prismnext/projects/p_abc/worktrees/calm-owl/checkout")).toBe(true);
+    expect(
+      parseHomeWorktreeCheckoutPath(
+        "remote://lab/home/ubuntu/.prismnext/projects/p_abc/worktrees/calm-owl/checkout",
+      ),
+    ).toEqual({ projectId: "p_abc", worktreeId: "calm-owl" });
     expect(isHomeWorktreeCheckoutPath("/Users/me/paper/.prismnext/worktrees/calm-owl")).toBe(false);
   });
 });

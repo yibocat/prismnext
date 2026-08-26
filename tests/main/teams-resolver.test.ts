@@ -257,6 +257,19 @@ describe("scope", () => {
     }
   });
 
+  it("remote:// lists this computer's app teams, not the remote project's hangar", () => {
+    writeTeam(join(appDataDir, "teams"), "user.shared", { orchestrator: { id: "lead" } });
+    writeTeam(join(projectRoot, PROJECT_TEAMS_REL), "project.local", { orchestrator: { id: "lead" } });
+
+    const localIds = listTeams(projectRoot).map((t) => t.manifest.id);
+    expect(localIds).toContain("user.shared");
+    expect(localIds).toContain("project.local");
+
+    const remoteIds = listTeams("remote://lab/home/ubuntu/paper").map((t) => t.manifest.id);
+    expect(remoteIds).toContain("user.shared");
+    expect(remoteIds).not.toContain("project.local");
+  });
+
   it("rejects an app default from project A and preserves project B's active team", () => {
     const projectATeams = join(projectRoot, PROJECT_TEAMS_REL);
     writeTeam(projectATeams, "project.local", { orchestrator: { id: "lead-a" } });

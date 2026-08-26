@@ -2,7 +2,9 @@ import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
 import { useLayoutStore } from "./layout-store";
 import { useTerminalStore } from "./terminal-store";
-import { shellDisplayName } from "@/lib/terminal/shell-label";
+import { remoteTerminalTabTitle, shellDisplayName } from "@/lib/terminal/shell-label";
+import { isRemoteProjectRoot } from "@shared/remote";
+import { i18n } from "@/lib/i18n";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import {
   isFileBackedTab,
@@ -608,13 +610,17 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   newTerminalTab: () => {
     const id = nextTabId();
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    const remote = Boolean(projectRoot && isRemoteProjectRoot(projectRoot));
     const shell = useTerminalStore.getState().envInfo?.shell;
     const tab: RightTab = {
       id,
       kind: "terminal",
-      title: shell
-        ? shellDisplayName(shell)
-        : modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Shell",
+      title: remote
+        ? i18n.t("modes.terminal.remoteTitle", { shell: remoteTerminalTabTitle("/bin/bash") })
+        : shell
+          ? shellDisplayName(shell)
+          : modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Shell",
       isInitial: false,
       terminalSource: "user",
     };

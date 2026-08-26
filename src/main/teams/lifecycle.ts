@@ -33,6 +33,7 @@ import {
   normalizeIconSpec,
   type IconSpec,
 } from "../../shared/platform/icon-spec";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { createLogger } from "../app/logger";
 import { _registeredRoots } from "../project/active-project-roots";
 import { licenseGrants } from "./teams-license";
@@ -178,6 +179,7 @@ function assertCanRemoveLeadTeam(
 }
 
 function pruneProjectTeamReferences(projectRoot: string, teamId: string): void {
+  if (isRemoteProjectRoot(projectRoot)) return;
   const state = readProjectTeamsState(projectRoot);
   const belongsToTeam = (key: string) => parseFqid(key)?.teamId === teamId;
   const fallback = state.defaultTeam === teamId ? fallbackLeadTeamId(teamId) : undefined;

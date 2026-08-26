@@ -14,7 +14,10 @@ export function buildHostEnsureListenScript(boot: {
   const hostBin = boot.hostBin.replace(/\\/g, "/");
   const teamsDir = `${currentDir}/resources/teams`;
   const commandsDir = `${currentDir}/resources/commands`;
+  const hostRoot = currentDir.replace(/\/current\/?$/, "") || currentDir;
+  const proDir = `${hostRoot}/pro-package`;
   const listenFile = `${currentDir}/listen.json`;
+  const stampPath = `${currentDir}/stamp.json`;
   const js = [
     "const {spawn}=require('child_process');",
     "const fs=require('fs');",
@@ -22,12 +25,15 @@ export function buildHostEnsureListenScript(boot: {
     `const node=${JSON.stringify(nodeBin)};`,
     `const host=${JSON.stringify(hostBin)};`,
     `const file=${JSON.stringify(listenFile)};`,
+    `const stampPath=${JSON.stringify(stampPath)};`,
     `const teams=${JSON.stringify(teamsDir)};`,
     `const commands=${JSON.stringify(commandsDir)};`,
+    `const pro=${JSON.stringify(proDir)};`,
     "function alive(pid){try{process.kill(pid,0);return true;}catch{return false;}}",
+    "function stampSha(){try{const s=JSON.parse(fs.readFileSync(stampPath,'utf8'));return typeof s.payloadSha256==='string'?s.payloadSha256:'';}catch{return '';}}",
     "function wait(port,done){const t=Date.now();(function tick(){const c=net.connect({host:'127.0.0.1',port},()=>{c.end();done();});c.on('error',()=>{if(Date.now()-t>8000){process.stderr.write('listen timeout');process.exit(1);}setTimeout(tick,80);});})();}",
-    "function start(){const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>{const child=spawn(node,[host,'serve','--listen','127.0.0.1:'+port],{detached:true,stdio:'ignore',env:Object.assign({},process.env,{PRISM_FIRST_PARTY_TEAMS_DIR:teams,PRISM_APP_COMMANDS_DIR:commands,PRISM_HOST_LISTEN_FILE:file})});child.unref();wait(port,()=>{fs.writeFileSync(file,JSON.stringify({port:port,pid:child.pid,bind:'127.0.0.1'}));process.stdout.write(String(port));});});});}",
-    "try{const prev=JSON.parse(fs.readFileSync(file,'utf8'));if(prev.port&&prev.pid&&alive(prev.pid)){wait(prev.port,()=>{process.stdout.write(String(prev.port));process.exit(0);});}else start();}catch{start();}",
+    "function start(){const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>{const child=spawn(node,[host,'serve','--listen','127.0.0.1:'+port],{detached:true,stdio:'ignore',env:Object.assign({},process.env,{PRISM_FIRST_PARTY_TEAMS_DIR:teams,PRISM_APP_COMMANDS_DIR:commands,PRISM_HOST_PRO_PACKAGE_DIR:pro,PRISM_HOST_LISTEN_FILE:file})});child.unref();wait(port,()=>{fs.writeFileSync(file,JSON.stringify({port:port,pid:child.pid,bind:'127.0.0.1',sha:stampSha()}));process.stdout.write(String(port));});});});}",
+    "try{const prev=JSON.parse(fs.readFileSync(file,'utf8'));const sha=stampSha();if(prev.port&&prev.pid&&alive(prev.pid)&&prev.sha===sha&&sha){wait(prev.port,()=>{process.stdout.write(String(prev.port));process.exit(0);});}else{if(prev.pid&&alive(prev.pid)){try{process.kill(prev.pid);}catch{}}start();}}catch{start();}",
   ].join("");
   return `${JSON.stringify(nodeBin)} -e ${JSON.stringify(js)}`;
 }

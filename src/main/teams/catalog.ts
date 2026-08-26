@@ -37,6 +37,7 @@ import {
   USER_TEAM_PUBLISHER,
 } from "../../shared/teams/types";
 import { fmInt, fmString, parseFlatFrontmatter } from "../../shared/teams/frontmatter";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { createLogger } from "../app/logger";
 import { homeSkillsDir } from "../workbench/home";
 import { appTeamsDir, projectTeamsDir } from "./scope";
@@ -630,12 +631,17 @@ function appCommandsDirFingerprint(): string {
   return `app-commands:${parts.sort().join(",")}`;
 }
 
+/** `remote://` is not a folder on this computer — app catalog only. */
+function localProjectRoots(projectRoots: string[]): string[] {
+  return projectRoots.filter((root) => !isRemoteProjectRoot(root));
+}
+
 function computeFingerprint(projectRoots: string[]): string {
   const roots = [
     getBundledTeamsDir(),
     ...listExternalTeamRoots(),
     appTeamsDir(),
-    ...projectRoots.map((r) => projectTeamsDir(r)),
+    ...localProjectRoots(projectRoots).map((r) => projectTeamsDir(r)),
   ];
   const parts: string[] = [appCommandsDirFingerprint()];
   for (const root of roots) {
@@ -666,7 +672,7 @@ function buildSnapshot(projectRoots: string[]): CatalogSnapshot {
       };
     }),
     { dir: appTeamsDir(), scope: "app", source: "user", writable: true },
-    ...projectRoots.map((r) => ({
+    ...localProjectRoots(projectRoots).map((r) => ({
       dir: projectTeamsDir(r),
       scope: "project" as const,
       source: "user" as const,

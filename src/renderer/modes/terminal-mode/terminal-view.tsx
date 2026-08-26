@@ -117,6 +117,8 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     let captureBuf = "";
     let capturing = false;
 
+    try { fitAddon.fit(); } catch { /* ignore */ }
+
     if (!canReuse) {
       // ─── Spawn PTY ───
       terminalDesktop
@@ -125,6 +127,8 @@ export function TerminalView({ tabId }: TerminalViewProps) {
           tabId,
           projectRoot,
           cwd: spawnCwd,
+          cols: term.cols,
+          rows: term.rows,
         })
         .then(({ shell, cwd, pid }) => {
           if (disposed) return;

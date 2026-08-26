@@ -65,15 +65,19 @@ function requireAgent(ctx: HostHandlerContext): AgentService {
   return ctx.agent;
 }
 
+function localizeAbs(value: unknown, fallback?: string | null): string | undefined {
+  if (typeof value === "string" && value.trim()) {
+    return parseRemoteAbs(value)?.abs ?? value;
+  }
+  return fallback?.trim() ? fallback : undefined;
+}
+
 function params(raw: Record<string, unknown>, ctx: HostHandlerContext): Record<string, unknown> {
   const next = { ...raw };
-  const root = ctx.remoteRoot
-    || (typeof raw.projectRoot === "string" ? parseRemoteAbs(raw.projectRoot)?.abs : null)
-    || (typeof raw.boundCheckoutPath === "string" ? parseRemoteAbs(raw.boundCheckoutPath)?.abs : null);
-  if (root) {
-    if (typeof raw.projectRoot === "string") next.projectRoot = root;
-    if (typeof raw.boundCheckoutPath === "string") next.boundCheckoutPath = root;
-  }
+  const projectRoot = localizeAbs(raw.projectRoot, ctx.remoteRoot);
+  const boundCheckoutPath = localizeAbs(raw.boundCheckoutPath, projectRoot);
+  if (projectRoot) next.projectRoot = projectRoot;
+  if (boundCheckoutPath) next.boundCheckoutPath = boundCheckoutPath;
   return next;
 }
 

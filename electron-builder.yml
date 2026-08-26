@@ -16,6 +16,7 @@ extraResources:
   - from: "out/host"
     to: "host"
     filter:
+      - "prismnext-host.tar.gz"
       - "prismnext-host-*.tar.gz"
       - "current/**"
 
