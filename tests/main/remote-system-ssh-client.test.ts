@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { classifySshError, systemSshArgv } from "../../src/main/remote/system-ssh-client";
+import {
+  classifySshError,
+  parseRemoteStatStdout,
+  systemSshArgv,
+} from "../../src/main/remote/system-ssh-client";
 
 describe("systemSshArgv", () => {
   it("keeps the remote script as one argument after -- dest", () => {
@@ -24,6 +28,22 @@ describe("systemSshArgv", () => {
     expect(argv.slice(destAt + 1)).toEqual(['printf %s "$HOME"']);
     expect(argv.includes("sh")).toBe(false);
     expect(argv.includes("-c")).toBe(false);
+  });
+});
+
+describe("parseRemoteStatStdout", () => {
+  it("does not treat a missing file as size 0 (empty stdout still exits 0)", () => {
+    // Production used `if [ -e p ]; then wc -c < p; fi`. Missing → code 0, stdout "".
+    // Number("") === 0, so inventory thought tectonic existed and skipped install.
+    expect(Number("")).toBe(0);
+    expect(parseRemoteStatStdout(0, "")).toBeNull();
+    expect(parseRemoteStatStdout(0, "   \n")).toBeNull();
+    expect(parseRemoteStatStdout(1, "0")).toBeNull();
+  });
+
+  it("parses wc -c output for a real file", () => {
+    expect(parseRemoteStatStdout(0, "19\n")).toEqual({ size: 19 });
+    expect(parseRemoteStatStdout(0, "  120243200\n")).toEqual({ size: 120243200 });
   });
 });
 

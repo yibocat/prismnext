@@ -48,14 +48,10 @@ const pickerPanelClass = cn(
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
-async function openRemoteAndToast(
-  alias: string,
-  remoteRoot: string,
-  created: boolean,
-): Promise<void> {
+async function openRemoteAndToast(alias: string, remoteRoot: string): Promise<void> {
   await openRemoteWorkbenchProject(alias, remoteRoot);
   const name = remoteRoot.split("/").filter(Boolean).at(-1) || remoteRoot;
-  toast.success(i18n.t(created ? "remote.createdProject" : "remote.openedProject", { name }));
+  toast.success(i18n.t("remote.openedProject", { name }));
 }
 
 export function WorkbenchProjectPicker({
@@ -82,7 +78,8 @@ export function WorkbenchProjectPicker({
   const [connect, setConnect] = useState<{ alias: string; next: RemoteHostNextAction } | null>(null);
   const connectRef = useRef(connect);
   connectRef.current = connect;
-  const [folder, setFolder] = useState<{ alias: string; mode: "open" | "create" } | null>(null);
+  const [folder, setFolder] = useState<{ alias: string } | null>(null);
+  const [remoteNew, setRemoteNew] = useState<{ profileId: string } | null>(null);
 
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const members = useWorkbenchStore((s) => s.members);
@@ -119,17 +116,17 @@ export function WorkbenchProjectPicker({
     setOpen(false);
     const ready = useRemoteStore.getState().byProfileId[alias]?.phase === "ready";
     if (ready && next.type === "open-path") {
-      void openRemoteAndToast(alias, next.remoteRoot, false).catch((err) => {
+      void openRemoteAndToast(alias, next.remoteRoot).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
     }
     if (ready && next.type === "open-folder") {
-      setFolder({ alias, mode: "open" });
+      setFolder({ alias });
       return;
     }
     if (ready && next.type === "create") {
-      setFolder({ alias, mode: "create" });
+      setRemoteNew({ profileId: alias });
       return;
     }
     if (ready && next.type === "idle") return;
@@ -141,17 +138,17 @@ export function WorkbenchProjectPicker({
     setConnect(null);
     if (!pending) return;
     if (pending.next.type === "open-path") {
-      void openRemoteAndToast(pending.alias, pending.next.remoteRoot, false).catch((err) => {
+      void openRemoteAndToast(pending.alias, pending.next.remoteRoot).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
     }
     if (pending.next.type === "open-folder") {
-      setFolder({ alias: pending.alias, mode: "open" });
+      setFolder({ alias: pending.alias });
       return;
     }
     if (pending.next.type === "create") {
-      setFolder({ alias: pending.alias, mode: "create" });
+      setRemoteNew({ profileId: pending.alias });
     }
   };
 
@@ -264,6 +261,21 @@ export function WorkbenchProjectPicker({
       <NewProjectDialog onCreated={onProjectCreated}>
         <button ref={newProjectTriggerRef} type="button" className="hidden" />
       </NewProjectDialog>
+      {remoteNew ? (
+        <NewProjectDialog
+          open
+          locationSeed={{ kind: "remote", profileId: remoteNew.profileId }}
+          onOpenChange={(next) => {
+            if (!next) setRemoteNew(null);
+          }}
+          onCreated={(path) => {
+            setRemoteNew(null);
+            onProjectCreated?.(path);
+            const name = path.split("/").filter(Boolean).at(-1) || path;
+            toast.success(i18n.t("remote.createdProject", { name }));
+          }}
+        />
+      ) : null}
       <RemoteConnectDialog
         alias={connect?.alias ?? null}
         open={Boolean(connect)}
@@ -274,14 +286,14 @@ export function WorkbenchProjectPicker({
       />
       <RemoteFolderDialog
         alias={folder?.alias ?? null}
-        mode={folder?.mode ?? "open"}
+        mode="open"
         open={Boolean(folder)}
         onOpenChange={(next) => {
           if (!next) setFolder(null);
         }}
         onConfirm={async (remoteRoot) => {
           if (!folder) return;
-          await openRemoteAndToast(folder.alias, remoteRoot, folder.mode === "create");
+          await openRemoteAndToast(folder.alias, remoteRoot);
         }}
       />
     </>

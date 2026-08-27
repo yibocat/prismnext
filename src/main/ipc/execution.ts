@@ -1,6 +1,6 @@
 import { BrowserWindow, ipcMain } from "electron";
-import { parseRemoteAbs } from "../../shared/remote";
 import { getRemoteSessionBroker } from "./remote";
+import { routeHostDomainMethod } from "../remote/domain-route";
 import type {
   ExecutionApplyProjectSwitchArgs,
   ExecutionApplyProjectSwitchResult,
@@ -26,13 +26,16 @@ export interface ExecutionIpcOptions {
 
 const NOT_AVAILABLE = { ok: false as const, error: "execution_not_available" };
 
+/** E1b: listRunning has no path; get/cancel fall back to currentRoot when args omit projectRoot. */
 async function routeIfRemote(method: string, args: Record<string, unknown> = {}): Promise<unknown | undefined> {
-  const root = projectLifecycleAuthority.currentRoot;
-  const parsed = root ? parseRemoteAbs(root) : null;
-  if (!parsed) return undefined;
-  const broker = getRemoteSessionBroker();
-  if (!broker.isBound(parsed.profileId)) return NOT_AVAILABLE;
-  return broker.invoke(parsed.profileId, method, { ...args, projectId: parsed.abs });
+  return routeHostDomainMethod(method, args, {
+    keys: ["projectRoot", "projectId"],
+    useCurrentRoot: true,
+    broker: getRemoteSessionBroker(),
+    disconnected() {
+      return { hit: true, result: NOT_AVAILABLE };
+    },
+  });
 }
 
 let stopBroadcast: (() => void) | undefined;

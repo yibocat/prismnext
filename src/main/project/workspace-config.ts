@@ -16,6 +16,65 @@ import { DEFAULT_WORKSPACE_FOLDERS, readWorkspaceDirs } from "../lib/workspace-d
 
 export { DEFAULT_WORKSPACE_FOLDERS, readWorkspaceDirs };
 
+export const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage[
+  style=nature,
+  backend=bibtex,
+  sorting=none,
+]{biblatex}
+\addbibresource{references.bib}
+
+% ── Title ──
+\title{Title}
+\author{Author}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  Write your abstract here.
+\end{abstract}
+
+\section{Introduction}
+
+\section{Methods}
+
+\section{Results}
+
+\section{Discussion}
+
+\printbibliography
+
+\end{document}
+`;
+
+export function ensureMainTex(
+  projectRoot: string,
+): { created: boolean; relativePath?: string } {
+  const dirs = readWorkspaceDirs(projectRoot);
+  const manuscript = dirs.find((d) => d.function === "manuscript");
+  const mainTex = manuscript && "mainTex" in manuscript ? manuscript.mainTex : "";
+  if (!manuscript || !mainTex) return { created: false };
+
+  const mainTexPath = path.join(projectRoot, manuscript.name, mainTex);
+  if (fs.existsSync(mainTexPath)) return { created: false };
+
+  const parentDir = path.dirname(mainTexPath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+  fs.writeFileSync(mainTexPath, DEFAULT_MAIN_TEX, "utf-8");
+  return { created: true, relativePath: `${manuscript.name}/${mainTex}` };
+}
+
 interface ProjectSettings {
   version?: number;
   compiler?: string;

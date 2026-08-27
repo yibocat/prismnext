@@ -6,6 +6,7 @@ import { destroyAllAiPty } from "../terminal/ai-pty";
 import type { TerminalConfig } from "../terminal/terminal-config";
 import { getRemoteSessionBroker } from "./remote";
 import { firstRemoteAbs, toHostFsParams } from "../remote/fs-bridge";
+import { routeHostDomainMethod } from "../remote/domain-route";
 
 /** Host terminal sessions — write/resize/destroy must not fan out to every profile. */
 const remoteSessions = new Map<string, string>();
@@ -166,6 +167,14 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     "terminal:loadConfig",
     async (_event, args: { projectRoot: string }) => {
+      const routed = await routeHostDomainMethod("terminal:loadConfig", args, {
+        keys: ["projectRoot"],
+        broker: getRemoteSessionBroker(),
+        disconnected() {
+          return { hit: true, result: { quickCommands: [] } };
+        },
+      });
+      if (routed !== undefined) return routed;
       return terminalConfig.loadConfig(args.projectRoot);
     },
   );
@@ -173,6 +182,11 @@ export function registerTerminalHandlers(): void {
   ipcMain.handle(
     "terminal:saveConfig",
     async (_event, args: { projectRoot: string; config: TerminalConfig }) => {
+      const routed = await routeHostDomainMethod("terminal:saveConfig", args, {
+        keys: ["projectRoot"],
+        broker: getRemoteSessionBroker(),
+      });
+      if (routed !== undefined) return routed;
       terminalConfig.saveConfig(args.projectRoot, args.config);
     },
   );

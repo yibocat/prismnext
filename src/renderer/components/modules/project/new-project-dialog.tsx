@@ -8,10 +8,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { parseRemoteAbs, remoteHomeFromAppHome } from "@shared/remote";
 import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { projectDesktop } from "@/lib/desktop-api/project";
+import { newProjectRoot, type NewProjectLocation } from "@/lib/project/new-project-location";
+import { openRemoteWorkbenchProject } from "@/lib/workspace/project-lifecycle";
+import { RemoteFolderDialog } from "@/components/modules/remote/remote-folder-dialog";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRemoteStore } from "@/stores/remote-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
@@ -58,6 +63,9 @@ interface NewProjectPaneProps {
   embedded?: boolean;
   /** Welcome already renders the page title + back control. */
   hideTitle?: boolean;
+  locationSeed?: { kind: "remote"; profileId: string };
+  remoteParentPick?: string | null;
+  onBrowseRemoteParent?: () => void;
   onCancel?: () => void;
   onCreated?: (path: string) => void;
 }
@@ -91,9 +99,10 @@ const PRESET_OPTIONS: Array<{
 ];
 
 interface NewProjectDialogProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  locationSeed?: { kind: "remote"; profileId: string };
   onCreated?: (path: string) => void;
 }
 
@@ -223,12 +232,16 @@ export function LiveStructurePreview({
 export function NewProjectPane({
   embedded = false,
   hideTitle = false,
+  locationSeed,
+  remoteParentPick,
+  onBrowseRemoteParent,
   onCancel,
   onCreated,
 }: NewProjectPaneProps) {
   const { t } = useTranslation();
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
+  const remote = locationSeed?.kind === "remote" ? locationSeed : null;
 
   const appDefaults = useSettingsStore((s) => s.settings.defaultWorkspaceDirs);
   const settingsInitGit = useSettingsStore((s) => s.settings.defaultInitGit !== false);
@@ -252,12 +265,24 @@ export function NewProjectPane({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const fullPath =
-    parentPath && projectName.trim() ? `${parentPath}/${projectName.trim()}` : "";
+  useEffect(() => {
+    if (!remote) return;
+    const state = useRemoteStore.getState().byProfileId[remote.profileId];
+    const handshake = state?.phase === "ready" ? state.handshake : null;
+    const home = handshake ? remoteHomeFromAppHome(handshake.appHome) : null;
+    if (home) setParentPath(home);
+  }, [remote]);
 
+  useEffect(() => {
+    if (remoteParentPick) setParentPath(remoteParentPick);
+  }, [remoteParentPick]);
+
+  const location: NewProjectLocation = remote
+    ? { kind: "remote", profileId: remote.profileId, parentPosix: parentPath }
+    : { kind: "local", parentPath };
+  const previewRoot = newProjectRoot(location, projectName);
   const hasManuscript = workspaceFolders.some((f) => f.function === "manuscript");
-  const canCreate =
-    Boolean(projectName.trim() && parentPath && hasManuscript) && !creating;
+  const canCreate = Boolean(previewRoot && hasManuscript) && !creating;
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 100);
@@ -283,21 +308,33 @@ export function NewProjectPane({
   };
 
   const handleSelectParent = async () => {
+    if (remote) {
+      onBrowseRemoteParent?.();
+      return;
+    }
     const result = await dialogDesktop.dialogOpenFolder();
     if (result && !result.canceled && result.path) setParentPath(result.path);
   };
 
   const handleCreate = async () => {
-    if (!fullPath || !hasManuscript) return;
+    if (!hasManuscript) return;
+    const root = previewRoot;
+    if (!root) return;
     setCreating(true);
     try {
       const workspaceDirs = toCreateDirs(workspaceFolders);
-      await projectDesktop.projectCreate(fullPath, workspaceDirs, {
+      await projectDesktop.projectCreate(root, workspaceDirs, {
         initGit,
       });
-      addRecentProject(fullPath);
-      await openProject(fullPath);
-      onCreated?.(fullPath);
+      addRecentProject(root);
+      if (remote) {
+        const parsed = parseRemoteAbs(root);
+        if (!parsed) throw new Error(t("project.new.createFailed"));
+        await openRemoteWorkbenchProject(parsed.profileId, parsed.abs);
+      } else {
+        await openProject(root);
+      }
+      onCreated?.(root);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t("project.new.createFailed");
       console.error("Project creation failed:", err);
@@ -322,7 +359,9 @@ export function NewProjectPane({
           {t("project.new.title")}
         </h2>
         <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-          {t("project.new.description")}
+          {remote
+            ? t("project.new.remoteDescription", { host: remote.profileId })
+            : t("project.new.description")}
         </p>
       </div>
       )}
@@ -373,7 +412,9 @@ export function NewProjectPane({
                     </span>
                   </span>
                 ) : (
-                  <span className="truncate">{t("project.new.chooseParent")}</span>
+                  <span className="truncate">
+                    {t(remote ? "project.new.chooseRemoteParent" : "project.new.chooseParent")}
+                  </span>
                 )}
               </button>
             </div>
@@ -619,9 +660,12 @@ export function NewProjectDialog({
   children,
   open: controlledOpen,
   onOpenChange,
+  locationSeed,
   onCreated,
 }: NewProjectDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [browseParent, setBrowseParent] = useState(false);
+  const [remoteParentPick, setRemoteParentPick] = useState<string | null>(null);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -630,18 +674,34 @@ export function NewProjectDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {!isControlled ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-      <DialogContent aria-describedby={undefined} className="max-w-2xl gap-0 overflow-hidden p-0 sm:rounded-xl">
-        <NewProjectPane
-          onCancel={() => setOpen(false)}
-          onCreated={(path) => {
-            setOpen(false);
-            onCreated?.(path);
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {!isControlled ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
+        <DialogContent aria-describedby={undefined} className="max-w-2xl gap-0 overflow-hidden p-0 sm:rounded-xl">
+          <NewProjectPane
+            locationSeed={locationSeed}
+            remoteParentPick={remoteParentPick}
+            onBrowseRemoteParent={locationSeed ? () => setBrowseParent(true) : undefined}
+            onCancel={() => setOpen(false)}
+            onCreated={(path) => {
+              setOpen(false);
+              onCreated?.(path);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+      {locationSeed ? (
+        <RemoteFolderDialog
+          alias={locationSeed.profileId}
+          mode="browse"
+          open={browseParent}
+          onOpenChange={setBrowseParent}
+          onConfirm={async (remoteRoot) => {
+            setRemoteParentPick(remoteRoot);
           }}
         />
-      </DialogContent>
-    </Dialog>
+      ) : null}
+    </>
   );
 }
 

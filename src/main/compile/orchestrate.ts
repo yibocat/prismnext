@@ -4,7 +4,7 @@ import { join, dirname, basename, extname } from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { syncTexSourceToBuildDir, syncTexSourceIncremental } from "../lib/bib-path-resolve";
 import { detectBibTool, detectTexEngine, type TexEngine } from "../lib/tex-detect";
-import { resolveTectonicBinary } from "./tectonic-binary";
+import { isHostRuntimeProcess, resolveTectonicBinary, tectonicUnavailableError } from "./tectonic-binary";
 import { getTectonicDaemonSession } from "./tectonic-daemon";
 
 import { createLogger } from "../app/logger";
@@ -635,6 +635,13 @@ export async function compileLatex(
         synctex: wantSynctex,
         fast,
       });
+    } else if (isHostRuntimeProcess()) {
+      log.error("compile.error", { ...job, code: "missing_binary", engine: "tectonic" });
+      return {
+        success: false,
+        error: tectonicUnavailableError(),
+        buildDir,
+      };
     } else {
       log.warn("compile.engine", { ...job, engine: "texlive", bundled: false });
       result = await compileWithTexlive(buildDir, buildMain, engine, content, buildDir, {
@@ -815,14 +822,17 @@ export async function compileStandaloneTexInPlace(
       success = result.success;
       logContent = result.logContent;
       timedOut = result.timedOut === true;
+    } else if (isHostRuntimeProcess()) {
+      log.error("compile.error", { ...job, code: "missing_binary", engine: "tectonic" });
+      return { success: false, error: tectonicUnavailableError() };
     } else {
       log.warn("compile.engine", { ...job, engine: "texlive", bundled: false });
       const enginePath = await findTexliveBinary(engine);
       if (!enginePath) {
-        log.error("compile.error", { ...job, code: "missing_binary", engine });
+        log.error("compile.error", { ...job, code: "missing_binary", engine: "tectonic" });
         return {
           success: false,
-          error: `${engine} not found. Install TeXLive or add it to your PATH.`,
+          error: tectonicUnavailableError(),
         };
       }
       const env = { ...process.env, PATH: texliveEnvPath(enginePath) };

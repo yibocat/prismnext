@@ -75,6 +75,20 @@ describe("workspace-config-store", () => {
     expect(useWorkspaceConfigStore.getState().workspaceDirs[0].function).toBe("manuscript");
   });
 
+  it("saves a remote project through IPC instead of pretending success", async () => {
+    const update = vi.mocked(window.electronAPI.workspaceUpdateConfig);
+    update.mockResolvedValue({ success: true });
+    useWorkspaceConfigStore.setState({
+      workspaceDirs: [{ function: "manuscript" as const, name: "manuscript", mainTex: "main.tex" }],
+    });
+    const ok = await useWorkspaceConfigStore.getState().saveConfig("remote://lab/home/u/p");
+    expect(ok).toBe(true);
+    expect(update).toHaveBeenCalledWith(
+      "remote://lab/home/u/p",
+      [{ function: "manuscript", name: "manuscript", mainTex: "main.tex" }],
+    );
+  });
+
   it("updateFolder modifies an entry", () => {
     useWorkspaceConfigStore.setState({
       workspaceDirs: [

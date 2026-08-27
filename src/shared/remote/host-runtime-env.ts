@@ -56,3 +56,99 @@ export function listHostRuntimeBinCandidates(input: {
 function normalizeHostDir(currentDir: string): string {
   return currentDir.replace(/\\/g, "/").replace(/\/+$/, "");
 }
+
+export type HostRuntimeStep = "node" | "git" | "tectonic";
+
+export interface HostRuntimeBinStatus {
+  available: boolean;
+  version: string | null;
+  path: string | null;
+}
+
+export interface HostRuntimeInventory {
+  node: HostRuntimeBinStatus;
+  git: HostRuntimeBinStatus;
+  tectonic: HostRuntimeBinStatus;
+}
+
+export interface HostRuntimePins {
+  node: string;
+  git: string;
+  tectonic: string;
+}
+
+/** Key/value pin or runtime-stamp text (`version 24.19.0`, `node 24.19.0`). */
+export function parseHostPinMap(raw: string | null | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  if (!raw) return map;
+  for (const line of raw.split("\n")) {
+    const trimmed = line.replace(/#.*$/, "").trim();
+    if (!trimmed) continue;
+    const space = trimmed.indexOf(" ");
+    if (space < 0) continue;
+    map[trimmed.slice(0, space)] = trimmed.slice(space + 1).trim();
+  }
+  return map;
+}
+
+export function hostRuntimePinsFromFiles(files: {
+  node?: string | null;
+  git?: string | null;
+  tectonic?: string | null;
+}): HostRuntimePins {
+  return {
+    node: parseHostPinMap(files.node).version ?? "",
+    git: parseHostPinMap(files.git).tag ?? "",
+    tectonic: parseHostPinMap(files.tectonic).version ?? "",
+  };
+}
+
+export function mergeHostRuntimePins(...sources: HostRuntimePins[]): HostRuntimePins {
+  const next: HostRuntimePins = { node: "", git: "", tectonic: "" };
+  for (const source of sources) {
+    if (!next.node && source.node) next.node = source.node;
+    if (!next.git && source.git) next.git = source.git;
+    if (!next.tectonic && source.tectonic) next.tectonic = source.tectonic;
+  }
+  return next;
+}
+
+function normalizeNodeVersion(value: string): string {
+  return value.trim().replace(/^v/i, "");
+}
+
+function binNeedsInstall(
+  status: HostRuntimeBinStatus,
+  pin: string,
+  kind: HostRuntimeStep,
+): boolean {
+  if (!status.available) return true;
+  if (!pin || !status.version) return false;
+  if (kind === "node") {
+    return normalizeNodeVersion(status.version) !== normalizeNodeVersion(pin);
+  }
+  return status.version !== pin;
+}
+
+/** SSH `sftpStat` `{ size: 0 }` is a missing file, not an installed binary. */
+export function runtimeBinFromStat(
+  stat: { size: number } | null,
+  path: string,
+  version: string | null,
+): HostRuntimeBinStatus {
+  if (!stat || stat.size <= 0) {
+    return { available: false, version: null, path: null };
+  }
+  return { available: true, version, path };
+}
+
+export function inventoryMissingSteps(
+  inv: HostRuntimeInventory,
+  pins: HostRuntimePins,
+): HostRuntimeStep[] {
+  const steps: HostRuntimeStep[] = [];
+  if (binNeedsInstall(inv.node, pins.node, "node")) steps.push("node");
+  if (binNeedsInstall(inv.git, pins.git, "git")) steps.push("git");
+  if (binNeedsInstall(inv.tectonic, pins.tectonic, "tectonic")) steps.push("tectonic");
+  return steps;
+}

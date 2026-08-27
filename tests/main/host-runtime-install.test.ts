@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -29,5 +29,28 @@ describe("host runtime installer plan", () => {
     expect(out).toContain("https://github.com/tectonic-typesetting/tectonic/releases/download/");
     expect(out).toContain("x86_64-unknown-linux-musl");
     expect(out).not.toMatch(/downloading /);
+  });
+
+  it("installs a cached ELF named .tar.gz into current/bin/tectonic without hitting the network", () => {
+    const hostRoot = mkdtempSync(join(tmpdir(), "prism-runtime-elf-"));
+    const current = join(hostRoot, "current");
+    copyPins(current);
+    mkdirSync(join(hostRoot, "cache"), { recursive: true });
+    mkdirSync(join(current, "bin"), { recursive: true });
+    const cacheFile = join(
+      hostRoot,
+      "cache",
+      "tectonic-0.15.0-x86_64-unknown-linux-musl.tar.gz",
+    );
+    writeFileSync(cacheFile, Buffer.concat([
+      Buffer.from([0x7f, 0x45, 0x4c, 0x46]),
+      Buffer.from("#!/bin/sh\necho tectonic 0.15.0\n"),
+    ]));
+    execFileSync("/bin/chmod", ["755", cacheFile]);
+    execFileSync("/bin/sh", [SCRIPT, "--current", current, "--arch", "x64", "--step", "tectonic"]);
+    const dest = join(current, "bin", "tectonic");
+    expect(existsSync(dest)).toBe(true);
+    expect(readFileSync(dest).subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))).toBe(true);
+    expect(existsSync(cacheFile)).toBe(true);
   });
 });

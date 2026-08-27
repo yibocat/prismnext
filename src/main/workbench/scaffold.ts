@@ -17,6 +17,8 @@ import { ensureResearchBrief } from "../research/research-brief-service";
 import {
   createConfiguredFolders,
   DEFAULT_WORKSPACE_FOLDERS,
+  ensureMainTex,
+  readWorkspaceDirs,
   validateWorkspaceDirs,
   writeProjectSettings,
   writeWorkspaceDirs,
@@ -41,46 +43,6 @@ export const WORKBENCH_GITIGNORE = [
   "backups/",
   "",
 ].join("\n");
-
-export const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
-
-% ── Packages ──
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
-\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
-\usepackage[
-  style=nature,
-  backend=bibtex,
-  sorting=none,
-]{biblatex}
-\addbibresource{references.bib}
-
-% ── Title ──
-\title{Title}
-\author{Author}
-\date{\today}
-
-\begin{document}
-
-\maketitle
-
-\begin{abstract}
-  Write your abstract here.
-\end{abstract}
-
-\section{Introduction}
-
-\section{Methods}
-
-\section{Results}
-
-\section{Discussion}
-
-\printbibliography
-
-\end{document}
-`;
 
 function localProjectRoot(projectRoot: string): string {
   if (parseRemoteAbs(projectRoot)) {
@@ -151,19 +113,6 @@ function writeLocalSettings(
   });
 }
 
-function writeManuscriptStub(projectRoot: string, workspaceDirs: WorkspaceFolder[]): void {
-  const manuscriptEntry = workspaceDirs.find((d) => d.function === "manuscript");
-  if (!manuscriptEntry || !("mainTex" in manuscriptEntry)) return;
-  const mainTexFullPath = join(projectRoot, manuscriptEntry.name, manuscriptEntry.mainTex);
-  const mainTexDir = join(mainTexFullPath, "..");
-  if (!existsSync(mainTexDir)) {
-    mkdirSync(mainTexDir, { recursive: true });
-  }
-  if (!existsSync(mainTexFullPath)) {
-    writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
-  }
-}
-
 export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): WorkbenchProjectRef {
   const root = localProjectRoot(args.rootPath);
   mkdirSync(root, { recursive: true });
@@ -194,7 +143,7 @@ export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): 
 
   ensureAgentDir(metaDir);
   createConfiguredFolders(root, workspaceDirs);
-  writeManuscriptStub(root, workspaceDirs);
+  ensureMainTex(root);
   return { projectId };
 }
 
@@ -207,6 +156,7 @@ export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjec
   if (!existing?.workspace?.folders?.length) {
     writeWorkspaceDirs(root, DEFAULT_WORKSPACE_FOLDERS);
   }
+  createConfiguredFolders(root, readWorkspaceDirs(root));
   const metaDir = projectMetaAbs(root);
   if (!existsSync(join(metaDir, "settings.json"))) {
     writeLocalSettings(metaDir, { compiler: "tectonic" });

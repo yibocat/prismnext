@@ -128,6 +128,22 @@ export function resetTectonicBinaryCacheForTests(): void {
   cached = null;
 }
 
+/** Host `main` sets this after it finds `current/bin`. */
+export function isHostRuntimeProcess(): boolean {
+  return Boolean(process.env.PRISM_HOST_BIN_DIR);
+}
+
+/** Product default is Tectonic. Do not tell the user to install TeX Live on a Host. */
+export function tectonicUnavailableError(): string {
+  if (isHostRuntimeProcess()) {
+    return (
+      "Tectonic was not found on this Host (~/.prismnext-host/current/bin/tectonic). "
+      + "Disconnect and reconnect so PrismNext can download it. Remote compile uses Tectonic, not TeX Live."
+    );
+  }
+  return "Tectonic was not found. Install Tectonic, or add TeX Live to PATH if you want that engine.";
+}
+
 /** Resolve bundled Tectonic first, then system install. */
 export async function resolveTectonicBinary(opts?: { force?: boolean }): Promise<TectonicBinaryInfo> {
   if (cached?.available && !opts?.force) return cached;

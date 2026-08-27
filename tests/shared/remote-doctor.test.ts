@@ -31,5 +31,19 @@ describe("connect constitution", () => {
       }),
     ).toBe(true);
     expect(isHostDoctorReport({ ok: true, node: "v20.0.0" })).toBe(false);
+    expect(
+      isHostDoctorReport({
+        ok: true,
+        node: "v20.0.0",
+        home: "/home/ubuntu/.prismnext",
+        homeWritable: true,
+        git: true,
+        runtime: {
+          node: { available: true, version: "v20.0.0", path: "/usr/bin/node" },
+          git: { available: true, version: null, path: "/usr/bin/git" },
+          tectonic: { available: false, version: null, path: null },
+        },
+      }),
+    ).toBe(true);
   });
 });

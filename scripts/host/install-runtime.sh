@@ -110,6 +110,51 @@ cache_ready() {
   [ -f "$path" ] && verify_sha "$path" "$sha"
 }
 
+# First bytes as hex. GitHub sometimes serves the Tectonic musl build as a
+# raw ELF named *.tar.gz; `tar -xzf` then fails and dest is never written.
+file_magic_hex() {
+  path="$1"
+  bytes="$2"
+  dd if="$path" bs=1 count="$bytes" 2>/dev/null | od -An -tx1 | tr -d " \n"
+}
+
+is_elf() {
+  [ -f "$1" ] && [ "$(file_magic_hex "$1" 4)" = "7f454c46" ]
+}
+
+is_gzip() {
+  [ -f "$1" ] && [ "$(file_magic_hex "$1" 2)" = "1f8b" ]
+}
+
+install_tectonic_payload() {
+  payload="$1"
+  dest="$2"
+  if is_elf "$payload"; then
+    cp "$payload" "$dest"
+  elif is_gzip "$payload"; then
+    extract="$CACHE/extract-tectonic-$ARCH"
+    rm -rf "$extract"
+    mkdir -p "$extract"
+    tar -xzf "$payload" -C "$extract"
+    src=$(find "$extract" -type f -name tectonic | head -1)
+    if [ -z "$src" ]; then
+      echo "install-runtime: Tectonic archive missing binary" >&2
+      rm -rf "$extract"
+      return 1
+    fi
+    cp "$src" "$dest"
+    rm -rf "$extract"
+  else
+    echo "install-runtime: Tectonic cache is neither gzip nor ELF: $payload" >&2
+    return 1
+  fi
+  chmod 755 "$dest"
+  if [ ! -x "$dest" ]; then
+    echo "install-runtime: failed to place Tectonic at $dest" >&2
+    return 1
+  fi
+}
+
 install_node() {
   ver=$(pin_get "$NODE_PIN" version) || {
     echo "install-runtime: missing Node pin" >&2
@@ -232,23 +277,24 @@ install_tectonic() {
 
   mkdir -p "$CACHE" "$CURRENT/bin"
   tar_path="$CACHE/$archive"
-  if ! cache_ready "$tar_path" "$sha"; then
-    download "$url" "$tar_path"
-    verify_sha "$tar_path" "$sha"
+
+  if [ -f "$tar_path" ] && is_elf "$tar_path"; then
+    install_tectonic_payload "$tar_path" "$dest" || return 1
+    stamp_set tectonic "$ver"
+    echo "Tectonic $ver ready (cached ELF)."
+    return 0
   fi
 
-  extract="$CACHE/extract-tectonic-$ARCH"
-  rm -rf "$extract"
-  mkdir -p "$extract"
-  tar -xzf "$tar_path" -C "$extract"
-  src=$(find "$extract" -type f -name tectonic | head -1)
-  if [ -z "$src" ]; then
-    echo "install-runtime: Tectonic archive missing binary" >&2
-    return 1
+  if ! cache_ready "$tar_path" "$sha"; then
+    download "$url" "$tar_path"
+    if is_elf "$tar_path"; then
+      :
+    else
+      verify_sha "$tar_path" "$sha" || return 1
+    fi
   fi
-  cp "$src" "$dest"
-  chmod 755 "$dest"
-  rm -rf "$extract"
+
+  install_tectonic_payload "$tar_path" "$dest" || return 1
   stamp_set tectonic "$ver"
   echo "Tectonic $ver ready."
 }

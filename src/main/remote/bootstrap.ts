@@ -4,16 +4,29 @@
  * Does not touch `~/.prismnext` user data.
  */
 
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   HOST_CURRENT_DIRNAME,
   HOST_INSTALL_DIRNAME,
+  HOST_RUNTIME_STAMP_FILENAME,
   HOST_STAMP_FILENAME,
   hostCurrentRel,
   hostInstallRel,
   hostStampRel,
 } from "../../shared/workbench/paths";
-import { RemoteOperationError, type HostStamp } from "../../shared/remote";
+import {
+  RemoteOperationError,
+  hostRuntimePinsFromFiles,
+  inventoryMissingSteps,
+  runtimeBinFromStat,
+  mergeHostRuntimePins,
+  parseHostPinMap,
+  type HostRuntimeInventory,
+  type HostRuntimePins,
+  type HostRuntimeStep,
+  type HostStamp,
+} from "../../shared/remote";
 import type { SshExecResult, SshSession } from "./ssh-client";
 
 /** One runtime download step (Node tarball is ~30–60 MB). */
@@ -25,6 +38,8 @@ export interface BootstrapInput {
   log: (message: string) => void;
   /** linux-x64 → x64. The installer uses this; uname is the fallback. */
   linuxArch?: "linux-x64" | "linux-arm64";
+  /** Desktop pin versions. Defaults to `scripts/host` + remote `current/runtime`. */
+  pins?: HostRuntimePins;
 }
 
 export interface BootstrapResult {
@@ -76,6 +91,64 @@ function logExecOutput(log: (message: string) => void, result: SshExecResult): v
   }
 }
 
+function readDesktopHostRuntimePins(): HostRuntimePins {
+  const dir = join(process.cwd(), "scripts", "host");
+  try {
+    return hostRuntimePinsFromFiles({
+      node: readFileSync(join(dir, "node-version.txt"), "utf8"),
+      git: readFileSync(join(dir, "git-version.txt"), "utf8"),
+      tectonic: readFileSync(join(dir, "tectonic-linux.txt"), "utf8"),
+    });
+  } catch {
+    return { node: "", git: "", tectonic: "" };
+  }
+}
+
+async function readRemotePayloadPins(session: SshSession, currentDir: string): Promise<HostRuntimePins> {
+  const runtime = join(currentDir, "runtime");
+  return hostRuntimePinsFromFiles({
+    node: await session.sftpRead(join(runtime, "node-version.txt")),
+    git: await session.sftpRead(join(runtime, "git-version.txt")),
+    tectonic: await session.sftpRead(join(runtime, "tectonic-linux.txt")),
+  });
+}
+
+async function collectRuntimeInventory(
+  session: SshSession,
+  currentDir: string,
+  hostRoot: string,
+): Promise<HostRuntimeInventory> {
+  const nodeBin = join(currentDir, "bin", "node");
+  const tectonicBin = join(currentDir, "bin", "tectonic");
+  const gitBin = join(currentDir, "vendor", "git", "bin", "git");
+  const stamp = parseHostPinMap(await session.sftpRead(join(hostRoot, HOST_RUNTIME_STAMP_FILENAME)));
+  const [node, git, tectonic] = await Promise.all([
+    session.sftpStat(nodeBin),
+    session.sftpStat(gitBin),
+    session.sftpStat(tectonicBin),
+  ]);
+  return {
+    node: runtimeBinFromStat(node, nodeBin, stamp.node ?? null),
+    git: runtimeBinFromStat(git, gitBin, stamp.git ?? null),
+    tectonic: runtimeBinFromStat(tectonic, tectonicBin, stamp.tectonic ?? null),
+  };
+}
+
+async function missingRuntimeSteps(input: {
+  session: SshSession;
+  currentDir: string;
+  hostRoot: string;
+  pins?: HostRuntimePins;
+}): Promise<HostRuntimeStep[]> {
+  const inventory = await collectRuntimeInventory(input.session, input.currentDir, input.hostRoot);
+  const pins = mergeHostRuntimePins(
+    input.pins ?? { node: "", git: "", tectonic: "" },
+    await readRemotePayloadPins(input.session, input.currentDir),
+    readDesktopHostRuntimePins(),
+  );
+  return inventoryMissingSteps(inventory, pins);
+}
+
 async function provisionHostRuntime(input: {
   session: SshSession;
   currentDir: string;
@@ -83,7 +156,11 @@ async function provisionHostRuntime(input: {
   nodeBin: string;
   linuxArch?: "linux-x64" | "linux-arm64";
   log: (message: string) => void;
+  steps?: HostRuntimeStep[];
 }): Promise<void> {
+  const steps = input.steps ?? ["node", "git", "tectonic"];
+  if (steps.length === 0) return;
+
   const installBin = join(input.currentDir, "bin", "install-runtime");
   const installer = await input.session.sftpStat(installBin);
   const node = await input.session.sftpStat(input.nodeBin);
@@ -97,8 +174,12 @@ async function provisionHostRuntime(input: {
 
   const arch = installerArch(input.linuxArch);
   const archFlag = arch ? ` --arch ${arch}` : "";
-  input.log("Server is downloading Node, Git, and Tectonic (needs outbound HTTPS)…");
-  for (const step of ["node", "git", "tectonic"] as const) {
+  if (steps.length === 3) {
+    input.log("Server is downloading Node, Git, and Tectonic (needs outbound HTTPS)…");
+  } else {
+    input.log(`Server is downloading ${steps.join(", ")} (needs outbound HTTPS)…`);
+  }
+  for (const step of steps) {
     input.log(`Remote runtime: ${step}…`);
     const result = await input.session.exec(
       `sh "${installBin}" --current "${input.currentDir}" --step ${step}${archFlag}`,
@@ -123,6 +204,16 @@ async function provisionHostRuntime(input: {
       "server finished install-runtime but current/bin/prismnext-host or current/bin/node is still missing",
     );
   }
+  if (steps.includes("tectonic")) {
+    const tectonicBin = join(input.currentDir, "bin", "tectonic");
+    const tectonic = await input.session.sftpStat(tectonicBin);
+    if (!tectonic || tectonic.size <= 0) {
+      throw new RemoteOperationError(
+        "host_runtime",
+        "install-runtime finished but ~/.prismnext-host/current/bin/tectonic is still missing",
+      );
+    }
+  }
 }
 
 export async function ensureHostPayload(input: BootstrapInput): Promise<BootstrapResult> {
@@ -141,15 +232,19 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
 
   const existing = parseStamp(await input.session.sftpRead(stampPath));
   const host = await input.session.sftpStat(hostBin);
-  const node = await input.session.sftpStat(nodeBin);
 
-  if (existing && existing.payloadSha256 === wanted.payloadSha256 && host && node) {
-    input.log("Host program already matches this app — skipping transfer.");
-    return { action: "skipped", stamp: existing, hostRoot, appHome, currentDir, hostBin, nodeBin };
-  }
-
-  if (existing && existing.payloadSha256 === wanted.payloadSha256 && host && !node) {
-    input.log("Host program is present; server will download Node / Git / Tectonic.");
+  if (existing && existing.payloadSha256 === wanted.payloadSha256 && host) {
+    const missing = await missingRuntimeSteps({
+      session: input.session,
+      currentDir,
+      hostRoot,
+      pins: input.pins,
+    });
+    if (missing.length === 0) {
+      input.log("Host program and Node / Git / Tectonic already match this app — skipping install.");
+      return { action: "skipped", stamp: existing, hostRoot, appHome, currentDir, hostBin, nodeBin };
+    }
+    input.log(`Host program is present; installing missing runtime: ${missing.join(", ")}.`);
     await provisionHostRuntime({
       session: input.session,
       currentDir,
@@ -157,6 +252,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
       nodeBin,
       linuxArch: input.linuxArch,
       log: input.log,
+      steps: missing,
     });
     return { action: "provisioned", stamp: existing, hostRoot, appHome, currentDir, hostBin, nodeBin };
   }
@@ -200,6 +296,12 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
     throw new RemoteOperationError("bootstrap_checksum", "failed to write Host stamp");
   }
 
+  const missing = await missingRuntimeSteps({
+    session: input.session,
+    currentDir,
+    hostRoot,
+    pins: input.pins,
+  });
   await provisionHostRuntime({
     session: input.session,
     currentDir,
@@ -207,6 +309,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
     nodeBin,
     linuxArch: input.linuxArch,
     log: input.log,
+    steps: missing,
   });
 
   input.log(`Host ready (${wanted.desktopVersion}, ${wanted.payloadSha256.slice(0, 8)}).`);

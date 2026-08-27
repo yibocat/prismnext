@@ -25,7 +25,7 @@ export function RemoteFolderDialog({
   onConfirm,
 }: {
   alias: string | null;
-  mode: "open" | "create";
+  mode: "open" | "browse";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (remoteRoot: string) => Promise<void>;
@@ -38,7 +38,6 @@ export function RemoteFolderDialog({
   });
   const [path, setPath] = useState("");
   const [draft, setDraft] = useState("");
-  const [name, setName] = useState("");
   const [listing, setListing] = useState<RemoteDirListing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,7 +48,6 @@ export function RemoteFolderDialog({
     const start = home ?? "/";
     setPath(start);
     setDraft(start);
-    setName("");
     setError(null);
   }, [handshake, open]);
 
@@ -80,12 +78,12 @@ export function RemoteFolderDialog({
     setDraft(abs);
   };
 
-  const confirmPath = mode === "create" ? joinPosixSegment(path, name) : normalizePosixAbs(path);
+  const confirmPath = normalizePosixAbs(path);
   const canConfirm = Boolean(confirmPath) && !busy;
 
   const submit = async () => {
     if (!confirmPath) {
-      setError(t(mode === "create" ? "remote.nameInvalid" : "remote.folderRequired"));
+      setError(t("remote.folderRequired"));
       return;
     }
     setBusy(true);
@@ -104,7 +102,7 @@ export function RemoteFolderDialog({
       <DialogContent className="sm:max-w-lg" showCloseButton>
         <DialogHeader>
           <DialogTitle>
-            {t(mode === "create" ? "remote.createDialogTitle" : "remote.folderDialogTitle")}
+            {t(mode === "browse" ? "remote.browseParentTitle" : "remote.folderDialogTitle")}
           </DialogTitle>
           <DialogDescription>{alias}</DialogDescription>
         </DialogHeader>
@@ -120,19 +118,6 @@ export function RemoteFolderDialog({
               }
             }}
           />
-          {mode === "create" ? (
-            <Input
-              value={name}
-              placeholder={t("remote.folderName")}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void submit();
-                }
-              }}
-            />
-          ) : null}
           <div className="max-h-56 overflow-y-auto rounded-md border border-border">
             {listing?.parent ? (
               <button
@@ -170,7 +155,7 @@ export function RemoteFolderDialog({
           </Button>
           <Button type="button" disabled={!canConfirm} onClick={() => void submit()}>
             {busy ? <Loader2Icon className="size-4 animate-spin" /> : null}
-            {t(mode === "create" ? "remote.create" : "remote.open")}
+            {t(mode === "browse" ? "remote.useFolder" : "remote.open")}
           </Button>
         </DialogFooter>
       </DialogContent>

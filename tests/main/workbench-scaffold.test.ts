@@ -74,6 +74,18 @@ describe("ensureWorkbenchProjectMeta", () => {
     expect(existsSync(join(root, ".prismnext", "compile"))).toBe(false);
     expect(readWorkspaceDirs(root).some((d) => d.function === "manuscript")).toBe(true);
   });
+
+  it("fills default folders and mkdir manuscript/ when workbench.json only has id", () => {
+    const root = tmpProject();
+    mkdirSync(join(root, PROJECT_META_DIR), { recursive: true });
+    writeFileSync(join(root, workbenchJsonRel()), `${JSON.stringify({ id: "p_oldonly" }, null, 2)}\n`);
+
+    ensureWorkbenchProjectMeta(root);
+    expect(readWorkbenchJson(root)?.workspace?.folders).toEqual([
+      { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+    ]);
+    expect(existsSync(join(root, "manuscript"))).toBe(true);
+  });
 });
 
 describe("checkWorkbenchProject", () => {

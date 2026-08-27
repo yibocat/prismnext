@@ -1,4 +1,9 @@
-import { parseRemoteAbs, RemoteOperationError } from "../../shared/remote";
+import {
+  firstExecutionTarget,
+  parseRemoteAbs,
+  RemoteOperationError,
+  type ExecutionTarget,
+} from "../../shared/remote";
 import { projectLifecycleAuthority } from "../project/project-lifecycle-authority";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -6,16 +11,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-export function remoteProfileFromArgs(args: unknown, keys: string[]): string | null {
+export function executionTargetFromArgs(args: unknown, keys: string[]): ExecutionTarget | null {
   const rec = asRecord(args);
   if (!rec) return null;
-  for (const key of keys) {
-    const value = rec[key];
-    if (typeof value !== "string") continue;
-    const parsed = parseRemoteAbs(value);
-    if (parsed) return parsed.profileId;
-  }
-  return null;
+  return firstExecutionTarget(...keys.map((key) => rec[key] as string | undefined));
+}
+
+export function remoteProfileFromArgs(args: unknown, keys: string[]): string | null {
+  const target = executionTargetFromArgs(args, keys);
+  return target?.kind === "remote" ? target.profileId : null;
 }
 
 export function remoteProfileFromCurrentRoot(): string | null {

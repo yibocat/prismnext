@@ -23,6 +23,13 @@ export {
   type RemoteDirKind,
   type RemoteDirListing,
 } from "./path";
+export {
+  executionTargetFromPath,
+  firstExecutionTarget,
+  type ExecutionTarget,
+  type LocalExecutionTarget,
+  type RemoteExecutionTarget,
+} from "./execution-target";
 export { sanitizeSshProfile, sanitizeSshProfileList, type SshProfile } from "./profile";
 export {
   parseSshConfig,
@@ -103,8 +110,17 @@ export {
   hostPayloadBinDirFromHostBin,
   hostPayloadGitBinDir,
   hostPayloadGitExecDir,
+  hostRuntimePinsFromFiles,
+  inventoryMissingSteps,
+  runtimeBinFromStat,
   listHostRuntimeBinCandidates,
+  mergeHostRuntimePins,
+  parseHostPinMap,
   posixDirname,
+  type HostRuntimeBinStatus,
+  type HostRuntimeInventory,
+  type HostRuntimePins,
+  type HostRuntimeStep,
 } from "./host-runtime-env";
 export {
   hostnameOfUrl,

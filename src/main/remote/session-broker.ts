@@ -260,10 +260,10 @@ export class RemoteSessionBroker {
         "bootstrap",
         true,
         boot.action === "skipped"
-          ? "Remote Host program already matches this app."
+          ? "Host program and Node / Git / Tectonic already match this app — skipping install."
           : boot.action === "provisioned"
-            ? "Server downloaded Node, Git, and Tectonic."
-            : "Host program pushed; server downloaded Node, Git, and Tectonic.",
+            ? "Server installed the missing Host runtime."
+            : "Host program pushed; server downloaded any missing Node / Git / Tectonic.",
       );
 
       const node = await session.exec(`"${boot.nodeBin}" --version`);
@@ -802,7 +802,10 @@ export class RemoteSessionBroker {
           detail: "Host doctor returned an unexpected payload.",
         });
       }
-      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}.`;
+      const tectonic = raw.runtime?.tectonic.available
+        ? (raw.runtime.tectonic.version || "yes")
+        : "missing";
+      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}, tectonic ${tectonic}.`;
       this.log(live.profileId, detail, { level: raw.ok ? "ok" : "warn", gate: "doctor" });
       return {
         ...recordConnectGate(constitution, { gate: "doctor", ok: raw.ok, detail }),

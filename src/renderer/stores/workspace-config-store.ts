@@ -10,7 +10,6 @@ import {
   createDefaultFolder,
   defaultWorkspaceDirs,
 } from "@/types/workspace";
-import { isRemoteProjectRoot } from "@shared/remote";
 import { projectDesktop } from "@/lib/desktop-api/project";
 
 interface WorkspaceConfigState {
@@ -76,7 +75,6 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
     },
 
     saveConfig: async (projectRoot: string) => {
-      if (isRemoteProjectRoot(projectRoot)) return true;
       const { workspaceDirs } = get();
       try {
         const result =

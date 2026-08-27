@@ -1,4 +1,5 @@
 import { RemoteOperationError } from "../shared/remote";
+import { loadConfig, saveConfig, type TerminalConfig } from "../main/terminal/terminal-config";
 import type { HostHandlerContext } from "./context";
 import { requireRemoteRoot, resolveHostProjectPath } from "./project-path";
 import { spawnHostPty, type HostPty } from "./terminal-pty";
@@ -71,6 +72,15 @@ export const terminalHandlers: Record<
       live.kill();
       sessions.delete(sessionId);
     }
+    return { ok: true };
+  },
+
+  async "terminal:loadConfig"(params) {
+    return loadConfig(String(params.projectRoot ?? ""));
+  },
+
+  async "terminal:saveConfig"(params) {
+    saveConfig(String(params.projectRoot ?? ""), params.config as TerminalConfig);
     return { ok: true };
   },
 };

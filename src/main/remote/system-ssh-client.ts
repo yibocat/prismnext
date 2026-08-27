@@ -39,6 +39,20 @@ export function systemSshArgv(dest: string, remoteCommand: string): string[] {
   return [...batchArgs(), "--", dest, remoteCommand];
 }
 
+/**
+ * Parse `wc -c` from a remote `sftpStat`.
+ * A missing file must not become `{ size: 0 }`: `Number("") === 0`, and
+ * `if [ -e p ]; then wc; fi` still exits 0 when the file is absent.
+ */
+export function parseRemoteStatStdout(code: number, stdout: string): { size: number } | null {
+  if (code !== 0) return null;
+  const text = stdout.trim();
+  if (!text) return null;
+  const n = Number(text);
+  if (!Number.isFinite(n)) return null;
+  return { size: n };
+}
+
 export function classifySshError(
   stderr: string,
   code: number | string | null,
@@ -229,10 +243,11 @@ class SystemSshSession implements SshSession {
   }
 
   async sftpStat(remotePath: string): Promise<{ size: number } | null> {
-    const result = await this.exec(`if [ -e ${shellQuote(remotePath)} ]; then wc -c < ${shellQuote(remotePath)}; fi`);
-    const n = Number(result.stdout.trim());
-    if (result.code !== 0 || !Number.isFinite(n)) return null;
-    return { size: n };
+    const quoted = shellQuote(remotePath);
+    const result = await this.exec(
+      `if [ -f ${quoted} ]; then wc -c < ${quoted}; else exit 1; fi`,
+    );
+    return parseRemoteStatStdout(result.code, result.stdout);
   }
 
   async sftpRead(remotePath: string): Promise<string | null> {

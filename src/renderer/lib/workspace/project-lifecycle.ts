@@ -140,9 +140,7 @@ export async function switchWorkbenchFocus(opts: {
   const result = await fsDesktop.fsScanMetadata(canonicalRoot);
   if (shouldAbort()) return;
 
-  if (!isRemoteProjectRoot(canonicalRoot)) {
-    gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
-  }
+  gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
   await useWorkspaceConfigStore.getState().loadConfig(canonicalRoot);
   if (shouldAbort()) return;
 

@@ -3,6 +3,8 @@
  * `HostDoctorReport` is what `prismnext-host doctor` / `host.doctor` returns.
  */
 
+import type { HostRuntimeInventory } from "./host-runtime-env";
+
 export const REMOTE_CONNECT_GATES = [
   "payload",
   "ssh",
@@ -33,6 +35,8 @@ export interface HostDoctorReport {
   home: string;
   homeWritable: boolean;
   git: boolean;
+  /** Payload Node / Git / Tectonic. Optional so older Hosts still pass `isHostDoctorReport`. */
+  runtime?: HostRuntimeInventory;
 }
 
 export interface RemoteConnectConstitution {

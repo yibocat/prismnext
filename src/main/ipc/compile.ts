@@ -5,6 +5,7 @@ import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
 import { parseRemoteAbs } from "../../shared/remote";
+import { routeHostDomainMethod } from "../remote/domain-route";
 import { getRemoteSessionBroker } from "./remote";
 import { pullRemoteBlob } from "../remote/sync-client";
 import { createLogger } from "../app/logger";
@@ -16,6 +17,21 @@ import {
 } from "../compile/manuscript-export";
 
 const log = createLogger("compile-ipc", "compile");
+
+const EMPTY_DETECT = { texlive: { available: false, engines: [] as string[], version: null }, tectonic: false };
+
+async function routeIfRemote(method: string, args: unknown, keys: string[]): Promise<unknown | undefined> {
+  return routeHostDomainMethod(method, args, {
+    keys,
+    broker: getRemoteSessionBroker(),
+    disconnected(name) {
+      if (name === "compile:detectTexlive") {
+        return { hit: true, result: EMPTY_DETECT };
+      }
+      return { hit: false };
+    },
+  });
+}
 
 function projectName(projectRoot: string): string {
   return basename(projectRoot) || "project";
@@ -44,22 +60,18 @@ export function registerCompileHandlers(): void {
         skipSynctex: args.skipSynctex ?? false,
         fast: args.fast ?? false,
       });
-      const remote = parseRemoteAbs(args.projectDir);
-      if (remote) {
-        const broker = getRemoteSessionBroker();
-        const raw = await broker.invoke(remote.profileId, "compile:execute", {
-          ...args,
-          projectDir: remote.abs,
-          pdfOnDisk: true,
-        }) as {
+      const routed = await routeIfRemote("compile:execute", { ...args, pdfOnDisk: true }, ["projectDir"]);
+      if (routed !== undefined) {
+        const remote = parseRemoteAbs(args.projectDir);
+        const raw = routed as {
           pdfPath?: string;
           stdout?: string;
           error?: string;
           buildDir?: string;
         };
         if (raw.error) return { error: raw.error, stdout: raw.stdout };
-        if (raw.pdfPath) {
-          const bytes = await pullRemoteBlob(broker, remote.profileId, "fs:readBlob", {
+        if (raw.pdfPath && remote) {
+          const bytes = await pullRemoteBlob(getRemoteSessionBroker(), remote.profileId, "fs:readBlob", {
             path: raw.pdfPath,
           });
           const tmp = join(tmpdir(), `prismnext-remote-${remote.profileId}-${basename(raw.pdfPath)}`);
@@ -102,14 +114,8 @@ export function registerCompileHandlers(): void {
   ipcMain.handle(
     "compile:detectTexlive",
     async (_event, args?: { projectRoot?: string }) => {
-      const remote = parseRemoteAbs(args?.projectRoot ?? "");
-      if (remote) {
-        const broker = getRemoteSessionBroker();
-        if (!broker.isBound(remote.profileId)) {
-          return { texlive: { available: false, engines: [], version: null }, tectonic: false };
-        }
-        return broker.invoke(remote.profileId, "compile:detectTexlive", {});
-      }
+      const routed = await routeIfRemote("compile:detectTexlive", args ?? {}, ["projectRoot"]);
+      if (routed !== undefined) return routed;
       const texliveStatus = await detectTexlive();
       const tectonicAvailable = await detectTectonic();
       return {

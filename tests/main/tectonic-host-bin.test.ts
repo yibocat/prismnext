@@ -12,9 +12,11 @@ vi.mock("electron", () => ({
 }));
 
 import {
+  isHostRuntimeProcess,
   resetTectonicBinaryCacheForTests,
   resolveHostPayloadTectonicPath,
   resolveTectonicBinary,
+  tectonicUnavailableError,
 } from "../../src/main/compile/tectonic-binary";
 
 describe("Host payload tectonic", () => {
@@ -53,6 +55,13 @@ describe("Host payload tectonic", () => {
       if (prevHome === undefined) delete process.env.HOME;
       else process.env.HOME = prevHome;
     }
+  });
+
+  it("names Tectonic — not TeX Live — when the Host has no engine", () => {
+    process.env.PRISM_HOST_BIN_DIR = "/tmp/prism-host-bin";
+    expect(isHostRuntimeProcess()).toBe(true);
+    expect(tectonicUnavailableError()).toMatch(/Tectonic was not found on this Host/);
+    expect(tectonicUnavailableError()).not.toMatch(/TeXLive|xelatex/i);
   });
 
   it("prefers the Host payload binary over a missing Electron bundle", async () => {
