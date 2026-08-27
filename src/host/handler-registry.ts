@@ -17,6 +17,8 @@ import { projectHandlers } from "./project-handlers";
 import { sessionHandlers } from "./session-handlers";
 import { settingsHandlers } from "./settings-handlers";
 import { teamsHandlers } from "./teams-handlers";
+import { interactionHandlers } from "./interaction-handlers";
+import { researchHandlers } from "./research-handlers";
 import { terminalHandlers } from "./terminal-handlers";
 import { worktreeHandlers } from "./worktree-handlers";
 
@@ -36,6 +38,8 @@ const handlers: Record<string, HostHandler> = {
   ...settingsHandlers,
   ...sessionHandlers,
   ...teamsHandlers,
+  ...researchHandlers,
+  ...interactionHandlers,
   ...proHandlers,
   async "host.configure"(params, ctx) {
     ensureMyContentTeam();

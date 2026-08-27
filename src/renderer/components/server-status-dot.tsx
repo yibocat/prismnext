@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
-import { CircleIcon, DownloadIcon, FileTypeIcon, GitBranchIcon, SparklesIcon, TerminalIcon } from "lucide-react";
+import { CircleIcon, DownloadIcon, FileTypeIcon, ServerIcon, SparklesIcon, TerminalIcon } from "lucide-react";
 import { agentDesktop } from "@/lib/desktop-api/agent";
-import { useCompileStore } from "@/stores/compile-store";
+import { compileDesktop } from "@/lib/desktop-api/compile";
+import { useCompileStore, type CompilerStatus } from "@/stores/compile-store";
 import {
+  compileEngineIconClass,
+  compileEngineTone,
   isCompileEngineAvailable,
   resolveActiveCompileEngineLabel,
 } from "@/lib/tex/compile-engine-label";
@@ -20,12 +23,18 @@ import { useRightPanelStore } from "@/stores/right-panel-store";
 import type {
   AgentLifecyclePhase,
   AgentStatusSnapshot,
-  ProjectWarmPhase,
 } from "../../shared/agent/status";
-import { isAgentLifecyclePhase, isProjectWarmPhase } from "../../shared/agent/status";
 import { Button } from "@/components/ui/button";
-import { useGitStore } from "@/stores/git-store";
 import { useAvailableUpdate } from "@/hooks/use-available-update";
+import {
+  appStatusDotPhase,
+  listRemoteStatusRows,
+  remoteConnectionDetailKey,
+  remotePhaseToDot,
+} from "@/lib/remote/display";
+import { useRemoteStore } from "@/stores/remote-store";
+import { useWorkbenchStore } from "@/stores/workbench-store";
+import { encodeRemoteAbs, parseRemoteAbs } from "@shared/remote";
 
 const AGENT_COLORS: Record<AgentLifecyclePhase, string> = {
   starting: "text-warning",
@@ -38,58 +47,58 @@ function StatusRow({
   label,
   detail,
   icon,
+  detailClassName,
 }: {
   label: string;
   detail: string;
   icon: React.ReactNode;
+  detailClassName?: string;
 }) {
   return (
     <div className="flex items-center gap-2">
       {icon}
-      <span className="text-[length:var(--font-hint)] text-muted-foreground flex-1">
+      <span className="text-[length:var(--font-hint)] text-muted-foreground flex-1 min-w-0 truncate">
         {label}
       </span>
-      <span className="text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums text-right max-w-[9rem] truncate">
+      <span className={`text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums text-right max-w-[11rem] truncate ${detailClassName ?? ""}`}>
         {detail}
       </span>
     </div>
   );
 }
 
-function normalizeSnapshot(raw: unknown): AgentStatusSnapshot {
-  const s = (raw && typeof raw === "object" ? raw : {}) as Partial<AgentStatusSnapshot>;
-  const phase: AgentLifecyclePhase = isAgentLifecyclePhase(s.phase)
-    ? s.phase
-    : s.available
-      ? "ready"
-      : "starting";
-  const projectWarmPhase: ProjectWarmPhase | null = isProjectWarmPhase(s.projectWarmPhase)
-    ? s.projectWarmPhase
-    : typeof s.projectWarm === "boolean"
-      ? s.projectWarm
-        ? "ready"
-        : "warming"
-      : null;
-  return {
-    phase,
-    available: Boolean(s.available),
-    version: typeof s.version === "string" ? s.version : "",
-    error: typeof s.error === "string" ? s.error : null,
-    binaryPresent: Boolean(s.binaryPresent),
-    projectWarm: projectWarmPhase === "ready" ? true : projectWarmPhase == null ? null : false,
-    projectWarmPhase,
-    projectWarmError: typeof s.projectWarmError === "string" ? s.projectWarmError : null,
-  };
+function remoteIconClass(phase: AgentLifecyclePhase): string {
+  if (phase === "ready") return "text-success";
+  if (phase === "starting") return "text-warning";
+  if (phase === "error") return "text-destructive";
+  return "text-muted-foreground/50";
 }
 
 /**
- * Compact Agent-first status. Outer dot = OpenCode ACP lifecycle.
- * Project tools warm should already be done by open time; the row reflects that.
+ * App-level status. Outer dot = local Agent, or the worst remote Host.
+ * Git / folder / session facts live on the session hover card.
  */
 export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isOpeningProject = useDocumentStore((s) => s.isOpeningProject);
+  const members = useWorkbenchStore((s) => s.members);
+  const remoteHosts = useRemoteStore((s) => s.hosts);
+  const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
+  const focusedProfileId = parseRemoteAbs(projectRoot ?? "")?.profileId ?? null;
+  const remoteRows = useMemo(
+    () => listRemoteStatusRows(
+      [projectRoot, ...members.map((member) => member.lastPath)],
+      remoteHosts,
+      remoteByProfileId,
+      focusedProfileId,
+    ),
+    [focusedProfileId, members, projectRoot, remoteByProfileId, remoteHosts],
+  );
+  const localStatusRoot = useMemo(() => {
+    if (projectRoot && !parseRemoteAbs(projectRoot)) return projectRoot;
+    return members.find((member) => !parseRemoteAbs(member.lastPath))?.lastPath ?? null;
+  }, [members, projectRoot]);
   const [agent, setAgent] = useState<AgentStatusSnapshot>({
     phase: "starting",
     available: false,
@@ -101,12 +110,10 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
     projectWarmError: null,
   });
   const [retrying, setRetrying] = useState(false);
+  const [remoteLatex, setRemoteLatex] = useState<Record<string, CompilerStatus | null>>({});
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
   const autoCompile = useCompileStore((s) => s.autoCompile);
   const detectCompilers = useCompileStore((s) => s.detectCompilers);
-  const isGitRepo = useGitStore((s) => s.isGitRepo);
-  const gitBranch = useGitStore((s) => s.branch);
-  const gitDirtyCount = useGitStore((s) => s.files.length);
   const update = useAvailableUpdate();
 
   useTerminalAiStore((s) => s.sessionStates);
@@ -117,7 +124,7 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
   const refresh = useCallback(async () => {
     try {
       const status = await agentDesktop.agentStatus(
-        projectRoot ? { projectRoot } : undefined,
+        localStatusRoot ? { projectRoot: localStatusRoot } : undefined,
       );
       setAgent({
         phase: status.ready && status.canEmbed ? "ready" : status.canEmbed ? "starting" : "error",
@@ -137,11 +144,39 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
         error: prev.error || "status unavailable",
       }));
     }
-  }, [projectRoot]);
+  }, [localStatusRoot]);
 
   useEffect(() => {
     void detectCompilers();
   }, [detectCompilers]);
+
+  const remoteProfileKey = remoteRows.map((row) => `${row.profileId}:${row.phase}`).join("|");
+  useEffect(() => {
+    let cancelled = false;
+    const profiles = remoteRows
+      .filter((row) => row.phase === "ready")
+      .map((row) => row.profileId);
+    if (profiles.length === 0) {
+      setRemoteLatex({});
+      return;
+    }
+    void Promise.all(profiles.map(async (profileId) => {
+      const projectRoot = encodeRemoteAbs(profileId, "/");
+      if (!projectRoot) return [profileId, null] as const;
+      try {
+        const status = await compileDesktop.compileDetectTexlive({ projectRoot });
+        return [profileId, status] as const;
+      } catch {
+        return [profileId, null] as const;
+      }
+    })).then((rows) => {
+      if (cancelled) return;
+      setRemoteLatex(Object.fromEntries(rows));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteProfileKey, remoteRows]);
 
   useEffect(() => {
     void refresh();
@@ -166,15 +201,16 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
     }
   };
 
-  const latexReady = isCompileEngineAvailable(compilerStatus);
-  const latexBackendLabel = resolveActiveCompileEngineLabel(compilerStatus);
-  const latexDetail = !compilerStatus
-    ? t("shell.status.checking")
-    : latexReady
-      ? autoCompile
-        ? t("shell.status.latexReadyAuto", { backend: latexBackendLabel })
-        : t("shell.status.latexReady", { backend: latexBackendLabel })
-      : t("shell.status.latexMissing");
+  const latexDetailOf = (status: CompilerStatus | null | undefined) => {
+    if (!status) return t("shell.status.checking");
+    if (!isCompileEngineAvailable(status)) return t("shell.status.latexMissing");
+    const backend = resolveActiveCompileEngineLabel(status);
+    return autoCompile
+      ? t("shell.status.latexReadyAuto", { backend })
+      : t("shell.status.latexReady", { backend });
+  };
+  const localLatexDetail = latexDetailOf(compilerStatus);
+  const showLatexWhere = remoteRows.length > 0;
 
   const agentDetail =
     agent.phase === "starting"
@@ -187,7 +223,7 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
 
   const warmPhase = agent.projectWarmPhase;
   const projectWarmDetail =
-    projectRoot == null || warmPhase == null || warmPhase === "none"
+    !localStatusRoot || warmPhase == null || warmPhase === "none"
       ? null
       : warmPhase === "ready"
         ? t("shell.status.projectWarmReady")
@@ -219,13 +255,19 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
     || agent.phase === "stopped"
     || warmPhase === "error";
 
+  const dotPhase = appStatusDotPhase(remoteRows, agent.phase);
+
   const glyph = (
     <>
       <CircleIcon
-        className={`size-2.5 ${AGENT_COLORS[agent.phase]} fill-current ${
+        className={`size-2.5 ${AGENT_COLORS[dotPhase]} fill-current ${
           layer === "paint" ? "" : "hover:scale-125 transition-transform duration-200"
         }`}
-        aria-label={t("shell.status.agentAria", { status: agentDetail })}
+        aria-label={t("shell.status.agentAria", {
+          status: remoteRows[0]
+            ? t(remoteConnectionDetailKey(remoteRows[0].phase))
+            : agentDetail,
+        })}
       />
       {terminalAttention ? (
         <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full bg-warning text-[9px] font-medium text-background flex items-center justify-center tabular-nums">
@@ -255,6 +297,17 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
       </HoverCardTrigger>
       <HoverCardContent side="bottom" align="start" className="w-56 p-3">
         <div className="space-y-2">
+          {remoteRows.map((row) => {
+            const phase = remotePhaseToDot(row.phase);
+            return (
+              <StatusRow
+                key={row.profileId}
+                label={row.hostname}
+                detail={t(remoteConnectionDetailKey(row.phase))}
+                icon={<ServerIcon className={`size-3 shrink-0 ${remoteIconClass(phase)}`} />}
+              />
+            );
+          })}
           <StatusRow
             label={t("shell.status.agent")}
             detail={agentDetail}
@@ -285,37 +338,37 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
               {agent.projectWarmError}
             </p>
           ) : null}
-          {isGitRepo ? (
-            <StatusRow
-              label={t("shell.status.git")}
-              detail={
-                gitDirtyCount > 0
-                  ? t("shell.status.gitDirty", {
-                      branch: gitBranch || "…",
-                      count: gitDirtyCount,
-                    })
-                  : t("shell.status.gitClean", { branch: gitBranch || "…" })
-              }
-              icon={
-                <GitBranchIcon
-                  className={`size-3 shrink-0 ${
-                    gitDirtyCount > 0 ? "text-warning" : "text-success"
-                  }`}
-                />
-              }
-            />
-          ) : null}
           <StatusRow
             label={t("shell.status.latex")}
-            detail={latexDetail}
+            detail={
+              showLatexWhere
+                ? t("shell.status.latexLocal", { detail: localLatexDetail })
+                : localLatexDetail
+            }
             icon={
               <FileTypeIcon
-                className={`size-3 shrink-0 ${
-                  latexReady ? "text-success" : "text-muted-foreground/40"
-                }`}
+                className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(compilerStatus))}`}
               />
             }
           />
+          {remoteRows.filter((row) => row.phase === "ready").map((row) => {
+            const status = remoteLatex[row.profileId];
+            return (
+              <StatusRow
+                key={`latex-${row.profileId}`}
+                label={t("shell.status.latex")}
+                detail={t("shell.status.latexRemote", {
+                  host: row.hostname,
+                  detail: latexDetailOf(status),
+                })}
+                icon={
+                  <FileTypeIcon
+                    className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(status))}`}
+                  />
+                }
+              />
+            );
+          })}
           {update.visible ? (
             <StatusRow
               label={t("shell.status.update")}

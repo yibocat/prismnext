@@ -6,7 +6,9 @@
 
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { listHostRuntimeBinCandidates } from "../../shared/remote/host-runtime-env";
 import { getAppPath, isAppPackaged, getResourcesPath } from "../app/paths";
 
 export interface TectonicBinaryInfo {
@@ -33,16 +35,23 @@ function platformArchDir(): { platformDir: string; archDir: string } {
   return { platformDir, archDir };
 }
 
-/** Host runtime: `~/.prismnext-host/current/bin/tectonic` next to the dedicated Node. */
+/**
+ * Host runtime: `~/.prismnext-host/current/bin/tectonic`.
+ * Do not require the dedicated Node — system Node + Host script, or just
+ * `$HOME/.prismnext-host/current/bin`, must still find the installer copy.
+ */
 export function resolveHostPayloadTectonicPath(): string | null {
   const binName = process.platform === "win32" ? "tectonic.exe" : "tectonic";
-  const fromEnv = process.env.PRISM_HOST_BIN_DIR?.trim();
-  if (fromEnv) {
-    const candidate = join(fromEnv, binName);
+  const candidates = listHostRuntimeBinCandidates({
+    envBinDir: process.env.PRISM_HOST_BIN_DIR,
+    execPath: process.execPath,
+    argv1: process.argv[1],
+    home: process.env.HOME || homedir(),
+  });
+  for (const dir of candidates) {
+    const candidate = join(dir, binName);
     if (existsSync(candidate)) return candidate;
   }
-  const besideNode = join(dirname(process.execPath), binName);
-  if (existsSync(besideNode)) return besideNode;
   return null;
 }
 
@@ -121,7 +130,7 @@ export function resetTectonicBinaryCacheForTests(): void {
 
 /** Resolve bundled Tectonic first, then system install. */
 export async function resolveTectonicBinary(opts?: { force?: boolean }): Promise<TectonicBinaryInfo> {
-  if (cached && !opts?.force) return cached;
+  if (cached?.available && !opts?.force) return cached;
 
   const hostPayload = resolveHostPayloadTectonicPath();
   if (hostPayload) {

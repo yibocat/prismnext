@@ -63,11 +63,13 @@ export function buildHostServeStdioCommand(boot: {
   const commandsDir = `${currentDir}/resources/commands`;
   const hostRoot = currentDir.replace(/\/current\/?$/, "") || currentDir;
   const proDir = `${hostRoot}/pro-package`;
+  const binDir = `${currentDir}/bin`;
   return [
     "env",
     `PRISM_FIRST_PARTY_TEAMS_DIR="${teamsDir}"`,
     `PRISM_APP_COMMANDS_DIR="${commandsDir}"`,
     `PRISM_HOST_PRO_PACKAGE_DIR="${proDir}"`,
+    `PRISM_HOST_BIN_DIR="${binDir}"`,
     `"${nodeBin}"`,
     `"${hostBin}"`,
     "serve --stdio",

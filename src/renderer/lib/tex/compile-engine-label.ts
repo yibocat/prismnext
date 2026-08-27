@@ -17,3 +17,18 @@ export function isCompileEngineAvailable(
 ): boolean {
   return Boolean(status?.tectonic || status?.texlive?.available);
 }
+
+export type CompileEngineTone = "checking" | "ready" | "missing";
+
+export function compileEngineTone(
+  status: CompilerStatus | null | undefined,
+): CompileEngineTone {
+  if (!status) return "checking";
+  return isCompileEngineAvailable(status) ? "ready" : "missing";
+}
+
+export function compileEngineIconClass(tone: CompileEngineTone): string {
+  if (tone === "ready") return "text-success";
+  if (tone === "missing") return "text-warning";
+  return "text-muted-foreground/40";
+}

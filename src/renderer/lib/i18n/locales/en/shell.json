@@ -96,6 +96,8 @@
     "latexReady": "{{backend}} · ready",
     "latexReadyAuto": "{{backend}} · auto-compile",
     "latexMissing": "Not detected",
+    "latexLocal": "This computer · {{detail}}",
+    "latexRemote": "{{host}} · {{detail}}",
     "aiTerminal": "AI Terminal",
     "aiTerminalRunning": "{{running}} running · {{open}} open",
     "aiTerminalOpen": "{{open}} open",
@@ -103,7 +105,12 @@
     "terminalBusy": "{{count}} busy",
     "connecting": "Connecting…",
     "running": "Running",
-    "stopped": "Stopped"
+    "stopped": "Stopped",
+    "remote": "Host",
+    "remoteConnected": "Connected",
+    "remoteConnecting": "Connecting…",
+    "remoteError": "Connection failed",
+    "remoteDisconnected": "Offline"
   },
   "rightArea": {
     "backToSettings": "Back to settings",

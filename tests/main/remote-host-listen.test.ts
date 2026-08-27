@@ -28,7 +28,8 @@ describe("host listen helpers", () => {
     expect(script).toContain("payloadSha256");
     expect(script).toContain("process.kill(prev.pid)");
     expect(script).toContain("prev.sha===sha");
-    expect(script).not.toContain("PRISM_HOST_BIN_DIR");
+    expect(script).toContain('PRISM_HOST_BIN_DIR:binDir');
+    expect(script).toContain("/opt/current/bin");
     expect(script).not.toContain("vendor/git");
     expect(script).not.toContain("GIT_EXEC_PATH");
   });

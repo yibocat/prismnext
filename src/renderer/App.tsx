@@ -6,6 +6,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRemoteStore } from "@/stores/remote-store";
 import { restoreWorkbenchLaunch } from "@/lib/workspace/project-lifecycle";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
@@ -72,6 +73,7 @@ export function App() {
   const isMobile = useIsMobile();
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hydrateRemote = useRemoteStore((s) => s.hydrate);
   const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -142,6 +144,10 @@ export function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    void hydrateRemote();
+  }, [hydrateRemote]);
 
   useEffect(() => {
     void hydrateProLicense();

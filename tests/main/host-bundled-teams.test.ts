@@ -65,7 +65,9 @@ describe("Host bundled Core team", () => {
     expect(command).toContain(
       'PRISM_HOST_PRO_PACKAGE_DIR="/home/me/.prismnext-host/pro-package"',
     );
-    expect(command).not.toContain("PRISM_HOST_BIN_DIR");
+    expect(command).toContain(
+      'PRISM_HOST_BIN_DIR="/home/me/.prismnext-host/current/bin"',
+    );
     expect(command).not.toContain("vendor/git");
     expect(command).toContain("serve --stdio");
   });

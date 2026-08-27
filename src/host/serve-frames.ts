@@ -8,6 +8,7 @@ import {
 import { runDoctor } from "./doctor";
 import { ensureMyContentTeam } from "../main/teams/my-content";
 import { enableHostLicenseSessionMode } from "../main/teams/teams-license";
+import { setHostEvents } from "../main/app/event-sink";
 import { createHostContext, dispatchHostMethod, type HostHandlerContext } from "./handler-registry";
 import { installHostModelProxyFetch } from "./model-proxy-transport";
 
@@ -27,6 +28,14 @@ export function createHostRuntime(handshake: HostHandshake): HostRuntime {
   ctx.emit = (channel, payload) => {
     write({ kind: "event", channel, payload });
   };
+  setHostEvents({
+    broadcast(channel, payload) {
+      ctx.emit(channel, payload);
+    },
+    sendToOriginThenBroadcast(channel, payload) {
+      ctx.emit(channel, payload);
+    },
+  });
   installHostModelProxyFetch(ctx.emit);
 
   const handle = async (frame: RemoteFrame) => {
@@ -52,6 +61,8 @@ export function createHostRuntime(handshake: HostHandshake): HostRuntime {
               "literature",
               "experiment",
               "compile",
+              "research",
+              "interaction",
             ])),
           },
         });

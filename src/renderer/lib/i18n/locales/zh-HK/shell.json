@@ -96,6 +96,8 @@
     "latexReady": "{{backend}} · 就緒",
     "latexReadyAuto": "{{backend}} · 自動編譯",
     "latexMissing": "未檢測到",
+    "latexLocal": "本機 · {{detail}}",
+    "latexRemote": "{{host}} · {{detail}}",
     "aiTerminal": "AI 終端",
     "aiTerminalRunning": "{{running}} 執行中 · {{open}} 已開啟",
     "aiTerminalOpen": "{{open}} 已開啟",
@@ -103,7 +105,12 @@
     "terminalBusy": "{{count}} 忙碌",
     "connecting": "連線中…",
     "running": "執行中",
-    "stopped": "已停止"
+    "stopped": "已停止",
+    "remote": "主機",
+    "remoteConnected": "已連線",
+    "remoteConnecting": "連線中…",
+    "remoteError": "連線失敗",
+    "remoteDisconnected": "未連線"
   },
   "rightArea": {
     "backToSettings": "返回設定",

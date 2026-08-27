@@ -8,7 +8,15 @@ import {
 } from "@/components/ui/hover-card";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useCitationStagingStore } from "@/stores/citation-staging-store";
+import { parseRemoteAbs, recoverRemoteAbs } from "@shared/remote";
+import {
+  remoteConnectionDetailKey,
+  remoteConnectionPhaseForRoot,
+  remoteHostDisplayName,
+  resolveSessionRemoteRoot,
+} from "@/lib/remote/display";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRemoteStore } from "@/stores/remote-store";
 import { useChatStore } from "@/stores/chat-store";
 import { useGitStore } from "@/stores/git-store";
 import {
@@ -26,6 +34,7 @@ import {
   GitBranchIcon,
   HammerIcon,
   ListTodoIcon,
+  ServerIcon,
   WorkflowIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -48,6 +57,8 @@ interface SessionContextCardProps {
   sessionId?: string | null;
   /** Session-bound cwd — preferred over global active worktree. */
   sessionDirectory?: string | null;
+  /** Workbench lastPath — needed when cwd is a Host POSIX path. */
+  projectLastPath?: string | null;
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
   children: ReactElement;
@@ -62,19 +73,29 @@ export function SessionContextCard({
   title,
   sessionId,
   sessionDirectory,
+  projectLastPath,
   side = "bottom",
   align = "start",
   children,
 }: SessionContextCardProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteHosts = useRemoteStore((s) => s.hosts);
+  const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const liveBranch = useGitStore((s) => s.branch);
+  const remoteRoot = resolveSessionRemoteRoot(sessionDirectory, [projectLastPath, projectRoot]);
+  const checkoutRoot = remoteRoot || sessionDirectory || projectRoot;
+  const projectHint = recoverRemoteAbs(projectLastPath ?? "") || recoverRemoteAbs(projectRoot ?? "") || projectRoot;
   const checkoutContext = resolveSessionWorktreeContext(
-    sessionDirectory ?? projectRoot,
-    projectRoot,
+    checkoutRoot,
+    projectHint,
     worktrees,
   );
+  const remoteHost = remoteHostDisplayName(remoteRoot ?? projectHint, remoteHosts);
+  const remotePhase = remoteConnectionPhaseForRoot(remoteRoot ?? projectHint, remoteByProfileId);
+  const checkoutDisplayPath = parseRemoteAbs(checkoutContext.directory)?.abs
+    || checkoutContext.directory;
 
   const resolvedTabId = useChatStore((s) => {
     if (tabId) return tabId;
@@ -100,10 +121,16 @@ export function SessionContextCard({
   );
 
   const [fetchedBranch, setFetchedBranch] = useState<string | null>(null);
+  const focusedRemoteAbs = parseRemoteAbs(projectRoot ?? "")?.abs;
+  const sessionRemoteAbs = parseRemoteAbs(remoteRoot ?? "")?.abs;
   const sameProjectLocal =
     checkoutContext.kind === "local"
     && Boolean(projectRoot)
-    && (!sessionDirectory || sessionDirectory === projectRoot);
+    && (
+      !sessionDirectory
+      || sessionDirectory === projectRoot
+      || Boolean(focusedRemoteAbs && sessionRemoteAbs && focusedRemoteAbs === sessionRemoteAbs)
+    );
   const gitBranch =
     checkoutContext.gitBranch
     || (sameProjectLocal && liveBranch && liveBranch !== "(no branch)" ? liveBranch : null)
@@ -173,11 +200,21 @@ export function SessionContextCard({
             />
           </div>
 
-          {checkoutContext.directory ? (
+          {remoteHost ? (
+            <div className={ROW}>
+              <ServerIcon className={ICON} />
+              <span className={TEXT}>{remoteHost}</span>
+              {remotePhase ? (
+                <span className={HINT}>{t(remoteConnectionDetailKey(remotePhase))}</span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {checkoutDisplayPath ? (
             <div className={cn(ROW, "items-start")}>
               <Folder className={cn(ICON, "mt-px")} />
               <span className={cn(TEXT_WRAP, "select-text")}>
-                {checkoutContext.directory}
+                {checkoutDisplayPath}
               </span>
             </div>
           ) : null}

@@ -753,7 +753,7 @@ export interface ElectronAPI {
     | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
     | { error: string; stdout?: string }
   >;
-  compileDetectTexlive: () => Promise<CompilerStatus>;
+  compileDetectTexlive: (args?: { projectRoot?: string }) => Promise<CompilerStatus>;
   compileExportPdf: (
     projectRoot: string,
     mainFile: string,

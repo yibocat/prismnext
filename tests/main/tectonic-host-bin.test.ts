@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -34,6 +34,25 @@ describe("Host payload tectonic", () => {
     process.env.PRISM_HOST_BIN_DIR = bin;
     resetTectonicBinaryCacheForTests();
     expect(resolveHostPayloadTectonicPath()).toBe(tectonic);
+  });
+
+  it("finds tectonic under ~/.prismnext-host when Node is not the payload copy", () => {
+    const home = mkdtempSync(join(tmpdir(), "prism-host-home-"));
+    const bin = join(home, ".prismnext-host", "current", "bin");
+    const tectonic = join(bin, "tectonic");
+    mkdirSync(bin, { recursive: true });
+    writeFileSync(tectonic, "#!/bin/sh\necho tectonic 0.15.0\n");
+    chmodSync(tectonic, 0o755);
+    delete process.env.PRISM_HOST_BIN_DIR;
+    const prevHome = process.env.HOME;
+    process.env.HOME = home;
+    resetTectonicBinaryCacheForTests();
+    try {
+      expect(resolveHostPayloadTectonicPath()).toBe(tectonic);
+    } finally {
+      if (prevHome === undefined) delete process.env.HOME;
+      else process.env.HOME = prevHome;
+    }
   });
 
   it("prefers the Host payload binary over a missing Electron bundle", async () => {

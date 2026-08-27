@@ -31,7 +31,7 @@ describe("prismnext-host serve --stdio", () => {
       kind: "res",
       id: "h1",
       ok: true,
-      result: { ...handshake, features: ["control", "fs", "terminal", "agent", "literature", "experiment", "compile"] },
+      result: { ...handshake, features: ["control", "fs", "terminal", "agent", "literature", "experiment", "compile", "research", "interaction"] },
     });
   });
 

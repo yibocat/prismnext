@@ -24,7 +24,8 @@ export const compileApi = {
 			skipSynctex: opts?.skipSynctex,
 			fast: opts?.fast,
 		}),
-	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+	compileDetectTexlive: (args?: { projectRoot?: string }) =>
+		ipcRenderer.invoke("compile:detectTexlive", args),
 	compileExportPdf: (projectRoot: string, mainFile: string, pdfBytes?: Uint8Array | null) =>
 		ipcRenderer.invoke("compile:exportPdf", { projectRoot, mainFile, pdfBytes }),
 	manuscriptPackZip: (projectRoot: string, manuscriptDir: string) =>

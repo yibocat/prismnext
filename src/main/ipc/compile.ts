@@ -7,7 +7,6 @@ import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
 import { parseRemoteAbs } from "../../shared/remote";
 import { getRemoteSessionBroker } from "./remote";
 import { pullRemoteBlob } from "../remote/sync-client";
-import { projectLifecycleAuthority } from "../project/project-lifecycle-authority";
 import { createLogger } from "../app/logger";
 import {
   fileExists,
@@ -100,19 +99,25 @@ export function registerCompileHandlers(): void {
     },
   );
 
-  ipcMain.handle("compile:detectTexlive", async () => {
-    const current = projectLifecycleAuthority.currentRoot;
-    const remote = current ? parseRemoteAbs(current) : null;
-    if (remote) {
-      return getRemoteSessionBroker().invoke(remote.profileId, "compile:detectTexlive", {});
-    }
-    const texliveStatus = await detectTexlive();
-    const tectonicAvailable = await detectTectonic();
-    return {
-      texlive: texliveStatus,
-      tectonic: tectonicAvailable,
-    };
-  });
+  ipcMain.handle(
+    "compile:detectTexlive",
+    async (_event, args?: { projectRoot?: string }) => {
+      const remote = parseRemoteAbs(args?.projectRoot ?? "");
+      if (remote) {
+        const broker = getRemoteSessionBroker();
+        if (!broker.isBound(remote.profileId)) {
+          return { texlive: { available: false, engines: [], version: null }, tectonic: false };
+        }
+        return broker.invoke(remote.profileId, "compile:detectTexlive", {});
+      }
+      const texliveStatus = await detectTexlive();
+      const tectonicAvailable = await detectTectonic();
+      return {
+        texlive: texliveStatus,
+        tectonic: tectonicAvailable,
+      };
+    },
+  );
 
   ipcMain.handle(
     "compile:exportPdf",

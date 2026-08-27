@@ -90,6 +90,9 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     const term = new Terminal({
       theme: xtermTheme,
+      // LF alone stays in the same column (staircase). Real PTYs emit CRLF;
+      // convertEol makes a lone LF behave as newline+return for both local and Host.
+      convertEol: true,
       // Required for theme.background alpha; otherwise xterm paints an opaque
       // cell fill that cannot match the content surface / glass token.
       allowTransparency: true,

@@ -98,9 +98,13 @@ export {
   stripAgentSecrets,
 } from "./strip-secrets";
 export {
+  hostHomeCurrentBinDir,
   hostPayloadBinDir,
+  hostPayloadBinDirFromHostBin,
   hostPayloadGitBinDir,
   hostPayloadGitExecDir,
+  listHostRuntimeBinCandidates,
+  posixDirname,
 } from "./host-runtime-env";
 export {
   hostnameOfUrl,

@@ -91,6 +91,8 @@ import {
   syncRemotePaperPdfAction,
   syncRemoteSessionsAction,
 } from "@/lib/remote/sync-actions";
+import { remoteHostDisplayName } from "@/lib/remote/display";
+import { useRemoteStore } from "@/stores/remote-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
@@ -337,6 +339,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
   const pendingPermissions = usePermissionStore((s) => s.permissions);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteHosts = useRemoteStore((s) => s.hosts);
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const members = useWorkbenchStore((s) => s.members);
   const workbenchProjectIds = useWorkbenchStore((s) => s.workbenchProjectIds);
@@ -908,6 +911,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             title={title}
             sessionId={s.id}
             sessionDirectory={s.directory ?? s.projectLastPath}
+            projectLastPath={s.projectLastPath}
             side="right"
             align="start"
           >
@@ -1033,6 +1037,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             title={title}
             sessionId={s.id}
             sessionDirectory={s.directory ?? s.projectLastPath}
+            projectLastPath={s.projectLastPath}
             side="right"
             align="start"
           >
@@ -1258,6 +1263,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 .filter((s) => !archivedSessionIds.includes(s.id))
                 .map((s) => s.id);
               const item = projectReorder.itemProps(index);
+              const hostLabel = remoteHostDisplayName(member.lastPath, remoteHosts);
               return (
                 <div
                   key={member.id}
@@ -1290,12 +1296,15 @@ export const LeftSidebar = memo(function LeftSidebar() {
                           }}
                         >
                           <WorkbenchFolderGlyph open={expanded} muted={missing} />
-                          <span className="flex min-w-0 flex-1 items-center gap-1">
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
                             <span className="min-w-0 truncate font-medium">
-                              {member.lastPath.startsWith("remote://")
-                                ? `${member.displayName} · ${t("nav.workbench.remote")}`
-                                : member.displayName}
+                              {member.displayName}
                             </span>
+                            {hostLabel ? (
+                              <span className="min-w-0 truncate text-[length:var(--font-hint)] text-muted-foreground/45">
+                                {hostLabel}
+                              </span>
+                            ) : null}
                             {member.id === defaultProjectId ? <DefaultProjectBadge /> : null}
                           </span>
                           {missing ? (
