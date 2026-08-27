@@ -63,6 +63,7 @@
   "folderDialogTitle": "開啟遠端資料夾",
   "browseParentTitle": "選擇父目錄",
   "useFolder": "使用此資料夾",
+  "createFolderFailed": "無法建立呢個資料夾。",
   "open": "開啟",
   "up": "上層目錄",
   "listingError": "無法列出這個資料夾。",

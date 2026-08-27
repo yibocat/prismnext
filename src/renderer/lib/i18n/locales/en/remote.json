@@ -63,6 +63,7 @@
   "folderDialogTitle": "Open remote folder",
   "browseParentTitle": "Choose parent folder",
   "useFolder": "Use this folder",
+  "createFolderFailed": "Could not create that folder.",
   "open": "Open",
   "up": "Parent folder",
   "listingError": "Could not list this folder.",

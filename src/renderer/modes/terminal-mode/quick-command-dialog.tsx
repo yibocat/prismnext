@@ -8,6 +8,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import type { TerminalQuickCommand } from "@/types/terminal";
 
 // ─── Types ───
@@ -91,7 +92,7 @@ export function QuickCommandDialog({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder={t("terminal.quickCommand.labelPlaceholder")}
-              className="h-8 rounded-md border border-border bg-background px-2.5 text-[length:var(--font-size-13)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 rounded-md border border-border bg-background px-2.5 font-sans text-[length:var(--font-size-12)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
               autoFocus
             />
           </div>
@@ -106,7 +107,7 @@ export function QuickCommandDialog({
               onChange={(e) => setCommand(e.target.value)}
               placeholder={t("terminal.quickCommand.commandPlaceholder")}
               rows={3}
-              className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-[length:var(--font-size-13)] font-mono text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="resize-none rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-[length:var(--font-size-12)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 
@@ -123,27 +124,28 @@ export function QuickCommandDialog({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t("terminal.quickCommand.descPlaceholder")}
-              className="h-8 rounded-md border border-border bg-background px-2.5 text-[length:var(--font-size-13)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="h-8 rounded-md border border-border bg-background px-2.5 font-sans text-[length:var(--font-size-12)] text-foreground placeholder:text-muted-foreground/50 outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
         </div>
 
         <DialogFooter>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="xs"
             onClick={() => onOpenChange(false)}
-            className="h-8 rounded-md border border-border bg-background px-3 text-[length:var(--font-size-13)] text-muted-foreground hover:bg-muted transition-colors"
           >
             {t("common.cancel")}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            size="xs"
             onClick={handleSave}
             disabled={!label.trim() || !command.trim()}
-            className="h-8 rounded-md bg-primary px-3 text-[length:var(--font-size-13)] text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {t("common.save")}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

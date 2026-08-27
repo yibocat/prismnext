@@ -57,3 +57,20 @@ export class RemoteOperationError extends Error {
 export function toRemoteErrorCode(value: unknown, fallback: RemoteErrorCode = "protocol"): RemoteErrorCode {
   return isRemoteErrorCode(value) ? value : fallback;
 }
+
+const INVOKE_PREFIX = /^Error invoking remote method '[^']+':\s*/i;
+const ERROR_NAME_PREFIX = /^RemoteOperationError:\s*/i;
+
+/** Strip Electron IPC / class-name wrappers so the UI can show the Host line. */
+export function unwrapRemoteErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  return raw.replace(INVOKE_PREFIX, "").replace(ERROR_NAME_PREFIX, "").trim();
+}
+
+export function isRemoteDirectoryMissing(err: unknown): boolean {
+  return /^Directory not found:/i.test(unwrapRemoteErrorMessage(err));
+}
+
+export function isRemoteDirectoryExists(err: unknown): boolean {
+  return /already exists/i.test(unwrapRemoteErrorMessage(err));
+}

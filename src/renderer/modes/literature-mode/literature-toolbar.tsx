@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 import { MarkdownToolbarControls } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { LiteratureLibrarySubviewDropdown } from "./literature-library-subview-dropdown";
 import {
@@ -500,10 +501,11 @@ function LiteratureLibraryToolbar() {
             <DialogTitle>{t("literature.dialogs.newEntry")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label className="text-[length:var(--font-size-11)] text-muted-foreground">
+            <Label className="text-[length:var(--font-dialog-label)] text-muted-foreground">
               {t("literature.dialogs.entryTitle")}
             </Label>
             <Input
+              className={SETTINGS_FORM_INPUT}
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               placeholder={t("literature.dialogs.paperTitle")}
@@ -512,10 +514,10 @@ function LiteratureLibraryToolbar() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewDialog(false)}>
+            <Button variant="outline" size="xs" onClick={() => setNewDialog(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={() => void handleNewEntry()} disabled={!newTitle.trim() || busy}>
+            <Button size="xs" onClick={() => void handleNewEntry()} disabled={!newTitle.trim() || busy}>
               {busy ? t("common.creating") : t("common.create")}
             </Button>
           </DialogFooter>

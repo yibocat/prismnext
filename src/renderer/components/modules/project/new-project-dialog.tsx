@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogTrigger,
+  dialogActionButtonsClass,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +14,8 @@ import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { projectDesktop } from "@/lib/desktop-api/project";
 import { newProjectRoot, type NewProjectLocation } from "@/lib/project/new-project-location";
 import { openRemoteWorkbenchProject } from "@/lib/workspace/project-lifecycle";
-import { RemoteFolderDialog } from "@/components/modules/remote/remote-folder-dialog";
+import { RemoteFolderBrowser } from "@/components/modules/remote/remote-folder-dialog";
+import { remotePhaseIsReady } from "@/lib/remote/ensure-connected";
 import { useProjectStore } from "@/stores/project-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRemoteStore } from "@/stores/remote-store";
@@ -21,12 +23,12 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { toast } from "sonner";
 import { Hint } from "@/components/ui/hint";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AppSelect,
+  AppSelectContent,
+  AppSelectItem,
+  AppSelectTrigger,
+  AppSelectValue,
+} from "@/components/ui/app-select";
 import {
   FOLDER_FUNCTIONS,
   FOLDER_FUNCTION_LABELS,
@@ -48,6 +50,7 @@ import {
   CheckIcon,
   SlidersHorizontalIcon,
   FolderIcon,
+  ChevronDownIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -64,8 +67,6 @@ interface NewProjectPaneProps {
   /** Welcome already renders the page title + back control. */
   hideTitle?: boolean;
   locationSeed?: { kind: "remote"; profileId: string };
-  remoteParentPick?: string | null;
-  onBrowseRemoteParent?: () => void;
   onCancel?: () => void;
   onCreated?: (path: string) => void;
 }
@@ -166,21 +167,21 @@ export function LiveStructurePreview({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-muted p-3 font-mono text-[length:var(--font-size-11)] text-foreground">
-      <div className="mb-2 flex items-center justify-between border-b border-border pb-1.5 font-sans">
-        <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+    <div className="rounded-md bg-muted p-3 font-sans text-[length:var(--font-size-12)] text-foreground">
+      <div className="mb-2 flex items-center justify-between font-sans">
+        <div className="flex items-center gap-1.5 text-[length:var(--font-size-12)] font-medium text-foreground">
           <FolderTreeIcon className="size-3.5 text-muted-foreground" />
           <span>{t("project.new.previewTitle")}</span>
         </div>
         {initGit ? (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground font-sans">
+          <span className="inline-flex items-center gap-1 text-[length:var(--font-badge)] text-muted-foreground font-sans">
             <GitBranchIcon className="size-2.5" />
             {t("project.new.gitInitialized")}
           </span>
         ) : null}
       </div>
 
-      <div className="flex flex-col gap-1 text-[11px] leading-relaxed">
+      <div className="flex flex-col gap-1 leading-relaxed">
         <div className="flex items-center gap-1.5 font-semibold text-foreground">
           <FolderIcon className="size-3.5 text-primary" />
           <span>{root}/</span>
@@ -190,7 +191,7 @@ export function LiveStructurePreview({
           <span className="text-muted-foreground/50">├──</span>
           <FolderIcon className="size-3 text-muted-foreground" />
           <span className="text-foreground/80">.workbench/</span>
-          <span className="font-sans text-[10px] text-muted-foreground/70">
+          <span className="font-sans text-[length:var(--font-badge)] text-muted-foreground">
             ({t("project.new.prismnextConfigTag", "智能体规则与配置")})
           </span>
         </div>
@@ -209,13 +210,13 @@ export function LiveStructurePreview({
                   className="size-3 text-foreground/80"
                 />
                 <span className="font-medium text-foreground">{folderName}/</span>
-                <span className="font-sans text-[10px] text-muted-foreground">
+                <span className="font-sans text-[length:var(--font-badge)] text-muted-foreground">
                   ({getFunctionBadge(f.function)})
                 </span>
               </div>
 
               {f.function === "manuscript" ? (
-                <div className="flex items-center gap-1.5 pl-9 text-[10px] text-muted-foreground">
+                <div className="flex items-center gap-1.5 pl-9 text-[length:var(--font-size-12)] text-muted-foreground">
                   <span className="text-muted-foreground/40">└──</span>
                   <FileTextIcon className="size-2.5 text-muted-foreground" />
                   <span>main.tex</span>
@@ -233,8 +234,6 @@ export function NewProjectPane({
   embedded = false,
   hideTitle = false,
   locationSeed,
-  remoteParentPick,
-  onBrowseRemoteParent,
   onCancel,
   onCreated,
 }: NewProjectPaneProps) {
@@ -242,6 +241,9 @@ export function NewProjectPane({
   const addRecentProject = useProjectStore((s) => s.addRecentProject);
   const openProject = useDocumentStore((s) => s.openProject);
   const remote = locationSeed?.kind === "remote" ? locationSeed : null;
+  const remoteReady = useRemoteStore((s) => (
+    remote ? remotePhaseIsReady(s.byProfileId[remote.profileId]?.phase) : true
+  ));
 
   const appDefaults = useSettingsStore((s) => s.settings.defaultWorkspaceDirs);
   const settingsInitGit = useSettingsStore((s) => s.settings.defaultInitGit !== false);
@@ -262,6 +264,7 @@ export function NewProjectPane({
   );
   const [initGit, setInitGit] = useState(settingsInitGit);
   const [showCustomFolders, setShowCustomFolders] = useState(false);
+  const [browseRemote, setBrowseRemote] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -274,8 +277,8 @@ export function NewProjectPane({
   }, [remote]);
 
   useEffect(() => {
-    if (remoteParentPick) setParentPath(remoteParentPick);
-  }, [remoteParentPick]);
+    if (remote && !remoteReady) setBrowseRemote(true);
+  }, [remote, remoteReady]);
 
   const location: NewProjectLocation = remote
     ? { kind: "remote", profileId: remote.profileId, parentPosix: parentPath }
@@ -309,7 +312,7 @@ export function NewProjectPane({
 
   const handleSelectParent = async () => {
     if (remote) {
-      onBrowseRemoteParent?.();
+      setBrowseRemote((open) => !open);
       return;
     }
     const result = await dialogDesktop.dialogOpenFolder();
@@ -352,13 +355,13 @@ export function NewProjectPane({
       <div
         className={cn(
           "space-y-1",
-          embedded ? "pb-5" : "border-b border-border px-6 pt-5 pb-4",
+          embedded ? "pb-5" : "px-6 pt-5 pb-3",
         )}
       >
-        <h2 className="text-[length:var(--font-size-15)] font-semibold tracking-tight">
+        <h2 className="text-[length:var(--font-dialog-title)] font-semibold tracking-tight">
           {t("project.new.title")}
         </h2>
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+        <p className="text-[length:var(--font-dialog-label)] text-muted-foreground">
           {remote
             ? t("project.new.remoteDescription", { host: remote.profileId })
             : t("project.new.description")}
@@ -385,38 +388,69 @@ export function NewProjectPane({
 
             <div className={SETTINGS_FORM_FIELD}>
               <label className={SETTINGS_ROW_LABEL}>{t("project.new.location")}</label>
-              <button
-                type="button"
+              <div
                 className={cn(
-                  "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-left text-[length:var(--font-size-12)] transition-colors hover:bg-muted",
-                  !parentPath && "text-muted-foreground",
+                  "overflow-hidden rounded-md border border-input",
+                  remote && browseRemote && "bg-background",
                 )}
-                onClick={() => void handleSelectParent()}
-                disabled={creating}
               >
-                <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />
-                {parentPath ? (
-                  <span className="flex min-w-0 items-baseline">
-                    <span className="min-w-0 truncate text-muted-foreground">
-                      {parentPath.replace(/[/\\]$/, "")}/
+                <button
+                  type="button"
+                  className={cn(
+                    "flex h-9 w-full items-center gap-2 bg-transparent px-3 text-left text-[length:var(--font-size-12)] transition-colors hover:bg-muted",
+                    !parentPath && "text-muted-foreground",
+                  )}
+                  onClick={() => void handleSelectParent()}
+                  disabled={creating}
+                  aria-expanded={remote ? browseRemote : undefined}
+                >
+                  <FolderOpenIcon className="size-4 shrink-0 text-muted-foreground" />
+                  {parentPath ? (
+                    <span className="flex min-w-0 flex-1 items-baseline">
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {parentPath.replace(/[/\\]$/, "")}/
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0",
+                          projectName.trim()
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {locationName}
+                      </span>
                     </span>
-                    <span
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">
+                      {remote && !remoteReady
+                        ? t("remote.phase.connecting")
+                        : t(remote ? "project.new.chooseRemoteParent" : "project.new.chooseParent")}
+                    </span>
+                  )}
+                  {remote ? (
+                    <ChevronDownIcon
                       className={cn(
-                        "shrink-0",
-                        projectName.trim()
-                          ? "font-medium text-foreground"
-                          : "text-muted-foreground",
+                        "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                        browseRemote && "rotate-180",
                       )}
-                    >
-                      {locationName}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="truncate">
-                    {t(remote ? "project.new.chooseRemoteParent" : "project.new.chooseParent")}
-                  </span>
-                )}
-              </button>
+                    />
+                  ) : null}
+                </button>
+                {remote && browseRemote ? (
+                  <div className="border-t border-border">
+                    <RemoteFolderBrowser
+                      alias={remote.profileId}
+                      embedded
+                      confirmLabel={t("remote.useFolder")}
+                      onConfirm={async (remoteRoot) => {
+                        setParentPath(remoteRoot);
+                        setBrowseRemote(false);
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
 
@@ -430,7 +464,7 @@ export function NewProjectPane({
                   setShowCustomFolders((v) => !v);
                   if (!showCustomFolders) setPreset("custom");
                 }}
-                className="flex items-center gap-1 text-[length:var(--font-size-11)] text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground transition-colors"
               >
                 <SlidersHorizontalIcon className="size-3" />
                 <span>
@@ -441,7 +475,7 @@ export function NewProjectPane({
               </button>
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col">
               {PRESET_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 const selected = preset === option.id;
@@ -451,7 +485,7 @@ export function NewProjectPane({
                     type="button"
                     disabled={creating}
                     onClick={() => applyPreset(option.id)}
-                    className="group flex items-start gap-2.5 py-1.5 text-left transition-colors"
+                    className="group flex items-start gap-2 py-1 text-left transition-colors"
                   >
                     <Icon
                       className={cn(
@@ -470,14 +504,14 @@ export function NewProjectPane({
                           {t(option.titleKey)}
                         </span>
                         {option.recommended ? (
-                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          <span className="rounded-md bg-muted px-1.5 py-0.5 text-[length:var(--font-badge)] font-medium text-muted-foreground">
                             {t("project.new.recommended")}
                           </span>
                         ) : null}
                       </span>
                       <span
                         className={cn(
-                          "mt-0.5 block text-[length:var(--font-size-11)]",
+                          "mt-0.5 block text-[length:var(--font-size-12)]",
                           selected
                             ? "text-foreground"
                             : "text-muted-foreground group-hover:text-foreground",
@@ -493,21 +527,13 @@ export function NewProjectPane({
           </div>
 
           {showCustomFolders ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[length:var(--font-size-12)] font-semibold text-foreground">
-                    {t("project.new.folders")}
-                  </p>
-                  <p className="text-[length:var(--font-size-11)] text-muted-foreground">
-                    {t("project.new.customDesc")}
-                  </p>
-                </div>
-                <Button
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[length:var(--font-size-12)] font-semibold text-foreground">
+                  {t("project.new.folders")}
+                </p>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 shrink-0 gap-1 px-2.5 text-[length:var(--font-size-11)]"
                   disabled={creating}
                   onClick={() =>
                     markCustomIfEdited([
@@ -515,21 +541,25 @@ export function NewProjectPane({
                       { name: "", function: "literature" },
                     ])
                   }
+                  className="flex items-center gap-1 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground"
                 >
-                  <PlusIcon className="size-3.5" />
+                  <PlusIcon className="size-3" />
                   {t("project.new.addFolder")}
-                </Button>
+                </button>
               </div>
+              <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+                {t("project.new.customDesc")}
+              </p>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {workspaceFolders.map((f, i) => {
                   const manuscriptTaken = workspaceFolders.some(
                     (x, j) => x.function === "manuscript" && j !== i,
                   );
                   return (
-                    <div key={i} className="flex items-center gap-2">
+                    <div key={i} className="flex items-center gap-1.5">
                       <Input
-                        className={cn(SETTINGS_FORM_INPUT, "h-8 min-w-0 flex-1 font-mono text-xs")}
+                        className="h-6 min-w-0 flex-1 !px-2 !text-[length:var(--font-size-12)] font-sans shadow-none"
                         placeholder="folder-name"
                         value={f.name}
                         disabled={creating}
@@ -539,7 +569,7 @@ export function NewProjectPane({
                           markCustomIfEdited(next);
                         }}
                       />
-                      <Select
+                      <AppSelect
                         value={f.function}
                         disabled={creating}
                         onValueChange={(v) => {
@@ -548,39 +578,39 @@ export function NewProjectPane({
                           markCustomIfEdited(next);
                         }}
                       >
-                        <SelectTrigger className={cn(SETTINGS_FORM_INPUT, "h-8 w-36 shrink-0 text-xs")}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
+                        <AppSelectTrigger className="w-[7.75rem] shrink-0">
+                          <AppSelectValue />
+                        </AppSelectTrigger>
+                        <AppSelectContent>
                           {FOLDER_FUNCTIONS.map((fn) => (
-                            <SelectItem
+                            <AppSelectItem
                               key={fn}
                               value={fn}
                               disabled={fn === "manuscript" && manuscriptTaken}
                             >
-                              <span className="inline-flex items-center gap-1.5 text-xs">
+                              <span className="inline-flex items-center gap-1.5">
                                 <WorkspaceFolderIcon
                                   name={defaultFolderIcon(fn)}
-                                  className="size-3.5"
+                                  className="size-3"
                                 />
                                 {FOLDER_FUNCTION_LABELS[fn]}
                               </span>
-                            </SelectItem>
+                            </AppSelectItem>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </AppSelectContent>
+                      </AppSelect>
                       <Hint label={t("project.new.removeFolder")}>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                          size="icon-xs"
+                          className="text-muted-foreground hover:text-destructive"
                           disabled={creating}
                           onClick={() =>
                             markCustomIfEdited(workspaceFolders.filter((_, j) => j !== i))
                           }
                         >
-                          <Trash2Icon className="size-3.5" />
+                          <Trash2Icon />
                         </Button>
                       </Hint>
                     </div>
@@ -589,7 +619,7 @@ export function NewProjectPane({
               </div>
 
               {!hasManuscript ? (
-                <p className="text-[length:var(--font-size-11)] font-medium text-destructive">
+                <p className="text-[length:var(--font-size-12)] font-medium text-destructive">
                   {t("project.new.needManuscript")}
                 </p>
               ) : null}
@@ -618,14 +648,15 @@ export function NewProjectPane({
       <div
         className={cn(
           "flex items-center justify-end gap-2",
-          embedded ? "pt-2" : "border-t border-border px-6 py-4",
+          dialogActionButtonsClass,
+          embedded ? "pt-2" : "px-6 pb-5",
         )}
       >
         {embedded ? null : (
         <Button
           type="button"
-          variant="outline"
-          size="sm"
+          variant="ghost"
+          size="xs"
           disabled={creating}
           onClick={onCancel}
         >
@@ -634,10 +665,10 @@ export function NewProjectPane({
         )}
         <Button
           type="button"
-          size="sm"
+          size="xs"
           disabled={!canCreate}
           onClick={() => void handleCreate()}
-          className="gap-1.5"
+          className="gap-1"
         >
           {creating ? (
             <>
@@ -664,8 +695,6 @@ export function NewProjectDialog({
   onCreated,
 }: NewProjectDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
-  const [browseParent, setBrowseParent] = useState(false);
-  const [remoteParentPick, setRemoteParentPick] = useState<string | null>(null);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = (value: boolean) => {
@@ -674,34 +703,19 @@ export function NewProjectDialog({
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={setOpen}>
-        {!isControlled ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
-        <DialogContent aria-describedby={undefined} className="max-w-2xl gap-0 overflow-hidden p-0 sm:rounded-xl">
-          <NewProjectPane
-            locationSeed={locationSeed}
-            remoteParentPick={remoteParentPick}
-            onBrowseRemoteParent={locationSeed ? () => setBrowseParent(true) : undefined}
-            onCancel={() => setOpen(false)}
-            onCreated={(path) => {
-              setOpen(false);
-              onCreated?.(path);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-      {locationSeed ? (
-        <RemoteFolderDialog
-          alias={locationSeed.profileId}
-          mode="browse"
-          open={browseParent}
-          onOpenChange={setBrowseParent}
-          onConfirm={async (remoteRoot) => {
-            setRemoteParentPick(remoteRoot);
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!isControlled ? <DialogTrigger asChild>{children}</DialogTrigger> : null}
+      <DialogContent aria-describedby={undefined} className="gap-0 overflow-hidden p-0 sm:max-w-xl sm:rounded-xl">
+        <NewProjectPane
+          locationSeed={locationSeed}
+          onCancel={() => setOpen(false)}
+          onCreated={(path) => {
+            setOpen(false);
+            onCreated?.(path);
           }}
         />
-      ) : null}
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 

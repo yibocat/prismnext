@@ -26,6 +26,7 @@ describe("desktop fs bridge", () => {
     expect(disconnectedHostFsProbe("fs:read")).toBeNull();
     expect(hostFsNeedsProjectBind("fs:scanMetadata")).toBe(true);
     expect(hostFsNeedsProjectBind("fs:listDir")).toBe(false);
+    expect(hostFsNeedsProjectBind("fs:mkdirDir")).toBe(false);
     expect(
       encodeRemoteScan("lab", {
         folders: ["src"],

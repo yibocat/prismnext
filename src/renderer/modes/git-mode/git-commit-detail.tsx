@@ -23,6 +23,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { useGitStore, type GitCommitData } from "@/stores/git-store";
 import { Hint } from "@/components/ui/hint";
 import { gitDesktop } from "@/lib/desktop-api/git";
@@ -333,34 +334,35 @@ export function GitCommitDetail({ gitRoot, commit, onBack }: GitCommitDetailProp
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("dialogs.git.revertTitle")}</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               {t("git.commitDetail.revertBody")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <div className="rounded bg-muted/50 px-3 py-2 text-xs font-mono">
+            <div className="rounded bg-muted/50 px-3 py-2 font-mono text-[length:var(--font-size-12)]">
               <span className="text-muted-foreground">{revertTarget?.hash}</span>{" "}
               <span>{revertTarget?.message}</span>
             </div>
           </div>
           <DialogFooter>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => setRevertTarget(null)}
-              className="h-8 px-3 rounded text-xs text-muted-foreground hover:bg-accent transition-colors"
             >
               {t("common.cancel")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="xs"
               onClick={handleRevert}
               disabled={reverting}
-              className="flex items-center gap-1.5 h-8 px-4 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {reverting
                 ? t("git.commitDetail.reverting")
                 : t("git.commitDetail.revert")}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -374,7 +376,7 @@ export function GitCommitDetail({ gitRoot, commit, onBack }: GitCommitDetailProp
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>{t("dialogs.git.resetTitle")}</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               {t("git.commitDetail.resetBody")}
               {resetMode === "hard" && (
                 <span className="flex items-center gap-1 mt-1 text-destructive font-medium">
@@ -395,34 +397,31 @@ export function GitCommitDetail({ gitRoot, commit, onBack }: GitCommitDetailProp
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <div className="rounded bg-muted/50 px-3 py-2 text-xs font-mono">
+            <div className="rounded bg-muted/50 px-3 py-2 font-mono text-[length:var(--font-size-12)]">
               <span className="text-muted-foreground">{resetTarget?.hash}</span>{" "}
               <span>{resetTarget?.message}</span>
             </div>
           </div>
           <DialogFooter>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
               onClick={() => setResetTarget(null)}
-              className="h-8 px-3 rounded text-xs text-muted-foreground hover:bg-accent transition-colors"
             >
               {t("common.cancel")}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              size="xs"
+              variant={resetMode === "hard" ? "destructive" : "default"}
               onClick={handleReset}
               disabled={resetting}
-              className={cn(
-                "flex items-center gap-1.5 h-8 px-4 rounded text-xs font-medium transition-colors disabled:opacity-50",
-                resetMode === "hard"
-                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90",
-              )}
             >
               {resetting
                 ? t("git.commitDetail.resetting")
                 : t("git.commitDetail.reset")}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

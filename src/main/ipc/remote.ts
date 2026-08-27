@@ -26,7 +26,7 @@ import {
 } from "../remote/sync-client";
 import { pullAndMirrorSession } from "../remote/session-mirror";
 import { pushLaptopSkillsToHost } from "../remote/skills-push";
-import { hostListingCacheKey, readHostListingCache, writeHostListingCache } from "../remote/fs-bridge";
+import { hostListingCacheKey, invalidateHostListingCache, readHostListingCache, writeHostListingCache } from "../remote/fs-bridge";
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -123,6 +123,15 @@ export function registerRemoteHandlers(): void {
       }
       writeHostListingCache(cacheKey, listing);
       return listing;
+    },
+  );
+
+  ipcMain.handle(
+    "remote:mkdir",
+    async (_e, args: { profileId: string; path: string }) => {
+      const created = await getRemoteSessionBroker().mkdirBrowseDir(args.profileId, args.path);
+      invalidateHostListingCache(args.profileId);
+      return created;
     },
   );
 

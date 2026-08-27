@@ -81,6 +81,24 @@ describe("host fs containment", () => {
     });
   });
 
+  it("creates a browse-time folder without a bound remoteRoot", async () => {
+    const root = mkdtempSync(join(tmpdir(), "prism-host-mkdir-"));
+    const ctx = createHostContext();
+    const dest = join(root, "new-paper");
+    const created = await dispatchHostMethod("fs:mkdirDir", { path: dest }, ctx) as {
+      ok: boolean;
+      path: string;
+    };
+    expect(created).toEqual({ ok: true, path: dest });
+    expect(existsSync(dest)).toBe(true);
+    await expect(dispatchHostMethod("fs:mkdirDir", { path: dest }, ctx)).rejects.toMatchObject({
+      code: "protocol",
+    });
+    await expect(dispatchHostMethod("fs:mkdirDir", { path: join(root, ".hidden") }, ctx)).rejects.toMatchObject({
+      code: "protocol",
+    });
+  });
+
   it("reads a 9 MiB file in two blobs", async () => {
     const root = mkdtempSync(join(tmpdir(), "prism-host-blob-"));
     const file = join(root, "big.bin");

@@ -268,7 +268,7 @@ export function ZoteroConnectDialog({
                 {currentCollectionId ? (
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="xs"
                     className="shadow-none text-muted-foreground hover:text-destructive"
                     onClick={() => setStep("disconnect")}
                     disabled={saving || loading}
@@ -280,14 +280,14 @@ export function ZoteroConnectDialog({
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   className="shadow-none"
                   onClick={() => handleOpenChange(false)}
                 >
                   {t("common.cancel")}
                 </Button>
                 <Button
-                  size="sm"
+                  size="xs"
                   className="shadow-none"
                   onClick={() => void handleSave()}
                   disabled={!selectedKey || saving || loading || Boolean(error)}
@@ -340,7 +340,7 @@ export function ZoteroConnectDialog({
             <DialogFooter className="gap-2 border-t border-border/60 bg-muted/15 px-6 py-4 sm:justify-between">
               <Button
                 variant="ghost"
-                size="sm"
+                size="xs"
                 className="shadow-none text-muted-foreground"
                 onClick={() => setStep("select")}
                 disabled={saving}
@@ -351,7 +351,7 @@ export function ZoteroConnectDialog({
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="xs"
                   className="shadow-none"
                   onClick={() => setStep("select")}
                   disabled={saving}
@@ -359,7 +359,7 @@ export function ZoteroConnectDialog({
                   {t("common.cancel")}
                 </Button>
                 <Button
-                  size="sm"
+                  size="xs"
                   variant="destructive"
                   className="shadow-none"
                   onClick={() => void handleDisconnect()}

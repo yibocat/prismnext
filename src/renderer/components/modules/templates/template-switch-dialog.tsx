@@ -105,7 +105,7 @@ export function TemplateSwitchDialog({
       <DialogContent className="!max-w-lg">
         <DialogHeader>
           <DialogTitle>{config.title}</DialogTitle>
-          <DialogDescription className="text-[length:var(--font-size-13)]">
+          <DialogDescription>
             {level === "firstUse"
               ? t("templates.switch.applyNamed", { name: newName, category: newCategory })
               : t("templates.switch.arrow", {
@@ -145,7 +145,7 @@ export function TemplateSwitchDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             className="shadow-none"
             disabled={submitting}
             onClick={() => onOpenChange(false)}
@@ -155,7 +155,7 @@ export function TemplateSwitchDialog({
           {dialogActions.includes("replace") && (
             <Button
               variant={isDestructive ? "default" : "outline"}
-              size="sm"
+              size="xs"
               className={
                 isDestructive
                   ? "shadow-none bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -169,7 +169,7 @@ export function TemplateSwitchDialog({
           )}
           {dialogActions.includes("merge") && (
             <Button
-              size="sm"
+              size="xs"
               className="shadow-none"
               disabled={submitting}
               onClick={() => onConfirm("merge")}

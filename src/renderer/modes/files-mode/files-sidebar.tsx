@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/files/file-tree";
@@ -924,6 +925,7 @@ export function FilesSidebar() {
           </DialogHeader>
           <div className="space-y-2 py-4">
             <Input
+              className={SETTINGS_FORM_INPUT}
               value={renameValue}
               onChange={(e) => { setRenameValue(e.target.value); setNameError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
@@ -934,10 +936,10 @@ export function FilesSidebar() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setRenameDialogOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleRename}>{t("dialogs.files.rename")}</Button>
+            <Button size="xs" onClick={handleRename}>{t("dialogs.files.rename")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -951,7 +953,7 @@ export function FilesSidebar() {
               <div className="space-y-2">
                 {deleteDialog?.workspaceFunc ? (
                   <>
-                    <p className="text-sm">
+                    <p>
                       <span className="inline-flex items-center gap-1.5">
                         {(() => {
                           const ws = findWorkspaceFolder(deleteDialog.folderPath, workspaceDirs);
@@ -972,13 +974,13 @@ export function FilesSidebar() {
                       useWorkspaceConfigStore.getState().workspaceDirs.filter(
                         (d) => d.function === "manuscript",
                       ).length === 1 && (
-                        <p className="text-sm text-warning">
+                        <p className="text-warning">
                           {t("dialogs.files.manuscriptWarn")}
                         </p>
                       )}
                   </>
                 ) : null}
-                <p className="text-sm">
+                <p>
                   {t("dialogs.files.deleteFolderBody", {
                     name: deleteDialog?.folderName ?? "",
                   })}
@@ -987,17 +989,17 @@ export function FilesSidebar() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <p className="text-sm text-muted-foreground">
-              <code className="text-destructive bg-destructive/10 px-1 rounded">
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              <code className="rounded bg-destructive/10 px-1 font-sans text-destructive">
                 {deleteDialog?.folderPath}/
               </code>
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog(null)}>
+            <Button variant="outline" size="xs" onClick={() => setDeleteDialog(null)}>
               {t("common.cancel")}
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteFolder}>
+            <Button variant="destructive" size="xs" onClick={confirmDeleteFolder}>
               {t("dialogs.files.deleteFolder")}
             </Button>
           </DialogFooter>

@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { appMenuFontClass } from "@/components/ui/app-menu";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 
 export function SshHostPickerDialog({
   open,
@@ -79,14 +81,15 @@ export function SshHostPickerDialog({
             placeholder={t("remote.sshHostnamePlaceholder")}
             aria-label={t("remote.sshHostnamePlaceholder")}
             className={cn(
-              "h-8 w-full rounded-md border border-border bg-background px-2.5 text-sm",
+              SETTINGS_FORM_INPUT,
+              "w-full rounded-md border border-border bg-background px-2.5 font-sans",
               "placeholder:text-muted-foreground/40",
             )}
             autoFocus
           />
           <div className="max-h-56 min-h-0 overflow-y-auto">
             {listed.length === 0 ? (
-              <p className="px-1 py-2 text-sm text-muted-foreground">
+              <p className={cn("px-1 py-2 text-muted-foreground", appMenuFontClass)}>
                 {t("nav.workbench.noSshHosts")}
               </p>
             ) : (
@@ -94,13 +97,16 @@ export function SshHostPickerDialog({
                 <button
                   key={host.alias}
                   type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-accent",
+                    appMenuFontClass,
+                  )}
                   onClick={() => select(host.alias)}
                 >
                   <TerminalIcon className="size-3.5 shrink-0 opacity-70" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{host.alias}</span>
+                  <span className="min-w-0 flex-1 truncate">{host.alias}</span>
                   {host.hostname !== host.alias ? (
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    <span className="shrink-0 text-[length:var(--font-dialog-label)] text-muted-foreground tabular-nums">
                       {host.hostname}
                     </span>
                   ) : null}
@@ -113,13 +119,14 @@ export function SshHostPickerDialog({
           <Button
             type="button"
             variant="ghost"
+            size="xs"
             onClick={() => {
               void shellDesktop.shellShowItemInFolder(SSH_CONFIG_REVEAL_PATH);
             }}
           >
             {t("remote.openSshConfig")}
           </Button>
-          <Button type="button" onClick={submit}>
+          <Button type="button" size="xs" onClick={submit}>
             {t("remote.connect")}
           </Button>
         </DialogFooter>

@@ -9,6 +9,7 @@ import {
   isHostHandshake,
   isHostModelConfigureResult,
   isRemoteErrorCode,
+  browseMkdirCommand,
   normalizePosixAbs,
   PAYLOAD_MISSING_LOCAL_MESSAGE,
   recordConnectGate,
@@ -522,6 +523,30 @@ export class RemoteSessionBroker {
         });
       }
     }
+  }
+
+  /**
+   * Create one browse-time folder over SSH. Do not call Host `fs:mkdirDir` —
+   * an older payload on the server will not have that method, and reconnect
+   * only pushes a new tarball after `pnpm host:pack`.
+   */
+  async mkdirBrowseDir(profileId: string, path: string): Promise<{ ok: true; path: string }> {
+    const command = browseMkdirCommand(path);
+    const abs = command ? normalizePosixAbs(path) : null;
+    if (!command || !abs) {
+      throw new RemoteOperationError("protocol", "Invalid folder name.");
+    }
+    const live = this.live.get(profileId);
+    if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
+    const result = await live.session.exec(command);
+    if (result.code !== 0) {
+      const detail = `${result.stderr} ${result.stdout}`.trim();
+      if (/File exists|already exists/i.test(detail)) {
+        throw new RemoteOperationError("protocol", "That folder already exists.");
+      }
+      throw new RemoteOperationError("protocol", detail || "Could not create that folder.");
+    }
+    return { ok: true, path: abs };
   }
 
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {

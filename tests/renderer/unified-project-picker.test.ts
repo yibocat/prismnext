@@ -142,5 +142,28 @@ describe("RW-6.1 picker wiring", () => {
     expect(repos).toContain("nav.workbench.localRepos");
     expect(repos).not.toContain("ml-auto");
     expect(ssh).toContain("SSH_CONFIG_REVEAL_PATH");
+    expect(repos).toContain("p-0.5");
+    const hosts = readFileSync(
+      join(__dirname, "../../src/renderer/components/modules/remote/remote-hosts-menu.tsx"),
+      "utf8",
+    );
+    expect(hosts).not.toContain("type: \"idle\"");
+    expect(hosts).toContain("p-0.5");
+    const addMenu = readFileSync(
+      join(__dirname, "../../src/renderer/components/layout/workbench-add-menu.tsx"),
+      "utf8",
+    );
+    expect(addMenu).toContain("ensureRemoteHostReady");
+    expect(addMenu).toContain("hostKeyPrompt: \"inline\"");
+    const newProject = readFileSync(
+      join(__dirname, "../../src/renderer/components/modules/project/new-project-dialog.tsx"),
+      "utf8",
+    );
+    expect(newProject).toContain("sm:max-w-xl");
+    expect(newProject).toContain("RemoteFolderBrowser");
+    expect(newProject).toContain("embedded");
+    expect(newProject).not.toContain("RemoteFolderDialog");
+    expect(newProject).not.toContain("border-b border-border px-6");
+    expect(newProject).not.toContain("border-t border-border px-6");
   });
 });

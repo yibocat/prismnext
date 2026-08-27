@@ -161,18 +161,20 @@ export function PlanChrome({ className }: { className?: string }) {
             <DialogDescription>{t("chat.planWorkflow.exitDialogBody")}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="ghost" onClick={() => closePlanExitDialog()}>
+            <Button type="button" variant="ghost" size="xs" onClick={() => closePlanExitDialog()}>
               {t("chat.planWorkflow.cancel")}
             </Button>
             <Button
               type="button"
               variant="secondary"
+              size="xs"
               onClick={() => void exitPlanDiscardAndBuild()}
             >
               {t("chat.planWorkflow.rejectPlan")}
             </Button>
             <Button
               type="button"
+              size="xs"
               disabled={!planDraftFileReady}
               onClick={() => void approveAndExecutePlan()}
             >

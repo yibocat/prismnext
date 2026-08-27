@@ -3,7 +3,12 @@ import {
   encodeRemoteAbs,
   isRemoteDirListing,
   isRemoteProjectRoot,
+  browseMkdirCommand,
+  isRemoteBrowseFolderName,
+  isRemoteDirectoryMissing,
   joinPosixSegment,
+  remoteBrowseCreatePath,
+  unwrapRemoteErrorMessage,
   parseRemoteAbs,
   posixContained,
   recoverRemoteAbs,
@@ -57,6 +62,29 @@ describe("remote path encoding", () => {
     expect(joinPosixSegment("/", "opt")).toBe("/opt");
     expect(joinPosixSegment("/home/ubuntu", "a/b")).toBeNull();
     expect(joinPosixSegment("/home/ubuntu", "..")).toBeNull();
+    expect(isRemoteBrowseFolderName("paper")).toBe(true);
+    expect(isRemoteBrowseFolderName(".hidden")).toBe(false);
+    expect(isRemoteBrowseFolderName("a/b")).toBe(false);
+  });
+
+  it("accepts a typed path whose last segment can be created", () => {
+    expect(remoteBrowseCreatePath("/home/ubuntu/test")).toBe("/home/ubuntu/test");
+    expect(remoteBrowseCreatePath("/home/ubuntu/")).toBe("/home/ubuntu");
+    expect(remoteBrowseCreatePath("/")).toBeNull();
+    expect(remoteBrowseCreatePath(".hidden")).toBeNull();
+    expect(remoteBrowseCreatePath("/home/ubuntu/.hidden")).toBeNull();
+    expect(browseMkdirCommand("/home/ubuntu/test")).toBe("mkdir '/home/ubuntu/test'");
+    expect(browseMkdirCommand("/home/ubuntu/it's")).toBe("mkdir '/home/ubuntu/it'\\''s'");
+    expect(browseMkdirCommand("/home/ubuntu/.hidden")).toBeNull();
+  });
+
+  it("unwraps Electron listDir wrappers so missing folders are detectable", () => {
+    const wrapped = new Error(
+      "Error invoking remote method 'remote:listDir': RemoteOperationError: Directory not found: /home/ubuntu/test",
+    );
+    expect(unwrapRemoteErrorMessage(wrapped)).toBe("Directory not found: /home/ubuntu/test");
+    expect(isRemoteDirectoryMissing(wrapped)).toBe(true);
+    expect(isRemoteDirectoryMissing(new Error("Not a directory: /home/ubuntu/file"))).toBe(false);
   });
 
   it("accepts a directory listing payload", () => {

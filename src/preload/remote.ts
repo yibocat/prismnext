@@ -21,6 +21,10 @@ export const remoteApi = {
 		input: { profileId: string; path: string },
 	): Promise<import("../shared/remote").RemoteDirListing> =>
 		ipcRenderer.invoke("remote:listDir", input),
+	remoteMkdir: (
+		input: { profileId: string; path: string },
+	): Promise<{ ok: true; path: string }> =>
+		ipcRenderer.invoke("remote:mkdir", input),
 	remoteOpenProject: (
 		input: { profileId: string; remoteRoot: string },
 	): Promise<{

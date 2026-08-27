@@ -12,6 +12,7 @@ export const remoteDesktop = {
   remoteDisconnect: forwardDesktop("remoteDisconnect"),
   remoteConnectionStatus: forwardDesktop("remoteConnectionStatus"),
   remoteListDir: forwardDesktop("remoteListDir"),
+  remoteMkdir: forwardDesktop("remoteMkdir"),
   remoteOpenProject: forwardDesktop("remoteOpenProject"),
   onRemoteLog: forwardDesktop("onRemoteLog"),
   onRemoteConnection: forwardDesktop("onRemoteConnection"),

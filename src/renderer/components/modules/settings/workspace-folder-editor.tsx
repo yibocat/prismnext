@@ -441,7 +441,7 @@ export function WorkspaceFolderEditor({
           <DialogFooter>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
@@ -449,7 +449,7 @@ export function WorkspaceFolderEditor({
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={remove}
             >

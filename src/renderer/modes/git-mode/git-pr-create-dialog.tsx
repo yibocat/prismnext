@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -11,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SETTINGS_FORM_INPUT, SETTINGS_FORM_TEXTAREA } from "@/components/modules/settings/settings-tokens";
 import { useGitStore } from "@/stores/git-store";
 
 export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
@@ -49,6 +51,7 @@ export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
             <Label htmlFor="git-pr-title">{t("git.prCreate.titleField")}</Label>
             <Input
               id="git-pr-title"
+              className={SETTINGS_FORM_INPUT}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={creating}
@@ -59,6 +62,7 @@ export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
               <Label htmlFor="git-pr-base">{t("git.prCreate.base")}</Label>
               <Input
                 id="git-pr-base"
+                className={SETTINGS_FORM_INPUT}
                 value={base}
                 onChange={(e) => setBase(e.target.value)}
                 disabled={creating}
@@ -66,13 +70,14 @@ export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="git-pr-head">{t("git.prCreate.head")}</Label>
-              <Input id="git-pr-head" value={head} disabled />
+              <Input id="git-pr-head" className={SETTINGS_FORM_INPUT} value={head} disabled />
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="git-pr-body">{t("git.prCreate.body")}</Label>
             <Textarea
               id="git-pr-body"
+              className={SETTINGS_FORM_TEXTAREA}
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder={t("git.prCreate.bodyHint")}
@@ -88,17 +93,17 @@ export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
             />
             {t("git.prCreate.draft")}
           </label>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={() => useGitStore.getState().cancelCreatePr()}
               disabled={creating}
             >
               {t("common.cancel")}
             </Button>
             <Button
-              size="sm"
+              size="xs"
               disabled={creating || !title.trim() || !base.trim() || !head.trim()}
               onClick={() => {
                 void useGitStore.getState().createPullRequest(projectRoot, {
@@ -112,7 +117,7 @@ export function GitPrCreateDialog({ projectRoot }: { projectRoot: string }) {
             >
               {creating ? t("git.prCreate.creating") : t("git.prCreate.create")}
             </Button>
-          </div>
+          </DialogFooter>
         </div>
       </DialogContent>
     </Dialog>

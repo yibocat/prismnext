@@ -156,7 +156,7 @@ function DeleteExperimentDialog({
         <DialogFooter>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => onOpenChange(false)}
             disabled={deleting}
           >
@@ -164,7 +164,7 @@ function DeleteExperimentDialog({
           </Button>
           <Button
             variant="destructive"
-            size="sm"
+            size="xs"
             onClick={onConfirm}
             disabled={deleting}
           >

@@ -86,20 +86,20 @@ function waitUntilSettled(alias: string): Promise<boolean> {
 }
 
 /**
- * A remembered `remote://` project is only a path. SSH dies when the app quits.
- * Call this from a user action (open a remote chat, pick a host). Launch restore
- * must not — connecting on startup stalls the app.
+ * Bring one Host up. `hostKeyPrompt: "inline"` leaves Trust on the caller
+ * (folder / new-project) instead of opening the connection dialog.
  */
-export async function ensureRemoteProjectReady(lastPath: string): Promise<void> {
-  const parsed = parseRemoteAbs(lastPath);
-  if (!parsed) return;
+export async function ensureRemoteHostReady(
+  alias: string,
+  opts?: { hostKeyPrompt?: "dialog" | "inline" },
+): Promise<void> {
+  const prompt = opts?.hostKeyPrompt ?? "dialog";
   const store = useRemoteStore.getState();
   if (!store.hydrated) await store.hydrate();
-  const alias = parsed.profileId;
   const phase = currentPhase(alias);
   if (remotePhaseIsReady(phase)) return;
   if (remotePhaseIsBusy(phase) || currentPhase(alias) === "awaiting_host_key") {
-    if (currentPhase(alias) === "awaiting_host_key") {
+    if (currentPhase(alias) === "awaiting_host_key" && prompt === "dialog") {
       useRemoteStore.getState().openConnectDialog(alias, { blocking: true });
     }
     const ok = await waitUntilSettled(alias);
@@ -110,7 +110,9 @@ export async function ensureRemoteProjectReady(lastPath: string): Promise<void> 
   }
   const result = await useRemoteStore.getState().connect(alias);
   if (result.hostKey) {
-    useRemoteStore.getState().openConnectDialog(alias, { blocking: true });
+    if (prompt === "dialog") {
+      useRemoteStore.getState().openConnectDialog(alias, { blocking: true });
+    }
     const ok = await waitUntilSettled(alias);
     if (!ok) throw new RemoteConnectError(alias, i18n.t("remote.connectFailed", { host: alias }));
     return;
@@ -121,6 +123,17 @@ export async function ensureRemoteProjectReady(lastPath: string): Promise<void> 
       result.message || i18n.t("remote.connectFailed", { host: alias }),
     );
   }
+}
+
+/**
+ * A remembered `remote://` project is only a path. SSH dies when the app quits.
+ * Call this from a user action (open a remote chat, pick a host). Launch restore
+ * must not — connecting on startup stalls the app.
+ */
+export async function ensureRemoteProjectReady(lastPath: string): Promise<void> {
+  const parsed = parseRemoteAbs(lastPath);
+  if (!parsed) return;
+  await ensureRemoteHostReady(parsed.profileId);
 }
 
 /** SSH ready + Host `project.open` — send / compile / live file ops. */

@@ -293,8 +293,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(421);
-    expect(new Set(keys).size).toBe(421);
+    expect(keys).toHaveLength(422);
+    expect(new Set(keys).size).toBe(422);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -323,6 +323,7 @@ describe("code structure host port (Phase 3)", () => {
       "remoteListHosts",
       "remoteConnect",
       "remoteListDir",
+      "remoteMkdir",
       "remoteOpenProject",
     ]));
     expect(keys).not.toEqual(expect.arrayContaining([

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 import {
   Dialog,
   DialogContent,
@@ -563,6 +564,7 @@ function LiteratureLibrarySidebar() {
             </p>
           ) : null}
           <Input
+            className={SETTINGS_FORM_INPUT}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder={t("literature.dialogs.collectionName")}
@@ -571,10 +573,10 @@ function LiteratureLibrarySidebar() {
             }}
           />
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setCreateOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" onClick={() => void handleCreate()} disabled={!newName.trim()}>
+            <Button size="xs" onClick={() => void handleCreate()} disabled={!newName.trim()}>
               {t("common.create")}
             </Button>
           </DialogFooter>
@@ -587,6 +589,7 @@ function LiteratureLibrarySidebar() {
             <DialogTitle>{t("literature.dialogs.renameCollection")}</DialogTitle>
           </DialogHeader>
           <Input
+            className={SETTINGS_FORM_INPUT}
             value={renameName}
             onChange={(e) => setRenameName(e.target.value)}
             onKeyDown={(e) => {
@@ -594,10 +597,10 @@ function LiteratureLibrarySidebar() {
             }}
           />
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setRenameOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setRenameOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" onClick={() => void handleRename()} disabled={!renameName.trim()}>
+            <Button size="xs" onClick={() => void handleRename()} disabled={!renameName.trim()}>
               {t("common.save")}
             </Button>
           </DialogFooter>
@@ -609,14 +612,14 @@ function LiteratureLibrarySidebar() {
           <DialogHeader>
             <DialogTitle>{t("literature.dialogs.deleteCollection")}</DialogTitle>
           </DialogHeader>
-          <p className="text-[length:var(--font-size-13)] text-muted-foreground">
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
             {t("literature.dialogs.deleteCollectionBody", { name: deleteTarget?.name ?? "" })}
           </p>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setDeleteOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button variant="destructive" size="sm" onClick={() => void handleDelete()}>
+            <Button variant="destructive" size="xs" onClick={() => void handleDelete()}>
               {t("common.delete")}
             </Button>
           </DialogFooter>

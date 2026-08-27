@@ -29,23 +29,24 @@ export function TabCloseConfirmDialog() {
           <DialogTitle>{pending?.title ?? t("dialogs.tabClose.closeTab")}</DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2">
-              <p className="text-sm">{pending?.description}</p>
+              <p>{pending?.description}</p>
               {pending?.detail ? (
-                <p className="text-sm text-muted-foreground">{pending.detail}</p>
+                <p className="text-muted-foreground">{pending.detail}</p>
               ) : null}
             </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={cancel}>
+          <Button variant="outline" size="xs" onClick={cancel}>
             {t("common.cancel")}
           </Button>
           {pending?.secondaryLabel ? (
-            <Button variant="destructive" onClick={secondary}>
+            <Button variant="destructive" size="xs" onClick={secondary}>
               {pending.secondaryLabel}
             </Button>
           ) : null}
           <Button
+            size="xs"
             variant={pending?.destructive && !pending?.secondaryLabel ? "destructive" : "default"}
             onClick={confirm}
           >

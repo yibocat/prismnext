@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import { dirname, posix } from "node:path";
 import {
+  isRemoteBrowseFolderName,
   normalizePosixAbs,
   RemoteOperationError,
   type RemoteDirEntry,
@@ -93,6 +94,28 @@ export const fsHandlers: Record<string, (params: Record<string, unknown>, ctx: H
       .sort((a, b) => a.name.localeCompare(b.name));
     const parent = path === "/" ? null : posix.dirname(path);
     return { path, parent: parent === path ? null : parent, entries };
+  },
+
+  /** Browse-time mkdir: no remoteRoot bind. New Project / Open Folder use this. */
+  async "fs:mkdirDir"(params) {
+    const path = normalizePosixAbs(String(params.path ?? ""));
+    if (!path || path === "/") {
+      throw new RemoteOperationError("protocol", "mkdirDir requires an absolute POSIX path.");
+    }
+    const name = posix.basename(path);
+    if (!isRemoteBrowseFolderName(name)) {
+      throw new RemoteOperationError("protocol", "Invalid folder name.");
+    }
+    try {
+      await mkdir(path);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EEXIST") {
+        throw new RemoteOperationError("protocol", "That folder already exists.");
+      }
+      throw err;
+    }
+    return { ok: true, path };
   },
 
   async "fs:scanMetadata"(params, ctx) {

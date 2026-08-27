@@ -55,7 +55,7 @@ export function ProjectPickerReposSection({
           {t("nav.workbench.localRepos")}
         </AppMenuSubTrigger>
         <AppMenuSubContent className={hostSubmenuClass}>
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0.5 pb-0.5">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-0.5">
             {localEntries.length === 0 ? (
               <p className="px-2 py-1.5 text-muted-foreground">
                 {t("nav.project.noRecent")}

@@ -61,3 +61,10 @@ export async function listRemoteHostDir(
   }
   return listing;
 }
+
+export async function mkdirRemoteHostDir(
+  profileId: string,
+  path: string,
+): Promise<void> {
+  await remoteDesktop.remoteMkdir({ profileId, path });
+}

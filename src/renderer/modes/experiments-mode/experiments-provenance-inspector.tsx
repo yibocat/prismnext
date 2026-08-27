@@ -319,7 +319,7 @@ export function ExperimentsProvenanceInspector({
         <DialogFooter className="gap-2 sm:justify-between">
           <Button
             type="button"
-            size="sm"
+            size="xs"
             variant="ghost"
             onClick={() => onOpenChange(false)}
           >
@@ -328,7 +328,7 @@ export function ExperimentsProvenanceInspector({
           <div className="flex flex-wrap items-center justify-end gap-2">
             <Button
               type="button"
-              size="sm"
+              size="xs"
               variant="outline"
               onClick={handleOpenInFiles}
               disabled={!artifactPath}
@@ -339,7 +339,7 @@ export function ExperimentsProvenanceInspector({
             <Hint label={t("experiments.provenance.sendArtifact")}>
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="outline"
                 onClick={handleDiscussInChat}
                 disabled={!run}
@@ -351,7 +351,7 @@ export function ExperimentsProvenanceInspector({
             <Hint label={t("experiments.provenance.sendDraft")}>
               <Button
                 type="button"
-                size="sm"
+                size="xs"
                 variant="default"
                 onClick={handleUseInPaper}
                 disabled={!run}

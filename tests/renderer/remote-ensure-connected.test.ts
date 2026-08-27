@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ensureRemoteLiveForWork,
+  ensureRemoteHostReady,
   ensureRemoteProjectReady,
   isRemoteConnectError,
   isRemoteProjectOffline,
@@ -80,6 +81,32 @@ describe("remote reconnect helpers", () => {
     expect(resolveFocusConnectRemote("remote://lab/home/u/a")).toBe(false);
     expect(resolveFocusConnectRemote("remote://lab/home/u/a", { connectRemote: true })).toBe(true);
     expect(resolveFocusConnectRemote("/papers/a", { connectRemote: false })).toBe(false);
+  });
+
+  it("keeps host-key trust on the caller when the prompt is inline", async () => {
+    const openConnectDialog = vi.fn();
+    const hostKey = { host: "lab", port: 22, fingerprint: "SHA256:abc" };
+    const connect = vi.fn(async () => {
+      useRemoteStore.setState({
+        byProfileId: { lab: { phase: "awaiting_host_key", profileId: "lab", hostKey } },
+      });
+      return { ok: false, hostKey };
+    });
+    useRemoteStore.setState({ connect, openConnectDialog, hydrated: true });
+    const pending = ensureRemoteHostReady("lab", { hostKeyPrompt: "inline" });
+    await vi.waitFor(() => {
+      expect(useRemoteStore.getState().byProfileId.lab?.phase).toBe("awaiting_host_key");
+    });
+    expect(openConnectDialog).not.toHaveBeenCalled();
+    useRemoteStore.setState({
+      byProfileId: {
+        lab: { phase: "error", profileId: "lab", code: "ssh_auth", message: "denied" },
+      },
+    });
+    await expect(pending).rejects.toSatisfy(
+      (err: unknown) => isRemoteConnectError(err) && err.alias === "lab",
+    );
+    expect(openConnectDialog).not.toHaveBeenCalled();
   });
 
   it("throws RemoteConnectError when connect fails", async () => {

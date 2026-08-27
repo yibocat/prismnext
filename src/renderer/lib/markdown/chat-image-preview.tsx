@@ -72,7 +72,7 @@ export function ChatImagePreviewDialog({
           <Button
             type="button"
             variant="outline"
-            size="icon-sm"
+            size="icon-xs"
             aria-label={t("common.close")}
             className="absolute top-3 right-3 z-20 shadow-sm"
           >

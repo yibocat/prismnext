@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, dialogActionButtonsClass } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2Icon, CheckIcon } from "lucide-react";
@@ -106,10 +106,10 @@ function EditProjectPane({
   return (
     <div>
       <div className="space-y-1 border-b border-border px-6 pt-5 pb-4">
-        <h2 className="text-[length:var(--font-size-15)] font-semibold tracking-tight">
+        <h2 className="text-[length:var(--font-dialog-title)] font-semibold tracking-tight">
           {t("project.edit.title")}
         </h2>
-        <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+        <p className="text-[length:var(--font-dialog-label)] text-muted-foreground">
           {t("project.edit.description")}
         </p>
       </div>
@@ -118,7 +118,7 @@ function EditProjectPane({
         <div className={SETTINGS_FORM_FIELD}>
           <label className={SETTINGS_ROW_LABEL}>{t("project.new.projectName")}</label>
           <Input
-            className={cn(SETTINGS_FORM_INPUT, "h-9 min-w-0 font-medium")}
+            className={cn(SETTINGS_FORM_INPUT, "min-w-0 font-medium")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={saving}
@@ -137,13 +137,13 @@ function EditProjectPane({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
-        <Button type="button" variant="outline" size="sm" disabled={saving} onClick={onCancel}>
+      <div className={cn("flex items-center justify-end gap-2 border-t border-border px-6 py-4", dialogActionButtonsClass)}>
+        <Button type="button" variant="outline" size="xs" disabled={saving} onClick={onCancel}>
           {t("common.cancel")}
         </Button>
         <Button
           type="button"
-          size="sm"
+          size="xs"
           disabled={!canSave}
           onClick={() => void handleSave()}
           className="gap-1.5"

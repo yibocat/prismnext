@@ -96,6 +96,35 @@ export function joinPosixSegment(parent: string, name: string): string | null {
   return base === "/" ? `/${segment}` : `${base}/${segment}`;
 }
 
+/** Browse-time folder name: one segment, not hidden, not `.` / `..`. */
+export function isRemoteBrowseFolderName(name: string): boolean {
+  const segment = name.trim();
+  if (!segment || segment.startsWith(".")) return false;
+  return joinPosixSegment("/", segment) !== null;
+}
+
+/** Last segment of a typed browse path, if it is a legal new folder name. */
+export function remoteBrowseCreatePath(draft: string): string | null {
+  const abs = normalizePosixAbs(draft);
+  if (!abs || abs === "/") return null;
+  const name = abs.slice(abs.lastIndexOf("/") + 1);
+  return isRemoteBrowseFolderName(name) ? abs : null;
+}
+
+export function posixShellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Browse-time mkdir over the existing SSH session — does not need a Host
+ * method, so an older server payload still works.
+ */
+export function browseMkdirCommand(path: string): string | null {
+  const abs = remoteBrowseCreatePath(path);
+  if (!abs) return null;
+  return `mkdir ${posixShellSingleQuote(abs)}`;
+}
+
 export type RemoteDirKind = "dir" | "file";
 
 export interface RemoteDirEntry {

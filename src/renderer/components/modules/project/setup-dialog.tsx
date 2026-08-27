@@ -45,10 +45,10 @@ export function ProjectSetupDialog() {
     <Dialog open={open} onOpenChange={() => close("cancel")}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-[length:var(--font-dialog-title)]">
+          <DialogTitle>
             {t("project.setup.title")}
           </DialogTitle>
-          <DialogDescription className="text-[length:var(--font-dialog-label)]">
+          <DialogDescription>
             {t("project.setup.description")}
           </DialogDescription>
         </DialogHeader>
@@ -56,7 +56,7 @@ export function ProjectSetupDialog() {
         <div className="space-y-3">
           <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-[length:var(--font-dialog-label)] text-muted-foreground">
             <FolderOpenIcon className="size-3.5 shrink-0" />
-            <span className="min-w-0 truncate font-mono" title={projectPath}>
+            <span className="min-w-0 truncate font-sans" title={projectPath}>
               {shortenPath(projectPath)}
             </span>
           </div>
@@ -69,7 +69,7 @@ export function ProjectSetupDialog() {
               {missing.map((d) => (
                 <span
                   key={d}
-                  className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[length:var(--font-dialog-label)] text-muted-foreground"
+                  className="rounded-md bg-muted px-1.5 py-0.5 font-sans text-[length:var(--font-dialog-label)] text-muted-foreground"
                 >
                   {formatMissingEntry(projectPath, d)}
                 </span>
@@ -79,14 +79,14 @@ export function ProjectSetupDialog() {
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="ghost" size="sm" onClick={() => close("skip")}>
+          <Button variant="ghost" size="xs" onClick={() => close("skip")}>
             {t("project.setup.openAnyway")}
           </Button>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" size="sm" onClick={() => close("cancel")}>
+            <Button variant="outline" size="xs" onClick={() => close("cancel")}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" onClick={() => close("create")}>
+            <Button size="xs" onClick={() => close("create")}>
               {t("project.setup.createAndOpen")}
             </Button>
           </div>

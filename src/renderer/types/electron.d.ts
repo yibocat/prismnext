@@ -1884,6 +1884,10 @@ export interface ElectronAPI {
     profileId: string;
     path: string;
   }) => Promise<import("@shared/remote").RemoteDirListing>;
+  remoteMkdir: (input: {
+    profileId: string;
+    path: string;
+  }) => Promise<{ ok: true; path: string }>;
   remoteOpenProject: (input: {
     profileId: string;
     remoteRoot: string;

@@ -14,6 +14,7 @@ import {
 } from "@/lib/workspace/unified-project-picker";
 import { encodeRemoteAbs, parseRemoteAbs } from "@shared/remote";
 import type { RemoteHostNextAction } from "@/lib/remote/host-projects";
+import { ensureRemoteHostReady } from "@/lib/remote/ensure-connected";
 import { useProjectStore } from "@/stores/project-store";
 import { defaultProjectAsMember, sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
@@ -129,22 +130,24 @@ export function WorkbenchProjectPicker({
 
   const requestRemote = (alias: string, next: RemoteHostNextAction) => {
     setOpen(false);
-    const ready = useRemoteStore.getState().byProfileId[alias]?.phase === "ready";
-    if (ready && next.type === "open-path") {
+    if (next.type === "open-path") {
       void openRemoteViaContext(alias, next.remoteRoot).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
     }
-    if (ready && next.type === "open-folder") {
+    if (next.type === "open-folder") {
       setFolder({ alias });
+      void ensureRemoteHostReady(alias, { hostKeyPrompt: "inline" }).catch(() => undefined);
       return;
     }
-    if (ready && next.type === "create") {
+    if (next.type === "create") {
       setRemoteNew({ profileId: alias });
+      void ensureRemoteHostReady(alias, { hostKeyPrompt: "inline" }).catch(() => undefined);
       return;
     }
-    if (ready && next.type === "idle") return;
+    const ready = useRemoteStore.getState().byProfileId[alias]?.phase === "ready";
+    if (ready) return;
     setConnect({ alias, next });
   };
 

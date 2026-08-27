@@ -353,7 +353,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
           <DialogFooter>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
@@ -361,7 +361,7 @@ export function CustomCommandEditorPanel({ slot }: { slot: CustomCommandSlot }) 
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               disabled={saving}
               onClick={() => void handleDelete()}

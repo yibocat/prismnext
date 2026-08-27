@@ -147,8 +147,8 @@ export function RemoteConnectDialog({
           </div>
           <Progress value={progress.percent} className="bg-muted" />
         </div>
-        <div className="min-h-0 space-y-2">
-          <ol className="max-h-48 space-y-1.5 overflow-y-auto text-[length:var(--font-size-12)]">
+        <div className="min-h-0">
+          <ol className="max-h-48 space-y-1 overflow-y-auto text-[length:var(--font-size-12)]">
             {REMOTE_CONNECT_GATES.map((gate) => {
               const status = resolveConnectGateStatus(gate, constitution, profileLogs);
               const detail = latestGateDetail(gate, constitution, profileLogs);
@@ -157,7 +157,7 @@ export function RemoteConnectDialog({
                 <li
                   key={gate}
                   className={cn(
-                    "flex gap-2",
+                    "flex items-center gap-2",
                     status === "fail" ? "text-destructive" : "text-foreground",
                   )}
                 >
@@ -172,14 +172,12 @@ export function RemoteConnectDialog({
                       t("remote.gatePending")
                     )}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div>{t(`remote.gate.${gate}`)}</div>
+                  <p className="min-w-0 flex-1 truncate">
+                    <span>{t(`remote.gate.${gate}`)}</span>
                     {detail ? (
-                      <p className="break-words whitespace-pre-wrap text-muted-foreground">
-                        {detail}
-                      </p>
+                      <span className="text-muted-foreground"> · {detail}</span>
                     ) : null}
-                  </div>
+                  </p>
                 </li>
               );
             })}
@@ -222,6 +220,7 @@ export function RemoteConnectDialog({
           {awaiting ? (
             <Button
               type="button"
+              size="xs"
               onClick={() => {
                 if (!alias) return;
                 void trustHostAndConnect(alias, awaiting.hostKey);
@@ -233,6 +232,7 @@ export function RemoteConnectDialog({
           {phase === "error" ? (
             <Button
               type="button"
+              size="xs"
               onClick={() => {
                 if (!alias) return;
                 void connect(alias);
@@ -244,6 +244,7 @@ export function RemoteConnectDialog({
           {ready ? (
             <Button
               type="button"
+              size="xs"
               onClick={() => {
                 if (onContinue) onContinue();
                 else onOpenChange(false);
@@ -254,6 +255,7 @@ export function RemoteConnectDialog({
           ) : null}
           <Button
             type="button"
+            size="xs"
             variant={ready ? "ghost" : "outline"}
             onClick={() => onOpenChange(false)}
           >

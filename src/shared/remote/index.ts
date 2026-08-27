@@ -12,7 +12,11 @@ export {
   encodeRemoteAbs,
   isRemoteDirListing,
   isRemoteProjectRoot,
+  isRemoteBrowseFolderName,
   joinPosixSegment,
+  browseMkdirCommand,
+  posixShellSingleQuote,
+  remoteBrowseCreatePath,
   normalizePosixAbs,
   parseRemoteAbs,
   recoverRemoteAbs,
@@ -94,8 +98,11 @@ export {
   PAYLOAD_MISSING_LOCAL_MESSAGE,
   REMOTE_ERROR_CODES,
   RemoteOperationError,
+  isRemoteDirectoryExists,
+  isRemoteDirectoryMissing,
   isRemoteErrorCode,
   toRemoteErrorCode,
+  unwrapRemoteErrorMessage,
   type RemoteErrorCode,
 } from "./errors";
 export {

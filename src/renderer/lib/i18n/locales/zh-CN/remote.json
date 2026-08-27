@@ -63,6 +63,7 @@
   "folderDialogTitle": "打开远程文件夹",
   "browseParentTitle": "选择父目录",
   "useFolder": "使用此文件夹",
+  "createFolderFailed": "无法创建这个文件夹。",
   "open": "打开",
   "up": "上级目录",
   "listingError": "无法列出这个文件夹。",

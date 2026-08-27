@@ -256,10 +256,10 @@ export function BackupsSettingsPanel({
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmRestore(null)}>
+            <Button variant="outline" size="xs" className="shadow-none" onClick={() => setConfirmRestore(null)}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" className="shadow-none" onClick={() => confirmRestore && handleRestore(confirmRestore)}>
+            <Button size="xs" className="shadow-none" onClick={() => confirmRestore && handleRestore(confirmRestore)}>
               {t("settings.editor.backups.restore")}
             </Button>
           </DialogFooter>
@@ -280,12 +280,12 @@ export function BackupsSettingsPanel({
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmDelete(null)}>
+            <Button variant="outline" size="xs" className="shadow-none" onClick={() => setConfirmDelete(null)}>
               {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               disabled={!!deleting}
               onClick={() => confirmDelete && handleDelete(confirmDelete)}
