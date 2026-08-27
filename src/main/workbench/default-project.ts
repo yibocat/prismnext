@@ -24,6 +24,12 @@ import {
 } from "../../shared/workbench/paths";
 import { replaceRegisteredRoots } from "../project/active-project-roots";
 import {
+  markProjectDirectoryRemoved,
+  readProjectDirectory,
+  rememberProjectDirectory,
+  syncProjectDirectoryMembers,
+} from "./project-directory-index";
+import {
   ensureWorkbenchHome,
   isPathInsideWorkbenchHome,
   isWorkbenchHomePath,
@@ -149,6 +155,11 @@ function rememberMember(
   writeWorkbenchHomeSettings({
     defaultProjectId: nextDefault,
     workbenchProjectIds: [...new Set(ids)],
+  }, opts);
+  rememberProjectDirectory({
+    projectId,
+    lastPath,
+    displayName: displayNameFor(lastPath, existing?.displayName),
   }, opts);
 }
 
@@ -336,6 +347,15 @@ export function removeWorkbenchProject(projectId: string, opts?: DefaultProjectO
   const id = projectId.trim();
   if (!id) throw new Error("missing_project_id");
   const settings = readWorkbenchHomeSettings(opts);
+  const meta = readProjectSlotMeta(id, opts);
+  if (meta?.lastPath) {
+    rememberProjectDirectory({
+      projectId: id,
+      lastPath: meta.lastPath,
+      displayName: displayNameFor(meta.lastPath, meta.displayName),
+    }, opts);
+  }
+  markProjectDirectoryRemoved(id, opts);
   writeWorkbenchHomeSettings({
     defaultProjectId: settings.defaultProjectId,
     workbenchProjectIds: settings.workbenchProjectIds.filter((item) => item !== id),
@@ -346,6 +366,18 @@ export function removeWorkbenchProject(projectId: string, opts?: DefaultProjectO
 export function setDefaultFromFolder(absPath: string, opts?: DefaultProjectOpts): DefaultProjectRef {
   const opened = openWorkbenchFolder(absPath, opts);
   return setDefaultProjectId(opened.projectId, opts);
+}
+
+/** Member lastPath, then `projectDirectoryById` (orphans after remove). */
+export function resolveProjectLastPath(
+  projectId: string,
+  opts?: DefaultProjectOpts,
+): string | null {
+  const id = projectId.trim();
+  if (!id) return null;
+  const member = listWorkbenchMembers(opts).find((item) => item.id === id);
+  if (member?.lastPath.trim()) return member.lastPath;
+  return readProjectDirectory(opts)[id]?.lastPath.trim() || null;
 }
 
 export function listWorkbenchMembers(opts?: DefaultProjectOpts): WorkbenchProjectMember[] {
@@ -369,10 +401,12 @@ export function listWorkbenchMembers(opts?: DefaultProjectOpts): WorkbenchProjec
 export function getWorkbenchState(opts?: DefaultProjectOpts): WorkbenchState {
   const ref = ensureDefaultProject(opts);
   const settings = readWorkbenchHomeSettings(opts);
+  const members = listWorkbenchMembers(opts);
   return {
     defaultProjectId: ref.projectId,
     defaultLastPath: ref.lastPath,
     workbenchProjectIds: settings.workbenchProjectIds,
-    members: listWorkbenchMembers(opts),
+    members,
+    projectDirectoryById: syncProjectDirectoryMembers(members, opts),
   };
 }

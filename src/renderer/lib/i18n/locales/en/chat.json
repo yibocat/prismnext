@@ -170,6 +170,7 @@
     "next": "next",
     "current": "current"
   },
+  "projectAssignBlocked": "Switch project requires an empty chat tab.",
   "project": {
     "select": "Project",
     "locked": "Cannot change project while the agent is running."

@@ -152,7 +152,8 @@ describe("workbench sidebar wiring", () => {
 
   it("loads a session on row click and does not open a project when toggling a folder", () => {
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
-    expect(sidebar).toContain("loadSession(s.id, s.directory, s.projectLastPath)");
+    expect(sidebar).toContain("activateWorkbenchSession");
+    expect(sidebar).toContain("applySessionActivate");
     expect(sidebar).toContain("toggleProjectExpanded(member.id)");
     expect(sidebar).not.toContain("openProject(");
   });
@@ -272,9 +273,11 @@ describe("workbench sidebar wiring", () => {
     const menu = sourceOf("src/renderer/components/layout/workbench-add-menu.tsx");
     const lib = sourceOf("src/renderer/lib/workspace/project-lifecycle.ts");
     expect(menu).not.toMatch(/desktop-api/);
-    expect(menu).toContain("filterRecentWorkbenchProjects");
+    expect(menu).toContain("listUnifiedRecents");
     expect(menu).toContain("pickAndJoinWorkbenchFolder");
-    expect(menu).toContain("openRecentFromAddPanel");
+    expect(menu).toContain("applyProjectPick");
+    expect(menu).toContain("nav.workbench.repos");
+    expect(menu).toContain("nav.workbench.connectSsh");
     expect(menu).toContain("nav.workbench.searchProjects");
     expect(menu).toContain("nav.workbench.recents");
     expect(menu).toContain("nav.workbench.more");
@@ -316,7 +319,8 @@ describe("workbench sidebar wiring", () => {
     expect(leftMain).toContain("ProjectSelector");
     expect(leftMain.match(/<ProjectSelector /g)?.length).toBe(1);
     expect(selector).toContain("WorkbenchProjectPicker");
-    expect(selector).toContain("assignSessionToProjectPath");
+    expect(selector).toContain("applyProjectPick");
+    expect(selector).toContain("pickerMode=\"chat-assign\"");
     expect(selector).toContain("pickFolderAndAssignSession");
     expect(selector).toContain("CHAT_PANEL_TOOLBAR_BUTTON");
     expect(selector).not.toContain("AppMenuCheckItem");

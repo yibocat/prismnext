@@ -220,7 +220,9 @@ describe("assignSessionProject", () => {
     });
     expect(useWorkbenchStore.getState().sessionProjectIds["conv-1"]).toBe("p_b");
     expect(useChatStore.getState().tabs[0]?.sessionCwd).toBe("/papers/b");
-    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/b");
+    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/b", {
+      connectRemote: true,
+    });
   });
 
   it("refuses while the agent is streaming", async () => {
@@ -487,9 +489,9 @@ describe("restoreWorkbenchLaunch", () => {
   });
 
   it("opens the last project and reloads the last session tabs", async () => {
-    agentListSessionsByProjectId.mockImplementation(async (projectId: string) => {
-      if (projectId === "p_b") return [{ conversationId: "conv-old" }];
-      if (projectId === "p_a") return [{ conversationId: "conv-other" }];
+    agentListSessionsByProjectId.mockImplementation(async (args: { projectId: string }) => {
+      if (args.projectId === "p_b") return [{ conversationId: "conv-old" }];
+      if (args.projectId === "p_a") return [{ conversationId: "conv-other" }];
       return [];
     });
     await restoreWorkbenchLaunch({ watch: false });

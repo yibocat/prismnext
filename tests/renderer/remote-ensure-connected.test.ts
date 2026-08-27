@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureRemoteProjectReady,
+  isRemoteConnectError,
+  RemoteConnectError,
+  resolveFocusConnectRemote,
   remoteFocusNeedsBind,
   remotePhaseIsBusy,
   remotePhaseIsReady,
@@ -39,6 +43,27 @@ describe("remote reconnect helpers", () => {
     expect(remotePhaseNeedsConnect("idle")).toBe(true);
     expect(remotePhaseNeedsConnect("error")).toBe(true);
     expect(remotePhaseNeedsConnect("ready")).toBe(false);
+  });
+
+  it("defaults connectRemote to false for remote roots and true for local", () => {
+    expect(resolveFocusConnectRemote("/papers/a")).toBe(true);
+    expect(resolveFocusConnectRemote("remote://lab/home/u/a")).toBe(false);
+    expect(resolveFocusConnectRemote("remote://lab/home/u/a", { connectRemote: true })).toBe(true);
+    expect(resolveFocusConnectRemote("/papers/a", { connectRemote: false })).toBe(false);
+  });
+
+  it("throws RemoteConnectError when connect fails", async () => {
+    const connect = vi.fn(async () => ({ ok: false, message: "ssh down" }));
+    useRemoteStore.setState({ connect });
+    await expect(ensureRemoteProjectReady("remote://lab/home/u/a")).rejects.toSatisfy(
+      (err: unknown) => isRemoteConnectError(err) && err.alias === "lab",
+    );
+    expect(connect).toHaveBeenCalledWith("lab");
+  });
+
+  it("isRemoteConnectError recognizes the class", () => {
+    expect(isRemoteConnectError(new RemoteConnectError("lab", "nope"))).toBe(true);
+    expect(isRemoteConnectError(new Error("nope"))).toBe(false);
   });
 
   it("needs a bind when the remembered remote host is down", () => {

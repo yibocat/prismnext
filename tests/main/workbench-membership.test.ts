@@ -178,6 +178,25 @@ describe("removeWorkbenchProject", () => {
     expect(getWorkbenchState(opts).workbenchProjectIds).toEqual([opened.projectId, def.projectId]);
   });
 
+  it("keeps lastPath in projectDirectoryById after remove", () => {
+    const { userHome, documentsDir, def } = setupHome();
+    const paper = path.join(tmpRoot(), "paper-dir");
+    fs.mkdirSync(paper, { recursive: true });
+    const opened = openWorkbenchFolder(paper, { homeDir: userHome, documentsDir });
+    const opts = { homeDir: userHome, documentsDir };
+
+    const joined = getWorkbenchState(opts);
+    expect(joined.projectDirectoryById?.[opened.projectId]?.lastPath).toBe(norm(paper));
+    expect(joined.projectDirectoryById?.[opened.projectId]?.removedFromWorkbenchAt).toBeUndefined();
+
+    const after = removeWorkbenchProject(opened.projectId, opts);
+    expect(after.members.map((m) => m.id)).toEqual([def.projectId]);
+    const orphan = after.projectDirectoryById?.[opened.projectId];
+    expect(orphan?.lastPath).toBe(norm(paper));
+    expect(orphan?.removedFromWorkbenchAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(after.projectDirectoryById?.[def.projectId]?.removedFromWorkbenchAt).toBeUndefined();
+  });
+
   it("drops only the member list; the repo and home slot stay", () => {
     const { userHome, documentsDir, def } = setupHome();
     const paper = path.join(tmpRoot(), "paper-b");

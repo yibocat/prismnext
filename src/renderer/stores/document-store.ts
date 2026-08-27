@@ -280,8 +280,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
   focusProject: async (rootPath: string, opts?: { connectRemote?: boolean }) => {
     const previousRoot = get().projectRoot;
+    const { resolveFocusConnectRemote } = await import("@/lib/remote/ensure-connected");
+    const connectRemote = resolveFocusConnectRemote(rootPath, opts);
     if (sameProjectPath(previousRoot, rootPath) && get().initialized) {
-      if (!recoverRemoteAbs(rootPath)) {
+      const remoteAbs = recoverRemoteAbs(rootPath);
+      if (!remoteAbs || !connectRemote) {
         const member = useWorkbenchStore.getState().members.find((item) =>
           sameProjectPath(item.lastPath, rootPath),
         );
@@ -305,16 +308,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const firstOpen = !previousRoot;
     if (firstOpen) set({ isOpeningProject: true });
     try {
-      if (recoverRemoteAbs(rootPath) && opts?.connectRemote !== false) {
+      const remoteAbs = recoverRemoteAbs(rootPath);
+      if (remoteAbs && connectRemote) {
         const { ensureRemoteProjectReady } = await import("@/lib/remote/ensure-connected");
         await ensureRemoteProjectReady(rootPath);
         if (generation !== openProjectGeneration) return;
       }
-      ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
+      if (remoteAbs && !connectRemote) {
+        canonicalRoot = remoteAbs;
+      } else {
+        ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
+      }
       if (generation !== openProjectGeneration) return;
 
       await switchWorkbenchFocus({
         canonicalRoot,
+        connectRemote,
         shouldAbort: () => generation !== openProjectGeneration,
         supersededByClose: () => projectOpenSupersededByClose,
         applyDocumentTree: (scan) => {
@@ -357,7 +366,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           log.warn("project.activate", { error: String(revertError), reason: "restore_previous" });
         }
       }
-      toast.error(`Failed to open project: ${error}`);
+      const { isRemoteConnectError } = await import("@/lib/remote/ensure-connected");
+      if (!isRemoteConnectError(error)) {
+        toast.error(`Failed to open project: ${error}`);
+      }
       throw error;
     } finally {
       if (generation === openProjectGeneration) {

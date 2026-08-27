@@ -3,14 +3,16 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { i18n } from "@/lib/i18n";
+import { applyProjectPick } from "@/lib/workspace/project-context";
 import {
   JOINABLE_RECENT_PREVIEW_COUNT,
-  filterRecentWorkbenchProjects,
-  openRecentFromAddPanel,
-  openRemoteWorkbenchProject,
   pickAndJoinWorkbenchFolder,
-  visibleJoinableRecentProjects,
 } from "@/lib/workspace/project-lifecycle";
+import {
+  listUnifiedRecents,
+  visibleUnifiedRecents,
+} from "@/lib/workspace/unified-project-picker";
+import { encodeRemoteAbs, parseRemoteAbs } from "@shared/remote";
 import type { RemoteHostNextAction } from "@/lib/remote/host-projects";
 import { useProjectStore } from "@/stores/project-store";
 import { defaultProjectAsMember, useWorkbenchStore } from "@/stores/workbench-store";
@@ -20,6 +22,7 @@ import {
   AppMenuContent,
   AppMenuItem,
   AppMenuLabel,
+  AppMenuSeparator,
   AppMenuTrigger,
   appMenuInputClass,
 } from "@/components/ui/app-menu";
@@ -28,11 +31,12 @@ import {
   LEFT_SIDEBAR_SECTION_ACTION_ICON,
 } from "@/components/layout/left-nav-button";
 import { NewProjectDialog } from "@/components/modules/project/new-project-dialog";
+import { ProjectPickerReposSection } from "@/components/modules/project/project-picker-repos";
 import { RemoteConnectDialog } from "@/components/modules/remote/remote-connect-dialog";
 import { RemoteFolderDialog } from "@/components/modules/remote/remote-folder-dialog";
-import { RemoteHostsMenuSection } from "@/components/modules/remote/remote-hosts-menu";
+import { SshHostPickerDialog } from "@/components/modules/remote/ssh-host-picker-dialog";
 import { Hint } from "@/components/ui/hint";
-import { FolderIcon, FolderOpen, FolderPlus } from "lucide-react";
+import { FolderIcon, FolderOpen, FolderPlus, PlugIcon } from "lucide-react";
 
 const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
@@ -44,12 +48,15 @@ const recentRowClass = cn(
 
 const pickerPanelClass = cn(
   "flex min-h-0 min-w-[12rem] w-max flex-col gap-0 overflow-hidden p-0",
-  "max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))]",
+  "max-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))]",
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
-async function openRemoteAndToast(alias: string, remoteRoot: string): Promise<void> {
-  await openRemoteWorkbenchProject(alias, remoteRoot);
+async function openRemoteViaContext(alias: string, remoteRoot: string): Promise<void> {
+  const path = encodeRemoteAbs(alias, remoteRoot);
+  if (!path) throw new Error("invalid_remote_path");
+  const result = await applyProjectPick({ path, mode: "focus" });
+  if (!result.ok) throw new Error(result.reason);
   const name = remoteRoot.split("/").filter(Boolean).at(-1) || remoteRoot;
   toast.success(i18n.t("remote.openedProject", { name }));
 }
@@ -58,6 +65,7 @@ export function WorkbenchProjectPicker({
   children,
   hintLabel,
   disabled,
+  pickerMode,
   onPickPath,
   onOpenFolder,
   onProjectCreated,
@@ -65,6 +73,7 @@ export function WorkbenchProjectPicker({
   children: ReactElement;
   hintLabel: string;
   disabled?: boolean;
+  pickerMode: "workbench-add" | "chat-assign";
   onPickPath: (path: string) => void;
   onOpenFolder: () => void;
   onProjectCreated?: (path: string) => void;
@@ -80,6 +89,7 @@ export function WorkbenchProjectPicker({
   connectRef.current = connect;
   const [folder, setFolder] = useState<{ alias: string } | null>(null);
   const [remoteNew, setRemoteNew] = useState<{ profileId: string } | null>(null);
+  const [sshPickerOpen, setSshPickerOpen] = useState(false);
 
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const members = useWorkbenchStore((s) => s.members);
@@ -87,18 +97,18 @@ export function WorkbenchProjectPicker({
   const memberPaths = useMemo(() => members.map((member) => member.lastPath), [members]);
 
   const filtered = useMemo(
-    () => filterRecentWorkbenchProjects(
+    () => listUnifiedRecents({
       recentProjects,
       memberPaths,
-      query,
-      defaultMember
+      defaultProject: defaultMember
         ? { path: defaultMember.lastPath, name: defaultMember.displayName }
         : null,
-    ),
+      query,
+    }),
     [recentProjects, memberPaths, query, defaultMember],
   );
   const searching = query.trim().length > 0;
-  const { items, remaining } = visibleJoinableRecentProjects(filtered, {
+  const { items, remaining } = visibleUnifiedRecents(filtered, {
     expanded: expanded || searching,
     previewCount: JOINABLE_RECENT_PREVIEW_COUNT,
   });
@@ -116,7 +126,7 @@ export function WorkbenchProjectPicker({
     setOpen(false);
     const ready = useRemoteStore.getState().byProfileId[alias]?.phase === "ready";
     if (ready && next.type === "open-path") {
-      void openRemoteAndToast(alias, next.remoteRoot).catch((err) => {
+      void openRemoteViaContext(alias, next.remoteRoot).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
@@ -138,7 +148,7 @@ export function WorkbenchProjectPicker({
     setConnect(null);
     if (!pending) return;
     if (pending.next.type === "open-path") {
-      void openRemoteAndToast(pending.alias, pending.next.remoteRoot).catch((err) => {
+      void openRemoteViaContext(pending.alias, pending.next.remoteRoot).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
@@ -165,6 +175,7 @@ export function WorkbenchProjectPicker({
           align="start"
           collisionPadding={16}
           className={pickerPanelClass}
+          data-picker-mode={pickerMode}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             requestAnimationFrame(() => searchRef.current?.focus());
@@ -212,12 +223,19 @@ export function WorkbenchProjectPicker({
                       )}
                     />
                   }
-                  description={item.path}
+                  description={item.kind === "local" ? item.description : undefined}
                   title={item.path}
                   titleAddon={
                     item.isDefault ? (
                       <span className="text-[length:var(--font-badge)] text-muted-foreground">
                         {t("nav.workbench.defaultBadge")}
+                      </span>
+                    ) : null
+                  }
+                  trailing={
+                    item.trailing ? (
+                      <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
+                        {item.trailing}
                       </span>
                     ) : null
                   }
@@ -238,9 +256,20 @@ export function WorkbenchProjectPicker({
                 {t("nav.workbench.more")}
               </AppMenuItem>
             ) : null}
-            <RemoteHostsMenuSection query={query} visible={open} onRequest={requestRemote} />
+            <AppMenuSeparator />
+            <AppMenuLabel className="normal-case tracking-normal">
+              {t("nav.workbench.repos")}
+            </AppMenuLabel>
+            <ProjectPickerReposSection
+              query={query}
+              visible={open}
+              onPickPath={onPickPath}
+              onOpenLocalFolder={onOpenFolder}
+              onRequest={requestRemote}
+            />
           </div>
           <div className="shrink-0 bg-popover px-0.5 pt-0.5 pb-0.5">
+            <AppMenuSeparator />
             <AppMenuItem
               className={sidebarItemClass}
               leading={<FolderOpen className="size-3.5 shrink-0 opacity-70" />}
@@ -254,6 +283,13 @@ export function WorkbenchProjectPicker({
               onClick={() => newProjectTriggerRef.current?.click()}
             >
               {t("nav.project.newProject")}
+            </AppMenuItem>
+            <AppMenuItem
+              className={sidebarItemClass}
+              leading={<PlugIcon className="size-3.5 shrink-0 opacity-70" />}
+              onClick={() => setSshPickerOpen(true)}
+            >
+              {t("nav.workbench.connectSsh")}
             </AppMenuItem>
           </div>
         </AppMenuContent>
@@ -293,8 +329,13 @@ export function WorkbenchProjectPicker({
         }}
         onConfirm={async (remoteRoot) => {
           if (!folder) return;
-          await openRemoteAndToast(folder.alias, remoteRoot);
+          await openRemoteViaContext(folder.alias, remoteRoot);
         }}
+      />
+      <SshHostPickerDialog
+        open={sshPickerOpen}
+        onOpenChange={setSshPickerOpen}
+        onSelectHost={(alias) => requestRemote(alias, { type: "idle" })}
       />
     </>
   );
@@ -306,8 +347,21 @@ export function WorkbenchAddMenu() {
 
   return (
     <WorkbenchProjectPicker
+      pickerMode="workbench-add"
       hintLabel={t("nav.workbench.addProject")}
-      onPickPath={(path) => void openRecentFromAddPanel(path)}
+      onPickPath={(path) => {
+        void applyProjectPick({
+          path,
+          mode: "focus",
+          newSessionAfterFocus: false,
+        }).then((result) => {
+          if (!result.ok) return;
+          const parsed = parseRemoteAbs(path);
+          if (!parsed) return;
+          const name = parsed.abs.split("/").filter(Boolean).at(-1) || parsed.abs;
+          toast.success(i18n.t("remote.openedProject", { name }));
+        });
+      }}
       onOpenFolder={() => void pickAndJoinWorkbenchFolder()}
     >
       <button

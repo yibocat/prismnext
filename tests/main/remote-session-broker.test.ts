@@ -71,11 +71,12 @@ process.stdin.on("data", (chunk) => {
     }
     if (msg.kind === "req" && msg.method === "project.open") {
       const remoteRoot = msg.params && msg.params.remoteRoot ? msg.params.remoteRoot : "/home/alice/paper";
+      const projectId = /\\/b$/.test(remoteRoot) ? "p_B" : /\\/a$/.test(remoteRoot) ? "p_A" : "p_test";
       process.stdout.write(JSON.stringify({
         kind: "res",
         id: msg.id,
         ok: true,
-        result: { projectId: "p_test", remoteRoot },
+        result: { projectId, remoteRoot },
       }) + "\\n");
     }
     if (msg.kind === "req" && msg.method === "pro:beginSync") {
@@ -220,6 +221,38 @@ describe("RemoteSessionBroker", () => {
     expect(broker.boundRemoteRoot("ssh_lab")).toBe("/home/alice/paper");
     const again = await broker.ensureProjectOpen("ssh_lab", "/home/alice/paper");
     expect(again?.projectId).toBe("p_test");
+    await broker.disconnect("ssh_lab");
+  });
+
+  it("rebinds project.open on same profile without disconnecting SSH", async () => {
+    const staging = mkdtempSync(join(tmpdir(), "prism-broker-rebind-"));
+    const remoteHome = mkdtempSync(join(tmpdir(), "prism-broker-rebind-home-"));
+    const knownHostsPath = join(mkdtempSync(join(tmpdir(), "prism-broker-rebind-kh-")), "known_hosts");
+    const tarball = await hostTarball(staging);
+    const broker = new RemoteSessionBroker({
+      desktopVersion: "0.9.0",
+      getProfile: () => ({ ...profile, strictHostKey: false }),
+      ssh: createDirectoryBackedSshClient(remoteHome),
+      resolvePayload: () => ({ ...tarball, arch: "linux-arm64" }),
+      knownHostsPath,
+      readModelSeed: () => ({
+        aiApiKeys: { deepseek: "sk-test" },
+        aiBaseUrls: {},
+        extraBaseUrls: [],
+        wrapKey: "",
+        providerIds: ["deepseek"],
+        wrapOk: true,
+      }),
+    });
+    const result = await broker.connect("ssh_lab");
+    expect(result.ok).toBe(true);
+    await broker.openProject("ssh_lab", "/home/u/a");
+    expect(broker.isBound("ssh_lab")).toBe(true);
+    expect(broker.profileIdForProjectId("p_A")).toBe("ssh_lab");
+    await broker.openProject("ssh_lab", "/home/u/b");
+    expect(broker.isBound("ssh_lab")).toBe(true);
+    expect(broker.profileIdForProjectId("p_B")).toBe("ssh_lab");
+    expect(broker.boundRemoteRoot("ssh_lab")).toBe("/home/u/b");
     await broker.disconnect("ssh_lab");
   });
 });

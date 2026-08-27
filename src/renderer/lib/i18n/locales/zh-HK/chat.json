@@ -170,6 +170,7 @@
     "next": "下一",
     "current": "當前"
   },
+  "projectAssignBlocked": "目前對話已有內容，請新建對話後再切換項目。",
   "project": {
     "select": "項目",
     "locked": "Agent 執行中時無法更換項目。"

@@ -9,6 +9,11 @@ export interface AgentSessionSummary {
   directory?: string;
 }
 
+export interface AgentListSessionsByProjectIdArgs {
+  projectId: string;
+  projectRoot?: string;
+}
+
 export interface AgentLoadSessionInput {
   conversationId: string;
   projectRoot: string;

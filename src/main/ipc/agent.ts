@@ -20,6 +20,7 @@ import type {
   AgentTruncateInput,
   AgentTurnMetaInput,
   AgentUndoTruncateInput,
+  AgentListSessionsByProjectIdArgs,
   AgentLoadSessionInput,
   AgentModelEffortInput,
   AgentRenameSessionInput,
@@ -39,18 +40,28 @@ import { stageLaptopAttachmentsForRemote } from "../remote/agent-attachments";
 import {
   disconnectedRemoteAgentStatus,
   isDesktopOnlyAgentMethod,
+  lookupRemoteProfileIdForProject,
   rememberRemoteConversation,
-  remoteProfileIdFromAgentArgs,
+  resolveRemoteAgentListTarget,
   rewriteAgentParamsForHost,
 } from "../remote/agent-route";
+import { resolveProjectLastPath } from "../workbench/default-project";
 import { getRemoteSessionBroker } from "./remote";
 
 async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
   if (isDesktopOnlyAgentMethod(method)) return undefined;
   const broker = getRemoteSessionBroker();
-  const profileId = remoteProfileIdFromAgentArgs(args, (projectId) => broker.profileIdForProjectId(projectId));
-  if (!profileId) return undefined;
-  if (!broker.isBound(profileId)) {
+  const target = resolveRemoteAgentListTarget(args, {
+    isBound: (profileId) => broker.isBound(profileId),
+    lookupProjectId: (projectId) => lookupRemoteProfileIdForProject(
+      projectId,
+      (id) => broker.profileIdForProjectId(id),
+      (id) => resolveProjectLastPath(id),
+    ),
+  });
+  if (target.kind === "local") return undefined;
+  const profileId = target.profileId;
+  if (!target.bound) {
     if (method === "agent:status") {
       const rec = args && typeof args === "object" && !Array.isArray(args)
         ? args as { projectRoot?: string }
@@ -191,7 +202,7 @@ export function registerAgentHandlers(): void {
     return agent.listSessions(args.projectRoot);
   });
 
-  ipcMain.handle("agent:listSessionsByProjectId", async (_event, args: { projectId: string }) => {
+  ipcMain.handle("agent:listSessionsByProjectId", async (_event, args: AgentListSessionsByProjectIdArgs) => {
     const remote = await routeIfRemote("agent:listSessionsByProjectId", args);
     if (remote !== undefined) return remote;
     const agent = await getAgentService();

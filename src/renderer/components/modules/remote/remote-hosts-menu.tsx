@@ -39,10 +39,12 @@ export function RemoteHostsMenuSection({
   query,
   visible,
   onRequest,
+  showHeading = true,
 }: {
   query: string;
   visible: boolean;
   onRequest: (alias: string, next: RemoteHostNextAction) => void;
+  showHeading?: boolean;
 }) {
   const { t } = useTranslation();
   const hosts = useRemoteStore((s) => s.hosts);
@@ -63,9 +65,11 @@ export function RemoteHostsMenuSection({
 
   return (
     <>
-      <AppMenuLabel className="normal-case tracking-normal">
-        {t("nav.workbench.remote")}
-      </AppMenuLabel>
+      {showHeading ? (
+        <AppMenuLabel className="normal-case tracking-normal">
+          {t("nav.workbench.remote")}
+        </AppMenuLabel>
+      ) : null}
       {filtered.length === 0 ? (
         <p className="px-2 py-1.5 text-muted-foreground">{t("nav.workbench.noSshHosts")}</p>
       ) : (

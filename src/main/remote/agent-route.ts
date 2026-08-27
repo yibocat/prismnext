@@ -122,3 +122,33 @@ export function remoteProfileIdFromAgentArgs(
   }
   return null;
 }
+
+/** Prefer a stored lastPath over the currently bound Host project. */
+export function lookupRemoteProfileIdForProject(
+  projectId: string,
+  lookupBound: (projectId: string) => string | null,
+  resolveLastPath: (projectId: string) => string | null,
+): string | null {
+  const lastPath = resolveLastPath(projectId);
+  if (lastPath) {
+    const parsed = parseRemoteAbs(lastPath);
+    if (parsed) return parsed.profileId;
+  }
+  return lookupBound(projectId);
+}
+
+export type RemoteAgentListTarget =
+  | { kind: "local" }
+  | { kind: "remote"; profileId: string; bound: boolean };
+
+export function resolveRemoteAgentListTarget(
+  args: unknown,
+  ctx: {
+    isBound: (profileId: string) => boolean;
+    lookupProjectId: (projectId: string) => string | null;
+  },
+): RemoteAgentListTarget {
+  const profileId = remoteProfileIdFromAgentArgs(args, ctx.lookupProjectId);
+  if (!profileId) return { kind: "local" };
+  return { kind: "remote", profileId, bound: ctx.isBound(profileId) };
+}

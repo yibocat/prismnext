@@ -1,8 +1,31 @@
-import { parseRemoteAbs, type RemoteConnectionState } from "@shared/remote";
+import { parseRemoteAbs, recoverRemoteAbs, type RemoteConnectionState } from "@shared/remote";
 import { i18n } from "@/lib/i18n";
 import { useRemoteStore } from "@/stores/remote-store";
 
 const SETTLE_MS = 120_000;
+
+export class RemoteConnectError extends Error {
+  readonly alias: string;
+  constructor(alias: string, message: string) {
+    super(message);
+    this.name = "RemoteConnectError";
+    this.alias = alias;
+  }
+}
+
+export function isRemoteConnectError(error: unknown): error is RemoteConnectError {
+  return error instanceof RemoteConnectError
+    || (error instanceof Error && error.name === "RemoteConnectError" && "alias" in error);
+}
+
+/** Remote focus is lazy unless the caller asks to connect. */
+export function resolveFocusConnectRemote(
+  rootPath: string,
+  opts?: { connectRemote?: boolean },
+): boolean {
+  if (opts?.connectRemote !== undefined) return opts.connectRemote;
+  return !Boolean(recoverRemoteAbs(rootPath) || parseRemoteAbs(rootPath));
+}
 
 export function remotePhaseIsReady(phase: RemoteConnectionState["phase"] | undefined): boolean {
   return phase === "ready";
@@ -67,23 +90,25 @@ export async function ensureRemoteProjectReady(lastPath: string): Promise<void> 
   if (remotePhaseIsReady(phase)) return;
   if (remotePhaseIsBusy(phase) || currentPhase(alias) === "awaiting_host_key") {
     if (currentPhase(alias) === "awaiting_host_key") {
-      useRemoteStore.getState().openConnectDialog(alias);
+      useRemoteStore.getState().openConnectDialog(alias, { blocking: true });
     }
     const ok = await waitUntilSettled(alias);
     if (!ok) {
-      throw new Error(i18n.t("remote.connectFailed", { host: alias }));
+      throw new RemoteConnectError(alias, i18n.t("remote.connectFailed", { host: alias }));
     }
     return;
   }
   const result = await useRemoteStore.getState().connect(alias);
   if (result.hostKey) {
-    useRemoteStore.getState().openConnectDialog(alias);
+    useRemoteStore.getState().openConnectDialog(alias, { blocking: true });
     const ok = await waitUntilSettled(alias);
-    if (!ok) throw new Error(i18n.t("remote.connectFailed", { host: alias }));
+    if (!ok) throw new RemoteConnectError(alias, i18n.t("remote.connectFailed", { host: alias }));
     return;
   }
   if (!result.ok) {
-    useRemoteStore.getState().openConnectDialog(alias);
-    throw new Error(result.message || i18n.t("remote.connectFailed", { host: alias }));
+    throw new RemoteConnectError(
+      alias,
+      result.message || i18n.t("remote.connectFailed", { host: alias }),
+    );
   }
 }

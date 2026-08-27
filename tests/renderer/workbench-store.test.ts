@@ -6,6 +6,7 @@ import {
   lastPathForSession,
   moveListItem,
   projectRootForSession,
+  resolveSessionProjectMeta,
   resolveWorkbenchMemberByPath,
   sameProjectPath,
   selectableWorkbenchProjects,
@@ -48,6 +49,7 @@ describe("workbench launch store", () => {
       focusConversationId: null,
       focusProjectId: "",
       sessionProjectIds: {},
+      projectDirectoryById: {},
     });
     (window as unknown as { electronAPI: Record<string, unknown> }).electronAPI = {
       workbenchGetState: vi.fn().mockResolvedValue(state),
@@ -84,6 +86,25 @@ describe("workbench launch store", () => {
     expect(lastPathForSession("conv_a")).toBe("/Users/me/papers/a");
     expect(projectRootForSession("conv_a", "/Users/me/Documents/PrismNext")).toBe("/Users/me/papers/a");
     expect(projectRootForSession("unknown", "/fallback")).toBe("/fallback");
+  });
+
+  it("resolves lastPath for a removed workbench project from the directory index", () => {
+    useWorkbenchStore.setState({
+      ...state,
+      loaded: true,
+      members: [defaultMember],
+      sessionProjectIds: { conv_gone: "p_a" },
+      projectDirectoryById: {
+        p_a: {
+          projectId: "p_a",
+          lastPath: "remote://lab/home/u/a",
+          displayName: "a",
+          removedFromWorkbenchAt: "2026-08-27T00:00:00.000Z",
+        },
+      },
+    });
+    expect(lastPathForSession("conv_gone")).toBe("remote://lab/home/u/a");
+    expect(projectRootForSession("conv_gone")).toBe("remote://lab/home/u/a");
   });
 
   it("openFolder hydrates members without changing the default role here", async () => {
@@ -190,5 +211,27 @@ describe("resolveWorkbenchMemberByPath", () => {
     };
     expect(resolveWorkbenchMemberByPath(offList, defaultMember.lastPath)?.id).toBe("p_default");
     expect(resolveWorkbenchMemberByPath(offList, "/missing")).toBeNull();
+  });
+});
+
+describe("resolveSessionProjectMeta", () => {
+  it("falls back to the directory index and exposes the remote host", () => {
+    expect(resolveSessionProjectMeta(
+      { projectId: "p_gone", projectLastPath: "" },
+      [defaultMember],
+      {
+        p_gone: {
+          projectId: "p_gone",
+          lastPath: "remote://lab/home/u/gone",
+          displayName: "gone",
+          removedFromWorkbenchAt: "2026-08-27T00:00:00.000Z",
+        },
+      },
+    )).toEqual({
+      id: "p_gone",
+      name: "gone",
+      lastPath: "remote://lab/home/u/gone",
+      host: "lab",
+    });
   });
 });

@@ -92,6 +92,8 @@ import {
   syncRemoteSessionsAction,
 } from "@/lib/remote/sync-actions";
 import { remoteHostDisplayName } from "@/lib/remote/display";
+import { isRemoteConnectError } from "@/lib/remote/ensure-connected";
+import { applySessionActivate } from "@/lib/workspace/project-context";
 import { useRemoteStore } from "@/stores/remote-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useExperimentStore } from "@/stores/experiment-store";
@@ -105,11 +107,13 @@ import {
   isWorkbenchProjectExpanded,
   moveListItem,
   type SessionDateBucket,
+  resolveSessionProjectMeta,
   sameProjectPath,
   toggleWorkbenchProjectExpanded,
   useWorkbenchStore,
   type WorkbenchSessionRow,
 } from "@/stores/workbench-store";
+import { listSessionFetchTargets } from "@shared/workbench/project-directory-index";
 import { useVerticalListReorder } from "@/lib/workspace/vertical-list-reorder";
 import { hasPendingPermission, usePermissionStore } from "@/stores/permission-store";
 import {
@@ -179,28 +183,13 @@ function shortProjectPath(lastPath: string): string {
 function projectMetaForSession(
   session: SessionInfo,
   members: { id: string; lastPath: string; displayName: string }[],
-): { id?: string; name: string; path: string; lastPath: string } | null {
-  const member =
-    (session.projectId
-      ? members.find((item) => item.id === session.projectId)
-      : undefined)
-    ?? members.find((item) => sameProjectPath(item.lastPath, session.projectLastPath));
-  if (member) {
-    return {
-      id: member.id,
-      name: member.displayName,
-      path: shortProjectPath(member.lastPath),
-      lastPath: member.lastPath,
-    };
-  }
-  if (!session.projectLastPath) return null;
-  const folder =
-    session.projectLastPath.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)
-    ?? session.projectLastPath;
+  directory: Record<string, { lastPath: string; displayName?: string; projectId: string }> = {},
+): { id?: string; name: string; path: string; lastPath: string; host?: string } | null {
+  const resolved = resolveSessionProjectMeta(session, members, directory);
+  if (!resolved) return null;
   return {
-    name: folder,
-    path: shortProjectPath(session.projectLastPath),
-    lastPath: session.projectLastPath,
+    ...resolved,
+    path: shortProjectPath(resolved.lastPath),
   };
 }
 
@@ -342,6 +331,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const remoteHosts = useRemoteStore((s) => s.hosts);
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const members = useWorkbenchStore((s) => s.members);
+  const projectDirectoryById = useWorkbenchStore((s) => s.projectDirectoryById);
   const workbenchProjectIds = useWorkbenchStore((s) => s.workbenchProjectIds);
   const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
   const focusProjectId = useWorkbenchStore((s) => s.focusProjectId);
@@ -416,8 +406,14 @@ export const LeftSidebar = memo(function LeftSidebar() {
   }, [members]);
 
   const fetchSessions = useCallback(async (options?: FetchSessionsOptions) => {
-    const targets = members.length > 0
-      ? members
+    const directory = useWorkbenchStore.getState().projectDirectoryById;
+    const sessionProjectIds = useWorkbenchStore.getState().sessionProjectIds;
+    const targets = members.length > 0 || Object.keys(directory).length > 0
+      ? listSessionFetchTargets({
+        members,
+        projectDirectory: directory,
+        sessionProjectIds,
+      })
       : projectRoot
         ? [{ id: "", lastPath: projectRoot, displayName: "" }]
         : [];
@@ -430,7 +426,10 @@ export const LeftSidebar = memo(function LeftSidebar() {
     try {
       const listed = await Promise.all(targets.map(async (member) => {
         const rows = member.id
-          ? await agentDesktop.agentListSessionsByProjectId(member.id)
+          ? await agentDesktop.agentListSessionsByProjectId({
+            projectId: member.id,
+            projectRoot: member.lastPath,
+          })
           : await agentDesktop.agentListSessions(member.lastPath);
         return rows.map((s) => ({
           id: s.conversationId,
@@ -476,7 +475,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [members, projectRoot]);
+  }, [members, projectDirectoryById, projectRoot]);
 
   const fetchSessionsRef = useRef(fetchSessions);
   fetchSessionsRef.current = fetchSessions;
@@ -677,6 +676,35 @@ export const LeftSidebar = memo(function LeftSidebar() {
     { ignoreSelector: "[data-project-drag-ignore]" },
   );
 
+  const activateWorkbenchSession = useCallback(async (s: SessionInfo) => {
+    const lastPath = s.projectLastPath || projectRoot || "";
+    try {
+      if (s.projectId && lastPath) {
+        await applySessionActivate({
+          conversationId: s.id,
+          projectId: s.projectId,
+          lastPath,
+          connectRemote: true,
+        });
+        return;
+      }
+      await loadSession(s.id, s.directory, s.projectLastPath);
+    } catch (error) {
+      if (isRemoteConnectError(error)) {
+        useRemoteStore.getState().openConnectDialog(error.alias, {
+          blocking: true,
+          pendingAction: "session-load",
+          pendingSession: {
+            conversationId: s.id,
+            projectId: s.projectId ?? "",
+            lastPath,
+            directory: s.directory,
+          },
+        });
+      }
+    }
+  }, [loadSession, projectRoot]);
+
   const newSessionInProject = useCallback(async (projectId: string, lastPath: string) => {
     setExpandedWorkbenchProjectIds(
       ensureWorkbenchProjectExpanded(projectId, expandedWorkbenchProjectIds, focusProjectId),
@@ -694,7 +722,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const renderSessionItem = (s: SessionInfo, opts?: { archivedRow?: boolean; showProject?: boolean }) => {
     const archivedRow = opts?.archivedRow ?? showArchived;
     const showProject = opts?.showProject === true;
-    const project = showProject ? projectMetaForSession(s, members) : null;
+    const project = showProject
+      ? projectMetaForSession(s, members, projectDirectoryById)
+      : null;
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
@@ -837,7 +867,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 ),
               );
             }
-            loadSession(s.id, s.directory, s.projectLastPath);
+            void activateWorkbenchSession(s);
           }}
           className={cn(
             LEFT_SIDEBAR_ROW,
@@ -881,6 +911,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
             {showProject && project ? (
               <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[length:var(--font-hint)] text-muted-foreground/70">
                 <span className="min-w-0 truncate">{project.name}</span>
+                {project.host ? (
+                  <span className="shrink-0 tabular-nums">{project.host}</span>
+                ) : null}
                 {project.id === defaultProjectId ? <DefaultProjectBadge /> : null}
               </span>
             ) : null}
@@ -924,7 +957,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
 
   const renderArchivedSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
-    const project = projectMetaForSession(s, members);
+        const project = projectMetaForSession(s, members, projectDirectoryById);
     const sessionProjectRoot = s.projectLastPath || projectRoot;
     const chromeEntry = sessionProjectRoot
       ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
@@ -937,7 +970,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
         data-workbench-session={s.id}
         onClick={() => {
           if (isRenaming) return;
-          loadSession(s.id, s.directory, s.projectLastPath);
+          void activateWorkbenchSession(s);
         }}
         className={cn(
           LEFT_SIDEBAR_ROW,

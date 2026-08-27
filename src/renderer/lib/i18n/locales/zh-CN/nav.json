@@ -76,6 +76,9 @@
     "openFolder": "打开文件夹",
     "defaultBadge": "默认",
     "remote": "远程",
+    "repos": "仓库",
+    "localRepos": "本机",
+    "connectSsh": "通过 SSH 连接…",
     "noSshHosts": "~/.ssh/config 里还没有主机"
   },
   "project": {

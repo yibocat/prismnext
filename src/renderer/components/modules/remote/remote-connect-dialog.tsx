@@ -19,11 +19,15 @@ export function RemoteConnectDialog({
   open,
   onOpenChange,
   onReady,
+  blocking = false,
+  onContinue,
 }: {
   alias: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReady: () => void;
+  blocking?: boolean;
+  onContinue?: () => void;
 }) {
   const { t } = useTranslation();
   const state = useRemoteStore((s) => (alias ? s.byProfileId[alias] : undefined));
@@ -78,7 +82,12 @@ export function RemoteConnectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(92vh,56rem)] overflow-y-auto sm:max-w-3xl">
+      <DialogContent
+        className="max-h-[min(92vh,56rem)] overflow-y-auto sm:max-w-3xl"
+        onPointerDownOutside={blocking ? (event) => event.preventDefault() : undefined}
+        onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
+        onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
+      >
         <DialogHeader>
           <DialogTitle>
             {t("remote.connectTitle", { host: alias ?? "" })}
@@ -177,6 +186,11 @@ export function RemoteConnectDialog({
               {t("remote.retry")}
             </Button>
           ) : null}
+          {state?.phase === "ready" && onContinue ? (
+            <Button type="button" onClick={onContinue}>
+              {t("remote.continue")}
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             {t("remote.close")}
           </Button>
@@ -189,18 +203,36 @@ export function RemoteConnectDialog({
 /** Shown when a remembered remote project needs a host key or hit an error. */
 export function RemoteConnectHost() {
   const alias = useRemoteStore((s) => s.connectDialogAlias);
+  const dialog = useRemoteStore((s) => s.connectDialog);
   const closeConnectDialog = useRemoteStore((s) => s.closeConnectDialog);
+  const pendingSession = dialog?.pendingAction === "session-load" ? dialog.pendingSession : undefined;
 
   return (
     <RemoteConnectDialog
       alias={alias}
       open={Boolean(alias)}
+      blocking={dialog?.blocking === true}
       onOpenChange={(next) => {
         if (!next) closeConnectDialog();
       }}
       onReady={() => {
+        if (pendingSession) return;
         closeConnectDialog();
       }}
+      onContinue={pendingSession
+        ? () => {
+          void (async () => {
+            const { applySessionActivate } = await import("@/lib/workspace/project-context");
+            await applySessionActivate({
+              conversationId: pendingSession.conversationId,
+              projectId: pendingSession.projectId,
+              lastPath: pendingSession.lastPath,
+              connectRemote: true,
+            });
+            closeConnectDialog();
+          })();
+        }
+        : undefined}
     />
   );
 }

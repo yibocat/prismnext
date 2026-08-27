@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { ipcMain, shell } from "electron";
 import { notifyDesktop } from "../app/desktop-notifications";
 import { setTrayMenuSnapshot, setTrayStatus } from "../app/tray";
@@ -18,7 +20,13 @@ function isAllowedExternalUrl(url: string): boolean {
 
 export function registerShellHandlers(): void {
   ipcMain.handle("shell:showItemInFolder", (_event, args: { absPath: string }) => {
-    shell.showItemInFolder(args.absPath);
+    const raw = typeof args.absPath === "string" ? args.absPath.trim() : "";
+    const absPath = raw === "~"
+      ? homedir()
+      : raw.startsWith("~/")
+        ? join(homedir(), raw.slice(2))
+        : raw;
+    if (absPath) shell.showItemInFolder(absPath);
   });
 
   ipcMain.handle("shell:openExternal", async (_event, args: { url: string }) => {

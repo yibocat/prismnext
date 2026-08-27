@@ -76,6 +76,9 @@
     "openFolder": "開啟資料夾",
     "defaultBadge": "預設",
     "remote": "遠端",
+    "repos": "倉庫",
+    "localRepos": "本機",
+    "connectSsh": "透過 SSH 連線…",
     "noSshHosts": "~/.ssh/config 裡還沒有主機"
   },
   "project": {

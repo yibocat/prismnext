@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { WorkbenchHomeSettings } from "../../shared/workbench/api";
+import { parseProjectDirectoryIndex } from "../../shared/workbench/project-directory-index";
 import {
   HOME_BROWSER_DIRNAME,
   HOME_JOBS_DIRNAME,
@@ -156,7 +157,11 @@ export function readWorkbenchHomeSettings(opts?: WorkbenchHomeOpts): WorkbenchHo
     return { ...EMPTY_HOME_SETTINGS };
   }
   if (!raw || typeof raw !== "object") return { ...EMPTY_HOME_SETTINGS };
-  const rec = raw as { defaultProjectId?: unknown; workbenchProjectIds?: unknown };
+  const rec = raw as {
+    defaultProjectId?: unknown;
+    workbenchProjectIds?: unknown;
+    projectDirectoryById?: unknown;
+  };
   const defaultProjectId =
     typeof rec.defaultProjectId === "string" && rec.defaultProjectId.trim()
       ? rec.defaultProjectId.trim()
@@ -164,7 +169,8 @@ export function readWorkbenchHomeSettings(opts?: WorkbenchHomeOpts): WorkbenchHo
   const workbenchProjectIds = Array.isArray(rec.workbenchProjectIds)
     ? rec.workbenchProjectIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
-  return { defaultProjectId, workbenchProjectIds };
+  const projectDirectoryById = parseProjectDirectoryIndex(rec.projectDirectoryById);
+  return { defaultProjectId, workbenchProjectIds, projectDirectoryById };
 }
 
 export function writeWorkbenchHomeSettings(
@@ -184,12 +190,15 @@ export function writeWorkbenchHomeSettings(
   }
   const ids = [...new Set(settings.workbenchProjectIds.map((id) => id.trim()).filter(Boolean))];
   const defaultProjectId = settings.defaultProjectId?.trim() || null;
+  const projectDirectoryById = settings.projectDirectoryById
+    ?? parseProjectDirectoryIndex(extra.projectDirectoryById);
   writeFileSync(
     file,
     `${JSON.stringify({
       ...extra,
       defaultProjectId,
       workbenchProjectIds: ids,
+      projectDirectoryById,
     }, null, 2)}\n`,
     "utf-8",
   );

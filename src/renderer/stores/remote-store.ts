@@ -9,12 +9,29 @@ import {
 import { clipBootstrapLogs } from "@/lib/remote/display";
 import { remoteDesktop } from "@/lib/desktop-api/remote";
 
+export type ConnectDialogPendingAction = "session-load" | "idle";
+
+export type ConnectDialogPendingSession = {
+  conversationId: string;
+  projectId: string;
+  lastPath: string;
+  directory?: string;
+};
+
+export type ConnectDialogState = {
+  alias: string;
+  blocking: boolean;
+  pendingAction?: ConnectDialogPendingAction;
+  pendingSession?: ConnectDialogPendingSession;
+};
+
 interface RemoteState {
   hosts: SshConfigHost[];
   byProfileId: Record<string, RemoteConnectionState>;
   logs: RemoteBootstrapLogLine[];
   hydrated: boolean;
   connectDialogAlias: string | null;
+  connectDialog: ConnectDialogState | null;
   hydrate: () => Promise<void>;
   connect: (alias: string) => Promise<RemoteConnectResult>;
   disconnect: (alias: string) => Promise<void>;
@@ -22,7 +39,14 @@ interface RemoteState {
     alias: string,
     hostKey: { host: string; port: number; fingerprint: string },
   ) => Promise<RemoteConnectResult>;
-  openConnectDialog: (alias: string) => void;
+  openConnectDialog: (
+    alias: string,
+    opts?: {
+      blocking?: boolean;
+      pendingAction?: ConnectDialogPendingAction;
+      pendingSession?: ConnectDialogPendingSession;
+    },
+  ) => void;
   closeConnectDialog: () => void;
   openProject: (
     alias: string,
@@ -64,6 +88,7 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
   logs: [],
   hydrated: false,
   connectDialogAlias: null,
+  connectDialog: null,
 
   hydrate: async () => {
     ensureSubscriptions(set);
@@ -100,12 +125,20 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
     return pending;
   },
 
-  openConnectDialog: (alias) => {
-    set({ connectDialogAlias: alias });
+  openConnectDialog: (alias, opts) => {
+    set({
+      connectDialogAlias: alias,
+      connectDialog: {
+        alias,
+        blocking: opts?.blocking === true,
+        pendingAction: opts?.pendingAction,
+        pendingSession: opts?.pendingSession,
+      },
+    });
   },
 
   closeConnectDialog: () => {
-    set({ connectDialogAlias: null });
+    set({ connectDialogAlias: null, connectDialog: null });
   },
 
   disconnect: async (alias) => {

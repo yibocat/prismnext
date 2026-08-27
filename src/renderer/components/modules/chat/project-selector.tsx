@@ -1,12 +1,11 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { FolderIcon, LockIcon } from "lucide-react";
 import { WorkbenchProjectPicker } from "@/components/layout/workbench-add-menu";
 import { cn } from "@/lib/utils";
-import {
-  assignSessionToProjectPath,
-  pickFolderAndAssignSession,
-} from "@/lib/workspace/project-lifecycle";
+import { applyProjectPick } from "@/lib/workspace/project-context";
+import { pickFolderAndAssignSession } from "@/lib/workspace/project-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
 import { selectableWorkbenchProjects, useWorkbenchStore } from "@/stores/workbench-store";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "./worktree-selector";
@@ -26,12 +25,20 @@ export function ProjectSelector() {
   const current = members.find((member) => member.id === currentId) ?? members[0];
   const label = current?.displayName || t("chat.project.select");
 
-  const handlePickPath = useCallback(
+  const assignActiveChat = useCallback(
     (path: string) => {
       if (streaming || !activeTabId) return;
-      void assignSessionToProjectPath(activeTabId, path);
+      void applyProjectPick({
+        path,
+        mode: "assign",
+        conversationId: activeTabId,
+      }).then((result) => {
+        if (!result.ok && result.reason === "session_not_empty") {
+          toast.error(t("chat.projectAssignBlocked"));
+        }
+      });
     },
-    [activeTabId, streaming],
+    [activeTabId, streaming, t],
   );
 
   const handleOpenFolder = useCallback(() => {
@@ -39,21 +46,14 @@ export function ProjectSelector() {
     void pickFolderAndAssignSession(activeTabId);
   }, [activeTabId, streaming]);
 
-  const handleProjectCreated = useCallback(
-    (path: string) => {
-      if (streaming || !activeTabId) return;
-      void assignSessionToProjectPath(activeTabId, path);
-    },
-    [activeTabId, streaming],
-  );
-
   return (
     <WorkbenchProjectPicker
+      pickerMode="chat-assign"
       hintLabel={streaming ? t("chat.project.locked") : label}
       disabled={streaming}
-      onPickPath={handlePickPath}
+      onPickPath={assignActiveChat}
       onOpenFolder={handleOpenFolder}
-      onProjectCreated={handleProjectCreated}
+      onProjectCreated={assignActiveChat}
     >
       <button
         type="button"

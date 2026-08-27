@@ -1478,7 +1478,9 @@ export interface ElectronAPI {
     decision: "allow" | "deny";
   }) => Promise<{ ok: boolean }>;
   agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
-  agentListSessionsByProjectId: (projectId: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
+  agentListSessionsByProjectId: (
+    args: import("../../shared/agent/api").AgentListSessionsByProjectIdArgs,
+  ) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
   agentLoadSession: (
     args: import("../../shared/agent/api").AgentLoadSessionInput,
   ) => Promise<import("../../shared/agent/api").AgentLoadSessionResult>;

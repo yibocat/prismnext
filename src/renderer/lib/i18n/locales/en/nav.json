@@ -76,6 +76,9 @@
     "openFolder": "Open Folder",
     "defaultBadge": "Default",
     "remote": "Remote",
+    "repos": "Repos",
+    "localRepos": "Local",
+    "connectSsh": "Connect via SSH…",
     "noSshHosts": "No hosts in ~/.ssh/config"
   },
   "project": {
