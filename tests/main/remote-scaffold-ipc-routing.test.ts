@@ -81,4 +81,23 @@ describe("remote scaffold / workspace IPC routing", () => {
     expect(json.id).toBe("p_keep");
     expect(json.workspace?.folders?.[0]?.name).toBe("refs");
   });
+
+  it("Host project.open adoptId overwrites a colliding workbench.json id", async () => {
+    const root = mkdtempSync(join(tmpdir(), "prism-host-adopt-"));
+    mkdirSync(join(root, ".workbench"), { recursive: true });
+    writeFileSync(
+      join(root, ".workbench", "workbench.json"),
+      `${JSON.stringify({ id: "p_local_copy" }, null, 2)}\n`,
+    );
+    const ctx = { remoteRoot: null, projectId: null, emit: () => undefined };
+    const opened = await projectHandlers["project.open"]({
+      remoteRoot: root,
+      adoptId: "p_remote_copy",
+    }, ctx) as { projectId: string };
+    expect(opened.projectId).toBe("p_remote_copy");
+    const json = JSON.parse(readFileSync(join(root, ".workbench", "workbench.json"), "utf8")) as {
+      id: string;
+    };
+    expect(json.id).toBe("p_remote_copy");
+  });
 });

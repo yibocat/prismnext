@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveSessionListStatus,
   isActiveSessionFromChatState,
+  matchesSessionStatusFilter,
 } from "../../src/renderer/lib/chat/session-status";
 
 describe("deriveSessionListStatus", () => {
@@ -68,6 +69,27 @@ describe("deriveSessionListStatus", () => {
     expect(deriveSessionListStatus({ isUnread: true }).showStatusBadge).toBe(true);
     expect(deriveSessionListStatus({ isStreaming: true }).showStatusBadge).toBe(true);
     expect(deriveSessionListStatus({}).showStatusBadge).toBe(false);
+  });
+});
+
+describe("matchesSessionStatusFilter", () => {
+  it("lets every kind through when the filter is all", () => {
+    expect(matchesSessionStatusFilter("waiting", "all")).toBe(true);
+    expect(matchesSessionStatusFilter("read", "all")).toBe(true);
+    expect(matchesSessionStatusFilter("archived", "all")).toBe(true);
+  });
+
+  it("treats stream and terminal as running", () => {
+    expect(matchesSessionStatusFilter("running-stream", "running")).toBe(true);
+    expect(matchesSessionStatusFilter("running-terminal", "running")).toBe(true);
+    expect(matchesSessionStatusFilter("waiting", "running")).toBe(false);
+  });
+
+  it("matches waiting, unread, and read exactly", () => {
+    expect(matchesSessionStatusFilter("waiting", "waiting")).toBe(true);
+    expect(matchesSessionStatusFilter("unread", "unread")).toBe(true);
+    expect(matchesSessionStatusFilter("read", "read")).toBe(true);
+    expect(matchesSessionStatusFilter("unread", "read")).toBe(false);
   });
 });
 

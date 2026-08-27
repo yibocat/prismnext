@@ -37,6 +37,9 @@ import {
   LEFT_SIDEBAR_ROW,
   LEFT_SIDEBAR_ROW_ACTION,
   LEFT_SIDEBAR_SESSION_HOVER_ACTION,
+  LEFT_SIDEBAR_SESSION_TIME,
+  LEFT_SIDEBAR_SESSION_TITLE_HOVER_PAD,
+  LEFT_SIDEBAR_SESSION_TRAILING,
   LEFT_SIDEBAR_ROW_ACTIVE,
   LEFT_SIDEBAR_ROW_HOVER,
   LEFT_SIDEBAR_SECTION_ACTION,
@@ -66,6 +69,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { CustomizeSidebarDialog } from "@/components/layout/customize-sidebar-dialog";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
+import {
+  deriveSessionListStatus,
+  matchesSessionStatusFilter,
+  type SessionStatusFilter,
+} from "@/lib/chat/session-status";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import {
   archiveSessionsForProject,
@@ -277,6 +285,25 @@ function relativeTime(ms: number, t: (key: string, opts?: Record<string, unknown
   return t("nav.sessions.daysAgo", { n: Math.floor(sec / 86400) });
 }
 
+const SESSION_STATUS_FILTERS: SessionStatusFilter[] = [
+  "all",
+  "waiting",
+  "running",
+  "unread",
+  "read",
+];
+
+function sessionStatusFilterLabel(
+  filter: SessionStatusFilter,
+  t: (key: string) => string,
+): string {
+  if (filter === "waiting") return t("nav.sessions.statusWaiting");
+  if (filter === "running") return t("nav.sessions.statusRunning");
+  if (filter === "unread") return t("nav.sessions.statusUnread");
+  if (filter === "read") return t("nav.sessions.statusRead");
+  return t("nav.sessions.statusAll");
+}
+
 export const LeftSidebar = memo(function LeftSidebar() {
   const { t } = useTranslation();
 
@@ -295,6 +322,8 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const sessionSort = useLayoutStore((s) => s.sessionSort);
   const sessionGroupBy = useLayoutStore((s) => s.sessionGroupBy);
   const setSessionGroupBy = useLayoutStore((s) => s.setSessionGroupBy);
+  const sessionStatusFilter = useLayoutStore((s) => s.sessionStatusFilter);
+  const setSessionStatusFilter = useLayoutStore((s) => s.setSessionStatusFilter);
 
   const sessionId = useChatStore((s) => s.sessionId);
   const streamingSessionKey = useChatStore(selectStreamingSessionKey);
@@ -634,6 +663,48 @@ export const LeftSidebar = memo(function LeftSidebar() {
     [archivedSessionIds, sortedSessions],
   );
 
+  const sessionMatchesStatusFilter = useCallback((s: SessionInfo) => {
+    if (sessionStatusFilter === "all") return true;
+    const sessionProjectRoot = s.projectLastPath || projectRoot;
+    const chromeEntry = sessionProjectRoot
+      ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
+      : undefined;
+    const kind = deriveSessionListStatus({
+      isActive: s.id === sessionId,
+      isWaitingPermission:
+        hasPendingPermission(pendingPermissions, s.id)
+        || pendingQuestionSessionIds.has(s.id),
+      isStreaming: streamingSessionIds.has(s.id),
+      isAiTerminalRunning: aiTerminalRunningSessionIds.has(s.id),
+      isUnread: chromeEntry?.unread === true,
+    }).kind;
+    return matchesSessionStatusFilter(kind, sessionStatusFilter);
+  }, [
+    aiTerminalRunningSessionIds,
+    pendingPermissions,
+    pendingQuestionSessionIds,
+    projectRoot,
+    sessionChromeByProject,
+    sessionId,
+    sessionStatusFilter,
+    streamingSessionIds,
+  ]);
+
+  const pinnedVisible = useMemo(
+    () => pinnedSessions.filter(sessionMatchesStatusFilter),
+    [pinnedSessions, sessionMatchesStatusFilter],
+  );
+  const updatedVisibleGroups = useMemo(
+    () =>
+      updatedSessionGroups
+        .map((group) => ({
+          ...group,
+          sessions: group.sessions.filter(sessionMatchesStatusFilter),
+        }))
+        .filter((group) => group.sessions.length > 0),
+    [sessionMatchesStatusFilter, updatedSessionGroups],
+  );
+
   const removeFromWorkbench = useCallback(async (projectId: string) => {
     const removed = members.find((member) => member.id === projectId);
     const next = await useWorkbenchStore.getState().removeProject(projectId);
@@ -747,7 +818,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
       : undefined;
     const isPinned = pinnedSessionIds.includes(s.id);
     const sessionTrailing = (
-      <span className="flex shrink-0 items-center gap-1">
+      <span className={LEFT_SIDEBAR_SESSION_TRAILING}>
         {archivedRow ? null : (
           <Hint
             label={isPinned ? t("nav.sessions.unpin") : t("nav.sessions.pin")}
@@ -844,12 +915,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             </span>
           </Hint>
         )}
-        <span
-          className={cn(
-            LEFT_SIDEBAR_SESSION_HOVER_ACTION,
-            "text-[length:var(--font-size-12)] text-muted-foreground/70 tabular-nums",
-          )}
-        >
+        <span className={LEFT_SIDEBAR_SESSION_TIME}>
           {relativeTime(s.lastModified, t)}
         </span>
       </span>
@@ -899,18 +965,21 @@ export const LeftSidebar = memo(function LeftSidebar() {
             />
           </span>
           <span className="min-w-0 flex-1 text-left">
-            <span className={cn(showProject && "flex min-w-0 items-center gap-2")}>
+            <span className="relative block min-w-0">
               <SessionTitleInline
                 title={title}
                 editing={isRenaming}
                 sessionId={s.id}
                 className={cn(
-                  showProject ? "min-w-0 flex-1 truncate" : "block truncate",
+                  "block min-w-0 truncate",
+                  archivedRow
+                    ? "group-hover/session:pr-14"
+                    : LEFT_SIDEBAR_SESSION_TITLE_HOVER_PAD,
                   chromeEntry?.unread === true && !isActive && "font-medium",
                 )}
                 onCancel={() => setRenamingSessionId(null)}
               />
-              {showProject ? sessionTrailing : null}
+              {sessionTrailing}
             </span>
             {showProject && project ? (
               <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[length:var(--font-hint)] text-muted-foreground/70">
@@ -922,7 +991,6 @@ export const LeftSidebar = memo(function LeftSidebar() {
               </span>
             ) : null}
           </span>
-          {showProject ? null : sessionTrailing}
         </button>
     );
     const trigger = (
@@ -984,17 +1052,18 @@ export const LeftSidebar = memo(function LeftSidebar() {
         )}
       >
         <span className="min-w-0 flex-1 text-left">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="relative block min-w-0">
             <SessionTitleInline
               title={title}
               editing={isRenaming}
               sessionId={s.id}
               className={cn(
-                "min-w-0 flex-1 truncate",
+                "block min-w-0 truncate group-hover/session:pr-14",
                 chromeEntry?.unread === true && !isActive && "font-medium",
               )}
               onCancel={() => setRenamingSessionId(null)}
             />
+            <span className={LEFT_SIDEBAR_SESSION_TRAILING}>
             <Hint
               label={t("nav.sessions.restoreFromArchive")}
               triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
@@ -1041,6 +1110,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 <Trash2Icon className="size-3.5" />
               </span>
             </Hint>
+            </span>
           </span>
           {project ? (
             <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[length:var(--font-hint)] text-muted-foreground/70">
@@ -1126,7 +1196,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
 
         {/* ── Scrollable workbench tree ── */}
         <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-2">
-          {!showArchived && pinnedSessions.length > 0 ? (
+          {!showArchived && pinnedVisible.length > 0 ? (
             <div className={LEFT_SIDEBAR_STACK}>
               <Hint
                 label={pinnedExpanded ? t("nav.sessions.collapsePinned") : t("nav.sessions.expandPinned")}
@@ -1151,7 +1221,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
               </button>
               </Hint>
               <LeftSidebarReveal open={pinnedExpanded}>
-                {pinnedSessions.map((s) => renderSessionItem(s, { archivedRow: false }))}
+                {pinnedVisible.map((s) => renderSessionItem(s, { archivedRow: false }))}
               </LeftSidebarReveal>
             </div>
           ) : null}
@@ -1165,7 +1235,10 @@ export const LeftSidebar = memo(function LeftSidebar() {
                   <AppMenuTrigger asChild>
                     <button
                       type="button"
-                      className={LEFT_SIDEBAR_SECTION_ACTION}
+                      className={cn(
+                        LEFT_SIDEBAR_SECTION_ACTION,
+                        sessionStatusFilter !== "all" && "text-primary",
+                      )}
                     >
                       <ListFilter className={LEFT_SIDEBAR_SECTION_ACTION_ICON} />
                     </button>
@@ -1206,9 +1279,25 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     </AppMenuSubContent>
                   </AppMenuSub>
                   <AppMenuSub>
-                    <AppMenuSubTrigger>{t("nav.sessions.status")}</AppMenuSubTrigger>
+                    <AppMenuSubTrigger
+                      trailing={
+                        <span className="text-muted-foreground">
+                          {sessionStatusFilterLabel(sessionStatusFilter, t)}
+                        </span>
+                      }
+                    >
+                      {t("nav.sessions.status")}
+                    </AppMenuSubTrigger>
                     <AppMenuSubContent>
-                      <AppMenuItem disabled>{t("nav.sessions.statusSoon")}</AppMenuItem>
+                      {SESSION_STATUS_FILTERS.map((filter) => (
+                        <AppMenuCheckItem
+                          key={filter}
+                          selected={sessionStatusFilter === filter}
+                          onClick={() => setSessionStatusFilter(filter)}
+                        >
+                          {sessionStatusFilterLabel(filter, t)}
+                        </AppMenuCheckItem>
+                      ))}
                     </AppMenuSubContent>
                   </AppMenuSub>
                   <AppMenuItem onClick={expandOrCollapseAllProjects}>
@@ -1249,16 +1338,18 @@ export const LeftSidebar = memo(function LeftSidebar() {
               </p>
             </div>
           ) : sessionGroupBy === "updated" ? (
-            updatedSessionGroups.length === 0 && pinnedSessions.length === 0 ? (
+            updatedVisibleGroups.length === 0 && pinnedVisible.length === 0 ? (
               <div className="flex flex-1 items-center justify-center px-4">
                 <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
                   <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
-                  {t("nav.sessions.noSessions")}
+                  {sessionStatusFilter === "all"
+                    ? t("nav.sessions.noSessions")
+                    : t("nav.sessions.statusEmpty")}
                 </p>
               </div>
             ) : (
               <div className="flex flex-col">
-                {updatedSessionGroups.map(({ bucket, sessions: groupSessions }, index) => (
+                {updatedVisibleGroups.map(({ bucket, sessions: groupSessions }, index) => (
                   <div
                     key={bucket}
                     className={cn(LEFT_SIDEBAR_STACK, index > 0 && LEFT_SIDEBAR_AFTER_EXPAND)}
@@ -1295,7 +1386,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     focusProjectId,
                   ),
               );
-              const visible = groupSessions.filter((s) => !archivedSessionIds.includes(s.id));
+              const visible = groupSessions.filter(
+                (s) => !archivedSessionIds.includes(s.id) && sessionMatchesStatusFilter(s),
+              );
               const activeSessionIds = groupSessions
                 .filter((s) => !archivedSessionIds.includes(s.id))
                 .map((s) => s.id);
@@ -1450,7 +1543,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     ) : visible.length === 0 ? (
                       <p className={cn(LEFT_SIDEBAR_ROW, "cursor-default text-muted-foreground/70")}>
                         <span className="min-w-0 flex-1 truncate text-left">
-                          {t("nav.workbench.emptyProject")}
+                          {sessionStatusFilter === "all"
+                            ? t("nav.workbench.emptyProject")
+                            : t("nav.sessions.statusEmpty")}
                         </span>
                       </p>
                     ) : (

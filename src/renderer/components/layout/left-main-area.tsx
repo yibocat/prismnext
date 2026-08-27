@@ -18,8 +18,8 @@ import {
   resolveSelectedModelContextTokensIfKnown,
   subscribePiModelsCatalog,
 } from "@/lib/providers";
-import { GitBranchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseRemoteAbs } from "@shared/remote";
 import { useChatFileDrop } from "@/lib/chat/use-chat-file-drop";
 import { chatFileDropZoneClass } from "@/lib/chat/chat-file-drag-overlay";
 import { ShortcutKbdChips } from "@/lib/shortcuts";
@@ -42,7 +42,7 @@ import {
 } from "@/components/modules/settings";
 import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { TeamsCenter } from "@/components/modules/teams/teams-center";
-import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
+import { ChatMessages, ChatComposer, ChatErrorBoundary, ComposerSessionLocus, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
@@ -52,7 +52,7 @@ import { executionHostLabel } from "@/lib/remote/display";
 import { useRemoteStore } from "@/stores/remote-store";
 import { selectableWorkbenchProjects, useWorkbenchStore } from "@/stores/workbench-store";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
-import { formatBranchWorktreeLabel, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
+import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
 export function LeftMainArea() {
@@ -71,7 +71,11 @@ export function LeftMainArea() {
   const currentProjectId = (activeTabId && sessionProjectIds[activeTabId]) || focusProjectId;
   const currentProject = members.find((member) => member.id === currentProjectId) ?? members[0];
   const projectDisplayName = currentProject?.displayName || t("chat.project.select");
-  const hostLabel = executionHostLabel(projectRoot, remoteHosts, t("chat.toolbar.hostLocal"));
+  const hostLabel = executionHostLabel(
+    currentProject?.lastPath || projectRoot,
+    remoteHosts,
+    t("chat.toolbar.hostLocal"),
+  );
   const showWorktreeActions = Boolean(
     activeWorktree || (projectRoot && checkoutRoot && isWorktreeCheckoutPath(checkoutRoot, projectRoot)),
   );
@@ -387,18 +391,15 @@ export function LeftMainArea() {
                 {!editorMaximized && <ChatComposer />}
               </div>
               <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
-                <span className="truncate max-w-[120px]">{projectDisplayName}</span>
-                <span className="opacity-40">·</span>
-                <span className="truncate max-w-[120px]">{hostLabel}</span>
-                {isGitRepo && (
-                  <span className="flex items-center gap-1">
-                    <GitBranchIcon className="size-3 shrink-0" />
-                    <span className="truncate max-w-[160px]">
-                      {formatBranchWorktreeLabel(displayBranch, activeWorktree?.name)}
-                    </span>
-                  </span>
-                )}
-                <span className="flex-1" />
+                <div className="@container min-w-0 flex-1 overflow-hidden">
+                  <ComposerSessionLocus
+                    isRemote={Boolean(parseRemoteAbs(currentProject?.lastPath || projectRoot || ""))}
+                    projectName={projectDisplayName}
+                    hostLabel={hostLabel}
+                    branch={isGitRepo ? displayBranch : null}
+                    worktreeName={activeWorktree?.name ?? null}
+                  />
+                </div>
                 {(contextTokens != null || contextWindowSize != null || contextCostUsd != null || sessionId) && (
                   <ContextWindowIndicator
                     used={contextTokens}

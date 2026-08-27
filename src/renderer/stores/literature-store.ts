@@ -33,6 +33,17 @@ import type {
   LiteratureSortDirection,
 } from "@/lib/literature/literature-format";
 
+function remoteLiteraturePdfError(err: unknown, fileName: string): string {
+  const code = err instanceof Error ? err.message : "";
+  if (code === "remote_literature_pdf_too_large") {
+    return `${fileName} is too large to copy to the remote host (40 MB limit)`;
+  }
+  if (code === "remote_literature_pdf_not_uploaded") {
+    return `Could not copy ${fileName} to the remote project`;
+  }
+  return err instanceof Error ? err.message : `Failed to import ${fileName}`;
+}
+
 export type LiteraturePaperPatch = Partial<
   Pick<
     LiteraturePaper,
@@ -949,7 +960,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
           } catch (err) {
             failed += 1;
             const name = pdfPath.split(/[/\\]/).pop() ?? pdfPath;
-            toast.error(err instanceof Error ? err.message : `Failed to import ${name}`);
+            toast.error(remoteLiteraturePdfError(err, name));
           }
         }
         if (batch) {

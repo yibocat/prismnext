@@ -813,7 +813,7 @@ export function ModelThoughtSelect({ compact, presentation = "default" }: ModelT
         <AppMenuContent
           ref={menuContentRef}
           align={menuAlign}
-          side="top"
+          side="bottom"
           sideOffset={6}
           collisionPadding={16}
           style={{ width: menuWidth }}

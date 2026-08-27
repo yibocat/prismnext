@@ -52,7 +52,7 @@ export function GitChangeNewLabel() {
         // "added" maps cleanly to the universal green semantic; all 5 packs
         // keep success in the green family, so this is safe to theme.
         "shrink-0 font-medium text-success",
-        "text-[length:var(--font-size-11)]",
+        gitChangeRowTextClass,
       )}
     >
       {t("git.changes.new")}
@@ -68,7 +68,7 @@ export function GitChangeDeletedLabel() {
         // "deleted" maps cleanly to the universal red semantic; destructive
         // stays red-family across all 5 packs.
         "shrink-0 font-medium text-destructive",
-        "text-[length:var(--font-size-11)]",
+        gitChangeRowTextClass,
       )}
     >
       {t("git.changes.deleted")}
@@ -94,8 +94,8 @@ export function GitChangeLineCounts({
   return (
     <span
       className={cn(
-        "font-mono tabular-nums shrink-0 flex items-center gap-0.5",
-        "text-[length:var(--font-size-11)]",
+        "inline-flex shrink-0 items-baseline gap-0.5 tabular-nums",
+        gitChangeRowTextClass,
       )}
     >
       {added > 0 && (

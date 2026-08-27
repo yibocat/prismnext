@@ -7,6 +7,7 @@ import {
   mintProjectId,
   readWorkbenchJson,
   resolveOpenFolder,
+  resolveRemoteOpenFolder,
   writeWorkbenchJson,
 } from "../../src/main/workbench/identity";
 
@@ -141,5 +142,43 @@ describe("resolveOpenFolder — five steps", () => {
       reason: "second-live-copy",
       previousId: "p_original",
     });
+  });
+});
+
+describe("resolveRemoteOpenFolder — do not steal a live local member", () => {
+  const remote = "remote://lab/home/ubuntu/test1";
+  const local = "/Users/me/Documents/test1";
+
+  it("reuses when the slot already points at this remote folder", () => {
+    expect(resolveRemoteOpenFolder({
+      absPath: remote,
+      workbenchId: "p_same",
+      slots: [{ id: "p_same", lastPath: remote }],
+      livePaths: [remote],
+    })).toEqual({ action: "reuse", id: "p_same" });
+  });
+
+  it("mints when the same workbench.json id is a live local folder", () => {
+    expect(resolveRemoteOpenFolder({
+      absPath: remote,
+      workbenchId: "p_local",
+      slots: [{ id: "p_local", lastPath: local }],
+      livePaths: [local],
+      mintId: () => "p_remote_copy",
+    })).toEqual({
+      action: "mint",
+      id: "p_remote_copy",
+      reason: "second-live-copy",
+      previousId: "p_local",
+    });
+  });
+
+  it("rebinds when the slot lastPath is dead", () => {
+    expect(resolveRemoteOpenFolder({
+      absPath: remote,
+      workbenchId: "p_moved",
+      slots: [{ id: "p_moved", lastPath: "/Volumes/old-disk/paper" }],
+      livePaths: [remote],
+    })).toEqual({ action: "rebind", id: "p_moved" });
   });
 });

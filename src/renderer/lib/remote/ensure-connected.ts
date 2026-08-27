@@ -41,6 +41,20 @@ export function isRemoteProjectOffline(
   return !remotePhaseIsReady(byProfileId[parsed.profileId]?.phase);
 }
 
+/**
+ * Lazy remote focus must not talk to a down Host. Once the Host is ready,
+ * skip is false even when the caller passed `connectRemote: false` — otherwise
+ * the file tree, Workspace folders, TeX manuscript, and library stay empty
+ * until the user hits Refresh.
+ */
+export function shouldSkipRemoteHostBind(
+  lastPath: string,
+  connectRemote?: boolean,
+): boolean {
+  if (connectRemote !== false) return false;
+  return remoteFocusNeedsBind(lastPath);
+}
+
 export function remotePhaseIsBusy(phase: RemoteConnectionState["phase"] | undefined): boolean {
   return phase === "connecting" || phase === "bootstrapping" || phase === "reconnecting";
 }

@@ -28,13 +28,7 @@ import {
   type WorkspaceFolder,
 } from "@/types/workspace";
 import { WorkspaceFolderIconPicker } from "./workspace-folder-icon-picker";
-import {
-  applyTemplateFolderPatch,
-  validateNewTemplateFolder,
-  validateTemplateFolderPatch,
-} from "@/lib/settings/workspace-template";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
-import { useSettingsStore } from "@/stores/settings-store";
 import { closeSettingsPanel } from "@/stores/settings-panel-store";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -51,25 +45,21 @@ import { SettingsFormField } from "./settings-form-field";
 
 import type { SettingsPanelSlot } from "@/lib/settings/settings-panel-slots";
 
-type DocClass = "article" | "report" | "book";
-
 interface FormState {
   function: FolderFunction;
   name: string;
   description: string;
   icon: string;
   mainTex: string;
-  defaultDocClass: DocClass;
 }
 
-function folderToForm(folder: WorkspaceFolder, defaultDocClass: DocClass): FormState {
+function folderToForm(folder: WorkspaceFolder): FormState {
   return {
     function: folder.function,
     name: folder.name,
     description: folder.description ?? "",
     icon: folder.icon ?? "",
     mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
-    defaultDocClass,
   };
 }
 
@@ -78,7 +68,7 @@ function defaultDescriptionForFunction(func: FolderFunction, t: (key: string) =>
   return t(`settings.editor.workspaceFolder.functionDesc.${func}`);
 }
 
-function emptyForm(func: FolderFunction = "notebook", defaultDocClass: DocClass = "article"): FormState {
+function emptyForm(func: FolderFunction = "notebook"): FormState {
   const folder = createDefaultFolder("", func);
   return {
     function: func,
@@ -86,7 +76,6 @@ function emptyForm(func: FolderFunction = "notebook", defaultDocClass: DocClass 
     description: "",
     icon: "",
     mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
-    defaultDocClass,
   };
 }
 
@@ -103,48 +92,34 @@ export function WorkspaceFolderEditor({
   const updateProjectFolder = useWorkspaceConfigStore((s) => s.updateFolder);
   const removeProjectFolder = useWorkspaceConfigStore((s) => s.removeFolder);
 
-  const settings = useSettingsStore((s) => s.settings);
-  const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const templateDirs = settings.defaultWorkspaceDirs ?? [];
-  const templateDocClass = (settings.defaultDocClass ?? "article") as DocClass;
-
   const editIndex = slot.mode === "edit" ? slot.index : null;
-
-  const sourceDirs = slot.scope === "project" ? projectDirs : templateDirs;
   const existing =
-    slot.mode === "edit" && editIndex !== null ? sourceDirs[editIndex] : null;
+    slot.mode === "edit" && editIndex !== null ? projectDirs[editIndex] : null;
 
   const [form, setForm] = useState<FormState>(() =>
-    existing ? folderToForm(existing, templateDocClass) : emptyForm("notebook", templateDocClass),
+    existing ? folderToForm(existing) : emptyForm(),
   );
 
   useEffect(() => {
     if (slot.mode === "edit" && existing) {
-      setForm(folderToForm(existing, templateDocClass));
+      setForm(folderToForm(existing));
     } else if (slot.mode === "new") {
-      setForm(emptyForm("notebook", templateDocClass));
+      setForm(emptyForm());
     }
     setDeleteDialogOpen(false);
-  }, [slot.mode, editIndex, slot.scope, existing?.name, existing?.function, templateDocClass]);
-
-  const showTemplateDocClass = slot.scope === "template" && form.function === "manuscript";
+  }, [slot.mode, editIndex, existing?.name, existing?.function]);
 
   const hasManuscript = useMemo(
     () =>
-      sourceDirs.some(
+      projectDirs.some(
         (d, i) => d.function === "manuscript" && (slot.mode === "new" || i !== editIndex),
       ),
-    [sourceDirs, slot.mode, editIndex],
+    [projectDirs, slot.mode, editIndex],
   );
 
   const isOnlyManuscript =
     existing?.function === "manuscript" &&
-    sourceDirs.filter((d) => d.function === "manuscript").length === 1;
-
-  const scopeLabel =
-    slot.scope === "project"
-      ? t("settings.editor.workspaceFolder.scopeThis")
-      : t("settings.editor.workspaceFolder.scopeTemplate");
+    projectDirs.filter((d) => d.function === "manuscript").length === 1;
 
   const patchFromForm = (): Partial<WorkspaceFolder> => {
     const iconTrim = form.icon.trim();
@@ -163,67 +138,29 @@ export function WorkspaceFolderEditor({
   };
 
   const save = () => {
-    if (slot.scope === "project") {
-      if (slot.mode === "new") {
-        const err = addProjectFolder(form.function, form.name.trim());
-        if (err) {
-          toast.error(err);
-          return;
-        }
-        const idx = useWorkspaceConfigStore.getState().workspaceDirs.length - 1;
-        const patch: Partial<WorkspaceFolder> = {};
-        if (form.description.trim()) patch.description = form.description.trim();
-        if (form.icon.trim()) patch.icon = form.icon.trim();
-        if (form.function === "manuscript") {
-          (patch as { mainTex?: string }).mainTex = form.mainTex.trim() || "main.tex";
-        }
-        if (Object.keys(patch).length > 0) {
-          const patchErr = updateProjectFolder(idx, patch);
-          if (patchErr) toast.error(patchErr);
-        }
-      } else if (editIndex !== null) {
-        const err = updateProjectFolder(editIndex, patchFromForm());
-        if (err) {
-          toast.error(err);
-          return;
-        }
+    if (slot.mode === "new") {
+      const err = addProjectFolder(form.function, form.name.trim());
+      if (err) {
+        toast.error(err);
+        return;
       }
-    } else {
-      const dirs = [...templateDirs];
-      const templateSettings: { defaultWorkspaceDirs: WorkspaceFolder[]; defaultDocClass?: DocClass } =
-        { defaultWorkspaceDirs: dirs };
-
-      if (slot.mode === "new") {
-        const err = validateNewTemplateFolder(dirs, form.function, form.name);
-        if (err) {
-          toast.error(err);
-          return;
-        }
-        const entry = createDefaultFolder(form.name.trim(), form.function);
-        let next: WorkspaceFolder = entry;
-        if (form.description.trim()) next = { ...next, description: form.description.trim() };
-        if (form.icon.trim()) next = { ...next, icon: form.icon.trim() };
-        if (next.function === "manuscript") {
-          next = { ...next, mainTex: form.mainTex.trim() || "main.tex" };
-          templateSettings.defaultDocClass = form.defaultDocClass;
-        }
-        templateSettings.defaultWorkspaceDirs = [...dirs, next];
-      } else if (editIndex !== null) {
-        const err = validateTemplateFolderPatch(dirs, editIndex, patchFromForm());
-        if (err) {
-          toast.error(err);
-          return;
-        }
-        templateSettings.defaultWorkspaceDirs = applyTemplateFolderPatch(
-          dirs,
-          editIndex,
-          patchFromForm(),
-        );
-        if (form.function === "manuscript") {
-          templateSettings.defaultDocClass = form.defaultDocClass;
-        }
+      const idx = useWorkspaceConfigStore.getState().workspaceDirs.length - 1;
+      const patch: Partial<WorkspaceFolder> = {};
+      if (form.description.trim()) patch.description = form.description.trim();
+      if (form.icon.trim()) patch.icon = form.icon.trim();
+      if (form.function === "manuscript") {
+        (patch as { mainTex?: string }).mainTex = form.mainTex.trim() || "main.tex";
       }
-      updateSettings(templateSettings);
+      if (Object.keys(patch).length > 0) {
+        const patchErr = updateProjectFolder(idx, patch);
+        if (patchErr) toast.error(patchErr);
+      }
+    } else if (editIndex !== null) {
+      const err = updateProjectFolder(editIndex, patchFromForm());
+      if (err) {
+        toast.error(err);
+        return;
+      }
     }
     toast.success(slot.mode === "new" ? t("settings.workspace.toast.folderAdded") : t("settings.workspace.toast.folderSaved"));
     closePanel();
@@ -232,13 +169,7 @@ export function WorkspaceFolderEditor({
   const remove = () => {
     if (slot.mode !== "edit" || editIndex === null) return;
     setDeleteDialogOpen(false);
-    if (slot.scope === "project") {
-      removeProjectFolder(editIndex);
-    } else {
-      updateSettings({
-        defaultWorkspaceDirs: templateDirs.filter((_, i) => i !== editIndex),
-      });
-    }
+    removeProjectFolder(editIndex);
     toast.success(t("settings.workspace.toast.folderRemoved"));
     closePanel();
   };
@@ -247,7 +178,7 @@ export function WorkspaceFolderEditor({
     <div className="flex-1 overflow-auto">
       <div className={SETTINGS_DETAIL_SHELL}>
         <p className={SETTINGS_ROW_DESC}>
-          {scopeLabel}. {t("settings.editor.workspaceFolder.intro")}
+          {t("settings.editor.workspaceFolder.scopeThis")}. {t("settings.editor.workspaceFolder.intro")}
         </p>
 
         <div className={SETTINGS_DETAIL_SECTION}>
@@ -327,36 +258,6 @@ export function WorkspaceFolderEditor({
               </SettingsFormField>
             ) : null}
 
-            {showTemplateDocClass ? (
-              <SettingsFormField
-                label={t("settings.workspace.folderEditor.docClass")}
-                htmlFor="ws-doc-class"
-                description={t("settings.workspace.folderEditor.docClassDesc")}
-              >
-                <AppSelect
-                  value={form.defaultDocClass}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, defaultDocClass: v as DocClass }))
-                  }
-                >
-                  <AppSelectTrigger id="ws-doc-class" variant="dialog" className="w-full">
-                    <AppSelectValue />
-                  </AppSelectTrigger>
-                  <AppSelectContent>
-                    <AppSelectItem value="article">
-                      {t("settings.workspace.folderEditor.article")}
-                    </AppSelectItem>
-                    <AppSelectItem value="report">
-                      {t("settings.workspace.folderEditor.report")}
-                    </AppSelectItem>
-                    <AppSelectItem value="book">
-                      {t("settings.workspace.folderEditor.book")}
-                    </AppSelectItem>
-                  </AppSelectContent>
-                </AppSelect>
-              </SettingsFormField>
-            ) : null}
-
             <SettingsFormField
               label={t("settings.workspace.folderEditor.description")}
               htmlFor="ws-folder-desc"
@@ -424,12 +325,9 @@ export function WorkspaceFolderEditor({
           <DialogHeader>
             <DialogTitle>{t("settings.workspace.folderEditor.removeTitle")}</DialogTitle>
             <DialogDescription>
-              {t(
-                slot.scope === "project"
-                  ? "settings.workspace.folderEditor.removeDescProject"
-                  : "settings.workspace.folderEditor.removeDescTemplate",
-                { name: existing?.name || "" },
-              )}
+              {t("settings.workspace.folderEditor.removeDescProject", {
+                name: existing?.name || "",
+              })}
               {isOnlyManuscript ? (
                 <>
                   {" "}

@@ -41,9 +41,12 @@ import {
 } from "./home";
 import {
   ensureWorkbenchId,
+  mintProjectId,
   readWorkbenchJson,
   resolveOpenFolder,
+  resolveRemoteOpenFolder,
   writeWorkbenchJson,
+  type OpenFolderDecision,
   type WorkbenchSlot,
 } from "./identity";
 import { scaffoldWorkbenchProject } from "./scaffold";
@@ -250,6 +253,32 @@ function liveMemberPaths(opts?: DefaultProjectOpts): string[] {
     .filter((lastPath) => existsSync(lastPath));
 }
 
+function liveIdentityPaths(opts?: DefaultProjectOpts): string[] {
+  return listProjectSlots(opts)
+    .map((slot) => slot.lastPath)
+    .filter((lastPath) => isRemoteProjectRoot(lastPath) || existsSync(lastPath));
+}
+
+/**
+ * Host `project.open` reuses `.workbench/workbench.json` id. A copied folder
+ * can share that id with a live local (or other remote) member — do not steal.
+ */
+export function decideRemoteWorkbenchIdentity(
+  input: { projectId: string; lastPath: string },
+  opts?: DefaultProjectOpts,
+): OpenFolderDecision {
+  if (!isRemoteProjectRoot(input.lastPath)) {
+    throw new Error("not_a_remote_project_root");
+  }
+  return resolveRemoteOpenFolder({
+    absPath: input.lastPath,
+    workbenchId: input.projectId,
+    slots: listProjectSlots(opts),
+    livePaths: liveIdentityPaths(opts),
+    mintId: mintProjectId,
+  });
+}
+
 export function registerRemoteWorkbenchProject(
   input: { projectId: string; lastPath: string; displayName?: string },
   opts?: DefaultProjectOpts,
@@ -257,9 +286,13 @@ export function registerRemoteWorkbenchProject(
   if (!isRemoteProjectRoot(input.lastPath)) {
     throw new Error("not_a_remote_project_root");
   }
-  rememberMember(input.projectId, input.lastPath, opts);
+  const decision = decideRemoteWorkbenchIdentity(input, opts);
+  if (decision.id !== input.projectId) {
+    throw new Error("remote_id_conflicts_with_live_member");
+  }
+  rememberMember(decision.id, input.lastPath, opts);
   if (input.displayName?.trim()) {
-    writeProjectSlotMeta(input.projectId, {
+    writeProjectSlotMeta(decision.id, {
       lastPath: input.lastPath,
       displayName: input.displayName.trim(),
     }, opts);

@@ -4,5 +4,6 @@ export { RestoreUndoBar } from "./restore-undo-bar";
 export { PermissionGatePanel, usePermissionGateOpen, shouldShowPermissionGate } from "./permission-gate-panel";
 export { ChatErrorBoundary } from "./error-boundary";
 export { ContextWindowIndicator } from "./context-window-indicator";
+export { ComposerSessionLocus } from "./composer-session-locus";
 export { AiBar } from "./ai-bar";
 

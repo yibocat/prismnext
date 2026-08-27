@@ -354,7 +354,7 @@
   },
   "workspace": {
     "title": "工作區",
-    "subtitle": "面向 AI Agent 與新建專案的資料夾佈局。",
+    "subtitle": "當前專案裡給 AI Agent 用的功能資料夾佈局。",
     "thisProject": "當前專案",
     "newProjectTemplate": "新建專案模板",
     "tabProject": "當前專案",
@@ -370,7 +370,7 @@
       "folderRemoved": "已從配置中移除資料夾。"
     },
     "loading": "正在載入工作區配置…",
-    "openProjectHint": "開啟專案以編輯即時工作區。你仍可在下方配置新建專案模板。",
+    "openProjectHint": "開啟專案以編輯其功能資料夾。",
     "templateDesc": "僅在建立新專案時使用 — 不會應用到已開啟的專案。",
     "initGit": "預設初始化 Git",
     "initGitDesc": "新建專案對話方塊預設開啟 Git。建立時仍可關閉。",

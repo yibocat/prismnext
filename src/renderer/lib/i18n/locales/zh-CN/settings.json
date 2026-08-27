@@ -354,7 +354,7 @@
   },
   "workspace": {
     "title": "工作区",
-    "subtitle": "面向 AI Agent 与新建项目的文件夹布局。",
+    "subtitle": "当前项目里给 AI Agent 用的功能文件夹布局。",
     "thisProject": "当前项目",
     "newProjectTemplate": "新建项目模板",
     "tabProject": "当前项目",
@@ -370,7 +370,7 @@
       "folderRemoved": "已从配置中移除文件夹。"
     },
     "loading": "正在加载工作区配置…",
-    "openProjectHint": "打开项目以编辑实时工作区。你仍可在下方配置新建项目模板。",
+    "openProjectHint": "打开项目以编辑其功能文件夹。",
     "templateDesc": "仅在创建新项目时使用 — 不会应用到已打开的项目。",
     "initGit": "默认初始化 Git",
     "initGitDesc": "新建项目对话框默认开启 Git。创建时仍可关闭。",

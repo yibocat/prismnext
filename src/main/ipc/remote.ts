@@ -17,7 +17,10 @@ import { getSshProfile, listSshProfiles } from "../remote/profiles";
 import { loadUserSshConfigHosts } from "../remote/ssh-config";
 import { readDesktopModelSeed } from "../app/settings";
 import { RemoteSessionBroker } from "../remote/session-broker";
-import { registerRemoteWorkbenchProject } from "../workbench/default-project";
+import {
+  decideRemoteWorkbenchIdentity,
+  registerRemoteWorkbenchProject,
+} from "../workbench/default-project";
 import {
   cancelRemoteSync,
   syncRemoteExperimentArtifacts,
@@ -145,12 +148,21 @@ export function registerRemoteHandlers(): void {
       }
       const opened = await current.openProject(args.profileId, remoteRoot);
       const displayName = opened.remoteRoot.split("/").filter(Boolean).at(-1) || args.profileId;
-      registerRemoteWorkbenchProject({
+      const decision = decideRemoteWorkbenchIdentity({
         projectId: opened.projectId,
+        lastPath: opened.lastPath,
+      });
+      let projectId = decision.id;
+      if (decision.action === "mint" && decision.reason === "second-live-copy") {
+        const adopted = await current.openProject(args.profileId, remoteRoot, { adoptId: projectId });
+        projectId = adopted.projectId;
+      }
+      registerRemoteWorkbenchProject({
+        projectId,
         lastPath: opened.lastPath,
         displayName,
       });
-      return opened;
+      return { ...opened, projectId };
     },
   );
 

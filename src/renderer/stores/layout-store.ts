@@ -8,6 +8,7 @@ import {
   RIGHT_AREA_DEFAULT,
   SIDEBAR_RIGHT_DEFAULT,
 } from "@/styles/constants";
+import type { SessionStatusFilter } from "@/lib/chat/session-status";
 
 /** App mode — "all", "manuscript", "chat", or any project subdirectory name. */
 export type AppMode = string;
@@ -150,6 +151,9 @@ interface LayoutState {
 
   sessionGroupBy: "workbench" | "updated";
   setSessionGroupBy: (groupBy: "workbench" | "updated") => void;
+
+  sessionStatusFilter: SessionStatusFilter;
+  setSessionStatusFilter: (filter: SessionStatusFilter) => void;
 
   archivedSessionIds: string[];
   showArchived: boolean;
@@ -329,6 +333,8 @@ export const useLayoutStore = create<LayoutState>()(
       setSessionSort: (sessionSort) => set({ sessionSort }),
       sessionGroupBy: "workbench",
       setSessionGroupBy: (sessionGroupBy) => set({ sessionGroupBy }),
+      sessionStatusFilter: "all",
+      setSessionStatusFilter: (sessionStatusFilter) => set({ sessionStatusFilter }),
 
       modeEditorTabs: {
         all: [],
@@ -407,6 +413,7 @@ export const useLayoutStore = create<LayoutState>()(
         settingsDetailWidth: state.settingsDetailWidth,
         sessionSort: state.sessionSort,
         sessionGroupBy: state.sessionGroupBy,
+        sessionStatusFilter: state.sessionStatusFilter,
         pinnedExpanded: state.pinnedExpanded,
         expandedWorkbenchProjectIds: state.expandedWorkbenchProjectIds,
         expandedFileTreeFolders: state.expandedFileTreeFolders,

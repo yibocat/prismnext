@@ -18,7 +18,9 @@ import {
   remoteConnectionPhaseForRoot,
 } from "@/lib/remote/display";
 import { cn } from "@/lib/utils";
+import { useChatStore } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { lastPathForSessionIn, useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
 import {
   CHAT_PANEL_TOOLBAR_BUTTON,
@@ -26,6 +28,13 @@ import {
   useWorktreeHostSuffix,
   WorktreeHostMenuSection,
 } from "./worktree-selector";
+
+function useComposerProjectRoot(): string | null {
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const sessionRoot = useWorkbenchStore((s) => lastPathForSessionIn(s, activeTabId));
+  const focusRoot = useDocumentStore((s) => s.projectRoot);
+  return sessionRoot || focusRoot;
+}
 
 function hostDotClass(phase: string | null): string {
   if (phase === "ready") return "bg-success";
@@ -43,7 +52,7 @@ function hostDotClass(phase: string | null): string {
 
 export function RemoteOneClickConnectButton() {
   const { t } = useTranslation();
-  const root = useDocumentStore((s) => s.projectRoot);
+  const root = useComposerProjectRoot();
   const byProfileId = useRemoteStore((s) => s.byProfileId);
   const openConnectDialog = useRemoteStore((s) => s.openConnectDialog);
   const parsed = parseRemoteAbs(root ?? "");
@@ -67,7 +76,7 @@ export function RemoteOneClickConnectButton() {
 
 export function ExecutionHostSelector() {
   const { t } = useTranslation();
-  const root = useDocumentStore((s) => s.projectRoot);
+  const root = useComposerProjectRoot();
   const hosts = useRemoteStore((s) => s.hosts);
   const byProfileId = useRemoteStore((s) => s.byProfileId);
   const openConnectDialog = useRemoteStore((s) => s.openConnectDialog);

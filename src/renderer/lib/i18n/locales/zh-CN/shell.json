@@ -106,6 +106,8 @@
     "connecting": "连接中…",
     "running": "运行中",
     "stopped": "已停止",
+    "thisComputer": "本机",
+    "connection": "连接",
     "remote": "主机",
     "remoteConnected": "已连接",
     "remoteConnecting": "连接中…",

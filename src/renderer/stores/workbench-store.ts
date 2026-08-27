@@ -242,13 +242,23 @@ export function resolveSessionProjectMeta(
   };
 }
 
-export function lastPathForSession(conversationId: string): string | null {
-  const state = useWorkbenchStore.getState();
-  const projectId = state.sessionProjectIds[conversationId];
+export function lastPathForSessionIn(
+  state: {
+    sessionProjectIds: Record<string, string>;
+    members: WorkbenchProjectMember[];
+    projectDirectoryById?: ProjectDirectoryIndex;
+  },
+  conversationId: string | null | undefined,
+): string | null {
+  const projectId = conversationId?.trim() ? state.sessionProjectIds[conversationId.trim()] : "";
   if (!projectId) return null;
   return state.members.find((member) => member.id === projectId)?.lastPath
     ?? state.projectDirectoryById?.[projectId]?.lastPath
     ?? null;
+}
+
+export function lastPathForSession(conversationId: string): string | null {
+  return lastPathForSessionIn(useWorkbenchStore.getState(), conversationId);
 }
 
 export function projectRootForSession(

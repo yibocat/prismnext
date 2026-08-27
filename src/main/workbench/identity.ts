@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { isRemoteProjectRoot } from "../../shared/remote";
+import { isRemoteProjectRoot, recoverRemoteAbs } from "../../shared/remote";
 import { workbenchJsonRel, normalizeWorkbenchPath } from "../../shared/workbench/paths";
 
 const ID_HEX_BYTES = 10;
@@ -126,6 +126,51 @@ export function resolveOpenFolder(input: ResolveOpenFolderInput): OpenFolderDeci
   }
 
   const live = liveSet(input.livePaths);
+  if (!last || !live.has(last)) {
+    return { action: "rebind", id: diskId };
+  }
+
+  return {
+    action: "mint",
+    id: mint(),
+    reason: "second-live-copy",
+    previousId: diskId,
+  };
+}
+
+function canonicalMemberPath(path: string): string {
+  const remote = recoverRemoteAbs(path);
+  if (remote) return remote;
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+/**
+ * Same five steps as `resolveOpenFolder`, but lastPath may be `remote://`.
+ * Do not `path.resolve` those URIs — they collapse into a laptop folder.
+ */
+export function resolveRemoteOpenFolder(input: ResolveOpenFolderInput): OpenFolderDecision {
+  const here = recoverRemoteAbs(input.absPath);
+  if (!here) {
+    throw new Error("not_a_remote_project_root");
+  }
+  const mint = input.mintId ?? mintProjectId;
+  const diskId = input.workbenchId?.trim() || null;
+
+  if (!diskId) {
+    return { action: "mint", id: mint(), reason: "no-json" };
+  }
+
+  const slot = input.slots.find((s) => s.id === diskId);
+  if (!slot) {
+    return { action: "create-slot", id: diskId };
+  }
+
+  const last = slot.lastPath?.trim() ? canonicalMemberPath(slot.lastPath) : "";
+  if (last && last === here) {
+    return { action: "reuse", id: diskId };
+  }
+
+  const live = new Set([...input.livePaths].map((p) => canonicalMemberPath(p)));
   if (!last || !live.has(last)) {
     return { action: "rebind", id: diskId };
   }

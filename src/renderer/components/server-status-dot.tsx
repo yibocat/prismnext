@@ -5,7 +5,16 @@ import {
   HoverCardTrigger,
   HoverCardContent,
 } from "@/components/ui/hover-card";
-import { CircleIcon, DownloadIcon, FileTypeIcon, ServerIcon, SparklesIcon, TerminalIcon } from "lucide-react";
+import {
+  ChevronRight,
+  CircleIcon,
+  DownloadIcon,
+  FileTypeIcon,
+  LaptopIcon,
+  ServerIcon,
+  SparklesIcon,
+  TerminalIcon,
+} from "lucide-react";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { compileDesktop } from "@/lib/desktop-api/compile";
 import { useCompileStore, type CompilerStatus } from "@/stores/compile-store";
@@ -43,6 +52,14 @@ const AGENT_COLORS: Record<AgentLifecyclePhase, string> = {
   stopped: "text-destructive",
 };
 
+function StatusIcon({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex size-3 shrink-0 items-center justify-center [&>svg]:block">
+      {children}
+    </span>
+  );
+}
+
 function StatusRow({
   label,
   detail,
@@ -55,14 +72,51 @@ function StatusRow({
   detailClassName?: string;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      {icon}
-      <span className="text-[length:var(--font-hint)] text-muted-foreground flex-1 min-w-0 truncate">
+    <div className="flex h-5 items-center gap-2">
+      <StatusIcon>{icon}</StatusIcon>
+      <span className="min-w-0 flex-1 truncate text-[length:var(--font-hint)] leading-none text-muted-foreground">
         {label}
       </span>
-      <span className={`text-[length:var(--font-hint)] text-muted-foreground/60 tabular-nums text-right max-w-[11rem] truncate ${detailClassName ?? ""}`}>
+      <span className={`max-w-[11rem] truncate text-right text-[length:var(--font-hint)] leading-none text-muted-foreground/60 tabular-nums ${detailClassName ?? ""}`}>
         {detail}
       </span>
+    </div>
+  );
+}
+
+function HostAccordionRow({
+  hostId,
+  label,
+  icon,
+  expanded,
+  onToggle,
+  children,
+}: {
+  hostId: string;
+  label: string;
+  icon: React.ReactNode;
+  expanded: boolean;
+  onToggle: (hostId: string) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        className="flex h-5 w-full items-center gap-2 text-left"
+        onClick={() => onToggle(hostId)}
+      >
+        <StatusIcon>{icon}</StatusIcon>
+        <span className="min-w-0 flex-1 truncate text-[length:var(--font-hint)] leading-none">
+          {label}
+        </span>
+        <ChevronRight
+          className={`size-3 shrink-0 text-muted-foreground/50 transition-transform ${
+            expanded ? "rotate-90" : ""
+          }`}
+        />
+      </button>
+      {expanded ? <div className="space-y-2">{children}</div> : null}
     </div>
   );
 }
@@ -76,7 +130,7 @@ function remoteIconClass(phase: AgentLifecyclePhase): string {
 
 /**
  * App-level status. Outer dot = local Agent, or the worst remote Host.
- * Git / folder / session facts live on the session hover card.
+ * Hover lists hosts; click a host to expand Agent / connection / LaTeX.
  */
 export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) {
   const { t } = useTranslation();
@@ -110,6 +164,7 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
     projectWarmError: null,
   });
   const [retrying, setRetrying] = useState(false);
+  const [expandedHostId, setExpandedHostId] = useState<string | null>(null);
   const [remoteLatex, setRemoteLatex] = useState<Record<string, CompilerStatus | null>>({});
   const compilerStatus = useCompileStore((s) => s.compilerStatus);
   const autoCompile = useCompileStore((s) => s.autoCompile);
@@ -210,7 +265,6 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
       : t("shell.status.latexReady", { backend });
   };
   const localLatexDetail = latexDetailOf(compilerStatus);
-  const showLatexWhere = remoteRows.length > 0;
 
   const agentDetail =
     agent.phase === "starting"
@@ -255,6 +309,10 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
     || agent.phase === "stopped"
     || warmPhase === "error";
 
+  const toggleHost = (hostId: string) => {
+    setExpandedHostId((current) => (current === hostId ? null : hostId));
+  };
+
   const dotPhase = appStatusDotPhase(remoteRows, agent.phase);
 
   const glyph = (
@@ -295,129 +353,135 @@ export function ServerStatusDot({ layer = "hit" }: { layer?: "paint" | "hit" }) 
           {glyph}
         </button>
       </HoverCardTrigger>
-      <HoverCardContent side="bottom" align="start" className="w-56 p-3">
+      <HoverCardContent side="bottom" align="start" className="w-64 p-3">
         <div className="space-y-2">
-          {remoteRows.map((row) => {
-            const phase = remotePhaseToDot(row.phase);
-            return (
-              <StatusRow
-                key={row.profileId}
-                label={row.hostname}
-                detail={t(remoteConnectionDetailKey(row.phase))}
-                icon={<ServerIcon className={`size-3 shrink-0 ${remoteIconClass(phase)}`} />}
-              />
-            );
-          })}
-          <StatusRow
-            label={t("shell.status.agent")}
-            detail={agentDetail}
-            icon={
-              <CircleIcon
-                className={`size-2.5 shrink-0 fill-current ${AGENT_COLORS[agent.phase]}`}
-              />
-            }
-          />
-          {agent.phase === "error" && agent.error ? (
-            <p className="text-[length:var(--font-hint)] text-destructive/80 leading-snug pl-4">
-              {agent.error}
-            </p>
-          ) : null}
-          {projectWarmDetail ? (
+          <HostAccordionRow
+            hostId="local"
+            label={t("shell.status.thisComputer")}
+            icon={<LaptopIcon className="size-3 shrink-0 text-muted-foreground" />}
+            expanded={expandedHostId === "local"}
+            onToggle={toggleHost}
+          >
             <StatusRow
-              label={t("shell.status.projectWarm")}
-              detail={projectWarmDetail}
+              label={t("shell.status.agent")}
+              detail={agentDetail}
               icon={
                 <CircleIcon
-                  className={`size-2.5 shrink-0 fill-current ${projectWarmColor}`}
+                  className={`size-2.5 shrink-0 fill-current ${AGENT_COLORS[agent.phase]}`}
                 />
               }
             />
-          ) : null}
-          {warmPhase === "error" && agent.projectWarmError ? (
-            <p className="text-[length:var(--font-hint)] text-destructive/80 leading-snug pl-4">
-              {agent.projectWarmError}
-            </p>
-          ) : null}
-          <StatusRow
-            label={t("shell.status.latex")}
-            detail={
-              showLatexWhere
-                ? t("shell.status.latexLocal", { detail: localLatexDetail })
-                : localLatexDetail
-            }
-            icon={
-              <FileTypeIcon
-                className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(compilerStatus))}`}
-              />
-            }
-          />
-          {remoteRows.filter((row) => row.phase === "ready").map((row) => {
-            const status = remoteLatex[row.profileId];
-            return (
+            {agent.phase === "error" && agent.error ? (
+              <p className="text-[length:var(--font-hint)] text-destructive/80 leading-snug">
+                {agent.error}
+              </p>
+            ) : null}
+            {projectWarmDetail ? (
               <StatusRow
-                key={`latex-${row.profileId}`}
-                label={t("shell.status.latex")}
-                detail={t("shell.status.latexRemote", {
-                  host: row.hostname,
-                  detail: latexDetailOf(status),
-                })}
+                label={t("shell.status.projectWarm")}
+                detail={projectWarmDetail}
                 icon={
-                  <FileTypeIcon
-                    className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(status))}`}
+                  <CircleIcon
+                    className={`size-2.5 shrink-0 fill-current ${projectWarmColor}`}
                   />
                 }
               />
-            );
-          })}
-          {update.visible ? (
+            ) : null}
+            {warmPhase === "error" && agent.projectWarmError ? (
+              <p className="text-[length:var(--font-hint)] text-destructive/80 leading-snug">
+                {agent.projectWarmError}
+              </p>
+            ) : null}
             <StatusRow
-              label={t("shell.status.update")}
-              detail={
-                update.readyToInstall
-                  ? t("shell.status.updateReady")
-                  : update.downloading
-                    ? t("shell.status.updateDownloading")
-                    : t("shell.status.updateAvailable", {
-                        version: update.latestVersion ?? "",
-                      })
-              }
-              icon={<DownloadIcon className="size-3 shrink-0 text-primary" />}
-            />
-          ) : null}
-          {showAiTerminal ? (
-            <StatusRow
-              label={t("shell.status.aiTerminal")}
-              detail={aiTerminalDetail}
+              label={t("shell.status.latex")}
+              detail={localLatexDetail}
               icon={
-                <SparklesIcon
-                  className={`size-3 shrink-0 ${
-                    activity.aiRunning > 0
-                      ? "text-warning"
-                      : "text-muted-foreground/60"
-                  }`}
+                <FileTypeIcon
+                  className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(compilerStatus))}`}
                 />
               }
             />
-          ) : null}
-          {showUserTerminal ? (
-            <StatusRow
-              label={t("shell.status.terminal")}
-              detail={t("shell.status.terminalBusy", { count: activity.userBusy })}
-              icon={<TerminalIcon className="size-3 shrink-0 text-warning" />}
-            />
-          ) : null}
-          {showRetry ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full h-7 mt-1 text-[length:var(--font-hint)]"
-              disabled={retrying}
-              onClick={() => void onRetry()}
-            >
-              {retrying ? t("shell.status.retrying") : t("shell.status.retry")}
-            </Button>
-          ) : null}
+            {update.visible ? (
+              <StatusRow
+                label={t("shell.status.update")}
+                detail={
+                  update.readyToInstall
+                    ? t("shell.status.updateReady")
+                    : update.downloading
+                      ? t("shell.status.updateDownloading")
+                      : t("shell.status.updateAvailable", {
+                          version: update.latestVersion ?? "",
+                        })
+                }
+                icon={<DownloadIcon className="size-3 shrink-0 text-primary" />}
+              />
+            ) : null}
+            {showAiTerminal ? (
+              <StatusRow
+                label={t("shell.status.aiTerminal")}
+                detail={aiTerminalDetail}
+                icon={
+                  <SparklesIcon
+                    className={`size-3 shrink-0 ${
+                      activity.aiRunning > 0
+                        ? "text-warning"
+                        : "text-muted-foreground/60"
+                    }`}
+                  />
+                }
+              />
+            ) : null}
+            {showUserTerminal ? (
+              <StatusRow
+                label={t("shell.status.terminal")}
+                detail={t("shell.status.terminalBusy", { count: activity.userBusy })}
+                icon={<TerminalIcon className="size-3 shrink-0 text-warning" />}
+              />
+            ) : null}
+            {showRetry ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full h-7 mt-1 text-[length:var(--font-hint)]"
+                disabled={retrying}
+                onClick={() => void onRetry()}
+              >
+                {retrying ? t("shell.status.retrying") : t("shell.status.retry")}
+              </Button>
+            ) : null}
+          </HostAccordionRow>
+          {remoteRows.map((row) => {
+            const phase = remotePhaseToDot(row.phase);
+            const status = remoteLatex[row.profileId];
+            return (
+              <HostAccordionRow
+                key={row.profileId}
+                hostId={row.profileId}
+                label={row.hostname}
+                icon={<ServerIcon className={`size-3 shrink-0 ${remoteIconClass(phase)}`} />}
+                expanded={expandedHostId === row.profileId}
+                onToggle={toggleHost}
+              >
+                <StatusRow
+                  label={t("shell.status.connection")}
+                  detail={t(remoteConnectionDetailKey(row.phase))}
+                  icon={<ServerIcon className={`size-3 shrink-0 ${remoteIconClass(phase)}`} />}
+                />
+                {row.phase === "ready" ? (
+                  <StatusRow
+                    label={t("shell.status.latex")}
+                    detail={latexDetailOf(status)}
+                    icon={
+                      <FileTypeIcon
+                        className={`size-3 shrink-0 ${compileEngineIconClass(compileEngineTone(status))}`}
+                      />
+                    }
+                  />
+                ) : null}
+              </HostAccordionRow>
+            );
+          })}
         </div>
       </HoverCardContent>
     </HoverCard>

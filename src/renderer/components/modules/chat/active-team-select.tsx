@@ -200,7 +200,7 @@ export function ActiveTeamSelect({
           </button>
         </AppMenuTrigger>
       </Hint>
-      <AppMenuContent align="start" side="top" className="min-w-[14rem] max-w-[18rem]">
+      <AppMenuContent align="start" side="bottom" className="min-w-[14rem] max-w-[18rem]">
         <AppMenuLabel>{t("chat.composer.activeTeam")}</AppMenuLabel>
         {candidates.map((team) => {
           const selected = team.manifest.id === effectiveId;

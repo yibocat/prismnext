@@ -7,6 +7,7 @@ import {
   checkWorkbenchProject,
   createWorkbenchProjectOnDisk,
   ensureWorkbenchProjectMeta,
+  projectMetaAbsIfLocal,
 } from "../../src/main/workbench/scaffold";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
 import { readWorkspaceDirs } from "../../src/main/project/workspace-config";
@@ -96,6 +97,12 @@ describe("checkWorkbenchProject", () => {
 
     ensureWorkbenchProjectMeta(root);
     expect(checkWorkbenchProject(root).missing).toEqual([]);
+  });
+});
+
+describe("projectMetaAbsIfLocal", () => {
+  it("refuses remote:// so template backups do not treat a Host path as a local folder", () => {
+    expect(projectMetaAbsIfLocal("remote://lab/home/ubuntu/paper")).toBeNull();
   });
 });
 

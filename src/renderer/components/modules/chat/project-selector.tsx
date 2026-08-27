@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { FolderIcon, LockIcon } from "lucide-react";
 import { WorkbenchProjectPicker } from "@/components/layout/workbench-add-menu";
 import { cn } from "@/lib/utils";
+import { i18n } from "@/lib/i18n";
+import { parseRemoteAbs } from "@shared/remote";
 import { applyProjectPick } from "@/lib/workspace/project-context";
 import { pickFolderAndAssignSession } from "@/lib/workspace/project-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
@@ -26,17 +28,24 @@ export function ProjectSelector() {
   const label = current?.displayName || t("chat.project.select");
 
   const assignActiveChat = useCallback(
-    (path: string) => {
+    async (path: string) => {
       if (streaming || !activeTabId) return;
-      void applyProjectPick({
+      const result = await applyProjectPick({
         path,
         mode: "assign",
         conversationId: activeTabId,
-      }).then((result) => {
-        if (!result.ok && result.reason === "session_not_empty") {
+      });
+      if (!result.ok) {
+        if (result.reason === "session_not_empty") {
           toast.error(t("chat.projectAssignBlocked"));
         }
-      });
+        throw new Error(result.reason);
+      }
+      const remote = parseRemoteAbs(path);
+      if (remote) {
+        const name = remote.abs.split("/").filter(Boolean).at(-1) || remote.abs;
+        toast.success(i18n.t("remote.openedProject", { name }));
+      }
     },
     [activeTabId, streaming, t],
   );

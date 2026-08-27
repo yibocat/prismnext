@@ -59,9 +59,40 @@ import type { PaperCitationSectionKind } from "../../shared/literature/paper-cit
 import type { StagedCitationImportInput, StagedCitationPayload, StageResult } from "../../shared/literature/citation-staging";
 import { getRemoteSessionBroker } from "./remote";
 import { routeHostLiteratureMethod } from "../remote/literature-route";
+import {
+  LITERATURE_LOCAL_PDF_METHODS,
+  stageLaptopPdfForRemote,
+} from "../remote/agent-attachments";
+import { parseRemoteAbs } from "../../shared/remote";
+
+function asLiteratureArgs(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
 
 async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
-  return routeHostLiteratureMethod(method, args, getRemoteSessionBroker());
+  const rec = asLiteratureArgs(args);
+  const projectRoot = typeof rec?.projectRoot === "string" ? rec.projectRoot : "";
+  const pdfPath = typeof rec?.pdfPath === "string" ? rec.pdfPath : "";
+  const profileId = parseRemoteAbs(projectRoot)?.profileId;
+  const broker = getRemoteSessionBroker();
+  if (
+    profileId
+    && broker.isBound(profileId)
+    && (LITERATURE_LOCAL_PDF_METHODS as readonly string[]).includes(method)
+    && pdfPath
+  ) {
+    const staged = await stageLaptopPdfForRemote(projectRoot, pdfPath, async (absPath, bytes) => {
+      await broker.invoke(profileId, "fs:writeBlob", {
+        path: absPath,
+        bytes: bytes.toString("base64"),
+        offset: 0,
+      });
+    });
+    if (!staged.ok) throw new Error(staged.error);
+    args = { ...rec, pdfPath: staged.pdfPath };
+  }
+  return routeHostLiteratureMethod(method, args, broker);
 }
 
 function handleLiterature(

@@ -106,6 +106,8 @@
     "connecting": "連線中…",
     "running": "執行中",
     "stopped": "已停止",
+    "thisComputer": "本機",
+    "connection": "連線",
     "remote": "主機",
     "remoteConnected": "已連線",
     "remoteConnecting": "連線中…",

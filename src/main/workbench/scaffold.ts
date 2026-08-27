@@ -55,6 +55,12 @@ export function projectMetaAbs(projectRoot: string): string {
   return join(localProjectRoot(projectRoot), PROJECT_META_DIR);
 }
 
+/** Template backups are laptop-only until Host grows `template:*`. */
+export function projectMetaAbsIfLocal(projectRoot: string): string | null {
+  if (parseRemoteAbs(projectRoot)) return null;
+  return projectMetaAbs(projectRoot);
+}
+
 export interface CreateWorkbenchProjectArgs {
   rootPath: string;
   workspaceDirs?: WorkspaceFolder[];

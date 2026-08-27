@@ -34,7 +34,7 @@ export function ProjectPickerReposSection({
   query: string;
   visible: boolean;
   selectedPath?: string | null;
-  onPickPath: (path: string) => void;
+  onPickPath: (path: string) => void | Promise<void>;
   onOpenLocalFolder: () => void;
   onRequest: (alias: string, next: RemoteHostNextAction) => void;
 }) {

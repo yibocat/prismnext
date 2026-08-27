@@ -5,8 +5,6 @@ import {
   type WorkspaceFolder,
 } from "@/types/workspace";
 
-export type WorkspaceFolderScope = "project" | "template";
-
 function isCaseInsensitiveFs(): boolean {
   return (
     typeof navigator !== "undefined" &&

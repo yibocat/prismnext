@@ -71,6 +71,19 @@ export function isActiveSessionFromChatState(
   );
 }
 
+export type SessionStatusFilter = "all" | "waiting" | "running" | "unread" | "read";
+
+export function matchesSessionStatusFilter(
+  kind: SessionListStatusKind,
+  filter: SessionStatusFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "running") {
+    return kind === "running-stream" || kind === "running-terminal";
+  }
+  return kind === filter;
+}
+
 export function deriveSessionListStatus(input: SessionListStatusInput): SessionListStatus {
   if (input.archivedRow) {
     return { kind: "archived", showStatusBadge: false };

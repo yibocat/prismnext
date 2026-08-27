@@ -33,7 +33,8 @@ import { getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { i18n } from "@/lib/i18n";
 import { createLogger } from "@/services/logger";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
-import { encodeRemoteAbs, isRemoteProjectRoot, recoverRemoteAbs } from "../../../shared/remote";
+import { encodeRemoteAbs, isRemoteProjectRoot, parseRemoteAbs, recoverRemoteAbs } from "../../../shared/remote";
+import { shouldSkipRemoteHostBind } from "@/lib/remote/ensure-connected";
 
 const log = createLogger("project-lifecycle");
 
@@ -105,6 +106,23 @@ export async function applyWorkbenchFocusChange(): Promise<void> {
   useExperimentStore.getState().reset();
 }
 
+/**
+ * After a remembered remote folder is already focused, Host becoming ready
+ * must fill the neighbors we skipped (file tree, Workspace folders, library,
+ * experiments). Does not reset tabs or git selection.
+ */
+export async function refreshFocusedRemoteNeighbors(projectRoot: string): Promise<void> {
+  const root = projectRoot.trim();
+  if (!root || !recoverRemoteAbs(root)) return;
+  await useWorkspaceConfigStore.getState().loadConfig(root);
+  const { useDocumentStore } = await import("@/stores/document-store");
+  await useDocumentStore.getState().reloadMetadataFromDisk(true);
+  void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+    void useLiteratureStore.getState().refresh(root);
+  });
+  void useExperimentStore.getState().refreshList(root);
+}
+
 export type WorkbenchFocusScan = {
   files: Array<{
     relativePath: string;
@@ -129,7 +147,7 @@ export async function switchWorkbenchFocus(opts: {
   applyDocumentTree: (scan: WorkbenchFocusScan) => void;
 }): Promise<void> {
   const { canonicalRoot, shouldAbort, supersededByClose, applyDocumentTree } = opts;
-  const skipRemoteBind = Boolean(recoverRemoteAbs(canonicalRoot)) && opts.connectRemote === false;
+  const skipRemoteBind = shouldSkipRemoteHostBind(canonicalRoot, opts.connectRemote);
 
   await applyWorkbenchFocusChange();
   if (shouldAbort()) return;
@@ -541,8 +559,14 @@ export async function assignSessionToProjectPath(
 
   let member = resolveWorkbenchMemberByPath(useWorkbenchStore.getState(), folder);
   if (!member) {
-    const joined = await joinWorkbenchFolder(folder);
-    if (!joined) return false;
+    const remote = parseRemoteAbs(folder);
+    if (remote) {
+      const opened = await openRemoteWorkbenchProject(remote.profileId, remote.abs);
+      if (!opened) return false;
+    } else {
+      const joined = await joinWorkbenchFolder(folder);
+      if (!joined) return false;
+    }
     member = resolveWorkbenchMemberByPath(useWorkbenchStore.getState(), folder);
   }
   if (!member) return false;

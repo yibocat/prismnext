@@ -19,9 +19,15 @@ export const LEFT_SIDEBAR_ROW_ACTIVE = "bg-sidebar-accent text-sidebar-accent-fo
 /** In-row action (project “+” / “−”) — ghost icon; fill only while pointed at. */
 export const LEFT_SIDEBAR_ROW_ACTION =
   "flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 transition-[color,opacity] group-hover/project:opacity-100 hover:bg-muted hover:text-foreground";
-/** Session trailing control — keep the slot so a pinned pin does not jump when archive/time fade in. */
+/** Session trailing control — hidden until hover; overlay so the title can use the full row. */
 export const LEFT_SIDEBAR_SESSION_HOVER_ACTION =
-  "shrink-0 opacity-0 pointer-events-none transition-opacity group-hover/session:opacity-100 group-hover/session:pointer-events-auto";
+  "shrink-0 text-muted-foreground/70 hover:text-foreground";
+/** Pin / archive / time sit on the title, not in flow. Fixed time column keeps the overlay width stable. */
+export const LEFT_SIDEBAR_SESSION_TRAILING =
+  "absolute right-0 top-1/2 z-[1] flex -translate-y-1/2 items-center gap-1 pl-2 opacity-0 pointer-events-none transition-opacity group-hover/session:opacity-100 group-hover/session:pointer-events-auto bg-sidebar group-hover/session:bg-sidebar-accent group-[&.bg-sidebar-accent]/session:bg-sidebar-accent";
+export const LEFT_SIDEBAR_SESSION_TIME =
+  "w-[2rem] shrink-0 text-right text-[length:var(--font-session-item)] text-muted-foreground/70 tabular-nums";
+export const LEFT_SIDEBAR_SESSION_TITLE_HOVER_PAD = "group-hover/session:pr-[4.75rem]";
 /** Compact stack — 2px so rounded hover pills do not fuse. */
 export const LEFT_SIDEBAR_STACK = "flex flex-col gap-0.5";
 /** Between collapsed projects — same 2px as `LEFT_SIDEBAR_STACK`. */

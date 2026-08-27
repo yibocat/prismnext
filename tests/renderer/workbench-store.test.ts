@@ -4,6 +4,7 @@ import {
   defaultProjectAsMember,
   groupSessionsByProject,
   lastPathForSession,
+  lastPathForSessionIn,
   moveListItem,
   projectRootForSession,
   resolveSessionProjectMeta,
@@ -84,6 +85,8 @@ describe("workbench launch store", () => {
     useWorkbenchStore.getState().setFocusConversation("conv_a");
     expect(useWorkbenchStore.getState().focusConversationId).toBe("conv_a");
     expect(lastPathForSession("conv_a")).toBe("/Users/me/papers/a");
+    expect(lastPathForSessionIn(useWorkbenchStore.getState(), "conv_a")).toBe("/Users/me/papers/a");
+    expect(lastPathForSessionIn(useWorkbenchStore.getState(), "missing")).toBeNull();
     expect(projectRootForSession("conv_a", "/Users/me/Documents/PrismNext")).toBe("/Users/me/papers/a");
     expect(projectRootForSession("unknown", "/fallback")).toBe("/fallback");
   });

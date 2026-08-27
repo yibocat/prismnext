@@ -8,6 +8,7 @@ import {
   RemoteConnectError,
   resolveFocusConnectRemote,
   remoteFocusNeedsBind,
+  shouldSkipRemoteHostBind,
   remotePhaseIsBusy,
   remotePhaseIsReady,
   remotePhaseNeedsConnect,
@@ -130,6 +131,18 @@ describe("remote reconnect helpers", () => {
       byProfileId: { lab: { phase: "ready", profileId: "lab" } },
     });
     expect(remoteFocusNeedsBind("remote://lab/home/ubuntu/paper")).toBe(false);
+  });
+
+  it("skips Host bind only while the remote Host is down", () => {
+    const remote = "remote://lab/home/ubuntu/paper";
+    expect(shouldSkipRemoteHostBind(remote, false)).toBe(true);
+    expect(shouldSkipRemoteHostBind("/papers/a", false)).toBe(false);
+    expect(shouldSkipRemoteHostBind(remote, true)).toBe(false);
+    expect(shouldSkipRemoteHostBind(remote)).toBe(false);
+    useRemoteStore.setState({
+      byProfileId: { lab: { phase: "ready", profileId: "lab" } },
+    });
+    expect(shouldSkipRemoteHostBind(remote, false)).toBe(false);
   });
 
   it("opens the Host project after SSH is ready", async () => {

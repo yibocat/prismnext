@@ -4,6 +4,14 @@ import { attachmentPathNeedsRemoteUpload, parseRemoteAbs } from "../../shared/re
 import type { AgentSendAttachment } from "../../shared/agent/api-send";
 
 export const REMOTE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+/** Papers are larger than chat attachments; Host `fs:writeBlob` is one shot. */
+export const REMOTE_LITERATURE_PDF_MAX_BYTES = 40 * 1024 * 1024;
+
+export const LITERATURE_LOCAL_PDF_METHODS = [
+  "literature:ingestPdf",
+  "literature:replacePdf",
+  "literature:attachLocalPdf",
+] as const;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -56,4 +64,32 @@ export async function stageLaptopAttachmentsForRemote(
     next.push({ name, kind, path: dest });
   }
   return { ok: true, input: { ...rec, attachments: next } };
+}
+
+/**
+ * Copy a laptop PDF into the bound remote paper so Host ingest can read it.
+ * Chat attachments stay at 5 MB; literature uses a higher cap.
+ */
+export async function stageLaptopPdfForRemote(
+  projectRoot: string,
+  pdfPath: string,
+  writeBlob: (absPath: string, bytes: Buffer) => Promise<void>,
+): Promise<{ ok: true; pdfPath: string } | { ok: false; error: string }> {
+  const remote = parseRemoteAbs(projectRoot);
+  if (!remote || !attachmentPathNeedsRemoteUpload(pdfPath, remote.abs)) {
+    return { ok: true, pdfPath };
+  }
+  let size = 0;
+  try {
+    size = (await stat(pdfPath)).size;
+  } catch {
+    return { ok: false, error: "remote_literature_pdf_not_uploaded" };
+  }
+  if (size > REMOTE_LITERATURE_PDF_MAX_BYTES) {
+    return { ok: false, error: "remote_literature_pdf_too_large" };
+  }
+  const bytes = await readFile(pdfPath);
+  const dest = `${remote.abs}/.workbench/uploads/literature/${safeFileName(basename(pdfPath))}`;
+  await writeBlob(dest, bytes);
+  return { ok: true, pdfPath: dest };
 }

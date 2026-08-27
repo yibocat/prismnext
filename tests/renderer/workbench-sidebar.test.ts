@@ -201,7 +201,8 @@ describe("workbench sidebar wiring", () => {
     expect(sidebar).toContain("nav.sessions.archived");
     expect(sidebar).toContain("nav.sessions.grouping");
     expect(sidebar).toContain("nav.sessions.groupUpdated");
-    expect(sidebar).toContain("nav.sessions.statusSoon");
+    expect(sidebar).toContain("nav.sessions.statusWaiting");
+    expect(sidebar).toContain("setSessionStatusFilter");
     expect(sidebar).toContain("nav.sessions.expandAll");
     expect(sidebar).toContain("nav.sessions.collapseAll");
     expect(sidebar).toContain("showProject: true");
@@ -210,11 +211,11 @@ describe("workbench sidebar wiring", () => {
     expect(sidebar).toContain("showProject && \"h-[1lh] w-4\"");
     expect(sidebar).toContain("project.id === defaultProjectId");
     expect(sidebar).toContain("DefaultProjectBadge");
-    expect(sidebar).toContain("showProject ? sessionTrailing : null");
+    expect(sidebar).toContain("LEFT_SIDEBAR_SESSION_TRAILING");
+    expect(sidebar).toContain("LEFT_SIDEBAR_SESSION_TIME");
     expect(sidebar).toContain("LEFT_SIDEBAR_FOOTER_ICON");
     expect(sidebar).toContain("renderArchivedSessionItem");
-    expect(sidebar).toContain("!showArchived && pinnedSessions");
-    expect(sidebar).not.toContain("AppContextMenuSeparator");
+    expect(sidebar).toContain("!showArchived && pinnedVisible");
     expect(sidebar).not.toContain("AppMenuSeparator");
     expect(sidebar).toContain("SessionStatusIndicator");
     expect(sidebar).toContain("pinSession(s.id)");
@@ -230,7 +231,7 @@ describe("workbench sidebar wiring", () => {
     expect(sidebar).toContain("archiveSessionsForProject");
     expect(sidebar).toContain("EditProjectDialog");
     expect(sidebar).toContain("newSessionInProject");
-    expect(sidebar).not.toContain("AppContextMenuSeparator");
+    expect(sidebar).toContain("AppContextMenuSeparator");
     expect(sidebar).not.toMatch(/\bMinus\b/);
     expect(sidebar).toContain("WorkbenchFolderGlyph");
     expect(sidebar).toContain("open={expanded}");
@@ -347,6 +348,7 @@ describe("workbench sidebar wiring", () => {
     expect(leftMain).toContain("<ExecutionHostSelector");
     expect(leftMain).not.toContain("<WorktreeSelector");
     expect(leftMain).toContain("executionHostLabel");
+    expect(leftMain).toContain("currentProject?.lastPath || projectRoot");
     expect(leftMain).toContain("chat.toolbar.hostLocal");
     expect(host).toContain("SshHostPickerDialog");
     expect(host).toContain("openConnectDialog");
@@ -356,6 +358,8 @@ describe("workbench sidebar wiring", () => {
     expect(leftMain).toContain("RemoteOneClickConnectButton");
     expect(host).not.toContain("applyProjectPick");
     expect(host).not.toMatch(/\bfocusProject\s*\(/);
+    expect(host).toContain("lastPathForSessionIn");
+    expect(host).toContain("useComposerProjectRoot");
     expect(aibar).not.toContain("WorktreeSelector");
   });
 
@@ -379,6 +383,11 @@ describe("workbench sidebar wiring", () => {
     expect(menu).toContain("sameProjectPath");
     expect(menu).toContain("removeRecentProject");
     expect(menu).not.toContain("description={item.kind === \"local\"");
+    expect(menu).toContain("function encodedRemotePath");
+    expect(menu).toContain("onPickPath(encodedRemotePath");
+    expect(menu).not.toContain("openRemoteViaContext");
+    expect(selector).toContain("mode: \"assign\"");
+    expect(lib).toContain("openRemoteWorkbenchProject");
     expect(lib).toContain("assignSessionToProjectPath");
     expect(lib).toContain("assignSessionProject");
     expect(lib).toContain("agentReassignSessionProject");

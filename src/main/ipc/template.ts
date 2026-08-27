@@ -6,7 +6,7 @@ import {
   assertSafeRelativePaths,
   parseBackupLabelIds,
 } from "../lib/template-path";
-import { projectMetaAbs } from "../workbench/scaffold";
+import { projectMetaAbs, projectMetaAbsIfLocal } from "../workbench/scaffold";
 
 const templateLog = createLogger("template-ipc", "ipc");
 
@@ -393,7 +393,10 @@ export function registerTemplateHandlers(): void {
       const { join } = require("node:path");
       const { readdirSync, readFileSync, existsSync, statSync } = require("node:fs");
 
-      const backupsDir = join(projectMetaAbs(args.rootPath), "backups");
+      const metaDir = projectMetaAbsIfLocal(args.rootPath);
+      if (!metaDir) return [];
+
+      const backupsDir = join(metaDir, "backups");
       if (!existsSync(backupsDir)) return [];
 
       const entries = (readdirSync(backupsDir, { withFileTypes: true }) as Dirent[])

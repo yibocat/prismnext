@@ -49,13 +49,10 @@ const pickerPanelClass = cn(
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
-async function openRemoteViaContext(alias: string, remoteRoot: string): Promise<void> {
+function encodedRemotePath(alias: string, remoteRoot: string): string {
   const path = encodeRemoteAbs(alias, remoteRoot);
   if (!path) throw new Error("invalid_remote_path");
-  const result = await applyProjectPick({ path, mode: "focus" });
-  if (!result.ok) throw new Error(result.reason);
-  const name = remoteRoot.split("/").filter(Boolean).at(-1) || remoteRoot;
-  toast.success(i18n.t("remote.openedProject", { name }));
+  return path;
 }
 
 export function WorkbenchProjectPicker({
@@ -73,7 +70,7 @@ export function WorkbenchProjectPicker({
   disabled?: boolean;
   pickerMode: "workbench-add" | "chat-assign";
   selectedPath?: string | null;
-  onPickPath: (path: string) => void;
+  onPickPath: (path: string) => void | Promise<void>;
   onOpenFolder: () => void;
   onProjectCreated?: (path: string) => void;
 }) {
@@ -131,7 +128,7 @@ export function WorkbenchProjectPicker({
   const requestRemote = (alias: string, next: RemoteHostNextAction) => {
     setOpen(false);
     if (next.type === "open-path") {
-      void openRemoteViaContext(alias, next.remoteRoot).catch((err) => {
+      void Promise.resolve(onPickPath(encodedRemotePath(alias, next.remoteRoot))).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
@@ -156,7 +153,7 @@ export function WorkbenchProjectPicker({
     setConnect(null);
     if (!pending) return;
     if (pending.next.type === "open-path") {
-      void openRemoteViaContext(pending.alias, pending.next.remoteRoot).catch((err) => {
+      void Promise.resolve(onPickPath(encodedRemotePath(pending.alias, pending.next.remoteRoot))).catch((err) => {
         toast.error(err instanceof Error ? err.message : t("remote.phase.error"));
       });
       return;
@@ -376,7 +373,7 @@ export function WorkbenchProjectPicker({
         }}
         onConfirm={async (remoteRoot) => {
           if (!folder) return;
-          await openRemoteViaContext(folder.alias, remoteRoot);
+          await Promise.resolve(onPickPath(encodedRemotePath(folder.alias, remoteRoot)));
         }}
       />
       <SshHostPickerDialog
@@ -396,18 +393,17 @@ export function WorkbenchAddMenu() {
     <WorkbenchProjectPicker
       pickerMode="workbench-add"
       hintLabel={t("nav.workbench.addProject")}
-      onPickPath={(path) => {
-        void applyProjectPick({
+      onPickPath={async (path) => {
+        const result = await applyProjectPick({
           path,
           mode: "focus",
           newSessionAfterFocus: false,
-        }).then((result) => {
-          if (!result.ok) return;
-          const parsed = parseRemoteAbs(path);
-          if (!parsed) return;
-          const name = parsed.abs.split("/").filter(Boolean).at(-1) || parsed.abs;
-          toast.success(i18n.t("remote.openedProject", { name }));
         });
+        if (!result.ok) throw new Error(result.reason);
+        const parsed = parseRemoteAbs(path);
+        if (!parsed) return;
+        const name = parsed.abs.split("/").filter(Boolean).at(-1) || parsed.abs;
+        toast.success(i18n.t("remote.openedProject", { name }));
       }}
       onOpenFolder={() => void pickAndJoinWorkbenchFolder()}
     >

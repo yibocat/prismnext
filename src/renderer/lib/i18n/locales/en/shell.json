@@ -106,6 +106,8 @@
     "connecting": "Connecting…",
     "running": "Running",
     "stopped": "Stopped",
+    "thisComputer": "This computer",
+    "connection": "Connection",
     "remote": "Host",
     "remoteConnected": "Connected",
     "remoteConnecting": "Connecting…",

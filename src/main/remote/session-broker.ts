@@ -388,6 +388,7 @@ export class RemoteSessionBroker {
   async openProject(
     profileId: string,
     remoteRoot: string,
+    opts?: { adoptId?: string },
   ): Promise<{
     projectId: string;
     remoteRoot: string;
@@ -397,7 +398,11 @@ export class RemoteSessionBroker {
   }> {
     const live = this.live.get(profileId);
     if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
-    const raw = await this.invokeOn(live, "project.open", { remoteRoot }) as {
+    const adoptId = opts?.adoptId?.trim();
+    const raw = await this.invokeOn(live, "project.open", {
+      remoteRoot,
+      ...(adoptId ? { adoptId } : {}),
+    }) as {
       projectId?: string;
       remoteRoot?: string;
     };

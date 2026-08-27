@@ -30,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   applyWorkbenchFocusChange,
+  refreshFocusedRemoteNeighbors,
   assignSessionProject,
   assignSessionToProjectPath,
   confirmProjectSwitchIfNeeded,
@@ -43,8 +44,11 @@ import {
 import { useChatStore } from "../../src/renderer/stores/chat-store";
 import { makeDefaultTab } from "../../src/renderer/stores/chat/model";
 import { useDocumentStore } from "../../src/renderer/stores/document-store";
+import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
+import { useLiteratureStore } from "../../src/renderer/stores/literature-store";
 import { useSettingsStore } from "../../src/renderer/stores/settings-store";
 import { useWorkbenchStore } from "../../src/renderer/stores/workbench-store";
+import { useWorkspaceConfigStore } from "../../src/renderer/stores/workspace-config-store";
 
 describe("project switch lifecycle", () => {
   beforeEach(() => {
@@ -180,6 +184,40 @@ describe("project switch lifecycle", () => {
     expect(openSrc).not.toContain("reloadCommands");
     expect(openSrc).not.toContain("literature-store");
     expect(openSrc).not.toContain("gitWarmup");
+    const lifecycleSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/lib/workspace/project-lifecycle.ts"),
+      "utf-8",
+    );
+    expect(lifecycleSrc).toContain("shouldSkipRemoteHostBind");
+    expect(lifecycleSrc).toContain("refreshFocusedRemoteNeighbors");
+    const remoteStoreSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/stores/remote-store.ts"),
+      "utf-8",
+    );
+    expect(remoteStoreSrc).toContain("refreshFocusedRemoteNeighbors");
+  });
+
+  it("refreshes remote neighbors after Host is ready and ignores local roots", async () => {
+    const loadConfig = vi.fn(async () => undefined);
+    const reloadMetadataFromDisk = vi.fn(async () => undefined);
+    const refresh = vi.fn(async () => undefined);
+    const refreshList = vi.fn(async () => undefined);
+    useWorkspaceConfigStore.setState({ loadConfig });
+    useDocumentStore.setState({ reloadMetadataFromDisk });
+    useLiteratureStore.setState({ refresh });
+    useExperimentStore.setState({ refreshList });
+
+    await refreshFocusedRemoteNeighbors("/papers/local");
+    expect(loadConfig).not.toHaveBeenCalled();
+    expect(reloadMetadataFromDisk).not.toHaveBeenCalled();
+
+    await refreshFocusedRemoteNeighbors("remote://lab/home/u/paper");
+    expect(loadConfig).toHaveBeenCalledWith("remote://lab/home/u/paper");
+    expect(reloadMetadataFromDisk).toHaveBeenCalledWith(true);
+    await vi.waitFor(() => {
+      expect(refresh).toHaveBeenCalledWith("remote://lab/home/u/paper");
+      expect(refreshList).toHaveBeenCalledWith("remote://lab/home/u/paper");
+    });
   });
 });
 

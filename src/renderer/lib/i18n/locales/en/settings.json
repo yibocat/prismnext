@@ -354,7 +354,7 @@
   },
   "workspace": {
     "title": "Workspace",
-    "subtitle": "Folder layout for AI agents and new projects.",
+    "subtitle": "Folder layout for AI agents in the open project.",
     "thisProject": "This project",
     "newProjectTemplate": "New project template",
     "tabProject": "This project",
@@ -370,7 +370,7 @@
       "folderRemoved": "Folder removed from configuration."
     },
     "loading": "Loading workspace configuration…",
-    "openProjectHint": "Open a project to edit its live workspace. You can still configure the new-project template below.",
+    "openProjectHint": "Open a project to edit its workspace folders.",
     "templateDesc": "Used only when you create a new project — not applied to projects you have already opened.",
     "initGit": "Initialize Git by default",
     "initGitDesc": "New Project dialog starts with Git on. You can still turn it off per create.",

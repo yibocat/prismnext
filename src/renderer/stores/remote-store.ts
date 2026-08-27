@@ -79,6 +79,8 @@ function onProfileReady(profileId: string): void {
     const { useDocumentStore } = await import("@/stores/document-store");
     const root = useDocumentStore.getState().projectRoot ?? "";
     if (parseRemoteAbs(root)?.profileId === profileId) {
+      const { refreshFocusedRemoteNeighbors } = await import("@/lib/workspace/project-lifecycle");
+      await refreshFocusedRemoteNeighbors(root).catch(() => undefined);
       void import("@/stores/git-store").then((mod) => mod.useGitStore.getState().checkRepo(root));
     }
     if (syncedReadyProfiles.has(profileId)) return;

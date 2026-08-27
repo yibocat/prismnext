@@ -63,6 +63,8 @@ export const projectHandlers: Record<
     } catch {
       // mint
     }
+    const adoptId = typeof params.adoptId === "string" ? params.adoptId.trim() : "";
+    if (adoptId) projectId = adoptId;
     const payload: { id: string; workspace?: unknown } = { id: projectId };
     if (workspace && typeof workspace === "object") payload.workspace = workspace;
     writeFileSync(jsonPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
