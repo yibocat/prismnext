@@ -1,6 +1,18 @@
 import { useDocumentStore } from "@/stores/document-store";
 import { useGitStore } from "@/stores/git-store";
 
+export function resolveToolbarGitState(input: {
+  projectRoot: string | null;
+  isGitRepo: boolean;
+  repoKnown: boolean;
+  remoteLive: boolean;
+}): "hidden" | "init" | "branch" {
+  if (!input.projectRoot) return "hidden";
+  if (input.isGitRepo) return "branch";
+  if (input.repoKnown && input.remoteLive) return "init";
+  return "hidden";
+}
+
 /** Git status/diff root — follows checkout (worktree path when active). */
 export function resolveGitRefreshRoot(): string | null {
   const { checkoutRoot, projectRoot } = useDocumentStore.getState();

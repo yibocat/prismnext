@@ -79,7 +79,8 @@
     "repos": "倉庫",
     "localRepos": "本機",
     "connectSsh": "透過 SSH 連線…",
-    "noSshHosts": "~/.ssh/config 裡還沒有主機"
+    "noSshHosts": "~/.ssh/config 裡還沒有主機",
+    "removeRecent": "從最近專案中移除"
   },
   "project": {
     "noProject": "未開啟專案",

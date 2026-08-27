@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clipBootstrapLogs,
+  connectPrepareGate,
   connectionPhaseLabelKey,
   constitutionLines,
   latestGateDetail,
@@ -58,6 +59,28 @@ describe("remote display helpers", () => {
       doctor: null,
       gates: [{ gate: "ssh", ok: true, detail: "up" }],
     }, logs)).toBe("up");
+  });
+
+  it("does not send SSH back to pending after a later info line on the same gate", () => {
+    const logs = [
+      { ts: 1, profileId: "a", message: "System ssh reached lab.", level: "ok" as const, gate: "ssh" as const },
+      { ts: 2, profileId: "a", message: "Handshake ok — 0.8.0 0fd49881", level: "ok" as const, gate: "handshake" as const },
+      {
+        ts: 3,
+        profileId: "a",
+        message: "OpenSSH destination lab (ProxyJump from ~/.ssh/config if set).",
+        level: "info" as const,
+        gate: "ssh" as const,
+      },
+    ];
+    expect(resolveConnectGateStatus("ssh", undefined, logs)).toBe("ok");
+    expect(resolveConnectGateStatus("handshake", undefined, logs)).toBe("ok");
+    expect(latestGateDetail("ssh", undefined, logs)).toBe("System ssh reached lab.");
+  });
+
+  it("exposes the current connect gate for the prepare line", () => {
+    expect(connectPrepareGate("remote://lab/home/u/a", {}, [])).toBe("payload");
+    expect(connectPrepareGate("/Users/me/paper", {}, [])).toBeNull();
   });
 });
 

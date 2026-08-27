@@ -282,9 +282,6 @@ export class RemoteSessionBroker {
       }
       mark("runtime", true, `Host Node is ${node.stdout.trim()} (${linuxArch}, dedicated).`);
 
-      this.log(profileId, `OpenSSH destination ${profile.id} (ProxyJump from ~/.ssh/config if set).`, {
-        gate: "ssh",
-      });
       const live: LiveConnection = {
         profileId,
         connectionId,
@@ -448,7 +445,10 @@ export class RemoteSessionBroker {
     handle: import("../../shared/remote").RemoteProjectHandle;
   } | null> {
     const live = this.live.get(profileId);
-    if (!live?.pipe) return null;
+    if (!live) return null;
+    if (!live.pipe || live.reconnecting || !live.ready) {
+      await this.waitForPipe(live);
+    }
     const abs = normalizePosixAbs(remoteRoot);
     if (!abs) {
       throw new RemoteOperationError("protocol", "Choose a remote folder.");
@@ -484,7 +484,7 @@ export class RemoteSessionBroker {
 
   isBound(profileId: string): boolean {
     const live = this.live.get(profileId.trim());
-    return Boolean(live?.pipe);
+    return Boolean(live?.pipe || live?.reconnecting);
   }
 
   /** Push the current laptop Pro grant (and packs, if licensed) to every live Host. */
@@ -527,6 +527,9 @@ export class RemoteSessionBroker {
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {
     const live = this.live.get(profileId);
     if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
+    if (!live.pipe || live.reconnecting || !live.ready) {
+      await this.waitForPipe(live);
+    }
     return this.invokeOn(live, method, params);
   }
 
@@ -535,6 +538,18 @@ export class RemoteSessionBroker {
     const live = this.live.get(profileId.trim());
     if (!live?.pipe) return;
     await live.pipe.close().catch(() => undefined);
+  }
+
+  private async waitForPipe(live: LiveConnection, timeoutMs = 20_000): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (live.closing || this.live.get(live.profileId) !== live) {
+        throw new RemoteOperationError("not_connected", "Not connected.");
+      }
+      if (live.pipe && live.ready && !live.reconnecting) return;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+    throw new RemoteOperationError("not_connected", "Host stdio is not open.");
   }
 
   private invokeOn(live: LiveConnection, method: string, params: unknown): Promise<unknown> {
@@ -636,6 +651,7 @@ export class RemoteSessionBroker {
     }
     live.reconnecting = true;
     live.ready = false;
+    const stalePipe = live.pipe;
     live.pipe = null;
     for (const pending of live.pending.values()) {
       pending.reject(new RemoteOperationError("not_connected", "Host control plane dropped. Reconnecting…"));
@@ -658,6 +674,7 @@ export class RemoteSessionBroker {
       return;
     }
     try {
+      await stalePipe?.close().catch(() => undefined);
       live.pipe = await live.session.openForwardedTcp(live.listenPort);
       live.codec = new NdjsonFrameCodec();
       this.attachPipe(live);

@@ -15,10 +15,11 @@ import {
 import { encodeRemoteAbs, parseRemoteAbs } from "@shared/remote";
 import type { RemoteHostNextAction } from "@/lib/remote/host-projects";
 import { useProjectStore } from "@/stores/project-store";
-import { defaultProjectAsMember, useWorkbenchStore } from "@/stores/workbench-store";
+import { defaultProjectAsMember, sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
 import {
   AppMenu,
+  AppMenuCheckItem,
   AppMenuContent,
   AppMenuItem,
   AppMenuLabel,
@@ -36,19 +37,14 @@ import { RemoteConnectDialog } from "@/components/modules/remote/remote-connect-
 import { RemoteFolderDialog } from "@/components/modules/remote/remote-folder-dialog";
 import { SshHostPickerDialog } from "@/components/modules/remote/ssh-host-picker-dialog";
 import { Hint } from "@/components/ui/hint";
-import { FolderIcon, FolderOpen, FolderPlus, PlugIcon } from "lucide-react";
+import { FolderIcon, FolderOpen, FolderPlus, PlugIcon, XIcon } from "lucide-react";
 
 const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
 
-const recentRowClass = cn(
-  sidebarItemClass,
-  "h-auto min-h-0 items-start py-1.5",
-);
-
 const pickerPanelClass = cn(
-  "flex min-h-0 min-w-[12rem] w-max flex-col gap-0 overflow-hidden p-0",
-  "max-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))]",
+  "flex min-h-0 min-w-[24rem] w-max flex-col gap-0 overflow-hidden p-0",
+  "max-w-[min(36rem,var(--radix-dropdown-menu-content-available-width))]",
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
@@ -66,6 +62,7 @@ export function WorkbenchProjectPicker({
   hintLabel,
   disabled,
   pickerMode,
+  selectedPath,
   onPickPath,
   onOpenFolder,
   onProjectCreated,
@@ -74,6 +71,7 @@ export function WorkbenchProjectPicker({
   hintLabel: string;
   disabled?: boolean;
   pickerMode: "workbench-add" | "chat-assign";
+  selectedPath?: string | null;
   onPickPath: (path: string) => void;
   onOpenFolder: () => void;
   onProjectCreated?: (path: string) => void;
@@ -81,6 +79,7 @@ export function WorkbenchProjectPicker({
   const { t } = useTranslation();
   const newProjectTriggerRef = useRef<HTMLButtonElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const holdPickerOpenUntilRef = useRef(0);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -113,8 +112,14 @@ export function WorkbenchProjectPicker({
     previewCount: JOINABLE_RECENT_PREVIEW_COUNT,
   });
 
+  const holdPickerOpen = () => {
+    holdPickerOpenUntilRef.current = Date.now() + 250;
+    requestAnimationFrame(() => searchRef.current?.focus());
+  };
+
   const handleOpenChange = (next: boolean) => {
     if (disabled && next) return;
+    if (!next && Date.now() < holdPickerOpenUntilRef.current) return;
     setOpen(next);
     if (!next) {
       setQuery("");
@@ -208,42 +213,79 @@ export function WorkbenchProjectPicker({
                 {t("nav.project.noRecent")}
               </p>
             ) : (
-              items.map((item) => (
-                <AppMenuItem
-                  key={item.path}
-                  className={cn(
-                    recentRowClass,
-                    item.onWorkbench && "text-muted-foreground",
-                  )}
-                  leading={
-                    <FolderIcon
-                      className={cn(
-                        "mt-0.5 size-3.5 shrink-0",
-                        item.onWorkbench ? "opacity-40" : "opacity-70",
-                      )}
-                    />
-                  }
-                  description={item.kind === "local" ? item.description : undefined}
-                  title={item.path}
-                  titleAddon={
-                    item.isDefault ? (
-                      <span className="text-[length:var(--font-badge)] text-muted-foreground">
-                        {t("nav.workbench.defaultBadge")}
-                      </span>
-                    ) : null
-                  }
-                  trailing={
-                    item.trailing ? (
-                      <span className="ml-auto shrink-0 text-muted-foreground tabular-nums">
-                        {item.trailing}
-                      </span>
-                    ) : null
-                  }
-                  onClick={() => onPickPath(item.path)}
-                >
-                  {item.name}
-                </AppMenuItem>
-              ))
+              items.map((item) => {
+                const selected = Boolean(selectedPath && sameProjectPath(item.path, selectedPath));
+                const meta = item.trailing;
+                const canRemove = recentProjects.some((recent) => sameProjectPath(recent.path, item.path));
+                return (
+                  <AppMenuCheckItem
+                    key={item.path}
+                    className={cn(sidebarItemClass, "group/recent")}
+                    selected={selected}
+                    leading={<FolderIcon className="size-3.5 shrink-0 opacity-70" />}
+                    title={item.path}
+                    trailing={
+                      !selected && canRemove ? (
+                        <Hint label={t("nav.workbench.removeRecent")}>
+                          <button
+                            type="button"
+                            data-remove-recent=""
+                            aria-label={t("nav.workbench.removeRecent")}
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-sm",
+                              "text-muted-foreground opacity-0",
+                              "group-hover/recent:opacity-100 group-data-[highlighted]/recent:opacity-100",
+                              "hover:bg-accent hover:text-accent-foreground",
+                            )}
+                            onPointerDown={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onPointerUp={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              holdPickerOpen();
+                              useProjectStore.getState().removeRecentProject(item.path);
+                            }}
+                          >
+                            <XIcon className="size-3" />
+                          </button>
+                        </Hint>
+                      ) : undefined
+                    }
+                    onSelect={(event) => {
+                      if (
+                        event.target instanceof Element
+                        && event.target.closest("[data-remove-recent]")
+                      ) {
+                        event.preventDefault();
+                      }
+                    }}
+                    onClick={() => onPickPath(item.path)}
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                      <span className="min-w-0 shrink truncate text-foreground">{item.name}</span>
+                      {item.isDefault ? (
+                        <span className="shrink-0 text-[length:var(--font-badge)] text-muted-foreground">
+                          {t("nav.workbench.defaultBadge")}
+                        </span>
+                      ) : null}
+                      {meta ? (
+                        <span
+                          className="min-w-0 truncate text-muted-foreground tabular-nums"
+                          title={meta}
+                        >
+                          {meta}
+                        </span>
+                      ) : null}
+                    </span>
+                  </AppMenuCheckItem>
+                );
+              })
             )}
             {remaining > 0 ? (
               <AppMenuItem
@@ -263,6 +305,7 @@ export function WorkbenchProjectPicker({
             <ProjectPickerReposSection
               query={query}
               visible={open}
+              selectedPath={selectedPath}
               onPickPath={onPickPath}
               onOpenLocalFolder={onOpenFolder}
               onRequest={requestRemote}
@@ -315,10 +358,11 @@ export function WorkbenchProjectPicker({
       <RemoteConnectDialog
         alias={connect?.alias ?? null}
         open={Boolean(connect)}
+        autoCloseOnReady={false}
         onOpenChange={(next) => {
           if (!next) setConnect(null);
         }}
-        onReady={afterConnectReady}
+        onContinue={afterConnectReady}
       />
       <RemoteFolderDialog
         alias={folder?.alias ?? null}

@@ -27,6 +27,31 @@ export function remoteProfileFromCurrentRoot(): string | null {
   return typeof root === "string" ? parseRemoteAbs(root)?.profileId ?? null : null;
 }
 
+/** Offline replica polls (branch list, status) must not throw through IPC. */
+export function disconnectedGitProbe(method: string): { hit: true; result: unknown } | { hit: false } {
+  if (method === "git:isRepo") return { hit: true, result: false };
+  if (method === "git:warmup") return { hit: true, result: { ok: true } };
+  if (method === "git:branches") return { hit: true, result: { current: "", branches: [] } };
+  if (method === "git:status") {
+    return {
+      hit: true,
+      result: {
+        branch: "",
+        files: [],
+        tracking: {
+          upstreamRef: null,
+          remoteName: null,
+          aheadCount: 0,
+          behindCount: 0,
+          hasRemote: false,
+          isDetached: false,
+        },
+      },
+    };
+  }
+  return { hit: false };
+}
+
 export function rewriteRemoteAbsKeys(params: unknown, keys: string[]): Record<string, unknown> {
   const rec = asRecord(params) ?? {};
   const next = { ...rec };

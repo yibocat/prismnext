@@ -93,7 +93,7 @@ export async function applyProjectPick(
   const host = deps ?? await liveDeps();
   const path = canonicalProjectPath(input.path);
   if (!path) return { ok: false, reason: "empty_path" };
-  const connectRemote = input.connectRemote ?? input.mode === "assign";
+  const connectRemote = input.connectRemote ?? false;
   const remote = parseRemoteAbs(path);
 
   if (input.mode === "assign") {
@@ -140,7 +140,7 @@ export async function applySessionActivate(
   deps?: ProjectContextDeps,
 ): Promise<void> {
   const host = deps ?? await liveDeps();
-  const connectRemote = input.connectRemote ?? true;
+  const connectRemote = input.connectRemote ?? false;
   const lastPath = canonicalProjectPath(input.lastPath);
   host.recordSessionProject(input.conversationId, input.projectId);
   await host.focusProject(lastPath, { connectRemote });

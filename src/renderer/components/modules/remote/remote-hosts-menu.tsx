@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { filterRemoteHostProjects, listRemoteHostProjects, type RemoteHostNextAction } from "@/lib/remote/host-projects";
 import { useProjectStore } from "@/stores/project-store";
-import { useWorkbenchStore } from "@/stores/workbench-store";
+import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import { useRemoteStore } from "@/stores/remote-store";
 import {
+  AppMenuCheckItem,
   AppMenuItem,
   AppMenuLabel,
   AppMenuSub,
@@ -18,14 +19,9 @@ import { FolderIcon, FolderOpen, FolderPlus, TerminalIcon } from "lucide-react";
 const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
 
-const recentRowClass = cn(
-  sidebarItemClass,
-  "h-auto min-h-0 items-start py-1.5",
-);
-
 const hostSubmenuClass = cn(
-  "flex min-h-0 min-w-[16rem] w-max flex-col gap-0 overflow-hidden p-0",
-  "max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))]",
+  "flex min-h-0 min-w-[22rem] w-max flex-col gap-0 overflow-hidden p-0",
+  "max-w-[min(36rem,var(--radix-dropdown-menu-content-available-width))]",
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
@@ -38,11 +34,13 @@ function hostMatchesQuery(alias: string, hostname: string, query: string): boole
 export function RemoteHostsMenuSection({
   query,
   visible,
+  selectedPath,
   onRequest,
   showHeading = true,
 }: {
   query: string;
   visible: boolean;
+  selectedPath?: string | null;
   onRequest: (alias: string, next: RemoteHostNextAction) => void;
   showHeading?: boolean;
 }) {
@@ -80,29 +78,29 @@ export function RemoteHostsMenuSection({
             listRemoteHostProjects(host.alias, recentProjects, members),
             hostQuery,
           );
-          const description = state?.phase === "ready"
+          const status = state?.phase === "ready"
             ? t("remote.phase.ready")
             : state?.phase === "error"
               ? t("remote.phase.error")
               : state?.phase === "connecting" || state?.phase === "bootstrapping"
                 ? t("remote.phase.connecting")
-                : host.hostname === host.alias
-                  ? undefined
-                  : host.hostname;
+                : undefined;
+          const trailing = status
+            ?? (host.hostname !== host.alias ? host.hostname : undefined);
           return (
             <AppMenuSub key={host.alias}>
               <AppMenuSubTrigger
-                className={recentRowClass}
-                leading={<TerminalIcon className="mt-0.5 size-3.5 shrink-0 opacity-70" />}
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{host.alias}</span>
-                  {description ? (
-                    <span className="truncate text-[length:var(--font-path)] text-muted-foreground">
-                      {description}
+                className={sidebarItemClass}
+                leading={<TerminalIcon className="size-3.5 shrink-0 opacity-70" />}
+                trailing={
+                  trailing ? (
+                    <span className="max-w-[10rem] truncate text-muted-foreground">
+                      {trailing}
                     </span>
-                  ) : null}
-                </span>
+                  ) : null
+                }
+              >
+                {host.alias}
               </AppMenuSubTrigger>
               <AppMenuSubContent className={hostSubmenuClass}>
                 <div className="shrink-0 border-b border-border px-2 pt-1.5 pb-1.5">
@@ -136,20 +134,34 @@ export function RemoteHostsMenuSection({
                       {t("remote.noRemoteProjects")}
                     </p>
                   ) : (
-                    projects.map((item) => (
-                      <AppMenuItem
-                        key={item.lastPath}
-                        className={recentRowClass}
-                        leading={<FolderIcon className="mt-0.5 size-3.5 shrink-0 opacity-70" />}
-                        description={item.remoteRoot}
-                        onClick={() => onRequest(host.alias, {
-                          type: "open-path",
-                          remoteRoot: item.remoteRoot,
-                        })}
-                      >
-                        {item.name}
-                      </AppMenuItem>
-                    ))
+                    projects.map((item) => {
+                      const selected = Boolean(
+                        selectedPath && sameProjectPath(item.lastPath, selectedPath),
+                      );
+                      return (
+                        <AppMenuCheckItem
+                          key={item.lastPath}
+                          className={sidebarItemClass}
+                          selected={selected}
+                          leading={<FolderIcon className="size-3.5 shrink-0 opacity-70" />}
+                          title={item.lastPath}
+                          onClick={() => onRequest(host.alias, {
+                            type: "open-path",
+                            remoteRoot: item.remoteRoot,
+                          })}
+                        >
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                            <span className="min-w-0 shrink truncate">{item.name}</span>
+                            <span
+                              className="min-w-0 truncate text-muted-foreground"
+                              title={item.remoteRoot}
+                            >
+                              {item.remoteRoot}
+                            </span>
+                          </span>
+                        </AppMenuCheckItem>
+                      );
+                    })
                   )}
                 </div>
                 <div className="shrink-0 bg-popover px-0.5 pt-0.5 pb-0.5">

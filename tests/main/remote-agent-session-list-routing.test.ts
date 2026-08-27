@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  forgetRemoteConversation,
   lookupRemoteProfileIdForProject,
+  rememberRemoteConversation,
+  remoteProfileIdFromAgentArgs,
   resolveRemoteAgentListTarget,
 } from "../../src/main/remote/agent-route";
 import {
@@ -23,6 +26,10 @@ const addMenu = readFileSync(
 );
 const projectSelector = readFileSync(
   join(__dirname, "../../src/renderer/components/modules/chat/project-selector.tsx"),
+  "utf8",
+);
+const lifecycle = readFileSync(
+  join(__dirname, "../../src/renderer/lib/workspace/project-lifecycle.ts"),
   "utf8",
 );
 
@@ -75,6 +82,22 @@ describe("resolveRemoteAgentListTarget", () => {
       { isBound: () => true, lookupProjectId: () => null },
     )).toEqual({ kind: "local" });
   });
+
+  it("leaves a remembered remote chat when the next projectRoot is local", () => {
+    rememberRemoteConversation("tab-1", "lab");
+    try {
+      expect(remoteProfileIdFromAgentArgs(
+        { conversationId: "tab-1", projectId: "p_local", projectRoot: "/Users/me/paper" },
+        () => "lab",
+      )).toBeNull();
+      expect(resolveRemoteAgentListTarget(
+        { conversationId: "tab-1", projectRoot: "/Users/me/paper" },
+        { isBound: () => false, lookupProjectId: () => "lab" },
+      )).toEqual({ kind: "local" });
+    } finally {
+      forgetRemoteConversation("tab-1");
+    }
+  });
 });
 
 describe("resolveProjectLastPath", () => {
@@ -96,6 +119,10 @@ describe("RW-6.0 wiring", () => {
     expect(ipc).toContain("lookupRemoteProfileIdForProject");
     expect(ipc).toContain("resolveProjectLastPath");
     expect(ipc).toContain("projectRoot");
+    expect(ipc).toContain("forgetRemoteConversation");
+    expect(ipc).toContain("agent:reassignSessionProject");
+    expect(ipc).toContain("offline_session_missing");
+    expect(ipc).not.toContain("readOnly: true");
   });
 
   it("passes member.lastPath as projectRoot from the sidebar", () => {
@@ -108,5 +135,6 @@ describe("RW-6.0 wiring", () => {
     expect(addMenu).toContain("applyProjectPick");
     expect(projectSelector).toContain("applyProjectPick");
     expect(projectSelector).not.toContain("openRemoteWorkbenchProject");
+    expect(lifecycle).toContain("ensureRemoteProjectReady");
   });
 });

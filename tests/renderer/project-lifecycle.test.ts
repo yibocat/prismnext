@@ -221,7 +221,7 @@ describe("assignSessionProject", () => {
     expect(useWorkbenchStore.getState().sessionProjectIds["conv-1"]).toBe("p_b");
     expect(useChatStore.getState().tabs[0]?.sessionCwd).toBe("/papers/b");
     expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/b", {
-      connectRemote: true,
+      connectRemote: false,
     });
   });
 

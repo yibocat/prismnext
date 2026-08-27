@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { sameProjectPath } from "@/stores/workbench-store";
 
 interface RecentProject {
   path: string;
@@ -42,7 +43,7 @@ export const useProjectStore = create<ProjectState>()(
 
       removeRecentProject: (path: string) => {
         set((state) => ({
-          recentProjects: state.recentProjects.filter((p) => p.path !== path),
+          recentProjects: state.recentProjects.filter((p) => !sameProjectPath(p.path, path)),
         }));
       },
     }),

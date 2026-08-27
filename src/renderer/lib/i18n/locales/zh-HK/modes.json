@@ -34,6 +34,8 @@
     "noRepo": "未初始化 Git 倉庫",
     "noRepoHint": "當前專案還不是 Git 倉庫。",
     "noRepoHintInit": "初始化 Git 後即可跟蹤更改、分支與 worktree。",
+    "noRepoOffline": "Git 在遠端 Host 上",
+    "noRepoHintOffline": "連上之後先能睇分支同更改。連過一次後，工具列會記住上次嘅分支名。",
     "emptyChanges": "無更改 — 工作區乾淨",
     "selectCommit": "選擇提交以檢視詳情",
     "commitNotFound": "未找到該提交",

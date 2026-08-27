@@ -6,36 +6,34 @@ import type { RemoteHostNextAction } from "@/lib/remote/host-projects";
 import { listLocalRepoEntries } from "@/lib/workspace/unified-project-picker";
 import { RemoteHostsMenuSection } from "@/components/modules/remote/remote-hosts-menu";
 import {
+  AppMenuCheckItem,
   AppMenuItem,
   AppMenuSub,
   AppMenuSubContent,
   AppMenuSubTrigger,
 } from "@/components/ui/app-menu";
-import { useWorkbenchStore } from "@/stores/workbench-store";
+import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 
 const sidebarItemClass =
   "focus:bg-sidebar-accent focus:text-sidebar-accent-foreground";
 
-const recentRowClass = cn(
-  sidebarItemClass,
-  "h-auto min-h-0 items-start py-1.5",
-);
-
 const hostSubmenuClass = cn(
-  "flex min-h-0 min-w-[16rem] w-max flex-col gap-0 overflow-hidden p-0",
-  "max-w-[min(22rem,var(--radix-dropdown-menu-content-available-width))]",
+  "flex min-h-0 min-w-[22rem] w-max flex-col gap-0 overflow-hidden p-0",
+  "max-w-[min(36rem,var(--radix-dropdown-menu-content-available-width))]",
   "max-h-[min(24rem,var(--radix-dropdown-menu-content-available-height))]",
 );
 
 export function ProjectPickerReposSection({
   query,
   visible,
+  selectedPath,
   onPickPath,
   onOpenLocalFolder,
   onRequest,
 }: {
   query: string;
   visible: boolean;
+  selectedPath?: string | null;
   onPickPath: (path: string) => void;
   onOpenLocalFolder: () => void;
   onRequest: (alias: string, next: RemoteHostNextAction) => void;
@@ -51,8 +49,8 @@ export function ProjectPickerReposSection({
     <>
       <AppMenuSub>
         <AppMenuSubTrigger
-          className={recentRowClass}
-          leading={<LaptopIcon className="mt-0.5 size-3.5 shrink-0 opacity-70" />}
+          className={sidebarItemClass}
+          leading={<LaptopIcon className="size-3.5 shrink-0 opacity-70" />}
         >
           {t("nav.workbench.localRepos")}
         </AppMenuSubTrigger>
@@ -63,17 +61,29 @@ export function ProjectPickerReposSection({
                 {t("nav.project.noRecent")}
               </p>
             ) : (
-              localEntries.map((item) => (
-                <AppMenuItem
-                  key={item.path}
-                  className={recentRowClass}
-                  leading={<FolderIcon className="mt-0.5 size-3.5 shrink-0 opacity-70" />}
-                  description={item.description}
-                  onClick={() => onPickPath(item.path)}
-                >
-                  {item.name}
-                </AppMenuItem>
-              ))
+              localEntries.map((item) => {
+                const selected = Boolean(selectedPath && sameProjectPath(item.path, selectedPath));
+                return (
+                  <AppMenuCheckItem
+                    key={item.path}
+                    className={sidebarItemClass}
+                    selected={selected}
+                    leading={<FolderIcon className="size-3.5 shrink-0 opacity-70" />}
+                    title={item.path}
+                    onClick={() => onPickPath(item.path)}
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                      <span className="min-w-0 shrink truncate">{item.name}</span>
+                      <span
+                        className="min-w-0 truncate text-muted-foreground"
+                        title={item.description}
+                      >
+                        {item.description}
+                      </span>
+                    </span>
+                  </AppMenuCheckItem>
+                );
+              })
             )}
           </div>
           <div className="shrink-0 bg-popover px-0.5 pt-0.5 pb-0.5">
@@ -90,6 +100,7 @@ export function ProjectPickerReposSection({
       <RemoteHostsMenuSection
         query={query}
         visible={visible}
+        selectedPath={selectedPath}
         onRequest={onRequest}
         showHeading={false}
       />

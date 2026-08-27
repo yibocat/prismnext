@@ -79,7 +79,8 @@
     "repos": "仓库",
     "localRepos": "本机",
     "connectSsh": "通过 SSH 连接…",
-    "noSshHosts": "~/.ssh/config 里还没有主机"
+    "noSshHosts": "~/.ssh/config 里还没有主机",
+    "removeRecent": "从最近项目中移除"
   },
   "project": {
     "noProject": "未打开项目",

@@ -135,14 +135,20 @@
   },
   "toolbar": {
     "local": "Local",
+    "hostLocal": "Local",
+    "hostRemote": "{{host}}",
+    "connectRemote": "SSH…",
+    "connectNow": "Connect",
+    "hostStatus": "Connection status",
     "suggestions": "Suggestions",
     "planNewIdea": "Plan a new idea",
     "initGit": "Initialize Git repository",
     "initGitShort": "Init Git"
   },
   "worktree": {
-    "local": "Local",
+    "local": "Project",
     "newWorktree": "New Worktree",
+    "short": "Worktree",
     "existing": "Existing worktrees",
     "active": "active",
     "selected": "selected",
@@ -168,7 +174,13 @@
   "branch": {
     "noBranches": "No branches",
     "next": "next",
-    "current": "current"
+    "current": "current",
+    "worktrees": "Worktrees"
+  },
+  "slash": {
+    "worktree": "Worktree",
+    "worktreeLocal": "Project",
+    "worktreeNew": "New worktree…"
   },
   "projectAssignBlocked": "Switch project requires an empty chat tab.",
   "project": {
@@ -287,6 +299,8 @@
     "resendFailed": "Failed to resend message"
   },
   "prepare": {
+    "connecting_remote": "Connecting…",
+    "connecting_remote_step": "Connecting · {{step}}",
     "planningNext": "Planning next step…",
     "describing_images": "Describing images with vision helper…",
     "thinking": "Thinking…",

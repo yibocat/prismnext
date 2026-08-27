@@ -21,6 +21,7 @@ export type ConnectDialogPendingSession = {
 export type ConnectDialogState = {
   alias: string;
   blocking: boolean;
+  autoCloseOnReady?: boolean;
   pendingAction?: ConnectDialogPendingAction;
   pendingSession?: ConnectDialogPendingSession;
 };
@@ -43,6 +44,7 @@ interface RemoteState {
     alias: string,
     opts?: {
       blocking?: boolean;
+      autoCloseOnReady?: boolean;
       pendingAction?: ConnectDialogPendingAction;
       pendingSession?: ConnectDialogPendingSession;
     },
@@ -65,8 +67,28 @@ async function rebindFocusedRemoteProject(alias: string): Promise<void> {
 }
 
 const connectInFlight = new Map<string, Promise<RemoteConnectResult>>();
+const syncedReadyProfiles = new Set<string>();
+const readySideEffects = new Map<string, Promise<void>>();
 
 let subscribed = false;
+
+function onProfileReady(profileId: string): void {
+  if (readySideEffects.has(profileId)) return;
+  const work = (async () => {
+    await rebindFocusedRemoteProject(profileId).catch(() => undefined);
+    const { useDocumentStore } = await import("@/stores/document-store");
+    const root = useDocumentStore.getState().projectRoot ?? "";
+    if (parseRemoteAbs(root)?.profileId === profileId) {
+      void import("@/stores/git-store").then((mod) => mod.useGitStore.getState().checkRepo(root));
+    }
+    if (syncedReadyProfiles.has(profileId)) return;
+    syncedReadyProfiles.add(profileId);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const { syncRemoteSessionsForProfile } = await import("@/lib/remote/sync-actions");
+    await syncRemoteSessionsForProfile(profileId, { silent: true });
+  })();
+  readySideEffects.set(profileId, work);
+}
 
 function ensureSubscriptions(apply: (partial: Partial<RemoteState>) => void): void {
   if (subscribed) return;
@@ -79,6 +101,11 @@ function ensureSubscriptions(apply: (partial: Partial<RemoteState>) => void): vo
     apply({
       byProfileId: { ...useRemoteStore.getState().byProfileId, [profileId]: state },
     });
+    if (state.phase === "ready") onProfileReady(profileId);
+    else {
+      syncedReadyProfiles.delete(profileId);
+      readySideEffects.delete(profileId);
+    }
   });
 }
 
@@ -102,6 +129,7 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
   },
 
   connect: async (alias) => {
+    ensureSubscriptions(set);
     const existing = connectInFlight.get(alias);
     if (existing) return existing;
     const pending = (async () => {
@@ -115,7 +143,7 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
         });
       }
       if (result.ok) {
-        await rebindFocusedRemoteProject(alias).catch(() => undefined);
+        onProfileReady(alias);
       }
       return result;
     })().finally(() => {
@@ -131,6 +159,7 @@ export const useRemoteStore = create<RemoteState>((set, get) => ({
       connectDialog: {
         alias,
         blocking: opts?.blocking === true,
+        autoCloseOnReady: opts?.autoCloseOnReady === true,
         pendingAction: opts?.pendingAction,
         pendingSession: opts?.pendingSession,
       },

@@ -50,6 +50,14 @@ export function isHostAgentMethod(method: string): method is HostAgentMethod {
   return (HOST_AGENT_METHODS as readonly string[]).includes(method);
 }
 
+/** Offline replica polls before SSH is up must not throw through IPC. */
+export function disconnectedRemoteAgentProbe(method: string): unknown {
+  if (method === "agent:syncIntensiveReading") return { ok: true };
+  if (method === "agent:getPlanEvents") return [];
+  if (method === "agent:send") return { ok: false, error: "remote_not_connected" };
+  return { ok: false, error: "remote_not_connected" };
+}
+
 /** Status-dot / sidebar polls before SSH is up must not throw. */
 export function disconnectedRemoteAgentStatus(projectRoot?: string | null): AgentStatus {
   return {
@@ -106,8 +114,12 @@ export function remoteProfileIdFromAgentArgs(
   for (const key of ["projectRoot", "boundCheckoutPath"] as const) {
     const value = rec[key];
     if (typeof value !== "string") continue;
-    const parsed = parseRemoteAbs(value);
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    const parsed = parseRemoteAbs(trimmed);
     if (parsed) return parsed.profileId;
+    // Explicit local path wins — do not keep the chat on the previous Host.
+    return null;
   }
   if (typeof rec.conversationId === "string") {
     const mapped = conversationProfiles.get(rec.conversationId.trim());

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatBranchWorktreeLabel, formatHostWorktreeLabel } from "../../src/renderer/lib/git/checkout-context";
 import {
   findWorktreeForDirectory,
   isWorktreeDirectoryActive,
@@ -65,5 +66,16 @@ describe("worktree path helpers", () => {
     const remaining = worktrees.filter((w) => w.name === "quick-fox");
     expect(isWorktreeDirectoryActive(foxPath, remaining, PROJECT)).toBe(true);
     expect(isWorktreeDirectoryActive(WT_PATH, remaining, PROJECT)).toBe(false);
+  });
+
+  it("labels a worktree checkout as branch · name", () => {
+    expect(formatBranchWorktreeLabel("master", null)).toBe("master");
+    expect(formatBranchWorktreeLabel("master", "wt-feature")).toBe("master · wt-feature");
+  });
+
+  it("labels the Host control as host · worktree when a checkout is attached", () => {
+    expect(formatHostWorktreeLabel("Local", null)).toBe("Local");
+    expect(formatHostWorktreeLabel("43.167.215.144", "wt-feature")).toBe("43.167.215.144 · wt-feature");
+    expect(formatHostWorktreeLabel("Local", "Worktree")).toBe("Local · Worktree");
   });
 });

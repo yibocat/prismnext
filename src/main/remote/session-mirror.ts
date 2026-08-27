@@ -13,7 +13,6 @@ export interface MirroredSessionSummary {
   updatedAt: string;
   projectId: string;
   fromCache: true;
-  readOnly: true;
 }
 
 function sessionsDir(profileId: string, projectId: string): string {
@@ -53,7 +52,6 @@ export function listMirroredSessions(profileId: string, projectId: string): Mirr
       updatedAt: typeof rec.updatedAt === "string" ? rec.updatedAt : "",
       projectId,
       fromCache: true,
-      readOnly: true,
     });
   }
   return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));

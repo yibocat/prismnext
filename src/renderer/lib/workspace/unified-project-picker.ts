@@ -84,7 +84,7 @@ export function listUnifiedRecents(input: {
       path,
       name: parsed ? remoteName(path, item.name) : item.name,
       kind: parsed ? "remote" : "local",
-      trailing: parsed?.profileId,
+      trailing: parsed?.profileId ?? path,
       description: parsed ? parsed.abs : path,
       onWorkbench: input.memberPaths.some((memberPath) => sameProjectPath(memberPath, path)),
       isDefault,

@@ -425,21 +425,25 @@ export const LeftSidebar = memo(function LeftSidebar() {
     if (!silent) setLoading(true);
     try {
       const listed = await Promise.all(targets.map(async (member) => {
-        const rows = member.id
-          ? await agentDesktop.agentListSessionsByProjectId({
+        try {
+          const rows = member.id
+            ? await agentDesktop.agentListSessionsByProjectId({
+              projectId: member.id,
+              projectRoot: member.lastPath,
+            })
+            : await agentDesktop.agentListSessions(member.lastPath);
+          return rows.map((s) => ({
+            id: s.conversationId,
+            title: s.title,
+            lastModified: s.updatedAt,
+            createdAt: s.createdAt,
+            directory: s.directory,
             projectId: member.id,
-            projectRoot: member.lastPath,
-          })
-          : await agentDesktop.agentListSessions(member.lastPath);
-        return rows.map((s) => ({
-          id: s.conversationId,
-          title: s.title,
-          lastModified: s.updatedAt,
-          createdAt: s.createdAt,
-          directory: s.directory,
-          projectId: member.id,
-          projectLastPath: member.lastPath,
-        }));
+            projectLastPath: member.lastPath,
+          }));
+        } catch {
+          return [];
+        }
       }));
       const result = listed.flat();
       useWorkbenchStore.getState().recordSessionProjects(
@@ -684,7 +688,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
           conversationId: s.id,
           projectId: s.projectId,
           lastPath,
-          connectRemote: true,
+          connectRemote: false,
         });
         return;
       }

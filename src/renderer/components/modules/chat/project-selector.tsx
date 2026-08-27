@@ -51,6 +51,7 @@ export function ProjectSelector() {
       pickerMode="chat-assign"
       hintLabel={streaming ? t("chat.project.locked") : label}
       disabled={streaming}
+      selectedPath={current?.lastPath}
       onPickPath={assignActiveChat}
       onOpenFolder={handleOpenFolder}
       onProjectCreated={assignActiveChat}

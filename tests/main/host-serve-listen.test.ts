@@ -118,15 +118,31 @@ describe("startHostListenServer", () => {
     }
   });
 
-  it("displaces the first socket when a second client connects", async () => {
+  it("ignores a TCP probe that never sends a frame", async () => {
+    const started = await startHostListenServer({ handshake, bind: "127.0.0.1:0" });
+    try {
+      const first = new LineClient(await connectPort(started.port));
+      await first.rpc("host.handshake", { connectionId: "conn_keep" });
+      const probe = await connectPort(started.port);
+      probe.end();
+      await once(probe, "close");
+      await expect(first.rpc("host.doctor", {})).resolves.toMatchObject({ ok: expect.anything() });
+      first.socket.destroy();
+    } finally {
+      await started.close();
+    }
+  });
+
+  it("displaces the first socket when a second client sends a frame", async () => {
     const started = await startHostListenServer({ handshake, bind: "127.0.0.1:0" });
     try {
       const first = new LineClient(await connectPort(started.port));
       await first.rpc("host.handshake", { connectionId: "conn_one" });
       const displaced = first.waitEvent("remote:displaced");
       const second = new LineClient(await connectPort(started.port));
+      const handshake = second.rpc("host.handshake", { connectionId: "conn_two" });
       await expect(displaced).resolves.toBeTruthy();
-      await second.rpc("host.handshake", { connectionId: "conn_two" });
+      await handshake;
       await expect(second.rpc("host.reattach", { connectionId: "conn_one" })).rejects.toThrow(/took over/i);
       const mine = await second.rpc("host.reattach", { connectionId: "conn_two" }) as {
         ownerConnectionId?: string;

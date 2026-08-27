@@ -26,6 +26,7 @@ describe("listUnifiedRecents", () => {
       "remote://43.167.215.144/home/u/project-test-1",
     ]);
     expect(rows[0]?.kind).toBe("local");
+    expect(rows[0]?.trailing).toBe("/Users/me/local-paper");
     expect(rows[1]?.kind).toBe("remote");
   });
 
@@ -130,7 +131,16 @@ describe("RW-6.1 picker wiring", () => {
     expect(menu).toContain("ProjectPickerReposSection");
     expect(menu).toContain("SshHostPickerDialog");
     expect(menu).toContain("pickerMode");
+    expect(menu).toContain("min-w-[24rem]");
+    expect(menu).toContain("AppMenuCheckItem");
+    expect(menu).toContain("removeRecentProject");
+    expect(menu).toContain("nav.workbench.removeRecent");
+    expect(menu).toContain("data-remove-recent");
+    expect(menu).toContain("holdPickerOpen");
+    expect(menu).toContain("group/recent");
+    expect(menu).not.toContain("ml-auto");
     expect(repos).toContain("nav.workbench.localRepos");
+    expect(repos).not.toContain("ml-auto");
     expect(ssh).toContain("SSH_CONFIG_REVEAL_PATH");
   });
 });

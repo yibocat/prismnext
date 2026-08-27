@@ -4,6 +4,7 @@
  * Cleared when the model streams (thought/text/tools) or the turn ends.
  *
  * - describing_images: renderer-only — multimodal helper describing attachments
+ * - connecting_remote: renderer-only — SSH / Host bootstrap before agentSend
  * - syncing_project / starting_agent / creating_session / connecting_mcp: setup
  * - starting_model: first turn, waiting for the model to spin up
  * - waiting_model: subsequent turns, prompt dispatched, waiting for output
@@ -14,6 +15,7 @@
  */
 export const CHAT_PREPARE_PHASES = [
   "describing_images",
+  "connecting_remote",
   "syncing_project",
   "starting_agent",
   "creating_session",

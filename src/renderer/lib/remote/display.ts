@@ -1,8 +1,9 @@
-import type {
-  RemoteBootstrapLogLine,
-  RemoteConnectConstitution,
-  RemoteConnectGate,
-  RemoteConnectionState,
+import {
+  REMOTE_CONNECT_GATES,
+  type RemoteBootstrapLogLine,
+  type RemoteConnectConstitution,
+  type RemoteConnectGate,
+  type RemoteConnectionState,
 } from "@shared/remote";
 import { encodeRemoteAbs, parseRemoteAbs, recoverRemoteAbs } from "@shared/remote";
 import type { AgentLifecyclePhase } from "../../../shared/agent/status";
@@ -24,7 +25,7 @@ export function connectionPhaseLabelKey(state: RemoteConnectionState): string {
 }
 
 export function logsForProfile(
-  lines: RemoteBootstrapLogLine[],
+  lines: ReadonlyArray<RemoteBootstrapLogLine>,
   profileId: string,
   max = 6,
 ): RemoteBootstrapLogLine[] {
@@ -43,13 +44,48 @@ export function latestGateDetail(
 ): string | undefined {
   const recorded = constitution?.gates.find((item) => item.gate === gate)?.detail?.trim();
   if (recorded) return recorded;
+  let infoFallback: string | undefined;
   for (let i = logs.length - 1; i >= 0; i -= 1) {
     const line = logs[i];
     if (line?.gate !== gate) continue;
     const message = line.message.trim();
-    if (message) return message;
+    if (!message) continue;
+    if (line.level === "ok" || line.level === "error" || line.level === "warn") return message;
+    infoFallback ??= message;
   }
-  return undefined;
+  return infoFallback;
+}
+
+export function connectProgress(input: {
+  gates?: readonly RemoteConnectGate[];
+  constitution?: RemoteConnectConstitution;
+  phase: RemoteConnectionState["phase"];
+  logs: ReadonlyArray<RemoteBootstrapLogLine>;
+}): {
+  completed: number;
+  total: number;
+  percent: number;
+  currentGate: RemoteConnectGate | null;
+} {
+  const gates = input.gates ?? REMOTE_CONNECT_GATES;
+  const total = gates.length;
+  if (input.phase === "ready") {
+    return { completed: total, total, percent: 100, currentGate: null };
+  }
+  let completed = 0;
+  let currentGate: RemoteConnectGate | null = gates[0] ?? null;
+  for (const gate of gates) {
+    const status = resolveConnectGateStatus(gate, input.constitution, input.logs);
+    if (status === "ok") {
+      completed += 1;
+      continue;
+    }
+    currentGate = gate;
+    break;
+  }
+  if (completed === total) currentGate = null;
+  const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+  return { completed, total, percent, currentGate };
 }
 
 export function resolveConnectGateStatus(
@@ -59,14 +95,20 @@ export function resolveConnectGateStatus(
 ): "ok" | "fail" | "pending" {
   const recorded = constitution?.gates.find((item) => item.gate === gate);
   if (recorded) return recorded.ok ? "ok" : "fail";
-  for (let i = logs.length - 1; i >= 0; i -= 1) {
-    const line = logs[i];
-    if (line?.gate !== gate) continue;
-    if (line.level === "error") return "fail";
-    if (line.level === "ok") return "ok";
-    return "pending";
+  let status: "ok" | "fail" | "pending" | null = null;
+  for (const line of logs) {
+    if (line.gate !== gate) continue;
+    if (line.level === "error") {
+      status = "fail";
+      continue;
+    }
+    if (line.level === "ok") {
+      status = "ok";
+      continue;
+    }
+    if (status === null) status = "pending";
   }
-  return "pending";
+  return status ?? "pending";
 }
 
 export function remoteHostDisplayName(
@@ -77,6 +119,35 @@ export function remoteHostDisplayName(
   if (!parsed) return null;
   const host = hosts.find((item) => item.alias === parsed.profileId);
   return host?.hostname?.trim() || parsed.profileId;
+}
+
+/** Chat Host control: Local, or the SSH HostName / profile id. */
+export function executionHostLabel(
+  projectRoot: string | null | undefined,
+  hosts: ReadonlyArray<{ alias: string; hostname: string }>,
+  localLabel: string,
+): string {
+  return remoteHostDisplayName(projectRoot, hosts) ?? localLabel;
+}
+
+export function connectPrepareGate(
+  projectRoot: string | null | undefined,
+  byProfileId: Record<string, RemoteConnectionState>,
+  logs: ReadonlyArray<RemoteBootstrapLogLine>,
+): RemoteConnectGate | null {
+  const parsed = parseRemoteAbs(projectRoot ?? "");
+  if (!parsed) return null;
+  const state = byProfileId[parsed.profileId];
+  const profileLogs = logsForProfile(logs, parsed.profileId, 400);
+  return connectProgress({
+    constitution: state && (
+      state.phase === "ready" || state.phase === "error" || state.phase === "reconnecting"
+    )
+      ? state.constitution
+      : undefined,
+    phase: state?.phase ?? "connecting",
+    logs: profileLogs,
+  }).currentGate;
 }
 
 export function remoteConnectionPhaseForRoot(

@@ -33,7 +33,7 @@ import { getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { i18n } from "@/lib/i18n";
 import { createLogger } from "@/services/logger";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
-import { isRemoteProjectRoot, recoverRemoteAbs } from "../../../shared/remote";
+import { encodeRemoteAbs, isRemoteProjectRoot, recoverRemoteAbs } from "../../../shared/remote";
 
 const log = createLogger("project-lifecycle");
 
@@ -449,10 +449,20 @@ export async function openRemoteWorkbenchProject(
   profileId: string,
   remoteRoot: string,
 ): Promise<boolean> {
+  const { ensureRemoteProjectReady, isRemoteConnectError } = await import(
+    "@/lib/remote/ensure-connected"
+  );
+  const path = encodeRemoteAbs(profileId, remoteRoot);
+  try {
+    if (path) await ensureRemoteProjectReady(path);
+  } catch (error) {
+    if (isRemoteConnectError(error)) return false;
+    throw error;
+  }
   const opened = await remoteDesktop.remoteOpenProject({ profileId, remoteRoot });
   await useWorkbenchStore.getState().hydrate();
   const { useDocumentStore } = await import("@/stores/document-store");
-  await useDocumentStore.getState().focusProject(opened.lastPath);
+  await useDocumentStore.getState().focusProject(opened.lastPath, { connectRemote: false });
   return true;
 }
 
@@ -509,7 +519,7 @@ export async function assignSessionProject(
 
   const { applyCheckoutTransition } = await import("@/lib/git/checkout-context");
   const { useDocumentStore } = await import("@/stores/document-store");
-  await useDocumentStore.getState().focusProject(member.lastPath, { connectRemote: true });
+  await useDocumentStore.getState().focusProject(member.lastPath, { connectRemote: false });
   await applyCheckoutTransition({ type: "local" });
 
   const { refreshAgentSessionList } = await import("@/stores/chat/model");

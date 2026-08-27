@@ -147,6 +147,39 @@ async function ensureCheckoutRoot(root: string): Promise<void> {
   await useGitStore.getState().selectUnit(root);
 }
 
+export function formatBranchWorktreeLabel(
+  displayBranch: string,
+  worktreeName?: string | null,
+): string {
+  return worktreeName ? `${displayBranch} · ${worktreeName}` : displayBranch;
+}
+
+/** Host toolbar: `Local` / `IP`, or `Local · wt-name` / `IP · New Worktree`. */
+export function formatHostWorktreeLabel(
+  hostLabel: string,
+  worktreeLabel?: string | null,
+): string {
+  return worktreeLabel ? `${hostLabel} · ${worktreeLabel}` : hostLabel;
+}
+
+/** Plan a new worktree from the current git branch. Returns false if no base branch. */
+export async function startNewWorktreeIntent(): Promise<boolean> {
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  const gs = useGitStore.getState();
+  const wtStore = useWorktreeStore.getState();
+  let baseBranch = wtStore.activeWorktree?.baseBranch ?? null;
+  if (!baseBranch && projectRoot && gs.isGitRepo) {
+    if (!gs.branch) {
+      await gs.refreshStatus(projectRoot);
+      await gs.refreshBranches(projectRoot);
+    }
+    baseBranch = useGitStore.getState().branch;
+  }
+  if (!baseBranch) return false;
+  await applyCheckoutTransition({ type: "worktree-intent", baseBranch });
+  return true;
+}
+
 /**
  * Single write path for worktree mode + checkout root changes.
  * Call from UI instead of chaining setMode / switchCheckoutRoot / selectUnit.

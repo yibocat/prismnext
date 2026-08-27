@@ -11,7 +11,6 @@ import { selectComposerHostedQuestionId } from "@/lib/chat/composer-pending-tool
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
 import { useComposerEditorStore } from "@/stores/composer-editor-store";
-import { WorktreeSelector } from "./worktree-selector";
 import { IntensiveReadingListButton } from "./intensive-reading-list-button";
 import { blurKeyboardFocus, cn } from "@/lib/utils";
 import { useChatFileDrop, useChatDropDragging } from "@/lib/chat/use-chat-file-drop";
@@ -396,7 +395,6 @@ export function AiBar() {
           )}
         </button>
       )}
-      <WorktreeSelector variant="capsule" />
       <IntensiveReadingListButton compact variant="capsule" />
     </div>
   );

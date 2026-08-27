@@ -1,17 +1,13 @@
 import { ipcMain } from "electron";
 import * as gitService from "../git/facade";
 import { getRemoteSessionBroker } from "./remote";
-import { routeHostDomainMethod } from "../remote/domain-route";
+import { disconnectedGitProbe, routeHostDomainMethod } from "../remote/domain-route";
 
 async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
   return routeHostDomainMethod(method, args, {
     keys: ["projectRoot"],
     broker: getRemoteSessionBroker(),
-    disconnected(name) {
-      if (name === "git:isRepo") return { hit: true, result: false };
-      if (name === "git:warmup") return { hit: true, result: { ok: true } };
-      return { hit: false };
-    },
+    disconnected: disconnectedGitProbe,
   });
 }
 

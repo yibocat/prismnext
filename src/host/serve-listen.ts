@@ -27,22 +27,36 @@ export async function startHostListenServer(opts: {
   let detach: () => void = () => undefined;
 
   const server = createServer((socket) => {
-    if (active && !active.destroyed) {
-      try {
-        active.write(`${JSON.stringify({
-          kind: "event",
-          channel: "remote:displaced",
-          payload: { message: "Another connection took over this Host." },
-        })}\n`);
-      } catch {
-        // old socket already gone
+    const takeOver = (first: Buffer | string) => {
+      if (active && !active.destroyed && active !== socket) {
+        try {
+          active.write(`${JSON.stringify({
+            kind: "event",
+            channel: "remote:displaced",
+            payload: { message: "Another connection took over this Host." },
+          })}\n`);
+        } catch {
+          // old socket already gone
+        }
+        active.end();
       }
-      active.end();
-    }
-    detach();
-    active = socket;
-    detach = runtime.attach(socket, socket);
+      detach();
+      active = socket;
+      if (typeof first === "string") socket.unshift(Buffer.from(first));
+      else socket.unshift(first);
+      detach = runtime.attach(socket, socket);
+    };
+    const onFirstData = (chunk: Buffer | string) => {
+      socket.off("data", onFirstData);
+      if ((typeof chunk === "string" ? chunk.length : chunk.length) === 0) {
+        socket.once("data", onFirstData);
+        return;
+      }
+      takeOver(chunk);
+    };
+    socket.on("data", onFirstData);
     socket.on("close", () => {
+      socket.off("data", onFirstData);
       if (active === socket) {
         detach();
         active = null;

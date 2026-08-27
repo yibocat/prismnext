@@ -92,13 +92,13 @@ describe("applySessionActivate", () => {
     }, host);
     expect(host.recordSessionProject).toHaveBeenCalledWith("conv-1", "p_B");
     expect(host.focusProject).toHaveBeenCalledWith("remote://lab/home/u/b", {
-      connectRemote: true,
+      connectRemote: false,
     });
     expect(host.loadSession).toHaveBeenCalledWith(
       "conv-1",
       undefined,
       "remote://lab/home/u/b",
-      { connectRemote: true },
+      { connectRemote: false },
     );
   });
 });

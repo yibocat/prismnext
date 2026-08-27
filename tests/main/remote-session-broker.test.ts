@@ -213,7 +213,7 @@ describe("RemoteSessionBroker", () => {
     expect(result.constitution?.gates.find((item) => item.gate === "model")?.detail).toMatch(/deepseek/);
     expect(result.constitution?.gates.find((item) => item.gate === "host_serve")?.detail).toMatch(/stdio/);
     expect(broker.snapshot().logs.some((line) => /PATH has no `node`/.test(line.message))).toBe(false);
-    expect(broker.snapshot().logs.some((line) => /ProxyJump/.test(line.message))).toBe(true);
+    expect(broker.snapshot().logs.some((line) => /OpenSSH destination|ProxyJump from/.test(line.message))).toBe(false);
     expect(broker.snapshot().logs.some((line) => line.gate === "handshake" && line.level === "ok")).toBe(true);
     expect(broker.boundRemoteRoot("ssh_lab")).toBeNull();
     const opened = await broker.ensureProjectOpen("ssh_lab", "/home/alice/paper");

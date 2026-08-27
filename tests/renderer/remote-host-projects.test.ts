@@ -3,6 +3,7 @@ import {
   filterRemoteHostProjects,
   listRemoteHostProjects,
 } from "../../src/renderer/lib/remote/host-projects";
+import { workbenchMembersOnProfile } from "../../src/renderer/lib/remote/sync-actions";
 
 describe("remote host project recents", () => {
   it("lists only this host's remote folders and prefers the workbench name", () => {
@@ -42,5 +43,18 @@ describe("remote host project recents", () => {
     expect(filterRemoteHostProjects(items, "PAPER")).toEqual(items);
     expect(filterRemoteHostProjects(items, "/home/ubuntu")).toEqual(items);
     expect(filterRemoteHostProjects(items, "gpu")).toEqual([]);
+  });
+});
+
+describe("workbenchMembersOnProfile", () => {
+  it("keeps only members whose lastPath is on that host", () => {
+    expect(workbenchMembersOnProfile(
+      [
+        { id: "p_a", lastPath: "remote://lab/home/u/a" },
+        { id: "p_b", lastPath: "remote://gpu/home/u/b" },
+        { id: "p_c", lastPath: "/Users/me/local" },
+      ],
+      "lab",
+    )).toEqual([{ id: "p_a", lastPath: "remote://lab/home/u/a" }]);
   });
 });

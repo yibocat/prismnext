@@ -135,14 +135,20 @@
   },
   "toolbar": {
     "local": "本地",
+    "hostLocal": "本地",
+    "hostRemote": "{{host}}",
+    "connectRemote": "SSH…",
+    "connectNow": "連線",
+    "hostStatus": "連線狀態",
     "suggestions": "建議",
     "planNewIdea": "規劃一個新想法",
     "initGit": "初始化 Git 倉庫",
     "initGitShort": "初始化 Git"
   },
   "worktree": {
-    "local": "本地",
+    "local": "主目錄",
     "newWorktree": "新建 Worktree",
+    "short": "Worktree",
     "existing": "已有 worktree",
     "active": "當前",
     "selected": "已選",
@@ -168,7 +174,13 @@
   "branch": {
     "noBranches": "無分支",
     "next": "下一",
-    "current": "當前"
+    "current": "當前",
+    "worktrees": "Worktrees"
+  },
+  "slash": {
+    "worktree": "Worktree",
+    "worktreeLocal": "主目錄",
+    "worktreeNew": "新建 worktree…"
   },
   "projectAssignBlocked": "目前對話已有內容，請新建對話後再切換項目。",
   "project": {
@@ -313,6 +325,8 @@
     "resendFailed": "重新發送失敗"
   },
   "prepare": {
+    "connecting_remote": "正在連線…",
+    "connecting_remote_step": "正在連線 · {{step}}",
     "planningNext": "正在規劃下一步…",
     "describing_images": "正在用視覺輔助模型識圖…",
     "thinking": "思考中…",

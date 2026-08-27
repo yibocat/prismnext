@@ -135,14 +135,20 @@
   },
   "toolbar": {
     "local": "本地",
+    "hostLocal": "本地",
+    "hostRemote": "{{host}}",
+    "connectRemote": "SSH…",
+    "connectNow": "连接",
+    "hostStatus": "连接状态",
     "suggestions": "建议",
     "planNewIdea": "规划一个新想法",
     "initGit": "初始化 Git 仓库",
     "initGitShort": "初始化 Git"
   },
   "worktree": {
-    "local": "本地",
+    "local": "主目录",
     "newWorktree": "新建 Worktree",
+    "short": "Worktree",
     "existing": "已有 worktree",
     "active": "当前",
     "selected": "已选",
@@ -168,7 +174,13 @@
   "branch": {
     "noBranches": "无分支",
     "next": "下一",
-    "current": "当前"
+    "current": "当前",
+    "worktrees": "Worktrees"
+  },
+  "slash": {
+    "worktree": "Worktree",
+    "worktreeLocal": "主目录",
+    "worktreeNew": "新建 worktree…"
   },
   "projectAssignBlocked": "当前对话已有内容，请新建对话后再切换项目。",
   "project": {
@@ -313,6 +325,8 @@
     "resendFailed": "重新发送失败"
   },
   "prepare": {
+    "connecting_remote": "正在连接…",
+    "connecting_remote_step": "正在连接 · {{step}}",
     "planningNext": "正在规划下一步…",
     "describing_images": "正在用视觉辅助模型识图…",
     "thinking": "思考中…",

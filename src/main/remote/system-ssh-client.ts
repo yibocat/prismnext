@@ -292,26 +292,31 @@ class SystemSshSession implements SshSession {
       "--",
       this.dest,
     ], { stdio: ["ignore", "ignore", "pipe"] });
-    const { waitForTcp, tcpPipe } = await import("./host-listen");
-    try {
-      await waitForTcp(localPort);
-    } catch (err) {
-      child.kill("SIGTERM");
-      throw new RemoteOperationError(
-        "host_runtime",
-        err instanceof Error ? err.message : "SSH local forward did not come up.",
-      );
+    const { tcpPipe } = await import("./host-listen");
+    const startedAt = Date.now();
+    let last: Error | undefined;
+    while (Date.now() - startedAt < 8_000) {
+      try {
+        const pipe = await tcpPipe(localPort);
+        return {
+          stdin: pipe.stdin,
+          stdout: pipe.stdout,
+          stderr: child.stderr ?? pipe.stderr,
+          close: async () => {
+            await pipe.close();
+            if (!child.killed) child.kill("SIGTERM");
+          },
+        };
+      } catch (err) {
+        last = err instanceof Error ? err : new Error(String(err));
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
     }
-    const pipe = await tcpPipe(localPort);
-    return {
-      stdin: pipe.stdin,
-      stdout: pipe.stdout,
-      stderr: child.stderr ?? pipe.stderr,
-      close: async () => {
-        await pipe.close();
-        if (!child.killed) child.kill("SIGTERM");
-      },
-    };
+    child.kill("SIGTERM");
+    throw new RemoteOperationError(
+      "host_runtime",
+      last?.message ?? "SSH local forward did not come up.",
+    );
   }
 
   async openStdio(command: string): Promise<SshStdioPipe> {

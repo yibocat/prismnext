@@ -26,6 +26,7 @@ export default function GitViewer({ projectRoot }: GitViewerProps) {
   const branches = useGitStore((s) => s.branches);
   const unitRoot = useGitStore((s) => s.unitRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const repoKnown = useGitStore((s) => s.repoKnown);
   const checkingRepo = useGitStore((s) => s.checkingRepo);
   const lastTurn = useLastAgentTurnLens();
 
@@ -44,6 +45,21 @@ export default function GitViewer({ projectRoot }: GitViewerProps) {
   }
 
   if (!isGitRepo) {
+    if (!repoKnown) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+          <GitBranchIcon className="size-8 text-muted-foreground/40" />
+          <div className="space-y-1.5 max-w-sm">
+            <p className="text-[length:var(--font-size-14)] font-medium text-foreground/90">
+              {t("modes.git.noRepoOffline")}
+            </p>
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("modes.git.noRepoHintOffline")}
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
         <GitBranchIcon className="size-8 text-muted-foreground/40" />

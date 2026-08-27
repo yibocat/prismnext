@@ -34,6 +34,8 @@
     "noRepo": "No Git repository",
     "noRepoHint": "This project is not a Git repository yet.",
     "noRepoHintInit": "Initialize Git to track changes, branches, and worktrees for this project.",
+    "noRepoOffline": "Git is on the host",
+    "noRepoHintOffline": "Connect to see branches and changes. After you have connected once, the toolbar remembers the last branch.",
     "emptyChanges": "No changes — working tree clean",
     "selectCommit": "Select a commit to view details",
     "commitNotFound": "Commit not found",

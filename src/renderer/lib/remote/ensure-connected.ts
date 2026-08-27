@@ -31,6 +31,16 @@ export function remotePhaseIsReady(phase: RemoteConnectionState["phase"] | undef
   return phase === "ready";
 }
 
+/** True when this folder is remote:// and the Host is not ready yet. */
+export function isRemoteProjectOffline(
+  projectRoot: string | null | undefined,
+  byProfileId: Record<string, Pick<RemoteConnectionState, "phase">>,
+): boolean {
+  const parsed = parseRemoteAbs(projectRoot ?? "");
+  if (!parsed) return false;
+  return !remotePhaseIsReady(byProfileId[parsed.profileId]?.phase);
+}
+
 export function remotePhaseIsBusy(phase: RemoteConnectionState["phase"] | undefined): boolean {
   return phase === "connecting" || phase === "bootstrapping" || phase === "reconnecting";
 }
@@ -111,4 +121,13 @@ export async function ensureRemoteProjectReady(lastPath: string): Promise<void> 
       result.message || i18n.t("remote.connectFailed", { host: alias }),
     );
   }
+}
+
+/** SSH ready + Host `project.open` — send / compile / live file ops. */
+export async function ensureRemoteLiveForWork(lastPath: string): Promise<void> {
+  const parsed = parseRemoteAbs(lastPath);
+  if (!parsed) return;
+  await ensureRemoteProjectReady(lastPath);
+  const { projectDesktop } = await import("@/lib/desktop-api/project");
+  await projectDesktop.projectOpen(lastPath);
 }

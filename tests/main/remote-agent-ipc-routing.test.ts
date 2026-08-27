@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   DESKTOP_ONLY_AGENT_METHODS,
   HOST_AGENT_METHODS,
+  disconnectedRemoteAgentProbe,
   disconnectedRemoteAgentStatus,
   remoteProfileIdFromAgentArgs,
   rewriteAgentParamsForHost,
@@ -54,5 +55,13 @@ describe("remote agent IPC routing", () => {
     expect(status.ready).toBe(false);
     expect(status.reason).toBe("remote_not_connected");
     expect(status.projectRoot).toBe("remote://lab/home/ubuntu/paper");
+  });
+
+  it("does not throw for offline replica polls", () => {
+    expect(disconnectedRemoteAgentProbe("agent:syncIntensiveReading")).toEqual({ ok: true });
+    expect(disconnectedRemoteAgentProbe("agent:send")).toEqual({
+      ok: false,
+      error: "remote_not_connected",
+    });
   });
 });

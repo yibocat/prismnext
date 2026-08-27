@@ -33,14 +33,17 @@ import type {
 } from "../../shared/agent/api";
 import {
   agentInputHasLaptopAttachments,
+  RemoteOperationError,
   stripAgentSecrets,
 } from "../../shared/remote";
 import { getAgentService } from "../agent/agent-service";
 import { stageLaptopAttachmentsForRemote } from "../remote/agent-attachments";
 import {
+  disconnectedRemoteAgentProbe,
   disconnectedRemoteAgentStatus,
   isDesktopOnlyAgentMethod,
   lookupRemoteProfileIdForProject,
+  forgetRemoteConversation,
   rememberRemoteConversation,
   resolveRemoteAgentListTarget,
   rewriteAgentParamsForHost,
@@ -59,9 +62,28 @@ async function routeIfRemote(method: string, args: unknown): Promise<unknown | u
       (id) => resolveProjectLastPath(id),
     ),
   });
-  if (target.kind === "local") return undefined;
+  if (target.kind === "local") {
+    if (method === "agent:reassignSessionProject") {
+      const rec = args && typeof args === "object" && !Array.isArray(args)
+        ? args as { conversationId?: string }
+        : {};
+      if (typeof rec.conversationId === "string") {
+        forgetRemoteConversation(rec.conversationId);
+      }
+    }
+    return undefined;
+  }
   const profileId = target.profileId;
   if (!target.bound) {
+    if (method === "agent:reassignSessionProject") {
+      const rec = args && typeof args === "object" && !Array.isArray(args)
+        ? args as { conversationId?: string }
+        : {};
+      if (typeof rec.conversationId === "string") {
+        rememberRemoteConversation(rec.conversationId, profileId);
+      }
+      return undefined;
+    }
     if (method === "agent:status") {
       const rec = args && typeof args === "object" && !Array.isArray(args)
         ? args as { projectRoot?: string }
@@ -85,7 +107,6 @@ async function routeIfRemote(method: string, args: unknown): Promise<unknown | u
           updatedAt: Date.parse(item.updatedAt) || 0,
           createdAt: Date.parse(item.updatedAt) || 0,
           fromCache: true,
-          readOnly: true,
         }));
       }
       return [];
@@ -112,11 +133,12 @@ async function routeIfRemote(method: string, args: unknown): Promise<unknown | u
           conversation: hydrateSessionRecordToConversation(cached as never),
           directory: typeof cached.boundCheckoutPath === "string" ? cached.boundCheckoutPath : undefined,
           planEvents: Array.isArray(cached.planEvents) ? cached.planEvents : [],
-          readOnly: true,
           fromCache: true,
         };
       }
+      return { ok: false, error: "offline_session_missing", fromCache: true };
     }
+    return disconnectedRemoteAgentProbe(method);
   }
   let payload: unknown = args ?? {};
   if (method === "agent:send" && agentInputHasLaptopAttachments(payload)) {
@@ -151,15 +173,24 @@ export function registerAgentHandlers(): void {
   });
 
   ipcMain.handle("agent:send", async (event, args: AgentSendInput) => {
-    const remote = await routeIfRemote("agent:send", args);
-    if (remote !== undefined) return remote;
-    const agent = await getAgentService();
-    agent.attachOwner(event.sender);
-    const result = await agent.send({
-      ...args,
-      tabId: args.tabId,
-    });
-    return result;
+    try {
+      const remote = await routeIfRemote("agent:send", args);
+      if (remote !== undefined) return remote;
+      const agent = await getAgentService();
+      agent.attachOwner(event.sender);
+      return agent.send({
+        ...args,
+        tabId: args.tabId,
+      });
+    } catch (err) {
+      if (err instanceof RemoteOperationError) {
+        return {
+          ok: false,
+          error: err.code === "not_connected" ? "host_control_plane_dropped" : err.message,
+        };
+      }
+      throw err;
+    }
   });
 
   ipcMain.handle("agent:cancel", async (_event, args: { conversationId: string }) => {

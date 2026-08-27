@@ -209,6 +209,38 @@ export interface ModeDefinition {
   openFromAddMenu?: () => void;
 }
 
+const LIVE_HOST_MODE_IDS = new Set([
+  "files",
+  "git",
+  "texworkspace",
+  "terminal",
+  "literature",
+  "experiments",
+  "research-plan",
+  "interaction",
+]);
+
+const LIVE_HOST_TAB_KINDS = new Set<RightTabKind>([
+  "file",
+  "research-plan",
+  "git-overview",
+  "git-diff",
+  "texworkspace",
+  "terminal",
+  "literature",
+  "experiments",
+  "interaction",
+]);
+
+/** Files / Git / TeX / terminal / library / experiments need a live Host. Browser does not. */
+export function modeNeedsLiveHost(modeId: string): boolean {
+  return LIVE_HOST_MODE_IDS.has(modeId);
+}
+
+export function tabNeedsLiveHost(tab: Pick<RightTab, "kind">): boolean {
+  return LIVE_HOST_TAB_KINDS.has(tab.kind);
+}
+
 // ── Registry ──
 
 const registry = new Map<string, ModeDefinition>();

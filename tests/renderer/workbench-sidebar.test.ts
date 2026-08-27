@@ -154,6 +154,7 @@ describe("workbench sidebar wiring", () => {
     const sidebar = sourceOf("src/renderer/components/layout/left-sidebar.tsx");
     expect(sidebar).toContain("activateWorkbenchSession");
     expect(sidebar).toContain("applySessionActivate");
+    expect(sidebar).toContain("connectRemote: false");
     expect(sidebar).toContain("toggleProjectExpanded(member.id)");
     expect(sidebar).not.toContain("openProject(");
   });
@@ -283,9 +284,10 @@ describe("workbench sidebar wiring", () => {
     expect(menu).toContain("nav.workbench.more");
     expect(menu).toContain("nav.workbench.openFolder");
     expect(menu).toContain("nav.workbench.defaultBadge");
-    expect(menu).toContain("titleAddon");
     expect(menu).toContain("item.isDefault");
-    expect(menu).toContain("item.onWorkbench && \"text-muted-foreground\"");
+    expect(menu).toContain("text-foreground");
+    expect(menu).toContain("text-muted-foreground tabular-nums");
+    expect(menu).not.toContain("item.onWorkbench && !selected");
     expect(menu).toContain("collisionPadding={16}");
     expect(menu).not.toContain("w-[18.5rem]");
     expect(menu).not.toContain("nav.project.openProject");
@@ -295,6 +297,9 @@ describe("workbench sidebar wiring", () => {
     expect(hosts).toContain("AppMenuSub");
     expect(hosts).not.toMatch(/desktop-api/);
     expect(menu).not.toContain("REMOTE_CONNECT_GATES");
+    expect(menu).toContain("autoCloseOnReady={false}");
+    expect(menu).toContain("onContinue={afterConnectReady}");
+    expect(menu).not.toContain("onReady={afterConnectReady}");
   });
 
   it("moves the empty homepage composer with interpolatable flex-grow, not justify-content", () => {
@@ -311,6 +316,49 @@ describe("workbench sidebar wiring", () => {
     expect(chatCss).not.toContain("data-homepage-composer-rising");
   });
 
+  it("nests worktree switching under Host, with /worktree as a shortcut", () => {
+    const branch = sourceOf("src/renderer/components/modules/chat/branch-selector.tsx");
+    const selector = sourceOf("src/renderer/components/modules/chat/worktree-selector.tsx");
+    const host = sourceOf("src/renderer/components/modules/chat/execution-host-selector.tsx");
+    const composer = sourceOf("src/renderer/components/modules/chat/inline-composer/composer-dropdown.tsx");
+    const editor = sourceOf("src/renderer/components/modules/chat/inline-composer/inline-composer-editor.tsx");
+    expect(selector).toContain("export function WorktreeHostMenuSection");
+    expect(selector).not.toContain("export function WorktreeSelector");
+    expect(selector).toContain("worktrees.length > 0");
+    expect(selector).not.toContain("chat.worktree.local");
+    expect(selector).toContain("startNewWorktreeIntent");
+    expect(selector).toContain("applyCheckoutTransition");
+    expect(host).toContain("WorktreeHostMenuSection");
+    expect(host).toContain("formatHostWorktreeLabel");
+    expect(host).toContain("WorkflowIcon");
+    expect(host).toContain("chat.toolbar.hostStatus");
+    expect(branch).not.toContain("startNewWorktreeIntent");
+    expect(branch).not.toContain("chat.branch.worktrees");
+    expect(composer).toContain("worktree-local");
+    expect(composer).toContain("id: \"worktree\"");
+    expect(editor).toContain("applyCheckoutTransition");
+    expect(editor).toContain("clearSlashQuery");
+  });
+
+  it("keeps Host on the homepage toolbar and does not add a standalone Worktree button", () => {
+    const leftMain = sourceOf("src/renderer/components/layout/left-main-area.tsx");
+    const host = sourceOf("src/renderer/components/modules/chat/execution-host-selector.tsx");
+    const aibar = sourceOf("src/renderer/components/modules/chat/ai-bar.tsx");
+    expect(leftMain).toContain("<ExecutionHostSelector");
+    expect(leftMain).not.toContain("<WorktreeSelector");
+    expect(leftMain).toContain("executionHostLabel");
+    expect(leftMain).toContain("chat.toolbar.hostLocal");
+    expect(host).toContain("SshHostPickerDialog");
+    expect(host).toContain("openConnectDialog");
+    expect(host).toContain("chat.toolbar.connectRemote");
+    expect(host).toContain("RemoteOneClickConnectButton");
+    expect(host).toContain("autoCloseOnReady: true");
+    expect(leftMain).toContain("RemoteOneClickConnectButton");
+    expect(host).not.toContain("applyProjectPick");
+    expect(host).not.toMatch(/\bfocusProject\s*\(/);
+    expect(aibar).not.toContain("WorktreeSelector");
+  });
+
   it("lets an empty homepage chat pick a workbench project, not a chat that already has messages", () => {
     const leftMain = sourceOf("src/renderer/components/layout/left-main-area.tsx");
     const selector = sourceOf("src/renderer/components/modules/chat/project-selector.tsx");
@@ -323,13 +371,25 @@ describe("workbench sidebar wiring", () => {
     expect(selector).toContain("pickerMode=\"chat-assign\"");
     expect(selector).toContain("pickFolderAndAssignSession");
     expect(selector).toContain("CHAT_PANEL_TOOLBAR_BUTTON");
+    expect(selector).toContain("selectedPath={current?.lastPath}");
     expect(selector).not.toContain("AppMenuCheckItem");
     expect(selector).not.toContain("openRecentFromAddPanel");
     expect(menu).toContain("export function WorkbenchProjectPicker");
+    expect(menu).toContain("AppMenuCheckItem");
+    expect(menu).toContain("sameProjectPath");
+    expect(menu).toContain("removeRecentProject");
+    expect(menu).not.toContain("description={item.kind === \"local\"");
     expect(lib).toContain("assignSessionToProjectPath");
     expect(lib).toContain("assignSessionProject");
     expect(lib).toContain("agentReassignSessionProject");
     expect(lib).toContain("_setSessionCwd");
+    expect(lib).toContain("connectRemote: false");
+    const send = sourceOf("src/renderer/stores/chat/send.ts");
+    const messages = sourceOf("src/renderer/components/modules/chat/chat-messages.tsx");
+    expect(send).toContain("ensureRemoteLiveForWork");
+    expect(send).toContain("connecting_remote");
+    expect(messages).toContain("connecting_remote");
+    expect(messages).toContain("onOpenConnect");
   });
 
   it("edits a workbench project through lib → desktop-api, not the dialog", () => {

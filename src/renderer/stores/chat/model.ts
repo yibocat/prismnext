@@ -74,7 +74,16 @@ import {
 
 export function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
-  if (reason === "agent_not_on_remote_yet") return i18n.t("remote.agentNotReady");
+  if (
+    reason === "host_control_plane_dropped"
+    || reason.includes("Host control plane dropped")
+    || reason.includes("Host stdio is not open")
+  ) {
+    return i18n.t("remote.hostControlPlaneDropped");
+  }
+  if (reason === "agent_not_on_remote_yet" || reason === "remote_not_connected") {
+    return i18n.t("remote.agentNotReady");
+  }
   if (reason === "entitlement") return i18n.t("remote.agentEntitlement");
   if (reason === "missing_local_key") return i18n.t("remote.missingLocalKey");
   if (reason === "host_model_unconfigured") return i18n.t("remote.hostModelUnconfigured");

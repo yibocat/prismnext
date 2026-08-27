@@ -38,6 +38,9 @@ import { UserMessageHeader } from "./user-message-header";
 import { isTodoPlanDismissed } from "@/lib/chat/composer-pending-tools";
 import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
+import { useRemoteStore } from "@/stores/remote-store";
+import { parseRemoteAbs } from "@shared/remote";
+import { connectPrepareGate } from "@/lib/remote/display";
 import {
   AlertCircleIcon,
   ArrowDownIcon,
@@ -49,9 +52,15 @@ import { Hint } from "@/components/ui/hint";
 // ─── Streaming Indicator ───
 
 // Parent turn column already applies px-6 — keep this flush with ThinkingWidget.
-const StreamingIndicator = memo(({ label }: { label: string }) => {
-  return (
-    <div className="mb-2 flex items-center gap-2">
+const StreamingIndicator = memo(({
+  label,
+  onOpenConnect,
+}: {
+  label: string;
+  onOpenConnect?: () => void;
+}) => {
+  const body = (
+    <>
       <div className="flex items-center gap-1">
         <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:0ms]" />
         <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:150ms]" />
@@ -60,8 +69,20 @@ const StreamingIndicator = memo(({ label }: { label: string }) => {
       <span className="text-muted-foreground text-[length:var(--font-chat-meta)]">
         {label}
       </span>
-    </div>
+    </>
   );
+  if (onOpenConnect) {
+    return (
+      <button
+        type="button"
+        className="mb-2 flex items-center gap-2 rounded-sm text-left hover:text-foreground"
+        onClick={onOpenConnect}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="mb-2 flex items-center gap-2">{body}</div>;
 });
 StreamingIndicator.displayName = "StreamingIndicator";
 
@@ -117,10 +138,21 @@ export const ChatMessages = memo(function ChatMessages() {
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
+  const remoteLogs = useRemoteStore((s) => s.logs);
   // Wait copy while streaming has no assistant content yet — surface each
   // prepare phase so first-send cold start (sync / agent / session) is not a hang.
   const preparePhase = useChatStore((s) => s.preparePhase);
+  const connectAlias = preparePhase === "connecting_remote"
+    ? parseRemoteAbs(projectRoot ?? "")?.profileId
+    : undefined;
   const streamingLabel = (() => {
+    if (preparePhase === "connecting_remote") {
+      const gate = connectPrepareGate(projectRoot, remoteByProfileId, remoteLogs);
+      return gate
+        ? t("chat.prepare.connecting_remote_step", { step: t(`remote.gate.${gate}`) })
+        : t("chat.prepare.connecting_remote");
+    }
     switch (preparePhase) {
       case "describing_images":
         return t("chat.prepare.describing_images");
@@ -797,7 +829,16 @@ export const ChatMessages = memo(function ChatMessages() {
               )}
               <div className="px-6 min-w-0 max-w-full overflow-hidden">
                 {isLastTurn && showStreamingIndicator && (
-                  <StreamingIndicator label={streamingLabel} />
+                  <StreamingIndicator
+                    label={streamingLabel}
+                    onOpenConnect={
+                      connectAlias
+                        ? () => useRemoteStore.getState().openConnectDialog(connectAlias, {
+                          autoCloseOnReady: true,
+                        })
+                        : undefined
+                    }
+                  />
                 )}
                 <TurnAssistantContent
                   blocks={turn.assistantBlocks}

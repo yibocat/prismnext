@@ -79,7 +79,8 @@
     "repos": "Repos",
     "localRepos": "Local",
     "connectSsh": "Connect via SSH…",
-    "noSshHosts": "No hosts in ~/.ssh/config"
+    "noSshHosts": "No hosts in ~/.ssh/config",
+    "removeRecent": "Remove from Recents"
   },
   "project": {
     "noProject": "No Project Open",

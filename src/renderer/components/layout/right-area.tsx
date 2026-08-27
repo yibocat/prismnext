@@ -4,7 +4,10 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { isFileBackedTab, modeRegistry, tabFilePath, type RightTab } from "@/lib/workspace/mode-registry";
+import { isFileBackedTab, modeNeedsLiveHost, modeRegistry, tabFilePath, tabNeedsLiveHost } from "@/lib/workspace/mode-registry";
+import { isRemoteProjectOffline } from "@/lib/remote/ensure-connected";
+import { RemoteConnectPrompt } from "@/components/modules/remote/remote-connect-prompt";
+import { useRemoteStore } from "@/stores/remote-store";
 import { useWindowState } from "@/hooks/use-window-state";
 import { RightMainArea } from "@/components/layout/right-main-area";
 import { RightSidebar } from "@/components/layout/right-sidebar";
@@ -184,22 +187,29 @@ function RightAreaWorkspace() {
     || activeTab?.kind === "texworkspace"
     || activeTab?.kind === "research-plan";
   const isSettingsEditorTab = activeTab?.kind === "settings-editor";
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
+  const hostProjectOffline = !inSettings && isRemoteProjectOffline(projectRoot, remoteByProfileId);
+  const hostWorkspaceOffline = hostProjectOffline && modeNeedsLiveHost(focusedMode);
   const showTabToolbar =
     !inSettings &&
     activeTab &&
     focusedMode !== "dashboard" &&
-    !isSettingsEditorTab;
+    !isSettingsEditorTab &&
+    !hostWorkspaceOffline;
   const modeSidebarEligible =
     !inSettings &&
     focusedMode !== "dashboard" &&
     !isSettingsEditorTab &&
+    !hostWorkspaceOffline &&
     !modeRegistry.get(focusedMode)?.hideRightSidebar;
+  const mainTabs = hostProjectOffline
+    ? surfaceTabs.filter((tab) => !tabNeedsLiveHost(tab))
+    : surfaceTabs;
 
   const closeSettingsPanel = () => {
     closeSettingsDetailPanel();
   };
-
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   // Initialize browser store when project opens
   useEffect(() => {
@@ -673,8 +683,10 @@ function RightAreaWorkspace() {
           }
           aria-hidden={sidebarFull}
         >
-          {!inSettings || surfaceTabs.length > 0 ? (
-            <RightMainArea tabs={surfaceTabs} activeTabId={surfaceActiveTabId} />
+          {hostWorkspaceOffline ? (
+            <RemoteConnectPrompt />
+          ) : !inSettings || surfaceTabs.length > 0 ? (
+            <RightMainArea tabs={mainTabs} activeTabId={surfaceActiveTabId} />
           ) : null}
         </div>
 

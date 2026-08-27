@@ -44,11 +44,15 @@ import { TemplateCenter } from "@/components/modules/templates/template-center";
 import { TeamsCenter } from "@/components/modules/teams/teams-center";
 import { ChatMessages, ChatComposer, ChatErrorBoundary, ContextWindowIndicator, RestoreUndoBar } from "@/components/modules/chat";
 import { ChatHomeBackdrop } from "@/components/modules/chat/chat-home-backdrop";
-import { WorktreeSelector, CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
+import { CHAT_PANEL_TOOLBAR_BUTTON } from "@/components/modules/chat/worktree-selector";
 import { BranchSelector } from "@/components/modules/chat/branch-selector";
+import { ExecutionHostSelector, RemoteOneClickConnectButton } from "@/components/modules/chat/execution-host-selector";
 import { ProjectSelector } from "@/components/modules/chat/project-selector";
+import { executionHostLabel } from "@/lib/remote/display";
+import { useRemoteStore } from "@/stores/remote-store";
+import { selectableWorkbenchProjects, useWorkbenchStore } from "@/stores/workbench-store";
 import { WorktreeActions } from "@/components/modules/chat/worktree-actions";
-import { isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
+import { formatBranchWorktreeLabel, isWorktreeCheckoutPath } from "@/lib/git/checkout-context";
 
 
 export function LeftMainArea() {
@@ -59,6 +63,15 @@ export function LeftMainArea() {
   const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
   const checkoutRoot = useDocumentStore((s) => s.checkoutRoot);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteHosts = useRemoteStore((s) => s.hosts);
+  const members = useWorkbenchStore((s) => selectableWorkbenchProjects(s));
+  const focusProjectId = useWorkbenchStore((s) => s.focusProjectId);
+  const sessionProjectIds = useWorkbenchStore((s) => s.sessionProjectIds);
+  const activeTabId = useChatStore((s) => s.activeTabId);
+  const currentProjectId = (activeTabId && sessionProjectIds[activeTabId]) || focusProjectId;
+  const currentProject = members.find((member) => member.id === currentProjectId) ?? members[0];
+  const projectDisplayName = currentProject?.displayName || t("chat.project.select");
+  const hostLabel = executionHostLabel(projectRoot, remoteHosts, t("chat.toolbar.hostLocal"));
   const showWorktreeActions = Boolean(
     activeWorktree || (projectRoot && checkoutRoot && isWorktreeCheckoutPath(checkoutRoot, projectRoot)),
   );
@@ -304,11 +317,12 @@ export function LeftMainArea() {
             ) : null}
             <div aria-hidden data-homepage-composer-lead="" className="pointer-events-none min-h-0 flex-1" />
             <div className="relative z-10 flex w-full flex-col items-center">
-              {/* Project / branch / worktree — sits directly above the centered composer */}
+              {/* Project / branch / host (worktrees live under Host) */}
               <div data-chat-width className="flex h-6 w-full items-center gap-1.5 px-3">
                 <ProjectSelector />
                 <BranchSelector />
-                <WorktreeSelector />
+                <ExecutionHostSelector />
+                <RemoteOneClickConnectButton />
               </div>
 
               {/* Composer */}
@@ -373,24 +387,16 @@ export function LeftMainArea() {
                 {!editorMaximized && <ChatComposer />}
               </div>
               <div data-chat-width className="w-full flex items-center gap-1.5 h-6 px-3 mb-2 text-[length:var(--font-chat-meta)] text-muted-foreground/70">
+                <span className="truncate max-w-[120px]">{projectDisplayName}</span>
+                <span className="opacity-40">·</span>
+                <span className="truncate max-w-[120px]">{hostLabel}</span>
                 {isGitRepo && (
-                  <>
-                    <span className="flex items-center gap-1">
-                      <GitBranchIcon className="size-3 shrink-0" />
-                      <span className="truncate max-w-[120px]">{displayBranch}</span>
+                  <span className="flex items-center gap-1">
+                    <GitBranchIcon className="size-3 shrink-0" />
+                    <span className="truncate max-w-[160px]">
+                      {formatBranchWorktreeLabel(displayBranch, activeWorktree?.name)}
                     </span>
-                    {activeWorktree ? (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span className="truncate max-w-[80px]">{activeWorktree.name}</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span>{t("chat.toolbar.local")}</span>
-                      </>
-                    )}
-                  </>
+                  </span>
                 )}
                 <span className="flex-1" />
                 {(contextTokens != null || contextWindowSize != null || contextCostUsd != null || sessionId) && (

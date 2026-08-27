@@ -56,6 +56,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
   const switching = useGitStore((s) => s.switching);
   const checkingRepo = useGitStore((s) => s.checkingRepo);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const repoKnown = useGitStore((s) => s.repoKnown);
   const files = useGitStore((s) => s.files);
   const sidebarView = useGitStore((s) => s.sidebarView);
   const commits = useGitStore((s) => s.commits);
@@ -189,7 +190,7 @@ export function GitToolbar({ projectRoot }: { projectRoot: string }) {
     return (
       <div className="flex flex-1 items-center gap-1.5 min-h-8 min-w-0 text-[length:var(--font-menu-item)] text-muted-foreground">
         <GitBranchIcon className="size-3.5 shrink-0 opacity-40" />
-        <span className="truncate">{t("git.toolbar.notRepo")}</span>
+        <span className="truncate">{t(repoKnown ? "git.toolbar.notRepo" : "modes.git.noRepoOffline")}</span>
       </div>
     );
   }

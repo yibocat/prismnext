@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  ensureRemoteLiveForWork,
   ensureRemoteProjectReady,
   isRemoteConnectError,
+  isRemoteProjectOffline,
   RemoteConnectError,
   resolveFocusConnectRemote,
   remoteFocusNeedsBind,
@@ -9,7 +11,16 @@ import {
   remotePhaseIsReady,
   remotePhaseNeedsConnect,
 } from "../../src/renderer/lib/remote/ensure-connected";
+import { modeNeedsLiveHost, tabNeedsLiveHost } from "../../src/renderer/lib/workspace/mode-registry";
 import { useRemoteStore } from "../../src/renderer/stores/remote-store";
+
+const projectOpen = vi.fn(async () => ({ rootPath: "remote://lab/home/u/a" }));
+
+vi.mock("@/lib/desktop-api/project", () => ({
+  projectDesktop: {
+    projectOpen: (...args: unknown[]) => projectOpen(...args),
+  },
+}));
 
 vi.mock("@/lib/desktop-api/remote", () => ({
   remoteDesktop: {
@@ -33,6 +44,25 @@ describe("remote reconnect helpers", () => {
       hydrated: true,
       connectDialogAlias: null,
     });
+  });
+
+  it("treats a remote folder as offline until the Host is ready", () => {
+    expect(isRemoteProjectOffline("/papers/a", {})).toBe(false);
+    expect(isRemoteProjectOffline("remote://lab/home/u/a", {})).toBe(true);
+    expect(isRemoteProjectOffline("remote://lab/home/u/a", { lab: { phase: "connecting" } })).toBe(true);
+    expect(isRemoteProjectOffline("remote://lab/home/u/a", { lab: { phase: "ready" } })).toBe(false);
+  });
+
+  it("only host-bound RightArea modes need a live Host", () => {
+    expect(modeNeedsLiveHost("files")).toBe(true);
+    expect(modeNeedsLiveHost("git")).toBe(true);
+    expect(modeNeedsLiveHost("experiments")).toBe(true);
+    expect(modeNeedsLiveHost("browser")).toBe(false);
+    expect(modeNeedsLiveHost("settings-editor")).toBe(false);
+    expect(modeNeedsLiveHost("dashboard")).toBe(false);
+    expect(tabNeedsLiveHost({ kind: "file" })).toBe(true);
+    expect(tabNeedsLiveHost({ kind: "browser" })).toBe(false);
+    expect(tabNeedsLiveHost({ kind: "settings-editor" })).toBe(false);
   });
 
   it("classifies connection phases", () => {
@@ -73,5 +103,14 @@ describe("remote reconnect helpers", () => {
       byProfileId: { lab: { phase: "ready", profileId: "lab" } },
     });
     expect(remoteFocusNeedsBind("remote://lab/home/ubuntu/paper")).toBe(false);
+  });
+
+  it("opens the Host project after SSH is ready", async () => {
+    projectOpen.mockClear();
+    useRemoteStore.setState({
+      byProfileId: { lab: { phase: "ready", profileId: "lab" } },
+    });
+    await ensureRemoteLiveForWork("remote://lab/home/u/a");
+    expect(projectOpen).toHaveBeenCalledWith("remote://lab/home/u/a");
   });
 });

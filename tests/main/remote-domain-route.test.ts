@@ -1,10 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  disconnectedGitProbe,
   executionTargetFromArgs,
   remoteProfileFromArgs,
   routeHostDomainMethod,
 } from "../../src/main/remote/domain-route";
 import { projectLifecycleAuthority } from "../../src/main/project/project-lifecycle-authority";
+
+describe("disconnectedGitProbe", () => {
+  it("returns empty git lists while SSH is down", () => {
+    expect(disconnectedGitProbe("git:branches")).toEqual({
+      hit: true,
+      result: { current: "", branches: [] },
+    });
+    expect(disconnectedGitProbe("git:isRepo")).toEqual({ hit: true, result: false });
+    expect(disconnectedGitProbe("git:checkout").hit).toBe(false);
+  });
+});
 
 describe("domain-route ExecutionTarget", () => {
   afterEach(() => {
