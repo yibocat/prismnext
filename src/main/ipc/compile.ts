@@ -1,7 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
 import { basename, extname, join } from "node:path";
-import { tmpdir } from "node:os";
-import { writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
 import { parseRemoteAbs } from "../../shared/remote";
@@ -74,9 +72,17 @@ export function registerCompileHandlers(): void {
           const bytes = await pullRemoteBlob(getRemoteSessionBroker(), remote.profileId, "fs:readBlob", {
             path: raw.pdfPath,
           });
-          const tmp = join(tmpdir(), `prismnext-remote-${remote.profileId}-${basename(raw.pdfPath)}`);
-          writeFileSync(tmp, bytes);
-          return { pdfPath: tmp, stdout: raw.stdout, buildDir: raw.buildDir };
+          if (bytes.byteLength === 0) {
+            return { error: raw.error || "Compilation failed", stdout: raw.stdout };
+          }
+          // Preview consumes pdfBytes. A system-temp path would fail fs:readBytes
+          // (that API only allows files under the user home).
+          const pdfBytes = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+          log.debug("compile:execute success", {
+            bytes: pdfBytes.byteLength,
+            remote: remote.profileId,
+          });
+          return { pdfBytes, stdout: raw.stdout, buildDir: raw.buildDir };
         }
         return { error: raw.error || "Compilation failed", stdout: raw.stdout };
       }

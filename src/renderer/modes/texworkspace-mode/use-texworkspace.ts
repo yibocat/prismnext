@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
-import { useCompileStore, compileCurrentDocument } from "@/stores/compile-store";
+import { useCompileStore, compileCurrentDocument, isAutoCompileEnabled } from "@/stores/compile-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 
@@ -75,10 +75,12 @@ export function useTexworkspace() {
       autoOpened.current = true;
       setTexworkspaceActiveFile(resolved.rootId);
       // Auto-compile the main file when entering texworkspace
-      if (useCompileStore.getState().autoCompile) {
+      if (isAutoCompileEnabled()) {
         // Delay to let the store settle (setActiveFile is synchronous but
         // the editor/viewer mount may need a frame)
-        setTimeout(() => compileCurrentDocument(), 100);
+        setTimeout(() => {
+          if (isAutoCompileEnabled()) compileCurrentDocument();
+        }, 100);
       }
     }
   }, [activeTab, files, openedContents, setTexworkspaceActiveFile]);

@@ -355,6 +355,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             openedContents: new Map(),
             initialized: true,
           });
+          void import("./compile-store").then(({ syncAutoCompileForProject }) => {
+            syncAutoCompileForProject(canonicalRoot);
+          });
         },
       });
     } catch (error) {

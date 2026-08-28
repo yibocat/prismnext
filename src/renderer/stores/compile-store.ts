@@ -6,6 +6,12 @@ import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 import { compileDesktop } from "@/lib/desktop-api/compile";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import {
+  autoCompilePreferenceKey,
+  migrateCompileAutoCompilePersist,
+  resolveAutoCompileForProjectRoot,
+  type CompileAutoCompilePersistV1,
+} from "@shared/compile/auto-compile-pref";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
 
@@ -129,6 +135,34 @@ export function clearPdfCache() {
 
 let _autoCompileTimer: ReturnType<typeof setTimeout> | null = null;
 let _compileInFlight = false;
+let _boundDocumentRoot = false;
+
+/**
+ * document-store → project-lifecycle → this file. Never read `useDocumentStore`
+ * while this module is still evaluating — that crashed the renderer on boot.
+ * `import()` waits until document-store finishes.
+ */
+function bindAutoCompileToDocumentStore(): void {
+  if (_boundDocumentRoot) return;
+  _boundDocumentRoot = true;
+  void import("./document-store").then((mod) => {
+    const store = mod.useDocumentStore;
+    if (!store?.getState) return;
+    syncAutoCompileForProject(store.getState().projectRoot);
+    store.subscribe((state, prev) => {
+      if (state.projectRoot === prev.projectRoot) return;
+      syncAutoCompileForProject(state.projectRoot);
+    });
+  });
+}
+
+function resyncAutoCompileFromDocument(): void {
+  void import("./document-store").then((mod) => {
+    const store = mod.useDocumentStore;
+    if (!store?.getState) return;
+    syncAutoCompileForProject(store.getState().projectRoot);
+  });
+}
 
 function clearAutoCompileTimer() {
   if (_autoCompileTimer !== null) {
@@ -169,7 +203,11 @@ interface CompileState {
   compilerStatus: CompilerStatus | null;
   pendingRecompile: boolean;
   lastCompiledRootId: string | null;
+  /** Effective switch for the focused project (derived from per-root prefs). */
   autoCompile: boolean;
+  autoCompileByRoot: Record<string, boolean>;
+  /** Used only when a local root has no remembered toggle (legacy global off). */
+  localAutoCompileDefault: boolean;
   synctexForwardTarget: SynctexForwardTarget | null;
 
   compile: (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => Promise<void>;
@@ -194,11 +232,9 @@ export const useCompileStore = create<CompileState>()(
       compilerStatus: null,
       pendingRecompile: false,
       lastCompiledRootId: null,
-      // TODO: future settings panel — expose autoCompile as a user-configurable
-      // preference in the Settings dialog (persisted via zustand persist middleware,
-      // already survives app restarts). The toolbar toggle should remain as a
-      // quick-access shortcut synchronized with the settings value.
       autoCompile: true,
+      autoCompileByRoot: {},
+      localAutoCompileDefault: true,
       synctexForwardTarget: null,
 
       compile: async (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => {
@@ -377,9 +413,18 @@ export const useCompileStore = create<CompileState>()(
       },
 
       toggleAutoCompile: () => {
-        set((s) => ({ autoCompile: !s.autoCompile }));
-        if (get().autoCompile) {
-          // Just turned on — schedule a compile if there's a document
+        const next = !get().autoCompile;
+        const projectRoot = useDocumentStore.getState().projectRoot;
+        if (projectRoot) {
+          const key = autoCompilePreferenceKey(projectRoot);
+          set({
+            autoCompile: next,
+            autoCompileByRoot: { ...get().autoCompileByRoot, [key]: next },
+          });
+        } else {
+          set({ autoCompile: next, localAutoCompileDefault: next });
+        }
+        if (next) {
           get().scheduleAutoCompile();
         } else {
           clearAutoCompileTimer();
@@ -389,7 +434,7 @@ export const useCompileStore = create<CompileState>()(
       scheduleAutoCompile: () => {
         clearAutoCompileTimer();
 
-        if (!get().autoCompile) {
+        if (!isAutoCompileEnabled()) {
           return;
         }
 
@@ -401,6 +446,9 @@ export const useCompileStore = create<CompileState>()(
         }
 
         _autoCompileTimer = setTimeout(async () => {
+          if (!isAutoCompileEnabled()) {
+            return;
+          }
           const docState = useDocumentStore.getState();
           const { projectRoot, files, activeFileId } = docState;
           if (!projectRoot || files.length === 0) {
@@ -456,9 +504,15 @@ export const useCompileStore = create<CompileState>()(
     }),
     {
       name: "prism-next-compile",
-      partialize: (state) => ({
-        autoCompile: state.autoCompile,
+      version: 1,
+      partialize: (state): CompileAutoCompilePersistV1 => ({
+        autoCompileByRoot: state.autoCompileByRoot,
+        localAutoCompileDefault: state.localAutoCompileDefault,
       }),
+      migrate: (persisted, fromVersion) => migrateCompileAutoCompilePersist(persisted, fromVersion),
+      onRehydrateStorage: () => () => {
+        resyncAutoCompileFromDocument();
+      },
     },
   ),
 );
@@ -502,15 +556,34 @@ export async function compileCurrentDocument(): Promise<void> {
   }
 }
 
-// ─── AI auto-compile control ───
+// ─── Auto-compile preference (per project root) ───
 
 let _aiSessionCount = 0;
-let _autoCompileBeforeAi: boolean | null = null;
+
+export function isAutoCompileEnabled(): boolean {
+  if (_aiSessionCount > 0) return false;
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  const { autoCompileByRoot, localAutoCompileDefault } = useCompileStore.getState();
+  return resolveAutoCompileForProjectRoot(autoCompileByRoot, projectRoot, localAutoCompileDefault);
+}
+
+export function syncAutoCompileForProject(projectRoot: string | null): void {
+  const effective = _aiSessionCount > 0
+    ? false
+    : resolveAutoCompileForProjectRoot(
+        useCompileStore.getState().autoCompileByRoot,
+        projectRoot,
+        useCompileStore.getState().localAutoCompileDefault,
+      );
+  if (useCompileStore.getState().autoCompile !== effective) {
+    useCompileStore.setState({ autoCompile: effective });
+  }
+  if (!effective) clearAutoCompileTimer();
+}
+
+bindAutoCompileToDocumentStore();
 
 export function pauseAutoCompileForAi(): void {
-  if (_aiSessionCount === 0) {
-    _autoCompileBeforeAi = useCompileStore.getState().autoCompile;
-  }
   _aiSessionCount++;
   useCompileStore.setState({ autoCompile: false });
   clearAutoCompileTimer();
@@ -519,8 +592,7 @@ export function pauseAutoCompileForAi(): void {
 export function resumeAutoCompileAfterAi(): void {
   if (_aiSessionCount <= 0) return;
   _aiSessionCount--;
-  if (_aiSessionCount === 0 && _autoCompileBeforeAi !== null) {
-    useCompileStore.setState({ autoCompile: _autoCompileBeforeAi });
-    _autoCompileBeforeAi = null;
+  if (_aiSessionCount === 0) {
+    syncAutoCompileForProject(useDocumentStore.getState().projectRoot);
   }
 }

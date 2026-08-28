@@ -15,5 +15,7 @@ describe("remote compile IPC routing", () => {
     expect(ipc).not.toContain("useCurrentRoot");
     expect(host).toContain("compile:execute");
     expect(host).toContain("compile:detectTexlive");
+    expect(ipc).toContain("pdfBytes");
+    expect(ipc).not.toContain("prismnext-remote-");
   });
 });

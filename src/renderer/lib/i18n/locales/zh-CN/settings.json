@@ -854,7 +854,7 @@
       "defaultEngine": "默认引擎",
       "defaultEngineDesc": "本项目的 LaTeX 编译器。构建输出位于 .workbench/compile/。",
       "autoCompile": "自动编译",
-      "autoCompileDesc": "停止输入约 0.5 秒后自动重新编译 PDF（优先使用 Tectonic）。"
+      "autoCompileDesc": "停止输入约 0.5 秒后自动重新编译 PDF（优先使用 Tectonic）。每个项目单独记住此开关；远程项目默认关闭。"
     },
     "backups": "备份",
     "references": "参考文献",

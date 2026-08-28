@@ -15,5 +15,7 @@ describe("remote compile routing", () => {
     expect(compileIpc).toContain("compile:execute");
     expect(compileIpc).toContain("pullRemoteBlob");
     expect(compileIpc).toContain("pdfOnDisk: true");
+    expect(compileIpc).toContain("pdfBytes");
+    expect(compileIpc).not.toContain("prismnext-remote-");
   });
 });

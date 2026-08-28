@@ -854,7 +854,7 @@
       "defaultEngine": "Default engine",
       "defaultEngineDesc": "LaTeX compiler for this project. Build output goes to .workbench/compile/.",
       "autoCompile": "Auto compile",
-      "autoCompileDesc": "Pause typing ~0.5s to recompile the PDF (Tectonic when available)."
+      "autoCompileDesc": "Pause typing ~0.5s to recompile the PDF (Tectonic when available). Each project remembers this switch; remote projects start off."
     },
     "backups": "Backups",
     "references": "References",

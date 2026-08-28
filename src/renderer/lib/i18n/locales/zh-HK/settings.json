@@ -854,7 +854,7 @@
       "defaultEngine": "預設引擎",
       "defaultEngineDesc": "本專案的 LaTeX 編譯器。構建輸出位於 .workbench/compile/。",
       "autoCompile": "自動編譯",
-      "autoCompileDesc": "停止輸入約 0.5 秒後自動重新編譯 PDF（優先使用 Tectonic）。"
+      "autoCompileDesc": "停止輸入約 0.5 秒後自動重新編譯 PDF（優先使用 Tectonic）。每個專案單獨記住此開關；遠端專案預設關閉。"
     },
     "backups": "備份",
     "references": "參考文獻",
