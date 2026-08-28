@@ -185,6 +185,8 @@ function isShellToolName(toolName: string): boolean {
     || n === "experiment-run"
     || n === "latex-compile"
     || n === "latex-compile-standalone"
+    || n === "typst-compile"
+    || n === "typst-compile-standalone"
     || n.includes("bash")
     || n === "shell"
     || n === "terminal"

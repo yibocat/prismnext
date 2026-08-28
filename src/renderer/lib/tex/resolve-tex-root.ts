@@ -63,6 +63,16 @@ export function hasDocumentClass(content: string): boolean {
   return false;
 }
 
+/** In-place standalone figures — not the paper pipeline. Mirrors main `latex-root`. */
+export function isStandaloneTexDocument(content: string): boolean {
+  const head = content
+    .split("\n")
+    .slice(0, 50)
+    .filter((line) => !line.trim().startsWith("%"))
+    .join("\n");
+  return /\\documentclass(?:\[[^\]]*\])?\{standalone\}/.test(head);
+}
+
 /**
  * Resolve the compile target file.
  * Returns the root file ID and relative path.

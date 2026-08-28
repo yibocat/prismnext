@@ -293,8 +293,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(422);
-    expect(new Set(keys).size).toBe(422);
+    expect(keys).toHaveLength(424);
+    expect(new Set(keys).size).toBe(424);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -924,7 +924,7 @@ describe("code structure renderer direction (Phase 4)", () => {
       "src/renderer/components/modules/settings/research-brief-panel.tsx",
       "src/renderer/components/modules/settings/literature-settings.tsx",
       "src/renderer/components/modules/settings/workspace-settings.tsx",
-      "src/renderer/components/modules/settings/texworkspace-settings.tsx",
+      "src/renderer/components/modules/settings/compile-settings-fields.tsx",
       "src/renderer/components/modules/settings/general-settings.tsx",
       "src/renderer/components/modules/settings/team-create-panel.tsx",
       "src/renderer/components/modules/settings/teams-settings.tsx",

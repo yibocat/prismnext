@@ -10,7 +10,14 @@ import { clearPdfCache } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import { templateDesktop } from "@/lib/desktop-api/template";
+import { isRemoteProjectRoot } from "@shared/remote";
 import { toast } from "sonner";
+
+function assertLocalTemplateProject(projectRoot: string): void {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("LaTeX templates apply on this computer only.");
+  }
+}
 
 export interface TemplateSwitchDialogState {
   open: boolean;
@@ -87,6 +94,7 @@ export async function requestApplyTemplate(
   templateMeta: { id: string; name: string; category: string },
   ctx: ApplyTemplateFlowContext,
 ): Promise<ApplyTemplateFlowResult> {
+  assertLocalTemplateProject(ctx.projectRoot);
   const full = await templateDesktop.templateGet(templateMeta.id);
   if (!full) {
     toast.error("Template could not be loaded.");
@@ -205,6 +213,7 @@ export async function confirmApplyTemplate(
   action: "merge" | "replace",
   ctx: ApplyTemplateFlowContext,
 ): Promise<void> {
+  assertLocalTemplateProject(ctx.projectRoot);
   const { newTemplate, changedFiles, deletedFiles, level } = dialog;
   if (!newTemplate) return;
 

@@ -297,7 +297,7 @@ const defaults: AppSettings = {
   agentSystemPrompt: "",
   editorSyntaxTheme: "prism",
   defaultWorkspaceDirs: [
-    { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+    { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
     { function: "notebook", name: "notes" },
   ],
   defaultInitGit: true,
@@ -339,7 +339,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       ) {
         const migratedDir = (remote as any).manuscriptDir as string;
         remote.defaultWorkspaceDirs = [
-          { function: "manuscript", name: migratedDir, mainTex: "main.tex" },
+          { function: "manuscript", name: migratedDir, mainFile: "main.tex", mainTex: "main.tex" },
         ];
         // Persist immediately so migration only happens once
         settingsDesktop.settingsSet({ defaultWorkspaceDirs: remote.defaultWorkspaceDirs }).catch(() => {});

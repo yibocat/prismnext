@@ -356,6 +356,7 @@
     "turn_timeout": "長時間未收到模型響應，已自動終止本輪對話。服務商可能正在限流或暫時不可用。",
     "turn_aborted": "這一輪在模型完成前被中止了。",
     "connectionLost": "Agent 連線已斷開，請重試。",
+    "alreadyProcessing": "上一輪還在收尾。請稍等，或按停止後再傳送。",
     "cancelled": "已停止。"
   },
   "turnFooter": {

@@ -16,11 +16,12 @@ function inventory(partial: Partial<HostRuntimeInventory>): HostRuntimeInventory
     node: bin(true, "24.19.0"),
     git: bin(true, "v2.53.0-3"),
     tectonic: bin(true, "0.15.0"),
+    typst: bin(true, "0.15.1"),
     ...partial,
   };
 }
 
-const pins = { node: "24.19.0", git: "v2.53.0-3", tectonic: "0.15.0" };
+const pins = { node: "24.19.0", git: "v2.53.0-3", tectonic: "0.15.0", typst: "0.15.1" };
 
 describe("runtimeBinFromStat", () => {
   it("treats a missing or zero-byte SSH stat as not installed", () => {
@@ -55,13 +56,21 @@ describe("parseHostPinMap / hostRuntimePinsFromFiles", () => {
       node: "version 24.19.0\narchive node-v{version}-linux-{arch}.tar.gz\n",
       git: "tag v2.53.0-3\n",
       tectonic: "version 0.15.0\n",
+      typst: "version 0.15.1\n",
     })).toEqual(pins);
   });
 });
 
 describe("inventoryMissingSteps", () => {
-  it("returns empty when all three bins match the pins", () => {
+  it("returns empty when all four bins match the pins", () => {
     expect(inventoryMissingSteps(inventory({}), pins)).toEqual([]);
+  });
+
+  it("asks only for typst when that bin is missing", () => {
+    expect(inventoryMissingSteps(
+      inventory({ typst: bin(false) }),
+      pins,
+    )).toEqual(["typst"]);
   });
 
   it("asks only for tectonic when that bin is missing", () => {
@@ -91,6 +100,7 @@ describe("inventoryMissingSteps", () => {
         node: bin(true, null),
         git: bin(true, null),
         tectonic: bin(true, null),
+        typst: bin(true, null),
       }),
       pins,
     )).toEqual([]);

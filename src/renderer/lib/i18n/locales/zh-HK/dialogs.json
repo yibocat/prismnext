@@ -78,7 +78,7 @@
     "deleteBody": "確定要永久刪除「{{name}}」嗎？",
     "deleteFolderBody": "確定要永久刪除資料夾「{{name}}」及其全部內容嗎？",
     "workspaceWarn": "此資料夾在工作區設定中配置為 {{function}}。",
-    "manuscriptWarn": "這是唯一的手稿資料夾 — 在配置另一個之前，TeX 工作區功能可能無法使用。"
+    "manuscriptWarn": "這是唯一的手稿資料夾 — 在配置另一個之前，Files 將不知道哪一層是成稿目錄。"
   },
   "experiments": {
     "deleteTitle": "刪除實驗？"

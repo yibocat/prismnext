@@ -18,6 +18,7 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useProjectTemplate } from "@/hooks/use-project-template";
 import { toast } from "sonner";
 import { ArrowLeftIcon } from "lucide-react";
+import { isRemoteProjectRoot } from "@shared/remote";
 
 export interface TemplateCenterProps {
   onBack: () => void;
@@ -64,7 +65,10 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
     scheduleDialogReset();
   }, [scheduleDialogReset]);
 
-  const canApply = Boolean(projectRoot && workspaceLoaded && manuscriptConfig && !templateLoading);
+  const canApply = Boolean(
+    projectRoot && workspaceLoaded && manuscriptConfig && !templateLoading && !isRemoteProjectRoot(projectRoot),
+  );
+  const isRemote = Boolean(projectRoot && isRemoteProjectRoot(projectRoot));
 
   useEffect(() => {
     return () => {
@@ -99,6 +103,10 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
 
       if (!projectRoot) {
         toast.error(t("templates.center.openProject"));
+        return;
+      }
+      if (isRemoteProjectRoot(projectRoot)) {
+        toast.error(t("templates.center.remoteOnlyLocal"));
         return;
       }
       if (!workspaceLoaded) {
@@ -178,6 +186,11 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               {t("templates.center.needManuscript")}
             </p>
           ) : null}
+          {isRemote ? (
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              {t("templates.center.remoteOnlyLocal")}
+            </p>
+          ) : null}
           {!projectRoot ? (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground">
               {t("templates.center.openProject")}
@@ -197,6 +210,11 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
           {!canApply && projectRoot && workspaceLoaded && !manuscriptConfig && (
             <p className="mb-4 text-[length:var(--font-size-12)] text-destructive lg:hidden">
               {t("templates.center.needManuscript")}
+            </p>
+          )}
+          {isRemote && (
+            <p className="mb-4 text-[length:var(--font-size-12)] text-muted-foreground lg:hidden">
+              {t("templates.center.remoteOnlyLocal")}
             </p>
           )}
           {selected ? (
@@ -220,6 +238,8 @@ export function TemplateCenter({ onBack }: TemplateCenterProps) {
               applyDisabledReason={
                 !projectRoot
                   ? t("templates.center.openProject")
+                  : isRemote
+                    ? t("templates.center.remoteOnlyLocal")
                   : templateLoading
                     ? t("common.loading")
                     : !manuscriptConfig

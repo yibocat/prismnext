@@ -12,6 +12,7 @@ describe("isDirectLatexCompileBashCommand", () => {
     expect(isDirectLatexCompileBashCommand("lualatex paper.tex")).toBe(true);
     expect(isDirectLatexCompileBashCommand("latexmk -pdf main.tex")).toBe(true);
     expect(isDirectLatexCompileBashCommand("tectonic manuscript/main.tex")).toBe(true);
+    expect(isDirectLatexCompileBashCommand("typst compile manuscript/main.typ")).toBe(true);
   });
 
   it("detects chained / path-qualified / sudo", () => {
@@ -33,8 +34,10 @@ describe("latex compile bash messages", () => {
   it("point at paper vs standalone tools", () => {
     expect(latexCompileBashBlockMessage()).toContain("latex-compile");
     expect(latexCompileBashBlockMessage()).toContain("latex-compile-standalone");
+    expect(latexCompileBashBlockMessage()).toContain("typst-compile");
     expect(latexCompileBashBlockMessage()).toContain(".workbench/compile/");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile-standalone");
+    expect(latexCompileBashRedirectNote()).toContain("typst-compile");
   });
 });

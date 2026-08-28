@@ -9,10 +9,13 @@ import { useDocumentStore } from "@/stores/document-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 
 /** Open a @file token — expand RightArea and focus the project file. */
-export function openComposerFileToken(filePath: string): void {
+export function openComposerFileToken(
+  filePath: string,
+  opts?: { line?: number; pin?: boolean },
+): void {
   const path = filePath.trim();
   if (!path) return;
-  void openProjectFileFromChat(path);
+  void openProjectFileFromChat(path, opts);
 }
 
 /** Open a @paper token — PDF reader when available, else library list detail. */

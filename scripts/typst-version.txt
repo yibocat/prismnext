@@ -1,0 +1,3 @@
+# Pinned Typst CLI for dev + electron-builder packaging.
+# Bump deliberately — see scripts/download-typst.sh
+0.15.1

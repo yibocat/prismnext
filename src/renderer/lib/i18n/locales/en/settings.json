@@ -14,7 +14,6 @@
     "commands": "Commands",
     "mcp": "MCP",
     "skills": "Skills",
-    "texWorkspace": "TeX Workspace",
     "terminal": "Terminal",
     "browser": "Browser",
     "literature": "Literature",
@@ -362,6 +361,7 @@
     "tabProjectHint": "No project open. Open a project to edit its live workspace folders.",
     "addFolder": "Add folder",
     "pageDesc": "Folder layout for AI agents. Use Configure to edit names, descriptions, and manuscript settings in the panel on the right.",
+    "backups": "Backups",
     "empty": "No folders configured.",
     "toast": {
       "folderSaved": "Folder saved.",
@@ -382,11 +382,11 @@
       "removeTitle": "Remove folder",
       "removeDescProject": "Remove \"{{name}}\" from this project? Only workspace configuration is updated — files on disk are not deleted.",
       "removeDescTemplate": "Remove \"{{name}}\" from the new project template? Only the template configuration is updated.",
-      "removeManuscriptWarn": "Removing the only manuscript folder disables TeX workspace features until another manuscript folder is configured.",
+      "removeManuscriptWarn": "Removing the only manuscript folder means Files will not know which directory is the paper until you add another.",
       "name": "Folder name",
       "nameDesc": "Folder name under the project root.",
-      "mainTex": "Main TeX file",
-      "mainTexDesc": "Primary manuscript file for this folder (manuscript folders only).",
+      "mainTex": "Main file",
+      "mainTexDesc": "Optional compile entry for this folder (`.tex` or `.typ`). Leave empty to resolve from the open file.",
       "docClass": "Default document class",
       "docClassDesc": "Used when scaffolding a new manuscript.",
       "description": "Description for AI agents",
@@ -481,7 +481,9 @@
   },
   "compiler": {
     "title": "Compiler",
-    "subtitle": "LaTeX engine and auto-compile defaults."
+    "subtitle": "Auto-compile defaults for LaTeX and Typst.",
+    "autoCompile": "Auto compile",
+    "autoCompileDesc": "Pause typing ~0.5s to recompile the PDF (Tectonic for .tex, bundled Typst for .typ). Each project remembers this switch; remote projects start off."
   },
   "terminalPage": {
     "title": "Terminal",
@@ -844,50 +846,6 @@
       "project": "This project"
     }
   },
-  "texWorkspacePage": {
-    "title": "TeX Workspace",
-    "subtitle": "Manuscript, layout, and compile preferences.",
-    "manuscript": "Manuscript",
-    "layout": "Layout",
-    "compileSection": "Compile",
-    "compile": {
-      "defaultEngine": "Default engine",
-      "defaultEngineDesc": "LaTeX compiler for this project. Build output goes to .workbench/compile/.",
-      "autoCompile": "Auto compile",
-      "autoCompileDesc": "Pause typing ~0.5s to recompile the PDF (Tectonic when available). Each project remembers this switch; remote projects start off."
-    },
-    "backups": "Backups",
-    "references": "References",
-    "openProject": "Open a project to configure the manuscript folder.",
-    "noTemplate": "No template applied yet.",
-    "pageDesc": "Manuscript folder, editor layout, and compile preferences.",
-    "manuscriptDesc": "Current manuscript binding and template status for this project.",
-    "defaultView": "Default view",
-    "defaultViewDesc": "Panel layout when entering TeX Workspace.",
-    "templateSnapshots": "Template snapshots",
-    "templateSnapshotsDesc": "Created in .workbench/backups/ when switching templates. Delete old snapshots to free disk space.",
-    "referencesDesc": "Manage citations and reading notes in Literature mode (right panel). Zotero sync is configured from the Literature library sidebar when a project is open.",
-    "referencesNote": "BibTeX export and manuscript citation checks live in the TeX workspace compile flow.",
-    "viewSplit": "Split (TeX + PDF)",
-    "viewEditor": "Editor only",
-    "viewPreview": "Preview only",
-    "noManuscript": "No manuscript folder is bound yet.",
-    "folder": "Folder",
-    "mainFile": "Main file",
-    "template": "Template",
-    "workspaceSettings": "Workspace settings",
-    "templateCenter": "Template Center",
-    "none": "None",
-    "appliedViaCenter": "Applied via Template Center",
-    "folderDesc": "Edit folder name and main file in Workspace settings.",
-    "folderDescPrefix": "Edit folder name and main file in",
-    "folderDescSuffix": ".",
-    "mainFileDesc": "Compile entry point relative to the manuscript folder — does not rename files on disk.",
-    "templateChangePrefix": "Change in",
-    "templateChangeSuffix": ".",
-    "viewTex": "TeX only",
-    "viewPdf": "PDF only"
-  },
   "shortcuts": {
     "title": "Shortcuts",
     "subtitle": "System defaults (shell & editor) are fixed. Workspace and product shortcuts will be customizable later; tooltips always show the resolved chord.",
@@ -1121,6 +1079,7 @@
         "deleteFailedShort": "Delete failed"
       },
       "openProject": "Open a project to manage manuscript backups.",
+      "remoteOnlyLocal": "Manuscript template backups are stored on this computer only. Open the project locally to view or restore them.",
       "refresh": "Refresh",
       "loading": "Loading backups…",
       "emptyHint": "Backups are created automatically when you switch templates.",
@@ -1464,7 +1423,7 @@
       },
       "descPlaceholder": "Explain what belongs in this folder so agents use it correctly.",
       "functionDesc": {
-        "manuscript": "Contains LaTeX manuscript files for writing academic papers. The main entry point is `main.tex`. This folder is bound to the TeX workspace (editor + PDF preview).",
+        "manuscript": "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). Compile output is `.workbench/compile/` — do not edit that cache. Open sources in Files. A main-file pin is optional.",
         "experiment": "Root folder for experiment working directories. Each experiment gets a subfolder (code, data, results). Bookkeeping (run history) is stored automatically under the project — you do not configure a separate registry folder.",
         "literature": "Stores literature and reference PDFs for academic research and citation.",
         "notebook": "Contains notes in various formats such as Markdown files or Jupyter notebooks."

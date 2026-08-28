@@ -9,7 +9,6 @@ import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { useGitStore } from "@/stores/git-store";
 import { clearPdfCache, useCompileStore } from "@/stores/compile-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import {
@@ -27,7 +26,6 @@ import { ShortcutKbdChips } from "@/lib/shortcuts";
 import {
   GeneralSettings,
   AppearanceSettings,
-  CompilerSettings,
   ModelSettings,
   BackupsSettings,
   AgentAssetsSettings,
@@ -35,7 +33,6 @@ import {
   PermissionsSettings,
   WorkspaceSettings,
   TerminalSettings,
-  TexworkspaceSettings,
   BrowserSettings,
   LiteratureSettings,
   AboutSettings,
@@ -81,16 +78,12 @@ export function LeftMainArea() {
   );
 
 
-  // When manuscript is removed from workspace config, clean up all
-  // TeXworkspace state: PDF cache, compile log, and open texworkspace tabs.
-  // The content area already shows the "No manuscript folder configured"
-  // placeholder; this ensures stale PDF data and editor state are cleared.
+  // When manuscript is removed from workspace config, drop compile cache.
   useEffect(() => {
     const unsub = useWorkspaceConfigStore.subscribe((state, prev) => {
       if (prev.manuscriptConfig && !state.manuscriptConfig) {
         clearPdfCache();
         useCompileStore.getState().clearCompileState();
-        useRightPanelStore.getState().closeTabsOfKind("texworkspace");
       }
     });
     return unsub;
@@ -249,7 +242,11 @@ export function LeftMainArea() {
 
   if (leftSidebarView === "settings") {
     const resolvedCategory =
-      settingsCategory === "zotero" ? "literature" : settingsCategory;
+      settingsCategory === "zotero"
+        ? "literature"
+        : settingsCategory === "texworkspace" || settingsCategory === "compiler"
+          ? "workspace"
+          : settingsCategory;
     const BuiltinSettings = {
       general: GeneralSettings,
       appearance: AppearanceSettings,
@@ -263,8 +260,7 @@ export function LeftMainArea() {
       commands: AgentAssetsSettings,
       "tools-mcp": AgentAssetsSettings,
       skills: AgentAssetsSettings,
-      compiler: CompilerSettings,
-      texworkspace: TexworkspaceSettings,
+      compiler: WorkspaceSettings,
       workspace: WorkspaceSettings,
       literature: LiteratureSettings,
       backups: BackupsSettings,

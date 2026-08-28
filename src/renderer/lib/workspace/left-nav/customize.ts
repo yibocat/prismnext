@@ -7,12 +7,10 @@ export type LeftNavLayoutPrefs = {
 };
 
 /** Shown in the module Nav until the user customizes. Everything else starts hidden. */
-export const DEFAULT_VISIBLE_LEFT_NAV_IDS = ["texworkspace", "literature"] as const;
+export const DEFAULT_VISIBLE_LEFT_NAV_IDS = ["files", "literature"] as const;
 
-/** Older customize prefs used a hand-written TeX nav id. */
-const LEFT_NAV_ID_ALIASES: Record<string, string> = {
-  "tex-workspace": "texworkspace",
-};
+/** Retired TeX Workspace ids — drop from saved order/hidden, do not rewrite. */
+const RETIRED_LEFT_NAV_IDS = new Set(["texworkspace", "tex-workspace"]);
 
 export function isDefaultVisibleLeftNav(id: string): boolean {
   return (DEFAULT_VISIBLE_LEFT_NAV_IDS as readonly string[]).includes(id);
@@ -26,8 +24,9 @@ export function defaultHiddenLeftNavIds(
     .map((item) => item.id);
 }
 
-function canonicalLeftNavId(id: string): string {
-  return LEFT_NAV_ID_ALIASES[id] ?? id;
+function canonicalLeftNavId(id: string): string | null {
+  if (RETIRED_LEFT_NAV_IDS.has(id)) return null;
+  return id;
 }
 
 export function isLeftNavRequired(item: Pick<LeftNavDefinition, "id" | "required">): boolean {
@@ -43,7 +42,7 @@ function uniqueKnown(ids: readonly string[] | undefined, known: Set<string>): st
   const seen = new Set<string>();
   for (const raw of ids ?? []) {
     const id = canonicalLeftNavId(raw);
-    if (!known.has(id) || seen.has(id)) continue;
+    if (!id || !known.has(id) || seen.has(id)) continue;
     seen.add(id);
     out.push(id);
   }

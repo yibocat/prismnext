@@ -5,6 +5,7 @@ import {
   FOLDER_FUNCTION_ICONS,
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
+  manuscriptMainFile,
 } from "../../../shared/workbench/workspace-folder";
 
 /** Build the prompt section describing functional workspace folders. */
@@ -24,11 +25,9 @@ export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {
 
     const icon = FOLDER_FUNCTION_ICONS[d.function] || "";
 
-    // Include mainTex info for manuscript folders
-    const extra =
-      d.function === "manuscript" && "mainTex" in d
-        ? ` (main file: \`${(d as any).mainTex}\`)`
-        : "";
+    const pin =
+      d.function === "manuscript" ? manuscriptMainFile(d) : undefined;
+    const extra = pin ? ` (optional compile entry: \`${pin}\`)` : "";
 
     return `- \`${d.name}/\` ${icon} **${label}**${extra}: ${desc}`;
   });

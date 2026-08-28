@@ -7,10 +7,10 @@ import {
 import {
   toggleExperimentsMaximize,
   toggleExperimentsSplit,
+  toggleFilesMaximize,
+  toggleFilesSplit,
   toggleLiteratureMaximize,
   toggleLiteratureSplit,
-  toggleTexWorkspaceMaximize,
-  toggleTexWorkspaceSplit,
 } from "@/lib/workspace/left-nav/panel-utils";
 import {
   openModeMaximized,
@@ -28,8 +28,9 @@ function matchesShortcut(id: string, e: KeyboardEvent): boolean {
 
 /**
  * Workspace mode shortcuts (Control on all platforms — avoids macOS ⌘⇧ screenshot):
- * - TeX / Library / Experiments: Ctrl+1–3 (+ Shift = maximize)
- * - Files / Git / Browser: Ctrl+4–6 (+ Shift = maximize)
+ * - Files / Library / Experiments: Ctrl+1–3 (+ Shift = maximize)
+ *   (`workspace.openTexWorkspace*` ids still exist; they open Files)
+ * - Files (Ctrl+4) / Git / Browser: Ctrl+4–6 (+ Shift = maximize)
  * - Terminal: Ctrl+` (+ Shift = maximize) — VS Code-style
  * - Templates: no shortcut
  */
@@ -46,12 +47,12 @@ export function useWorkspaceModeShortcuts(options?: { isMobile?: boolean }) {
       // LeftNav modes (Shift before bare).
       if (matchesShortcut("workspace.openTexWorkspaceMaximize", e)) {
         e.preventDefault();
-        toggleTexWorkspaceMaximize();
+        toggleFilesMaximize();
         return;
       }
       if (matchesShortcut("workspace.openTexWorkspace", e)) {
         e.preventDefault();
-        toggleTexWorkspaceSplit(layout);
+        toggleFilesSplit(layout);
         return;
       }
       if (matchesShortcut("workspace.openLiteratureMaximize", e)) {

@@ -13,6 +13,8 @@ export function mintProjectId(): string {
 export interface WorkbenchWorkspaceFolder {
   function: string;
   name: string;
+  mainFile?: string;
+  /** @deprecated read alias for `mainFile` */
   mainTex?: string;
   description?: string;
   icon?: string;

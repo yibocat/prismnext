@@ -3,7 +3,8 @@ import type { ContentBlock } from "../../src/renderer/stores/chat-store";
 import {
   extractExperimentArtifactPaths,
   extractExperimentImageArtifactPaths,
-  extractLatexCompileArtifactPaths,
+  extractCompileArtifactPaths,
+  extractCompileToolErrors,
   collectExperimentArtifactPathsFromBlocks,
   isExperimentFigureToolUse,
   assistantTextEmbedsImagePath,
@@ -169,7 +170,7 @@ describe("extractExperimentArtifactPaths", () => {
   });
 });
 
-describe("extractLatexCompileArtifactPaths", () => {
+describe("extractCompileArtifactPaths", () => {
   const toolUse: ContentBlock = {
     type: "tool_use",
     id: "tex1",
@@ -179,7 +180,7 @@ describe("extractLatexCompileArtifactPaths", () => {
 
   it("reads pdfPath from a successful compile result", () => {
     expect(
-      extractLatexCompileArtifactPaths(toolUse, {
+      extractCompileArtifactPaths(toolUse, {
         type: "tool_result",
         tool_use_id: "tex1",
         content: {
@@ -191,9 +192,46 @@ describe("extractLatexCompileArtifactPaths", () => {
     ).toEqual(["figures/lstm-cell.pdf"]);
   });
 
+  it("reads pdfPath from a successful typst-compile result", () => {
+    expect(
+      extractCompileArtifactPaths(
+        {
+          type: "tool_use",
+          id: "typ1",
+          name: "typst-compile",
+          input: { mainFile: "manuscript/main.typ" },
+        },
+        {
+          type: "tool_result",
+          tool_use_id: "typ1",
+          content: {
+            success: true,
+            mainFile: "manuscript/main.typ",
+            pdfPath: ".workbench/compile/typst/main.pdf",
+          },
+        },
+      ),
+    ).toEqual([".workbench/compile/typst/main.pdf"]);
+  });
+
+  it("does not surface a PDF path from a failed compile", () => {
+    expect(
+      extractCompileArtifactPaths(toolUse, {
+        type: "tool_result",
+        tool_use_id: "tex1",
+        content: {
+          success: false,
+          pdfPath: "figures/lstm-cell.pdf",
+          errorSummary: "Undefined control sequence",
+          errors: [{ file: "figures/lstm-cell.tex", line: 4, message: "Undefined control sequence" }],
+        },
+      }),
+    ).toEqual([]);
+  });
+
   it("unwraps ToolHost { result: compile } payloads", () => {
     expect(
-      extractLatexCompileArtifactPaths(toolUse, {
+      extractCompileArtifactPaths(toolUse, {
         type: "tool_result",
         tool_use_id: "tex1",
         content: JSON.stringify({
@@ -263,6 +301,43 @@ describe("extractLatexCompileArtifactPaths", () => {
         [toolUse, { type: "text", text: "PNG: `figures/lstm-cell.png`" }],
         map,
       ),
+    ).toEqual([]);
+  });
+});
+
+describe("extractCompileToolErrors", () => {
+  it("returns structured errors from a failed compile", () => {
+    expect(
+      extractCompileToolErrors({
+        success: false,
+        errors: [
+          { file: "manuscript/main.typ", line: 12, message: "expected semicolon" },
+        ],
+      }),
+    ).toEqual([
+      { file: "manuscript/main.typ", line: 12, message: "expected semicolon" },
+    ]);
+  });
+
+  it("unwraps nested result.errors", () => {
+    expect(
+      extractCompileToolErrors({
+        result: {
+          success: false,
+          errors: [{ file: "main.tex", line: 4, message: "Undefined control sequence" }],
+        },
+      }),
+    ).toEqual([
+      { file: "main.tex", line: 4, message: "Undefined control sequence" },
+    ]);
+  });
+
+  it("returns empty on success even if an errors array is present", () => {
+    expect(
+      extractCompileToolErrors({
+        success: true,
+        errors: [{ file: "main.tex", line: 1, message: "should ignore" }],
+      }),
     ).toEqual([]);
   });
 });

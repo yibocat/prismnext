@@ -20,7 +20,6 @@ export function rightTabComposerDragPayload(tab: RightTab): ComposerDragPayload 
       };
     }
     case "file":
-    case "texworkspace":
     case "research-plan": {
       const filePath = tab.filePath?.trim();
       const fileId = tab.fileId?.trim();

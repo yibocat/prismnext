@@ -7,6 +7,8 @@ interface ChatFileLinkProps {
   className?: string;
   /** Shown on hover when children omit the full path. */
   title?: string;
+  /** Jump to this 1-based line after opening. */
+  line?: number;
 }
 
 /** Tool widgets + markdown — opens RightArea and focuses the project file. */
@@ -15,6 +17,7 @@ export function ChatFileLink({
   children,
   className,
   title,
+  line,
 }: ChatFileLinkProps) {
   const label =
     typeof children === "string" && children.trim() ? children : undefined;
@@ -25,6 +28,7 @@ export function ChatFileLink({
       label={label}
       title={title}
       className={className}
+      line={line}
     />
   );
 }

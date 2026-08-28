@@ -25,6 +25,7 @@ extraResources:
 #   Packaged → <resources>/tectonic/tectonic[.exe]
 #   Dev      → bin/tectonic/<platform>-<arch>/tectonic[.exe]
 # Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
+# Typst CLI — same layout under <resources>/typst and bin/typst/<platform>-<arch>/.
 mac:
   icon: resources/brand/icon.icns
   # dmg = human download; zip = electron-updater (generic provider requires zip on macOS)
@@ -37,6 +38,10 @@ mac:
       to: "tectonic"
       filter:
         - "tectonic*"
+    - from: "bin/typst/darwin-${arch}/"
+      to: "typst"
+      filter:
+        - "typst*"
 
 win:
   # Generated from app-icon-dark.png (Pillow). Falls back to PNG if missing.
@@ -49,6 +54,10 @@ win:
       to: "tectonic"
       filter:
         - "tectonic*"
+    - from: "bin/typst/windows-${arch}/"
+      to: "typst"
+      filter:
+        - "typst*"
 
 linux:
   icon: resources/brand/app-icon-dark.png
@@ -60,6 +69,10 @@ linux:
       to: "tectonic"
       filter:
         - "tectonic*"
+    - from: "bin/typst/linux-${arch}/"
+      to: "typst"
+      filter:
+        - "typst*"
 
 # CI may override with --config.publish.url="$R2_PUBLIC_BASE_URL".
 # Local dist:* uses --publish never — no upload.

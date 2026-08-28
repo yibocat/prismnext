@@ -15,8 +15,9 @@ describe("mode-shortcuts", () => {
 
   it("covers all add-menu workspace modes that have shortcuts", () => {
     const withShortcuts = Object.keys(MODE_SHORTCUT);
-    expect(withShortcuts).toContain("texworkspace");
+    expect(withShortcuts).toContain("files");
     expect(withShortcuts).toContain("literature");
-    expect(withShortcuts).toHaveLength(7);
+    expect(withShortcuts).not.toContain("texworkspace");
+    expect(withShortcuts).toHaveLength(6);
   });
 });

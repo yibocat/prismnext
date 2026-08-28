@@ -38,6 +38,8 @@ const PLAN_EXECUTION_DENY = new Set([
   "move",
   "latex-compile",
   "latex-compile-standalone",
+  "typst-compile",
+  "typst-compile-standalone",
   "experiment-run",
   "experiment-log",
 ]);

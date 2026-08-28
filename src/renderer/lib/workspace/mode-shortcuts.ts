@@ -3,7 +3,6 @@
  * Maximize variants stay in Shortcut settings / hints only.
  */
 export const MODE_SHORTCUT: Partial<Record<string, string>> = {
-  texworkspace: "workspace.openTexWorkspace",
   literature: "workspace.openLiterature",
   experiments: "workspace.openExperiments",
   files: "workspace.openFiles",

@@ -1,4 +1,4 @@
-import { memo, type ReactNode, useCallback } from "react";
+import { memo, type ReactNode, useCallback, Fragment } from "react";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
@@ -93,10 +93,12 @@ export const TabToolbar = memo(function TabToolbar({
               const isLast = i === collapsed.length - 1;
               if (item.isEllipsis) {
                 return (
-                  <BreadcrumbItem key="ellipsis" className="shrink-0">
-                    <span className="px-0.5 text-muted-foreground">…</span>
+                  <Fragment key="ellipsis">
+                    <BreadcrumbItem className="shrink-0">
+                      <span className="px-0.5 text-muted-foreground">…</span>
+                    </BreadcrumbItem>
                     <BreadcrumbSeparator />
-                  </BreadcrumbItem>
+                  </Fragment>
                 );
               }
               const seg = item.label;
@@ -112,29 +114,33 @@ export const TabToolbar = memo(function TabToolbar({
               }
               if (isExternal) {
                 return (
-                  <BreadcrumbItem key={`${segIndex}-${seg}`} className="min-w-0 shrink">
-                    <span className="block max-w-[6rem] truncate text-muted-foreground" title={seg}>
-                      {seg}
-                    </span>
+                  <Fragment key={`${segIndex}-${seg}`}>
+                    <BreadcrumbItem className="min-w-0 shrink">
+                      <span className="block max-w-[6rem] truncate text-muted-foreground" title={seg}>
+                        {seg}
+                      </span>
+                    </BreadcrumbItem>
                     <BreadcrumbSeparator className="shrink-0" />
-                  </BreadcrumbItem>
+                  </Fragment>
                 );
               }
               const cumPath = segments.slice(0, segIndex + 1).join("/");
               return (
-                <BreadcrumbItem key={`${segIndex}-${seg}`} className="min-w-0 shrink">
-                  <Hint label={`Go to ${cumPath}`}>
-                    <button
-                      type="button"
-                      className="block max-w-[6rem] truncate hover:text-foreground transition-colors cursor-pointer"
-                      title={seg}
-                      onClick={() => navigateToPath(cumPath)}
-                    >
-                      {seg}
-                    </button>
-                  </Hint>
+                <Fragment key={`${segIndex}-${seg}`}>
+                  <BreadcrumbItem className="min-w-0 shrink">
+                    <Hint label={`Go to ${cumPath}`}>
+                      <button
+                        type="button"
+                        className="block max-w-[6rem] truncate hover:text-foreground transition-colors cursor-pointer"
+                        title={seg}
+                        onClick={() => navigateToPath(cumPath)}
+                      >
+                        {seg}
+                      </button>
+                    </Hint>
+                  </BreadcrumbItem>
                   <BreadcrumbSeparator className="shrink-0" />
-                </BreadcrumbItem>
+                </Fragment>
               );
             })}
           </BreadcrumbList>

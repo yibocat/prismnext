@@ -155,17 +155,54 @@ export function extractExperimentImageArtifactPaths(
   return extractExperimentArtifactPaths(toolUse, toolResult).filter(isImageArtifactPath);
 }
 
-export function isLatexCompileToolUse(toolUse: ContentBlock): boolean {
+export type CompileToolError = {
+  file?: string;
+  line?: number;
+  message: string;
+};
+
+function asCompileToolError(v: unknown): CompileToolError | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  const rec = v as Record<string, unknown>;
+  if (typeof rec.message !== "string" || !rec.message.trim()) return null;
+  const file = typeof rec.file === "string" && rec.file.trim() ? rec.file.replace(/\\/g, "/") : undefined;
+  const line = typeof rec.line === "number" && Number.isFinite(rec.line) && rec.line > 0
+    ? rec.line
+    : undefined;
+  return { file, line, message: rec.message.trim() };
+}
+
+/** Structured compile failures from latex/typst tool results. Empty on success. */
+export function extractCompileToolErrors(content: unknown): CompileToolError[] {
+  const data = unwrapPayload(content);
+  if (!data) return [];
+  const nested = data.result;
+  const inner =
+    nested && typeof nested === "object" && !Array.isArray(nested)
+      ? (nested as Record<string, unknown>)
+      : data;
+  if (inner.success === true || data.success === true) return [];
+  const raw = inner.errors ?? data.errors;
+  if (!Array.isArray(raw)) return [];
+  return raw.map(asCompileToolError).filter((e): e is CompileToolError => e != null);
+}
+
+export function isManuscriptCompileToolUse(toolUse: ContentBlock): boolean {
   const name = (toolUse.name || "").toLowerCase();
-  return name === "latex-compile" || name === "latex-compile-standalone";
+  return (
+    name === "latex-compile"
+    || name === "latex-compile-standalone"
+    || name === "typst-compile"
+    || name === "typst-compile-standalone"
+  );
 }
 
 /** Successful compile PDF (in-place figure or `.workbench/compile/` paper). */
-export function extractLatexCompileArtifactPaths(
+export function extractCompileArtifactPaths(
   toolUse: ContentBlock,
   toolResult?: ContentBlock,
 ): string[] {
-  if (!isLatexCompileToolUse(toolUse)) return [];
+  if (!isManuscriptCompileToolUse(toolUse)) return [];
   if (!toolResult || toolResult.is_error) return [];
   const data = unwrapPayload(toolResult.content ?? toolUse.content);
   if (!data) return [];
@@ -208,7 +245,7 @@ export function collectExperimentArtifactPathsFromBlocks(
       ? fromOutcome
       : [
           ...extractExperimentArtifactPaths(block, result),
-          ...extractLatexCompileArtifactPaths(block, result),
+          ...extractCompileArtifactPaths(block, result),
         ];
     for (const p of paths) {
       if (seen.has(p)) continue;

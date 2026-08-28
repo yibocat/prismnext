@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Bundle prismnext-host (JS + Core teams + runtime pins + install-runtime).
- * Node, Git, and Tectonic are not packed here — the Linux server downloads
+ * Node, Git, Tectonic, and Typst are not packed here — the Linux server downloads
  * them from the pin files on first connect. Pack does not hit the network.
  */
 
@@ -56,7 +56,9 @@ function requireSha(pin, key, filePath) {
 const NODE_PIN = readKeyPin(join(root, "scripts/host/node-version.txt"));
 const HOST_GIT = readKeyPin(join(root, "scripts/host/git-version.txt"));
 const TECTONIC_LINUX = readKeyPin(join(root, "scripts/host/tectonic-linux.txt"));
+const TYPST_LINUX = readKeyPin(join(root, "scripts/host/typst-linux.txt"));
 const TECTONIC_VERSION = readPinLines(join(root, "scripts/tectonic-version.txt"))[0].replace(/^v/, "");
+const TYPST_VERSION = readPinLines(join(root, "scripts/typst-version.txt"))[0].replace(/^v/, "");
 
 if (!NODE_PIN.version || !NODE_PIN.archive) {
   throw new Error("scripts/host/node-version.txt needs version and archive");
@@ -78,6 +80,16 @@ if (!TECTONIC_LINUX["triple-x64"] || !TECTONIC_LINUX["triple-arm64"]) {
 }
 requireSha(TECTONIC_LINUX, "sha256-x64", "scripts/host/tectonic-linux.txt");
 requireSha(TECTONIC_LINUX, "sha256-arm64", "scripts/host/tectonic-linux.txt");
+if (TYPST_LINUX.version !== TYPST_VERSION) {
+  throw new Error(
+    `scripts/host/typst-linux.txt version ${TYPST_LINUX.version} must match scripts/typst-version.txt ${TYPST_VERSION}`,
+  );
+}
+if (!TYPST_LINUX["triple-x64"] || !TYPST_LINUX["triple-arm64"]) {
+  throw new Error("scripts/host/typst-linux.txt needs triple-x64 and triple-arm64");
+}
+requireSha(TYPST_LINUX, "sha256-x64", "scripts/host/typst-linux.txt");
+requireSha(TYPST_LINUX, "sha256-arm64", "scripts/host/typst-linux.txt");
 
 const installSrc = join(root, "scripts/host/install-runtime.sh");
 if (!existsSync(installSrc)) {
@@ -116,6 +128,10 @@ copyFileSync(join(root, "scripts/host/git-version.txt"), join(currentDir, "runti
 copyFileSync(
   join(root, "scripts/host/tectonic-linux.txt"),
   join(currentDir, "runtime", "tectonic-linux.txt"),
+);
+copyFileSync(
+  join(root, "scripts/host/typst-linux.txt"),
+  join(currentDir, "runtime", "typst-linux.txt"),
 );
 
 try {

@@ -70,7 +70,7 @@ export function ensureRightAreaVisibleForFiles(): void {
  */
 export async function openProjectFileFromChat(
   rawPath: string,
-  opts?: { pin?: boolean },
+  opts?: { pin?: boolean; line?: number },
 ): Promise<boolean> {
   const raw = rawPath?.trim();
   if (!raw) return false;
@@ -122,16 +122,27 @@ export async function openProjectFileFromChat(
   }
 
   const name = relativePath.split("/").pop() || relativePath;
+  const pin = opts?.pin ?? (opts?.line != null || isPlan);
   if (isPlan) {
     useRightPanelStore.getState().openResearchPlan(relativePath, relativePath, name, {
-      pin: opts?.pin ?? true,
+      pin,
     });
   } else {
     useRightPanelStore.getState().openFile(relativePath, relativePath, name, {
-      pin: opts?.pin ?? false,
+      pin,
     });
   }
   await docStore.openFile(relativePath);
+  const line = opts?.line;
+  if (line != null && line > 0) {
+    const match = useDocumentStore.getState().files.find(
+      (f) => f.relativePath === relativePath || f.id === relativePath,
+    );
+    const fileId = match?.id ?? relativePath;
+    window.setTimeout(() => {
+      useDocumentStore.getState().requestJumpToLine(fileId, line);
+    }, 80);
+  }
   return true;
 }
 

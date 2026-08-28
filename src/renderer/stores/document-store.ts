@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
 import { isBinaryProjectFile } from "../../shared/platform/project-file-openability";
+import { compileEngineFromRelPath, isLiveCompileSourceRel } from "@shared/compile/artifact-key";
 
 const log = createLogger("document-store", "startup");
 
@@ -134,7 +135,7 @@ interface DocumentState {
   getAsset: (id: string) => string;
   /** Project-relative paths of files with unsaved edits. */
   getDirtyRelativePaths: () => string[];
-  /** Dirty + open tex-related files with in-memory content (for live compile flush). */
+  /** Dirty + open manuscript sources with in-memory content (for live compile flush). */
   getLiveCompilePayload: () => {
     dirtyRelPaths: string[];
     dirtyFiles: Array<{ relPath: string; content: string }>;
@@ -1447,11 +1448,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const seen = new Set<string>();
     state.openedContents.forEach((val, id) => {
       // Only flush buffers that actually changed — avoids rewriting every open
-      // .tex/.bib on each live pass (IPC + disk + incremental sync).
+      // compile source on each live pass (IPC + disk + incremental sync).
       if (!val.isDirty || val.content == null) return;
       const file = state.files.find((f) => f.id === id);
       if (!file?.relativePath) return;
-      if (!/\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) return;
+      if (!isLiveCompileSourceRel(file.relativePath)) return;
       if (seen.has(file.relativePath)) return;
       seen.add(file.relativePath);
       dirtyRelPaths.push(file.relativePath);
@@ -1501,9 +1502,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     scheduleAutoSave();
 
     const file = state.files.find((f) => f.id === id);
-    if (file && /\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) {
+    if (file && isLiveCompileSourceRel(file.relativePath)) {
       void import("./compile-store").then(({ useCompileStore }) => {
-        useCompileStore.getState().scheduleAutoCompile();
+        const compile = useCompileStore.getState();
+        if (compileEngineFromRelPath(file.relativePath) === "typst") {
+          compile.scheduleTypstLiveCompile();
+        } else {
+          compile.scheduleAutoCompile();
+        }
       });
     }
   },

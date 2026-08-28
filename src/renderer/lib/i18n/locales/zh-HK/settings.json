@@ -14,7 +14,6 @@
     "commands": "命令",
     "mcp": "MCP",
     "skills": "技能",
-    "texWorkspace": "TeX 工作區",
     "terminal": "終端",
     "browser": "瀏覽器",
     "literature": "文獻",
@@ -362,6 +361,7 @@
     "tabProjectHint": "未開啟專案。開啟專案以編輯其即時工作區資料夾。",
     "addFolder": "新增資料夾",
     "pageDesc": "面向 AI Agent 的資料夾佈局。使用「配置」在右側面板編輯名稱、說明與手稿設定。",
+    "backups": "備份",
     "empty": "尚未配置資料夾。",
     "toast": {
       "folderSaved": "資料夾已儲存。",
@@ -382,11 +382,11 @@
       "removeTitle": "移除資料夾",
       "removeDescProject": "從當前專案移除「{{name}}」？僅更新工作區配置 — 不會刪除磁碟上的檔案。",
       "removeDescTemplate": "從新建專案模板移除「{{name}}」？僅更新模板配置。",
-      "removeManuscriptWarn": "移除唯一的手稿資料夾將停用 TeX 工作區功能，直到配置另一個手稿資料夾。",
+      "removeManuscriptWarn": "移除唯一的手稿資料夾後，Files 將不知道哪一層是成稿目錄，直到你再新增一個。",
       "name": "資料夾名稱",
       "nameDesc": "專案根目錄下的資料夾名稱。",
-      "mainTex": "主 TeX 檔案",
-      "mainTexDesc": "此資料夾的主手稿檔案（僅手稿資料夾）。",
+      "mainTex": "主檔案",
+      "mainTexDesc": "可選的編譯入口（`.tex` 或 `.typ`）。留空則依目前開啟的檔案解析。",
       "docClass": "預設文件類",
       "docClassDesc": "搭建新手稿時使用。",
       "description": "給 AI Agent 的說明",
@@ -481,7 +481,9 @@
   },
   "compiler": {
     "title": "編譯器",
-    "subtitle": "LaTeX 引擎與自動編譯預設值。"
+    "subtitle": "LaTeX 與 Typst 的自動編譯預設值。",
+    "autoCompile": "自動編譯",
+    "autoCompileDesc": "停止輸入約 0.5 秒後自動重新編譯 PDF（.tex 優先 Tectonic，.typ 使用內建 Typst）。每個專案單獨記住此開關；遠端專案預設關閉。"
   },
   "terminalPage": {
     "title": "終端",
@@ -844,50 +846,6 @@
       "project": "此專案"
     }
   },
-  "texWorkspacePage": {
-    "title": "TeX 工作區",
-    "subtitle": "手稿、佈局與編譯偏好。",
-    "manuscript": "手稿",
-    "layout": "佈局",
-    "compileSection": "編譯",
-    "compile": {
-      "defaultEngine": "預設引擎",
-      "defaultEngineDesc": "本專案的 LaTeX 編譯器。構建輸出位於 .workbench/compile/。",
-      "autoCompile": "自動編譯",
-      "autoCompileDesc": "停止輸入約 0.5 秒後自動重新編譯 PDF（優先使用 Tectonic）。每個專案單獨記住此開關；遠端專案預設關閉。"
-    },
-    "backups": "備份",
-    "references": "參考文獻",
-    "openProject": "開啟專案以配置手稿資料夾。",
-    "noTemplate": "尚未應用模板。",
-    "pageDesc": "手稿資料夾、編輯器佈局與編譯偏好。",
-    "manuscriptDesc": "當前專案的手稿繫結與模板狀態。",
-    "defaultView": "預設檢視",
-    "defaultViewDesc": "進入 TeX 工作區時的面板佈局。",
-    "templateSnapshots": "模板快照",
-    "templateSnapshotsDesc": "切換模板時創建於 .workbench/backups/。刪除舊快照可釋放磁碟空間。",
-    "referencesDesc": "在文獻模式（右側面板）管理引用與閱讀筆記。開啟專案後可從文獻庫側欄配置 Zotero 同步。",
-    "referencesNote": "BibTeX 匯出與手稿引用檢查位於 TeX 工作區編譯流程中。",
-    "viewSplit": "分欄（TeX + PDF）",
-    "viewEditor": "僅編輯器",
-    "viewPreview": "僅預覽",
-    "noManuscript": "尚未繫結手稿資料夾。",
-    "folder": "資料夾",
-    "mainFile": "主檔案",
-    "template": "模板",
-    "workspaceSettings": "工作區設定",
-    "templateCenter": "模板中心",
-    "none": "無",
-    "appliedViaCenter": "通過模板中心應用",
-    "folderDesc": "在工作區設定中編輯資料夾名稱與主檔案。",
-    "folderDescPrefix": "在",
-    "folderDescSuffix": "中編輯資料夾名稱與主檔案。",
-    "mainFileDesc": "相對於手稿資料夾的編譯入口 — 不會重新命名磁碟上的檔案。",
-    "templateChangePrefix": "在",
-    "templateChangeSuffix": "中更改。",
-    "viewTex": "僅 TeX",
-    "viewPdf": "僅 PDF"
-  },
   "shortcuts": {
     "title": "快捷鍵",
     "subtitle": "殼層與編輯器為系統預設、不可修改；工作區與產品快捷鍵將支援自定義。Tooltip 始終顯示解析後的鍵位。",
@@ -1121,6 +1079,7 @@
         "deleteFailedShort": "刪除失敗"
       },
       "openProject": "請先開啟專案以管理文稿備份。",
+      "remoteOnlyLocal": "文稿模板備份僅保存在本機。請在本機開啟專案後再檢視或還原。",
       "refresh": "重新整理",
       "loading": "正在載入備份…",
       "emptyHint": "切換模板時會自動建立備份。",
@@ -1464,7 +1423,7 @@
       },
       "descPlaceholder": "說明此資料夾應存放什麼內容，以便智慧體正確使用。",
       "functionDesc": {
-        "manuscript": "存放撰寫學術論文的 LaTeX 文稿檔案。主入口為 `main.tex`。此資料夾繫結到 TeX 工作區（編輯器 + PDF 預覽）。",
+        "manuscript": "成稿 / 論文主體所在目錄（LaTeX `.tex` 或 Typst `.typ`）。編譯產物在 `.workbench/compile/`，不要編輯該快取。在 Files 中開啟原始檔。主檔 pin 可選。",
         "experiment": "實驗工作區根目錄。每個實驗會在此下建立子資料夾（程式碼、資料、結果）。執行記錄由應用自動記賬，無需單獨配置「登錄檔」資料夾。",
         "literature": "存放學術研究與引用所需的文獻與參考 PDF。",
         "notebook": "存放各類筆記，如 Markdown 或 Jupyter 筆記本。"

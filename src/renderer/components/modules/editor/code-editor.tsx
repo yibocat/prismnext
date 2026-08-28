@@ -53,7 +53,7 @@ export function CodeEditor() {
 
   const { tab, isActive } = useTabContext();
   const fileId =
-    tab.kind === "file" || tab.kind === "texworkspace" || tab.kind === "research-plan"
+    tab.kind === "file" || tab.kind === "research-plan"
       ? tab.fileId
       : null;
   const filePath = tabFilePath(tab) ?? "";

@@ -4,13 +4,27 @@ import { CheckCircle2Icon, FileTextIcon, XCircleIcon } from "lucide-react";
 import { ToolCard, param } from "./shared";
 import { ChatFileLink } from "../chat-file-link";
 import { ChatArtifactGallery } from "@/lib/markdown/chat-artifact-block";
-import { extractLatexCompileArtifactPaths } from "@/lib/chat/experiment-run-figures";
+import {
+  extractCompileToolErrors,
+  extractCompileArtifactPaths,
+} from "@/lib/chat/experiment-run-figures";
 
 const LABELS: Record<string, string> = {
   "latex-root": "LaTeX root",
   "latex-compile": "LaTeX compile",
   "latex-compile-standalone": "Figure compile",
+  "typst-root": "Typst root",
+  "typst-compile": "Typst compile",
+  "typst-compile-standalone": "Typst figure compile",
 };
+
+const ROOT_TOOLS = new Set(["latex-root", "typst-root"]);
+const COMPILE_TOOLS = new Set([
+  "latex-compile",
+  "latex-compile-standalone",
+  "typst-compile",
+  "typst-compile-standalone",
+]);
 
 function parseToolJson(content: unknown): Record<string, unknown> | null {
   if (content == null) return null;
@@ -48,7 +62,7 @@ function unwrapPayload(content: unknown): Record<string, unknown> | null {
   return outer;
 }
 
-function LatexResultSummary({
+function CompileResultSummary({
   toolName,
   data,
 }: {
@@ -61,16 +75,19 @@ function LatexResultSummary({
     );
   }
 
-  if (toolName === "latex-root") {
+  if (ROOT_TOOLS.has(toolName)) {
     const mainFile = typeof data.mainFile === "string" ? data.mainFile : "—";
-    const engine = typeof data.engine === "string" ? data.engine : "—";
+    const engine = typeof data.engine === "string" ? data.engine : null;
     const bibTool = data.bibTool != null ? String(data.bibTool) : "none";
     return (
       <div className="space-y-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
         <p>
-          <span className="text-foreground font-medium">{mainFile}</span>
-          {" · "}
-          {engine}
+          {typeof data.mainFile === "string" ? (
+            <ChatFileLink path={data.mainFile} className="font-normal" />
+          ) : (
+            <span className="text-foreground font-medium">{mainFile}</span>
+          )}
+          {engine ? ` · ${engine}` : ""}
           {bibTool !== "none" ? ` · ${bibTool}` : ""}
         </p>
         {typeof data.buildDir === "string" ? <p>Build: {data.buildDir}</p> : null}
@@ -78,7 +95,7 @@ function LatexResultSummary({
     );
   }
 
-  if (toolName === "latex-compile" || toolName === "latex-compile-standalone") {
+  if (COMPILE_TOOLS.has(toolName)) {
     const nested = data.result;
     const inner =
       nested && typeof nested === "object" && !Array.isArray(nested)
@@ -89,6 +106,7 @@ function LatexResultSummary({
     const pdfPath = typeof inner.pdfPath === "string" ? inner.pdfPath : data.pdfPath;
     const errorSummary =
       typeof inner.errorSummary === "string" ? inner.errorSummary : data.errorSummary;
+    const errors = extractCompileToolErrors(data);
     return (
       <div className="space-y-1 text-[length:var(--font-chat-meta)]">
         <p className="flex items-center gap-1.5">
@@ -109,8 +127,24 @@ function LatexResultSummary({
         {typeof pdfPath === "string" && ok ? (
           <p className="text-muted-foreground">PDF: {pdfPath}</p>
         ) : null}
-        {!ok && typeof errorSummary === "string" && errorSummary ? (
-          <p className="text-destructive/90 whitespace-pre-wrap">{errorSummary}</p>
+        {!ok && errors.length > 0 ? (
+          <ul className="space-y-0.5 text-destructive">
+            {errors.map((err, i) => (
+              <li key={`${i}:${err.file ?? ""}:${err.line ?? ""}:${err.message}`} className="break-words">
+                {err.file ? (
+                  <ChatFileLink path={err.file} line={err.line} className="font-normal" />
+                ) : null}
+                {err.file && err.line != null ? (
+                  <span className="text-muted-foreground">:{err.line}</span>
+                ) : null}
+                {err.file ? " " : null}
+                <span>{err.message}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {!ok && errors.length === 0 && typeof errorSummary === "string" && errorSummary ? (
+          <p className="text-destructive whitespace-pre-wrap">{errorSummary}</p>
         ) : null}
       </div>
     );
@@ -119,7 +153,7 @@ function LatexResultSummary({
   return null;
 }
 
-export const LatexToolWidget = memo(function LatexToolWidget({
+export const ManuscriptCompileToolWidget = memo(function ManuscriptCompileToolWidget({
   toolUse,
   toolResult,
   toolName,
@@ -151,7 +185,7 @@ export const LatexToolWidget = memo(function LatexToolWidget({
 
   const previewPaths = nestedInActivity
     ? []
-    : extractLatexCompileArtifactPaths(toolUse, toolResult);
+    : extractCompileArtifactPaths(toolUse, toolResult);
 
   return (
     <>
@@ -180,7 +214,7 @@ export const LatexToolWidget = memo(function LatexToolWidget({
         <>
           {parsed ? (
             <div className="mb-2 font-sans">
-              <LatexResultSummary toolName={toolName} data={parsed} />
+              <CompileResultSummary toolName={toolName} data={parsed} />
             </div>
           ) : null}
           <pre className="whitespace-pre-wrap break-all">

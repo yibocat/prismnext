@@ -20,6 +20,9 @@ export const TOOL_NAMES = {
   latexRoot: "latex-root",
   latexCompile: "latex-compile",
   latexCompileStandalone: "latex-compile-standalone",
+  typstRoot: "typst-root",
+  typstCompile: "typst-compile",
+  typstCompileStandalone: "typst-compile-standalone",
   researchBriefRead: "research-brief-read",
   researchBriefUpdate: "research-brief-update",
   projectRuleWrite: "project-rule-write",
@@ -45,4 +48,9 @@ export const ALL_TOOL_NAMES = Object.values(TOOL_NAMES);
 export function isLatexCompileToolName(name: string): boolean {
   const n = name.toLowerCase();
   return n === TOOL_NAMES.latexCompile || n === TOOL_NAMES.latexCompileStandalone;
+}
+
+export function isTypstCompileToolName(name: string): boolean {
+  const n = name.toLowerCase();
+  return n === TOOL_NAMES.typstCompile || n === TOOL_NAMES.typstCompileStandalone;
 }

@@ -184,7 +184,6 @@ function RightAreaWorkspace() {
   const activeTab = surfaceTabs.find((t) => t.id === surfaceActiveTabId) ?? null;
   const isEditorKind =
     activeTab?.kind === "file"
-    || activeTab?.kind === "texworkspace"
     || activeTab?.kind === "research-plan";
   const isSettingsEditorTab = activeTab?.kind === "settings-editor";
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -661,7 +660,7 @@ function RightAreaWorkspace() {
           }
           isExternal={isFileBackedTab(activeTab) ? activeTab.isExternal : undefined}
           hideSpacer={!isEditorKind}
-          hideBreadcrumb={focusedMode === "texworkspace" || focusedMode === "literature"}
+          hideBreadcrumb={focusedMode === "literature"}
           hideSidebarToggle={modeRegistry.get(focusedMode)?.hideRightSidebar}
         >
           {activeTab && (() => {

@@ -1,4 +1,6 @@
 import type { AppSettings } from "../stores/settings-store";
+import type { CompileAgentCompleteEvent } from "@shared/compile/artifact-key";
+import type { TypstCliFormat } from "@shared/compile/typst-format";
 
 export interface TexliveStatus {
   available: boolean;
@@ -85,6 +87,8 @@ export type {
   PaperCitationNetworkResult,
   PaperCitationSection,
 } from "@shared/literature/paper-citation-network";
+
+export type { CompileAgentCompleteEvent };
 
 export interface LiteratureCollection {
   id: string;
@@ -365,7 +369,7 @@ export interface ElectronAPI {
     }>;
     projectName?: string | null;
     modes?: Array<{
-      id: "texworkspace" | "literature" | "experiments";
+      id: "files" | "literature" | "experiments";
       label: string;
     }>;
   }) => Promise<void>;
@@ -376,7 +380,7 @@ export interface ElectronAPI {
   ) => () => void;
   onShellTrayOpenMode: (
     callback: (args: {
-      modeId: "texworkspace" | "literature" | "experiments";
+      modeId: "files" | "literature" | "experiments";
     }) => void,
   ) => () => void;
   /** Absolute path for a File from an OS drag-drop (Electron webUtils). */
@@ -753,6 +757,21 @@ export interface ElectronAPI {
     | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
     | { error: string; stdout?: string }
   >;
+  compileTypstLive: (
+    projectDir: string,
+    mainFile: string,
+    opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
+  ) => Promise<{ svgPages: string[]; stdout?: string } | { error: string; stdout?: string }>;
+  compileTypstExport: (
+    projectDir: string,
+    mainFile: string,
+    format: TypstCliFormat,
+    opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
+  ) => Promise<
+    | { canceled: true }
+    | { canceled: false; ok: true; path: string }
+    | { canceled: false; ok: false; error: string; stdout?: string }
+  >;
   compileDetectTexlive: (args?: { projectRoot?: string }) => Promise<CompilerStatus>;
   compileExportPdf: (
     projectRoot: string,
@@ -772,14 +791,7 @@ export interface ElectronAPI {
     | { canceled: false; ok: false; error: string }
   >;
   onCompileAgentComplete: (
-    callback: (data: {
-      projectDir: string;
-      success: boolean;
-      mainFile?: string;
-      pdfBytes?: ArrayBuffer;
-      error?: string;
-      logTail?: string;
-    }) => void,
+    callback: (data: CompileAgentCompleteEvent) => void,
   ) => () => void;
 
   // Literature library

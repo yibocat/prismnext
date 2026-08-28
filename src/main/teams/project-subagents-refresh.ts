@@ -17,7 +17,7 @@ export function notifyExpertsIntegrationChanged(projectPath: string): void {
 }
 
 export interface RefreshProjectExpertsOptions {
-  /** Workspace dirs and rules context for profile module builds (latex-workspace, etc.). */
+  /** Workspace dirs and rules context for profile module builds (manuscript-compile, etc.). */
   promptCtx?: PromptContext;
 }
 

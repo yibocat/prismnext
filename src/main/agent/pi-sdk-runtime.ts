@@ -1204,9 +1204,9 @@ export class PiSdkRuntime implements AgentRuntime {
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
 
-    if (session.cancelled || session.activeTurn) {
-      await session.handle.abort().catch(() => {});
-    }
+    // Abort leftover Pi work even when our activeTurn is already null (a
+    // dropped provider stream can reject prompt() without aborting the agent).
+    await session.handle.abort().catch(() => {});
     session.cancelled = false;
 
     const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
@@ -1254,6 +1254,19 @@ export class PiSdkRuntime implements AgentRuntime {
         || live.cancelled
         || !live.activeTurn
         || live.activeTurn.turnId !== turnIdAtPrompt
+      ) {
+        return;
+      }
+      // Provider drop ("Connection error") can reject prompt() while Pi still
+      // thinks a turn is in flight. Abort so the next send is not
+      // "Agent is already processing".
+      await live.handle.abort().catch(() => {});
+      const afterAbort = this.sessions.get(session.runtimeSessionId);
+      if (
+        !afterAbort
+        || afterAbort.cancelled
+        || !afterAbort.activeTurn
+        || afterAbort.activeTurn.turnId !== turnIdAtPrompt
       ) {
         return;
       }

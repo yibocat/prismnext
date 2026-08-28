@@ -166,4 +166,48 @@ describe("PiSdkRuntime turn idle watchdog", () => {
     resolvePrompt?.();
     await sendPromise;
   });
+
+  it("aborts Pi when prompt() rejects with a connection error", async () => {
+    const project = mkdtempSync(join(tmpdir(), "prism-pi-conn-"));
+    const storeRoot = mkdtempSync(join(tmpdir(), "prism-pi-conn-store-"));
+    dirs.push(project, storeRoot);
+
+    const events: AgentEvent[] = [];
+    let abortCount = 0;
+
+    const runtime = new PiSdkRuntime({
+      store: new AgentSessionStore(storeRoot),
+      toolHost: new ToolHost({ gate: new PermissionGate() }),
+      gate: new PermissionGate(),
+      agentDir: join(storeRoot, "pi-agent"),
+      createPiSession: async () => ({
+        sessionId: "pi-conn-session",
+        subscribe: () => () => {},
+        prompt: async () => {
+          throw new Error("Connection error.");
+        },
+        abort: async () => {
+          abortCount += 1;
+        },
+        dispose: () => {},
+      }),
+    });
+    runtime.subscribe((event) => events.push(event));
+
+    const session = await runtime.createSession({ tabId: "tab-conn", projectRoot: project });
+    await runtime.sendTurn({
+      runtimeSessionId: session.runtimeSessionId,
+      tabId: "tab-conn",
+      text: "write a draft",
+      permissionMode: "edit_auto",
+    });
+
+    const failed = events.filter((e) => e.type === "turn_failed");
+    expect(failed).toHaveLength(1);
+    if (failed[0]?.type === "turn_failed") {
+      expect(failed[0].error).toBe("Connection error.");
+    }
+    // sendTurn start + prompt() catch
+    expect(abortCount).toBeGreaterThanOrEqual(2);
+  });
 });

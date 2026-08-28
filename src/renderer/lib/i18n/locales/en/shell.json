@@ -124,6 +124,6 @@
     "restorePanel": "Restore panel",
     "openFileToStart": "Open a file to get started",
     "openFileOrWorkspace": "Open a file or switch to a workspace",
-    "openFileOrWorkspaceHint": "Use the toolbar above to browse files, view git history, or start writing in the TeX workspace."
+    "openFileOrWorkspaceHint": "Use the toolbar above to browse files, view git history, or open a `.tex` / `.typ` file in Files."
   }
 }

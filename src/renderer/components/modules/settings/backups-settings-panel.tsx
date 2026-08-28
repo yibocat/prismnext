@@ -24,6 +24,7 @@ import {
   restoreTemplateBackup,
   type TemplateBackupEntry,
 } from "@/lib/settings";
+import { isRemoteProjectRoot } from "@shared/remote";
 
 function formatLabel(label: string): { date: string; from: string; to: string } {
   const firstUnderscore = label.indexOf("_");
@@ -58,6 +59,7 @@ export function BackupsSettingsPanel({
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const isRemote = Boolean(projectRoot && isRemoteProjectRoot(projectRoot));
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const [backups, setBackups] = useState<TemplateBackupEntry[]>([]);
@@ -130,6 +132,14 @@ export function BackupsSettingsPanel({
     return (
       <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
         {t("settings.editor.backups.openProject")}
+      </p>
+    );
+  }
+
+  if (isRemote) {
+    return (
+      <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
+        {t("settings.editor.backups.remoteOnlyLocal")}
       </p>
     );
   }

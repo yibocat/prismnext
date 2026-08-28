@@ -31,6 +31,13 @@ describe("tool permission registry — classifications", () => {
     expect(entry.rules).toEqual(FILE_MUTATION);
   });
 
+  it("classifies typst-compile as FILE_MUTATION", () => {
+    const entry = TOOL_PERMISSION_REGISTRY["typst-compile"];
+    expect(entry).toBeDefined();
+    expect(entry.permissionGroup).toBe("file_write");
+    expect(entry.rules).toEqual(FILE_MUTATION);
+  });
+
   it("classifies bash as SHELL", () => {
     expect(TOOL_PERMISSION_REGISTRY["bash"].permissionGroup).toBe("shell");
     expect(TOOL_PERMISSION_REGISTRY["bash"].rules).toEqual(SHELL);
@@ -53,6 +60,7 @@ describe("tool permission registry — classifications", () => {
       "literature-stage",
       "citation-health",
       "latex-root",
+      "typst-root",
     ];
     for (const tool of readOnly) {
       const entry = TOOL_PERMISSION_REGISTRY[tool];

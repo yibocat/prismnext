@@ -14,7 +14,6 @@ import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { applyCheckoutTransition } from "@/lib/git/checkout-context";
-import { useIsTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import {
   FilePlusCorner,
   FolderPlusIcon,
@@ -158,7 +157,6 @@ export function FilesSidebar() {
   const workspaceDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openFile = useRightPanelStore((s) => s.openFile);
-  const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
   const deleteFolder = useDocumentStore((s) => s.deleteFolder);
   const renameFile = useDocumentStore((s) => s.renameFile);
@@ -197,8 +195,7 @@ export function FilesSidebar() {
     [],
   );
 
-  const isTexworkspaceActive = useIsTexworkspace();
-  const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : "all";
+  const currentMode: SidebarMode = "all";
 
   // ─── Context bar: branch + worktree ───
   const gitBranch = useGitStore((s) => s.branch);
@@ -494,14 +491,10 @@ export function FilesSidebar() {
       setSelectedFolder(null);
       if (projectRoot) void setProjectLastActiveFileId(projectRoot, id);
       void trackRecentOpenedFile(id, name);
-      if (isTexworkspaceActive) {
-        openTexworkspaceFile(id, id, name);
-      } else {
-        setActiveFile(id);
-        openFile(id, id, name, { pin });
-      }
+      setActiveFile(id);
+      openFile(id, id, name, { pin });
     },
-    [isTexworkspaceActive, openTexworkspaceFile, projectRoot, setActiveFile, openFile],
+    [projectRoot, setActiveFile, openFile],
   );
 
   const handleSelectFolder = useCallback((path: string) => {

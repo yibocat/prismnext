@@ -83,4 +83,37 @@ describe("open-project-file", () => {
     });
     expect(parseGrepResultLine("not a match")).toBeNull();
   });
+
+  it("jumps to a line after opening a compile error location", async () => {
+    vi.useFakeTimers();
+    const requestJumpToLine = vi.fn();
+    const openFile = vi.fn(async () => {});
+    useDocumentStore.setState({
+      projectRoot: root,
+      files: [{
+        id: "chapters/intro.tex",
+        name: "intro.tex",
+        relativePath: "chapters/intro.tex",
+        absolutePath: `${root}/chapters/intro.tex`,
+        type: "tex",
+      }],
+      fileMetadata: new Map([
+        ["chapters/intro.tex", {
+          relativePath: "chapters/intro.tex",
+          absolutePath: `${root}/chapters/intro.tex`,
+          name: "intro.tex",
+          type: "tex",
+        }],
+      ]),
+      openFile,
+      requestJumpToLine,
+    } as any);
+
+    await expect(
+      openProjectFileFromChat("chapters/intro.tex", { line: 12, pin: true }),
+    ).resolves.toBe(true);
+    vi.advanceTimersByTime(80);
+    expect(requestJumpToLine).toHaveBeenCalledWith("chapters/intro.tex", 12);
+    vi.useRealTimers();
+  });
 });

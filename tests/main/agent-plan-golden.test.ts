@@ -206,7 +206,7 @@ describe("agent plan golden parity (Phase 2)", () => {
             name: "LaTeX Polisher",
             description: "Polishes LaTeX manuscripts for clarity and consistency.",
             model: "anthropic/claude-sonnet-4-20250514",
-            modules: ["latex-workspace", "project-brief"],
+            modules: ["manuscript-compile", "project-brief"],
             permission: { edit: "deny" },
           },
           null,

@@ -23,7 +23,6 @@ export function lucideIconFromMode(mode: Pick<ModeDefinition, "id" | "icon">): L
 /** Keep existing sidebar copy for modes that already had a nav key. */
 const LEFT_NAV_LABEL_KEY: Record<string, string> = {
   literature: "nav.library",
-  texworkspace: "nav.texWorkspace",
   experiments: "nav.experiments",
 };
 

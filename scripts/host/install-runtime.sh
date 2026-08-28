@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Node, portable Git, and Tectonic into ~/.prismnext-host/current.
+# Install Node, portable Git, Tectonic, and Typst into ~/.prismnext-host/current.
 # Runs on the Linux server. The laptop only pushes this script + pin files.
 set -eu
 
@@ -10,7 +10,7 @@ STEP="all"
 PRINT_PLAN=0
 
 usage() {
-  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|all] [--print-plan]" >&2
+  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|typst|all] [--print-plan]" >&2
 }
 
 need_cmd() {
@@ -122,6 +122,10 @@ is_elf() {
   [ -f "$1" ] && [ "$(file_magic_hex "$1" 4)" = "7f454c46" ]
 }
 
+is_xz() {
+  [ -f "$1" ] && [ "$(file_magic_hex "$1" 6)" = "fd377a585a00" ]
+}
+
 is_gzip() {
   [ -f "$1" ] && [ "$(file_magic_hex "$1" 2)" = "1f8b" ]
 }
@@ -151,6 +155,35 @@ install_tectonic_payload() {
   chmod 755 "$dest"
   if [ ! -x "$dest" ]; then
     echo "install-runtime: failed to place Tectonic at $dest" >&2
+    return 1
+  fi
+}
+
+install_typst_payload() {
+  payload="$1"
+  dest="$2"
+  if is_elf "$payload"; then
+    cp "$payload" "$dest"
+  elif is_xz "$payload"; then
+    extract="$CACHE/extract-typst-$ARCH"
+    rm -rf "$extract"
+    mkdir -p "$extract"
+    tar -xJf "$payload" -C "$extract"
+    src=$(find "$extract" -type f -name typst | head -1)
+    if [ -z "$src" ]; then
+      echo "install-runtime: Typst archive missing binary" >&2
+      rm -rf "$extract"
+      return 1
+    fi
+    cp "$src" "$dest"
+    rm -rf "$extract"
+  else
+    echo "install-runtime: Typst cache is neither xz nor ELF: $payload" >&2
+    return 1
+  fi
+  chmod 755 "$dest"
+  if [ ! -x "$dest" ]; then
+    echo "install-runtime: failed to place Typst at $dest" >&2
     return 1
   fi
 }
@@ -299,6 +332,52 @@ install_tectonic() {
   echo "Tectonic $ver ready."
 }
 
+install_typst() {
+  ver=$(pin_get "$TYP_PIN" version) || {
+    echo "install-runtime: missing Typst pin" >&2
+    return 1
+  }
+  triple=$(pin_get "$TYP_PIN" "triple-$ARCH")
+  sha=$(pin_get "$TYP_PIN" "sha256-$ARCH")
+  archive="typst-${triple}.tar.xz"
+  url="https://github.com/typst/typst/releases/download/v${ver}/${archive}"
+  dest="$CURRENT/bin/typst"
+  cache_name="typst-${ver}-${triple}.tar.xz"
+
+  if [ "$PRINT_PLAN" = 1 ]; then
+    echo "typst $url $sha"
+    return 0
+  fi
+
+  if [ -x "$dest" ] && [ "$(stamp_get typst || true)" = "$ver" ]; then
+    echo "Typst $ver already installed — skip."
+    return 0
+  fi
+
+  mkdir -p "$CACHE" "$CURRENT/bin"
+  tar_path="$CACHE/$cache_name"
+
+  if [ -f "$tar_path" ] && is_elf "$tar_path"; then
+    install_typst_payload "$tar_path" "$dest" || return 1
+    stamp_set typst "$ver"
+    echo "Typst $ver ready (cached ELF)."
+    return 0
+  fi
+
+  if ! cache_ready "$tar_path" "$sha"; then
+    download "$url" "$tar_path"
+    if is_elf "$tar_path"; then
+      :
+    else
+      verify_sha "$tar_path" "$sha" || return 1
+    fi
+  fi
+
+  install_typst_payload "$tar_path" "$dest" || return 1
+  stamp_set typst "$ver"
+  echo "Typst $ver ready."
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --current)
@@ -361,6 +440,7 @@ RUNTIME="$CURRENT/runtime"
 NODE_PIN="$RUNTIME/node-version.txt"
 GIT_PIN="$RUNTIME/git-version.txt"
 TEC_PIN="$RUNTIME/tectonic-linux.txt"
+TYP_PIN="$RUNTIME/typst-linux.txt"
 
 if [ ! -d "$RUNTIME" ]; then
   echo "install-runtime: missing $RUNTIME (Host payload pins)" >&2
@@ -372,6 +452,7 @@ run_step() {
     node) install_node ;;
     git) install_git ;;
     tectonic) install_tectonic ;;
+    typst) install_typst ;;
     *)
       echo "install-runtime: unknown step $1" >&2
       return 1
@@ -383,6 +464,7 @@ if [ "$STEP" = "all" ]; then
   run_step node
   run_step git
   run_step tectonic
+  run_step typst
 else
   run_step "$STEP"
 fi

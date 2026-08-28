@@ -24,6 +24,7 @@ import {
   FOLDER_FUNCTIONS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   createDefaultFolder,
+  manuscriptMainFile,
   type FolderFunction,
   type WorkspaceFolder,
 } from "@/types/workspace";
@@ -50,7 +51,7 @@ interface FormState {
   name: string;
   description: string;
   icon: string;
-  mainTex: string;
+  mainFile: string;
 }
 
 function folderToForm(folder: WorkspaceFolder): FormState {
@@ -59,7 +60,7 @@ function folderToForm(folder: WorkspaceFolder): FormState {
     name: folder.name,
     description: folder.description ?? "",
     icon: folder.icon ?? "",
-    mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
+    mainFile: folder.function === "manuscript" ? (manuscriptMainFile(folder) ?? "") : "",
   };
 }
 
@@ -75,7 +76,7 @@ function emptyForm(func: FolderFunction = "notebook"): FormState {
     name: "",
     description: "",
     icon: "",
-    mainTex: folder.function === "manuscript" ? folder.mainTex : "main.tex",
+    mainFile: folder.function === "manuscript" ? (manuscriptMainFile(folder) ?? "") : "",
   };
 }
 
@@ -132,7 +133,9 @@ export function WorkspaceFolderEditor({
       patch.function = form.function;
     }
     if (form.function === "manuscript") {
-      (patch as { mainTex: string }).mainTex = form.mainTex.trim() || "main.tex";
+      const pin = form.mainFile.trim();
+      (patch as { mainFile?: string; mainTex?: string }).mainFile = pin || undefined;
+      (patch as { mainFile?: string; mainTex?: string }).mainTex = pin || undefined;
     }
     return patch;
   };
@@ -149,7 +152,9 @@ export function WorkspaceFolderEditor({
       if (form.description.trim()) patch.description = form.description.trim();
       if (form.icon.trim()) patch.icon = form.icon.trim();
       if (form.function === "manuscript") {
-        (patch as { mainTex?: string }).mainTex = form.mainTex.trim() || "main.tex";
+        const pin = form.mainFile.trim();
+        (patch as { mainFile?: string; mainTex?: string }).mainFile = pin || undefined;
+        (patch as { mainFile?: string; mainTex?: string }).mainTex = pin || undefined;
       }
       if (Object.keys(patch).length > 0) {
         const patchErr = updateProjectFolder(idx, patch);
@@ -198,7 +203,7 @@ export function WorkspaceFolderEditor({
                   setForm((f) => ({
                     ...f,
                     function: func,
-                    mainTex: func === "manuscript" ? f.mainTex || "main.tex" : f.mainTex,
+                    mainFile: func === "manuscript" ? f.mainFile : f.mainFile,
                     icon: f.icon.trim() ? f.icon : "",
                   }));
                 }}
@@ -250,8 +255,8 @@ export function WorkspaceFolderEditor({
               >
                 <Input
                   id="ws-main-tex"
-                  value={form.mainTex}
-                  onChange={(e) => setForm((f) => ({ ...f, mainTex: e.target.value }))}
+                  value={form.mainFile}
+                  onChange={(e) => setForm((f) => ({ ...f, mainFile: e.target.value }))}
                   placeholder="main.tex"
                   className={SETTINGS_FORM_INPUT_MONO}
                 />

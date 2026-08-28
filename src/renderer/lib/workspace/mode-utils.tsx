@@ -24,6 +24,7 @@ export function resolveViewer(filePath: string): ReactNode {
   const dot = filePath.lastIndexOf(".");
   const ext = dot === -1 ? "" : filePath.slice(dot).toLowerCase();
   if (IMAGE_EXTS.has(ext)) return <ImageViewer />;
+  if (ext === ".typ") return <CodeEditor />;
   if (ext === ".tex" || ext === ".ltx") return <LatexEditor />;
   if (ext === ".pdf") return <PdfPreview />;
   return <CodeEditor />;

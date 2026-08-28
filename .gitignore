@@ -16,6 +16,8 @@ scripts/host/.git-cache/
 
 # Tectonic binaries (downloaded or manually placed)
 bin/tectonic/
+# Typst binaries (downloaded or manually placed)
+bin/typst/
 # Leftover local OpenCode agent binary — unused; do not commit if still present
 bin/opencode/
 .cursor/

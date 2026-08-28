@@ -98,6 +98,12 @@ export function formatAgentSendError(reason?: string): string {
   if (reason === "terminated" || reason === "aborted") {
     return i18n.t("chat.errors.turn_aborted");
   }
+  if (/connection error/i.test(reason)) {
+    return i18n.t("chat.errors.connectionLost");
+  }
+  if (/already processing/i.test(reason)) {
+    return i18n.t("chat.errors.alreadyProcessing");
+  }
   if (reason.startsWith("unsupported_pi_provider")) {
     return i18n.t("agentLab.reason.unsupportedProvider");
   }

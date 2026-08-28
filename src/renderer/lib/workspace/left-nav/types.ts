@@ -31,7 +31,7 @@ export interface LeftNavDefinition {
   activate: () => void;
   /**
    * 其他项被选中时，若本项仍 active，先调用 deactivate 做清理。
-   * 右侧全屏类入口（如 TeX Workspace）应在此关闭面板/标签。
+   * 右侧全屏类入口应在此关闭面板/标签。
    */
   deactivate?: () => void;
   /**

@@ -37,9 +37,9 @@ export function findWorkspaceFolder(
 
 export const DEFAULT_FUNCTION_DESCRIPTIONS: Record<FolderFunction, string | null> = {
   manuscript:
-    "Contains LaTeX manuscript files for writing academic papers. " +
-    "The main entry point is `main.tex`. " +
-    "This folder is bound to the TeX workspace (editor + PDF preview).",
+    "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). " +
+    "Compile output is `.workbench/compile/` — do not edit that cache. " +
+    "Open sources in Files. A main-file pin is optional.",
   experiment:
     "Contains experiment-related files such as data, scripts, results, and analysis.",
   literature:
@@ -55,7 +55,10 @@ export interface ManuscriptFolder {
   description?: string;
   /** Lucide icon name (PascalCase), e.g. `BookOpen`. Shown in Files tree. */
   icon?: string;
-  mainTex: string;
+  /** Optional compile entry pin (`.tex` or `.typ`), relative to this folder. */
+  mainFile?: string;
+  /** @deprecated read alias for `mainFile` — dual-written for one version */
+  mainTex?: string;
 }
 
 export interface ExperimentFolder {
@@ -97,7 +100,37 @@ export type WorkspaceFolder =
 /** Extracted from workspaceDirs — the single manuscript config, or null if none configured */
 export interface ManuscriptConfig {
   dir: string;
-  mainTex: string;
+  /** Optional pin; missing means resolve from disk / open file. */
+  mainFile?: string;
+}
+
+/** Resolved pin from `mainFile`, falling back to deprecated `mainTex`. */
+export function manuscriptMainFile(
+  folder: Pick<ManuscriptFolder, "mainFile" | "mainTex">,
+): string | undefined {
+  const raw = folder.mainFile ?? folder.mainTex;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed || undefined;
+}
+
+/** Dual-write `mainFile` + `mainTex` so old readers keep working for one version. */
+export function withManuscriptPin(folder: ManuscriptFolder, pin: string | undefined): ManuscriptFolder {
+  const next: ManuscriptFolder = { ...folder };
+  delete next.mainFile;
+  delete next.mainTex;
+  if (pin) {
+    next.mainFile = pin;
+    next.mainTex = pin;
+  }
+  return next;
+}
+
+export function dualWriteManuscriptPins(dirs: WorkspaceFolder[]): WorkspaceFolder[] {
+  return dirs.map((d) => {
+    if (d.function !== "manuscript") return d;
+    return withManuscriptPin(d, manuscriptMainFile(d));
+  });
 }
 
 /** Find the first manuscript entry in workspaceDirs */
@@ -108,7 +141,7 @@ export function findManuscriptConfig(
     (d): d is ManuscriptFolder => d.function === "manuscript",
   );
   if (!m) return null;
-  return { dir: m.name, mainTex: m.mainTex };
+  return { dir: m.name, mainFile: manuscriptMainFile(m) };
 }
 
 /** Create a default workspace folder entry */
@@ -119,7 +152,7 @@ export function createDefaultFolder(
   const base = { name, function: func as WorkspaceFolder["function"] };
   switch (func) {
     case "manuscript":
-      return { ...base, mainTex: "main.tex" } as ManuscriptFolder;
+      return withManuscriptPin({ ...base, function: "manuscript" }, "main.tex");
     case "custom":
       return { ...base } as CustomFolder;
     default:
@@ -181,7 +214,10 @@ export function folderWorkspaceFunction(
 /** Default workspaceDirs for a new project */
 export function defaultWorkspaceDirs(): WorkspaceFolder[] {
   return [
-    { function: "manuscript", name: DEFAULT_MANUSCRIPT_DIR, mainTex: "main.tex" },
+    withManuscriptPin(
+      { function: "manuscript", name: DEFAULT_MANUSCRIPT_DIR },
+      "main.tex",
+    ),
     { function: "notebook", name: DEFAULT_NOTEBOOK_DIR },
   ];
 }

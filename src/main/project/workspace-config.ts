@@ -6,7 +6,10 @@ import {
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   findExperimentConfig,
+  manuscriptMainFile,
+  dualWriteManuscriptPins,
 } from "../../shared/workbench/workspace-folder";
+import { compileEngineFromRelPath } from "../../shared/compile/artifact-key";
 import {
   readWorkbenchJson,
   writeWorkbenchJson,
@@ -61,10 +64,12 @@ export function ensureMainTex(
 ): { created: boolean; relativePath?: string } {
   const dirs = readWorkspaceDirs(projectRoot);
   const manuscript = dirs.find((d) => d.function === "manuscript");
-  const mainTex = manuscript && "mainTex" in manuscript ? manuscript.mainTex : "";
-  if (!manuscript || !mainTex) return { created: false };
+  if (!manuscript) return { created: false };
+  const pin = manuscriptMainFile(manuscript);
+  if (!pin) return { created: false };
+  if (compileEngineFromRelPath(pin) !== "latex") return { created: false };
 
-  const mainTexPath = path.join(projectRoot, manuscript.name, mainTex);
+  const mainTexPath = path.join(projectRoot, manuscript.name, pin);
   if (fs.existsSync(mainTexPath)) return { created: false };
 
   const parentDir = path.dirname(mainTexPath);
@@ -72,7 +77,7 @@ export function ensureMainTex(
     fs.mkdirSync(parentDir, { recursive: true });
   }
   fs.writeFileSync(mainTexPath, DEFAULT_MAIN_TEX, "utf-8");
-  return { created: true, relativePath: `${manuscript.name}/${mainTex}` };
+  return { created: true, relativePath: `${manuscript.name}/${pin}` };
 }
 
 interface ProjectSettings {
@@ -118,7 +123,7 @@ export function writeWorkspaceDirs(
     id,
     workspace: {
       ...existing?.workspace,
-      folders: dirs,
+      folders: dualWriteManuscriptPins(dirs),
     },
   });
 }
@@ -162,13 +167,6 @@ export function validateWorkspaceDirs(dirs: WorkspaceFolder[]): string[] {
   const manuscriptCount = dirs.filter((d) => d.function === "manuscript").length;
   if (manuscriptCount > 1) {
     errors.push("Only one manuscript folder is allowed.");
-  }
-
-  // Check manuscript has mainTex
-  for (const d of dirs) {
-    if (d.function === "manuscript" && !("mainTex" in d && d.mainTex)) {
-      errors.push(`Manuscript folder "${d.name}" must specify mainTex.`);
-    }
   }
 
   return errors;

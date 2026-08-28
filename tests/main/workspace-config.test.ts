@@ -6,7 +6,9 @@ import {
   readWorkspaceDirs,
   writeWorkspaceDirs,
   validateWorkspaceDirs,
+  ensureMainTex,
 } from "../../src/main/project/workspace-config";
+import { findManuscriptConfig } from "../../src/shared/workbench/workspace-folder";
 import { readWorkbenchJson, writeWorkbenchJson } from "../../src/main/workbench/identity";
 
 let tmpDir: string;
@@ -23,7 +25,7 @@ describe("workspace-config — readConfig", () => {
   it("returns default when workbench.json does not exist", () => {
     const result = readWorkspaceDirs(tmpDir);
     expect(result).toEqual([
-      { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+      { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
     ]);
   });
 
@@ -116,8 +118,76 @@ describe("workspace-config — validate", () => {
     expect(errors).toHaveLength(0);
   });
 
+  it("accepts a manuscript folder without a main-file pin", () => {
+    const errors = validateWorkspaceDirs([
+      { function: "manuscript" as const, name: "paper" },
+    ]);
+    expect(errors).toHaveLength(0);
+  });
+
   it("rejects empty list (requires at least one folder - data-loss guard)", () => {
     const errors = validateWorkspaceDirs([]);
     expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("manuscript pin", () => {
+  it("treats legacy mainTex as mainFile", () => {
+    expect(
+      findManuscriptConfig([
+        { function: "manuscript", name: "paper", mainTex: "article.tex" },
+      ]),
+    ).toEqual({ dir: "paper", mainFile: "article.tex" });
+  });
+
+  it("prefers mainFile over mainTex", () => {
+    expect(
+      findManuscriptConfig([
+        { function: "manuscript", name: "paper", mainFile: "main.typ", mainTex: "main.tex" },
+      ]),
+    ).toEqual({ dir: "paper", mainFile: "main.typ" });
+  });
+
+  it("returns a config when the manuscript folder has no pin", () => {
+    expect(findManuscriptConfig([{ function: "manuscript", name: "paper" }])).toEqual({
+      dir: "paper",
+      mainFile: undefined,
+    });
+  });
+
+  it("dual-writes mainFile when persisting a mainTex-only folder", () => {
+    writeWorkspaceDirs(tmpDir, [
+      { function: "manuscript", name: "paper", mainTex: "article.tex" },
+    ]);
+    expect(readWorkbenchJson(tmpDir)?.workspace?.folders?.[0]).toMatchObject({
+      name: "paper",
+      mainFile: "article.tex",
+      mainTex: "article.tex",
+    });
+  });
+
+  it("ensureMainTex does not create a file when there is no pin", () => {
+    writeWorkspaceDirs(tmpDir, [{ function: "manuscript", name: "paper" }]);
+    fs.mkdirSync(path.join(tmpDir, "paper"), { recursive: true });
+    expect(ensureMainTex(tmpDir)).toEqual({ created: false });
+    expect(fs.existsSync(path.join(tmpDir, "paper", "main.tex"))).toBe(false);
+  });
+
+  it("ensureMainTex creates the pinned LaTeX file when missing", () => {
+    writeWorkspaceDirs(tmpDir, [
+      { function: "manuscript", name: "paper", mainFile: "article.tex" },
+    ]);
+    const result = ensureMainTex(tmpDir);
+    expect(result.created).toBe(true);
+    expect(result.relativePath).toBe("paper/article.tex");
+    expect(fs.existsSync(path.join(tmpDir, "paper", "article.tex"))).toBe(true);
+  });
+
+  it("ensureMainTex does not scaffold a .typ pin", () => {
+    writeWorkspaceDirs(tmpDir, [
+      { function: "manuscript", name: "paper", mainFile: "main.typ" },
+    ]);
+    expect(ensureMainTex(tmpDir)).toEqual({ created: false });
+    expect(fs.existsSync(path.join(tmpDir, "paper", "main.typ"))).toBe(false);
   });
 });

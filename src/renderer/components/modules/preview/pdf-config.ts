@@ -37,6 +37,16 @@ export function copyPdfSourceForViewer(
   return source;
 }
 
+/** True when pdf.js has sized at least one page canvas (safe to uncover an A/B swap). */
+export function pdfPreviewCanvasPainted(root: ParentNode | null | undefined): boolean {
+  if (!root) return false;
+  for (const node of root.querySelectorAll("canvas")) {
+    const canvas = node as HTMLCanvasElement;
+    if (canvas.width > 8 && canvas.height > 8) return true;
+  }
+  return false;
+}
+
 /** Decode `data:application/pdf;base64,…` (e.g. template:getPdfData) for pdf.js. */
 export function pdfDataUrlToUint8Array(dataUrl: string): Uint8Array {
   const comma = dataUrl.indexOf(",");

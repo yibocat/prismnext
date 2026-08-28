@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasCompileProblems, parseLatexLog } from "@/modes/texworkspace-mode/parse-latex-log";
+import { hasCompileProblems, parseLatexLog } from "@/lib/compile/parse-latex-log";
 
 describe("parseLatexLog", () => {
   it("parses classic ! error with l.N line reference", () => {

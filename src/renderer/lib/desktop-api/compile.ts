@@ -8,6 +8,8 @@ import { forwardDesktop } from "./forward";
 
 export const compileDesktop = {
   compileExecute: forwardDesktop("compileExecute"),
+  compileTypstLive: forwardDesktop("compileTypstLive"),
+  compileTypstExport: forwardDesktop("compileTypstExport"),
   compileDetectTexlive: forwardDesktop("compileDetectTexlive"),
   compileExportPdf: forwardDesktop("compileExportPdf"),
   manuscriptPackZip: forwardDesktop("manuscriptPackZip"),

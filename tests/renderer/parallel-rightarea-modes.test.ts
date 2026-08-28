@@ -66,13 +66,13 @@ vi.mock("../../src/renderer/lib/workspace/right-area-layout", () => ({
 vi.mock("../../src/renderer/lib/workspace/mode-registry", () => ({
   modeRegistry: {
     get: (id: string) => {
-      if (id === "texworkspace") return { id, tabKinds: ["texworkspace"], onDeactivate: undefined };
+      if (id === "files") return { id, tabKinds: ["file"], onDeactivate: undefined };
       if (id === "literature") return { id, tabKinds: ["literature"], onDeactivate: undefined };
       if (id === "experiments") return { id, tabKinds: ["experiments"], onDeactivate: undefined };
       return undefined;
     },
     findByTabKind: (kind: string) => {
-      if (kind === "texworkspace") return { id: "texworkspace" };
+      if (kind === "file") return { id: "files" };
       if (kind === "literature") return { id: "literature" };
       if (kind === "experiments") return { id: "experiments" };
       return undefined;
@@ -84,7 +84,7 @@ import {
   dismissModeFromRightArea,
   focusModeInRightArea,
   openLiteratureSplit,
-  openTexWorkspaceSplit,
+  openFilesSplit,
 } from "../../src/renderer/lib/workspace/left-nav/panel-utils";
 import { closeRightArea, openRightAreaForDeepLink } from "../../src/renderer/lib/workspace/right-area-layout";
 
@@ -131,12 +131,12 @@ describe("parallel RightArea modes", () => {
     };
   });
 
-  it("keeps TeX tabs when opening Literature", () => {
-    openTexWorkspaceSplit();
+  it("keeps Files tabs when opening Literature", () => {
+    openFilesSplit();
     openLiteratureSplit();
 
     expect(panelState.tabs.map((t) => t.kind)).toEqual([
-      "texworkspace",
+      "file",
       "literature",
     ]);
     expect(focusedModeId(panelState.tabs, panelState.activeTabId)).toBe("literature");
@@ -146,19 +146,19 @@ describe("parallel RightArea modes", () => {
   });
 
   it("dismisses only the focused mode and keeps sibling tabs", () => {
-    focusModeInRightArea("texworkspace");
+    focusModeInRightArea("files");
     focusModeInRightArea("literature");
 
     dismissModeFromRightArea("literature");
 
-    expect(panelState.tabs.map((t) => t.kind)).toEqual(["texworkspace"]);
+    expect(panelState.tabs.map((t) => t.kind)).toEqual(["file"]);
     expect(layoutState.rightAreaExpanded).toBe(true);
     expect(closeRightArea).not.toHaveBeenCalled();
   });
 
   it("collapses RightArea only when the last mode tab is dismissed", () => {
-    focusModeInRightArea("texworkspace");
-    dismissModeFromRightArea("texworkspace");
+    focusModeInRightArea("files");
+    dismissModeFromRightArea("files");
 
     expect(panelState.tabs).toHaveLength(0);
     expect(layoutState.setRightAreaExpanded).toHaveBeenCalledWith(false);

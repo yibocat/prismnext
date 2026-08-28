@@ -12,6 +12,7 @@ import { citeCheckLiterature } from "../literature/facade";
 import { notifyAgentCompilePreview } from "./compile-preview-notify";
 import { TOOL_NAMES } from "../../shared/agent/tool-names";
 import { projectCompileRel } from "../../shared/workbench/paths";
+import { derivePaperPdfRel } from "../../shared/compile/artifact-key";
 
 export interface CompileErrorEntry {
   file?: string;
@@ -252,11 +253,18 @@ async function compileResolvedManuscript(
 
   notifyAgentCompilePreview({
     projectDir: projectRoot,
+    projectRoot,
+    engine: "latex",
+    route: "paper",
+    compileRoot: root.mainFile,
+    pdfRel: derivePaperPdfRel("latex", root.mainFile),
     success: result.success,
-    mainFile: root.mainFile,
     pdfBytes: result.success ? result.pdfBytes : undefined,
     error: result.success ? undefined : errorSummary,
+    errors,
     logTail,
+    source: "agent",
+    mainFile: root.mainFile,
   });
 
   return {

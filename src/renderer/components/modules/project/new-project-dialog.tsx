@@ -32,6 +32,7 @@ import {
 import {
   FOLDER_FUNCTIONS,
   FOLDER_FUNCTION_LABELS,
+  withManuscriptPin,
   type FolderFunction,
   type WorkspaceFolder,
 } from "@/types/workspace";
@@ -135,7 +136,7 @@ function toCreateDirs(folders: NewFolderEntry[]): WorkspaceFolder[] {
     .filter((f) => f.name.trim())
     .map((f) => {
       if (f.function === "manuscript") {
-        return { function: "manuscript" as const, name: f.name.trim(), mainTex: "main.tex" };
+        return withManuscriptPin({ function: "manuscript", name: f.name.trim() }, "main.tex");
       }
       return { function: f.function, name: f.name.trim() } as WorkspaceFolder;
     });

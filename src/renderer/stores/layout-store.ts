@@ -23,12 +23,10 @@ export type RightToolbarTab =
   | "research-plan"
   | "git"
   | "browser"
-  | "texworkspace"
   | "terminal"
   | "literature"
   | "experiments"
   | "interaction";
-export type TexworkspaceViewMode = "split" | "tex" | "pdf";
 
 export type TabType = "file" | "pdf";
 
@@ -50,23 +48,15 @@ interface LayoutState {
    * `modes-from-tabs.ts` (`activeModeIds` / `focusedModeId` / `hasMode`).
    */
 
-  texworkspaceViewMode: TexworkspaceViewMode;
-  setTexworkspaceViewMode: (mode: TexworkspaceViewMode) => void;
-  /** Default layout applied when entering TeX Workspace. */
-  texworkspaceDefaultViewMode: TexworkspaceViewMode;
-  setTexworkspaceDefaultViewMode: (mode: TexworkspaceViewMode) => void;
   /**
-   * When true, TeX split shows editor on the left and compile PDF on the right
-   * (default is PDF left / editor right).
+   * Files `.tex` / `.typ` preview pane — session only, not persisted.
+   * Missing key means closed (D-7: editor-only by default).
    */
-  texworkspacePanesSwapped: boolean;
-  setTexworkspacePanesSwapped: (swapped: boolean) => void;
-  toggleTexworkspacePanesSwapped: () => void;
-  /** When true, the PDF preview slot shows compile problems (texworkspace only). */
-  texworkspaceProblemsOpen: boolean;
-  setTexworkspaceProblemsOpen: (open: boolean) => void;
-  texworkspaceSearchQuery: string;
-  setTexworkspaceSearchQuery: (query: string) => void;
+  compilePreviewOpenByFileId: Record<string, boolean>;
+  setCompilePreviewOpen: (fileId: string, open: boolean) => void;
+  /** Typst right pane: live SVG webview vs Lector PDF. Missing key is live. */
+  typstPreviewKindByFileId: Record<string, "live" | "pdf">;
+  setTypstPreviewKind: (fileId: string, kind: "live" | "pdf") => void;
 
   /** 中间主区域当前视图；centerView 型导航项激活时写入，见 left-nav/items.tsx */
   leftSidebarView: LeftSidebarView;
@@ -199,22 +189,22 @@ export const useLayoutStore = create<LayoutState>()(
       activeMode: "chat",
       setActiveMode: (mode) => set({ activeMode: mode }),
 
-      texworkspaceViewMode: "split",
-      texworkspaceDefaultViewMode: "split",
-      setTexworkspaceDefaultViewMode: (mode) => set({ texworkspaceDefaultViewMode: mode }),
-      texworkspacePanesSwapped: false,
-      setTexworkspacePanesSwapped: (swapped) => set({ texworkspacePanesSwapped: swapped }),
-      toggleTexworkspacePanesSwapped: () =>
-        set((s) => ({ texworkspacePanesSwapped: !s.texworkspacePanesSwapped })),
-      texworkspaceProblemsOpen: false,
-      setTexworkspaceProblemsOpen: (open) => set({ texworkspaceProblemsOpen: open }),
-      texworkspaceSearchQuery: "",
-      setTexworkspaceViewMode: (mode) =>
-        set({
-          texworkspaceViewMode: mode,
-          texworkspaceProblemsOpen: false,
+      compilePreviewOpenByFileId: {},
+      setCompilePreviewOpen: (fileId, open) =>
+        set((s) => {
+          if (s.compilePreviewOpenByFileId[fileId] === open) return s;
+          return {
+            compilePreviewOpenByFileId: { ...s.compilePreviewOpenByFileId, [fileId]: open },
+          };
         }),
-      setTexworkspaceSearchQuery: (query) => set({ texworkspaceSearchQuery: query }),
+      typstPreviewKindByFileId: {},
+      setTypstPreviewKind: (fileId, kind) =>
+        set((s) => {
+          if (s.typstPreviewKindByFileId[fileId] === kind) return s;
+          return {
+            typstPreviewKindByFileId: { ...s.typstPreviewKindByFileId, [fileId]: kind },
+          };
+        }),
 
       leftSidebarView: "sessions",
       setLeftSidebarView: (view) => set({ leftSidebarView: view }),
@@ -225,7 +215,11 @@ export const useLayoutStore = create<LayoutState>()(
       setWorkspaceActiveTabIdBeforeSettings: (id) =>
         set({ workspaceActiveTabIdBeforeSettings: id }),
       settingsCategory: "general",
-      setSettingsCategory: (category) => set({ settingsCategory: category }),
+      setSettingsCategory: (category) =>
+        set({
+          settingsCategory:
+            category === "texworkspace" || category === "compiler" ? "workspace" : category,
+        }),
 
       settingsDetailStacked: false,
       setSettingsDetailStacked: (stacked) =>
@@ -417,8 +411,6 @@ export const useLayoutStore = create<LayoutState>()(
         pinnedExpanded: state.pinnedExpanded,
         expandedWorkbenchProjectIds: state.expandedWorkbenchProjectIds,
         expandedFileTreeFolders: state.expandedFileTreeFolders,
-        texworkspaceDefaultViewMode: state.texworkspaceDefaultViewMode,
-        texworkspacePanesSwapped: state.texworkspacePanesSwapped,
         workspaceSplitLayouts: state.workspaceSplitLayouts,
       }),
     },

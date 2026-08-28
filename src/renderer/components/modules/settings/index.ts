@@ -22,6 +22,5 @@ export { ToolsMcpSettings } from "./tools-mcp-settings";
 export { SkillsSettings } from "./skills-settings";
 export { WorkspaceSettings } from "./workspace-settings";
 export { TerminalSettings } from "./terminal-settings";
-export { TexworkspaceSettings } from "./texworkspace-settings";
 export { BrowserSettings } from "./browser-settings";
 export { AiTerminalSettingsFields } from "./ai-terminal-settings-fields";

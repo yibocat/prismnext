@@ -12,6 +12,7 @@ import {
   INTERACTION_TOOLS,
   SYSTEM_TOOLS,
   INTERACTIVE_TOOLS,
+  TYPST_TOOLS,
 } from "../../src/main/agent/tools/index";
 import { createAgentNativeTools as createPiLabNativeTools } from "../../src/main/agent/agent-service";
 import { createPiNativeTools, hostToolsForChatModel } from "../../src/main/agent/pi-sdk-runtime";
@@ -29,14 +30,15 @@ describe("unified native tools catalog", () => {
   };
 
   it("exports unique host custom tools without Pi file/shell primitives", () => {
-    expect(ALL_NATIVE_TOOLS).toHaveLength(29);
+    expect(ALL_NATIVE_TOOLS).toHaveLength(32);
     const names = new Set(ALL_NATIVE_TOOLS.map((t) => t.name));
-    expect(names.size).toBe(29);
+    expect(names.size).toBe(32);
     expect(names.has("bash")).toBe(false);
     expect(names.has("read")).toBe(false);
 
     expect(LITERATURE_TOOLS).toHaveLength(10);
     expect(LATEX_TOOLS).toHaveLength(3);
+    expect(TYPST_TOOLS).toHaveLength(3);
     expect(RESEARCH_BRIEF_TOOLS).toHaveLength(2);
     expect(EXPERIMENT_TOOLS).toHaveLength(4);
     expect(INTERACTION_TOOLS).toHaveLength(4);
@@ -58,6 +60,7 @@ describe("unified native tools catalog", () => {
     expect(getNativeToolByName("BASH")).toBeUndefined();
     expect(getNativeToolByName("Latex-Compile")?.name).toBe("latex-compile");
     expect(getNativeToolByName("Latex-Compile-Standalone")?.name).toBe("latex-compile-standalone");
+    expect(getNativeToolByName("Typst-Compile")?.name).toBe("typst-compile");
     expect(getNativeToolByName("non-existent")).toBeUndefined();
   });
 
@@ -66,10 +69,10 @@ describe("unified native tools catalog", () => {
     const toolHost = new ToolHost({ gate });
     toolHost.registerAll(ALL_NATIVE_TOOLS);
 
-    expect(toolHost.names()).toHaveLength(29);
+    expect(toolHost.names()).toHaveLength(32);
 
     const piTools = toolHost.toPiTools(() => ctx);
-    expect(piTools).toHaveLength(29);
+    expect(piTools).toHaveLength(32);
     for (const pt of piTools) {
       expect(pt.name).toBeTruthy();
       expect(pt.description).toBeTruthy();
@@ -84,13 +87,13 @@ describe("unified native tools catalog", () => {
     expect(question?.promptGuidelines?.length).toBeGreaterThan(0);
 
     const labTools = createPiLabNativeTools();
-    expect(labTools).toHaveLength(29);
+    expect(labTools).toHaveLength(32);
 
     const piNative = createPiNativeTools({
       toolHost,
       getContext: () => ctx,
     });
-    expect(piNative).toHaveLength(29);
+    expect(piNative).toHaveLength(32);
   });
 
   it("executes system and fs tools in-memory with real file operations", async () => {

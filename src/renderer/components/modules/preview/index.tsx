@@ -29,6 +29,7 @@ import {
   PDF_PAGE_DARK_FILTER,
   PDF_PAGE_INVERTED_CLASS,
   copyPdfSourceForViewer,
+  pdfPreviewCanvasPainted,
 } from "./pdf-config";
 import { PdfScrollClamp } from "./pdf-scroll-clamp";
 import { cn } from "@/lib/utils";
@@ -57,7 +58,7 @@ import {
   AppMenuContent,
   AppMenuTrigger,
 } from "@/components/ui/app-menu";
-import { useCompileStore, getPdfBytes, ensureCompilePdfFromDisk } from "@/stores/compile-store";
+import { useCompileStore, getPdfBytesForKey, ensureCompilePdfForKey } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -67,6 +68,16 @@ import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { isBrowsableUrl, normalizeBrowserUrl, openUrlInBrowser } from "@/lib/browser-link";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import { useTranslation } from "react-i18next";
+import { isStandaloneTexDocument, resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
+import { resolveTypstRootFromBuffers } from "@/lib/typst/resolve-typst-root";
+import { classifyCompileTab } from "@/lib/compile/classify-compile-tab";
+import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
+import {
+  compileArtifactCacheKey,
+  compileEngineFromRelPath,
+  type CompileArtifactKey,
+  type CompileRoute,
+} from "@shared/compile/artifact-key";
 
 type SidePanel = "outline" | "search" | "thumbnails" | null;
 
@@ -605,7 +616,7 @@ export function PdfViewerInner({
 
           {/* Zoom controls */}
           <div className="flex items-center">
-            <Hint label={t("modes.texworkspace.zoomOut")}>
+            <Hint label={t("modes.preview.zoomOut")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-r-none"
                 onClick={handleZoomOut}
@@ -614,7 +625,7 @@ export function PdfViewerInner({
               </Button>
             </Hint>
             <AppMenu>
-              <Hint label={t("modes.texworkspace.zoom")}>
+              <Hint label={t("modes.preview.zoom")}>
                 <AppMenuTrigger asChild>
                   <button
                     className="h-6 min-w-[4.5rem] px-1 tabular-nums text-muted-foreground hover:text-foreground rounded transition-colors cursor-pointer select-none text-center"
@@ -649,7 +660,7 @@ export function PdfViewerInner({
                 ))}
               </AppMenuContent>
             </AppMenu>
-            <Hint label={t("modes.texworkspace.zoomIn")}>
+            <Hint label={t("modes.preview.zoomIn")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-l-none"
                 onClick={handleZoomIn}
@@ -663,7 +674,7 @@ export function PdfViewerInner({
 
           {/* Page navigation */}
           <div className="flex items-center">
-            <Hint label={t("modes.texworkspace.prevPage")}>
+            <Hint label={t("modes.preview.prevPage")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-r-none"
                 disabled={currentPage <= 1}
@@ -675,7 +686,7 @@ export function PdfViewerInner({
             <span className="inline-flex items-center h-6 px-0.5 tabular-nums text-muted-foreground select-none min-w-[3rem] justify-center">
               {currentPage}<span className="text-border mx-px">/</span>{totalPages}
             </span>
-            <Hint label={t("modes.texworkspace.nextPage")}>
+            <Hint label={t("modes.preview.nextPage")}>
               <Button
                 variant="ghost" size="icon" className="size-6 rounded-l-none"
                 disabled={currentPage >= totalPages}
@@ -689,7 +700,7 @@ export function PdfViewerInner({
           <span className="mx-0.5 h-3 w-px bg-border shrink-0" />
 
           {/* PDF dark mode toggle */}
-          <Hint label={pdfDark === "on" ? t("modes.texworkspace.lightMode") : pdfDark === "follow" ? t("modes.texworkspace.followTheme") : t("modes.texworkspace.darkMode")}>
+          <Hint label={pdfDark === "on" ? t("modes.preview.lightMode") : pdfDark === "follow" ? t("modes.preview.followTheme") : t("modes.preview.darkMode")}>
             <button
               type="button"
               className={`flex size-6 items-center justify-center rounded transition-colors ${
@@ -862,26 +873,40 @@ function PageSessionBridge({
   const viewports = usePdf((s) => s.viewports);
   const virtualizer = usePdf((s) => s.virtualizer);
   const currentPage = usePdf((s) => s.currentPage);
+  const viewportRef = usePdf((s) => s.viewportRef);
   const { jumpToPage } = usePdfJump();
   const targetRef = useRef<number | null>(null);
   const jumpedRef = useRef(false);
   const readyFiredRef = useRef(false);
   const trackingRef = useRef(false);
+  const paintWaitGen = useRef(0);
   const onReadyRef = useRef(onReady);
   onReadyRef.current = onReady;
 
   const finishReady = useCallback(() => {
     if (readyFiredRef.current) return;
     readyFiredRef.current = true;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        trackingRef.current = true;
-        onReadyRef.current?.();
-      });
-    });
-  }, []);
+    const gen = ++paintWaitGen.current;
+    const started = Date.now();
+    const tick = () => {
+      if (paintWaitGen.current !== gen) return;
+      if (pdfPreviewCanvasPainted(viewportRef.current) || Date.now() - started >= 800) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (paintWaitGen.current !== gen) return;
+            trackingRef.current = true;
+            onReadyRef.current?.();
+          });
+        });
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }, [viewportRef]);
 
   useEffect(() => {
+    paintWaitGen.current += 1;
     targetRef.current = null;
     jumpedRef.current = false;
     readyFiredRef.current = false;
@@ -1084,17 +1109,52 @@ export function resolvePdfPreviewPersistKey(
   sourceMode: PdfPreviewSourceMode,
   projectRoot: string | null | undefined,
   fileId: string | undefined,
+  compileCacheKey?: string | null,
 ): string | undefined {
   if (!projectRoot) return undefined;
-  if (sourceMode === "compile") return `${projectRoot}::compile-preview`;
+  if (sourceMode === "compile") return compileCacheKey || undefined;
   if (!fileId) return undefined;
   return `${projectRoot}::${fileId}`;
+}
+
+export function resolveCompilePreviewArtifactKey(
+  projectRoot: string | null | undefined,
+  tabRelPath: string | undefined,
+  lastPaperKey: CompileArtifactKey | null,
+  compileRoot?: string | null,
+  route: CompileRoute = "paper",
+): CompileArtifactKey | null {
+  if (!projectRoot) return lastPaperKey;
+  const rel = (compileRoot || tabRelPath || "").replace(/\\/g, "/");
+  const engine = rel ? compileEngineFromRelPath(rel) : null;
+  if (engine && rel) {
+    if (route === "standalone") {
+      return {
+        projectRoot,
+        engine,
+        route: "standalone",
+        sourceFile: rel,
+      };
+    }
+    return {
+      projectRoot,
+      engine,
+      route: "paper",
+      compileRoot: rel,
+    };
+  }
+  if (lastPaperKey && lastPaperKey.projectRoot === projectRoot) return lastPaperKey;
+  return null;
 }
 
 export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
-  const { isCompiling, compileError, pdfRevision } = useCompileStore();
+  const files = useDocumentStore((s) => s.files);
+  const getAsset = useDocumentStore((s) => s.getAsset);
+  const manuscriptDir = useWorkspaceConfigStore((s) => s.manuscriptConfig?.dir ?? null);
+  const mainFilePin = useWorkspaceConfigStore((s) => s.manuscriptConfig?.mainFile ?? null);
+  const { isCompiling, pdfRevision, lastPaperKey, compilingKey, diagnosticsByKey } = useCompileStore();
   const fileMetadata = useDocumentStore((s) => s.fileMetadata);
   const storeTabs = useRightPanelStore((s) => s.tabs);
   const storeActiveTabId = useRightPanelStore((s) => s.activeTabId);
@@ -1105,9 +1165,59 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   const activeTab = tabCtx?.tab ?? storeTabs.find((t) => t.id === storeActiveTabId);
   const isPdfFile = resolvePdfPreviewIsAssetFile(sourceMode, activeTab ? tabFilePath(activeTab) : undefined);
   const fileId = activeTab ? tabFileId(activeTab) ?? null : null;
+  const tabRelPath = activeTab ? tabFilePath(activeTab) : undefined;
   const absolutePath = fileId
     ? (fileMetadata.get(fileId)?.absolutePath ?? null)
     : null;
+
+  const compilePreviewKey = useMemo(() => {
+    const startId = fileId || tabRelPath || "";
+    const resolved = startId ? resolveCompileTarget(startId, files, getAsset) : null;
+    const typstRootRel = tabRelPath
+      ? resolveTypstRootFromBuffers({
+          files,
+          getContent: (rel) => {
+            const f = files.find((x) => x.relativePath.replace(/\\/g, "/") === rel.replace(/\\/g, "/"));
+            return f ? getAsset(f.id) : "";
+          },
+          manuscriptDir,
+          mainFilePin,
+          hintRel: tabRelPath,
+        })
+      : null;
+    const content = fileId ? getAsset(fileId) : "";
+    const cls = tabRelPath
+      ? classifyCompileTab({
+          fileRel: tabRelPath,
+          manuscriptDir,
+          content,
+          isStandaloneTex: isStandaloneTexDocument,
+          latexRootRel: resolved?.targetPath ?? null,
+          typstRootRel,
+        })
+      : null;
+    const route = cls?.kind === "standalone" ? "standalone" : "paper";
+    const keyRel = route === "standalone"
+      ? tabRelPath
+      : (typstRootRel ?? resolved?.targetPath ?? tabRelPath);
+    return resolveCompilePreviewArtifactKey(
+      projectRoot,
+      tabRelPath,
+      lastPaperKey,
+      keyRel,
+      route,
+    );
+  }, [projectRoot, fileId, tabRelPath, files, getAsset, lastPaperKey, manuscriptDir, mainFilePin]);
+
+  const previewCacheKey = compilePreviewKey ? compileArtifactCacheKey(compilePreviewKey) : null;
+  const compileError = previewCacheKey
+    ? (diagnosticsByKey[previewCacheKey]?.error ?? null)
+    : null;
+  const compilingThisArtifact = previewCacheKey
+    ? compilingKey === previewCacheKey
+    : isCompiling;
+  /** Store `isCompiling` is delayed 300ms — do not flash chrome on fast Typst passes. */
+  const showCompilingChrome = isCompiling && compilingThisArtifact;
 
   /** Standalone Files PDF — same Uint8Array path as compile preview (not data URL). */
   const [filePdfBytes, setFilePdfBytes] = useState<Uint8Array | null>(null);
@@ -1117,28 +1227,28 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
 
   const compilePdfBytes = useMemo(() => {
     if (isPdfFile) return null;
-    if (projectRoot) return getPdfBytes(projectRoot) ?? null;
+    if (compilePreviewKey) return getPdfBytesForKey(compilePreviewKey) ?? null;
     return null;
-  }, [isPdfFile, projectRoot, pdfRevision]);
+  }, [isPdfFile, compilePreviewKey, pdfRevision]);
 
   useEffect(() => {
-    if (isPdfFile || !projectRoot) {
+    if (isPdfFile || !compilePreviewKey) {
       setDiskHydrating(false);
       return;
     }
-    if (getPdfBytes(projectRoot)) {
+    if (getPdfBytesForKey(compilePreviewKey)) {
       setDiskHydrating(false);
       return;
     }
     let cancelled = false;
     setDiskHydrating(true);
-    void ensureCompilePdfFromDisk(projectRoot).finally(() => {
+    void ensureCompilePdfForKey(compilePreviewKey).finally(() => {
       if (!cancelled) setDiskHydrating(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [isPdfFile, projectRoot, pdfRevision]);
+  }, [isPdfFile, compilePreviewKey, pdfRevision]);
 
   useEffect(() => {
     if (!isPdfFile || !fileId) {
@@ -1177,8 +1287,14 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   }, [filePdfBytes, compilePdfBytes]);
 
   const persistKey = useMemo(
-    () => resolvePdfPreviewPersistKey(sourceMode, projectRoot, activeTab ? tabFileId(activeTab) : undefined),
-    [projectRoot, sourceMode, activeTab],
+    () =>
+      resolvePdfPreviewPersistKey(
+        sourceMode,
+        projectRoot,
+        activeTab ? tabFileId(activeTab) : undefined,
+        compilePreviewKey ? compileArtifactCacheKey(compilePreviewKey) : undefined,
+      ),
+    [projectRoot, sourceMode, activeTab, compilePreviewKey],
   );
 
   if (loadError && isPdfFile) {
@@ -1193,7 +1309,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
   if (!source) {
     const loadingLabel = isPdfFile
       ? "Loading PDF…"
-      : t("modes.texworkspace.loadingPdfPreview");
+      : t("modes.preview.loadingPdfPreview");
     if (isPdfFile || diskHydrating) {
       return (
         <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background text-[length:var(--font-size-12)] text-muted-foreground">
@@ -1205,7 +1321,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
     // Never-compiled project: keep a full-height pane so split layout stays stable.
     return (
       <div className="flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 bg-background px-4 text-center text-[length:var(--font-size-12)] text-muted-foreground">
-        <span>{t("modes.texworkspace.noPdfPreview")}</span>
+        <span>{t("modes.preview.noPdfPreview")}</span>
       </div>
     );
   }
@@ -1216,7 +1332,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
         source={source}
         sourceRevision={pdfRevision}
         persistKey={persistKey}
-        isCompiling={isCompiling}
+        isCompiling={showCompilingChrome}
         compileError={compileError}
       />
     );
@@ -1227,7 +1343,7 @@ export function PdfPreview({ sourceMode = "auto" }: PdfPreviewProps) {
       source={source}
       persistKey={persistKey}
       isPdfFile={isPdfFile}
-      isCompiling={isCompiling}
+      isCompiling={showCompilingChrome}
       compileError={compileError}
     />
   );

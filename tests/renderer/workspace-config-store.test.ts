@@ -29,7 +29,17 @@ describe("workspace-config-store", () => {
       { function: "literature" as const, name: "lit" },
     ]);
     const config = useWorkspaceConfigStore.getState().manuscriptConfig;
-    expect(config).toEqual({ dir: "paper", mainTex: "article.tex" });
+    expect(config).toEqual({ dir: "paper", mainFile: "article.tex" });
+  });
+
+  it("manuscriptConfig is present without a pin", () => {
+    useWorkspaceConfigStore.getState().setWorkspaceDirs([
+      { function: "manuscript" as const, name: "paper" },
+    ]);
+    expect(useWorkspaceConfigStore.getState().manuscriptConfig).toEqual({
+      dir: "paper",
+      mainFile: undefined,
+    });
   });
 
   it("manuscriptConfig is null when no manuscript folder", () => {
@@ -95,9 +105,13 @@ describe("workspace-config-store", () => {
         { function: "manuscript" as const, name: "paper", mainTex: "main.tex" },
       ],
     });
-    useWorkspaceConfigStore.getState().updateFolder(0, { name: "doc", mainTex: "index.tex" });
+    useWorkspaceConfigStore.getState().updateFolder(0, { name: "doc", mainFile: "index.tex" });
     const dir = useWorkspaceConfigStore.getState().workspaceDirs[0];
     expect(dir.name).toBe("doc");
-    expect((dir as any).mainTex).toBe("index.tex");
+    expect((dir as { mainFile?: string }).mainFile).toBe("index.tex");
+    expect(useWorkspaceConfigStore.getState().manuscriptConfig).toEqual({
+      dir: "doc",
+      mainFile: "index.tex",
+    });
   });
 });

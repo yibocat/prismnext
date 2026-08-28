@@ -5,7 +5,6 @@ import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { fsDesktop } from "@/lib/desktop-api/fs";
@@ -310,9 +309,6 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const focusedMode = useFocusedModeId();
-  const hasTexWorkspaceTab = useRightPanelStore((s) =>
-    s.tabs.some((t) => t.kind === "texworkspace"),
-  );
   const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const showArchived = useLayoutStore((s) => s.showArchived);
@@ -579,7 +575,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
         hiddenIds: leftNavHiddenIds,
         order: leftNavOrder,
       }),
-    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab, leftNavHiddenIds, leftNavOrder],
+    [leftSidebarView, rightAreaExpanded, focusedMode, leftNavHiddenIds, leftNavOrder],
   );
   const hubNavItems = useMemo(
     () => leftNavRegistry.getBySection("hub"),
@@ -587,7 +583,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
   );
   const footerNavItems = useMemo(
     () => leftNavRegistry.getBySection("footer"),
-    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
+    [leftSidebarView, rightAreaExpanded, focusedMode],
   );
   const settingsNavItem = footerNavItems.find((item) => item.id === "settings");
   const extraFooterNavItems = footerNavItems.filter((item) => item.id !== "settings");

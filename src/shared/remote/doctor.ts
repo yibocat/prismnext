@@ -35,7 +35,7 @@ export interface HostDoctorReport {
   home: string;
   homeWritable: boolean;
   git: boolean;
-  /** Payload Node / Git / Tectonic. Optional so older Hosts still pass `isHostDoctorReport`. */
+  /** Payload Node / Git / Tectonic / Typst. Optional so older Hosts still pass `isHostDoctorReport`. */
   runtime?: HostRuntimeInventory;
 }
 

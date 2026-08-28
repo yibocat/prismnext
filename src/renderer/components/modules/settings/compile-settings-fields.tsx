@@ -18,8 +18,8 @@ export function CompileSettingsFields() {
     <div className={SETTINGS_CARD}>
       <div className={SETTINGS_ROW}>
         <div className="min-w-0">
-          <span className={SETTINGS_ROW_LABEL}>{t("settings.texWorkspacePage.compile.autoCompile")}</span>
-          <p className={SETTINGS_ROW_DESC}>{t("settings.texWorkspacePage.compile.autoCompileDesc")}</p>
+          <span className={SETTINGS_ROW_LABEL}>{t("settings.compiler.autoCompile")}</span>
+          <p className={SETTINGS_ROW_DESC}>{t("settings.compiler.autoCompileDesc")}</p>
         </div>
         <Switch
           checked={autoCompile}

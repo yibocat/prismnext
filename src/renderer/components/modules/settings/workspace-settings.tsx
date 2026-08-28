@@ -8,12 +8,16 @@ import { useWorkspaceProjectAutosave } from "@/hooks/use-workspace-project-autos
 import { Button } from "@/components/ui/button";
 import {
   DEFAULT_FUNCTION_DESCRIPTIONS,
+  manuscriptMainFile,
   type WorkspaceFolder,
 } from "@/types/workspace";
 import { resolveFolderIconName } from "@/lib/workspace/folder-icons";
 import { WorkspaceFolderIcon } from "@/lib/workspace/workspace-folder-icon";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import { cn } from "@/lib/utils";
+import { CompileSettingsFields } from "./compile-settings-fields";
+import { BackupsSettingsPanel } from "./backups-settings-panel";
+import { useProjectTemplate } from "@/hooks/use-project-template";
 import {
   SETTINGS_CARD,
   SETTINGS_ROW,
@@ -92,7 +96,7 @@ function FolderSummaryRow({
 }) {
   const { t } = useTranslation();
   const onDisk = useFolderOnDisk(projectRoot, folder.name, true);
-  const mainTex = folder.function === "manuscript" ? folder.mainTex : null;
+  const mainFile = folder.function === "manuscript" ? manuscriptMainFile(folder) : null;
 
   return (
     <div className={ROW}>
@@ -110,9 +114,9 @@ function FolderSummaryRow({
         </div>
         <p className={cn(ROW_DESC, "line-clamp-2")}>{folderSummary(folder, t)}</p>
         <p className="text-[length:var(--font-size-11)] text-muted-foreground/60 mt-0.5">
-          {mainTex ? (
+          {mainFile ? (
             <>
-              <span className="font-mono text-primary">{mainTex}</span>
+              <span className="font-mono text-primary">{mainFile}</span>
               <span className="mx-1.5 text-muted-foreground/40">·</span>
             </>
           ) : null}
@@ -168,6 +172,7 @@ export function WorkspaceSettings() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const { workspaceDirs, loaded } = useWorkspaceConfigStore();
   const saveStatus = useWorkspaceProjectAutosave(projectRoot, loaded);
+  const { reload: reloadProjectTemplate } = useProjectTemplate();
 
   if (projectRoot && !loaded) {
     return (
@@ -238,6 +243,27 @@ export function WorkspaceSettings() {
               />
             ))
           )}
+        </div>
+      </div>
+
+      <div>
+        <p className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          {t("settings.compiler.title")}
+        </p>
+        <p className={cn(ROW_DESC, "mb-2")}>{t("settings.compiler.subtitle")}</p>
+        <CompileSettingsFields />
+      </div>
+
+      <div>
+        <p className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          {t("settings.workspace.backups")}
+        </p>
+        <div className={CARD}>
+          <BackupsSettingsPanel
+            compact
+            embedded
+            onRestored={() => void reloadProjectTemplate()}
+          />
         </div>
       </div>
     </WorkspacePageChrome>

@@ -14,7 +14,6 @@
     "commands": "命令",
     "mcp": "MCP",
     "skills": "技能",
-    "texWorkspace": "TeX 工作区",
     "terminal": "终端",
     "browser": "浏览器",
     "literature": "文献",
@@ -362,6 +361,7 @@
     "tabProjectHint": "未打开项目。打开项目以编辑其实时工作区文件夹。",
     "addFolder": "添加文件夹",
     "pageDesc": "面向 AI Agent 的文件夹布局。使用「配置」在右侧面板编辑名称、说明与手稿设置。",
+    "backups": "备份",
     "empty": "尚未配置文件夹。",
     "toast": {
       "folderSaved": "文件夹已保存。",
@@ -382,11 +382,11 @@
       "removeTitle": "移除文件夹",
       "removeDescProject": "从当前项目移除「{{name}}」？仅更新工作区配置 — 不会删除磁盘上的文件。",
       "removeDescTemplate": "从新建项目模板移除「{{name}}」？仅更新模板配置。",
-      "removeManuscriptWarn": "移除唯一的手稿文件夹将禁用 TeX 工作区功能，直到配置另一个手稿文件夹。",
+      "removeManuscriptWarn": "移除唯一的手稿文件夹后，Files 将不知道哪一层是成稿目录，直到你再添加一个。",
       "name": "文件夹名称",
       "nameDesc": "项目根目录下的文件夹名称。",
-      "mainTex": "主 TeX 文件",
-      "mainTexDesc": "此文件夹的主手稿文件（仅手稿文件夹）。",
+      "mainTex": "主文件",
+      "mainTexDesc": "可选的编译入口（`.tex` 或 `.typ`）。留空则按当前打开的文件解析。",
       "docClass": "默认文档类",
       "docClassDesc": "搭建新手稿时使用。",
       "description": "给 AI Agent 的说明",
@@ -481,7 +481,9 @@
   },
   "compiler": {
     "title": "编译器",
-    "subtitle": "LaTeX 引擎与自动编译默认值。"
+    "subtitle": "LaTeX 与 Typst 的自动编译默认值。",
+    "autoCompile": "自动编译",
+    "autoCompileDesc": "停止输入约 0.5 秒后自动重新编译 PDF（.tex 优先 Tectonic，.typ 使用内置 Typst）。每个项目单独记住此开关；远程项目默认关闭。"
   },
   "terminalPage": {
     "title": "终端",
@@ -844,50 +846,6 @@
       "project": "此项目"
     }
   },
-  "texWorkspacePage": {
-    "title": "TeX 工作区",
-    "subtitle": "手稿、布局与编译偏好。",
-    "manuscript": "手稿",
-    "layout": "布局",
-    "compileSection": "编译",
-    "compile": {
-      "defaultEngine": "默认引擎",
-      "defaultEngineDesc": "本项目的 LaTeX 编译器。构建输出位于 .workbench/compile/。",
-      "autoCompile": "自动编译",
-      "autoCompileDesc": "停止输入约 0.5 秒后自动重新编译 PDF（优先使用 Tectonic）。每个项目单独记住此开关；远程项目默认关闭。"
-    },
-    "backups": "备份",
-    "references": "参考文献",
-    "openProject": "打开项目以配置手稿文件夹。",
-    "noTemplate": "尚未应用模板。",
-    "pageDesc": "手稿文件夹、编辑器布局与编译偏好。",
-    "manuscriptDesc": "当前项目的手稿绑定与模板状态。",
-    "defaultView": "默认视图",
-    "defaultViewDesc": "进入 TeX 工作区时的面板布局。",
-    "templateSnapshots": "模板快照",
-    "templateSnapshotsDesc": "切换模板时创建于 .workbench/backups/。删除旧快照可释放磁盘空间。",
-    "referencesDesc": "在文献模式（右侧面板）管理引用与阅读笔记。打开项目后可从文献库侧栏配置 Zotero 同步。",
-    "referencesNote": "BibTeX 导出与手稿引用检查位于 TeX 工作区编译流程中。",
-    "viewSplit": "分栏（TeX + PDF）",
-    "viewEditor": "仅编辑器",
-    "viewPreview": "仅预览",
-    "noManuscript": "尚未绑定手稿文件夹。",
-    "folder": "文件夹",
-    "mainFile": "主文件",
-    "template": "模板",
-    "workspaceSettings": "工作区设置",
-    "templateCenter": "模板中心",
-    "none": "无",
-    "appliedViaCenter": "通过模板中心应用",
-    "folderDesc": "在工作区设置中编辑文件夹名称与主文件。",
-    "folderDescPrefix": "在",
-    "folderDescSuffix": "中编辑文件夹名称与主文件。",
-    "mainFileDesc": "相对于手稿文件夹的编译入口 — 不会重命名磁盘上的文件。",
-    "templateChangePrefix": "在",
-    "templateChangeSuffix": "中更改。",
-    "viewTex": "仅 TeX",
-    "viewPdf": "仅 PDF"
-  },
   "shortcuts": {
     "title": "快捷键",
     "subtitle": "壳层与编辑器为系统默认、不可修改；工作区与产品快捷键将支持自定义。Tooltip 始终显示解析后的键位。",
@@ -1121,6 +1079,7 @@
         "deleteFailedShort": "删除失败"
       },
       "openProject": "请先打开项目以管理文稿备份。",
+      "remoteOnlyLocal": "文稿模板备份仅保存在本机。请在本机打开项目后再查看或恢复。",
       "refresh": "刷新",
       "loading": "正在加载备份…",
       "emptyHint": "切换模板时会自动创建备份。",
@@ -1464,7 +1423,7 @@
       },
       "descPlaceholder": "说明此文件夹应存放什么内容，以便智能体正确使用。",
       "functionDesc": {
-        "manuscript": "存放撰写学术论文的 LaTeX 文稿文件。主入口为 `main.tex`。此文件夹绑定到 TeX 工作区（编辑器 + PDF 预览）。",
+        "manuscript": "成稿 / 论文主体所在目录（LaTeX `.tex` 或 Typst `.typ`）。编译产物在 `.workbench/compile/`，不要编辑该缓存。在 Files 中打开源文件。主文件 pin 可选。",
         "experiment": "实验工作区根目录。每个实验会在此下建立子文件夹（代码、数据、结果）。运行记录由应用自动记账，无需单独配置「注册表」文件夹。",
         "literature": "存放学术研究与引用所需的文献与参考 PDF。",
         "notebook": "存放各类笔记，如 Markdown 或 Jupyter 笔记本。"

@@ -8,6 +8,7 @@
     "categories": "分類",
     "openProject": "請先開啟專案再應用模板。",
     "needManuscript": "請先在工作區設定中配置手稿資料夾。",
+    "remoteOnlyLocal": "LaTeX 模板僅在本機專案可用。請在本機開啟專案後再使用模板中心或還原備份。",
     "current": "目前：{{name}}（{{category}}）",
     "inUse": "使用中",
     "status": "狀態",

@@ -4,7 +4,6 @@
   "library": "Library",
   "experiments": "Experiments",
   "templates": "Templates",
-  "texWorkspace": "TeX Workspace",
   "settings": "Settings",
   "updateToVersion": "Update to {{version}}",
   "sessions": {
@@ -102,6 +101,6 @@
   "customizeSidebar": {
     "menu": "Customize Sidebar",
     "title": "Customize Sidebar",
-    "description": "Choose which workspace modules appear, and drag to change their order. TeX Workspace and Library are on by default. Templates and Teams stay under New Chat."
+    "description": "Choose which workspace modules appear, and drag to change their order. Files and Library are on by default. Templates and Teams stay under New Chat."
   }
 }

@@ -330,6 +330,7 @@
     "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
     "turn_aborted": "This turn was stopped before the model finished.",
     "connectionLost": "Agent connection lost. Please try again.",
+    "alreadyProcessing": "The previous turn is still finishing. Wait a moment, or press Stop, then send again.",
     "cancelled": "Stopped."
   },
   "turnFooter": {

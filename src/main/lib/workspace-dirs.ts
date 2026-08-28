@@ -2,7 +2,7 @@ import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { readWorkbenchJson } from "../workbench/identity";
 
 export const DEFAULT_WORKSPACE_FOLDERS: WorkspaceFolder[] = [
-  { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+  { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
 ];
 
 function foldersFromWorkbench(projectRoot: string): WorkspaceFolder[] | null {

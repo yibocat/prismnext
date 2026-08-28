@@ -13,7 +13,7 @@ import { EXPERIMENTS_PROMPT } from "./experiments";
 import { INTERACTION_PROMPT } from "./interaction";
 import { PROJECT_RULES_MEMORY_PROMPT } from "./project-rules-memory";
 import { SUBAGENT_ROLE_PROMPT } from "./subagent-role";
-import { buildLatexWorkspacePrompt } from "./latex-workspace";
+import { buildManuscriptCompilePrompt } from "./manuscript-compile";
 import { buildWorkspacePrompt } from "./workspace-folders";
 
 /** All available prompt modules.
@@ -80,14 +80,14 @@ export const ALL_MODULES: PromptModule[] = [
     build: buildOrchestratorJudgmentPrompt,
   },
   {
-    key: "latex-workspace",
-    label: "LaTeX Workspace (compile chain)",
+    key: "manuscript-compile",
+    label: "Manuscript & paper compile",
     description:
-      "Build dir, latex-root/compile tool chain; manuscript folder from Workspace settings.",
+      "Paper compile for LaTeX and Typst; manuscript folder from Workspace settings. Template Center is LaTeX-only.",
     enabled: true,
     profileOnly: true,
     source: "app",
-    build: buildLatexWorkspacePrompt,
+    build: buildManuscriptCompilePrompt,
   },
   {
     key: "research-reasoning",

@@ -29,6 +29,7 @@ import {
   finalizePermissionDeny,
 } from "@/stores/permission-actions";
 import { compileCurrentDocument } from "@/stores/compile-store";
+import { compileEngineFromRelPath } from "@shared/compile/artifact-key";
 import { createLogger } from "@/services/logger";
 import { ChangesBar } from "./changes-bar";
 import { CodeMirrorInsertHost } from "./codemirror-insert-host";
@@ -55,11 +56,11 @@ export function LatexEditor() {
 
   const { tab, isActive } = useTabContext();
   const fileId =
-    tab.kind === "file" || tab.kind === "texworkspace" || tab.kind === "research-plan"
+    tab.kind === "file" || tab.kind === "research-plan"
       ? tab.fileId
       : null;
   const filePath = tabFilePath(tab) ?? "";
-  const isTexworkspace = tab.kind === "texworkspace";
+  const canCompile = compileEngineFromRelPath(filePath) != null;
 
   const refreshFileContent = useDocumentStore((s) => s.refreshFileContent);
   const jumpTarget = useDocumentStore((s) => s.jumpTarget);
@@ -115,8 +116,8 @@ export function LatexEditor() {
       await useChangesStore.getState().acceptChange(activeChange.id);
     }
     deactivateMerge();
-    if (isTexworkspace) compileCurrentDocument();
-  }, [activeChange, deactivateMerge, isTexworkspace]);
+    if (canCompile) compileCurrentDocument();
+  }, [activeChange, deactivateMerge, canCompile]);
 
   const handleRejectCurrent = useCallback(async () => {
     if (!activeChange) return;
@@ -148,8 +149,8 @@ export function LatexEditor() {
         annotations: Transaction.addToHistory.of(false),
       });
     }
-    if (isTexworkspace) compileCurrentDocument();
-  }, [activeChange, fileId, isTexworkspace]);
+    if (canCompile) compileCurrentDocument();
+  }, [activeChange, fileId, canCompile]);
 
   // Load file content when tab changes
   useEffect(() => {
@@ -211,11 +212,8 @@ export function LatexEditor() {
             preventDefault: true,
             run: () => {
               if (currentFileId) {
-                const isTexworkspace = useRightPanelStore.getState().tabs.find(
-                  (t) => t.id === useRightPanelStore.getState().activeTabId,
-                )?.kind === "texworkspace";
                 useDocumentStore.getState().saveFile(currentFileId).then(() => {
-                  if (isTexworkspace) compileCurrentDocument();
+                  if (compileEngineFromRelPath(currentFileId) === "latex") compileCurrentDocument();
                 });
               }
               return true;

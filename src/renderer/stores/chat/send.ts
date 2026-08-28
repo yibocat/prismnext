@@ -26,6 +26,7 @@ import { agentDesktop } from "@/lib/desktop-api/agent";
 import { isAgentRuntime } from "../../../shared/agent/api";
 import { parseRemoteAbs } from "@shared/remote";
 import { ensureRemoteLiveForWork } from "@/lib/remote/ensure-connected";
+import { pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "../compile-store";
 import { useDocumentStore } from "../document-store";
 import { lastPathForSession, useWorkbenchStore } from "../workbench-store";
 import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
@@ -303,6 +304,7 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       });
       return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
     });
+    pauseAutoCompileForAi(tabId);
     const started = get().tabs.find((tab) => tab.id === tabId);
     const turnIndex = started?.conversation.live?.turnIndex ?? 0;
     const sessionId = started?.conversation.conversationId || started?.sessionId || tabId;
@@ -353,6 +355,7 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       || event.type === "turn_cancelled"
       || event.type === "turn_failed"
     ) {
+      resumeAutoCompileAfterAi(tabId);
       void import("../checkpoint-store").then(({ useCheckpointStore }) => {
         void useCheckpointStore.getState().finalizeTurn(tabId, event.type === "turn_finished");
       });

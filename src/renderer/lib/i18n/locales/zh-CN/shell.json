@@ -124,6 +124,6 @@
     "restorePanel": "还原面板",
     "openFileToStart": "打开文件以开始",
     "openFileOrWorkspace": "打开文件或切换到工作区",
-    "openFileOrWorkspaceHint": "使用上方工具栏浏览文件、查看 Git 历史，或在 TeX 工作区开始写作。"
+    "openFileOrWorkspaceHint": "使用上方工具栏浏览文件、查看 Git 历史，或在 Files 中打开 `.tex` / `.typ`。"
   }
 }
