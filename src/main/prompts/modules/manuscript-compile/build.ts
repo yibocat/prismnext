@@ -1,7 +1,7 @@
-import type { PromptContext } from "../types";
-import type { ManuscriptFolder } from "../../../shared/workbench/workspace-folder";
-import { manuscriptMainFile } from "../../../shared/workbench/workspace-folder";
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import type { PromptContext } from "../../types";
+import type { ManuscriptFolder } from "../../../../shared/workbench/workspace-folder";
+import { manuscriptMainFile } from "../../../../shared/workbench/workspace-folder";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 function manuscriptFolder(ctx: PromptContext): ManuscriptFolder | null {
   for (const d of ctx.workspaceDirs ?? []) {

@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 /**
  * Project library papers — when/边界；how-to 在 literature-* tools。

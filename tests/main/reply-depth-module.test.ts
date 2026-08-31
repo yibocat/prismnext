@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { REPLY_DEPTH_PROMPT } from "../../src/main/prompts/modules/reply-depth";
+import { REPLY_DEPTH_PROMPT } from "../../src/main/prompts";
 
 describe("REPLY_DEPTH_PROMPT", () => {
   it("calibrates reply length and chat rendering only", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
+import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("CITATION_AUDIT_PROMPT", () => {

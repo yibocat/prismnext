@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SUBAGENT_ROLE_PROMPT } from "../../src/main/prompts/modules/subagent-role";
-import { ALL_MODULES } from "../../src/main/prompts/modules";
 import {
+  SUBAGENT_ROLE_PROMPT,
+  ALL_MODULES,
   composeSubagentProfileModulePrompts,
   composeOrchestratorProfileModulePrompts,
   resolveSubagentProfileModuleKeys,
   resolveOrchestratorProfileModuleKeys,
   resolveSharedProfileModules,
-} from "../../src/main/prompts/resolve-active-modules";
+} from "../../src/main/prompts";
 
 describe("SUBAGENT_ROLE_PROMPT", () => {
   it("puts expert instructions first and avoids module/tool jargon for users", () => {

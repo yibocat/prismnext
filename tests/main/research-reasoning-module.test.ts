@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESEARCH_REASONING_PROMPT } from "../../src/main/prompts/modules/research-reasoning";
+import { RESEARCH_REASONING_PROMPT } from "../../src/main/prompts";
 
 describe("RESEARCH_REASONING_PROMPT", () => {
   it("is judgment-only scholarly discipline with clear boundaries", () => {

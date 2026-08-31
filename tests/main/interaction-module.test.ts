@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INTERACTION_PROMPT } from "../../src/main/prompts/modules/interaction";
-import { ALL_MODULES } from "../../src/main/prompts/modules";
+import { INTERACTION_PROMPT, ALL_MODULES } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("INTERACTION_PROMPT", () => {

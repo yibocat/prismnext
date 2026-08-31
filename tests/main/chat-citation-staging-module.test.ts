@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
+import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("CHAT_CITATION_STAGING_PROMPT", () => {

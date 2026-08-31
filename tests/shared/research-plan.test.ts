@@ -15,7 +15,7 @@ import {
   sessionDraftPlanRel,
   type ResearchPlanDoc,
 } from "../../src/shared/research/plan";
-import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
+import { buildPlanModeTurnAppendix } from "../../src/main/prompts";
 import { planDraftMissingRedirectNote } from "../../src/shared/research/plan";
 
 const sampleDoc: ResearchPlanDoc = {

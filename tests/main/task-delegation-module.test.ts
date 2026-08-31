@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
+import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts";
 
 describe("ORCHESTRATOR_JUDGMENT_PROMPT", () => {
   it("covers proactive scheduling and Task delegation for the orchestrator", () => {

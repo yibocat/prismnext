@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 /**
  * Experiments — empirical execution (islands, runs, metrics).

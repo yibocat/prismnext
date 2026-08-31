@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { promptManager } from "../../src/main/prompts";
-import type { PromptContext } from "../../src/main/prompts/types";
+import type { PromptContext } from "../../src/main/prompts";
 
 describe("promptManager project rules injection split", () => {
   beforeEach(() => {
@@ -57,6 +57,6 @@ describe("promptManager project rules injection split", () => {
     expect(stable).not.toContain("Active Agent Profile");
     expect(stable).not.toContain("Chat paper citations");
     expect(stable).not.toContain("Citations & Bibliography");
-    expect(stable).toContain("# prismnext");
+    expect(stable).toContain("## Research AI assistant");
   });
 });

@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 /**
  * External chat citations — when/边界；discover/stage how-to 在 literature-* tools。

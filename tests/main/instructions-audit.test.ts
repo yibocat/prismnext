@@ -1,14 +1,16 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
-import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
-import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
-import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
-import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
-import { buildManuscriptCompilePrompt } from "../../src/main/prompts/modules/manuscript-compile";
-import type { PromptContext } from "../../src/main/prompts/types";
+import {
+  CHAT_CITATION_STAGING_PROMPT,
+  CITATION_AUDIT_PROMPT,
+  RESEARCH_DESIGN_PROMPT,
+  EXPERIMENTS_PROMPT,
+  LITERATURE_LIBRARY_PROMPT,
+  ORCHESTRATOR_JUDGMENT_PROMPT,
+  buildManuscriptCompilePrompt,
+} from "../../src/main/prompts";
+import type { PromptContext } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */

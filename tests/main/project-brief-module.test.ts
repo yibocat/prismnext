@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_BRIEF_PROMPT } from "../../src/main/prompts/modules/project-brief";
+import { PROJECT_BRIEF_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("PROJECT_BRIEF_PROMPT", () => {

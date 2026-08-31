@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 /**
  * Project brief — `.brief.md` intellectual spine on disk.

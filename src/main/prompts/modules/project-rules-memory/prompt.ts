@@ -1,4 +1,4 @@
-import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
 
 /**
  * Project rules memory — when to persist stable preferences into project rules.

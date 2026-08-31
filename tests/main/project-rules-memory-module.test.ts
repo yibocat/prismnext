@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_RULES_MEMORY_PROMPT } from "../../src/main/prompts/modules/project-rules-memory";
+import { PROJECT_RULES_MEMORY_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("PROJECT_RULES_MEMORY_PROMPT", () => {

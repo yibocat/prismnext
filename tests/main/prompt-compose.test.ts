@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { promptManager, composeStableSystem, CORE_PERSONA_PROMPT } from "../../src/main/prompts";
-import type { PromptContext } from "../../src/main/prompts/types";
+import type { PromptContext } from "../../src/main/prompts";
 
 describe("promptManager.compose", () => {
   beforeEach(() => {

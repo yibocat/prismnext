@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getNativeToolByName } from "../../src/main/agent/tools/index";
-import { buildManuscriptCompilePrompt } from "../../src/main/prompts/modules/manuscript-compile";
-import { buildWorkspacePrompt } from "../../src/main/prompts/modules/workspace-folders";
+import { buildManuscriptCompilePrompt, buildWorkspacePrompt } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
-import type { PromptContext } from "../../src/main/prompts/types";
+import type { PromptContext } from "../../src/main/prompts";
 
 describe("buildManuscriptCompilePrompt", () => {
   it("keeps build workflow + boundaries; manuscript entry from workspace folder", () => {

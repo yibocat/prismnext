@@ -9,9 +9,9 @@ import {
   resolveOrchestratorProfileModuleKeys,
   resolveSharedProfileModules,
   resolveStableSystemModules,
-} from "../../src/main/prompts/resolve-active-modules";
-import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
+  LITERATURE_LIBRARY_PROMPT,
+  EXPERIMENTS_PROMPT,
+} from "../../src/main/prompts";
 
 describe("resolve-active-modules", () => {
   it("stable system modules follow explicit global order (reasoning → depth → workspace)", () => {

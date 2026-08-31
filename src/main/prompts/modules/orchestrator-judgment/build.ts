@@ -1,4 +1,4 @@
-import type { PromptContext } from "../types";
+import type { PromptContext } from "../../types";
 
 /**
  * Orchestrator-only judgment — proactive scheduling + Task delegation.

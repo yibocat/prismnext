@@ -95,6 +95,20 @@ describe("code structure layer boundaries (Phase 0)", () => {
     }
   });
 
+  it("does not deep-import capability-module prompt.ts or build.ts", () => {
+    const deepBlock = /(?:from\s+|import\s*\()\s*["'][^"']*modules\/[a-z0-9-]+\/(?:prompt|build)["']/;
+    const files = [
+      ...walkTsFiles(join(REPO, "src/main")),
+      ...walkTsFiles(join(REPO, "tests")),
+    ];
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const rel = relative(REPO, file);
+      if (/src\/main\/prompts\/modules\/[a-z0-9-]+\/(?:prompt|build)\.ts$/.test(rel)) continue;
+      expect(importsFrom(file, deepBlock), rel).toEqual([]);
+    }
+  });
+
   it("defines PermissionMode in one shared module", () => {
     const modes = sourceOf("src/shared/permissions/modes.ts");
     const session = sourceOf("src/shared/agent/session-agent.ts");

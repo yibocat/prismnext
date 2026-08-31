@@ -3,13 +3,18 @@
  * Manual checklist: docs-private/superpowers/verification/2026-07-21-prompt-hard-soft-scenarios.md
  */
 import { describe, expect, it } from "vitest";
-import { ALL_MODULES } from "../../src/main/prompts/modules";
-import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
-import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
-import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { ORCHESTRATOR_JUDGMENT_PROMPT, buildOrchestratorJudgmentPrompt } from "../../src/main/prompts/modules/orchestrator-judgment";
-import { composeOrchestratorProfileModulePrompts, resolveOrchestratorProfileModuleKeys, resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
-import { buildPlanModeTurnAppendix } from "../../src/main/prompts/per-turn/plan-mode";
+import {
+  ALL_MODULES,
+  CHAT_CITATION_STAGING_PROMPT,
+  EXPERIMENTS_PROMPT,
+  LITERATURE_LIBRARY_PROMPT,
+  ORCHESTRATOR_JUDGMENT_PROMPT,
+  buildOrchestratorJudgmentPrompt,
+  composeOrchestratorProfileModulePrompts,
+  resolveOrchestratorProfileModuleKeys,
+  resolveStableSystemModules,
+  buildPlanModeTurnAppendix,
+} from "../../src/main/prompts";
 import { getNativeToolByName } from "../../src/main/agent/tools/index";
 import { RESEARCH_BRIEF_REL } from "../../src/shared/research/brief";
 import {

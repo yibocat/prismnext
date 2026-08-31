@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
+import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("RESEARCH_DESIGN_PROMPT", () => {
