@@ -9,9 +9,12 @@ describe("RESEARCH_DESIGN_PROMPT", () => {
     expect(RESEARCH_DESIGN_PROMPT).toContain("Scope boundary");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Route the request");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Intellectual roadmap");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("research thinking");
+    expect(RESEARCH_DESIGN_PROMPT).toContain(TOOL_NAMES.researchBriefRead);
     expect(RESEARCH_DESIGN_PROMPT).toContain(TOOL_NAMES.suggestPlan);
-    expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("orchestrator-judgment");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Experiments");
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("research-design-coach");
 
     expect(RESEARCH_DESIGN_PROMPT).not.toContain("Frozen");
     expect(RESEARCH_DESIGN_PROMPT).not.toContain("grounds experiments");

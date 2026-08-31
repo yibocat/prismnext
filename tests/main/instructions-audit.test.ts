@@ -9,6 +9,7 @@ import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/litera
 import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
 import { buildManuscriptCompilePrompt } from "../../src/main/prompts/modules/manuscript-compile";
 import type { PromptContext } from "../../src/main/prompts/types";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
 const CORE_PACK_DIR = join(process.cwd(), "resources", "teams", "prismnext.core");
@@ -88,13 +89,15 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(CITATION_AUDIT_PROMPT).toContain("Compliance model");
     expect(CITATION_AUDIT_PROMPT).not.toContain("peer-reviewer");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
-    expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("research-design-coach");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("Intellectual roadmap");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Project brief");
-    expect(EXPERIMENTS_PROMPT).toContain("Soft workflow");
-    expect(EXPERIMENTS_PROMPT).toContain("experiment-log");
+    expect(EXPERIMENTS_PROMPT).toContain("Route the request");
+    expect(EXPERIMENTS_PROMPT).not.toContain("Soft workflow");
+    expect(EXPERIMENTS_PROMPT).toContain(TOOL_NAMES.experimentLog);
     expect(EXPERIMENTS_PROMPT).toContain("experiment-run");
     expect(EXPERIMENTS_PROMPT).toContain("results-snapshot");
-    expect(EXPERIMENTS_PROMPT).toContain("methodology-auditor");
+    expect(EXPERIMENTS_PROMPT).not.toContain("methodology-auditor");
     expect(EXPERIMENTS_PROMPT).not.toContain("uv pip --system");
     expect(EXPERIMENTS_PROMPT).not.toContain("### Workflow (binding)");
     const latex = buildManuscriptCompilePrompt({} as PromptContext);

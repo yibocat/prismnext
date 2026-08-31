@@ -6,17 +6,19 @@ describe("PROJECT_BRIEF_PROMPT", () => {
   it("defines .brief.md as intellectual spine — not memory, rules, or experiment plan", () => {
     expect(PROJECT_BRIEF_PROMPT).toContain(".brief.md");
     expect(PROJECT_BRIEF_PROMPT).toContain("intellectual spine");
+    expect(PROJECT_BRIEF_PROMPT).toContain("Scope boundary");
+    expect(PROJECT_BRIEF_PROMPT).toContain("Research design");
     expect(PROJECT_BRIEF_PROMPT).toContain("What this is not");
     expect(PROJECT_BRIEF_PROMPT).toContain("starting scaffold only");
     expect(PROJECT_BRIEF_PROMPT).toContain(TOOL_NAMES.researchBriefRead);
     expect(PROJECT_BRIEF_PROMPT).toContain(TOOL_NAMES.researchBriefUpdate);
     expect(PROJECT_BRIEF_PROMPT).toContain("Experiments");
+    expect(PROJECT_BRIEF_PROMPT).toContain("Driven by dialogue");
+    expect(PROJECT_BRIEF_PROMPT).toContain("first person");
 
     expect(PROJECT_BRIEF_PROMPT).not.toContain("Frozen");
     expect(PROJECT_BRIEF_PROMPT).not.toContain("research-design-coach");
     expect(PROJECT_BRIEF_PROMPT).not.toContain("BINDING");
     expect(PROJECT_BRIEF_PROMPT).not.toContain("Before major work");
-    expect(PROJECT_BRIEF_PROMPT).toContain("Driven by dialogue and thinking");
-    expect(PROJECT_BRIEF_PROMPT).toContain("first person");
   });
 });
