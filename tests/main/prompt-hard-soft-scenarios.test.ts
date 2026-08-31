@@ -117,14 +117,15 @@ describe("S3 — Approve seeds todowrite (prompt contract)", () => {
 describe("S4 — external literature recommendations", () => {
   it("module defers staging rules to literature-stage; tool keeps BINDING", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.literatureStage);
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("on that tool");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("BINDING");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("search_arxiv");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("tool-output");
 
     const desc = toolDesc(TOOL_NAMES.literatureStage);
-    expect(desc).toMatch(/catalog/i);
-    expect(desc).toContain("[n]");
+    expect(desc).toMatch(/session citation/i);
+    const stage = getNativeToolByName(TOOL_NAMES.literatureStage)!;
+    expect(stage.promptGuidelines?.join(" ")).toContain("[n]");
   });
 });
 

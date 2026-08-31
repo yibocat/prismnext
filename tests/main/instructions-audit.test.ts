@@ -77,10 +77,9 @@ describe("builtin instructions audit (Phase 1.3)", () => {
 
   it("knowledge modules cover citation and Task handoff workflows", () => {
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
-    expect(LITERATURE_LIBRARY_PROMPT).toContain("Task handoff");
+    expect(LITERATURE_LIBRARY_PROMPT).toContain("Library papers (this Task)");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("on that tool");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Available subagents (via Task)");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Do not search the project");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("@peer-reviewer");

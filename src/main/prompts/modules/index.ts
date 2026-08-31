@@ -43,7 +43,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "chat-citation-staging",
     label: "Chat Paper Citations",
     description:
-      "External papers in chat: literature-stage first, cite as [n]. Library papers use the Literature Library module.",
+      `External papers in chat: ${TOOL_NAMES.literatureStage} first, cite as [n]. Library papers use the Literature Library module.`,
     enabled: true,
     profileOnly: true,
     source: "app",
