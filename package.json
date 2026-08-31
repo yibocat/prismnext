@@ -1,7 +1,7 @@
 {
   "name": "prism-next",
   "productName": "PrismNext",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Local-first collaborative AI scientist — literature, experiments, and LaTeX in one desktop workspace",
   "license": "Apache-2.0",
   "author": "yibocat",

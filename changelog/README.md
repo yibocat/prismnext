@@ -19,9 +19,11 @@ changelog/
     0.5.x.md          ← detailed bullets while developing 0.5.*
     0.6.x.md
     0.7.x.md
-    0.8.x.md          ← current work → ## 0.8.0 (Unreleased)
+    0.8.x.md
+    0.9.x.md          ← 0.9.* line (0.9.0 shipped; next work → ## 0.9.1 Unreleased)
   releases/
-    0.8.0.md          ← summarized notes for GitHub Release
+    0.8.0.md
+    0.9.0.md          ← summarized notes for GitHub Release
 ```
 
 Rule: version **`X.Y.Z` → series file `series/X.Y.x.md`**.
@@ -33,7 +35,7 @@ Rule: version **`X.Y.Z` → series file `series/X.Y.x.md`**.
 3. Write **why / user effect**; put file-path noise under `### Developer` or `### Architecture` (those sections are omitted from Release notes).
 4. Cursor agents: `.cursor/rules/changelog-next-version.mdc`.
 
-Example (current line): work goes in `series/0.8.x.md` under `## 0.8.0 (Unreleased)`.
+Example (current line): work goes in `series/0.9.x.md` under `## 0.9.1 (Unreleased)`.
 
 ## Before tagging a release
 
@@ -42,16 +44,16 @@ Example (current line): work goes in `series/0.8.x.md` under `## 0.8.0 (Unreleas
 3. **Regenerate** the summarized release file:
 
 ```bash
-pnpm release:changelog 0.8.0
+pnpm release:changelog 0.9.0
 ```
 
-4. **Edit** `releases/0.8.0.md` if the auto-summary needs tightening (intro, merge themes, drop noise).
+4. **Edit** `releases/0.9.0.md` if the auto-summary needs tightening (intro, merge themes, drop noise).
 5. Tag / run Release — CI extracts **`releases/X.Y.Z.md`**, not the series file.
 
 Dry-run extraction (same as Release workflow):
 
 ```bash
-pnpm release:changelog:extract 0.8.0
+pnpm release:changelog:extract 0.9.0
 ```
 
 Fallback order if `releases/X.Y.Z.md` is missing: `series/X.Y.x.md` section → legacy `X.Y.x.md` at repo root → `CHANGELOG.md`.
@@ -64,5 +66,6 @@ Fallback order if `releases/X.Y.Z.md` is missing: `series/X.Y.x.md` section → 
 | `0.6.*` | [`series/0.6.x.md`](./series/0.6.x.md) |
 | `0.7.*` | [`series/0.7.x.md`](./series/0.7.x.md) |
 | `0.8.*` | [`series/0.8.x.md`](./series/0.8.x.md) |
+| `0.9.*` | [`series/0.9.x.md`](./series/0.9.x.md) |
 
 When starting a **new minor** (e.g. first `0.9.0` work), create `series/0.9.x.md` — do not keep writing into the previous series file.
