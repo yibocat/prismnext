@@ -21,6 +21,19 @@ const ctx: ToolExecuteContext = {
 };
 
 describe("interaction-write tool", () => {
+  it("has promptGuidelines aligned with interaction module (kinds, params, artifact boundary)", () => {
+    const write = getNativeToolByName("interaction-write")!;
+    expect(write.promptGuidelines!.length).toBeGreaterThan(5);
+    const text = write.promptGuidelines!.join(" ");
+    expect(text).toContain("artifact");
+    expect(text).toContain("figure.static");
+    expect(text).toContain("plot.line");
+    expect(text).toContain("params.x");
+    expect(text).toContain("params.fill");
+    expect(text).toContain("already exist");
+    expect(write.description).toContain("fenceMarkdown");
+  });
+
   it("coerces sloppy specs and explains remaining failures", async () => {
     const projectDir = mkdtempSync(join(tmpdir(), "prism-ix-write-"));
     const localCtx: ToolExecuteContext = { ...ctx, projectRoot: projectDir };

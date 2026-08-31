@@ -83,6 +83,12 @@ describe("unified native tools catalog", () => {
     // Guidelines / snippets declared on native tools reach the Pi ToolDefinition.
     const literature = piTools.find((t) => t.name === "literature-search");
     expect(literature?.promptGuidelines?.length).toBeGreaterThan(0);
+    const briefRead = piTools.find((t) => t.name === "research-brief-read");
+    expect(briefRead?.promptGuidelines?.length).toBeGreaterThan(0);
+    const experimentLog = piTools.find((t) => t.name === "experiment-log");
+    expect(experimentLog?.promptGuidelines?.length).toBeGreaterThan(3);
+    const interactionWrite = piTools.find((t) => t.name === "interaction-write");
+    expect(interactionWrite?.promptGuidelines?.length).toBeGreaterThan(5);
     const question = piTools.find((t) => t.name === "question");
     expect(question?.promptGuidelines?.length).toBeGreaterThan(0);
 

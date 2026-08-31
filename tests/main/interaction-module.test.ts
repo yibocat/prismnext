@@ -16,6 +16,8 @@ describe("INTERACTION_PROMPT", () => {
 
     expect(INTERACTION_PROMPT).not.toContain("RightArea");
     expect(INTERACTION_PROMPT).not.toContain("BINDING");
+    expect(INTERACTION_PROMPT).toContain("interaction-write");
+    expect(INTERACTION_PROMPT).toContain("read the CSV header");
     expect(INTERACTION_PROMPT).not.toContain("plot.heatmap");
   });
 

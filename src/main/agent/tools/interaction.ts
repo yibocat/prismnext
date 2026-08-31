@@ -14,6 +14,7 @@ import {
 } from "../../interaction/interaction-store";
 import {
   INTERACTION_SPEC_DIR_REL,
+  INTERACTION_KINDS_AGENT,
   interactionFenceHint,
   interactionSpecRelativePath,
   coerceInteractionSpecInput,
@@ -87,17 +88,25 @@ export const interactionWriteTool: NativeToolDefinition = {
   name: TOOL_NAMES.interactionWrite,
   label: "Write Interaction",
   description:
-    "Create or update an Interaction spec (.workbench/interactions/<id>/spec.json). " +
-    "Embed the returned fenceMarkdown in your assistant reply after success.",
+    "Create or update an Interaction spec (`.workbench/interactions/<id>/spec.json`) for a revisitable figure or CSV plot card. " +
+    "Upserts by `id`; returns `fenceMarkdown` to embed in your assistant reply after success.",
   promptGuidelines: [
-    "An Interaction is for figures/plots the user will revisit — not a one-shot peek (`artifact` fence).",
-    "Pass a spec object: id, title, kind (`figure.static` or `plot.*`), compute, revision, resources[].path. After success, embed fenceMarkdown.",
-    "plot.* needs a real CSV in resources[] plus params.x / params.y.",
+    "Interaction = revisitable chat card — not a one-shot file peek (`artifact` fence with `path:` only).",
+    "The backing file must **already exist** on disk (Experiments, compile, or edit) — produce PNG/PDF/CSV first, then write.",
+    "Allowed kinds: " +
+      INTERACTION_KINDS_AGENT.join(", ") +
+      " — use dots (figure.static), not colons.",
+    "`figure.static` — finished visual on disk: `resources:[{\"role\":\"figure\",\"path\":\"figures/foo.pdf\"}]` (png/svg/jpg/webp/gif/pdf). Path is validated under the project root.",
+    "`plot.*` — real CSV in `resources:[{\"role\":\"data\",\"path\":\"…/metrics.csv\"}]`; **read the CSV header** and set `params.x`, `params.y` (string or string[]), optional `params.bins` (histogram), `params.fill` (heatmap). Do not invent columns or numeric series.",
+    "plot.line/series/scatter/area/density: numeric x + one or more y columns; plot.bar: categorical x + numeric y; plot.box: categorical x + exactly one y; plot.heatmap: x + y + `params.fill`.",
+    "Required spec fields: `id` (slug), `title`, `kind`, `compute` (`local` or `bound`), `revision` (int ≥ 1; auto-bumps on update). Pass a JSON **object**, not a string.",
+    "Updating an existing card → interaction-list / interaction-read first; bump content or title, then write. After success, embed returned `fenceMarkdown` — the card is part of the deliverable.",
   ],
   parameters: Type.Object({
     spec: Type.Any({
       description:
-        "InteractionSpec object — not a JSON string. figure.static example: {\"id\":\"fig.demo\",\"title\":\"Demo\",\"kind\":\"figure.static\",\"compute\":\"local\",\"revision\":1,\"resources\":[{\"role\":\"figure\",\"path\":\"figures/demo.pdf\"}]}",
+        "InteractionSpec object. figure.static example: {\"id\":\"fig.demo\",\"title\":\"Demo\",\"kind\":\"figure.static\",\"compute\":\"local\",\"revision\":1,\"resources\":[{\"role\":\"figure\",\"path\":\"figures/demo.pdf\"}]}. " +
+        "plot.line example: {\"id\":\"plot.loss\",\"title\":\"Training loss\",\"kind\":\"plot.line\",\"compute\":\"local\",\"revision\":1,\"resources\":[{\"role\":\"data\",\"path\":\"experiments/exp-a/metrics.csv\"}],\"params\":{\"x\":\"epoch\",\"y\":[\"train_loss\",\"val_loss\"]}}",
     }),
   }),
   permission: {
