@@ -15,6 +15,7 @@ import { PROJECT_RULES_MEMORY_PROMPT } from "./project-rules-memory";
 import { SUBAGENT_ROLE_PROMPT } from "./subagent-role";
 import { buildManuscriptCompilePrompt } from "./manuscript-compile";
 import { buildWorkspacePrompt } from "../stable/workspace-folders";
+import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
 /** All available prompt modules.
  *
@@ -52,7 +53,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "citation-audit",
     label: "Citation & Bibliography Audit",
     description:
-      "Manuscript .tex ↔ .bib ↔ library compliance via citation-health — not read/glob scans.",
+      `Manuscript LaTeX/Typst ↔ .bib ↔ library integrity via ${TOOL_NAMES.citationHealth} — not read/glob scans.`,
     enabled: true,
     profileOnly: true,
     source: "app",

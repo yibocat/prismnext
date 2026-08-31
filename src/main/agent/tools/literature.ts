@@ -452,7 +452,11 @@ export const citationHealthTool: NativeToolDefinition = {
   promptGuidelines: [
     "Call when the user asks about missing citations, before claiming compile-ready, or after editing cites / .bib / library entries — not on every casual turn.",
     "Automatically scans all project `.tex` (`\\cite{}`) and `.typ` (`@key`, `#cite`) sources and merges the key set; you do not choose LaTeX vs Typst.",
-    "Reports manuscript↔.bib gaps, manuscript↔library gaps, and .bib-only keys not in the library.",
+    "Do not substitute `read`/`grep`/`glob` for this tool — one call returns the grounded `.tex/.typ` ↔ `.bib` ↔ library snapshot.",
+    "If **Session citation audit (this chat)** is in context, reuse it unless manuscript sources or `.bib` changed or the user asked for a fresh check.",
+    "Treat as **issues**: cite keys in manuscript missing from `.bib`; duplicate bib keys; cite keys in manuscript missing from the library.",
+    "Treat as **informational only** (not failures): library papers not cited (`libraryCheck.unusedKeys`); `.bib` keys not cited (`bibCheck.unusedKeys`); `.bib` keys not in library when those keys are not cited in the manuscript.",
+    "`verified: false` on `bibFallback` entries means the DOI/arXiv could not be confirmed in external catalogs — flag as suspected fabrication; do not recommend importing without user confirmation.",
     "Set `verify: false` to skip slower external catalog checks on .bib fallback entries.",
   ],
   parameters: Type.Object({

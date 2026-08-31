@@ -78,7 +78,7 @@ export function buildManuscriptCompilePrompt(ctx: PromptContext): string {
     "### Judgment",
     "",
     "- User compiles from Files (Cmd+Enter) — same engines; you use build tools when *you* need structured errors in chat.",
-    "- A green manuscript build does not prove citation compliance — use citation-health when that is the question.",
+    `- A green manuscript build does not prove citation compliance — use \`${TOOL_NAMES.citationHealth}\` when that is the question.`,
     "- Project rules may specify engine preference or when to verify — defer to them.",
   ].join("\n");
 }

@@ -13,6 +13,11 @@ export function formatCitationHealthReport(report: CitationHealthReport): string
   } else {
     lines.push(`  ✗ Missing in library (${lib.missingKeys.length}): ${lib.missingKeys.join(", ")}`);
   }
+  if (lib.unusedKeys.length > 0) {
+    lines.push(
+      `  · Library papers not cited (${lib.unusedKeys.length}, informational): ${lib.unusedKeys.join(", ")}`,
+    );
+  }
 
   lines.push("");
   lines.push(`Manuscript .bib: ${bib.bibPath ?? "(not found)"}`);
@@ -30,8 +35,9 @@ export function formatCitationHealthReport(report: CitationHealthReport): string
   if (bibKeysNotInLibrary.length > 0) {
     lines.push("");
     lines.push(
-      `Policy: .bib keys not in library (${bibKeysNotInLibrary.length}): ${bibKeysNotInLibrary.join(", ")}`,
+      `Informational: .bib keys not in library (${bibKeysNotInLibrary.length}): ${bibKeysNotInLibrary.join(", ")}`,
     );
+    lines.push("  (Not an audit failure unless a cited manuscript key is missing from the library.)");
   }
 
   const importable = bibFallback.filter((e) => e.canImportFromBib);
@@ -49,8 +55,7 @@ export function formatCitationHealthReport(report: CitationHealthReport): string
   const ok =
     lib.missingKeys.length === 0
     && bib.missingKeys.length === 0
-    && bib.duplicateKeys.length === 0
-    && bibKeysNotInLibrary.length === 0;
+    && bib.duplicateKeys.length === 0;
   lines.push(ok ? "Overall: OK" : "Overall: issues found — fix library first, then literature-export-bib, then re-check.");
 
   return lines.join("\n");

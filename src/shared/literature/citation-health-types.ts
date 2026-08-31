@@ -38,7 +38,7 @@ export interface CitationHealthReport {
   bibCheck: CitationHealthBibCheck;
   libraryCheck: CitationHealthLibraryCheck;
   bibFallback: BibFallbackEntry[];
-  /** Keys in manuscript .bib that are not in library.db — policy violation under library-first rules. */
+  /** Keys in manuscript .bib that are not in library.db — informational unless cited in the manuscript. */
   bibKeysNotInLibrary: string[];
 }
 

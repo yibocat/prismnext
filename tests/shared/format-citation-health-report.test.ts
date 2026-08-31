@@ -39,4 +39,21 @@ describe("formatCitationHealthReport", () => {
     };
     expect(formatCitationHealthReport(ok)).toContain("Overall: OK");
   });
+
+  it("reports OK when library has uncited papers (informational only)", () => {
+    const ok: CitationHealthReport = {
+      ...baseReport,
+      libraryCheck: {
+        ...baseReport.libraryCheck,
+        missingKeys: [],
+        knownKeys: ["a", "b", "unused-in-lib"],
+        unusedKeys: ["unused-in-lib"],
+      },
+      bibCheck: { ...baseReport.bibCheck, missingKeys: [], keysInBib: ["a", "b"] },
+      bibKeysNotInLibrary: ["extra-bib-only"],
+    };
+    const text = formatCitationHealthReport(ok);
+    expect(text).toContain("informational");
+    expect(text).toContain("Overall: OK");
+  });
 });

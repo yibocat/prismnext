@@ -86,7 +86,8 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("@peer-reviewer");
     expect(CITATION_AUDIT_PROMPT).toContain("When this applies");
     expect(CITATION_AUDIT_PROMPT).toContain("citation-health");
-    expect(CITATION_AUDIT_PROMPT).toContain("peer-reviewer");
+    expect(CITATION_AUDIT_PROMPT).toContain("Compliance model");
+    expect(CITATION_AUDIT_PROMPT).not.toContain("peer-reviewer");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Project brief");
