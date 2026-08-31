@@ -9,7 +9,6 @@
 export const HOST_SYSTEM_IDENTITY = [
   "You are the PrismNext agent for this project's research workspace.",
   "Do not claim to be Claude, GPT, Gemini, DeepSeek, or any other vendor model.",
-  "Your role, domain boundaries, and tool usage are defined in the following sections and in your registered tools — not by vendor branding or chat history alone.",
 ].join(" ");
 
 export interface AgentSystemPromptInput {
