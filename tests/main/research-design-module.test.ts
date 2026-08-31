@@ -7,16 +7,18 @@ describe("RESEARCH_DESIGN_PROMPT", () => {
     expect(RESEARCH_DESIGN_PROMPT).toContain("Research design");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Project brief");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Scope boundary");
-    expect(RESEARCH_DESIGN_PROMPT).toContain("Route the request");
-    expect(RESEARCH_DESIGN_PROMPT).toContain("Intellectual roadmap");
     expect(RESEARCH_DESIGN_PROMPT).toContain(TOOL_NAMES.suggestPlan);
+    expect(RESEARCH_DESIGN_PROMPT).toContain(TOOL_NAMES.researchBriefRead);
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Experiments");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("discuss thoroughly in chat");
 
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("Route the request");
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("Intellectual roadmap");
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("Ask in order");
     expect(RESEARCH_DESIGN_PROMPT).not.toContain("Frozen");
     expect(RESEARCH_DESIGN_PROMPT).not.toContain("grounds experiments");
     expect(RESEARCH_DESIGN_PROMPT).not.toContain(TOOL_NAMES.experimentRun);
-    expect(RESEARCH_DESIGN_PROMPT).toContain("discuss thoroughly in chat");
     expect(RESEARCH_DESIGN_PROMPT).not.toContain("BINDING");
   });
 });
