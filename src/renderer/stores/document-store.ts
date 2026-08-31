@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { AUTO_SAVE_DELAY } from "@/styles/constants";
 import { createLogger } from "@/services/logger";
 import { isBinaryProjectFile } from "../../shared/platform/project-file-openability";
+import { compileEngineFromRelPath, isLiveCompileSourceRel } from "@shared/compile/artifact-key";
 
 const log = createLogger("document-store", "startup");
 
@@ -22,6 +23,7 @@ import {
 } from "@/lib/files/project-path";
 import { trackRecentOpenedFile } from "@/lib/files/recent-files";
 import { switchWorkbenchFocus } from "@/lib/workspace/project-lifecycle";
+import { recoverRemoteAbs } from "@shared/remote";
 import { sameProjectPath, useWorkbenchStore } from "@/stores/workbench-store";
 import {
   focusPathAfterOpenFolder,
@@ -90,7 +92,7 @@ interface DocumentState {
   // Async actions
   openProject: (rootPath: string) => Promise<void>;
   /** Switch the focused workbench project without joining or tearing down agents. */
-  focusProject: (rootPath: string) => Promise<void>;
+  focusProject: (rootPath: string, opts?: { connectRemote?: boolean }) => Promise<void>;
   closeProject: () => Promise<void>;
   /** Open a file for editing — loads content from disk if not already cached */
   openFile: (id: string) => Promise<void>;
@@ -133,7 +135,7 @@ interface DocumentState {
   getAsset: (id: string) => string;
   /** Project-relative paths of files with unsaved edits. */
   getDirtyRelativePaths: () => string[];
-  /** Dirty + open tex-related files with in-memory content (for live compile flush). */
+  /** Dirty + open manuscript sources with in-memory content (for live compile flush). */
   getLiveCompilePayload: () => {
     dirtyRelPaths: string[];
     dirtyFiles: Array<{ relPath: string; content: string }>;
@@ -264,6 +266,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   // ─── Project Management ───
 
   openProject: async (rootPath: string) => {
+    const remote = recoverRemoteAbs(rootPath);
+    if (remote) {
+      await get().focusProject(remote);
+      return;
+    }
     const opened = await workbenchDesktop.workbenchOpenFolder(rootPath);
     useWorkbenchStore.setState({
       ...workbenchStateFromOpenResult(opened),
@@ -272,14 +279,27 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     await get().focusProject(focusPathAfterOpenFolder(opened.openedLastPath, rootPath));
   },
 
-  focusProject: async (rootPath: string) => {
+  focusProject: async (rootPath: string, opts?: { connectRemote?: boolean }) => {
     const previousRoot = get().projectRoot;
+    const { resolveFocusConnectRemote } = await import("@/lib/remote/ensure-connected");
+    const connectRemote = resolveFocusConnectRemote(rootPath, opts);
     if (sameProjectPath(previousRoot, rootPath) && get().initialized) {
-      const member = useWorkbenchStore.getState().members.find((item) =>
-        sameProjectPath(item.lastPath, rootPath),
-      );
-      if (member) useWorkbenchStore.getState().setFocusProject(member.id);
-      return;
+      const remoteAbs = recoverRemoteAbs(rootPath);
+      if (!remoteAbs || !connectRemote) {
+        const member = useWorkbenchStore.getState().members.find((item) =>
+          sameProjectPath(item.lastPath, rootPath),
+        );
+        if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+        return;
+      }
+      const { remoteFocusNeedsBind } = await import("@/lib/remote/ensure-connected");
+      if (!remoteFocusNeedsBind(rootPath)) {
+        const member = useWorkbenchStore.getState().members.find((item) =>
+          sameProjectPath(item.lastPath, rootPath),
+        );
+        if (member) useWorkbenchStore.getState().setFocusProject(member.id);
+        return;
+      }
     }
 
     const generation = ++openProjectGeneration;
@@ -289,11 +309,22 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const firstOpen = !previousRoot;
     if (firstOpen) set({ isOpeningProject: true });
     try {
-      ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
+      const remoteAbs = recoverRemoteAbs(rootPath);
+      if (remoteAbs && connectRemote) {
+        const { ensureRemoteProjectReady } = await import("@/lib/remote/ensure-connected");
+        await ensureRemoteProjectReady(rootPath);
+        if (generation !== openProjectGeneration) return;
+      }
+      if (remoteAbs && !connectRemote) {
+        canonicalRoot = remoteAbs;
+      } else {
+        ({ rootPath: canonicalRoot } = await projectDesktop.projectOpen(rootPath));
+      }
       if (generation !== openProjectGeneration) return;
 
       await switchWorkbenchFocus({
         canonicalRoot,
+        connectRemote,
         shouldAbort: () => generation !== openProjectGeneration,
         supersededByClose: () => projectOpenSupersededByClose,
         applyDocumentTree: (scan) => {
@@ -325,6 +356,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             openedContents: new Map(),
             initialized: true,
           });
+          void import("./compile-store").then(({ syncAutoCompileForProject }) => {
+            syncAutoCompileForProject(canonicalRoot);
+          });
         },
       });
     } catch (error) {
@@ -336,7 +370,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
           log.warn("project.activate", { error: String(revertError), reason: "restore_previous" });
         }
       }
-      toast.error(`Failed to open project: ${error}`);
+      const { isRemoteConnectError } = await import("@/lib/remote/ensure-connected");
+      if (!isRemoteConnectError(error)) {
+        toast.error(`Failed to open project: ${error}`);
+      }
       throw error;
     } finally {
       if (generation === openProjectGeneration) {
@@ -375,6 +412,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       (typeof cached.content === "string" || typeof cached.dataUrl === "string");
     if (hasCachedPayload) {
       if (activeFileId !== id) set({ activeFileId: id });
+      const rel = (fileMetadata.get(id)?.relativePath || id).replace(/\\/g, "/");
+      if (typeof cached.content === "string" && compileEngineFromRelPath(rel) === "typst") {
+        void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+          notifyTypstDidOpen(id, rel, cached.content ?? "");
+        });
+      }
       return;
     }
 
@@ -435,13 +478,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         newMap.set(id, { content, isDirty: false });
         if (openSeq !== fileOpenGeneration) {
           set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
-          return;
+        } else {
+          set({
+            openedContents: newMap,
+            activeFileId: id,
+            contentVersion: get().contentVersion + 1,
+          });
         }
-        set({
-          openedContents: newMap,
-          activeFileId: id,
-          contentVersion: get().contentVersion + 1,
-        });
+        if (compileEngineFromRelPath(relPath) === "typst") {
+          void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+            notifyTypstDidOpen(id, relPath, content);
+          });
+        }
       }
     } catch {
       if (openSeq === fileOpenGeneration) {
@@ -454,6 +502,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const newMap = new Map(get().openedContents);
     newMap.set(id, { content, isDirty: false });
     set({ openedContents: newMap, activeFileId: id });
+    if (compileEngineFromRelPath(id) === "typst") {
+      void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+        notifyTypstDidOpen(id, id, content);
+      });
+    }
   },
 
   ensureLazyProjectFileMeta: async (relativePath: string): Promise<boolean> => {
@@ -1411,11 +1464,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const seen = new Set<string>();
     state.openedContents.forEach((val, id) => {
       // Only flush buffers that actually changed — avoids rewriting every open
-      // .tex/.bib on each live pass (IPC + disk + incremental sync).
+      // compile source on each live pass (IPC + disk + incremental sync).
       if (!val.isDirty || val.content == null) return;
       const file = state.files.find((f) => f.id === id);
       if (!file?.relativePath) return;
-      if (!/\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) return;
+      if (!isLiveCompileSourceRel(file.relativePath)) return;
       if (seen.has(file.relativePath)) return;
       seen.add(file.relativePath);
       dirtyRelPaths.push(file.relativePath);
@@ -1465,10 +1518,16 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     scheduleAutoSave();
 
     const file = state.files.find((f) => f.id === id);
-    if (file && /\.(tex|bib|sty|cls|bst)$/i.test(file.relativePath)) {
-      void import("./compile-store").then(({ useCompileStore }) => {
-        useCompileStore.getState().scheduleAutoCompile();
-      });
+    if (file && isLiveCompileSourceRel(file.relativePath)) {
+      if (compileEngineFromRelPath(file.relativePath) === "typst") {
+        void import("./typst-session-store").then(({ notifyTypstDidChange }) => {
+          notifyTypstDidChange(file.id, file.relativePath);
+        });
+      } else {
+        void import("./compile-store").then(({ useCompileStore }) => {
+          useCompileStore.getState().scheduleAutoCompile();
+        });
+      }
     }
   },
 

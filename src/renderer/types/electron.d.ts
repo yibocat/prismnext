@@ -1,4 +1,18 @@
 import type { AppSettings } from "../stores/settings-store";
+import type { CompileAgentCompleteEvent } from "@shared/compile/artifact-key";
+import type { TypstCliFormat } from "@shared/compile/typst-format";
+import type {
+  TypstDidChangeArgs,
+  TypstDidCloseArgs,
+  TypstDidOpenArgs,
+  TypstDiagnosticsEvent,
+  TypstEnsureSessionArgs,
+  TypstIpcError,
+  TypstPreviewReadyEvent,
+  TypstPreviewStartArgs,
+  TypstPreviewStopArgs,
+  TypstScrollToEvent,
+} from "@shared/typst/session";
 
 export interface TexliveStatus {
   available: boolean;
@@ -85,6 +99,20 @@ export type {
   PaperCitationNetworkResult,
   PaperCitationSection,
 } from "@shared/literature/paper-citation-network";
+
+export type { CompileAgentCompleteEvent };
+export type {
+  TypstDidChangeArgs,
+  TypstDidCloseArgs,
+  TypstDidOpenArgs,
+  TypstDiagnosticsEvent,
+  TypstEnsureSessionArgs,
+  TypstIpcError,
+  TypstPreviewReadyEvent,
+  TypstPreviewStartArgs,
+  TypstPreviewStopArgs,
+  TypstScrollToEvent,
+};
 
 export interface LiteratureCollection {
   id: string;
@@ -229,6 +257,16 @@ export type {
   GhPrViewWebResult,
 } from "@shared/git-hosting";
 
+export type {
+  HostHandshake,
+  RemoteBootstrapLogLine,
+  RemoteConnectResult,
+  RemoteConnectionSnapshot,
+  RemoteConnectionState,
+  SshConfigHost,
+  SshProfile,
+} from "@shared/remote";
+
 
 export interface ElectronAPI {
   // Filesystem operations
@@ -355,7 +393,7 @@ export interface ElectronAPI {
     }>;
     projectName?: string | null;
     modes?: Array<{
-      id: "texworkspace" | "literature" | "experiments";
+      id: "files" | "literature" | "experiments";
       label: string;
     }>;
   }) => Promise<void>;
@@ -366,7 +404,7 @@ export interface ElectronAPI {
   ) => () => void;
   onShellTrayOpenMode: (
     callback: (args: {
-      modeId: "texworkspace" | "literature" | "experiments";
+      modeId: "files" | "literature" | "experiments";
     }) => void,
   ) => () => void;
   /** Absolute path for a File from an OS drag-drop (Electron webUtils). */
@@ -743,7 +781,17 @@ export interface ElectronAPI {
     | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
     | { error: string; stdout?: string }
   >;
-  compileDetectTexlive: () => Promise<CompilerStatus>;
+  compileTypstExport: (
+    projectDir: string,
+    mainFile: string,
+    format: TypstCliFormat,
+    opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
+  ) => Promise<
+    | { canceled: true }
+    | { canceled: false; ok: true; path: string }
+    | { canceled: false; ok: false; error: string; stdout?: string }
+  >;
+  compileDetectTexlive: (args?: { projectRoot?: string }) => Promise<CompilerStatus>;
   compileExportPdf: (
     projectRoot: string,
     mainFile: string,
@@ -762,15 +810,22 @@ export interface ElectronAPI {
     | { canceled: false; ok: false; error: string }
   >;
   onCompileAgentComplete: (
-    callback: (data: {
-      projectDir: string;
-      success: boolean;
-      mainFile?: string;
-      pdfBytes?: ArrayBuffer;
-      error?: string;
-      logTail?: string;
-    }) => void,
+    callback: (data: CompileAgentCompleteEvent) => void,
   ) => () => void;
+
+  typstEnsureSession: (
+    args: TypstEnsureSessionArgs,
+  ) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidOpen: (args: TypstDidOpenArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidChange: (args: TypstDidChangeArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidClose: (args: TypstDidCloseArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstPreviewStart: (
+    args: TypstPreviewStartArgs,
+  ) => Promise<TypstPreviewReadyEvent | TypstIpcError>;
+  typstPreviewStop: (args: TypstPreviewStopArgs) => Promise<{ ok: true } | TypstIpcError>;
+  onTypstPreviewReady: (callback: (data: TypstPreviewReadyEvent) => void) => () => void;
+  onTypstDiagnostics: (callback: (data: TypstDiagnosticsEvent) => void) => () => void;
+  onTypstScrollTo: (callback: (data: TypstScrollToEvent) => void) => () => void;
 
   // Literature library
   literatureList: (projectRoot: string) => Promise<LiteraturePaper[]>;
@@ -1468,7 +1523,9 @@ export interface ElectronAPI {
     decision: "allow" | "deny";
   }) => Promise<{ ok: boolean }>;
   agentListSessions: (projectRoot: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
-  agentListSessionsByProjectId: (projectId: string) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
+  agentListSessionsByProjectId: (
+    args: import("../../shared/agent/api").AgentListSessionsByProjectIdArgs,
+  ) => Promise<import("../../shared/agent/api").AgentSessionSummary[]>;
   agentLoadSession: (
     args: import("../../shared/agent/api").AgentLoadSessionInput,
   ) => Promise<import("../../shared/agent/api").AgentLoadSessionResult>;
@@ -1758,6 +1815,8 @@ export interface ElectronAPI {
     tabId: string;
     projectRoot: string;
     cwd: string;
+    cols?: number;
+    rows?: number;
   }) => Promise<{ shell: string; cwd: string; pid: number; tabId: string }>;
   terminalDestroy: (args: { sessionId: string }) => Promise<void>;
   terminalDestroyTab: (args: { tabId: string }) => Promise<void>;
@@ -1857,6 +1916,74 @@ export interface ElectronAPI {
   worktreeMergeStatus: (projectRoot: string, name: string) => Promise<MergeStatus>;
   worktreeMoveSessions: (projectRoot: string, worktreeName: string) => Promise<number>;
   worktreeBranches: (projectRoot: string) => Promise<BranchInfo[]>;
+
+  // Remote workspace — hosts come from ~/.ssh/config
+  remoteListHosts: () => Promise<import("@shared/remote").SshConfigHost[]>;
+  remoteTrustHost: (input: { host: string; port: number; fingerprint: string }) => Promise<void>;
+  remoteConnect: (profileId: string) => Promise<import("@shared/remote").RemoteConnectResult>;
+  remoteDisconnect: (profileId: string) => Promise<void>;
+  remoteConnectionStatus: (
+    profileId?: string,
+  ) => Promise<import("@shared/remote").RemoteConnectionState | import("@shared/remote").RemoteConnectionSnapshot>;
+  remoteListDir: (input: {
+    profileId: string;
+    path: string;
+  }) => Promise<import("@shared/remote").RemoteDirListing>;
+  remoteMkdir: (input: {
+    profileId: string;
+    path: string;
+  }) => Promise<{ ok: true; path: string }>;
+  remoteOpenProject: (input: {
+    profileId: string;
+    remoteRoot: string;
+  }) => Promise<{
+    projectId: string;
+    remoteRoot: string;
+    connectionId: string;
+    lastPath: string;
+    handle: import("@shared/remote").RemoteProjectHandle;
+  }>;
+  onRemoteLog: (callback: (line: import("@shared/remote").RemoteBootstrapLogLine) => void) => () => void;
+  remoteZoteroCancel: () => Promise<{ ok: boolean }>;
+  onRemoteZoteroProgress: (
+    callback: (progress: { current: number; total: number; title: string }) => void,
+  ) => () => void;
+  onRemoteConnection: (
+    callback: (payload: {
+      profileId: string;
+      state: import("@shared/remote").RemoteConnectionState;
+    }) => void,
+  ) => () => void;
+  remoteGetSyncMode: (profileId: string) => Promise<{ mode: import("@shared/remote").RemoteSyncMode }>;
+  remoteSetSyncMode: (
+    profileId: string,
+    mode: import("@shared/remote").RemoteSyncMode,
+  ) => Promise<{ mode: import("@shared/remote").RemoteSyncMode }>;
+  remoteSyncFile: (input: {
+    profileId: string;
+    projectId: string;
+    remoteAbs: string;
+    destRel?: string;
+  }) => Promise<{ ok: true; path: string; skipped?: string } | { ok: false; error: string }>;
+  remoteSyncPaperPdf: (input: {
+    projectRoot: string;
+    paperId: string;
+    projectId: string;
+  }) => Promise<{ ok: true; path: string } | { ok: false; error: string }>;
+  remoteSyncExperimentArtifacts: (input: {
+    projectRoot: string;
+    projectId: string;
+    experimentId: string;
+  }) => Promise<{ ok: true; paths: string[]; skipped: number }>;
+  remoteSyncSessions: (input: {
+    profileId: string;
+    projectId: string;
+  }) => Promise<{ ok: true; count: number }>;
+  remoteSyncCancel: () => Promise<{ ok: boolean }>;
+  remotePushSkills: (profileId: string) => Promise<{ ok: true; files: number } | { ok: false; error: string }>;
+  onRemoteSyncProgress: (
+    callback: (progress: import("@shared/remote").RemoteSyncProgress) => void,
+  ) => () => void;
 }
 
 declare global {

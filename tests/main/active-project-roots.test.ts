@@ -50,6 +50,12 @@ describe("active-project-roots registry", () => {
       expect(registerProjectRoot("")).toBe(false);
     });
 
+    it("ignores remote:// workbench members without a security warning path", () => {
+      expect(registerProjectRoot("remote://lab/home/ubuntu/project-test-1")).toBe(false);
+      replaceRegisteredRoots([projA, "remote://lab/home/ubuntu/project-test-1"]);
+      expect(_registeredRoots()).toEqual([projA]);
+    });
+
     it("rejects the home directory itself", () => {
       expect(registerProjectRoot(HOME)).toBe(false);
     });

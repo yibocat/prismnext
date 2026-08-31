@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 import { basename, join } from "node:path";
+import { mkdirSync } from "node:fs";
 import { createLogger, shortLogDetail } from "../app/logger";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { buildAgentsMdScaffold } from "../project/agents-md-scaffold";
@@ -9,8 +10,17 @@ import {
   checkWorkbenchProject,
   projectMetaAbs,
 } from "../workbench/scaffold";
+import { routeHostDomainMethod } from "../remote/domain-route";
+import { getRemoteSessionBroker } from "./remote";
 
 const fsLog = createLogger("fs-ipc", "fs");
+
+async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
+  return routeHostDomainMethod(method, args, {
+    keys: ["rootPath", "projectRoot"],
+    broker: getRemoteSessionBroker(),
+  });
+}
 
 export function registerProjectScaffoldHandlers(): void {
   ipcMain.handle(
@@ -23,6 +33,9 @@ export function registerProjectScaffoldHandlers(): void {
         initGit?: boolean;
       },
     ) => {
+    const routed = await routeIfRemote("project:create", args);
+    if (routed !== undefined) return routed;
+
     let failLogged = false;
 
     try {
@@ -56,17 +69,22 @@ export function registerProjectScaffoldHandlers(): void {
   });
 
   ipcMain.handle("project:ensure", async (_event, args: { rootPath: string }) => {
+    const routed = await routeIfRemote("project:ensure", args);
+    if (routed !== undefined) return routed;
     ensureWorkbenchProjectMeta(args.rootPath);
     return { success: true };
   });
 
   ipcMain.handle("project:scaffoldAgentsMd", async (_event, args: { rootPath: string }) => {
-    const { mkdirSync } = require("node:fs");
+    const routed = await routeIfRemote("project:scaffoldAgentsMd", args);
+    if (routed !== undefined) return routed;
     mkdirSync(join(projectMetaAbs(args.rootPath), "agent"), { recursive: true });
     return await buildAgentsMdScaffold(args.rootPath);
   });
 
   ipcMain.handle("project:check", async (_event, args: { rootPath: string }) => {
+    const routed = await routeIfRemote("project:check", args);
+    if (routed !== undefined) return routed;
     return checkWorkbenchProject(args.rootPath);
   });
 }

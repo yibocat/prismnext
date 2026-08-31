@@ -1,59 +1,67 @@
 import { ipcMain } from "electron";
 import * as gitService from "../git/facade";
+import { getRemoteSessionBroker } from "./remote";
+import { disconnectedGitProbe, routeHostDomainMethod } from "../remote/domain-route";
+
+async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
+  return routeHostDomainMethod(method, args, {
+    keys: ["projectRoot"],
+    broker: getRemoteSessionBroker(),
+    disconnected: disconnectedGitProbe,
+  });
+}
+
+function handleGit<T>(method: string, run: (args: T) => Promise<unknown> | unknown) {
+  return async (_event: unknown, args: T) => {
+    const remote = await routeIfRemote(method, args);
+    if (remote !== undefined) return remote;
+    return run(args);
+  };
+}
 
 export function registerGitHandlers(): void {
-  // ── git:warmup — directory-level warmup to absorb TCC / code-signing ──
-  ipcMain.handle("git:warmup", async (_event, args: { projectRoot: string }) => {
-    await gitService.queueWarmup(args.projectRoot);
-    return { ok: true };
-  });
+  ipcMain.handle(
+    "git:warmup",
+    handleGit("git:warmup", async (args: { projectRoot: string }) => {
+      await gitService.queueWarmup(args.projectRoot);
+      return { ok: true };
+    }),
+  );
 
-  // ── git:isRepo ──
   ipcMain.handle(
     "git:isRepo",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.isGitRepo(args.projectRoot);
-    },
+    handleGit("git:isRepo", (args: { projectRoot: string }) => gitService.isGitRepo(args.projectRoot)),
   );
 
-  // ── git:status ──
   ipcMain.handle(
     "git:status",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.getStatus(args.projectRoot);
-    },
+    handleGit("git:status", (args: { projectRoot: string }) => gitService.getStatus(args.projectRoot)),
   );
 
-  // ── git:branches ──
   ipcMain.handle(
     "git:branches",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.getBranches(args.projectRoot);
-    },
+    handleGit("git:branches", (args: { projectRoot: string }) => gitService.getBranches(args.projectRoot)),
   );
 
-  // ── git:checkout ──
   ipcMain.handle(
     "git:checkout",
-    async (_event, args: { projectRoot: string; branch: string }) => {
-      return gitService.checkoutBranch(args.projectRoot, args.branch);
-    },
+    handleGit("git:checkout", (args: { projectRoot: string; branch: string }) =>
+      gitService.checkoutBranch(args.projectRoot, args.branch),
+    ),
   );
 
-  // ── git:createBranch ──
   ipcMain.handle(
     "git:createBranch",
-    async (_event, args: { projectRoot: string; branchName: string }) => {
-      return gitService.createBranch(args.projectRoot, args.branchName);
-    },
+    handleGit("git:createBranch", (args: { projectRoot: string; branchName: string }) =>
+      gitService.createBranch(args.projectRoot, args.branchName),
+    ),
   );
 
-  // ── git:diff ──
   ipcMain.handle(
     "git:diff",
-    async (
-      _event,
-      args: {
+    handleGit(
+      "git:diff",
+      (args: {
         projectRoot: string;
         filePath: string;
         indexStatus: string;
@@ -62,249 +70,221 @@ export function registerGitHandlers(): void {
         unstaged: boolean;
         untracked: boolean;
         view?: "staged" | "unstaged" | "all";
-      },
-    ) => {
-      return gitService.getFileDiff(
-        args.projectRoot,
-        args.filePath,
-        {
-          indexStatus: args.indexStatus,
-          worktreeStatus: args.worktreeStatus,
-          staged: args.staged,
-          unstaged: args.unstaged,
-          untracked: args.untracked,
-        },
-        args.view,
-      );
-    },
+      }) =>
+        gitService.getFileDiff(
+          args.projectRoot,
+          args.filePath,
+          {
+            indexStatus: args.indexStatus,
+            worktreeStatus: args.worktreeStatus,
+            staged: args.staged,
+            unstaged: args.unstaged,
+            untracked: args.untracked,
+          },
+          args.view,
+        ),
+    ),
   );
 
-  // ── git:stage ──
   ipcMain.handle(
     "git:stage",
-    async (_event, args: { projectRoot: string; filePath: string }) => {
-      return gitService.stageFile(args.projectRoot, args.filePath);
-    },
+    handleGit("git:stage", (args: { projectRoot: string; filePath: string }) =>
+      gitService.stageFile(args.projectRoot, args.filePath),
+    ),
   );
 
-  // ── git:unstage ──
   ipcMain.handle(
     "git:unstage",
-    async (_event, args: { projectRoot: string; filePath: string }) => {
-      return gitService.unstageFile(args.projectRoot, args.filePath);
-    },
+    handleGit("git:unstage", (args: { projectRoot: string; filePath: string }) =>
+      gitService.unstageFile(args.projectRoot, args.filePath),
+    ),
   );
 
-  // ── git:stageAll ──
   ipcMain.handle(
     "git:stageAll",
-    async (_event, args: { projectRoot: string; filePaths: string[] }) => {
-      return gitService.stageFiles(args.projectRoot, args.filePaths);
-    },
+    handleGit("git:stageAll", (args: { projectRoot: string; filePaths: string[] }) =>
+      gitService.stageFiles(args.projectRoot, args.filePaths),
+    ),
   );
 
-  // ── git:unstageAll ──
   ipcMain.handle(
     "git:unstageAll",
-    async (_event, args: { projectRoot: string; filePaths: string[] }) => {
-      return gitService.unstageFiles(args.projectRoot, args.filePaths);
-    },
+    handleGit("git:unstageAll", (args: { projectRoot: string; filePaths: string[] }) =>
+      gitService.unstageFiles(args.projectRoot, args.filePaths),
+    ),
   );
 
-  // ── git:init ──
   ipcMain.handle(
     "git:init",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.initRepo(args.projectRoot);
-    },
+    handleGit("git:init", (args: { projectRoot: string }) => gitService.initRepo(args.projectRoot)),
   );
 
-  // ── git:diffStats ──
   ipcMain.handle(
     "git:diffStats",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.getDiffStats(args.projectRoot);
-    },
+    handleGit("git:diffStats", (args: { projectRoot: string }) => gitService.getDiffStats(args.projectRoot)),
   );
 
-  // ── git:log ──
   ipcMain.handle(
     "git:log",
-    async (
-      _event,
-      args: {
+    handleGit(
+      "git:log",
+      (args: {
         projectRoot: string;
         maxCount?: number;
         range?: "head" | "branch";
         baseBranch?: string;
-      },
-    ) => {
-      return gitService.getLog(args.projectRoot, {
-        maxCount: args.maxCount,
-        range: args.range,
-        baseBranch: args.baseBranch,
-      });
-    },
+      }) =>
+        gitService.getLog(args.projectRoot, {
+          maxCount: args.maxCount,
+          range: args.range,
+          baseBranch: args.baseBranch,
+        }),
+    ),
   );
 
-  // ── git:commitDiff ──
   ipcMain.handle(
     "git:commitDiff",
-    async (_event, args: { projectRoot: string; hash: string }) => {
-      return gitService.getCommitDiff(args.projectRoot, args.hash);
-    },
+    handleGit("git:commitDiff", (args: { projectRoot: string; hash: string }) =>
+      gitService.getCommitDiff(args.projectRoot, args.hash),
+    ),
   );
 
-  // ── git:commitFiles (lightweight, no diff content) ──
   ipcMain.handle(
     "git:commitFiles",
-    async (_event, args: { projectRoot: string; hash: string }) => {
-      return gitService.getCommitFiles(args.projectRoot, args.hash);
-    },
+    handleGit("git:commitFiles", (args: { projectRoot: string; hash: string }) =>
+      gitService.getCommitFiles(args.projectRoot, args.hash),
+    ),
   );
 
-  // ── git:commitFileDiff ──
   ipcMain.handle(
     "git:commitFileDiff",
-    async (_event, args: { projectRoot: string; hash: string; filePath: string }) => {
-      return gitService.getCommitFileDiff(args.projectRoot, args.hash, args.filePath);
-    },
+    handleGit("git:commitFileDiff", (args: { projectRoot: string; hash: string; filePath: string }) =>
+      gitService.getCommitFileDiff(args.projectRoot, args.hash, args.filePath),
+    ),
   );
 
-  // ── git:discard ──
   ipcMain.handle(
     "git:discard",
-    async (
-      _event,
-      args: {
+    handleGit(
+      "git:discard",
+      (args: {
         projectRoot: string;
         filePath: string;
         staged: boolean;
         untracked: boolean;
         worktreeStatus: string;
-      },
-    ) => {
-      return gitService.discardChanges(
-        args.projectRoot,
-        args.filePath,
-        args.staged,
-        args.untracked,
-        args.worktreeStatus,
-      );
-    },
+      }) =>
+        gitService.discardChanges(
+          args.projectRoot,
+          args.filePath,
+          args.staged,
+          args.untracked,
+          args.worktreeStatus,
+        ),
+    ),
   );
 
-  // ── git:revert ──
   ipcMain.handle(
     "git:revert",
-    async (_event, args: { projectRoot: string; hash: string }) => {
-      return gitService.revertCommit(args.projectRoot, args.hash);
-    },
+    handleGit("git:revert", (args: { projectRoot: string; hash: string }) =>
+      gitService.revertCommit(args.projectRoot, args.hash),
+    ),
   );
 
-  // ── git:reset ──
   ipcMain.handle(
     "git:reset",
-    async (_event, args: { projectRoot: string; hash: string; mode: "soft" | "mixed" | "hard" }) => {
-      return gitService.resetToCommit(args.projectRoot, args.hash, args.mode);
-    },
+    handleGit("git:reset", (args: { projectRoot: string; hash: string; mode: "soft" | "mixed" | "hard" }) =>
+      gitService.resetToCommit(args.projectRoot, args.hash, args.mode),
+    ),
   );
 
-  // ── git:merge ──
   ipcMain.handle(
     "git:merge",
-    async (_event, args: { projectRoot: string; sourceBranch: string }) => {
-      return gitService.mergeBranch(args.projectRoot, args.sourceBranch);
-    },
+    handleGit("git:merge", (args: { projectRoot: string; sourceBranch: string }) =>
+      gitService.mergeBranch(args.projectRoot, args.sourceBranch),
+    ),
   );
 
-  // ── git:mergeNoCommit ──
   ipcMain.handle(
     "git:mergeNoCommit",
-    async (_event, args: { projectRoot: string; sourceBranch: string }) => {
-      return gitService.mergeNoCommit(args.projectRoot, args.sourceBranch);
-    },
+    handleGit("git:mergeNoCommit", (args: { projectRoot: string; sourceBranch: string }) =>
+      gitService.mergeNoCommit(args.projectRoot, args.sourceBranch),
+    ),
   );
 
-  // ── git:abortMerge ──
   ipcMain.handle(
     "git:abortMerge",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.abortMerge(args.projectRoot);
-    },
+    handleGit("git:abortMerge", (args: { projectRoot: string }) => gitService.abortMerge(args.projectRoot)),
   );
 
-  // ── git:stash ──
   ipcMain.handle(
     "git:stash",
-    async (_event, args: { projectRoot: string; message?: string }) => {
-      return gitService.stashPush(args.projectRoot, args.message);
-    },
+    handleGit("git:stash", (args: { projectRoot: string; message?: string }) =>
+      gitService.stashPush(args.projectRoot, args.message),
+    ),
   );
 
-  // ── git:stashPop ──
   ipcMain.handle(
     "git:stashPop",
-    async (_event, args: { projectRoot: string }) => {
-      return gitService.stashPop(args.projectRoot);
-    },
+    handleGit("git:stashPop", (args: { projectRoot: string }) => gitService.stashPop(args.projectRoot)),
   );
 
-  // ── git:commit (MVP: wired, UI disabled) ──
   ipcMain.handle(
     "git:commit",
-    async (_event, args: { projectRoot: string; message: string }) => {
-      return gitService.commit(args.projectRoot, args.message);
-    },
+    handleGit("git:commit", (args: { projectRoot: string; message: string }) =>
+      gitService.commit(args.projectRoot, args.message),
+    ),
   );
 
-  // ── git:commitAll ──
   ipcMain.handle(
     "git:commitAll",
-    async (_event, args: { projectRoot: string; filePaths: string[]; message: string }) => {
-      return gitService.commitAll(args.projectRoot, args.filePaths, args.message);
-    },
+    handleGit("git:commitAll", (args: { projectRoot: string; filePaths: string[]; message: string }) =>
+      gitService.commitAll(args.projectRoot, args.filePaths, args.message),
+    ),
   );
 
-  // ── git:deleteBranch ──
-  ipcMain.handle("git:deleteBranch", async (_e, args: {
-    projectRoot: string; branch: string;
-  }) => gitService.deleteBranch(args.projectRoot, args.branch));
+  ipcMain.handle(
+    "git:deleteBranch",
+    handleGit("git:deleteBranch", (args: { projectRoot: string; branch: string }) =>
+      gitService.deleteBranch(args.projectRoot, args.branch),
+    ),
+  );
 
-  // ── git:push ──
   ipcMain.handle(
     "git:push",
-    async (_e, args: { projectRoot: string; remote?: string }) =>
+    handleGit("git:push", (args: { projectRoot: string; remote?: string }) =>
       gitService.pushBranch(args.projectRoot, { remote: args.remote }),
+    ),
   );
 
-  ipcMain.handle("git:remotes", async (_e, args: { projectRoot: string }) =>
-    gitService.listRemotes(args.projectRoot),
+  ipcMain.handle(
+    "git:remotes",
+    handleGit("git:remotes", (args: { projectRoot: string }) => gitService.listRemotes(args.projectRoot)),
   );
 
   ipcMain.handle(
     "git:addRemote",
-    async (_e, args: { projectRoot: string; name: string; url: string }) =>
+    handleGit("git:addRemote", (args: { projectRoot: string; name: string; url: string }) =>
       gitService.addRemote(args.projectRoot, { name: args.name, url: args.url }),
+    ),
   );
 
-  // ── git:fetch ──
   ipcMain.handle(
     "git:fetch",
-    async (_e, args: { projectRoot: string; remote?: string; all?: boolean }) =>
+    handleGit("git:fetch", (args: { projectRoot: string; remote?: string; all?: boolean }) =>
       gitService.fetchRemote(args.projectRoot, { remote: args.remote, all: args.all }),
+    ),
   );
 
-  // ── git:pull ──
-  ipcMain.handle("git:pull", async (_e, args: { projectRoot: string }) =>
-    gitService.pullRemote(args.projectRoot),
+  ipcMain.handle(
+    "git:pull",
+    handleGit("git:pull", (args: { projectRoot: string }) => gitService.pullRemote(args.projectRoot)),
   );
 
-  // ── git:checkIgnore ──
   ipcMain.handle(
     "git:checkIgnore",
-    async (_event, args: { projectRoot: string; relativePaths: string[] }) => {
-      return gitService.checkIgnoredPaths(args.projectRoot, args.relativePaths);
-    },
+    handleGit("git:checkIgnore", (args: { projectRoot: string; relativePaths: string[] }) =>
+      gitService.checkIgnoredPaths(args.projectRoot, args.relativePaths),
+    ),
   );
 }

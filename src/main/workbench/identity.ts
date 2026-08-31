@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { isRemoteProjectRoot, recoverRemoteAbs } from "../../shared/remote";
 import { workbenchJsonRel, normalizeWorkbenchPath } from "../../shared/workbench/paths";
 
 const ID_HEX_BYTES = 10;
@@ -12,6 +13,8 @@ export function mintProjectId(): string {
 export interface WorkbenchWorkspaceFolder {
   function: string;
   name: string;
+  mainFile?: string;
+  /** @deprecated read alias for `mainFile` */
   mainTex?: string;
   description?: string;
   icon?: string;
@@ -33,6 +36,7 @@ function workbenchJsonAbs(projectRoot: string): string {
 }
 
 export function readWorkbenchJson(projectRoot: string): WorkbenchJson | null {
+  if (isRemoteProjectRoot(projectRoot)) return null;
   const file = workbenchJsonAbs(projectRoot);
   if (!existsSync(file)) return null;
   let raw: unknown;
@@ -53,6 +57,9 @@ export function readWorkbenchJson(projectRoot: string): WorkbenchJson | null {
 }
 
 export function ensureWorkbenchId(projectRoot: string): string {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
   const existing = readWorkbenchJson(projectRoot);
   if (existing) return existing.id;
   const id = mintProjectId();
@@ -61,6 +68,9 @@ export function ensureWorkbenchId(projectRoot: string): string {
 }
 
 export function writeWorkbenchJson(projectRoot: string, doc: WorkbenchJson): void {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
   const id = doc.id?.trim();
   if (!id) throw new Error("workbench.json requires id");
   const payload: WorkbenchJson = { id };
@@ -118,6 +128,51 @@ export function resolveOpenFolder(input: ResolveOpenFolderInput): OpenFolderDeci
   }
 
   const live = liveSet(input.livePaths);
+  if (!last || !live.has(last)) {
+    return { action: "rebind", id: diskId };
+  }
+
+  return {
+    action: "mint",
+    id: mint(),
+    reason: "second-live-copy",
+    previousId: diskId,
+  };
+}
+
+function canonicalMemberPath(path: string): string {
+  const remote = recoverRemoteAbs(path);
+  if (remote) return remote;
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+/**
+ * Same five steps as `resolveOpenFolder`, but lastPath may be `remote://`.
+ * Do not `path.resolve` those URIs — they collapse into a laptop folder.
+ */
+export function resolveRemoteOpenFolder(input: ResolveOpenFolderInput): OpenFolderDecision {
+  const here = recoverRemoteAbs(input.absPath);
+  if (!here) {
+    throw new Error("not_a_remote_project_root");
+  }
+  const mint = input.mintId ?? mintProjectId;
+  const diskId = input.workbenchId?.trim() || null;
+
+  if (!diskId) {
+    return { action: "mint", id: mint(), reason: "no-json" };
+  }
+
+  const slot = input.slots.find((s) => s.id === diskId);
+  if (!slot) {
+    return { action: "create-slot", id: diskId };
+  }
+
+  const last = slot.lastPath?.trim() ? canonicalMemberPath(slot.lastPath) : "";
+  if (last && last === here) {
+    return { action: "reuse", id: diskId };
+  }
+
+  const live = new Set([...input.livePaths].map((p) => canonicalMemberPath(p)));
   if (!last || !live.has(last)) {
     return { action: "rebind", id: diskId };
   }

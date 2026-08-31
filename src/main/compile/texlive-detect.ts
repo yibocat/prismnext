@@ -137,7 +137,7 @@ export async function detectTexlive(): Promise<TexliveStatus> {
  */
 export async function detectTectonic(): Promise<boolean> {
   try {
-    const info = await resolveTectonicBinary();
+    const info = await resolveTectonicBinary({ force: true });
     return info.available;
   } catch {
     return false;

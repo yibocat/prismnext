@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatBranchWorktreeLabel, formatHostWorktreeLabel } from "../../src/renderer/lib/git/checkout-context";
 import {
   findWorktreeForDirectory,
   isWorktreeDirectoryActive,
@@ -42,6 +43,14 @@ describe("worktree path helpers", () => {
     expect(found?.name).toBe("calm-owl");
   });
 
+  it("finds a remote:// worktree checkout by path", () => {
+    const remotePath = "remote://lab/home/ubuntu/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
+    const list: WorktreeInfo[] = [{ ...worktrees[0], path: remotePath }];
+    expect(
+      findWorktreeForDirectory(remotePath, list, "remote://lab/home/ubuntu/paper")?.name,
+    ).toBe("calm-owl");
+  });
+
   it("finds worktree by name when path prefix differs", () => {
     const altPath = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
     const gitResolved = "/Users/test/.prismnext/projects/p_paper/worktrees/calm-owl/checkout";
@@ -57,5 +66,16 @@ describe("worktree path helpers", () => {
     const remaining = worktrees.filter((w) => w.name === "quick-fox");
     expect(isWorktreeDirectoryActive(foxPath, remaining, PROJECT)).toBe(true);
     expect(isWorktreeDirectoryActive(WT_PATH, remaining, PROJECT)).toBe(false);
+  });
+
+  it("labels a worktree checkout as branch · name", () => {
+    expect(formatBranchWorktreeLabel("master", null)).toBe("master");
+    expect(formatBranchWorktreeLabel("master", "wt-feature")).toBe("master · wt-feature");
+  });
+
+  it("labels the Host control as host · worktree when a checkout is attached", () => {
+    expect(formatHostWorktreeLabel("Local", null)).toBe("Local");
+    expect(formatHostWorktreeLabel("43.167.215.144", "wt-feature")).toBe("43.167.215.144 · wt-feature");
+    expect(formatHostWorktreeLabel("Local", "Worktree")).toBe("Local · Worktree");
   });
 });

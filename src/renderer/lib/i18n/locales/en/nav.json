@@ -4,7 +4,6 @@
   "library": "Library",
   "experiments": "Experiments",
   "templates": "Templates",
-  "texWorkspace": "TeX Workspace",
   "settings": "Settings",
   "updateToVersion": "Update to {{version}}",
   "sessions": {
@@ -22,6 +21,12 @@
     "groupWorkbench": "Workbench",
     "groupUpdated": "Updated",
     "status": "Status",
+    "statusAll": "All",
+    "statusWaiting": "Waiting",
+    "statusRunning": "Running",
+    "statusUnread": "Unread",
+    "statusRead": "Read",
+    "statusEmpty": "No sessions match this status",
     "statusSoon": "No status filters yet",
     "expandAll": "Expand All",
     "collapseAll": "Collapse All",
@@ -53,7 +58,7 @@
     "archive": "Archive",
     "restore": "Restore",
     "delete": "Delete",
-    "justNow": "just now",
+    "justNow": "now",
     "minutesAgo": "{{n}}m",
     "hoursAgo": "{{n}}h",
     "daysAgo": "{{n}}d",
@@ -74,7 +79,13 @@
     "recents": "Recents",
     "more": "More",
     "openFolder": "Open Folder",
-    "defaultBadge": "Default"
+    "defaultBadge": "Default",
+    "remote": "Remote",
+    "repos": "Repos",
+    "localRepos": "Local",
+    "connectSsh": "Connect via SSH…",
+    "noSshHosts": "No hosts in ~/.ssh/config",
+    "removeRecent": "Remove from Recents"
   },
   "project": {
     "noProject": "No Project Open",
@@ -90,6 +101,6 @@
   "customizeSidebar": {
     "menu": "Customize Sidebar",
     "title": "Customize Sidebar",
-    "description": "Choose which workspace modules appear, and drag to change their order. TeX Workspace and Library are on by default. Templates and Teams stay under New Chat."
+    "description": "Choose which workspace modules appear, and drag to change their order. Files and Library are on by default. Templates and Teams stay under New Chat."
   }
 }

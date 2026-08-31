@@ -80,12 +80,12 @@ export function WorktreeActions() {
       <Dialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogTitle className="flex items-center gap-2">
               <AlertTriangleIcon className="size-4 text-amber-500" />
               {t("dialogs.worktree.discardTitle")}
             </DialogTitle>
           </DialogHeader>
-          <div className="text-sm text-muted-foreground space-y-2">
+          <div className="space-y-2 text-[length:var(--font-size-12)] text-muted-foreground">
             <p>
               {t("dialogs.worktree.discardBody", { count: activeWorktree.aheadCount })}
             </p>
@@ -94,10 +94,10 @@ export function WorktreeActions() {
             </p>
           </div>
           <DialogFooter className="gap-2 sm:gap-2">
-            <Button variant="outline" onClick={() => setShowDiscardConfirm(false)}>
+            <Button variant="outline" size="xs" onClick={() => setShowDiscardConfirm(false)}>
               {t("common.cancel")}
             </Button>
-            <Button variant="destructive" onClick={handleConfirmDiscard}>
+            <Button variant="destructive" size="xs" onClick={handleConfirmDiscard}>
               {t("dialogs.worktree.discardConfirm")}
             </Button>
           </DialogFooter>

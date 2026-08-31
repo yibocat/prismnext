@@ -5,10 +5,10 @@ import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import { useChatStore, type ChatStreamMessage } from "@/stores/chat-store";
 import { useDocumentStore } from "@/stores/document-store";
-import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useTerminalAiStore } from "@/stores/terminal-ai-store";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import { isRemoteProjectRoot } from "@shared/remote";
 import {
   PinIcon,
   MessageSquareIcon,
@@ -23,6 +23,8 @@ import {
   PlusIcon,
   Pencil,
   SlidersHorizontal,
+  Download,
+  CloudUpload,
 } from "lucide-react";
 import { SettingsSidebar, type SettingsCategory } from "@/components/modules/settings";
 import { SidebarHitChrome } from "@/components/layout/sidebar-controls";
@@ -34,6 +36,9 @@ import {
   LEFT_SIDEBAR_ROW,
   LEFT_SIDEBAR_ROW_ACTION,
   LEFT_SIDEBAR_SESSION_HOVER_ACTION,
+  LEFT_SIDEBAR_SESSION_TIME,
+  LEFT_SIDEBAR_SESSION_TITLE_HOVER_PAD,
+  LEFT_SIDEBAR_SESSION_TRAILING,
   LEFT_SIDEBAR_ROW_ACTIVE,
   LEFT_SIDEBAR_ROW_HOVER,
   LEFT_SIDEBAR_SECTION_ACTION,
@@ -63,6 +68,11 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { CustomizeSidebarDialog } from "@/components/layout/customize-sidebar-dialog";
 import { cn } from "@/lib/utils";
 import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
+import {
+  deriveSessionListStatus,
+  matchesSessionStatusFilter,
+  type SessionStatusFilter,
+} from "@/lib/chat/session-status";
 import { resolveSessionWorktreeContext } from "@/lib/git/session-worktree-context";
 import {
   archiveSessionsForProject,
@@ -77,8 +87,23 @@ import {
   AppContextMenuContent,
   AppContextMenuDestructiveItem,
   AppContextMenuItem,
+  AppContextMenuSeparator,
   AppContextMenuTrigger,
 } from "@/components/ui/app-context-menu";
+import {
+  pushRemoteSkillsAction,
+  setRemoteSyncModeAction,
+  syncRemoteExperimentAction,
+  syncRemoteFileAction,
+  syncRemotePaperPdfAction,
+  syncRemoteSessionsAction,
+} from "@/lib/remote/sync-actions";
+import { remoteHostDisplayName } from "@/lib/remote/display";
+import { isRemoteConnectError } from "@/lib/remote/ensure-connected";
+import { applySessionActivate } from "@/lib/workspace/project-context";
+import { useRemoteStore } from "@/stores/remote-store";
+import { useLiteratureStore } from "@/stores/literature-store";
+import { useExperimentStore } from "@/stores/experiment-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import {
   ensureWorkbenchProjectExpanded,
@@ -89,11 +114,13 @@ import {
   isWorkbenchProjectExpanded,
   moveListItem,
   type SessionDateBucket,
+  resolveSessionProjectMeta,
   sameProjectPath,
   toggleWorkbenchProjectExpanded,
   useWorkbenchStore,
   type WorkbenchSessionRow,
 } from "@/stores/workbench-store";
+import { listSessionFetchTargets } from "@shared/workbench/project-directory-index";
 import { useVerticalListReorder } from "@/lib/workspace/vertical-list-reorder";
 import { hasPendingPermission, usePermissionStore } from "@/stores/permission-store";
 import {
@@ -149,6 +176,11 @@ function sessionsListEqual(a: SessionInfo[], b: SessionInfo[]): boolean {
 }
 
 function shortProjectPath(lastPath: string): string {
+  if (lastPath.startsWith("remote://")) {
+    const abs = lastPath.replace(/^remote:\/\/[^/]+/, "");
+    const parts = abs.split("/").filter(Boolean);
+    return parts.slice(-2).join("/") || abs;
+  }
   const normalized = lastPath.replace(/\\/g, "/").replace(/\/+$/, "");
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return parts.join("/") || normalized;
@@ -158,28 +190,13 @@ function shortProjectPath(lastPath: string): string {
 function projectMetaForSession(
   session: SessionInfo,
   members: { id: string; lastPath: string; displayName: string }[],
-): { id?: string; name: string; path: string; lastPath: string } | null {
-  const member =
-    (session.projectId
-      ? members.find((item) => item.id === session.projectId)
-      : undefined)
-    ?? members.find((item) => sameProjectPath(item.lastPath, session.projectLastPath));
-  if (member) {
-    return {
-      id: member.id,
-      name: member.displayName,
-      path: shortProjectPath(member.lastPath),
-      lastPath: member.lastPath,
-    };
-  }
-  if (!session.projectLastPath) return null;
-  const folder =
-    session.projectLastPath.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)
-    ?? session.projectLastPath;
+  directory: Record<string, { lastPath: string; displayName?: string; projectId: string }> = {},
+): { id?: string; name: string; path: string; lastPath: string; host?: string } | null {
+  const resolved = resolveSessionProjectMeta(session, members, directory);
+  if (!resolved) return null;
   return {
-    name: folder,
-    path: shortProjectPath(session.projectLastPath),
-    lastPath: session.projectLastPath,
+    ...resolved,
+    path: shortProjectPath(resolved.lastPath),
   };
 }
 
@@ -267,15 +284,31 @@ function relativeTime(ms: number, t: (key: string, opts?: Record<string, unknown
   return t("nav.sessions.daysAgo", { n: Math.floor(sec / 86400) });
 }
 
+const SESSION_STATUS_FILTERS: SessionStatusFilter[] = [
+  "all",
+  "waiting",
+  "running",
+  "unread",
+  "read",
+];
+
+function sessionStatusFilterLabel(
+  filter: SessionStatusFilter,
+  t: (key: string) => string,
+): string {
+  if (filter === "waiting") return t("nav.sessions.statusWaiting");
+  if (filter === "running") return t("nav.sessions.statusRunning");
+  if (filter === "unread") return t("nav.sessions.statusUnread");
+  if (filter === "read") return t("nav.sessions.statusRead");
+  return t("nav.sessions.statusAll");
+}
+
 export const LeftSidebar = memo(function LeftSidebar() {
   const { t } = useTranslation();
 
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const rightAreaExpanded = useLayoutStore((s) => s.rightAreaExpanded);
   const focusedMode = useFocusedModeId();
-  const hasTexWorkspaceTab = useRightPanelStore((s) =>
-    s.tabs.some((t) => t.kind === "texworkspace"),
-  );
   const pinnedSessionIds = useLayoutStore((s) => s.pinnedSessionIds);
   const archivedSessionIds = useLayoutStore((s) => s.archivedSessionIds);
   const showArchived = useLayoutStore((s) => s.showArchived);
@@ -285,6 +318,8 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const sessionSort = useLayoutStore((s) => s.sessionSort);
   const sessionGroupBy = useLayoutStore((s) => s.sessionGroupBy);
   const setSessionGroupBy = useLayoutStore((s) => s.setSessionGroupBy);
+  const sessionStatusFilter = useLayoutStore((s) => s.sessionStatusFilter);
+  const setSessionStatusFilter = useLayoutStore((s) => s.setSessionStatusFilter);
 
   const sessionId = useChatStore((s) => s.sessionId);
   const streamingSessionKey = useChatStore(selectStreamingSessionKey);
@@ -318,8 +353,10 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const clearCurrentTab = useChatStore((s) => s.clearCurrentTab);
   const pendingPermissions = usePermissionStore((s) => s.permissions);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const remoteHosts = useRemoteStore((s) => s.hosts);
   const worktrees = useWorktreeStore((s) => s.worktrees);
   const members = useWorkbenchStore((s) => s.members);
+  const projectDirectoryById = useWorkbenchStore((s) => s.projectDirectoryById);
   const workbenchProjectIds = useWorkbenchStore((s) => s.workbenchProjectIds);
   const defaultProjectId = useWorkbenchStore((s) => s.defaultProjectId);
   const focusProjectId = useWorkbenchStore((s) => s.focusProjectId);
@@ -377,6 +414,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
     void Promise.all(
       members.map(async (member) => {
         try {
+          if (isRemoteProjectRoot(member.lastPath)) return [member.id, true] as const;
           const ok = await fsDesktop.fsExists(member.lastPath);
           return [member.id, ok] as const;
         } catch {
@@ -393,8 +431,14 @@ export const LeftSidebar = memo(function LeftSidebar() {
   }, [members]);
 
   const fetchSessions = useCallback(async (options?: FetchSessionsOptions) => {
-    const targets = members.length > 0
-      ? members
+    const directory = useWorkbenchStore.getState().projectDirectoryById;
+    const sessionProjectIds = useWorkbenchStore.getState().sessionProjectIds;
+    const targets = members.length > 0 || Object.keys(directory).length > 0
+      ? listSessionFetchTargets({
+        members,
+        projectDirectory: directory,
+        sessionProjectIds,
+      })
       : projectRoot
         ? [{ id: "", lastPath: projectRoot, displayName: "" }]
         : [];
@@ -406,18 +450,25 @@ export const LeftSidebar = memo(function LeftSidebar() {
     if (!silent) setLoading(true);
     try {
       const listed = await Promise.all(targets.map(async (member) => {
-        const rows = member.id
-          ? await agentDesktop.agentListSessionsByProjectId(member.id)
-          : await agentDesktop.agentListSessions(member.lastPath);
-        return rows.map((s) => ({
-          id: s.conversationId,
-          title: s.title,
-          lastModified: s.updatedAt,
-          createdAt: s.createdAt,
-          directory: s.directory,
-          projectId: member.id,
-          projectLastPath: member.lastPath,
-        }));
+        try {
+          const rows = member.id
+            ? await agentDesktop.agentListSessionsByProjectId({
+              projectId: member.id,
+              projectRoot: member.lastPath,
+            })
+            : await agentDesktop.agentListSessions(member.lastPath);
+          return rows.map((s) => ({
+            id: s.conversationId,
+            title: s.title,
+            lastModified: s.updatedAt,
+            createdAt: s.createdAt,
+            directory: s.directory,
+            projectId: member.id,
+            projectLastPath: member.lastPath,
+          }));
+        } catch {
+          return [];
+        }
       }));
       const result = listed.flat();
       useWorkbenchStore.getState().recordSessionProjects(
@@ -453,7 +504,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [members, projectRoot]);
+  }, [members, projectDirectoryById, projectRoot]);
 
   const fetchSessionsRef = useRef(fetchSessions);
   fetchSessionsRef.current = fetchSessions;
@@ -524,7 +575,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
         hiddenIds: leftNavHiddenIds,
         order: leftNavOrder,
       }),
-    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab, leftNavHiddenIds, leftNavOrder],
+    [leftSidebarView, rightAreaExpanded, focusedMode, leftNavHiddenIds, leftNavOrder],
   );
   const hubNavItems = useMemo(
     () => leftNavRegistry.getBySection("hub"),
@@ -532,7 +583,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
   );
   const footerNavItems = useMemo(
     () => leftNavRegistry.getBySection("footer"),
-    [leftSidebarView, rightAreaExpanded, focusedMode, hasTexWorkspaceTab],
+    [leftSidebarView, rightAreaExpanded, focusedMode],
   );
   const settingsNavItem = footerNavItems.find((item) => item.id === "settings");
   const extraFooterNavItems = footerNavItems.filter((item) => item.id !== "settings");
@@ -608,6 +659,48 @@ export const LeftSidebar = memo(function LeftSidebar() {
     [archivedSessionIds, sortedSessions],
   );
 
+  const sessionMatchesStatusFilter = useCallback((s: SessionInfo) => {
+    if (sessionStatusFilter === "all") return true;
+    const sessionProjectRoot = s.projectLastPath || projectRoot;
+    const chromeEntry = sessionProjectRoot
+      ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
+      : undefined;
+    const kind = deriveSessionListStatus({
+      isActive: s.id === sessionId,
+      isWaitingPermission:
+        hasPendingPermission(pendingPermissions, s.id)
+        || pendingQuestionSessionIds.has(s.id),
+      isStreaming: streamingSessionIds.has(s.id),
+      isAiTerminalRunning: aiTerminalRunningSessionIds.has(s.id),
+      isUnread: chromeEntry?.unread === true,
+    }).kind;
+    return matchesSessionStatusFilter(kind, sessionStatusFilter);
+  }, [
+    aiTerminalRunningSessionIds,
+    pendingPermissions,
+    pendingQuestionSessionIds,
+    projectRoot,
+    sessionChromeByProject,
+    sessionId,
+    sessionStatusFilter,
+    streamingSessionIds,
+  ]);
+
+  const pinnedVisible = useMemo(
+    () => pinnedSessions.filter(sessionMatchesStatusFilter),
+    [pinnedSessions, sessionMatchesStatusFilter],
+  );
+  const updatedVisibleGroups = useMemo(
+    () =>
+      updatedSessionGroups
+        .map((group) => ({
+          ...group,
+          sessions: group.sessions.filter(sessionMatchesStatusFilter),
+        }))
+        .filter((group) => group.sessions.length > 0),
+    [sessionMatchesStatusFilter, updatedSessionGroups],
+  );
+
   const removeFromWorkbench = useCallback(async (projectId: string) => {
     const removed = members.find((member) => member.id === projectId);
     const next = await useWorkbenchStore.getState().removeProject(projectId);
@@ -654,6 +747,35 @@ export const LeftSidebar = memo(function LeftSidebar() {
     { ignoreSelector: "[data-project-drag-ignore]" },
   );
 
+  const activateWorkbenchSession = useCallback(async (s: SessionInfo) => {
+    const lastPath = s.projectLastPath || projectRoot || "";
+    try {
+      if (s.projectId && lastPath) {
+        await applySessionActivate({
+          conversationId: s.id,
+          projectId: s.projectId,
+          lastPath,
+          connectRemote: false,
+        });
+        return;
+      }
+      await loadSession(s.id, s.directory, s.projectLastPath);
+    } catch (error) {
+      if (isRemoteConnectError(error)) {
+        useRemoteStore.getState().openConnectDialog(error.alias, {
+          blocking: true,
+          pendingAction: "session-load",
+          pendingSession: {
+            conversationId: s.id,
+            projectId: s.projectId ?? "",
+            lastPath,
+            directory: s.directory,
+          },
+        });
+      }
+    }
+  }, [loadSession, projectRoot]);
+
   const newSessionInProject = useCallback(async (projectId: string, lastPath: string) => {
     setExpandedWorkbenchProjectIds(
       ensureWorkbenchProjectExpanded(projectId, expandedWorkbenchProjectIds, focusProjectId),
@@ -671,7 +793,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
   const renderSessionItem = (s: SessionInfo, opts?: { archivedRow?: boolean; showProject?: boolean }) => {
     const archivedRow = opts?.archivedRow ?? showArchived;
     const showProject = opts?.showProject === true;
-    const project = showProject ? projectMetaForSession(s, members) : null;
+    const project = showProject
+      ? projectMetaForSession(s, members, projectDirectoryById)
+      : null;
     const isActive = s.id === sessionId;
     const isSessionStreaming = streamingSessionIds.has(s.id);
     const isAiTerminalRunning = aiTerminalRunningSessionIds.has(s.id);
@@ -690,7 +814,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
       : undefined;
     const isPinned = pinnedSessionIds.includes(s.id);
     const sessionTrailing = (
-      <span className="flex shrink-0 items-center gap-1">
+      <span className={LEFT_SIDEBAR_SESSION_TRAILING}>
         {archivedRow ? null : (
           <Hint
             label={isPinned ? t("nav.sessions.unpin") : t("nav.sessions.pin")}
@@ -787,12 +911,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             </span>
           </Hint>
         )}
-        <span
-          className={cn(
-            LEFT_SIDEBAR_SESSION_HOVER_ACTION,
-            "text-[length:var(--font-size-12)] text-muted-foreground/70 tabular-nums",
-          )}
-        >
+        <span className={LEFT_SIDEBAR_SESSION_TIME}>
           {relativeTime(s.lastModified, t)}
         </span>
       </span>
@@ -814,7 +933,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 ),
               );
             }
-            loadSession(s.id, s.directory, s.projectLastPath);
+            void activateWorkbenchSession(s);
           }}
           className={cn(
             LEFT_SIDEBAR_ROW,
@@ -842,27 +961,32 @@ export const LeftSidebar = memo(function LeftSidebar() {
             />
           </span>
           <span className="min-w-0 flex-1 text-left">
-            <span className={cn(showProject && "flex min-w-0 items-center gap-2")}>
+            <span className="relative block min-w-0">
               <SessionTitleInline
                 title={title}
                 editing={isRenaming}
                 sessionId={s.id}
                 className={cn(
-                  showProject ? "min-w-0 flex-1 truncate" : "block truncate",
+                  "block min-w-0 truncate",
+                  archivedRow
+                    ? "group-hover/session:pr-14"
+                    : LEFT_SIDEBAR_SESSION_TITLE_HOVER_PAD,
                   chromeEntry?.unread === true && !isActive && "font-medium",
                 )}
                 onCancel={() => setRenamingSessionId(null)}
               />
-              {showProject ? sessionTrailing : null}
+              {sessionTrailing}
             </span>
             {showProject && project ? (
               <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[length:var(--font-hint)] text-muted-foreground/70">
                 <span className="min-w-0 truncate">{project.name}</span>
+                {project.host ? (
+                  <span className="shrink-0 tabular-nums">{project.host}</span>
+                ) : null}
                 {project.id === defaultProjectId ? <DefaultProjectBadge /> : null}
               </span>
             ) : null}
           </span>
-          {showProject ? null : sessionTrailing}
         </button>
     );
     const trigger = (
@@ -888,6 +1012,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             title={title}
             sessionId={s.id}
             sessionDirectory={s.directory ?? s.projectLastPath}
+            projectLastPath={s.projectLastPath}
             side="right"
             align="start"
           >
@@ -900,7 +1025,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
 
   const renderArchivedSessionItem = (s: SessionInfo) => {
     const isActive = s.id === sessionId;
-    const project = projectMetaForSession(s, members);
+        const project = projectMetaForSession(s, members, projectDirectoryById);
     const sessionProjectRoot = s.projectLastPath || projectRoot;
     const chromeEntry = sessionProjectRoot
       ? sessionChromeByProject?.[sessionProjectRoot]?.[s.id]
@@ -913,7 +1038,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
         data-workbench-session={s.id}
         onClick={() => {
           if (isRenaming) return;
-          loadSession(s.id, s.directory, s.projectLastPath);
+          void activateWorkbenchSession(s);
         }}
         className={cn(
           LEFT_SIDEBAR_ROW,
@@ -923,17 +1048,18 @@ export const LeftSidebar = memo(function LeftSidebar() {
         )}
       >
         <span className="min-w-0 flex-1 text-left">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="relative block min-w-0">
             <SessionTitleInline
               title={title}
               editing={isRenaming}
               sessionId={s.id}
               className={cn(
-                "min-w-0 flex-1 truncate",
+                "block min-w-0 truncate group-hover/session:pr-14",
                 chromeEntry?.unread === true && !isActive && "font-medium",
               )}
               onCancel={() => setRenamingSessionId(null)}
             />
+            <span className={LEFT_SIDEBAR_SESSION_TRAILING}>
             <Hint
               label={t("nav.sessions.restoreFromArchive")}
               triggerClassName={LEFT_SIDEBAR_SESSION_HOVER_ACTION}
@@ -980,6 +1106,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
                 <Trash2Icon className="size-3.5" />
               </span>
             </Hint>
+            </span>
           </span>
           {project ? (
             <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[length:var(--font-hint)] text-muted-foreground/70">
@@ -1013,6 +1140,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
             title={title}
             sessionId={s.id}
             sessionDirectory={s.directory ?? s.projectLastPath}
+            projectLastPath={s.projectLastPath}
             side="right"
             align="start"
           >
@@ -1064,7 +1192,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
 
         {/* ── Scrollable workbench tree ── */}
         <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 pb-1 pt-2">
-          {!showArchived && pinnedSessions.length > 0 ? (
+          {!showArchived && pinnedVisible.length > 0 ? (
             <div className={LEFT_SIDEBAR_STACK}>
               <Hint
                 label={pinnedExpanded ? t("nav.sessions.collapsePinned") : t("nav.sessions.expandPinned")}
@@ -1089,7 +1217,7 @@ export const LeftSidebar = memo(function LeftSidebar() {
               </button>
               </Hint>
               <LeftSidebarReveal open={pinnedExpanded}>
-                {pinnedSessions.map((s) => renderSessionItem(s, { archivedRow: false }))}
+                {pinnedVisible.map((s) => renderSessionItem(s, { archivedRow: false }))}
               </LeftSidebarReveal>
             </div>
           ) : null}
@@ -1103,7 +1231,10 @@ export const LeftSidebar = memo(function LeftSidebar() {
                   <AppMenuTrigger asChild>
                     <button
                       type="button"
-                      className={LEFT_SIDEBAR_SECTION_ACTION}
+                      className={cn(
+                        LEFT_SIDEBAR_SECTION_ACTION,
+                        sessionStatusFilter !== "all" && "text-primary",
+                      )}
                     >
                       <ListFilter className={LEFT_SIDEBAR_SECTION_ACTION_ICON} />
                     </button>
@@ -1144,9 +1275,25 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     </AppMenuSubContent>
                   </AppMenuSub>
                   <AppMenuSub>
-                    <AppMenuSubTrigger>{t("nav.sessions.status")}</AppMenuSubTrigger>
+                    <AppMenuSubTrigger
+                      trailing={
+                        <span className="text-muted-foreground">
+                          {sessionStatusFilterLabel(sessionStatusFilter, t)}
+                        </span>
+                      }
+                    >
+                      {t("nav.sessions.status")}
+                    </AppMenuSubTrigger>
                     <AppMenuSubContent>
-                      <AppMenuItem disabled>{t("nav.sessions.statusSoon")}</AppMenuItem>
+                      {SESSION_STATUS_FILTERS.map((filter) => (
+                        <AppMenuCheckItem
+                          key={filter}
+                          selected={sessionStatusFilter === filter}
+                          onClick={() => setSessionStatusFilter(filter)}
+                        >
+                          {sessionStatusFilterLabel(filter, t)}
+                        </AppMenuCheckItem>
+                      ))}
                     </AppMenuSubContent>
                   </AppMenuSub>
                   <AppMenuItem onClick={expandOrCollapseAllProjects}>
@@ -1187,16 +1334,18 @@ export const LeftSidebar = memo(function LeftSidebar() {
               </p>
             </div>
           ) : sessionGroupBy === "updated" ? (
-            updatedSessionGroups.length === 0 && pinnedSessions.length === 0 ? (
+            updatedVisibleGroups.length === 0 && pinnedVisible.length === 0 ? (
               <div className="flex flex-1 items-center justify-center px-4">
                 <p className="text-center text-[length:var(--font-session-item)] leading-relaxed text-muted-foreground">
                   <MessageSquareIcon className="size-5 mx-auto mb-2 opacity-30" />
-                  {t("nav.sessions.noSessions")}
+                  {sessionStatusFilter === "all"
+                    ? t("nav.sessions.noSessions")
+                    : t("nav.sessions.statusEmpty")}
                 </p>
               </div>
             ) : (
               <div className="flex flex-col">
-                {updatedSessionGroups.map(({ bucket, sessions: groupSessions }, index) => (
+                {updatedVisibleGroups.map(({ bucket, sessions: groupSessions }, index) => (
                   <div
                     key={bucket}
                     className={cn(LEFT_SIDEBAR_STACK, index > 0 && LEFT_SIDEBAR_AFTER_EXPAND)}
@@ -1233,11 +1382,14 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     focusProjectId,
                   ),
               );
-              const visible = groupSessions.filter((s) => !archivedSessionIds.includes(s.id));
+              const visible = groupSessions.filter(
+                (s) => !archivedSessionIds.includes(s.id) && sessionMatchesStatusFilter(s),
+              );
               const activeSessionIds = groupSessions
                 .filter((s) => !archivedSessionIds.includes(s.id))
                 .map((s) => s.id);
               const item = projectReorder.itemProps(index);
+              const hostLabel = remoteHostDisplayName(member.lastPath, remoteHosts);
               return (
                 <div
                   key={member.id}
@@ -1270,10 +1422,15 @@ export const LeftSidebar = memo(function LeftSidebar() {
                           }}
                         >
                           <WorkbenchFolderGlyph open={expanded} muted={missing} />
-                          <span className="flex min-w-0 flex-1 items-center gap-1">
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
                             <span className="min-w-0 truncate font-medium">
                               {member.displayName}
                             </span>
+                            {hostLabel ? (
+                              <span className="min-w-0 truncate text-[length:var(--font-hint)] text-muted-foreground/45">
+                                {hostLabel}
+                              </span>
+                            ) : null}
                             {member.id === defaultProjectId ? <DefaultProjectBadge /> : null}
                           </span>
                           {missing ? (
@@ -1297,6 +1454,46 @@ export const LeftSidebar = memo(function LeftSidebar() {
                         >
                           {t("nav.project.archiveAll")}
                         </AppContextMenuItem>
+                        {member.lastPath.startsWith("remote://") ? (
+                          <>
+                            <AppContextMenuSeparator />
+                            <AppContextMenuItem
+                              leading={<Download className="size-3.5" />}
+                              onSelect={() => {
+                                void syncRemoteSessionsAction(member);
+                                const fileId = useDocumentStore.getState().activeFileId;
+                                const file = fileId
+                                  ? useDocumentStore.getState().fileMetadata.get(fileId)
+                                  : null;
+                                if (file?.absolutePath.startsWith("remote://")) {
+                                  void syncRemoteFileAction(member, file.absolutePath);
+                                }
+                                const paperId = useLiteratureStore.getState().selectedPaperId;
+                                if (paperId) void syncRemotePaperPdfAction(member, paperId);
+                                const experimentId = useExperimentStore.getState().selectedId;
+                                if (experimentId) void syncRemoteExperimentAction(member, experimentId);
+                              }}
+                            >
+                              {t("remote.sync.toThisComputer")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              leading={<CloudUpload className="size-3.5" />}
+                              onSelect={() => void pushRemoteSkillsAction(member.lastPath)}
+                            >
+                              {t("remote.sync.pushSkills")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "on-demand")}
+                            >
+                              {t("remote.sync.modeOnDemand")}
+                            </AppContextMenuItem>
+                            <AppContextMenuItem
+                              onSelect={() => void setRemoteSyncModeAction(member.lastPath, "online-only")}
+                            >
+                              {t("remote.sync.modeOnlineOnly")}
+                            </AppContextMenuItem>
+                          </>
+                        ) : null}
                         <AppContextMenuDestructiveItem
                           leading={<Trash2Icon className="size-3.5" />}
                           onSelect={() => {
@@ -1342,7 +1539,9 @@ export const LeftSidebar = memo(function LeftSidebar() {
                     ) : visible.length === 0 ? (
                       <p className={cn(LEFT_SIDEBAR_ROW, "cursor-default text-muted-foreground/70")}>
                         <span className="min-w-0 flex-1 truncate text-left">
-                          {t("nav.workbench.emptyProject")}
+                          {sessionStatusFilter === "all"
+                            ? t("nav.workbench.emptyProject")
+                            : t("nav.sessions.statusEmpty")}
                         </span>
                       </p>
                     ) : (

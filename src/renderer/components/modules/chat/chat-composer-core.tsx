@@ -200,9 +200,9 @@ export function ChatComposerCore({
         type="button"
         onClick={() => void composer.cancelExecution()}
         aria-label={t("chat.composer.stop")}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+        className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
       >
-        <SquareIcon className="size-3 fill-current" />
+        <SquareIcon className="size-2.5 fill-current" />
       </button>
     </Hint>
   ) : (
@@ -210,9 +210,9 @@ export function ChatComposerCore({
       type="button"
       onClick={composer.handleSend}
       disabled={!composer.canSend}
-      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
+      className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-30"
     >
-      <ArrowUpIcon className="size-3.5" />
+      <ArrowUpIcon className="size-3" />
     </button>
   );
 

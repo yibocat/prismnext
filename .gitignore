@@ -9,8 +9,17 @@ __pycache__/
 *.pyc
 src/renderer/public/pdfjs-dist/
 
+# Leftover Host pack caches (no longer used; pack does not download binaries)
+scripts/host/.node-cache/
+scripts/host/.tectonic-cache/
+scripts/host/.git-cache/
+
 # Tectonic binaries (downloaded or manually placed)
 bin/tectonic/
+# Leftover Typst CLI downloads — unused after Tinymist-only; keep ignored if present
+bin/typst/
+# Tinymist binaries (downloaded or manually placed)
+bin/tinymist/
 # Leftover local OpenCode agent binary — unused; do not commit if still present
 bin/opencode/
 .cursor/
@@ -31,3 +40,6 @@ docs-private/
 # Brainstorm mockups
 .superpowers/
 .claude/
+
+# Accidental local mkdir of a remote:// URI (Node path.resolve)
+/remote:

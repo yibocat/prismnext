@@ -135,14 +135,20 @@
   },
   "toolbar": {
     "local": "本地",
+    "hostLocal": "本地",
+    "hostRemote": "{{host}}",
+    "connectRemote": "SSH…",
+    "connectNow": "連線",
+    "hostStatus": "連線狀態",
     "suggestions": "建議",
     "planNewIdea": "規劃一個新想法",
     "initGit": "初始化 Git 倉庫",
     "initGitShort": "初始化 Git"
   },
   "worktree": {
-    "local": "本地",
+    "local": "主目錄",
     "newWorktree": "新建 Worktree",
+    "short": "Worktree",
     "existing": "已有 worktree",
     "active": "當前",
     "selected": "已選",
@@ -168,8 +174,15 @@
   "branch": {
     "noBranches": "無分支",
     "next": "下一",
-    "current": "當前"
+    "current": "當前",
+    "worktrees": "Worktrees"
   },
+  "slash": {
+    "worktree": "Worktree",
+    "worktreeLocal": "主目錄",
+    "worktreeNew": "新建 worktree…"
+  },
+  "projectAssignBlocked": "目前對話已有內容，請新建對話後再切換項目。",
   "project": {
     "select": "項目",
     "locked": "Agent 執行中時無法更換項目。"
@@ -312,6 +325,8 @@
     "resendFailed": "重新發送失敗"
   },
   "prepare": {
+    "connecting_remote": "正在連線…",
+    "connecting_remote_step": "正在連線 · {{step}}",
     "planningNext": "正在規劃下一步…",
     "describing_images": "正在用視覺輔助模型識圖…",
     "thinking": "思考中…",
@@ -341,6 +356,7 @@
     "turn_timeout": "長時間未收到模型響應，已自動終止本輪對話。服務商可能正在限流或暫時不可用。",
     "turn_aborted": "這一輪在模型完成前被中止了。",
     "connectionLost": "Agent 連線已斷開，請重試。",
+    "alreadyProcessing": "上一輪還在收尾。請稍等，或按停止後再傳送。",
     "cancelled": "已停止。"
   },
   "turnFooter": {

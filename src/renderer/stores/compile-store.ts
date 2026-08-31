@@ -4,16 +4,76 @@ import { AUTO_COMPILE_DEBOUNCE, AUTO_COMPILE_SPINNER_MIN_MS, COMPILE_SPINNER_MIN
 import { useDocumentStore } from "./document-store";
 import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
+import {
+  diagnosticsFromCompileLog,
+  paperKeyFromMainFile,
+  type CompileDiagnostics,
+} from "@/lib/compile/compile-artifact";
 import { compileDesktop } from "@/lib/desktop-api/compile";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import {
+  autoCompilePreferenceKey,
+  migrateCompileAutoCompilePersist,
+  resolveAutoCompileForProjectRoot,
+  type CompileAutoCompilePersistV1,
+} from "@shared/compile/auto-compile-pref";
+import {
+  compileArtifactCacheKey,
+  compileEngineFromRelPath,
+  derivePaperPdfRel,
+  deriveStandalonePdfRel,
+  type CompileArtifactKey,
+} from "@shared/compile/artifact-key";
+import { isRemoteProjectRoot } from "@shared/remote";
+
+export {
+  diagnosticsFromCompileLog,
+  paperKeyFromMainFile,
+  type CompileDiagnostics,
+  type CompileProblemEntry,
+} from "@/lib/compile/compile-artifact";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
 
 const _pdfBytesCache = new Map<string, Uint8Array>();
 let _currentPdfRootId: string | null = null;
 
-export function getPdfBytes(rootFileId: string): Uint8Array | undefined {
-  return _pdfBytesCache.get(rootFileId);
+export function getPdfBytesForKey(key: CompileArtifactKey): Uint8Array | undefined {
+  return _pdfBytesCache.get(compileArtifactCacheKey(key));
+}
+
+export function setPdfBytesForKey(key: CompileArtifactKey, data: Uint8Array): void {
+  const cacheKey = compileArtifactCacheKey(key);
+  const copy = new Uint8Array(
+    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+  );
+  _pdfBytesCache.set(cacheKey, copy);
+  _currentPdfRootId = cacheKey;
+  useCompileStore.setState((s) => ({
+    pdfRevision: s.pdfRevision + 1,
+    lastCompiledRootId: cacheKey,
+    lastCompiledProjectRoot: key.projectRoot,
+    lastPaperKey: key.route === "paper" ? key : s.lastPaperKey,
+  }));
+}
+
+export function setCompileDiagnosticsForKey(
+  key: CompileArtifactKey,
+  diag: CompileDiagnostics,
+): void {
+  const cacheKey = compileArtifactCacheKey(key);
+  useCompileStore.setState((s) => ({
+    diagnosticsByKey: { ...s.diagnosticsByKey, [cacheKey]: diag },
+  }));
+}
+
+/** @deprecated latex paper + focused project only. New code must use getPdfBytesForKey. */
+export function getPdfBytes(projectRoot: string): Uint8Array | undefined {
+  const last = useCompileStore.getState().lastPaperKey;
+  if (last && last.projectRoot === projectRoot) {
+    return getPdfBytesForKey(last);
+  }
+  return _pdfBytesCache.get(projectRoot);
 }
 
 function joinProjectPath(projectRoot: string, ...parts: string[]): string {
@@ -40,73 +100,70 @@ export function resolveCompilePdfDiskPath(
   );
 }
 
-function collectCompilePdfDiskCandidates(projectRoot: string): string[] {
-  const candidates: string[] = [];
-  const push = (rel: string) => {
-    const abs = resolveCompilePdfDiskPath(projectRoot, rel);
-    if (!candidates.includes(abs)) candidates.push(abs);
-  };
-
-  const doc = useDocumentStore.getState();
-  const resolved = resolveCompileTarget(
-    doc.activeFileId || "",
-    doc.files,
-    doc.getAsset,
-  );
-  if (resolved?.targetPath) push(resolved.targetPath);
-
-  const manuscript = useWorkspaceConfigStore.getState().manuscriptConfig;
-  if (manuscript) {
-    push(`${manuscript.dir}/${manuscript.mainTex}`.replace(/\/+/g, "/"));
-  }
-
-  return candidates;
-}
-
 let _ensureDiskPdfPromise: Promise<boolean> | null = null;
 let _ensureDiskPdfKey: string | null = null;
 
-/**
- * If memory cache is empty, try loading a previously compiled PDF from
- * `<project>/.workbench/compile/<stem>.pdf`. Returns true when bytes are available.
- */
-export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boolean> {
-  if (!projectRoot) return false;
-  if (getPdfBytes(projectRoot)) return true;
+function paperRelFromManuscript(
+  manuscript: { dir: string; mainFile?: string } | null,
+): string | null {
+  if (!manuscript?.mainFile) return null;
+  return `${manuscript.dir}/${manuscript.mainFile}`.replace(/\/+/g, "/");
+}
 
-  if (_ensureDiskPdfPromise && _ensureDiskPdfKey === projectRoot) {
+function resolvePaperKeyForProject(projectRoot: string): CompileArtifactKey | null {
+  const doc = useDocumentStore.getState();
+  const resolved = resolveCompileTarget(doc.activeFileId || "", doc.files, doc.getAsset);
+  const manuscript = useWorkspaceConfigStore.getState().manuscriptConfig;
+  const compileRoot = resolved?.targetPath ?? paperRelFromManuscript(manuscript);
+  if (!compileRoot) return null;
+  return paperKeyFromMainFile(projectRoot, compileRoot);
+}
+
+export async function ensureCompilePdfForKey(key: CompileArtifactKey): Promise<boolean> {
+  if (getPdfBytesForKey(key)) return true;
+  if (isRemoteProjectRoot(key.projectRoot)) return false;
+
+  const cacheKey = compileArtifactCacheKey(key);
+  if (_ensureDiskPdfPromise && _ensureDiskPdfKey === cacheKey) {
     return _ensureDiskPdfPromise;
   }
 
-  _ensureDiskPdfKey = projectRoot;
+  _ensureDiskPdfKey = cacheKey;
   _ensureDiskPdfPromise = (async () => {
-    if (getPdfBytes(projectRoot)) return true;
-
-    for (const abs of collectCompilePdfDiskCandidates(projectRoot)) {
-      try {
-        const { bytes } = await fsDesktop.fsReadBytes(abs);
-        if (!bytes || bytes.byteLength === 0) continue;
-        const copy = new Uint8Array(bytes);
-        _pdfBytesCache.set(projectRoot, copy);
-        _currentPdfRootId = projectRoot;
-        useCompileStore.setState((s) => ({
-          pdfRevision: s.pdfRevision + 1,
-          lastCompiledRootId: projectRoot,
-        }));
-        return true;
-      } catch {
-        // Missing or unreadable — try next candidate.
-      }
+    if (getPdfBytesForKey(key)) return true;
+    const rel = key.route === "paper"
+      ? derivePaperPdfRel(key.engine, key.compileRoot)
+      : deriveStandalonePdfRel(key.sourceFile);
+    const abs = joinProjectPath(key.projectRoot, ...rel.split("/"));
+    try {
+      const { bytes } = await fsDesktop.fsReadBytes(abs);
+      if (!bytes?.byteLength) return false;
+      setPdfBytesForKey(key, new Uint8Array(bytes));
+      return true;
+    } catch {
+      return false;
     }
-    return false;
   })().finally(() => {
-    if (_ensureDiskPdfKey === projectRoot) {
+    if (_ensureDiskPdfKey === cacheKey) {
       _ensureDiskPdfPromise = null;
       _ensureDiskPdfKey = null;
     }
   });
 
   return _ensureDiskPdfPromise;
+}
+
+/**
+ * If memory cache is empty, try loading a previously compiled PDF from
+ * `<project>/.workbench/compile/<stem>.pdf`. Remote roots skip disk (laptop
+ * path is not the Host compile dir). Returns true when bytes are available.
+ */
+export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boolean> {
+  if (!projectRoot) return false;
+  if (isRemoteProjectRoot(projectRoot)) return false;
+  const key = resolvePaperKeyForProject(projectRoot);
+  if (!key) return false;
+  return ensureCompilePdfForKey(key);
 }
 
 export function clearPdfCache() {
@@ -120,15 +177,48 @@ export function clearPdfCache() {
   useCompileStore.setState({
     pdfRevision: 0,
     lastCompiledRootId: "",
+    lastCompiledProjectRoot: null,
+    lastPaperKey: null,
     isCompiling: false,
-    compileError: null,
+    diagnosticsByKey: {},
+    compilingKey: null,
   });
+  void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
+  void import("./typst-session-store").then((m) => m.resetTypstSessionStore());
 }
 
 // ─── Auto-compile debounce timer ───
 
 let _autoCompileTimer: ReturnType<typeof setTimeout> | null = null;
 let _compileInFlight = false;
+let _boundDocumentRoot = false;
+
+/**
+ * document-store → project-lifecycle → this file. Never read `useDocumentStore`
+ * while this module is still evaluating — that crashed the renderer on boot.
+ * `import()` waits until document-store finishes.
+ */
+function bindAutoCompileToDocumentStore(): void {
+  if (_boundDocumentRoot) return;
+  _boundDocumentRoot = true;
+  void import("./document-store").then((mod) => {
+    const store = mod.useDocumentStore;
+    if (!store?.getState) return;
+    syncAutoCompileForProject(store.getState().projectRoot);
+    store.subscribe((state, prev) => {
+      if (state.projectRoot === prev.projectRoot) return;
+      syncAutoCompileForProject(state.projectRoot);
+    });
+  });
+}
+
+function resyncAutoCompileFromDocument(): void {
+  void import("./document-store").then((mod) => {
+    const store = mod.useDocumentStore;
+    if (!store?.getState) return;
+    syncAutoCompileForProject(store.getState().projectRoot);
+  });
+}
 
 function clearAutoCompileTimer() {
   if (_autoCompileTimer !== null) {
@@ -163,22 +253,33 @@ export type SynctexForwardTarget = {
 
 interface CompileState {
   isCompiling: boolean;
-  compileError: string | null;
-  compileLog: string | null;
+  diagnosticsByKey: Record<string, CompileDiagnostics>;
+  compilingKey: string | null;
   pdfRevision: number;
   compilerStatus: CompilerStatus | null;
   pendingRecompile: boolean;
   lastCompiledRootId: string | null;
+  lastCompiledProjectRoot: string | null;
+  lastPaperKey: CompileArtifactKey | null;
+  /** Effective switch for the focused project (derived from per-root prefs). */
   autoCompile: boolean;
+  autoCompileByRoot: Record<string, boolean>;
+  /** Used only when a local root has no remembered toggle (legacy global off). */
+  localAutoCompileDefault: boolean;
   synctexForwardTarget: SynctexForwardTarget | null;
 
-  compile: (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => Promise<void>;
+  compile: (
+    projectDir: string,
+    mainFile: string,
+    opts?: { fromAutoCompile?: boolean; evenIfClean?: boolean },
+  ) => Promise<void>;
   setPdfData: (data: Uint8Array | null, rootFileId?: string) => void;
-  setCompileError: (error: string | null) => void;
   detectCompilers: () => Promise<void>;
   clearCompileState: () => void;
   toggleAutoCompile: () => void;
   scheduleAutoCompile: () => void;
+  /** PDF pane is open and cache is empty: compile once even if buffers match disk. */
+  ensurePreviewCompile: (mainFile?: string) => void;
   requestSynctexForward: (result: Omit<SynctexForwardTarget, "rev">) => void;
 }
 
@@ -188,21 +289,32 @@ export const useCompileStore = create<CompileState>()(
   persist(
     (set, get) => ({
       isCompiling: false,
-      compileError: null,
-      compileLog: null,
+      diagnosticsByKey: {},
+      compilingKey: null,
       pdfRevision: 0,
       compilerStatus: null,
       pendingRecompile: false,
       lastCompiledRootId: null,
-      // TODO: future settings panel — expose autoCompile as a user-configurable
-      // preference in the Settings dialog (persisted via zustand persist middleware,
-      // already survives app restarts). The toolbar toggle should remain as a
-      // quick-access shortcut synchronized with the settings value.
+      lastCompiledProjectRoot: null,
+      lastPaperKey: null,
       autoCompile: true,
+      autoCompileByRoot: {},
+      localAutoCompileDefault: true,
       synctexForwardTarget: null,
 
-      compile: async (projectDir: string, mainFile: string, opts?: { fromAutoCompile?: boolean }) => {
+      compile: async (
+        projectDir: string,
+        mainFile: string,
+        opts?: { fromAutoCompile?: boolean; evenIfClean?: boolean },
+      ) => {
+        if (compileEngineFromRelPath(mainFile) === "typst") {
+          const { compileTypstPdf } = await import("./typst-live-store");
+          await compileTypstPdf(mainFile);
+          return;
+        }
+
         const fromAuto = opts?.fromAutoCompile ?? false;
+        const evenIfClean = opts?.evenIfClean ?? false;
 
         // One engine run at a time; coalesce to "need another pass with latest buffers".
         if (_compileInFlight) {
@@ -227,7 +339,7 @@ export const useCompileStore = create<CompileState>()(
 
           // Live pass with nothing dirty: buffers already match disk/build — skip engine.
           if ((fromAuto || pass > 1) && dirtyRelPaths.length === 0 && dirtyFiles.length === 0) {
-            break;
+            if (!(evenIfClean && pass === 1)) break;
           }
 
           if (!fromAuto && pass === 1) {
@@ -235,7 +347,11 @@ export const useCompileStore = create<CompileState>()(
           }
 
           _compileInFlight = true;
-          set({ compileError: null, pendingRecompile: false });
+          const artifactKey = paperKeyFromMainFile(projectDir, mainFile);
+          set({
+            pendingRecompile: false,
+            compilingKey: compileArtifactCacheKey(artifactKey),
+          });
           const spinnerTimer = setTimeout(() => {
             set({ isCompiling: true });
           }, COMPILE_UI_SPINNER_DELAY_MS);
@@ -269,50 +385,43 @@ export const useCompileStore = create<CompileState>()(
             }
 
             if ("pdfBytes" in result && result.pdfBytes) {
-              // Always publish — discarding on "stale" made continuous typing never update the PDF.
               const buf = result.pdfBytes.slice(0) as ArrayBuffer;
-              _pdfBytesCache.set(projectDir, new Uint8Array(buf));
-              _currentPdfRootId = projectDir;
+              setPdfBytesForKey(paperKeyFromMainFile(projectDir, mainFile), new Uint8Array(buf));
               if (dirtyFiles.length > 0) {
                 useDocumentStore.getState().markCompiledClean(dirtyFiles);
               }
-              set({
-                isCompiling: false,
-                compileError: null,
-                compileLog: result.stdout ?? null,
-                pdfRevision: get().pdfRevision + 1,
-                lastCompiledRootId: projectDir,
-              });
+              setCompileDiagnosticsForKey(
+                paperKeyFromMainFile(projectDir, mainFile),
+                diagnosticsFromCompileLog(mainFile, null, result.stdout ?? null),
+              );
+              set({ isCompiling: false });
               published = true;
             } else if ("pdfPath" in result && result.pdfPath) {
               const { bytes } = await fsDesktop.fsReadBytes(result.pdfPath);
-              _pdfBytesCache.set(projectDir, new Uint8Array(bytes));
-              _currentPdfRootId = projectDir;
+              setPdfBytesForKey(paperKeyFromMainFile(projectDir, mainFile), new Uint8Array(bytes));
               if (dirtyFiles.length > 0) {
                 useDocumentStore.getState().markCompiledClean(dirtyFiles);
               }
-              set({
-                isCompiling: false,
-                compileError: null,
-                compileLog: result.stdout ?? null,
-                pdfRevision: get().pdfRevision + 1,
-                lastCompiledRootId: projectDir,
-              });
+              setCompileDiagnosticsForKey(
+                paperKeyFromMainFile(projectDir, mainFile),
+                diagnosticsFromCompileLog(mainFile, null, result.stdout ?? null),
+              );
+              set({ isCompiling: false });
               published = true;
             } else if ("error" in result) {
               failed = true;
-              set({
-                isCompiling: false,
-                compileError: result.error,
-                compileLog: result.stdout ?? null,
-              });
+              setCompileDiagnosticsForKey(
+                paperKeyFromMainFile(projectDir, mainFile),
+                diagnosticsFromCompileLog(mainFile, result.error, result.stdout ?? null),
+              );
+              set({ isCompiling: false });
             } else {
               failed = true;
-              set({
-                isCompiling: false,
-                compileError: "Compilation failed",
-                compileLog: null,
-              });
+              setCompileDiagnosticsForKey(
+                paperKeyFromMainFile(projectDir, mainFile),
+                diagnosticsFromCompileLog(mainFile, "Compilation failed", null),
+              );
+              set({ isCompiling: false });
             }
 
             if (!published && !failed) {
@@ -324,9 +433,16 @@ export const useCompileStore = create<CompileState>()(
             if (elapsed < spinnerMin) {
               await new Promise((r) => setTimeout(r, spinnerMin - elapsed));
             }
+            setCompileDiagnosticsForKey(
+              paperKeyFromMainFile(projectDir, mainFile),
+              diagnosticsFromCompileLog(
+                mainFile,
+                error instanceof Error ? error.message : String(error),
+                null,
+              ),
+            );
             set({
               isCompiling: false,
-              compileError: error instanceof Error ? error.message : String(error),
             });
           } finally {
             clearTimeout(spinnerTimer);
@@ -341,17 +457,26 @@ export const useCompileStore = create<CompileState>()(
           if (!needAnother) break;
           // Follow-up always uses live memory flush.
         }
+        set({ compilingKey: null });
       },
 
       setPdfData: (data, rootFileId) => {
         if (data && rootFileId) {
-          // Defensive copy — same reasoning as above.
+          const last = get().lastPaperKey;
+          if (last && (rootFileId === last.projectRoot || rootFileId === compileArtifactCacheKey(last))) {
+            setPdfBytesForKey(last, data);
+            return;
+          }
           const copy = new Uint8Array(
             data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
           );
           _pdfBytesCache.set(rootFileId, copy);
           _currentPdfRootId = rootFileId;
-          set({ pdfRevision: get().pdfRevision + 1, lastCompiledRootId: rootFileId });
+          set({
+            pdfRevision: get().pdfRevision + 1,
+            lastCompiledRootId: rootFileId,
+            lastCompiledProjectRoot: rootFileId,
+          });
         } else if (rootFileId) {
           _pdfBytesCache.delete(rootFileId);
           if (_currentPdfRootId === rootFileId) {
@@ -361,10 +486,6 @@ export const useCompileStore = create<CompileState>()(
           _pdfBytesCache.clear();
           _currentPdfRootId = null;
         }
-      },
-
-      setCompileError: (error) => {
-        set({ compileError: error });
       },
 
       detectCompilers: async () => {
@@ -377,9 +498,18 @@ export const useCompileStore = create<CompileState>()(
       },
 
       toggleAutoCompile: () => {
-        set((s) => ({ autoCompile: !s.autoCompile }));
-        if (get().autoCompile) {
-          // Just turned on — schedule a compile if there's a document
+        const next = !get().autoCompile;
+        const projectRoot = useDocumentStore.getState().projectRoot;
+        if (projectRoot) {
+          const key = autoCompilePreferenceKey(projectRoot);
+          set({
+            autoCompile: next,
+            autoCompileByRoot: { ...get().autoCompileByRoot, [key]: next },
+          });
+        } else {
+          set({ autoCompile: next, localAutoCompileDefault: next });
+        }
+        if (next) {
           get().scheduleAutoCompile();
         } else {
           clearAutoCompileTimer();
@@ -389,46 +519,50 @@ export const useCompileStore = create<CompileState>()(
       scheduleAutoCompile: () => {
         clearAutoCompileTimer();
 
-        if (!get().autoCompile) {
-          return;
-        }
-
-        // Guard: no manuscript configured — nothing to auto-compile
-        const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
-        if (!manuscriptConfig) {
-          console.warn("[compile-store] scheduleAutoCompile: no manuscript configured — skipping auto-compile.");
+        if (!isAutoCompileEnabled()) {
           return;
         }
 
         _autoCompileTimer = setTimeout(async () => {
+          if (!isAutoCompileEnabled()) {
+            return;
+          }
           const docState = useDocumentStore.getState();
           const { projectRoot, files, activeFileId } = docState;
           if (!projectRoot || files.length === 0) {
             return;
           }
-
-          // Resolve compile target — prefer active file, fall back to manuscript config
-          let targetPath: string | null = null;
-
-          if (activeFileId) {
-            const resolved = resolveCompileTarget(activeFileId, files, docState.getAsset);
-            if (resolved) targetPath = resolved.targetPath;
+          const activeRel = files.find((f) => f.id === activeFileId)?.relativePath ?? "";
+          if (compileEngineFromRelPath(activeRel) === "typst") {
+            return;
           }
 
-          // Fallback: use the manuscriptConfig's mainTex as the preferred entry point
+          const targetPath = resolveUiCompileTargetPath();
           if (!targetPath) {
-            const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
-            const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
-            if (mainTexFile) {
-              const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getAsset);
-              if (resolved) targetPath = resolved.targetPath;
-            }
+            warnNoCompileTargetOnce("scheduleAutoCompile");
+            return;
           }
-
-          if (targetPath) {
-            get().compile(projectRoot, targetPath, { fromAutoCompile: true });
+          if (compileEngineFromRelPath(targetPath) === "typst") {
+            return;
           }
+          get().compile(projectRoot, targetPath, { fromAutoCompile: true });
         }, AUTO_COMPILE_DEBOUNCE);
+      },
+
+      ensurePreviewCompile: (mainFile) => {
+        if (_aiSessionCount > 0) return;
+        const projectRoot = useDocumentStore.getState().projectRoot;
+        const targetPath = mainFile ?? resolveUiCompileTargetPath();
+        if (!projectRoot || !targetPath) return;
+        if (compileEngineFromRelPath(targetPath) === "typst") {
+          void import("./typst-live-store").then((m) => {
+            void m.compileTypstPdf(targetPath, { skipIfCached: true });
+          });
+          return;
+        }
+        const key = paperKeyFromMainFile(projectRoot, targetPath);
+        if (getPdfBytesForKey(key)) return;
+        void get().compile(projectRoot, targetPath, { fromAutoCompile: true, evenIfClean: true });
       },
 
       clearCompileState: () => {
@@ -437,12 +571,17 @@ export const useCompileStore = create<CompileState>()(
         _currentPdfRootId = null;
         set({
           isCompiling: false,
-          compileError: null,
+          diagnosticsByKey: {},
+          compilingKey: null,
           pdfRevision: 0,
           lastCompiledRootId: null,
+          lastCompiledProjectRoot: null,
+          lastPaperKey: null,
           pendingRecompile: false,
           synctexForwardTarget: null,
         });
+        void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
+        void import("./typst-session-store").then((m) => m.resetTypstSessionStore());
       },
 
       requestSynctexForward: (result) => {
@@ -456,14 +595,42 @@ export const useCompileStore = create<CompileState>()(
     }),
     {
       name: "prism-next-compile",
-      partialize: (state) => ({
-        autoCompile: state.autoCompile,
+      version: 1,
+      partialize: (state): CompileAutoCompilePersistV1 => ({
+        autoCompileByRoot: state.autoCompileByRoot,
+        localAutoCompileDefault: state.localAutoCompileDefault,
       }),
+      migrate: (persisted, fromVersion) => migrateCompileAutoCompilePersist(persisted, fromVersion),
+      onRehydrateStorage: () => () => {
+        resyncAutoCompileFromDocument();
+      },
     },
   ),
 );
 
 // ─── Helper to compile from current state ───
+
+let _warnedNoCompileTarget = false;
+
+function warnNoCompileTargetOnce(context: string): void {
+  if (_warnedNoCompileTarget) return;
+  _warnedNoCompileTarget = true;
+  console.warn(`[compile-store] ${context}: no compile target — skipping.`);
+}
+
+function resolveUiCompileTargetPath(): string | null {
+  const docState = useDocumentStore.getState();
+  const { files, activeFileId } = docState;
+  const resolved = resolveCompileTarget(activeFileId || "", files, docState.getAsset);
+  const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
+  const pinRel = paperRelFromManuscript(manuscriptConfig);
+  return (
+    resolved?.targetPath ??
+    (pinRel
+      ? files.find((f) => f.relativePath === pinRel)?.relativePath ?? null
+      : null)
+  );
+}
 
 export async function compileCurrentDocument(): Promise<void> {
   const docState = useDocumentStore.getState();
@@ -472,55 +639,80 @@ export async function compileCurrentDocument(): Promise<void> {
   const { projectRoot, files, activeFileId } = docState;
   if (!projectRoot || files.length === 0) return;
 
-  // Guard: no manuscript configured — nothing to compile
-  const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
-  if (!manuscriptConfig) {
-    console.warn("[compile-store] compileCurrentDocument: no manuscript configured — skipping compilation. Configure a manuscript folder in Workspace Settings.");
+  const activeRel = files.find((f) => f.id === activeFileId)?.relativePath ?? "";
+  if (compileEngineFromRelPath(activeRel) === "typst") {
+    const { compileTypstPdf } = await import("./typst-live-store");
+    await compileTypstPdf(activeRel);
     return;
   }
 
-  // Resolve compile target — prefer active file, fall back to manuscript config
-  let targetPath: string | null = null;
-
-  if (activeFileId) {
-    const resolved = resolveCompileTarget(activeFileId, files, docState.getAsset);
-    if (resolved) targetPath = resolved.targetPath;
-  }
-
-  // Fallback: use the manuscriptConfig's mainTex as the preferred entry point
+  const targetPath = resolveUiCompileTargetPath();
   if (!targetPath) {
-    const mainTexRelPath = `${manuscriptConfig.dir}/${manuscriptConfig.mainTex}`;
-    const mainTexFile = files.find(f => f.relativePath === mainTexRelPath);
-    if (mainTexFile) {
-      const resolved = resolveCompileTarget(mainTexFile.id, files, docState.getAsset);
-      if (resolved) targetPath = resolved.targetPath;
-    }
+    warnNoCompileTargetOnce("compileCurrentDocument");
+    return;
   }
 
-  if (targetPath) {
-    await compileState.compile(projectRoot, targetPath);
-  }
+  await compileState.compile(projectRoot, targetPath);
 }
 
-// ─── AI auto-compile control ───
+// ─── Auto-compile preference (per project root) ───
 
 let _aiSessionCount = 0;
-let _autoCompileBeforeAi: boolean | null = null;
+const _aiPauseOwners = new Set<string>();
 
-export function pauseAutoCompileForAi(): void {
-  if (_aiSessionCount === 0) {
-    _autoCompileBeforeAi = useCompileStore.getState().autoCompile;
+export function isAutoCompileEnabled(): boolean {
+  if (_aiSessionCount > 0) return false;
+  const projectRoot = useDocumentStore.getState().projectRoot;
+  const { autoCompileByRoot, localAutoCompileDefault } = useCompileStore.getState();
+  return resolveAutoCompileForProjectRoot(autoCompileByRoot, projectRoot, localAutoCompileDefault);
+}
+
+export function syncAutoCompileForProject(projectRoot: string | null): void {
+  const effective = _aiSessionCount > 0
+    ? false
+    : resolveAutoCompileForProjectRoot(
+        useCompileStore.getState().autoCompileByRoot,
+        projectRoot,
+        useCompileStore.getState().localAutoCompileDefault,
+      );
+  if (useCompileStore.getState().autoCompile !== effective) {
+    useCompileStore.setState({ autoCompile: effective });
+  }
+  if (!effective) clearAutoCompileTimer();
+}
+
+bindAutoCompileToDocumentStore();
+
+export function pauseAutoCompileForAi(ownerId?: string): void {
+  if (ownerId) {
+    if (_aiPauseOwners.has(ownerId)) return;
+    _aiPauseOwners.add(ownerId);
   }
   _aiSessionCount++;
   useCompileStore.setState({ autoCompile: false });
   clearAutoCompileTimer();
 }
 
-export function resumeAutoCompileAfterAi(): void {
+export function resumeAutoCompileAfterAi(ownerId?: string): void {
+  if (ownerId) {
+    if (!_aiPauseOwners.has(ownerId)) return;
+    _aiPauseOwners.delete(ownerId);
+  }
   if (_aiSessionCount <= 0) return;
   _aiSessionCount--;
-  if (_aiSessionCount === 0 && _autoCompileBeforeAi !== null) {
-    useCompileStore.setState({ autoCompile: _autoCompileBeforeAi });
-    _autoCompileBeforeAi = null;
+  if (_aiSessionCount === 0) {
+    syncAutoCompileForProject(useDocumentStore.getState().projectRoot);
+    if (isAutoCompileEnabled()) {
+      useCompileStore.getState().scheduleAutoCompile();
+    }
   }
+}
+
+export function aiAutoCompilePauseCountForTests(): number {
+  return _aiSessionCount;
+}
+
+export function resetAiAutoCompilePauseForTests(): void {
+  _aiPauseOwners.clear();
+  _aiSessionCount = 0;
 }

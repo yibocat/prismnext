@@ -5,6 +5,7 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { parseRemoteAbs } from "../../shared/remote";
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import {
   PROJECT_COMPILE_DIRNAME,
@@ -16,6 +17,8 @@ import { ensureResearchBrief } from "../research/research-brief-service";
 import {
   createConfiguredFolders,
   DEFAULT_WORKSPACE_FOLDERS,
+  ensureMainTex,
+  readWorkspaceDirs,
   validateWorkspaceDirs,
   writeProjectSettings,
   writeWorkspaceDirs,
@@ -41,48 +44,21 @@ export const WORKBENCH_GITIGNORE = [
   "",
 ].join("\n");
 
-export const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
-
-% ── Packages ──
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath,amssymb,amsthm}
-\usepackage{graphicx}
-\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
-\usepackage[
-  style=nature,
-  backend=bibtex,
-  sorting=none,
-]{biblatex}
-\addbibresource{references.bib}
-
-% ── Title ──
-\title{Title}
-\author{Author}
-\date{\today}
-
-\begin{document}
-
-\maketitle
-
-\begin{abstract}
-  Write your abstract here.
-\end{abstract}
-
-\section{Introduction}
-
-\section{Methods}
-
-\section{Results}
-
-\section{Discussion}
-
-\printbibliography
-
-\end{document}
-`;
+function localProjectRoot(projectRoot: string): string {
+  if (parseRemoteAbs(projectRoot)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
+  return resolve(projectRoot);
+}
 
 export function projectMetaAbs(projectRoot: string): string {
-  return join(resolve(projectRoot), PROJECT_META_DIR);
+  return join(localProjectRoot(projectRoot), PROJECT_META_DIR);
+}
+
+/** Template backups are laptop-only until Host grows `template:*`. */
+export function projectMetaAbsIfLocal(projectRoot: string): string | null {
+  if (parseRemoteAbs(projectRoot)) return null;
+  return projectMetaAbs(projectRoot);
 }
 
 export interface CreateWorkbenchProjectArgs {
@@ -95,7 +71,7 @@ export interface WorkbenchProjectRef {
 }
 
 export function scaffoldWorkbenchProject(projectRoot: string, projectId: string): void {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   mkdirSync(root, { recursive: true });
   const metaDir = projectMetaAbs(root);
   mkdirSync(join(metaDir, PROJECT_COMPILE_DIRNAME), { recursive: true });
@@ -143,21 +119,8 @@ function writeLocalSettings(
   });
 }
 
-function writeManuscriptStub(projectRoot: string, workspaceDirs: WorkspaceFolder[]): void {
-  const manuscriptEntry = workspaceDirs.find((d) => d.function === "manuscript");
-  if (!manuscriptEntry || !("mainTex" in manuscriptEntry)) return;
-  const mainTexFullPath = join(projectRoot, manuscriptEntry.name, manuscriptEntry.mainTex);
-  const mainTexDir = join(mainTexFullPath, "..");
-  if (!existsSync(mainTexDir)) {
-    mkdirSync(mainTexDir, { recursive: true });
-  }
-  if (!existsSync(mainTexFullPath)) {
-    writeFileSync(mainTexFullPath, DEFAULT_MAIN_TEX);
-  }
-}
-
 export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): WorkbenchProjectRef {
-  const root = resolve(args.rootPath);
+  const root = localProjectRoot(args.rootPath);
   mkdirSync(root, { recursive: true });
   if (existsSync(join(root, workbenchJsonRel()))) {
     throw new Error(
@@ -186,12 +149,12 @@ export function createWorkbenchProjectOnDisk(args: CreateWorkbenchProjectArgs): 
 
   ensureAgentDir(metaDir);
   createConfiguredFolders(root, workspaceDirs);
-  writeManuscriptStub(root, workspaceDirs);
+  ensureMainTex(root);
   return { projectId };
 }
 
 export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjectRef {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   mkdirSync(root, { recursive: true });
   const projectId = ensureWorkbenchId(root);
   scaffoldWorkbenchProject(root, projectId);
@@ -199,6 +162,7 @@ export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjec
   if (!existing?.workspace?.folders?.length) {
     writeWorkspaceDirs(root, DEFAULT_WORKSPACE_FOLDERS);
   }
+  createConfiguredFolders(root, readWorkspaceDirs(root));
   const metaDir = projectMetaAbs(root);
   if (!existsSync(join(metaDir, "settings.json"))) {
     writeLocalSettings(metaDir, { compiler: "tectonic" });
@@ -209,7 +173,7 @@ export function ensureWorkbenchProjectMeta(projectRoot: string): WorkbenchProjec
 }
 
 export function checkWorkbenchProject(projectRoot: string): { missing: string[] } {
-  const root = resolve(projectRoot);
+  const root = localProjectRoot(projectRoot);
   const missing: string[] = [];
   const jsonPath = join(root, workbenchJsonRel());
   if (!existsSync(jsonPath)) missing.push(`${PROJECT_META_DIR}/${WORKBENCH_JSON_FILENAME}`);

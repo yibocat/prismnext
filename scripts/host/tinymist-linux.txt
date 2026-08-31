@@ -1,0 +1,8 @@
+# Linux musl Tinymist for Host runtime. Version must match scripts/tinymist-version.txt.
+# Digests from https://github.com/Myriad-Dreamin/tinymist/releases/tag/v0.15.2 (*.sha256 assets).
+# The server downloads this — not host:pack. Bump version, triples, and sha256 together.
+version 0.15.2
+triple-x64 x86_64-unknown-linux-musl
+triple-arm64 aarch64-unknown-linux-musl
+sha256-x64 46ff973fbc89c89714e7b03488498404da0a517d4686e3f6f870b978c91d5f84
+sha256-arm64 bfa7e93af0c0761206d810ac4781b0dd17b09fbbba6a26bea8f1b0756fa5132a

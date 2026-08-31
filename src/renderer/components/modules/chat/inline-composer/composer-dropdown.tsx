@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   BotIcon,
   BookOpenIcon,
@@ -8,10 +9,12 @@ import {
   FileTextIcon,
   FlaskConicalIcon,
   ImageIcon,
+  FolderGit2,
   ListTodoIcon,
   PlugIcon,
   PuzzleIcon,
   SparklesIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { appPopoverLabelClass, appPopoverListClass } from "@/components/ui/app-popover";
@@ -48,11 +51,11 @@ export type MentionOption =
   | { kind: "experiment"; experiment: ExperimentSummary }
   | { kind: "show-more"; section: MentionSectionKind; remaining: number };
 
-export type SlashSectionKind = "mode" | "command" | "skill" | "mcp";
+export type SlashSectionKind = "mode" | "command" | "skill" | "mcp" | "worktree";
 
 /** Composer quick actions under slash → Modes (not Commands). */
 export type SlashModeDef = {
-  id: "plan" | "models";
+  id: "plan" | "models" | "worktree";
   name: string;
   label: string;
   description: string;
@@ -71,6 +74,12 @@ export const COMPOSER_SLASH_MODES: SlashModeDef[] = [
     label: "Plan",
     description: "Plan and design before coding — no file edits or shell until you approve",
   },
+  {
+    id: "worktree",
+    name: "worktree",
+    label: "Worktree",
+    description: "Switch checkout or create a worktree",
+  },
 ];
 
 export type SlashOption =
@@ -78,7 +87,19 @@ export type SlashOption =
   | { kind: "command"; command: CommandDef }
   | { kind: "skill"; skill: SlashCatalogSkill }
   | { kind: "mcp"; mcp: SlashCatalogMcp }
+  | { kind: "worktree-local" }
+  | { kind: "worktree"; name: string; baseBranch: string }
+  | { kind: "worktree-new" }
   | { kind: "show-more"; section: SlashSectionKind; remaining: number };
+
+export function matchWorktreeSlashQuery(query: string): { filter: string } | null {
+  const q = query.trim().toLowerCase();
+  if (q === "wt" || q.startsWith("wt ")) return { filter: q.slice(2).trim() };
+  if (q === "worktree" || q.startsWith("worktree ")) {
+    return { filter: q.slice("worktree".length).trim() };
+  }
+  return null;
+}
 
 export const MENTIONS_LIMIT = 6;
 const SLASH_LIMITS = { mode: 6, command: 10, skill: 8, mcp: 8 } as const;
@@ -88,6 +109,7 @@ const SLASH_SECTION_LABELS: Record<SlashSectionKind, string> = {
   command: "Commands",
   skill: "Skills",
   mcp: "MCPs",
+  worktree: "Worktrees",
 };
 
 function appendLimitedSection<T, O extends { kind: string }>(
@@ -113,9 +135,31 @@ export function buildSlashOptions(
   skills: SlashCatalogSkill[],
   mcps: SlashCatalogMcp[],
   expandedSections: ReadonlySet<SlashSectionKind> = new Set(),
+  worktrees: ReadonlyArray<{ name: string; baseBranch: string }> = [],
 ): SlashOption[] {
   const q = query.toLowerCase();
   const options: SlashOption[] = [];
+  const worktreeQuery = matchWorktreeSlashQuery(query);
+  const showWorktreeList = Boolean(worktreeQuery) || expandedSections.has("worktree");
+
+  if (showWorktreeList) {
+    const filter = (worktreeQuery?.filter ?? "").toLowerCase();
+    options.push({ kind: "worktree-local" });
+    for (const worktree of worktrees) {
+      if (
+        !filter
+        || worktree.name.toLowerCase().includes(filter)
+        || worktree.baseBranch.toLowerCase().includes(filter)
+      ) {
+        options.push({
+          kind: "worktree",
+          name: worktree.name,
+          baseBranch: worktree.baseBranch,
+        });
+      }
+    }
+    options.push({ kind: "worktree-new" });
+  }
 
   const matchedCommands = commands.filter(
     (command) =>
@@ -160,10 +204,13 @@ export function buildSlashOptions(
   // Modes last (Cursor-style): Plan is a mode, never a Command.
   const matchedModes = COMPOSER_SLASH_MODES.filter(
     (mode) =>
-      !q
-      || mode.name.toLowerCase().includes(q)
-      || mode.label.toLowerCase().includes(q)
-      || mode.description.toLowerCase().includes(q),
+      !(mode.id === "worktree" && showWorktreeList)
+      && (
+        !q
+        || mode.name.toLowerCase().includes(q)
+        || mode.label.toLowerCase().includes(q)
+        || mode.description.toLowerCase().includes(q)
+      ),
   );
   appendLimitedSection(
     options,
@@ -361,6 +408,7 @@ export function SlashCommandDropdown({
   onListPointerMove?: () => void;
   canHoverItem?: () => boolean;
 }) {
+  const { t } = useTranslation();
   let lastSection: SlashSectionKind | null = null;
 
   return (
@@ -373,7 +421,13 @@ export function SlashCommandDropdown({
       {options.length > 0 ? (
         options.map((option, i) => {
           const section: SlashSectionKind =
-            option.kind === "show-more" ? option.section : option.kind;
+            option.kind === "show-more"
+              ? option.section
+              : option.kind === "worktree-local"
+                || option.kind === "worktree"
+                || option.kind === "worktree-new"
+                ? "worktree"
+                : option.kind;
           const showHeader = option.kind !== "show-more" && section !== lastSection;
           lastSection = section;
 
@@ -385,13 +439,44 @@ export function SlashCommandDropdown({
                 </span>
               );
             }
+            if (option.kind === "worktree-local") {
+              return (
+                <>
+                  <FolderGit2 className="size-3 shrink-0 text-muted-foreground" />
+                  <span className={itemLabelClass}>{t("chat.slash.worktreeLocal")}</span>
+                </>
+              );
+            }
+            if (option.kind === "worktree") {
+              return (
+                <>
+                  <WorkflowIcon className="size-3 shrink-0 text-muted-foreground" />
+                  <span className={itemLabelClass}>{option.name}</span>
+                  <span className={itemMetaClass}>{option.baseBranch}</span>
+                </>
+              );
+            }
+            if (option.kind === "worktree-new") {
+              return (
+                <>
+                  <WorkflowIcon className="size-3 shrink-0 text-muted-foreground" />
+                  <span className={itemLabelClass}>{t("chat.slash.worktreeNew")}</span>
+                </>
+              );
+            }
             if (option.kind === "mode") {
               const ModeIcon =
-                option.mode.id === "models" ? SparklesIcon : ListTodoIcon;
+                option.mode.id === "models"
+                  ? SparklesIcon
+                  : option.mode.id === "worktree"
+                    ? WorkflowIcon
+                    : ListTodoIcon;
               const iconClass =
                 option.mode.id === "models"
                   ? "size-3.5 shrink-0 text-primary"
-                  : "size-3.5 shrink-0 text-amber-700 dark:text-amber-400";
+                  : option.mode.id === "worktree"
+                    ? "size-3.5 shrink-0 text-muted-foreground"
+                    : "size-3.5 shrink-0 text-amber-700 dark:text-amber-400";
               return (
                 <>
                   <ModeIcon className={iconClass} />
@@ -436,11 +521,21 @@ export function SlashCommandDropdown({
                   ? `command:${option.command.name}`
                   : option.kind === "skill"
                     ? `skill:${option.skill.id}`
-                    : `mcp:${option.mcp.name}`;
+                    : option.kind === "worktree-local"
+                      ? "worktree-local"
+                      : option.kind === "worktree-new"
+                        ? "worktree-new"
+                        : option.kind === "worktree"
+                          ? `worktree:${option.name}`
+                          : `mcp:${option.mcp.name}`;
 
           return (
             <div key={rowKey} data-composer-option-group>
-              {showHeader && <div className={sectionLabelClass}>{SLASH_SECTION_LABELS[section]}</div>}
+              {showHeader && (
+                <div className={sectionLabelClass}>
+                  {section === "worktree" ? t("chat.slash.worktree") : SLASH_SECTION_LABELS[section]}
+                </div>
+              )}
               <button
                 type="button"
                 data-active={i === activeIndex}

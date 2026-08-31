@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SETTINGS_FORM_INPUT, SETTINGS_FORM_TEXTAREA } from "@/components/modules/settings/settings-tokens";
 import { readResearchBrief } from "@/lib/files/open-research-brief";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
@@ -136,6 +137,7 @@ export function ExperimentsCreateDialog({
             </label>
             <Input
               autoFocus
+              className={SETTINGS_FORM_INPUT}
               value={title}
               disabled={busy}
               placeholder={t("experiments.create.placeholder")}
@@ -154,6 +156,7 @@ export function ExperimentsCreateDialog({
               {t("experiments.create.tagsLabel")}
             </label>
             <Input
+              className={SETTINGS_FORM_INPUT}
               value={tagsInput}
               disabled={busy}
               placeholder={t("experiments.create.tagsPlaceholder")}
@@ -178,6 +181,7 @@ export function ExperimentsCreateDialog({
               </Button>
             </div>
             <Textarea
+              className={SETTINGS_FORM_TEXTAREA}
               value={hypothesis}
               disabled={busy}
               rows={2}
@@ -191,6 +195,7 @@ export function ExperimentsCreateDialog({
               {t("experiments.brief.rqLabel")}
             </label>
             <Textarea
+              className={SETTINGS_FORM_TEXTAREA}
               value={rq}
               disabled={busy}
               rows={2}
@@ -214,6 +219,7 @@ export function ExperimentsCreateDialog({
           <Button
             type="button"
             variant="secondary"
+            size="xs"
             disabled={busy}
             onClick={() => onOpenChange(false)}
           >
@@ -221,6 +227,7 @@ export function ExperimentsCreateDialog({
           </Button>
           <Button
             type="button"
+            size="xs"
             disabled={busy || !title.trim() || !projectRoot}
             onClick={() => void handleSubmit()}
           >

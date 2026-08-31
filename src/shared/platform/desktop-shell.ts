@@ -87,7 +87,7 @@ export type TrayRecentItem = {
 };
 
 /** RightArea modes that Tray can open maximized. */
-export type TrayModeId = "texworkspace" | "literature" | "experiments";
+export type TrayModeId = "files" | "literature" | "experiments";
 
 export type TrayModeItem = {
   id: TrayModeId;

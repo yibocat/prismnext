@@ -7,6 +7,7 @@
 export * from "./types";
 export * from "./literature";
 export * from "./latex";
+export * from "./typst";
 export * from "./research-brief";
 export * from "./experiment";
 export * from "./interaction";
@@ -15,6 +16,7 @@ export * from "./interactive";
 
 import { LITERATURE_TOOLS } from "./literature";
 import { LATEX_TOOLS } from "./latex";
+import { TYPST_TOOLS } from "./typst";
 import { RESEARCH_BRIEF_TOOLS } from "./research-brief";
 import { EXPERIMENT_TOOLS } from "./experiment";
 import { INTERACTION_TOOLS } from "./interaction";
@@ -25,6 +27,7 @@ import type { NativeToolDefinition } from "./types";
 export const ALL_NATIVE_TOOLS: readonly NativeToolDefinition[] = [
   ...LITERATURE_TOOLS,
   ...LATEX_TOOLS,
+  ...TYPST_TOOLS,
   ...RESEARCH_BRIEF_TOOLS,
   ...EXPERIMENT_TOOLS,
   ...INTERACTION_TOOLS,

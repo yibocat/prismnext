@@ -3,6 +3,7 @@ import { formatRemoteUrlSummary } from "@shared/git";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -26,7 +27,7 @@ export function GitRemotePicker({ projectRoot }: { projectRoot: string }) {
         <DialogHeader>
           <DialogTitle>{t("git.remotePicker.title")}</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-center text-[length:var(--font-size-12)] text-muted-foreground">
           {t("git.remotePicker.body")}
         </p>
         <div className="flex flex-col gap-1.5">
@@ -52,15 +53,15 @@ export function GitRemotePicker({ projectRoot }: { projectRoot: string }) {
             </Button>
           ))}
         </div>
-        <div className="flex justify-end">
+        <DialogFooter>
           <Button
             variant="outline"
-            size="sm"
+            size="xs"
             onClick={() => useGitStore.getState().cancelRemotePick()}
           >
             {t("common.cancel")}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -347,7 +347,7 @@ export function ExperimentsRunDialog({
                 </span>
                 <Button
                   type="button"
-                  size="sm"
+                  size="xs"
                   variant="outline"
                   onClick={handleCancel}
                   className="gap-1"
@@ -372,7 +372,7 @@ export function ExperimentsRunDialog({
               </div>
             ) : (
               <>
-                <Button type="button" size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+                <Button type="button" size="xs" variant="ghost" onClick={() => onOpenChange(false)}>
                   {t("experiments.close")}
                 </Button>
                 <Hint
@@ -388,7 +388,7 @@ export function ExperimentsRunDialog({
                 >
                   <Button
                     type="button"
-                    size="sm"
+                    size="xs"
                     variant="default"
                     onClick={handleRunClick}
                     disabled={!canRun}

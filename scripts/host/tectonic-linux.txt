@@ -1,0 +1,7 @@
+# Linux musl Tectonic for Host runtime. Version must match scripts/tectonic-version.txt.
+# The server downloads this — not host:pack. Bump version, triples, and sha256 together.
+version 0.15.0
+triple-x64 x86_64-unknown-linux-musl
+triple-arm64 aarch64-unknown-linux-musl
+sha256-x64 dfb82876f2986862996e564fa507a9e576e0c1e3bee63c2c1bd677c2543e6407
+sha256-arm64 1f59f9fb8eb65e8ba18658fc9016767e7d3e12488ded8b8fffa34254e51ce42c

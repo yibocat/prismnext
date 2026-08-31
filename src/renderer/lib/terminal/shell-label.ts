@@ -30,3 +30,9 @@ export function isGenericTerminalTabTitle(title: string | undefined): boolean {
 export function defaultUserTerminalTitle(shellPath?: string | null): string {
   return shellDisplayName(shellPath);
 }
+
+/** Tab label when the PTY is on a remote Host, not this computer. */
+export function remoteTerminalTabTitle(shellPath?: string | null): string {
+  const shell = shellDisplayName(shellPath ?? "/bin/bash");
+  return shell === "Shell" ? "bash" : shell;
+}

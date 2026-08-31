@@ -4,6 +4,7 @@ import { suggestRemoteName } from "@shared/git";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -11,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 import { useGitStore } from "@/stores/git-store";
 
 export function GitRemoteAddDialog({ projectRoot }: { projectRoot: string }) {
@@ -53,6 +55,7 @@ export function GitRemoteAddDialog({ projectRoot }: { projectRoot: string }) {
             <Label htmlFor="git-remote-url">{t("git.remoteAdd.url")}</Label>
             <Input
               id="git-remote-url"
+              className={SETTINGS_FORM_INPUT}
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder={t("git.remoteAdd.urlPlaceholder")}
@@ -64,26 +67,27 @@ export function GitRemoteAddDialog({ projectRoot }: { projectRoot: string }) {
             <Label htmlFor="git-remote-name">{t("git.remoteAdd.name")}</Label>
             <Input
               id="git-remote-name"
+              className={SETTINGS_FORM_INPUT}
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="origin"
               disabled={adding}
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="xs"
               onClick={() => useGitStore.getState().cancelAddRemote()}
               disabled={adding}
             >
               {t("common.cancel")}
             </Button>
-            <Button type="submit" size="sm" disabled={!canSubmit}>
+            <Button type="submit" size="xs" disabled={!canSubmit}>
               {adding ? t("git.remoteAdd.adding") : t("git.remoteAdd.add")}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

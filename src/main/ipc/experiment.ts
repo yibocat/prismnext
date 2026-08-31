@@ -6,6 +6,8 @@
  * consults the current permission mode before kicking off a run.
  */
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
+import { getRemoteSessionBroker } from "./remote";
+import { remoteProfileFromArgs, routeHostDomainMethod } from "../remote/domain-route";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getSettings } from "../app/settings";
@@ -106,8 +108,42 @@ async function lookupPiSessionAgent(id: string): Promise<SessionAgent | undefine
   }
 }
 
+async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
+  if (!remoteProfileFromArgs(args, ["projectRoot"])) return undefined;
+  return routeHostDomainMethod(method, args, {
+    keys: ["projectRoot"],
+    broker: getRemoteSessionBroker(),
+    disconnected(name) {
+      if (name === "experiment:list") {
+        return {
+          hit: true,
+          result: {
+            ok: true,
+            experimentRoot: "",
+            registryRoot: EXPERIMENT_REGISTRY_REL,
+            experiments: [],
+            corruptIds: [],
+          },
+        };
+      }
+      return { hit: false };
+    },
+  });
+}
+
+function handleExperiment(
+  channel: string,
+  fn: (event: IpcMainInvokeEvent, args: never) => unknown,
+): void {
+  ipcMain.handle(channel, async (event, args) => {
+    const remote = await routeIfRemote(channel, args ?? {});
+    if (remote !== undefined) return remote;
+    return fn(event, args as never);
+  });
+}
+
 export function registerExperimentHandlers(): void {
-  ipcMain.handle("experiment:list", async (_event, args: ExperimentListArgs) => {
+  handleExperiment("experiment:list", async (_event, args: ExperimentListArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const list = listExperiments(ctxResult, {
@@ -122,7 +158,7 @@ export function registerExperimentHandlers(): void {
     };
   });
 
-  ipcMain.handle(
+  handleExperiment(
     "experiment:archive",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
@@ -138,7 +174,7 @@ export function registerExperimentHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExperiment(
     "experiment:create",
     async (
       _event,
@@ -173,7 +209,7 @@ export function registerExperimentHandlers(): void {
     },
   );
 
-  ipcMain.handle("experiment:update", async (_event, args: ExperimentUpdateArgs) => {
+  handleExperiment("experiment:update", async (_event, args: ExperimentUpdateArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = updateExperiment(ctxResult, args.id, {
@@ -191,7 +227,7 @@ export function registerExperimentHandlers(): void {
     return { ok: true as const, meta: result.meta };
   });
 
-  ipcMain.handle(
+  handleExperiment(
     "experiment:updateRun",
     async (
       _event,
@@ -215,7 +251,7 @@ export function registerExperimentHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExperiment(
     "experiment:restore",
     async (_event, args: { projectRoot: string; id: string }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
@@ -231,7 +267,7 @@ export function registerExperimentHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExperiment(
     "experiment:delete",
     async (_event, args: { projectRoot: string; id: string; removeLab?: boolean }) => {
       const ctxResult = resolveExperimentCtx(args.projectRoot);
@@ -248,7 +284,7 @@ export function registerExperimentHandlers(): void {
     },
   );
 
-  ipcMain.handle("experiment:read", async (_event, args: ExperimentReadArgs) => {
+  handleExperiment("experiment:read", async (_event, args: ExperimentReadArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const limit = typeof args.runsLimit === "number" && args.runsLimit > 0 ? args.runsLimit : 20;
@@ -268,7 +304,7 @@ export function registerExperimentHandlers(): void {
     };
   });
 
-  ipcMain.handle("experiment:detectEnv", async (_event, args: ExperimentDetectEnvArgs) => {
+  handleExperiment("experiment:detectEnv", async (_event, args: ExperimentDetectEnvArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const result = detectEnvForIsland(ctxResult, args.id);
@@ -276,7 +312,7 @@ export function registerExperimentHandlers(): void {
     return { ok: true as const, env: result.env, workspacePath: result.workspacePath };
   });
 
-  ipcMain.handle("experiment:getPaths", async (_event, args: ExperimentGetPathsArgs) => {
+  handleExperiment("experiment:getPaths", async (_event, args: ExperimentGetPathsArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const workspaceAbs = workspaceIslandPathForId(ctxResult, args.id);
@@ -292,7 +328,7 @@ export function registerExperimentHandlers(): void {
     };
   });
 
-  ipcMain.handle("experiment:run", async (event, args: ExperimentRunArgs) => {
+  handleExperiment("experiment:run", async (event, args: ExperimentRunArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();
@@ -362,7 +398,7 @@ export function registerExperimentHandlers(): void {
     };
   });
 
-  ipcMain.handle("experiment:cancelRun", async (_event, args: ExperimentCancelRunArgs) => {
+  handleExperiment("experiment:cancelRun", async (_event, args: ExperimentCancelRunArgs) => {
     const id = (args.id || "").trim();
     const runId = (args.runId || "").trim();
     if (!id || !runId) return { ok: true as const };
@@ -371,7 +407,7 @@ export function registerExperimentHandlers(): void {
   });
 
   // Station 3 — read-only workspace scan for Results panel (same core as agent tool).
-  ipcMain.handle("experiment:snapshot", async (_event, args: ExperimentSnapshotArgs) => {
+  handleExperiment("experiment:snapshot", async (_event, args: ExperimentSnapshotArgs) => {
     const ctxResult = resolveExperimentCtx(args.projectRoot);
     if (isExperimentCtxError(ctxResult)) return ctxResult;
     const id = (args.id || "").trim();

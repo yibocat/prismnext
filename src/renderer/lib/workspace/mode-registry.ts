@@ -9,16 +9,15 @@ export type RightTabKind =
   | "browser"
   | "git-overview"
   | "git-diff"
-  | "texworkspace"
   | "terminal"
   | "settings-editor"
   | "literature"
   | "experiments"
   | "interaction";
 
-/** Tabs that host an editable project file buffer (Files / TeX / Plan). */
+/** Tabs that host an editable project file buffer (Files / Plan). */
 export function isEditableFileTabKind(kind: RightTabKind): boolean {
-  return kind === "file" || kind === "texworkspace" || kind === "research-plan";
+  return kind === "file" || kind === "research-plan";
 }
 
 export function isJobMonitorTab(
@@ -31,7 +30,7 @@ export function isJobMonitorTab(
 
 export function isFileBackedTab(
   tab: RightTab,
-): tab is Extract<RightTab, { kind: "file" | "texworkspace" | "research-plan" }> {
+): tab is Extract<RightTab, { kind: "file" | "research-plan" }> {
   return isEditableFileTabKind(tab.kind);
 }
 
@@ -58,7 +57,7 @@ interface RightTabBase {
 }
 
 type FileBackedRightTab = RightTabBase & {
-  kind: "file" | "texworkspace" | "research-plan";
+  kind: "file" | "research-plan";
   filePath?: string;
   fileId?: string;
   /** File lives outside the project root */
@@ -207,6 +206,36 @@ export interface ModeDefinition {
    * Default: openMode — focus existing tab or ensure home / spawn multi.
    */
   openFromAddMenu?: () => void;
+}
+
+const LIVE_HOST_MODE_IDS = new Set([
+  "files",
+  "git",
+  "terminal",
+  "literature",
+  "experiments",
+  "research-plan",
+  "interaction",
+]);
+
+const LIVE_HOST_TAB_KINDS = new Set<RightTabKind>([
+  "file",
+  "research-plan",
+  "git-overview",
+  "git-diff",
+  "terminal",
+  "literature",
+  "experiments",
+  "interaction",
+]);
+
+/** Files / Git / terminal / library / experiments need a live Host. Browser does not. */
+export function modeNeedsLiveHost(modeId: string): boolean {
+  return LIVE_HOST_MODE_IDS.has(modeId);
+}
+
+export function tabNeedsLiveHost(tab: Pick<RightTab, "kind">): boolean {
+  return LIVE_HOST_TAB_KINDS.has(tab.kind);
 }
 
 // ── Registry ──

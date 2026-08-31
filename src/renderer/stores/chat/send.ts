@@ -24,6 +24,9 @@ import { toast } from "sonner";
 import { i18n } from "@/lib/i18n";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { isAgentRuntime } from "../../../shared/agent/api";
+import { parseRemoteAbs } from "@shared/remote";
+import { ensureRemoteLiveForWork } from "@/lib/remote/ensure-connected";
+import { pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "../compile-store";
 import { useDocumentStore } from "../document-store";
 import { lastPathForSession, useWorkbenchStore } from "../workbench-store";
 import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
@@ -129,6 +132,11 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
           const info = await useWorktreeStore.getState().initializeWorktree(projectPath);
           await applyCheckoutTransition({ type: "worktree-existing", worktree: info });
         }
+        if (parseRemoteAbs(projectPath)) {
+          get()._setPreparePhase(tabId, "connecting_remote");
+          await ensureRemoteLiveForWork(projectPath);
+          get()._setPreparePhase(tabId, null);
+        }
         const boundCheckoutPath =
           resolveWorktreePathForSend(get().tabs.find((t) => t.id === tabId), projectPath)
           ?? captureSessionCwd()
@@ -161,13 +169,14 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
         } else {
           refreshAgentSessionList();
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         get()._applyAgentEvent(tabId, {
           type: "turn_failed",
           runtimeSessionId: tabId,
           tabId,
           turnId,
-          error: err?.message || String(err),
+          error: formatAgentSendError(message),
         });
       }
       return;
@@ -295,6 +304,7 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       });
       return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
     });
+    pauseAutoCompileForAi(tabId);
     const started = get().tabs.find((tab) => tab.id === tabId);
     const turnIndex = started?.conversation.live?.turnIndex ?? 0;
     const sessionId = started?.conversation.conversationId || started?.sessionId || tabId;
@@ -345,6 +355,7 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       || event.type === "turn_cancelled"
       || event.type === "turn_failed"
     ) {
+      resumeAutoCompileAfterAi(tabId);
       void import("../checkpoint-store").then(({ useCheckpointStore }) => {
         void useCheckpointStore.getState().finalizeTurn(tabId, event.type === "turn_finished");
       });

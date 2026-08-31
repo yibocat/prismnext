@@ -5,10 +5,26 @@ type IpcHandler = (event: unknown, args: { rootPath: string }) => Promise<unknow
 const handlers = new Map<string, IpcHandler>();
 const state = vi.hoisted(() => ({ startWatching: vi.fn() }));
 
+vi.mock("electron-store", () => ({
+  default: class MockStore {
+    store = {};
+    get() {
+      return undefined;
+    }
+    set() {}
+  },
+}));
+
 vi.mock("electron", () => ({
   ipcMain: { handle: (channel: string, handler: IpcHandler) => handlers.set(channel, handler) },
   BrowserWindow: { getAllWindows: () => [], getFocusedWindow: () => undefined },
   dialog: {},
+  app: { getVersion: () => "0.9.0", getPath: () => "/tmp" },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (s: string) => Buffer.from(s, "utf8"),
+    decryptString: (b: Buffer) => b.toString("utf8"),
+  },
 }));
 
 import { registerFsHandlers } from "../../src/main/ipc/fs";

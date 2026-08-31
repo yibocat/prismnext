@@ -1,36 +1,30 @@
-import { useEffect, useCallback } from "react";
+/**
+ * Chat chrome tokens + worktree rows used inside the Host menu.
+ */
+import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Trash2Icon, WorkflowIcon } from "lucide-react";
 import {
-  Loader2Icon,
-  LaptopIcon,
-  LockIcon,
-  Trash2Icon,
-  WorkflowIcon,
-} from "lucide-react";
-import {
-  AppMenu,
   AppMenuCheckItem,
-  AppMenuContent,
-  AppMenuItem,
-  AppMenuLabel,
   AppMenuSeparator,
-  AppMenuTrigger,
+  AppMenuSub,
+  AppMenuSubContent,
+  AppMenuSubTrigger,
 } from "@/components/ui/app-menu";
-import { useWorktreeStore } from "@/stores/worktree-store";
-import { useDocumentStore } from "@/stores/document-store";
-import { applyCheckoutTransition } from "@/lib/git/checkout-context";
-import { useGitStore } from "@/stores/git-store";
-import { useChatStore } from "@/stores/chat-store";
 import { Hint } from "@/components/ui/hint";
-import { cn } from "@/lib/utils";
+import { applyCheckoutTransition, startNewWorktreeIntent } from "@/lib/git/checkout-context";
+import { useChatStore } from "@/stores/chat-store";
+import { useDocumentStore } from "@/stores/document-store";
+import { useGitStore } from "@/stores/git-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 
-/**
- * AI Chat panel toolbar (branch / worktree / actions) — `h-6` like Plan
- * `Button size="xs"`, type via `--font-chat-meta` (chat chrome step).
- */
 export const CHAT_PANEL_TOOLBAR_BUTTON =
   "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground";
+
+/** One-click Connect — outline follows Brand; hover only retints the border/text. */
+export const CHAT_PANEL_TOOLBAR_OUTLINE_BUTTON =
+  "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-muted-foreground transition-colors hover:border-primary hover:text-primary";
 
 export const CHAT_PANEL_TOOLBAR_BUTTON_PRIMARY =
   "inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border-0 bg-transparent px-1.5 text-[length:var(--font-chat-meta)] text-primary transition-colors hover:bg-accent hover:text-accent-foreground";
@@ -52,178 +46,108 @@ export const CHAT_CHROME_BUTTON_TEXT = "text-[length:var(--font-chat-meta)]";
 export const CAPSULE_TOOLBAR_PILL =
   "inline-flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-border px-2.5 text-[length:var(--font-chat-meta)] transition-colors";
 
-interface WorktreeSelectorProps {
-  /** `capsule` = AiBar toolbar pill; default = left chat panel (unchanged). */
-  variant?: "default" | "capsule";
+export function useWorktreeHostSuffix(): string | null {
+  const { t } = useTranslation();
+  const mode = useWorktreeStore((s) => s.mode);
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  if (activeWorktree) return activeWorktree.name;
+  if (mode === "worktree") return t("chat.worktree.short");
+  return null;
 }
 
-export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps) {
+/** Worktrees submenu + New — lives under Host, not as its own toolbar button. */
+export function WorktreeHostMenuSection() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
   const hasMessages = useChatStore((s) => {
-    const tab = s.tabs.find((t) => t.id === s.activeTabId);
+    const tab = s.tabs.find((item) => item.id === s.activeTabId);
     const conv = tab?.conversation;
     return Boolean(conv && (conv.turns.length > 0 || conv.live));
   });
-  const {
-    worktrees,
-    activeWorktree,
-    mode,
-    loading,
-    refreshWorktrees,
-    removeWorktree,
-  } = useWorktreeStore();
+  const worktrees = useWorktreeStore((s) => s.worktrees);
+  const activeWorktree = useWorktreeStore((s) => s.activeWorktree);
+  const mode = useWorktreeStore((s) => s.mode);
+  const loading = useWorktreeStore((s) => s.loading);
+  const refreshWorktrees = useWorktreeStore((s) => s.refreshWorktrees);
+  const removeWorktree = useWorktreeStore((s) => s.removeWorktree);
+  const pendingNew = mode === "worktree" && activeWorktree === null;
 
   useEffect(() => {
-    if (projectRoot) {
-      refreshWorktrees(projectRoot);
-    }
+    if (projectRoot) void refreshWorktrees(projectRoot);
   }, [projectRoot, refreshWorktrees]);
 
-  const handleSetLocal = useCallback(() => {
-    void applyCheckoutTransition({ type: "local" });
-  }, []);
-
-  const handleSetNewWorktree = useCallback(async () => {
-    const gs = useGitStore.getState();
-    const wtStore = useWorktreeStore.getState();
-    let baseBranch = wtStore.activeWorktree?.baseBranch ?? null;
-    if (!baseBranch && projectRoot && gs.isGitRepo) {
-      if (!gs.branch) {
-        await gs.refreshStatus(projectRoot);
-        await gs.refreshBranches(projectRoot);
-      }
-      baseBranch = useGitStore.getState().branch;
-    }
-    if (!baseBranch) {
-      toast.error(t("chat.worktree.noBaseBranch"));
-      return;
-    }
-    void applyCheckoutTransition({ type: "worktree-intent", baseBranch });
-  }, [projectRoot, t]);
+  const refuseIfLocked = useCallback((): boolean => {
+    if (!hasMessages) return false;
+    toast.error(t("chat.worktree.locked"));
+    return true;
+  }, [hasMessages, t]);
 
   const handleSelectExisting = useCallback(
-    (wtName: string) => {
-      const wt = worktrees.find((w) => w.name === wtName);
-      if (wt) void applyCheckoutTransition({ type: "worktree-existing", worktree: wt });
+    (name: string) => {
+      if (refuseIfLocked()) return;
+      if (activeWorktree?.name === name) {
+        void applyCheckoutTransition({ type: "local" });
+        return;
+      }
+      const worktree = worktrees.find((item) => item.name === name);
+      if (worktree) void applyCheckoutTransition({ type: "worktree-existing", worktree });
     },
-    [worktrees],
+    [activeWorktree?.name, refuseIfLocked, worktrees],
   );
 
+  const handleSetNew = useCallback(async () => {
+    if (refuseIfLocked()) return;
+    if (pendingNew) {
+      void applyCheckoutTransition({ type: "local" });
+      return;
+    }
+    const ok = await startNewWorktreeIntent();
+    if (!ok) toast.error(t("chat.worktree.noBaseBranch"));
+  }, [pendingNew, refuseIfLocked, t]);
+
   const handleRemove = useCallback(
-    async (name: string, e: React.MouseEvent) => {
-      e.stopPropagation();
+    async (name: string, event: React.MouseEvent) => {
+      event.stopPropagation();
       if (!projectRoot) return;
       try {
         await removeWorktree(projectRoot, name);
-      } catch {}
+      } catch {
+        // store surfaces the error
+      }
     },
     [projectRoot, removeWorktree],
   );
 
-  const isActive = activeWorktree !== null;
-
-  const triggerLabel = isActive
-    ? activeWorktree.name
-    : mode === "worktree"
-      ? t("chat.worktree.newWorktree")
-      : t("chat.worktree.local");
-
-  if (!isGitRepo) return null;
-
-  const isCapsule = variant === "capsule";
-
-  if (hasMessages) {
-    return (
-      <span
-        className={cn(
-          isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
-          "cursor-default",
-          !isCapsule && "hover:bg-transparent hover:text-muted-foreground",
-          mode === "worktree" && !isCapsule && "text-primary hover:text-primary",
-          isCapsule && mode === "worktree" && "bg-accent text-accent-foreground border-border",
-          isCapsule && mode !== "worktree" && "bg-card text-muted-foreground",
-        )}
-        title={t("chat.worktree.lockedWithLabel", { label: triggerLabel })}
-      >
-        {mode === "local" ? (
-          <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
-        ) : (
-          <WorkflowIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
-        )}
-        <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
-        <LockIcon className="size-3 text-muted-foreground/50" />
-      </span>
-    );
-  }
+  if (!projectRoot || !isGitRepo) return null;
 
   return (
-    <AppMenu>
-      <Hint label={triggerLabel}>
-        <AppMenuTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              isCapsule ? CAPSULE_TOOLBAR_PILL : CHAT_PANEL_TOOLBAR_BUTTON,
-              mode === "worktree"
-                ? isCapsule
-                  ? "bg-accent text-accent-foreground border-border hover:bg-accent"
-                  : "text-primary hover:bg-accent hover:text-accent-foreground"
-                : isCapsule
-                  ? "bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  : undefined,
-            )}
-            onMouseDown={(e) => e.preventDefault()}
-          >
-            {mode === "local" ? (
-              <LaptopIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
-            ) : (
-              <WorkflowIcon className={cn("shrink-0", isCapsule ? "size-3.5" : "size-3")} />
-            )}
-            <span className="max-w-[100px] truncate hidden @md:inline">{triggerLabel}</span>
-          </button>
-        </AppMenuTrigger>
-      </Hint>
-      <AppMenuContent align="start" className="w-56">
-        <AppMenuCheckItem selected={mode === "local"} onClick={handleSetLocal}>
-          {t("chat.worktree.local")}
-        </AppMenuCheckItem>
-
-        {worktrees.length > 0 && (
-          <>
-            <AppMenuSeparator />
-            <AppMenuLabel>{t("chat.worktree.existing")}</AppMenuLabel>
-            {worktrees.map((wt) => (
-              <AppMenuItem
-                key={wt.name}
-                onClick={() => handleSelectExisting(wt.name)}
+    <>
+      <AppMenuSeparator />
+      {worktrees.length > 0 ? (
+        <AppMenuSub>
+          <AppMenuSubTrigger leading={<WorkflowIcon className="size-3.5 shrink-0 opacity-70" />}>
+            {t("chat.branch.worktrees")}
+          </AppMenuSubTrigger>
+          <AppMenuSubContent className="min-w-[14rem]">
+            {worktrees.map((worktree) => (
+              <AppMenuCheckItem
+                key={worktree.name}
+                selected={activeWorktree?.name === worktree.name}
+                disabled={hasMessages}
+                leading={<WorkflowIcon className="size-3.5 shrink-0 opacity-70" />}
+                onClick={() => handleSelectExisting(worktree.name)}
                 className="group"
                 trailing={
                   <span className="flex items-center gap-0.5 shrink-0">
-                    {wt.aheadCount > 0 && (
-                      <span className="text-[length:var(--font-hint)] text-muted-foreground/50">
-                        {wt.aheadCount}↑
-                      </span>
-                    )}
-                    {wt.behindCount > 0 && (
-                      <span
-                        className="text-[length:var(--font-hint)] text-amber-500"
-                        title={t("chat.worktree.commitsBehind", { n: wt.behindCount })}
-                      >
-                        {wt.behindCount}↓
-                      </span>
-                    )}
-                    {activeWorktree?.name === wt.name && (
-                      <span className="text-[length:var(--font-badge)] text-primary">
-                        {t("chat.worktree.active")}
-                      </span>
-                    )}
-                    <Hint label={t("chat.worktree.remove", { name: wt.name })}>
+                    <span className="text-muted-foreground text-[length:var(--font-path)]">
+                      {worktree.baseBranch}
+                    </span>
+                    <Hint label={t("chat.worktree.remove", { name: worktree.name })}>
                       <button
                         type="button"
-                        className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all"
-                        onClick={(e) => void handleRemove(wt.name, e)}
+                        className="flex size-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground transition-all"
+                        onClick={(event) => void handleRemove(worktree.name, event)}
                       >
                         <Trash2Icon className="size-2.5" />
                       </button>
@@ -231,29 +155,20 @@ export function WorktreeSelector({ variant = "default" }: WorktreeSelectorProps)
                   </span>
                 }
               >
-                {wt.name}
-              </AppMenuItem>
+                {worktree.name}
+              </AppMenuCheckItem>
             ))}
-          </>
-        )}
-
-        <AppMenuSeparator />
-        <AppMenuItem
-          onClick={handleSetNewWorktree}
-          disabled={loading}
-          trailing={
-            loading ? (
-              <Loader2Icon className="size-3 animate-spin opacity-80" />
-            ) : mode === "worktree" && !isActive ? (
-              <span className="text-[length:var(--font-badge)] text-primary">
-                {t("chat.worktree.selected")}
-              </span>
-            ) : null
-          }
-        >
-          {t("chat.worktree.newWorktree")}
-        </AppMenuItem>
-      </AppMenuContent>
-    </AppMenu>
+          </AppMenuSubContent>
+        </AppMenuSub>
+      ) : null}
+      <AppMenuCheckItem
+        selected={pendingNew}
+        disabled={hasMessages || loading}
+        leading={<WorkflowIcon className="size-3.5 shrink-0 opacity-70" />}
+        onClick={() => void handleSetNew()}
+      >
+        {t("chat.worktree.newWorktree")}
+      </AppMenuCheckItem>
+    </>
   );
 }

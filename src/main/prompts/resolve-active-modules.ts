@@ -1,6 +1,15 @@
 import { ALL_MODULES } from "./modules";
 import type { PromptContext, PromptModule } from "./types";
 
+/** Legacy module keys still referenced in team JSON / cached profiles. */
+const PROMPT_MODULE_KEY_ALIASES: Record<string, string> = {
+  "latex-workspace": "manuscript-compile",
+};
+
+function normalizePromptModuleKey(key: string): string {
+  return PROMPT_MODULE_KEY_ALIASES[key] ?? key;
+}
+
 function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   if (mod.build) return mod.build(ctx);
   if (mod.prompt) return mod.prompt;
@@ -55,7 +64,7 @@ export function resolveSubagentProfileModuleKeysFor(def: { modules?: string[] })
   const all = resolveSubagentProfileModuleKeys();
   if (!def.modules?.length) return all;
   const sharedKeys = new Set(resolveSharedProfileModules().map((m) => m.key));
-  const picked = def.modules.filter((k) => sharedKeys.has(k));
+  const picked = def.modules.map(normalizePromptModuleKey).filter((k) => sharedKeys.has(k));
   const alwaysKept = all.filter((k) => !sharedKeys.has(k));
   return [...new Set([...picked, ...alwaysKept])];
 }
@@ -70,7 +79,7 @@ export function composeProfileModulePrompts(
 ): string {
   if (!profileModules?.length) return "";
 
-  const allowed = new Set(profileModules);
+  const allowed = new Set(profileModules.map(normalizePromptModuleKey));
   const profileModuleSummaries = ALL_MODULES.filter(
     (m) =>
       m.profileOnly &&
@@ -118,7 +127,7 @@ export function resolveActiveModuleKeys(
         ? resolveOrchestratorProfileModuleKeys()
         : []);
   if (profileKeys.length) {
-    const allowed = new Set(profileKeys);
+    const allowed = new Set(profileKeys.map(normalizePromptModuleKey));
     for (const mod of ALL_MODULES) {
       if (mod.profileOnly && allowed.has(mod.key)) keys.push(mod.key);
     }

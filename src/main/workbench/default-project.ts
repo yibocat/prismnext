@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { isRemoteProjectRoot, recoverRemoteAbs } from "../../shared/remote";
 import {
   sameIdSet,
   type WorkbenchProjectMember,
@@ -23,6 +24,12 @@ import {
 } from "../../shared/workbench/paths";
 import { replaceRegisteredRoots } from "../project/active-project-roots";
 import {
+  markProjectDirectoryRemoved,
+  readProjectDirectory,
+  rememberProjectDirectory,
+  syncProjectDirectoryMembers,
+} from "./project-directory-index";
+import {
   ensureWorkbenchHome,
   isPathInsideWorkbenchHome,
   isWorkbenchHomePath,
@@ -34,9 +41,12 @@ import {
 } from "./home";
 import {
   ensureWorkbenchId,
+  mintProjectId,
   readWorkbenchJson,
   resolveOpenFolder,
+  resolveRemoteOpenFolder,
   writeWorkbenchJson,
+  type OpenFolderDecision,
   type WorkbenchSlot,
 } from "./identity";
 import { scaffoldWorkbenchProject } from "./scaffold";
@@ -87,11 +97,20 @@ export function readProjectSlotMeta(
   const lastPath = (raw as { lastPath?: unknown }).lastPath;
   if (typeof lastPath !== "string" || !lastPath.trim()) return null;
   const displayName = (raw as { displayName?: unknown }).displayName;
+  const stored = lastPath.trim();
+  const remote = recoverRemoteAbs(stored);
   const out: WorkbenchProjectMeta = {
-    lastPath: normalizeWorkbenchPath(resolve(lastPath.trim())),
+    lastPath: remote ?? normalizeWorkbenchPath(resolve(stored)),
   };
   if (typeof displayName === "string" && displayName.trim()) {
     out.displayName = displayName.trim();
+  }
+  if (remote && remote !== stored) {
+    try {
+      writeProjectSlotMeta(projectId, out, opts);
+    } catch {
+      // In-memory lastPath is already the remote:// URI.
+    }
   }
   return out;
 }
@@ -105,7 +124,8 @@ export function writeProjectSlotMeta(
   const file = join(home, projectSlotMetaRel(projectId));
   mkdirSync(join(home, projectSlotRel(projectId)), { recursive: true });
   const payload: WorkbenchProjectMeta = {
-    lastPath: normalizeWorkbenchPath(resolve(meta.lastPath)),
+    lastPath: recoverRemoteAbs(meta.lastPath)
+      ?? normalizeWorkbenchPath(resolve(meta.lastPath)),
   };
   if (meta.displayName?.trim()) payload.displayName = meta.displayName.trim();
   writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
@@ -139,6 +159,11 @@ function rememberMember(
     defaultProjectId: nextDefault,
     workbenchProjectIds: [...new Set(ids)],
   }, opts);
+  rememberProjectDirectory({
+    projectId,
+    lastPath,
+    displayName: displayNameFor(lastPath, existing?.displayName),
+  }, opts);
 }
 
 export function ensureDefaultProject(opts?: DefaultProjectOpts): DefaultProjectRef {
@@ -151,6 +176,16 @@ export function ensureDefaultProject(opts?: DefaultProjectOpts): DefaultProjectR
   if (settings.defaultProjectId) {
     const meta = readProjectSlotMeta(settings.defaultProjectId, opts);
     if (meta?.lastPath) {
+      if (isRemoteProjectRoot(meta.lastPath)) {
+        rememberMember(
+          settings.defaultProjectId,
+          meta.lastPath,
+          opts,
+          settings.defaultProjectId,
+          joinExisting,
+        );
+        return { projectId: settings.defaultProjectId, lastPath: meta.lastPath };
+      }
       mkdirSync(meta.lastPath, { recursive: true });
       scaffoldWorkbenchProject(meta.lastPath, settings.defaultProjectId);
       rememberMember(
@@ -218,16 +253,71 @@ function liveMemberPaths(opts?: DefaultProjectOpts): string[] {
     .filter((lastPath) => existsSync(lastPath));
 }
 
+function liveIdentityPaths(opts?: DefaultProjectOpts): string[] {
+  return listProjectSlots(opts)
+    .map((slot) => slot.lastPath)
+    .filter((lastPath) => isRemoteProjectRoot(lastPath) || existsSync(lastPath));
+}
+
+/**
+ * Host `project.open` reuses `.workbench/workbench.json` id. A copied folder
+ * can share that id with a live local (or other remote) member — do not steal.
+ */
+export function decideRemoteWorkbenchIdentity(
+  input: { projectId: string; lastPath: string },
+  opts?: DefaultProjectOpts,
+): OpenFolderDecision {
+  if (!isRemoteProjectRoot(input.lastPath)) {
+    throw new Error("not_a_remote_project_root");
+  }
+  return resolveRemoteOpenFolder({
+    absPath: input.lastPath,
+    workbenchId: input.projectId,
+    slots: listProjectSlots(opts),
+    livePaths: liveIdentityPaths(opts),
+    mintId: mintProjectId,
+  });
+}
+
+export function registerRemoteWorkbenchProject(
+  input: { projectId: string; lastPath: string; displayName?: string },
+  opts?: DefaultProjectOpts,
+): WorkbenchState {
+  if (!isRemoteProjectRoot(input.lastPath)) {
+    throw new Error("not_a_remote_project_root");
+  }
+  const decision = decideRemoteWorkbenchIdentity(input, opts);
+  if (decision.id !== input.projectId) {
+    throw new Error("remote_id_conflicts_with_live_member");
+  }
+  rememberMember(decision.id, input.lastPath, opts);
+  if (input.displayName?.trim()) {
+    writeProjectSlotMeta(decision.id, {
+      lastPath: input.lastPath,
+      displayName: input.displayName.trim(),
+    }, opts);
+  }
+  return getWorkbenchState(opts);
+}
+
 export function syncWorkbenchRegisteredRoots(opts?: DefaultProjectOpts): void {
   try {
-    replaceRegisteredRoots(listWorkbenchMembers(opts).map((member) => member.lastPath));
+    replaceRegisteredRoots(
+      listWorkbenchMembers(opts)
+        .map((member) => member.lastPath)
+        .filter((lastPath) => !isRemoteProjectRoot(lastPath)),
+    );
   } catch {
     // Missing home / tests without a real user home.
   }
 }
 
 export function openWorkbenchFolder(absPath: string, opts?: DefaultProjectOpts): DefaultProjectRef {
-  const lastPath = normalizeWorkbenchPath(resolve(absPath.trim()));
+  const trimmed = absPath.trim();
+  if (recoverRemoteAbs(trimmed)) {
+    throw new Error("remote_project_root_is_not_local");
+  }
+  const lastPath = normalizeWorkbenchPath(resolve(trimmed));
   if (!lastPath || lastPath === "/") throw new Error("missing_folder");
   const checkout = parseHomeWorktreeCheckout(lastPath, opts);
   if (checkout) {
@@ -290,6 +380,15 @@ export function removeWorkbenchProject(projectId: string, opts?: DefaultProjectO
   const id = projectId.trim();
   if (!id) throw new Error("missing_project_id");
   const settings = readWorkbenchHomeSettings(opts);
+  const meta = readProjectSlotMeta(id, opts);
+  if (meta?.lastPath) {
+    rememberProjectDirectory({
+      projectId: id,
+      lastPath: meta.lastPath,
+      displayName: displayNameFor(meta.lastPath, meta.displayName),
+    }, opts);
+  }
+  markProjectDirectoryRemoved(id, opts);
   writeWorkbenchHomeSettings({
     defaultProjectId: settings.defaultProjectId,
     workbenchProjectIds: settings.workbenchProjectIds.filter((item) => item !== id),
@@ -300,6 +399,18 @@ export function removeWorkbenchProject(projectId: string, opts?: DefaultProjectO
 export function setDefaultFromFolder(absPath: string, opts?: DefaultProjectOpts): DefaultProjectRef {
   const opened = openWorkbenchFolder(absPath, opts);
   return setDefaultProjectId(opened.projectId, opts);
+}
+
+/** Member lastPath, then `projectDirectoryById` (orphans after remove). */
+export function resolveProjectLastPath(
+  projectId: string,
+  opts?: DefaultProjectOpts,
+): string | null {
+  const id = projectId.trim();
+  if (!id) return null;
+  const member = listWorkbenchMembers(opts).find((item) => item.id === id);
+  if (member?.lastPath.trim()) return member.lastPath;
+  return readProjectDirectory(opts)[id]?.lastPath.trim() || null;
 }
 
 export function listWorkbenchMembers(opts?: DefaultProjectOpts): WorkbenchProjectMember[] {
@@ -323,10 +434,12 @@ export function listWorkbenchMembers(opts?: DefaultProjectOpts): WorkbenchProjec
 export function getWorkbenchState(opts?: DefaultProjectOpts): WorkbenchState {
   const ref = ensureDefaultProject(opts);
   const settings = readWorkbenchHomeSettings(opts);
+  const members = listWorkbenchMembers(opts);
   return {
     defaultProjectId: ref.projectId,
     defaultLastPath: ref.lastPath,
     workbenchProjectIds: settings.workbenchProjectIds,
-    members: listWorkbenchMembers(opts),
+    members,
+    projectDirectoryById: syncProjectDirectoryMembers(members, opts),
   };
 }

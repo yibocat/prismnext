@@ -191,7 +191,7 @@ export function LiteraturePdfAttachConflictDialog({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="xs"
             className="shadow-none"
             onClick={clearConflict}
           >
@@ -201,7 +201,7 @@ export function LiteraturePdfAttachConflictDialog({
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={() => void conflictActions.handleAttachAnyway()}
             >
@@ -211,7 +211,7 @@ export function LiteraturePdfAttachConflictDialog({
           {conflict.kind === "identifier_duplicate" && !otherHasPdf ? (
             <Button
               type="button"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={() => void conflictActions.handleAttachToOther()}
             >
@@ -221,7 +221,7 @@ export function LiteraturePdfAttachConflictDialog({
           {other ? (
             <Button
               type="button"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={conflictActions.handleOpenOther}
             >

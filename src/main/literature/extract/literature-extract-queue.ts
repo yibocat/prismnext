@@ -13,7 +13,7 @@ import { createLogger } from "../../app/logger";
 import { getSettings } from "../../app/settings";
 import { ensurePaperPdfAbsPath, type PdfResolveProgress } from "../pdf/literature-pdf-resolve";
 import { getPaper, openLibraryDb, type PaperRow, materializeZoteroPaperIfLinked } from "../facade";
-import { extractPdfTextWithPdfJs } from "./literature-extract-pdfjs";
+import { assertExtractParserAvailable, extractPdfTextWithPdfJs } from "./literature-extract-pdfjs";
 import { fetchHtmlSnapshot } from "./literature-extract-html";
 import { extractWithMineru } from "./mineru-client";
 import {
@@ -458,6 +458,8 @@ export function enqueuePaperExtract(
     return Promise.resolve(existing);
   }
 
+  assertExtractParserAvailable(source, Boolean(mineruToken()));
+
   let job = pendingByKey.get(key);
   if (!job) {
     const queued: PaperExtractState = {
@@ -534,6 +536,7 @@ export function enqueueBatchPaperExtract(
   source: PaperExtractSource,
   opts?: { force?: boolean; maxPapers?: number },
 ): { enqueued: number; skipped: number; capped: boolean } {
+  assertExtractParserAvailable(source, Boolean(mineruToken()));
   const max = Math.min(opts?.maxPapers ?? EXTRACT_BATCH_MAX_PAPERS, EXTRACT_BATCH_MAX_PAPERS);
   const capped = paperIds.length > max;
   const ids = paperIds.slice(0, max);
@@ -576,6 +579,7 @@ export function retryPaperExtract(
   paperId: string,
   source: PaperExtractSource,
 ): void {
+  assertExtractParserAvailable(source, Boolean(mineruToken()));
   const key = jobKey(projectRoot, paperId, source);
   clearRetryTimer(key);
   upsertPaperExtractState(projectRoot, {
@@ -591,16 +595,24 @@ export function retryPaperExtract(
 
 function pollDueRetries(projectRoot: string): void {
   for (const state of listExtractsDueForRetry(projectRoot)) {
-    void enqueuePaperExtract(projectRoot, state.paperId, state.source, { force: true });
+    try {
+      void enqueuePaperExtract(projectRoot, state.paperId, state.source, { force: true });
+    } catch {
+      // Parser missing — skip auto-retry until an engine is available.
+    }
   }
 }
 
 export function resumeExtractQueues(projectRoot: string): void {
   const pending = listQueuedOrExtracting(projectRoot);
   for (const state of pending) {
-    enqueuePaperExtract(projectRoot, state.paperId, state.source, {
-      force: state.status === "extracting",
-    });
+    try {
+      enqueuePaperExtract(projectRoot, state.paperId, state.source, {
+        force: state.status === "extracting",
+      });
+    } catch {
+      // Parser missing — leave queued rows; opening Literature must not throw.
+    }
   }
   pollDueRetries(projectRoot);
   for (const state of listFailedWithScheduledRetry(projectRoot)) {

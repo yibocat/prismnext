@@ -601,12 +601,12 @@ export function LiteratureEntryPanel({
               : `"${paper.title}" will be removed from the library.`}
           </p>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setDeleteOpen(false)}>
               {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               onClick={() => void handleDelete()}
               disabled={deleting}
             >

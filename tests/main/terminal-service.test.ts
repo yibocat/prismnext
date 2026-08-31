@@ -31,6 +31,7 @@ vi.mock("node-pty", () => ({
   }),
 }));
 
+import * as pty from "node-pty";
 import {
   createSession,
   destroySession,
@@ -64,6 +65,24 @@ describe("terminal service", () => {
     mockKill.mockClear();
     mockWrite.mockClear();
     mockResize.mockClear();
+  });
+
+  it("spawns the PTY at the panel size", () => {
+    createSession({
+      sessionId: "tab-size:0",
+      tabId: "tab-size",
+      projectRoot: "/proj",
+      cwd: "/proj",
+      cols: 132,
+      rows: 40,
+      onData: vi.fn(),
+      onExit: vi.fn(),
+    });
+    expect(vi.mocked(pty.spawn)).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cols: 132, rows: 40 }),
+    );
   });
 
   it("creates a session with metadata", () => {

@@ -78,7 +78,7 @@
     "deleteBody": "Are you sure you want to permanently delete “{{name}}”?",
     "deleteFolderBody": "Are you sure you want to permanently delete the folder “{{name}}” and all its contents?",
     "workspaceWarn": "This folder is configured as {{function}} in Workspace settings.",
-    "manuscriptWarn": "This is the only manuscript folder — TeX workspace features may stop working until another is configured."
+    "manuscriptWarn": "This is the only manuscript folder — Files will not know which directory is the paper until another is configured."
   },
   "experiments": {
     "deleteTitle": "Delete experiment?"

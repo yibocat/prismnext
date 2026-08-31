@@ -38,11 +38,13 @@ export const ChatFileInline = memo(function ChatFileInline({
   label,
   title,
   className,
+  line,
 }: {
   path: string;
   label?: ReactNode;
   title?: string;
   className?: string;
+  line?: number;
 }) {
   const resolvedPath = useMemo(() => resolveChatFilePath(path), [path]);
   const normalizedLabel = typeof label === "string" ? label.trim() : "";
@@ -53,15 +55,21 @@ export const ChatFileInline = memo(function ChatFileInline({
   const display = useCustomLabel
     ? normalizedLabel
     : projectPathBasename(resolvedPath);
+  const hoverTitle = line != null
+    ? `${title ?? resolvedPath}:${line}`
+    : (title ?? resolvedPath);
 
   return (
     <InlineTokenChip
       variant="file"
       label={display}
-      title={title ?? resolvedPath}
+      title={hoverTitle}
       icon={inlineFileIcon(resolvedPath)}
       className={cn(className)}
-      onClick={() => openComposerFileToken(resolvedPath)}
+      onClick={() => openComposerFileToken(
+        resolvedPath,
+        line != null ? { line, pin: true } : undefined,
+      )}
     />
   );
 });

@@ -27,7 +27,7 @@ export const shellApi = {
 		}>;
 		projectName?: string | null;
 		modes?: Array<{
-			id: "texworkspace" | "literature" | "experiments";
+			id: "files" | "literature" | "experiments";
 			label: string;
 		}>;
 	}) => ipcRenderer.invoke("shell:setTrayMenu", snapshot),
@@ -56,12 +56,12 @@ export const shellApi = {
 	},
 	onShellTrayOpenMode: (
 		callback: (args: {
-			modeId: "texworkspace" | "literature" | "experiments";
+			modeId: "files" | "literature" | "experiments";
 		}) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			args: { modeId: "texworkspace" | "literature" | "experiments" },
+			args: { modeId: "files" | "literature" | "experiments" },
 		) => callback(args);
 		ipcRenderer.on("shell:trayOpenMode", handler);
 		return () => ipcRenderer.removeListener("shell:trayOpenMode", handler);

@@ -4,11 +4,15 @@ import { findWorkbenchProjectRoot, parseHomeWorktreeCheckout, resolveWorkbenchHo
 import { readProjectSlotMeta } from "../workbench/default-project";
 import { ensureWorkbenchId, readWorkbenchJson } from "../workbench/identity";
 import { libraryRel, projectSlotRel } from "../../shared/workbench/paths";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import type { LibraryPaths } from "./types";
 
 export function resolveLibraryProjectRoot(candidate: string): string {
   const trimmed = candidate?.trim();
   if (!trimmed) return "";
+  if (isRemoteProjectRoot(trimmed)) {
+    throw new Error("literature_not_on_remote_yet");
+  }
   const resolved = path.resolve(trimmed);
   const checkout = parseHomeWorktreeCheckout(resolved);
   if (checkout) {

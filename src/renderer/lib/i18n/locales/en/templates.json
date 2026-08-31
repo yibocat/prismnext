@@ -8,6 +8,7 @@
     "categories": "Categories",
     "openProject": "Open a project before applying a template.",
     "needManuscript": "Configure a manuscript folder in Workspace settings first.",
+    "remoteOnlyLocal": "LaTeX templates apply on this computer only. Open the project locally to use Template Center or restore backups.",
     "current": "Current: {{name}} ({{category}})",
     "inUse": "In use",
     "status": "Status",

@@ -96,6 +96,8 @@
     "latexReady": "{{backend}} · 就绪",
     "latexReadyAuto": "{{backend}} · 自动编译",
     "latexMissing": "未检测到",
+    "latexLocal": "本机 · {{detail}}",
+    "latexRemote": "{{host}} · {{detail}}",
     "aiTerminal": "AI 终端",
     "aiTerminalRunning": "{{running}} 运行中 · {{open}} 已打开",
     "aiTerminalOpen": "{{open}} 已打开",
@@ -103,7 +105,14 @@
     "terminalBusy": "{{count}} 忙碌",
     "connecting": "连接中…",
     "running": "运行中",
-    "stopped": "已停止"
+    "stopped": "已停止",
+    "thisComputer": "本机",
+    "connection": "连接",
+    "remote": "主机",
+    "remoteConnected": "已连接",
+    "remoteConnecting": "连接中…",
+    "remoteError": "连接失败",
+    "remoteDisconnected": "未连接"
   },
   "rightArea": {
     "backToSettings": "返回设置",
@@ -115,6 +124,6 @@
     "restorePanel": "还原面板",
     "openFileToStart": "打开文件以开始",
     "openFileOrWorkspace": "打开文件或切换到工作区",
-    "openFileOrWorkspaceHint": "使用上方工具栏浏览文件、查看 Git 历史，或在 TeX 工作区开始写作。"
+    "openFileOrWorkspaceHint": "使用上方工具栏浏览文件、查看 Git 历史，或在 Files 中打开 `.tex` / `.typ`。"
   }
 }

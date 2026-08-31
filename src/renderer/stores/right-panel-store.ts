@@ -2,7 +2,9 @@ import { create } from "zustand";
 import { useDocumentStore } from "./document-store";
 import { useLayoutStore } from "./layout-store";
 import { useTerminalStore } from "./terminal-store";
-import { shellDisplayName } from "@/lib/terminal/shell-label";
+import { remoteTerminalTabTitle, shellDisplayName } from "@/lib/terminal/shell-label";
+import { isRemoteProjectRoot } from "@shared/remote";
+import { i18n } from "@/lib/i18n";
 import { useTerminalAiStore } from "./terminal-ai-store";
 import {
   isFileBackedTab,
@@ -83,10 +85,6 @@ interface RightPanelState {
   ) => void;
   /** Pin a preview tab (italic → normal) */
   pinTab: (id: string) => void;
-  openTexworkspaceFile: (fileId: string, filePath: string, name: string) => void;
-  /** Switch the texworkspace tab's active file without changing the tab title */
-  setTexworkspaceActiveFile: (fileId: string) => void;
-  switchToTexworkspace: (fileId: string, filePath: string, name: string) => void;
   openGitDiff: (filePath: string) => void;
   newBrowserTab: () => string;
   newTerminalTab: () => string;
@@ -148,14 +146,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     if (existing) {
       set({ activeTabId: existing.id });
       return existing.id;
-    }
-    // texworkspace is a singleton — reuse the existing tab
-    if (kind === "texworkspace") {
-      const texTab = tabs.find((t) => t.kind === "texworkspace");
-      if (texTab) {
-        set({ activeTabId: texTab.id });
-        return texTab.id;
-      }
     }
     const id = nextTabId();
     const tab = createHomeTab(kind, id);
@@ -333,57 +323,6 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
     };
     set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
     return id;
-  },
-
-  openTexworkspaceFile: (fileId: string, filePath: string, name: string) => {
-    const { tabs, activeTabId } = get();
-    const texworkspaceTab = tabs.find((t) => t.kind === "texworkspace" && t.id === activeTabId);
-    if (!texworkspaceTab) return;
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === texworkspaceTab.id && t.kind === "texworkspace"
-          ? { ...t, title: name, fileId, filePath, isInitial: false }
-          : t,
-      ),
-    }));
-    useDocumentStore.getState().setActiveFile(fileId);
-  },
-
-  setTexworkspaceActiveFile: (fileId: string) => {
-    const { tabs, activeTabId } = get();
-    const texworkspaceTab = tabs.find((t) => t.kind === "texworkspace" && t.id === activeTabId);
-    if (!texworkspaceTab) return;
-    const meta = useDocumentStore.getState().fileMetadata.get(fileId);
-    const filePath = meta?.relativePath ?? fileId;
-    const title = meta?.name ?? texworkspaceTab.title;
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === texworkspaceTab.id && t.kind === "texworkspace"
-          ? { ...t, fileId, filePath, title, isInitial: false }
-          : t,
-      ),
-    }));
-    useDocumentStore.getState().setActiveFile(fileId);
-  },
-
-  switchToTexworkspace: (fileId: string, filePath: string, name: string) => {
-    const { tabs } = get();
-    const existing = tabs.find((t) => t.kind === "texworkspace");
-    if (existing) {
-      set((s) => ({
-        tabs: s.tabs.map((t) =>
-          t.id === existing.id && t.kind === "texworkspace"
-            ? { ...t, title: name, fileId, filePath, isInitial: false }
-            : t,
-        ),
-        activeTabId: existing.id,
-      }));
-    } else {
-      const id = nextTabId();
-      const tab: RightTab = { id, kind: "texworkspace", title: name, fileId, filePath, isInitial: false };
-      set((s) => ({ tabs: [tab, ...s.tabs], activeTabId: id }));
-    }
-    useDocumentStore.getState().setActiveFile(fileId);
   },
 
   openFile: (fileId, filePath, name, opts) => {
@@ -608,13 +547,17 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
 
   newTerminalTab: () => {
     const id = nextTabId();
+    const projectRoot = useDocumentStore.getState().projectRoot;
+    const remote = Boolean(projectRoot && isRemoteProjectRoot(projectRoot));
     const shell = useTerminalStore.getState().envInfo?.shell;
     const tab: RightTab = {
       id,
       kind: "terminal",
-      title: shell
-        ? shellDisplayName(shell)
-        : modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Shell",
+      title: remote
+        ? i18n.t("modes.terminal.remoteTitle", { shell: remoteTerminalTabTitle("/bin/bash") })
+        : shell
+          ? shellDisplayName(shell)
+          : modeRegistry.findByTabKind("terminal")?.initialTitle ?? "Shell",
       isInitial: false,
       terminalSource: "user",
     };
@@ -856,7 +799,7 @@ export const useRightPanelStore = create<RightPanelState>()((set, get) => ({
       useRightPanelStore.setState((s) => {
         const next = s.tabs.filter((t) => t.kind !== kind);
         const nextActive = next.length > 0 ? next[0].id : null;
-        if (kind === "file" || kind === "texworkspace" || kind === "research-plan") {
+        if (kind === "file" || kind === "research-plan") {
           useDocumentStore.getState().setActiveFile("");
         }
         return { tabs: next, activeTabId: nextActive };
@@ -932,6 +875,13 @@ function performCloseTab(
 
     return { tabs: next, activeTabId: nextActive };
   });
+
+  if (closingTab.kind === "file" && (closingTab.filePath || closingTab.fileId)) {
+    const rel = closingTab.filePath || closingTab.fileId || "";
+    void import("./typst-session-store").then(({ notifyTypstTabClosed }) => {
+      notifyTypstTabClosed(rel);
+    });
+  }
 
   if (closedAiTabId && !options?.skipAiDismiss) {
     useTerminalAiStore.getState().onAiTabClosedByUser(closedAiTabId);

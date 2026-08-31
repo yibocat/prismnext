@@ -3,6 +3,7 @@ import { registerDialogHandlers } from "./dialog";
 import { registerProjectScaffoldHandlers } from "./project-scaffold";
 import { registerTemplateHandlers } from "./template";
 import { registerCompileHandlers } from "./compile";
+import { registerTypstHandlers } from "./typst";
 import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
@@ -35,16 +36,19 @@ import { registerPacksHandlers } from "./teams";
 import { registerUserPacksHandlers } from "./user-teams";
 import { registerProjectLifecycleHandlers } from "./project-lifecycle";
 import { registerWorkbenchHandlers } from "./workbench";
+import { registerRemoteHandlers } from "./remote";
 
 export function registerIpcHandlers(): void {
   installIpcHandlerErrorGuard();
   registerProjectLifecycleHandlers();
   registerWorkbenchHandlers();
+  registerRemoteHandlers();
   registerFsHandlers();
   registerDialogHandlers();
   registerProjectScaffoldHandlers();
   registerTemplateHandlers();
   registerCompileHandlers();
+  registerTypstHandlers();
   registerAgentHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();

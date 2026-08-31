@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import {
   LEGACY_RESEARCH_BRIEF_REL,
   RESEARCH_BRIEF_REL,
@@ -36,6 +37,9 @@ function migrateLegacyResearchBrief(projectRoot: string): boolean {
  * Migrates the pre-0.6.8 path once. Never overwrites an existing brief.
  */
 export function ensureResearchBrief(projectRoot: string): { created: boolean; path: string } {
+  if (isRemoteProjectRoot(projectRoot)) {
+    return { created: false, path: RESEARCH_BRIEF_REL };
+  }
   migrateLegacyResearchBrief(projectRoot);
   const abs = researchBriefAbsPath(projectRoot);
   if (existsSync(abs)) {

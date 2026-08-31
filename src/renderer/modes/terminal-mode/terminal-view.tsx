@@ -90,6 +90,9 @@ export function TerminalView({ tabId }: TerminalViewProps) {
 
     const term = new Terminal({
       theme: xtermTheme,
+      // LF alone stays in the same column (staircase). Real PTYs emit CRLF;
+      // convertEol makes a lone LF behave as newline+return for both local and Host.
+      convertEol: true,
       // Required for theme.background alpha; otherwise xterm paints an opaque
       // cell fill that cannot match the content surface / glass token.
       allowTransparency: true,
@@ -117,6 +120,8 @@ export function TerminalView({ tabId }: TerminalViewProps) {
     let captureBuf = "";
     let capturing = false;
 
+    try { fitAddon.fit(); } catch { /* ignore */ }
+
     if (!canReuse) {
       // ─── Spawn PTY ───
       terminalDesktop
@@ -125,6 +130,8 @@ export function TerminalView({ tabId }: TerminalViewProps) {
           tabId,
           projectRoot,
           cwd: spawnCwd,
+          cols: term.cols,
+          rows: term.rows,
         })
         .then(({ shell, cwd, pid }) => {
           if (disposed) return;

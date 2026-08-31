@@ -15,6 +15,7 @@ import { updateApi } from "./update";
 import { proLicenseApi } from "./pro-license";
 import { windowApi } from "./window";
 import { compileApi } from "./compile";
+import { typstApi } from "./typst";
 import { literatureApi } from "./literature";
 import { literatureExtractApi } from "./literature-extract";
 import { zoteroApi } from "./zotero";
@@ -35,6 +36,7 @@ import { worktreeApi } from "./worktree";
 import { skillsApi } from "./skills";
 import { logApi } from "./log";
 import { themeApi } from "./theme";
+import { remoteApi } from "./remote";
 
 contextBridge.exposeInMainWorld("electronAPI", {
 	...platformApi,
@@ -53,6 +55,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	...proLicenseApi,
 	...windowApi,
 	...compileApi,
+	...typstApi,
 	...literatureApi,
 	...literatureExtractApi,
 	...zoteroApi,
@@ -73,4 +76,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	...skillsApi,
 	...logApi,
 	...themeApi,
+	...remoteApi,
 });

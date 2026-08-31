@@ -1,12 +1,13 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { FolderIcon, LockIcon } from "lucide-react";
 import { WorkbenchProjectPicker } from "@/components/layout/workbench-add-menu";
 import { cn } from "@/lib/utils";
-import {
-  assignSessionToProjectPath,
-  pickFolderAndAssignSession,
-} from "@/lib/workspace/project-lifecycle";
+import { i18n } from "@/lib/i18n";
+import { parseRemoteAbs } from "@shared/remote";
+import { applyProjectPick } from "@/lib/workspace/project-context";
+import { pickFolderAndAssignSession } from "@/lib/workspace/project-lifecycle";
 import { useChatStore } from "@/stores/chat-store";
 import { selectableWorkbenchProjects, useWorkbenchStore } from "@/stores/workbench-store";
 import { CHAT_PANEL_TOOLBAR_BUTTON } from "./worktree-selector";
@@ -26,12 +27,27 @@ export function ProjectSelector() {
   const current = members.find((member) => member.id === currentId) ?? members[0];
   const label = current?.displayName || t("chat.project.select");
 
-  const handlePickPath = useCallback(
-    (path: string) => {
+  const assignActiveChat = useCallback(
+    async (path: string) => {
       if (streaming || !activeTabId) return;
-      void assignSessionToProjectPath(activeTabId, path);
+      const result = await applyProjectPick({
+        path,
+        mode: "assign",
+        conversationId: activeTabId,
+      });
+      if (!result.ok) {
+        if (result.reason === "session_not_empty") {
+          toast.error(t("chat.projectAssignBlocked"));
+        }
+        throw new Error(result.reason);
+      }
+      const remote = parseRemoteAbs(path);
+      if (remote) {
+        const name = remote.abs.split("/").filter(Boolean).at(-1) || remote.abs;
+        toast.success(i18n.t("remote.openedProject", { name }));
+      }
     },
-    [activeTabId, streaming],
+    [activeTabId, streaming, t],
   );
 
   const handleOpenFolder = useCallback(() => {
@@ -39,21 +55,15 @@ export function ProjectSelector() {
     void pickFolderAndAssignSession(activeTabId);
   }, [activeTabId, streaming]);
 
-  const handleProjectCreated = useCallback(
-    (path: string) => {
-      if (streaming || !activeTabId) return;
-      void assignSessionToProjectPath(activeTabId, path);
-    },
-    [activeTabId, streaming],
-  );
-
   return (
     <WorkbenchProjectPicker
+      pickerMode="chat-assign"
       hintLabel={streaming ? t("chat.project.locked") : label}
       disabled={streaming}
-      onPickPath={handlePickPath}
+      selectedPath={current?.lastPath}
+      onPickPath={assignActiveChat}
       onOpenFolder={handleOpenFolder}
-      onProjectCreated={handleProjectCreated}
+      onProjectCreated={assignActiveChat}
     >
       <button
         type="button"

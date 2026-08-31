@@ -6,7 +6,10 @@ import {
   FOLDER_FUNCTION_LABELS,
   DEFAULT_FUNCTION_DESCRIPTIONS,
   findExperimentConfig,
+  manuscriptMainFile,
+  dualWriteManuscriptPins,
 } from "../../shared/workbench/workspace-folder";
+import { compileEngineFromRelPath } from "../../shared/compile/artifact-key";
 import {
   readWorkbenchJson,
   writeWorkbenchJson,
@@ -15,6 +18,67 @@ import {
 import { DEFAULT_WORKSPACE_FOLDERS, readWorkspaceDirs } from "../lib/workspace-dirs";
 
 export { DEFAULT_WORKSPACE_FOLDERS, readWorkspaceDirs };
+
+export const DEFAULT_MAIN_TEX = String.raw`\documentclass{article}
+
+% ── Packages ──
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage[
+  style=nature,
+  backend=bibtex,
+  sorting=none,
+]{biblatex}
+\addbibresource{references.bib}
+
+% ── Title ──
+\title{Title}
+\author{Author}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  Write your abstract here.
+\end{abstract}
+
+\section{Introduction}
+
+\section{Methods}
+
+\section{Results}
+
+\section{Discussion}
+
+\printbibliography
+
+\end{document}
+`;
+
+export function ensureMainTex(
+  projectRoot: string,
+): { created: boolean; relativePath?: string } {
+  const dirs = readWorkspaceDirs(projectRoot);
+  const manuscript = dirs.find((d) => d.function === "manuscript");
+  if (!manuscript) return { created: false };
+  const pin = manuscriptMainFile(manuscript);
+  if (!pin) return { created: false };
+  if (compileEngineFromRelPath(pin) !== "latex") return { created: false };
+
+  const mainTexPath = path.join(projectRoot, manuscript.name, pin);
+  if (fs.existsSync(mainTexPath)) return { created: false };
+
+  const parentDir = path.dirname(mainTexPath);
+  if (!fs.existsSync(parentDir)) {
+    fs.mkdirSync(parentDir, { recursive: true });
+  }
+  fs.writeFileSync(mainTexPath, DEFAULT_MAIN_TEX, "utf-8");
+  return { created: true, relativePath: `${manuscript.name}/${pin}` };
+}
 
 interface ProjectSettings {
   version?: number;
@@ -59,7 +123,7 @@ export function writeWorkspaceDirs(
     id,
     workspace: {
       ...existing?.workspace,
-      folders: dirs,
+      folders: dualWriteManuscriptPins(dirs),
     },
   });
 }
@@ -103,13 +167,6 @@ export function validateWorkspaceDirs(dirs: WorkspaceFolder[]): string[] {
   const manuscriptCount = dirs.filter((d) => d.function === "manuscript").length;
   if (manuscriptCount > 1) {
     errors.push("Only one manuscript folder is allowed.");
-  }
-
-  // Check manuscript has mainTex
-  for (const d of dirs) {
-    if (d.function === "manuscript" && !("mainTex" in d && d.mainTex)) {
-      errors.push(`Manuscript folder "${d.name}" must specify mainTex.`);
-    }
   }
 
   return errors;

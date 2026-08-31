@@ -1,4 +1,5 @@
 import {
+  EXTRACT_PARSER_UNAVAILABLE,
   EXTRACT_SOURCE_PRIORITY,
   PAPER_EXTRACT_ACTION_LABEL,
   pickBestReadySource,
@@ -6,6 +7,7 @@ import {
   type PaperExtractSourcePreference,
   type PaperExtractState,
 } from "../../../shared/literature/paper-extract";
+import { resolveExtractParser } from "./literature-extract-pdfjs";
 import {
   filterMarkdownByQuery,
   parsePageSpec,
@@ -59,16 +61,6 @@ export interface ReadPdfContentResult {
   error?: string;
 }
 
-function defaultSourceToEnqueue(
-  preference: PaperExtractSourcePreference,
-  tokenPresent: boolean,
-): PaperExtractSource {
-  if (preference === "auto") {
-    return tokenPresent ? "mineru" : "pdfjs";
-  }
-  return preference;
-}
-
 export async function readPaperPdfContent(
   args: ReadPdfContentArgs,
   mineruTokenPresent: boolean,
@@ -89,7 +81,16 @@ export async function readPaperPdfContent(
   let readySource = pickBestReadySource(states, preference);
 
   if (!readySource && args.force) {
-    const enqueueSource = defaultSourceToEnqueue(preference, mineruTokenPresent);
+    const parser = resolveExtractParser(preference, mineruTokenPresent);
+    if (!parser.ok) {
+      return {
+        bibkey,
+        paperId: paper.id,
+        error: EXTRACT_PARSER_UNAVAILABLE,
+        hint: "No extract engine on this machine (MinerU token missing or PDF parser unavailable).",
+      };
+    }
+    const enqueueSource = parser.source;
     if (args.initiatedBy === "agent") {
       notifyAgentExtractRequested({
         projectRoot: args.projectRoot,

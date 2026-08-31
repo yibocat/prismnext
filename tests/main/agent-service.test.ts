@@ -34,6 +34,23 @@ describe("agent auth and prompt assembly", () => {
     });
   });
 
+  it("allows a placeholder key in Host Gateway mode", () => {
+    const result = resolveAgentAuth({
+      allowMissingKey: true,
+      settings: {
+        aiProvider: "anthropic",
+        aiModel: "claude-sonnet-4-5",
+        aiApiKeys: {},
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-5",
+    });
+    if (result.ok) expect(result.apiKey).toBe("prismnext-gateway");
+  });
+
   it("reads the decrypted settings key when the send payload omits apiKey", () => {
     const result = resolveAgentAuth({
       settings: {
@@ -166,6 +183,9 @@ describe("agent service status", () => {
       "latex-root",
       "latex-compile",
       "latex-compile-standalone",
+      "typst-root",
+      "typst-compile",
+      "typst-compile-standalone",
       "research-brief-read",
       "research-brief-update",
       "experiment-log",
@@ -186,7 +206,7 @@ describe("agent service status", () => {
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(36);
+    expect(missingKey.tools).toHaveLength(39);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({

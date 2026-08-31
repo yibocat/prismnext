@@ -194,12 +194,12 @@ export function LiteratureBatchSelectionActions({
             {t("literature.dialogs.deleteEntriesBody")}
           </p>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setDeleteOpen(false)}>
               {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               onClick={() => void handleBatchDelete()}
               disabled={deleting}
             >

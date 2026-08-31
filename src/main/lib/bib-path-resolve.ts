@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { createLogger } from "../app/logger";
 import { readWorkspaceDirs } from "./workspace-dirs";
+import { manuscriptMainFile } from "../../shared/workbench/workspace-folder";
+import { compileEngineFromRelPath } from "../../shared/compile/artifact-key";
 
 const log = createLogger("bib-path", "fs");
 
@@ -112,9 +114,12 @@ export function intendedBibliographyPath(
 export function resolveMainTexRelativePath(projectRoot: string): string | null {
   const dirs = readWorkspaceDirs(projectRoot);
   const manuscript = dirs.find((d) => d.function === "manuscript");
-  if (manuscript && "mainTex" in manuscript) {
-    const rel = normalizeRel(path.join(manuscript.name, manuscript.mainTex));
-    if (fs.existsSync(path.join(projectRoot, rel))) return rel;
+  if (manuscript) {
+    const pin = manuscriptMainFile(manuscript);
+    if (pin && compileEngineFromRelPath(pin) === "latex") {
+      const rel = normalizeRel(path.join(manuscript.name, pin));
+      if (fs.existsSync(path.join(projectRoot, rel))) return rel;
+    }
   }
   for (const candidate of ["main.tex"]) {
     if (fs.existsSync(path.join(projectRoot, candidate))) return candidate;

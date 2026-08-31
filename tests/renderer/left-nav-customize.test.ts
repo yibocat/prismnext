@@ -21,7 +21,6 @@ const primary = [
   { id: "new-agent", order: 0, required: true },
   { id: "files", order: 10 },
   { id: "git", order: 20 },
-  { id: "texworkspace", order: 30 },
   { id: "literature", order: 40 },
   { id: "experiments", order: 50 },
 ];
@@ -35,7 +34,7 @@ describe("left nav customize", () => {
     expect(next.map((item) => item.id)).toEqual([
       "new-agent",
       "git",
-      "texworkspace",
+      "files",
     ]);
     expect(next.every((item) => item.id !== "literature" || isLeftNavRequired(item))).toBe(true);
   });
@@ -45,52 +44,52 @@ describe("left nav customize", () => {
       { hiddenIds: ["new-agent", "nope", "experiments"], order: ["nope", "literature", "git"] },
       primary,
     );
-    expect(prefs.hiddenIds).toEqual(["experiments", "files"]);
+    expect(prefs.hiddenIds).toEqual(["experiments"]);
     expect(prefs.order[0]).toBe("literature");
     expect(prefs.order).toContain("new-agent");
     expect(prefs.order).not.toContain("nope");
   });
 
-  it("rewrites the old TeX nav id", () => {
+  it("drops retired TeX Workspace nav ids", () => {
     const prefs = sanitizeLeftNavPrefs(
       { hiddenIds: ["tex-workspace"], order: ["tex-workspace", "literature"] },
       primary,
     );
-    expect(prefs.hiddenIds).toEqual(["texworkspace", "files", "git", "experiments"]);
-    expect(prefs.order[0]).toBe("texworkspace");
+    expect(prefs.hiddenIds).toEqual(["git", "experiments"]);
+    expect(prefs.order[0]).toBe("literature");
     expect(prefs.order).not.toContain("tex-workspace");
+    expect(prefs.order).not.toContain("texworkspace");
   });
 
   it("lists optional items in saved order including hidden ones", () => {
     const optional = optionalPrimaryNavItems(primary, {
-      order: ["git", "texworkspace"],
-      hiddenIds: ["texworkspace"],
+      order: ["git", "files"],
+      hiddenIds: ["files"],
     });
     expect(optional.map((item) => item.id)).toEqual([
       "git",
-      "texworkspace",
-      "literature",
       "files",
+      "literature",
       "experiments",
     ]);
     expect(optional.some((item) => item.id === "templates" || item.id === "teams")).toBe(false);
   });
 
-  it("defaults the module Nav to TeX Workspace and Library", () => {
+  it("defaults the module Nav to Files and Library", () => {
     const next = resolvePrimaryNavItems(primary, undefined);
     expect(next.map((item) => item.id)).toEqual([
       "new-agent",
-      "texworkspace",
+      "files",
       "literature",
     ]);
     const prefs = sanitizeLeftNavPrefs(undefined, primary);
-    expect(prefs.hiddenIds).toEqual(["files", "git", "experiments"]);
+    expect(prefs.hiddenIds).toEqual(["git", "experiments"]);
   });
 
   it("hides a newly registered module until the user opts in", () => {
     const withNotebook = [...primary, { id: "notebook", order: 60 }];
     const prefs = sanitizeLeftNavPrefs(
-      { hiddenIds: ["files"], order: ["texworkspace", "literature", "files"] },
+      { hiddenIds: ["files"], order: ["literature", "files"] },
       withNotebook,
     );
     expect(prefs.hiddenIds).toContain("notebook");

@@ -24,6 +24,7 @@ import {
   restoreTemplateBackup,
   type TemplateBackupEntry,
 } from "@/lib/settings";
+import { isRemoteProjectRoot } from "@shared/remote";
 
 function formatLabel(label: string): { date: string; from: string; to: string } {
   const firstUnderscore = label.indexOf("_");
@@ -58,6 +59,7 @@ export function BackupsSettingsPanel({
 }) {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const isRemote = Boolean(projectRoot && isRemoteProjectRoot(projectRoot));
   const manuscriptConfig = useWorkspaceConfigStore((s) => s.manuscriptConfig);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const [backups, setBackups] = useState<TemplateBackupEntry[]>([]);
@@ -130,6 +132,14 @@ export function BackupsSettingsPanel({
     return (
       <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
         {t("settings.editor.backups.openProject")}
+      </p>
+    );
+  }
+
+  if (isRemote) {
+    return (
+      <p className="text-[length:var(--font-size-12)] text-muted-foreground py-4">
+        {t("settings.editor.backups.remoteOnlyLocal")}
       </p>
     );
   }
@@ -256,10 +266,10 @@ export function BackupsSettingsPanel({
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmRestore(null)}>
+            <Button variant="outline" size="xs" className="shadow-none" onClick={() => setConfirmRestore(null)}>
               {t("common.cancel")}
             </Button>
-            <Button size="sm" className="shadow-none" onClick={() => confirmRestore && handleRestore(confirmRestore)}>
+            <Button size="xs" className="shadow-none" onClick={() => confirmRestore && handleRestore(confirmRestore)}>
               {t("settings.editor.backups.restore")}
             </Button>
           </DialogFooter>
@@ -280,12 +290,12 @@ export function BackupsSettingsPanel({
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setConfirmDelete(null)}>
+            <Button variant="outline" size="xs" className="shadow-none" onClick={() => setConfirmDelete(null)}>
               {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               disabled={!!deleting}
               onClick={() => confirmDelete && handleDelete(confirmDelete)}

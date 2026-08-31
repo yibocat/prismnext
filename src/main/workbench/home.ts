@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { WorkbenchHomeSettings } from "../../shared/workbench/api";
+import { parseProjectDirectoryIndex } from "../../shared/workbench/project-directory-index";
 import {
   HOME_BROWSER_DIRNAME,
   HOME_JOBS_DIRNAME,
@@ -12,6 +13,9 @@ import {
   HOME_SKILLS_MANIFEST_FILENAME,
   HOME_TEAMS_DIRNAME,
   HOME_TEAMS_STATE_FILENAME,
+  HOME_TYPST_LIVE_DIRNAME,
+  HOST_INSTALL_DIRNAME,
+  HOST_PRO_PACKAGE_DIRNAME,
   PROJECT_META_DIR,
   PROJECTS_DIRNAME,
   WORKBENCH_HOME_DIRNAME,
@@ -40,6 +44,18 @@ function resolveUserHome(opts?: WorkbenchHomeOpts): string {
 
 export function resolveWorkbenchHome(opts?: WorkbenchHomeOpts): string {
   return normalizeWorkbenchPath(join(resolveUserHome(opts), WORKBENCH_HOME_DIRNAME));
+}
+
+/** Server Host install root (`~/.prismnext-host`), sibling of app home. */
+export function resolveHostInstallDir(opts?: WorkbenchHomeOpts): string {
+  return normalizeWorkbenchPath(join(resolveUserHome(opts), HOST_INSTALL_DIRNAME));
+}
+
+/** Pushed Pro packs on the server — not inside the Host tarball `current/`. */
+export function resolveHostProPackageDir(opts?: WorkbenchHomeOpts): string {
+  const env = process.env.PRISM_HOST_PRO_PACKAGE_DIR?.trim();
+  if (env) return normalizeWorkbenchPath(env);
+  return join(resolveHostInstallDir(opts), HOST_PRO_PACKAGE_DIRNAME);
 }
 
 export function homeSkillsDir(opts?: WorkbenchHomeOpts): string {
@@ -116,6 +132,7 @@ export function ensureWorkbenchHome(opts?: WorkbenchHomeOpts): string {
   ]) {
     mkdirSync(join(home, rel), { recursive: true });
   }
+  rmSync(join(home, HOME_TYPST_LIVE_DIRNAME), { recursive: true, force: true });
   const settingsPath = join(home, HOME_SETTINGS_FILENAME);
   if (!existsSync(settingsPath)) {
     writeFileSync(
@@ -142,7 +159,11 @@ export function readWorkbenchHomeSettings(opts?: WorkbenchHomeOpts): WorkbenchHo
     return { ...EMPTY_HOME_SETTINGS };
   }
   if (!raw || typeof raw !== "object") return { ...EMPTY_HOME_SETTINGS };
-  const rec = raw as { defaultProjectId?: unknown; workbenchProjectIds?: unknown };
+  const rec = raw as {
+    defaultProjectId?: unknown;
+    workbenchProjectIds?: unknown;
+    projectDirectoryById?: unknown;
+  };
   const defaultProjectId =
     typeof rec.defaultProjectId === "string" && rec.defaultProjectId.trim()
       ? rec.defaultProjectId.trim()
@@ -150,7 +171,8 @@ export function readWorkbenchHomeSettings(opts?: WorkbenchHomeOpts): WorkbenchHo
   const workbenchProjectIds = Array.isArray(rec.workbenchProjectIds)
     ? rec.workbenchProjectIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
     : [];
-  return { defaultProjectId, workbenchProjectIds };
+  const projectDirectoryById = parseProjectDirectoryIndex(rec.projectDirectoryById);
+  return { defaultProjectId, workbenchProjectIds, projectDirectoryById };
 }
 
 export function writeWorkbenchHomeSettings(
@@ -170,12 +192,15 @@ export function writeWorkbenchHomeSettings(
   }
   const ids = [...new Set(settings.workbenchProjectIds.map((id) => id.trim()).filter(Boolean))];
   const defaultProjectId = settings.defaultProjectId?.trim() || null;
+  const projectDirectoryById = settings.projectDirectoryById
+    ?? parseProjectDirectoryIndex(extra.projectDirectoryById);
   writeFileSync(
     file,
     `${JSON.stringify({
       ...extra,
       defaultProjectId,
       workbenchProjectIds: ids,
+      projectDirectoryById,
     }, null, 2)}\n`,
     "utf-8",
   );

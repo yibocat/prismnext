@@ -159,6 +159,7 @@ export default defineConfig({
       },
       dedupe: ["@codemirror/state", "@codemirror/view", "@codemirror/merge", "pdfjs-dist"],
     },
+    assetsInclude: ["**/*.wasm"],
     server: {
       fs: {
         // Allow all files for local dev (KaTeX fonts in pnpm store)
@@ -205,7 +206,9 @@ export default defineConfig({
     optimizeDeps: {
       // Legacy build is already a webpack bundle — don't re-bundle.
       // Paths are explicit to avoid pulling in the modern ESM build.
-      exclude: ["pdfjs-dist"],
+      exclude: [
+        "pdfjs-dist",
+      ],
       esbuildOptions: {
         target: "esnext",
       },

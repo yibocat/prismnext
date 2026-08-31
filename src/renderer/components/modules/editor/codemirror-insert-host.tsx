@@ -23,7 +23,7 @@ export interface CodeMirrorInsertHostProps {
   children: ReactNode;
 }
 
-/** CodeMirror selection → Add to Chat (Files, TeX Workspace, Git diff). */
+/** CodeMirror selection → Add to Chat (Files, Git diff). */
 export function CodeMirrorInsertHost({
   viewRef,
   filePath,

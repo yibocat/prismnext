@@ -1,4 +1,6 @@
 import { ipcRenderer } from "electron";
+import type { CompileAgentCompleteEvent } from "../shared/compile/artifact-key";
+import type { TypstCliFormat } from "../shared/compile/typst-format";
 
 export const compileApi = {
 	// Compile operations
@@ -24,31 +26,30 @@ export const compileApi = {
 			skipSynctex: opts?.skipSynctex,
 			fast: opts?.fast,
 		}),
-	compileDetectTexlive: () => ipcRenderer.invoke("compile:detectTexlive"),
+	compileTypstExport: (
+		projectDir: string,
+		mainFile: string,
+		format: TypstCliFormat,
+		opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
+	) =>
+		ipcRenderer.invoke("compile:typstExport", {
+			projectDir,
+			mainFile,
+			format,
+			dirtyFiles: opts?.dirtyFiles,
+		}),
+	compileDetectTexlive: (args?: { projectRoot?: string }) =>
+		ipcRenderer.invoke("compile:detectTexlive", args),
 	compileExportPdf: (projectRoot: string, mainFile: string, pdfBytes?: Uint8Array | null) =>
 		ipcRenderer.invoke("compile:exportPdf", { projectRoot, mainFile, pdfBytes }),
 	manuscriptPackZip: (projectRoot: string, manuscriptDir: string) =>
 		ipcRenderer.invoke("manuscript:packZip", { projectRoot, manuscriptDir }),
 	onCompileAgentComplete: (
-		callback: (data: {
-			projectDir: string;
-			success: boolean;
-			mainFile?: string;
-			pdfBytes?: ArrayBuffer;
-			error?: string;
-			logTail?: string;
-		}) => void,
+		callback: (data: CompileAgentCompleteEvent) => void,
 	) => {
 		const handler = (
 			_event: Electron.IpcRendererEvent,
-			data: {
-				projectDir: string;
-				success: boolean;
-				mainFile?: string;
-				pdfBytes?: ArrayBuffer;
-				error?: string;
-				logTail?: string;
-			},
+			data: CompileAgentCompleteEvent,
 		) => callback(data);
 		ipcRenderer.on("compile:agentComplete", handler);
 		return () => ipcRenderer.removeListener("compile:agentComplete", handler);

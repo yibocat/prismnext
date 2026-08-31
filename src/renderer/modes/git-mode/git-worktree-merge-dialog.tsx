@@ -5,9 +5,11 @@ import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useDocumentStore } from "@/stores/document-store";
 import { gitDesktop } from "@/lib/desktop-api/git";
@@ -117,11 +119,11 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
         </DialogHeader>
 
         <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Integrates worktree commits into the target branch locally. This is not a remote <code className="text-xs bg-muted px-1 rounded">git push</code>.
+          <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+            Integrates worktree commits into the target branch locally. This is not a remote <code className="text-[length:var(--font-size-12)] bg-muted px-1 rounded">git push</code>.
           </p>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-[length:var(--font-size-12)] text-muted-foreground">
             <GitBranchIcon className="size-3.5" />
             <span className="truncate">{resolvedWorktree.branch}</span>
             <span className="text-primary font-semibold">→</span>
@@ -130,7 +132,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
           </div>
 
           {!canMerge ? (
-            <p className="text-xs text-muted-foreground text-center py-4">
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground text-center py-4">
               No changes to merge
             </p>
           ) : (
@@ -140,7 +142,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
                   {files.map((f) => (
                     <div
                       key={f.path}
-                      className="flex items-center gap-2 px-3 py-1.5 text-xs border-b border-border last:border-0"
+                      className="flex items-center gap-2 px-3 py-1.5 text-[length:var(--font-size-12)] border-b border-border last:border-0"
                     >
                       <span
                         className={cn(
@@ -158,13 +160,13 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground px-1">
+                <p className="text-[length:var(--font-size-12)] text-muted-foreground px-1">
                   {aheadCount} commit{aheadCount !== 1 ? "s" : ""} ready to merge into {baseBranch}
                 </p>
               )}
 
               {error && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded text-xs text-destructive bg-destructive/5">
+                <div className="flex items-center gap-2 px-3 py-2 rounded text-[length:var(--font-size-12)] text-destructive bg-destructive/5">
                   <AlertTriangleIcon className="size-3 shrink-0" />
                   <span className="truncate">{error}</span>
                 </div>
@@ -172,7 +174,7 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
 
               {merging && mergeSteps.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-[length:var(--font-size-12)] text-muted-foreground">
                     <Loader2Icon className="size-3 animate-spin shrink-0" />
                     <span className="truncate">{mergeSteps[mergeStep] || mergeSteps[mergeSteps.length - 1]}</span>
                   </div>
@@ -181,25 +183,26 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
               )}
 
               <div className="flex items-center justify-between pt-2">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-[length:var(--font-size-12)] text-muted-foreground">
                   {files.length > 0
                     ? `${files.length} file${files.length !== 1 ? "s" : ""}`
                     : `${aheadCount} commit${aheadCount !== 1 ? "s" : ""}`}
                 </span>
-                <div className="flex gap-2">
-                  <button
+                <DialogFooter className="flex-row pt-0">
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="xs"
                     onClick={() => onOpenChange(false)}
                     disabled={merging}
-                    className="flex items-center h-8 px-3 rounded-md text-xs font-medium border border-border hover:bg-accent transition-colors disabled:opacity-50"
                   >
                     {t("common.cancel")}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    size="xs"
                     onClick={handleMerge}
                     disabled={merging || !canMerge}
-                    className="flex items-center gap-1.5 h-8 px-4 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
                   >
                     {merging ? (
                       <>
@@ -209,8 +212,8 @@ export function GitWorktreeMergeDialog({ open, onOpenChange, projectRoot }: GitW
                     ) : (
                       <>Merge → {baseBranch}</>
                     )}
-                  </button>
-                </div>
+                  </Button>
+                </DialogFooter>
               </div>
             </>
           )}

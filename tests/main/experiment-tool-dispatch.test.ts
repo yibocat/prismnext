@@ -263,7 +263,7 @@ describe("experiment-tool-dispatch experiment-run interpreter", () => {
     if (root) rmSync(root, { recursive: true, force: true });
   });
 
-  it("passes interpreter=external + pythonPath through to kickoffExperimentRun", () => {
+  it("passes interpreter=external + pythonPath through to kickoffExperimentRun", async () => {
     const executorSpy = vi.spyOn(experimentRunExecutor, "kickoffExperimentRun").mockImplementation(() => {});
 
     try {
@@ -278,7 +278,9 @@ describe("experiment-tool-dispatch experiment-run interpreter", () => {
         pythonPath: "sage",
       });
       expect(result).toBeNull();
-      expect(executorSpy).toHaveBeenCalledTimes(1);
+      await vi.waitFor(() => {
+        expect(executorSpy).toHaveBeenCalledTimes(1);
+      });
       expect(executorSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           id: expId,

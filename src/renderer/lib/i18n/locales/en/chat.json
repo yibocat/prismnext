@@ -135,14 +135,20 @@
   },
   "toolbar": {
     "local": "Local",
+    "hostLocal": "Local",
+    "hostRemote": "{{host}}",
+    "connectRemote": "SSH…",
+    "connectNow": "Connect",
+    "hostStatus": "Connection status",
     "suggestions": "Suggestions",
     "planNewIdea": "Plan a new idea",
     "initGit": "Initialize Git repository",
     "initGitShort": "Init Git"
   },
   "worktree": {
-    "local": "Local",
+    "local": "Project",
     "newWorktree": "New Worktree",
+    "short": "Worktree",
     "existing": "Existing worktrees",
     "active": "active",
     "selected": "selected",
@@ -168,8 +174,15 @@
   "branch": {
     "noBranches": "No branches",
     "next": "next",
-    "current": "current"
+    "current": "current",
+    "worktrees": "Worktrees"
   },
+  "slash": {
+    "worktree": "Worktree",
+    "worktreeLocal": "Project",
+    "worktreeNew": "New worktree…"
+  },
+  "projectAssignBlocked": "Switch project requires an empty chat tab.",
   "project": {
     "select": "Project",
     "locked": "Cannot change project while the agent is running."
@@ -286,6 +299,8 @@
     "resendFailed": "Failed to resend message"
   },
   "prepare": {
+    "connecting_remote": "Connecting…",
+    "connecting_remote_step": "Connecting · {{step}}",
     "planningNext": "Planning next step…",
     "describing_images": "Describing images with vision helper…",
     "thinking": "Thinking…",
@@ -315,6 +330,7 @@
     "turn_timeout": "No response from the model for a long time — the turn was stopped. The provider may be rate-limited or unavailable.",
     "turn_aborted": "This turn was stopped before the model finished.",
     "connectionLost": "Agent connection lost. Please try again.",
+    "alreadyProcessing": "The previous turn is still finishing. Wait a moment, or press Stop, then send again.",
     "cancelled": "Stopped."
   },
   "turnFooter": {

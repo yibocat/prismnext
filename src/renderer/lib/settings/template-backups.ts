@@ -1,4 +1,5 @@
 import { templateDesktop } from "@/lib/desktop-api/template";
+import { isRemoteProjectRoot } from "@shared/remote";
 
 export type TemplateBackupEntry = Awaited<
   ReturnType<typeof templateDesktop.templateListBackups>
@@ -7,6 +8,7 @@ export type TemplateBackupEntry = Awaited<
 export async function listTemplateBackups(
   projectRoot: string,
 ): Promise<TemplateBackupEntry[]> {
+  if (isRemoteProjectRoot(projectRoot)) return [];
   try {
     return await templateDesktop.templateListBackups({ rootPath: projectRoot });
   } catch {
@@ -19,6 +21,9 @@ export async function restoreTemplateBackup(args: {
   manuscriptDir: string;
   backupLabel: string;
 }): Promise<void> {
+  if (isRemoteProjectRoot(args.projectRoot)) {
+    throw new Error("Manuscript template backups are stored on this computer only.");
+  }
   await templateDesktop.templateRestoreBackup({
     rootPath: args.projectRoot,
     manuscriptDir: args.manuscriptDir,
@@ -30,6 +35,9 @@ export async function deleteTemplateBackup(
   projectRoot: string,
   backupLabel: string,
 ): Promise<void> {
+  if (isRemoteProjectRoot(projectRoot)) {
+    throw new Error("Manuscript template backups are stored on this computer only.");
+  }
   await templateDesktop.templateDeleteBackup({
     rootPath: projectRoot,
     backupLabel,

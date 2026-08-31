@@ -89,6 +89,9 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   // Compile writes PDF artifacts. Engines stay on the host tools — never bash.
   "latex-compile": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
   "latex-compile-standalone": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
+  "typst-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
+  "typst-compile": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
+  "typst-compile-standalone": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
   "research-brief-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "research-brief-update": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
   "project-rule-write": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },

@@ -102,8 +102,12 @@ export const agentApi = {
 		ipcRenderer.invoke("agent:resolvePermission", args),
 	agentListSessions: (projectRoot: string) =>
 		ipcRenderer.invoke("agent:listSessions", { projectRoot }),
-	agentListSessionsByProjectId: (projectId: string) =>
-		ipcRenderer.invoke("agent:listSessionsByProjectId", { projectId }),
+	agentListSessionsByProjectId: (
+		args: string | import("../shared/agent/api").AgentListSessionsByProjectIdArgs,
+	) => {
+		const payload = typeof args === "string" ? { projectId: args } : args;
+		return ipcRenderer.invoke("agent:listSessionsByProjectId", payload);
+	},
 	agentLoadSession: (args: import("../shared/agent/api").AgentLoadSessionInput) =>
 		ipcRenderer.invoke("agent:loadSession", args),
 	agentRenameSession: (args: import("../shared/agent/api").AgentRenameSessionInput) =>

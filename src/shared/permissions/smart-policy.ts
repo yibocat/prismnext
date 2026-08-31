@@ -68,6 +68,9 @@ export function buildSmartPermissionRules(): Record<string, "allow" | "ask" | "d
     "latex-root": "allow",
     "latex-compile": "ask",
     "latex-compile-standalone": "ask",
+    "typst-root": "allow",
+    "typst-compile": "ask",
+    "typst-compile-standalone": "ask",
     "research-brief-read": "allow",
     "suggest-plan": "allow",
     "results-snapshot": "allow",
@@ -176,6 +179,8 @@ function isFileWriteToolName(toolName: string): boolean {
     || n === "interaction-write"
     || n === "latex-compile"
     || n === "latex-compile-standalone"
+    || n === "typst-compile"
+    || n === "typst-compile-standalone"
   );
 }
 
@@ -186,7 +191,7 @@ function isReadToolName(toolName: string): boolean {
     "read", "grep", "glob", "webfetch", "websearch", "question", "task", "skill",
     "todowrite", "literature-search", "literature-read", "literature-read-pdf",
     "literature-intensive-reading", "literature-stage", "citation-health",
-    "latex-root", "research-brief-read", "suggest-plan", "results-snapshot",
+    "latex-root", "typst-root", "research-brief-read", "suggest-plan", "results-snapshot",
     "provenance-query", "interaction-list", "interaction-read", "interaction-open",
   ].includes(n);
 }

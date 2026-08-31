@@ -4,7 +4,10 @@ import React from "react";
 import { EditorSelection, EditorState, Transaction } from "@codemirror/state";
 import { history, redo, undo } from "@codemirror/commands";
 import { detectQueryAtCursor } from "../../src/renderer/components/modules/chat/inline-composer/query";
-import { buildSlashOptions } from "../../src/renderer/components/modules/chat/inline-composer/composer-dropdown";
+import {
+  buildSlashOptions,
+  matchWorktreeSlashQuery,
+} from "../../src/renderer/components/modules/chat/inline-composer/composer-dropdown";
 import { buildMentionOptions } from "../../src/renderer/components/modules/chat/inline-composer/inline-composer-editor";
 import { ComposerTokenChip } from "../../src/renderer/components/modules/chat/inline-tokens/inline-token-parts";
 import { createTokenId, partsToPlainText, partsToAgentText, isComposerEmpty, mergeAdjacentText, parseTextToComposerParts, parseTextWithLinks, hasLinkParts } from "../../src/renderer/lib/chat/composer-parts";
@@ -168,10 +171,11 @@ describe("inline composer query", () => {
     expect(options.map((o) => o.kind)).toEqual(["command", "skill", "mcp"]);
   });
 
-  it("lists Models and Plan under Modes, not Commands", () => {
+  it("lists Models, Plan, and Worktree under Modes, not Commands", () => {
     const options = buildSlashOptions("", [], [], []);
     expect(options.some((o) => o.kind === "mode" && o.mode.id === "models")).toBe(true);
     expect(options.some((o) => o.kind === "mode" && o.mode.id === "plan")).toBe(true);
+    expect(options.some((o) => o.kind === "mode" && o.mode.id === "worktree")).toBe(true);
     expect(options.some((o) => o.kind === "command")).toBe(false);
 
     const planQuery = buildSlashOptions("plan", [], [], []);
@@ -198,6 +202,31 @@ describe("inline composer query", () => {
     const expanded = buildSlashOptions("", [], skills, [], new Set(["skill"]));
     expect(expanded.filter((o) => o.kind === "skill")).toHaveLength(12);
     expect(expanded.some((o) => o.kind === "show-more")).toBe(false);
+  });
+
+  it("treats /worktree and /wt as a checkout switch, not a command", () => {
+    expect(matchWorktreeSlashQuery("worktree")).toEqual({ filter: "" });
+    expect(matchWorktreeSlashQuery("wt feat")).toEqual({ filter: "feat" });
+    expect(matchWorktreeSlashQuery("worktree feat")).toEqual({ filter: "feat" });
+    expect(matchWorktreeSlashQuery("plan")).toBeNull();
+
+    const trees = [{ name: "feat", baseBranch: "master" }, { name: "docs", baseBranch: "main" }];
+    const listed = buildSlashOptions("worktree", [], [], [], new Set(), trees);
+    expect(listed.some((o) => o.kind === "worktree-local")).toBe(true);
+    expect(listed.some((o) => o.kind === "worktree-new")).toBe(true);
+    expect(listed.filter((o) => o.kind === "worktree")).toEqual([
+      { kind: "worktree", name: "feat", baseBranch: "master" },
+      { kind: "worktree", name: "docs", baseBranch: "main" },
+    ]);
+    expect(listed.some((o) => o.kind === "mode" && o.mode.id === "worktree")).toBe(false);
+
+    const filtered = buildSlashOptions("wt feat", [], [], [], new Set(), trees);
+    expect(filtered.filter((o) => o.kind === "worktree")).toEqual([
+      { kind: "worktree", name: "feat", baseBranch: "master" },
+    ]);
+
+    const expanded = buildSlashOptions("", [], [], [], new Set(["worktree"]), trees);
+    expect(expanded.some((o) => o.kind === "worktree-local")).toBe(true);
   });
 });
 

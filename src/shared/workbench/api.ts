@@ -3,6 +3,8 @@
  * Source of truth: ~/.prismnext/settings.json.
  */
 
+import type { ProjectDirectoryIndex } from "./project-directory-index";
+
 export interface WorkbenchProjectMember {
   id: string;
   lastPath: string;
@@ -14,6 +16,8 @@ export interface WorkbenchState {
   defaultLastPath: string;
   workbenchProjectIds: string[];
   members: WorkbenchProjectMember[];
+  /** Last-known roots, including removed workbench members (RW-6.2). */
+  projectDirectoryById?: ProjectDirectoryIndex;
 }
 
 /** `workbench:openFolder` — includes the paper lastPath after worktree remap. */
@@ -39,6 +43,7 @@ export function focusPathAfterOpenFolder(
 export interface WorkbenchHomeSettings {
   defaultProjectId: string | null;
   workbenchProjectIds: string[];
+  projectDirectoryById?: ProjectDirectoryIndex;
 }
 
 export interface WorkbenchProjectMeta {

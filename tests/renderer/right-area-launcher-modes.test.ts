@@ -32,7 +32,6 @@ describe("getRightAreaLauncherModes", () => {
     ensureMode(stub("git", ["git-overview", "git-diff"]));
     ensureMode(stub("browser", ["browser"], { addMenuPolicy: "multi" }));
     ensureMode(stub("terminal", ["terminal"], { addMenuPolicy: "multi" }));
-    ensureMode(stub("texworkspace", ["texworkspace"]));
     ensureMode(stub("literature", ["literature"], { addMenuPolicy: "multi" }));
     ensureMode(stub("experiments", ["experiments"]));
     ensureMode(stub("research-plan", ["research-plan"], { showInAddMenu: false }));
@@ -58,7 +57,7 @@ describe("getRightAreaLauncherModes", () => {
     expect(ids).not.toContain("interaction");
   });
 
-  it("includes the seven primary workspace modes", () => {
+  it("includes the six primary workspace modes", () => {
     const ids = new Set(getRightAreaLauncherModes().map((m) => m.id));
     expect(ids).toEqual(
       new Set([
@@ -66,7 +65,6 @@ describe("getRightAreaLauncherModes", () => {
         "git",
         "browser",
         "terminal",
-        "texworkspace",
         "literature",
         "experiments",
       ]),

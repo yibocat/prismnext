@@ -4,7 +4,6 @@
   "library": "文献库",
   "experiments": "实验",
   "templates": "模板",
-  "texWorkspace": "TeX 工作区",
   "settings": "设置",
   "updateToVersion": "更新到 {{version}}",
   "sessions": {
@@ -22,6 +21,12 @@
     "groupWorkbench": "工作台",
     "groupUpdated": "更新日期",
     "status": "状态",
+    "statusAll": "全部",
+    "statusWaiting": "等待许可",
+    "statusRunning": "运行中",
+    "statusUnread": "未读",
+    "statusRead": "已读",
+    "statusEmpty": "没有符合该状态的会话",
     "statusSoon": "暂无状态筛选",
     "expandAll": "展开所有",
     "collapseAll": "折叠所有",
@@ -74,7 +79,13 @@
     "recents": "最近项目",
     "more": "更多",
     "openFolder": "打开文件夹",
-    "defaultBadge": "默认"
+    "defaultBadge": "默认",
+    "remote": "远程",
+    "repos": "仓库",
+    "localRepos": "本机",
+    "connectSsh": "通过 SSH 连接…",
+    "noSshHosts": "~/.ssh/config 里还没有主机",
+    "removeRecent": "从最近项目中移除"
   },
   "project": {
     "noProject": "未打开项目",
@@ -90,6 +101,6 @@
   "customizeSidebar": {
     "menu": "自定义侧边栏",
     "title": "自定义侧边栏",
-    "description": "选择要显示的工作区模块，拖动可调整顺序。默认只显示 TeX 工作区和文献库。模板和团队固定在新建对话下方。"
+    "description": "选择要显示的工作区模块，拖动可调整顺序。默认只显示文件和文献库。模板和团队固定在新建对话下方。"
   }
 }

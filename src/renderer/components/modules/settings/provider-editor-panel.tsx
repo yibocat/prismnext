@@ -1289,7 +1289,7 @@ function CustomProviderEditorPanel({
           <DialogFooter>
             <Button
               variant="outline"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={() => setDeleteDialogOpen(false)}
             >
@@ -1297,7 +1297,7 @@ function CustomProviderEditorPanel({
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               onClick={removeProvider}
             >

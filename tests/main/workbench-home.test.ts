@@ -9,9 +9,17 @@ import {
   WORKBENCH_HOME_DIRNAME,
   WORKBENCH_JSON_FILENAME,
   WORKTREES_DIRNAME,
+  HOST_INSTALL_DIRNAME,
+  REMOTE_CACHE_DIRNAME,
+  hostCacheRel,
+  hostCurrentRel,
+  hostInstallRel,
+  hostRuntimeStampRel,
+  hostStampRel,
   libraryRel,
   projectSlotMetaRel,
   projectSlotRel,
+  remoteCacheRel,
   workbenchJsonRel,
   worktreeCheckoutRel,
   worktreeSlotRel,
@@ -26,6 +34,7 @@ import {
   HOME_SETTINGS_FILENAME,
   HOME_SKILLS_DIRNAME,
   HOME_TEAMS_DIRNAME,
+  HOME_TYPST_LIVE_DIRNAME,
 } from "../../src/shared/workbench/paths";
 import {
   ensureWorkbenchHome,
@@ -80,6 +89,19 @@ describe("workbench-paths", () => {
     expect(libraryRel("p_abc")).not.toContain(".prismnext");
   });
 
+  it("keeps Host install and remote cache off the paper-side .prismnext layout", () => {
+    expect(HOST_INSTALL_DIRNAME).toBe(".prismnext-host");
+    expect(REMOTE_CACHE_DIRNAME).toBe("remote-cache");
+    expect(hostInstallRel()).toBe(".prismnext-host");
+    expect(hostCurrentRel()).toBe(".prismnext-host/current");
+    expect(hostStampRel()).toBe(".prismnext-host/current/stamp.json");
+    expect(hostCacheRel()).toBe(".prismnext-host/cache");
+    expect(hostRuntimeStampRel()).toBe(".prismnext-host/runtime-stamp.txt");
+    expect(remoteCacheRel("ssh_1", "p_abc")).toBe("remote-cache/ssh_1/p_abc");
+    expect(hostInstallRel()).not.toBe(".prismnext");
+    expect(remoteCacheRel("ssh_1", "p_abc")).not.toContain(".prismnext");
+  });
+
   it("parses home worktree checkout paths and rejects the old paper-side layout", () => {
     expect(
       parseHomeWorktreeCheckoutPath(
@@ -87,6 +109,11 @@ describe("workbench-paths", () => {
       ),
     ).toEqual({ projectId: "p_abc", worktreeId: "calm-owl" });
     expect(isHomeWorktreeCheckoutPath("/Users/me/.prismnext/projects/p_abc/worktrees/calm-owl/checkout")).toBe(true);
+    expect(
+      parseHomeWorktreeCheckoutPath(
+        "remote://lab/home/ubuntu/.prismnext/projects/p_abc/worktrees/calm-owl/checkout",
+      ),
+    ).toEqual({ projectId: "p_abc", worktreeId: "calm-owl" });
     expect(isHomeWorktreeCheckoutPath("/Users/me/paper/.prismnext/worktrees/calm-owl")).toBe(false);
   });
 });
@@ -203,6 +230,16 @@ describe("ensureWorkbenchHome", () => {
     fs.writeFileSync(settingsPath, JSON.stringify({ defaultProjectId: "p_keep" }), "utf-8");
     ensureWorkbenchHome({ homeDir: fakeHome });
     expect(JSON.parse(fs.readFileSync(settingsPath, "utf-8"))).toEqual({ defaultProjectId: "p_keep" });
+  });
+
+  it("deletes leftover ~/.prismnext/typst-live from CLI watch", () => {
+    const fakeHome = path.join(tmpRoot(), "Users", "me");
+    const home = resolveWorkbenchHome({ homeDir: fakeHome });
+    const stale = path.join(home, HOME_TYPST_LIVE_DIRNAME, "stale");
+    fs.mkdirSync(stale, { recursive: true });
+    fs.writeFileSync(path.join(stale, "page.svg"), "<svg/>");
+    ensureWorkbenchHome({ homeDir: fakeHome });
+    expect(fs.existsSync(path.join(home, HOME_TYPST_LIVE_DIRNAME))).toBe(false);
   });
 });
 

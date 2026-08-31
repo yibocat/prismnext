@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import Store from "electron-store";
 import { safeStorage } from "electron";
 import {
@@ -10,6 +11,12 @@ import {
 } from "../../shared/permissions/modes";
 import { createLogger, setLogLevel, shortLogDetail } from "./logger";
 import { isLogLevel, type LogLevel } from "../../shared/platform/log-types";
+import {
+  emptyDesktopModelSeed,
+  hostModelProviderIds,
+  sanitizeHostModelKeyMap,
+  type DesktopModelSeed,
+} from "../../shared/remote";
 
 const log = createLogger("settings", "general");
 
@@ -104,6 +111,8 @@ export interface AppSettings {
   aiVisionFallbackModel?: string | null;
   /** Provider API keys keyed by provider id. */
   aiApiKeys?: Record<string, string>;
+  /** AES-256 wrap key (base64, 32 bytes) for remote Host model files. Laptop only. */
+  remoteHostWrapKey?: string;
   /** Provider base URLs keyed by provider id. */
   aiBaseUrls?: Record<string, string>;
   /** User-added custom API providers. */
@@ -205,14 +214,61 @@ const defaults: AppSettings = {
   logMinLevel: "info",
 };
 
-const store = new Store<AppSettings>({
-  name: "prism-settings",
-  defaults,
-});
+type SettingsBag = {
+  get: (key: string) => unknown;
+  set: (patch: Record<string, unknown>) => void;
+  delete: (key: string) => void;
+  store: Record<string, unknown>;
+};
+
+let store: SettingsBag | undefined;
+
+function createMemorySettingsBag(): SettingsBag {
+  const data: Record<string, unknown> = { ...defaults };
+  return {
+    get(key) {
+      return data[key];
+    },
+    set(patch) {
+      Object.assign(data, patch);
+    },
+    delete(key) {
+      delete data[key];
+    },
+    store: data,
+  };
+}
+
+function settingsStore(): SettingsBag {
+  if (!store) {
+    try {
+      const disk = new Store<AppSettings>({
+        name: "prism-settings",
+        defaults,
+      });
+      store = {
+        get: (key) => disk.get(key as never),
+        set: (patch) => {
+          disk.set(patch as never);
+        },
+        delete: (key) => {
+          disk.delete(key as never);
+        },
+        get store() {
+          return (disk as unknown as { store: Record<string, unknown> }).store;
+        },
+      };
+    } catch {
+      // Host / Vitest have no Electron app name; conf throws `projectName`.
+      store = createMemorySettingsBag();
+    }
+  }
+  return store;
+}
 
 function persistStore(patch: Record<string, unknown>): void {
   try {
-    store.set(patch as never);
+    settingsStore().set(patch);
   } catch (err) {
     log.warn("settings.persist.fail", { error: shortLogDetail(err) });
     throw err;
@@ -245,6 +301,7 @@ const SENSITIVE_KEYS = [
   "zoteroApiKey",
   "zoteroUserId",
   "aiApiKeys",
+  "remoteHostWrapKey",
   "mineruApiToken",
   "semanticScholarApiKey",
   "pubmedApiKey",
@@ -255,6 +312,7 @@ function isSensitiveKey(key: string): boolean {
 }
 
 export function getSettings(): AppSettings {
+  const store = settingsStore();
   // Read ALL stored keys so dynamic renderer-side keys
   // (editorSyntaxTheme, pdfDarkMode, manuscriptDir, etc.) are
   // automatically included — no more manual enumeration.
@@ -271,7 +329,7 @@ export function getSettings(): AppSettings {
   };
 
   if ("lastProjectPath" in raw) {
-    store.delete("lastProjectPath" as keyof AppSettings);
+    store.delete("lastProjectPath");
     delete raw.lastProjectPath;
   }
 
@@ -327,6 +385,12 @@ export function getSettings(): AppSettings {
     settings.aiApiKeys = {};
   }
 
+  const encryptedWrap = store.get("remoteHostWrapKey") as string | undefined;
+  if (encryptedWrap) {
+    const decrypted = decryptIfAvailable(encryptedWrap);
+    if (decrypted.trim()) settings.remoteHostWrapKey = decrypted.trim();
+  }
+
   // Start with explicitly-read settings, then overlay all raw store keys
   // so that renderer-side dynamic keys (editorSyntaxTheme, etc.) survive
   // round-trips without needing manual enumeration here.
@@ -344,6 +408,8 @@ export function getSettings(): AppSettings {
     result.pubmedApiKey = settings.pubmedApiKey;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
+  if (settings.remoteHostWrapKey !== undefined)
+    result.remoteHostWrapKey = settings.remoteHostWrapKey;
 
   // One-shot: v1 `"auto"` meant edit-auto; v2 makes `"auto"` full OpenCode auto.
   const migrated = migratePermissionModeSetting(
@@ -364,6 +430,55 @@ export function getSettings(): AppSettings {
 
   applyLogMinLevel(result.logMinLevel);
   return result as AppSettings;
+}
+
+export function getOrCreateRemoteHostWrapKey(): string {
+  const current = (getSettings().remoteHostWrapKey ?? "").trim();
+  if (current) {
+    try {
+      if (Buffer.from(current, "base64").length === 32) return current;
+    } catch {
+      // regenerate below
+    }
+  }
+  const next = randomBytes(32).toString("base64");
+  updateSettings({ remoteHostWrapKey: next });
+  return next;
+}
+
+/** Static import — electron-vite packs main as one file; `require("../app/settings")` fails there. */
+export function readDesktopModelSeed(): DesktopModelSeed {
+  try {
+    const settings = getSettings();
+    const aiApiKeys = sanitizeHostModelKeyMap(settings.aiApiKeys);
+    const aiBaseUrls = Object.fromEntries(
+      Object.entries(settings.aiBaseUrls ?? {}).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0,
+      ),
+    );
+    let wrapKey = "";
+    try {
+      wrapKey = getOrCreateRemoteHostWrapKey();
+    } catch (err) {
+      return {
+        ...emptyDesktopModelSeed(err instanceof Error ? err.message : String(err)),
+        aiApiKeys,
+        aiBaseUrls,
+        extraBaseUrls: Object.values(aiBaseUrls),
+        providerIds: hostModelProviderIds(aiApiKeys),
+      };
+    }
+    return {
+      aiApiKeys,
+      aiBaseUrls,
+      extraBaseUrls: Object.values(aiBaseUrls),
+      wrapKey,
+      providerIds: hostModelProviderIds(aiApiKeys),
+      wrapOk: Boolean(wrapKey),
+    };
+  } catch (err) {
+    return emptyDesktopModelSeed(err instanceof Error ? err.message : String(err));
+  }
 }
 
 export function updateSettings(patch: Partial<AppSettings>): void {
@@ -399,6 +514,7 @@ export function updateSettings(patch: Partial<AppSettings>): void {
  * Returns the pruned provider ids (for startup logging).
  */
 export function pruneOrphanProviderSettings(): string[] {
+  const store = settingsStore();
   const raw = (store as unknown as { store: Record<string, unknown> }).store;
   const list = raw.aiCustomProviders;
   if (!Array.isArray(list)) return [];

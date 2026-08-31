@@ -67,7 +67,11 @@ import {
   type ComposerFileMentionTarget,
   type InlineComposerEditorHandle,
 } from "@/lib/chat/composer-draft";
+import { toast } from "sonner";
+import { i18n } from "@/lib/i18n";
+import { applyCheckoutTransition, startNewWorktreeIntent } from "@/lib/git/checkout-context";
 import { useChatStore } from "@/stores/chat-store";
+import { useWorktreeStore } from "@/stores/worktree-store";
 import { requestOpenModelPicker } from "@/lib/chat/open-model-picker";
 import type { Extension } from "@codemirror/state";
 
@@ -85,6 +89,40 @@ function clearSlashQuery(view: EditorView, q: ComposerQuery): void {
 function applyEnterPlanFromSlash(view: EditorView, q: ComposerQuery): void {
   clearSlashQuery(view, q);
   useChatStore.getState().setSessionAgent("plan");
+}
+
+function sessionHasTurns(): boolean {
+  const state = useChatStore.getState();
+  const tab = state.tabs.find((item) => item.id === state.activeTabId);
+  const conv = tab?.conversation;
+  return Boolean(conv && (conv.turns.length > 0 || conv.live));
+}
+
+function applyWorktreeSlashOption(option: SlashOption): boolean {
+  if (
+    option.kind !== "worktree-local"
+    && option.kind !== "worktree"
+    && option.kind !== "worktree-new"
+  ) {
+    return false;
+  }
+  if (sessionHasTurns()) {
+    toast.error(i18n.t("chat.worktree.locked"));
+    return true;
+  }
+  if (option.kind === "worktree-local") {
+    void applyCheckoutTransition({ type: "local" });
+    return true;
+  }
+  if (option.kind === "worktree") {
+    const worktree = useWorktreeStore.getState().worktrees.find((item) => item.name === option.name);
+    if (worktree) void applyCheckoutTransition({ type: "worktree-existing", worktree });
+    return true;
+  }
+  void startNewWorktreeIntent().then((ok) => {
+    if (!ok) toast.error(i18n.t("chat.worktree.noBaseBranch"));
+  });
+  return true;
 }
 
 function collectInsertedText(changes: import("@codemirror/state").ChangeSet): string {
@@ -395,6 +433,11 @@ function insertFromDropdown(
     return;
   }
 
+  if (applyWorktreeSlashOption(option)) {
+    clearSlashQuery(view, q);
+    return;
+  }
+
   if (option.kind === "command") {
     const cmd = option.command;
     insertComposerToken(
@@ -427,6 +470,8 @@ function insertFromDropdown(
     );
     return;
   }
+
+  if (option.kind !== "mcp") return;
 
   insertComposerToken(
     view,
@@ -720,9 +765,11 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
     // Best-effort: refresh the experiments list when the project changes so the
     // @ experiment menu has data even before the user opens the Experiments tab.
     const projectRoot = useDocumentStore((s) => s.projectRoot);
+    const worktrees = useWorktreeStore((s) => s.worktrees);
     useEffect(() => {
       if (!projectRoot) return;
       void useExperimentStore.getState().refreshList(projectRoot);
+      void useWorktreeStore.getState().refreshWorktrees(projectRoot);
     }, [projectRoot]);
 
     const slashOptions = useMemo(() => {
@@ -733,8 +780,9 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         slashSkills,
         slashMcps,
         expandedSlashSections,
+        worktrees,
       );
-    }, [activeQuery, searchCommands, slashSkills, slashMcps, expandedSlashSections]);
+    }, [activeQuery, searchCommands, slashSkills, slashMcps, expandedSlashSections, worktrees]);
 
     const dropdownCount =
       activeQuery?.kind === "mention" ? mentionOptions.length : slashOptions.length;
@@ -845,6 +893,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         slashSkillsRef.current,
         slashMcpsRef.current,
         expandedSlashSectionsRef.current,
+        useWorktreeStore.getState().worktrees,
       );
     }, []);
 
@@ -875,6 +924,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
         if (option.kind === "mode") {
           const view = viewRef.current;
           const q = activeQueryRef.current;
+          if (option.mode.id === "worktree") {
+            expandSlashSection("worktree");
+            return;
+          }
           if (option.mode.id === "plan") {
             if (view && q) {
               applyEnterPlanFromSlash(view, q);
@@ -890,6 +943,21 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
             closeDropdown();
             requestOpenModelPicker();
           }
+          return;
+        }
+        if (
+          option.kind === "worktree-local"
+          || option.kind === "worktree"
+          || option.kind === "worktree-new"
+        ) {
+          const view = viewRef.current;
+          const q = activeQueryRef.current;
+          applyWorktreeSlashOption(option);
+          if (view && q) {
+            clearSlashQuery(view, q);
+            emitChange(view);
+          }
+          closeDropdown();
           return;
         }
         if (option.kind === "command") {
@@ -913,6 +981,7 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           });
           return;
         }
+        if (option.kind !== "mcp") return;
         insertAtQuery({
           type: "mcp",
           id: createTokenId(),
@@ -952,6 +1021,10 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
           const opt = slashOpts[idx];
           if (opt?.kind === "show-more") {
             expandSlashSection(opt.section);
+            return true;
+          }
+          if (opt?.kind === "mode" && opt.mode.id === "worktree") {
+            expandSlashSection("worktree");
             return true;
           }
         }

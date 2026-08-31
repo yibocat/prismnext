@@ -7,6 +7,7 @@ import {
   checkWorkbenchProject,
   createWorkbenchProjectOnDisk,
   ensureWorkbenchProjectMeta,
+  projectMetaAbsIfLocal,
 } from "../../src/main/workbench/scaffold";
 import { readWorkbenchJson } from "../../src/main/workbench/identity";
 import { readWorkspaceDirs } from "../../src/main/project/workspace-config";
@@ -41,7 +42,7 @@ describe("createWorkbenchProjectOnDisk", () => {
     const json = readWorkbenchJson(root);
     expect(json?.id).toBe(result.projectId);
     expect(json?.workspace?.folders).toEqual([
-      { function: "manuscript", name: "manuscript", mainTex: "main.tex" },
+      { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
     ]);
     expect(readWorkspaceDirs(root)).toEqual(json?.workspace?.folders);
     expect(existsSync(join(root, "manuscript", "main.tex"))).toBe(true);
@@ -74,6 +75,18 @@ describe("ensureWorkbenchProjectMeta", () => {
     expect(existsSync(join(root, ".prismnext", "compile"))).toBe(false);
     expect(readWorkspaceDirs(root).some((d) => d.function === "manuscript")).toBe(true);
   });
+
+  it("fills default folders and mkdir manuscript/ when workbench.json only has id", () => {
+    const root = tmpProject();
+    mkdirSync(join(root, PROJECT_META_DIR), { recursive: true });
+    writeFileSync(join(root, workbenchJsonRel()), `${JSON.stringify({ id: "p_oldonly" }, null, 2)}\n`);
+
+    ensureWorkbenchProjectMeta(root);
+    expect(readWorkbenchJson(root)?.workspace?.folders).toEqual([
+      { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
+    ]);
+    expect(existsSync(join(root, "manuscript"))).toBe(true);
+  });
 });
 
 describe("checkWorkbenchProject", () => {
@@ -84,6 +97,12 @@ describe("checkWorkbenchProject", () => {
 
     ensureWorkbenchProjectMeta(root);
     expect(checkWorkbenchProject(root).missing).toEqual([]);
+  });
+});
+
+describe("projectMetaAbsIfLocal", () => {
+  it("refuses remote:// so template backups do not treat a Host path as a local folder", () => {
+    expect(projectMetaAbsIfLocal("remote://lab/home/ubuntu/paper")).toBeNull();
   });
 });
 

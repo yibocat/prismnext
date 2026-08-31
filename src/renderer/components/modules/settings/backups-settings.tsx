@@ -7,7 +7,7 @@ export function BackupsSettings() {
         <div>
           <h2 className="text-[length:var(--font-dialog-title)] font-semibold">Backups</h2>
           <p className="text-[length:var(--font-dialog-label)] text-muted-foreground mt-0.5">
-            Moved to TeX Workspace settings.
+            Moved to Workspace settings.
           </p>
         </div>
         <BackupsSettingsPanel />

@@ -30,6 +30,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   applyWorkbenchFocusChange,
+  refreshFocusedRemoteNeighbors,
   assignSessionProject,
   assignSessionToProjectPath,
   confirmProjectSwitchIfNeeded,
@@ -43,8 +44,11 @@ import {
 import { useChatStore } from "../../src/renderer/stores/chat-store";
 import { makeDefaultTab } from "../../src/renderer/stores/chat/model";
 import { useDocumentStore } from "../../src/renderer/stores/document-store";
+import { useExperimentStore } from "../../src/renderer/stores/experiment-store";
+import { useLiteratureStore } from "../../src/renderer/stores/literature-store";
 import { useSettingsStore } from "../../src/renderer/stores/settings-store";
 import { useWorkbenchStore } from "../../src/renderer/stores/workbench-store";
+import { useWorkspaceConfigStore } from "../../src/renderer/stores/workspace-config-store";
 
 describe("project switch lifecycle", () => {
   beforeEach(() => {
@@ -180,6 +184,40 @@ describe("project switch lifecycle", () => {
     expect(openSrc).not.toContain("reloadCommands");
     expect(openSrc).not.toContain("literature-store");
     expect(openSrc).not.toContain("gitWarmup");
+    const lifecycleSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/lib/workspace/project-lifecycle.ts"),
+      "utf-8",
+    );
+    expect(lifecycleSrc).toContain("shouldSkipRemoteHostBind");
+    expect(lifecycleSrc).toContain("refreshFocusedRemoteNeighbors");
+    const remoteStoreSrc = readFileSync(
+      join(import.meta.dirname, "../../src/renderer/stores/remote-store.ts"),
+      "utf-8",
+    );
+    expect(remoteStoreSrc).toContain("refreshFocusedRemoteNeighbors");
+  });
+
+  it("refreshes remote neighbors after Host is ready and ignores local roots", async () => {
+    const loadConfig = vi.fn(async () => undefined);
+    const reloadMetadataFromDisk = vi.fn(async () => undefined);
+    const refresh = vi.fn(async () => undefined);
+    const refreshList = vi.fn(async () => undefined);
+    useWorkspaceConfigStore.setState({ loadConfig });
+    useDocumentStore.setState({ reloadMetadataFromDisk });
+    useLiteratureStore.setState({ refresh });
+    useExperimentStore.setState({ refreshList });
+
+    await refreshFocusedRemoteNeighbors("/papers/local");
+    expect(loadConfig).not.toHaveBeenCalled();
+    expect(reloadMetadataFromDisk).not.toHaveBeenCalled();
+
+    await refreshFocusedRemoteNeighbors("remote://lab/home/u/paper");
+    expect(loadConfig).toHaveBeenCalledWith("remote://lab/home/u/paper");
+    expect(reloadMetadataFromDisk).toHaveBeenCalledWith(true);
+    await vi.waitFor(() => {
+      expect(refresh).toHaveBeenCalledWith("remote://lab/home/u/paper");
+      expect(refreshList).toHaveBeenCalledWith("remote://lab/home/u/paper");
+    });
   });
 });
 
@@ -220,7 +258,9 @@ describe("assignSessionProject", () => {
     });
     expect(useWorkbenchStore.getState().sessionProjectIds["conv-1"]).toBe("p_b");
     expect(useChatStore.getState().tabs[0]?.sessionCwd).toBe("/papers/b");
-    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/b");
+    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/b", {
+      connectRemote: false,
+    });
   });
 
   it("refuses while the agent is streaming", async () => {
@@ -487,9 +527,9 @@ describe("restoreWorkbenchLaunch", () => {
   });
 
   it("opens the last project and reloads the last session tabs", async () => {
-    agentListSessionsByProjectId.mockImplementation(async (projectId: string) => {
-      if (projectId === "p_b") return [{ conversationId: "conv-old" }];
-      if (projectId === "p_a") return [{ conversationId: "conv-other" }];
+    agentListSessionsByProjectId.mockImplementation(async (args: { projectId: string }) => {
+      if (args.projectId === "p_b") return [{ conversationId: "conv-old" }];
+      if (args.projectId === "p_a") return [{ conversationId: "conv-other" }];
       return [];
     });
     await restoreWorkbenchLaunch({ watch: false });
@@ -498,11 +538,13 @@ describe("restoreWorkbenchLaunch", () => {
       "conv-other",
       undefined,
       "/papers/a",
+      { connectRemote: false },
     );
     expect(useChatStore.getState().loadSession).toHaveBeenCalledWith(
       "conv-old",
       undefined,
       "/papers/b",
+      { connectRemote: false },
     );
     const loadOrder = (useChatStore.getState().loadSession as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => call[0]);
@@ -530,6 +572,29 @@ describe("restoreWorkbenchLaunch", () => {
     await restoreWorkbenchLaunch({ watch: false });
     expect(useDocumentStore.getState().openProject).not.toHaveBeenCalled();
     expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith("/papers/default");
+  });
+
+  it("does not join a remembered remote project as a local folder", async () => {
+    workbenchGetState.mockResolvedValue({
+      defaultProjectId: "p_def",
+      defaultLastPath: "/papers/default",
+      workbenchProjectIds: ["p_lab"],
+      members: [{
+        id: "p_lab",
+        lastPath: "remote://lab/home/ubuntu/paper",
+        displayName: "paper",
+      }],
+    });
+    useSettingsStore.setState({
+      settings: { lastFocusProjectId: "p_lab", lastFocusConversationId: "" },
+      loaded: true,
+    });
+    await restoreWorkbenchLaunch({ watch: false });
+    expect(useDocumentStore.getState().openProject).not.toHaveBeenCalled();
+    expect(useDocumentStore.getState().focusProject).toHaveBeenCalledWith(
+      "remote://lab/home/ubuntu/paper",
+      { connectRemote: false },
+    );
   });
 });
 

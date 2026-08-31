@@ -2,6 +2,7 @@
  * Open-core Pro license + feature ids (shared main ↔ renderer).
  *
  * Do not pre-list product feature ids here. Add them when a Pro SKU ships.
+ * Remote Workspace / Remote Agent are core product — not Pro entitlements.
  */
 
 /** Feature entitlement ids — grow with real products; never rename shipped ids. */
@@ -11,6 +12,18 @@ export type ProFeatureId = string;
 export const PRO_FEATURE_IDS = [] as const satisfies readonly ProFeatureId[];
 
 export type ProLicensePlan = "pro" | "none";
+
+/**
+ * Laptop → Host session grant. No activation key.
+ * Host trusts this only for the current SSH owner; disk license.json is ignored in Host mode.
+ */
+export interface HostProGrant {
+  plan: "pro";
+  expiresAt?: string | null;
+  features?: ProFeatureId[];
+  activatedAt: string;
+  label?: string | null;
+}
 
 /** Persisted / IPC license snapshot (no secrets beyond the key itself). */
 export interface LicenseSnapshot {

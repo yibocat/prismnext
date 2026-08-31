@@ -26,6 +26,10 @@ export function getHostEvents(): HostEvents {
   return defaultImpl;
 }
 
-export function setHostEventsForTest(sink: HostEvents | null): void {
+export function setHostEvents(sink: HostEvents | null): void {
   override = sink;
+}
+
+export function setHostEventsForTest(sink: HostEvents | null): void {
+  setHostEvents(sink);
 }

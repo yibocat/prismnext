@@ -23,6 +23,7 @@ import { destroyAllAiPty } from "./terminal/ai-pty";
 import { getExecutionRegistry, initExecutionRegistry } from "./terminal/execution-registry";
 import { startExecutionEventBroadcast } from "./ipc/execution";
 import { disposeAllTectonicDaemonSessions } from "./compile/tectonic-daemon";
+import { killAllTinymistSessions } from "./compile/tinymist-session";
 import { mainNetFetch } from "./lib/main-network";
 import { setCatalogFetch } from "./literature/catalog";
 import { registerCrashHandlers } from "./lib/crash-handler";
@@ -446,6 +447,7 @@ app.whenReady().then(async () => {
 app.on("before-quit", () => {
   setIsQuitting(true);
   disposeAllTectonicDaemonSessions();
+  killAllTinymistSessions();
   finalizeExecutionsForQuit();
   destroyAllAiPty();
   destroyAllTerminalSessions();

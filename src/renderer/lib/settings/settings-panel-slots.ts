@@ -12,13 +12,12 @@ import { useSettingsStore } from "@/stores/settings-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { getProvider } from "@/lib/providers";
 import { i18n } from "@/lib/i18n";
-import type { WorkspaceFolderScope } from "@/lib/settings/workspace-template";
 import { MY_CONTENT_TEAM_ID, PROJECT_DEFAULT_TEAM_ID } from "@shared/teams/types";
 
 export type SettingsPanelSlot =
   | { kind: "placeholder"; title: string; description?: string }
-  | { kind: "workspace-folder"; scope: WorkspaceFolderScope; mode: "edit"; index: number }
-  | { kind: "workspace-folder"; scope: WorkspaceFolderScope; mode: "new" }
+  | { kind: "workspace-folder"; mode: "edit"; index: number }
+  | { kind: "workspace-folder"; mode: "new" }
   | { kind: "ai-provider"; mode: "new" }
   | { kind: "ai-provider"; mode: "edit"; providerId: string }
   | { kind: "ai-provider"; mode: "builtin-key"; providerId: string }
@@ -91,15 +90,8 @@ export function settingsPanelSlotTitle(slot: SettingsPanelSlot | null): string |
     case "placeholder":
       return slot.title;
     case "workspace-folder": {
-      if (slot.mode === "new") {
-        return slot.scope === "project"
-          ? tt("settings.slots.addFolder", "Add folder")
-          : tt("settings.slots.addTemplateFolder", "Add template folder");
-      }
-      const dirs =
-        slot.scope === "project"
-          ? useWorkspaceConfigStore.getState().workspaceDirs
-          : useSettingsStore.getState().settings.defaultWorkspaceDirs ?? [];
+      if (slot.mode === "new") return tt("settings.slots.addFolder", "Add folder");
+      const dirs = useWorkspaceConfigStore.getState().workspaceDirs;
       return dirs[slot.index]?.name ?? tt("settings.slots.folder", "Folder");
     }
     case "ai-provider": {

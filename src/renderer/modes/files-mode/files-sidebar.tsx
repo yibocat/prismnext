@@ -14,7 +14,6 @@ import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useGitStore } from "@/stores/git-store";
 import { useWorktreeStore } from "@/stores/worktree-store";
 import { applyCheckoutTransition } from "@/lib/git/checkout-context";
-import { useIsTexworkspace } from "@/modes/texworkspace-mode/use-texworkspace";
 import {
   FilePlusCorner,
   FolderPlusIcon,
@@ -50,6 +49,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SETTINGS_FORM_INPUT } from "@/components/modules/settings/settings-tokens";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import { buildFileTree, flattenVisibleTree, type TreeNode, type FlatVisibleNode } from "@/lib/files/file-tree";
@@ -157,7 +157,6 @@ export function FilesSidebar() {
   const workspaceDirs = useWorkspaceConfigStore((s) => s.workspaceDirs);
   const manuscriptDir = manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR;
   const openFile = useRightPanelStore((s) => s.openFile);
-  const openTexworkspaceFile = useRightPanelStore((s) => s.openTexworkspaceFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
   const deleteFolder = useDocumentStore((s) => s.deleteFolder);
   const renameFile = useDocumentStore((s) => s.renameFile);
@@ -196,8 +195,7 @@ export function FilesSidebar() {
     [],
   );
 
-  const isTexworkspaceActive = useIsTexworkspace();
-  const currentMode: SidebarMode = isTexworkspaceActive ? "manuscript" : "all";
+  const currentMode: SidebarMode = "all";
 
   // ─── Context bar: branch + worktree ───
   const gitBranch = useGitStore((s) => s.branch);
@@ -493,14 +491,10 @@ export function FilesSidebar() {
       setSelectedFolder(null);
       if (projectRoot) void setProjectLastActiveFileId(projectRoot, id);
       void trackRecentOpenedFile(id, name);
-      if (isTexworkspaceActive) {
-        openTexworkspaceFile(id, id, name);
-      } else {
-        setActiveFile(id);
-        openFile(id, id, name, { pin });
-      }
+      setActiveFile(id);
+      openFile(id, id, name, { pin });
     },
-    [isTexworkspaceActive, openTexworkspaceFile, projectRoot, setActiveFile, openFile],
+    [projectRoot, setActiveFile, openFile],
   );
 
   const handleSelectFolder = useCallback((path: string) => {
@@ -924,6 +918,7 @@ export function FilesSidebar() {
           </DialogHeader>
           <div className="space-y-2 py-4">
             <Input
+              className={SETTINGS_FORM_INPUT}
               value={renameValue}
               onChange={(e) => { setRenameValue(e.target.value); setNameError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
@@ -934,10 +929,10 @@ export function FilesSidebar() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameDialogOpen(false)}>
+            <Button variant="outline" size="xs" onClick={() => setRenameDialogOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button onClick={handleRename}>{t("dialogs.files.rename")}</Button>
+            <Button size="xs" onClick={handleRename}>{t("dialogs.files.rename")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -951,7 +946,7 @@ export function FilesSidebar() {
               <div className="space-y-2">
                 {deleteDialog?.workspaceFunc ? (
                   <>
-                    <p className="text-sm">
+                    <p>
                       <span className="inline-flex items-center gap-1.5">
                         {(() => {
                           const ws = findWorkspaceFolder(deleteDialog.folderPath, workspaceDirs);
@@ -972,13 +967,13 @@ export function FilesSidebar() {
                       useWorkspaceConfigStore.getState().workspaceDirs.filter(
                         (d) => d.function === "manuscript",
                       ).length === 1 && (
-                        <p className="text-sm text-warning">
+                        <p className="text-warning">
                           {t("dialogs.files.manuscriptWarn")}
                         </p>
                       )}
                   </>
                 ) : null}
-                <p className="text-sm">
+                <p>
                   {t("dialogs.files.deleteFolderBody", {
                     name: deleteDialog?.folderName ?? "",
                   })}
@@ -987,17 +982,17 @@ export function FilesSidebar() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <p className="text-sm text-muted-foreground">
-              <code className="text-destructive bg-destructive/10 px-1 rounded">
+            <p className="text-[length:var(--font-size-12)] text-muted-foreground">
+              <code className="rounded bg-destructive/10 px-1 font-sans text-destructive">
                 {deleteDialog?.folderPath}/
               </code>
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog(null)}>
+            <Button variant="outline" size="xs" onClick={() => setDeleteDialog(null)}>
               {t("common.cancel")}
             </Button>
-            <Button variant="destructive" onClick={confirmDeleteFolder}>
+            <Button variant="destructive" size="xs" onClick={confirmDeleteFolder}>
               {t("dialogs.files.deleteFolder")}
             </Button>
           </DialogFooter>

@@ -231,7 +231,7 @@ export function LiteratureCitationHealthDialog({
         <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
           <Button
             variant="ghost"
-            size="sm"
+            size="xs"
             onClick={() => void load()}
             disabled={loading || acting != null}
             className="sm:mr-auto"
@@ -242,7 +242,7 @@ export function LiteratureCitationHealthDialog({
           <div className="flex flex-wrap gap-2 justify-end">
             {importable.length > 0 ? (
               <Button
-                size="sm"
+                size="xs"
                 variant="outline"
                 disabled={acting != null || loading}
                 onClick={() => void handleImportFromBib()}
@@ -255,7 +255,7 @@ export function LiteratureCitationHealthDialog({
             ) : null}
             {!libraryOk && bibOk ? (
               <Button
-                size="sm"
+                size="xs"
                 disabled={acting != null || loading}
                 onClick={() => void handleSyncLibraryToBib()}
               >
@@ -265,7 +265,7 @@ export function LiteratureCitationHealthDialog({
                 {t("literature.citations.syncBib")}
               </Button>
             ) : null}
-            <Button size="sm" variant="secondary" onClick={() => onOpenChange(false)}>
+            <Button size="xs" variant="secondary" onClick={() => onOpenChange(false)}>
               {t("common.close")}
             </Button>
           </div>

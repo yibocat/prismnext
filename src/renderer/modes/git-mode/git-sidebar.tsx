@@ -30,6 +30,7 @@ export function GitSidebar() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const unitRoot = useGitStore((s) => s.unitRoot);
   const isGitRepo = useGitStore((s) => s.isGitRepo);
+  const repoKnown = useGitStore((s) => s.repoKnown);
   const checkingRepo = useGitStore((s) => s.checkingRepo);
   const files = useGitStore((s) => s.files);
   const filterMode = useGitStore((s) => s.filterMode);
@@ -95,10 +96,10 @@ export function GitSidebar() {
             <GitBranchIcon className="size-5 text-muted-foreground/50" />
             <div className="space-y-1">
               <p className="text-[length:var(--font-size-13)] font-medium text-foreground/90">
-                {t("modes.git.noRepo")}
+                {t(repoKnown ? "modes.git.noRepo" : "modes.git.noRepoOffline")}
               </p>
               <p className="text-[length:var(--font-size-12)] text-muted-foreground max-w-[14rem]">
-                {t("modes.git.noRepoHint")}
+                {t(repoKnown ? "modes.git.noRepoHint" : "modes.git.noRepoHintOffline")}
               </p>
             </div>
           </div>

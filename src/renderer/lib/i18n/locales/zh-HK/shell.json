@@ -96,6 +96,8 @@
     "latexReady": "{{backend}} · 就緒",
     "latexReadyAuto": "{{backend}} · 自動編譯",
     "latexMissing": "未檢測到",
+    "latexLocal": "本機 · {{detail}}",
+    "latexRemote": "{{host}} · {{detail}}",
     "aiTerminal": "AI 終端",
     "aiTerminalRunning": "{{running}} 執行中 · {{open}} 已開啟",
     "aiTerminalOpen": "{{open}} 已開啟",
@@ -103,7 +105,14 @@
     "terminalBusy": "{{count}} 忙碌",
     "connecting": "連線中…",
     "running": "執行中",
-    "stopped": "已停止"
+    "stopped": "已停止",
+    "thisComputer": "本機",
+    "connection": "連線",
+    "remote": "主機",
+    "remoteConnected": "已連線",
+    "remoteConnecting": "連線中…",
+    "remoteError": "連線失敗",
+    "remoteDisconnected": "未連線"
   },
   "rightArea": {
     "backToSettings": "返回設定",
@@ -115,6 +124,6 @@
     "restorePanel": "還原面板",
     "openFileToStart": "開啟檔案以開始",
     "openFileOrWorkspace": "開啟檔案或切換到工作區",
-    "openFileOrWorkspaceHint": "使用上方工具欄瀏覽檔案、檢視 Git 歷史，或在 TeX 工作區開始寫作。"
+    "openFileOrWorkspaceHint": "使用上方工具欄瀏覽檔案、檢視 Git 歷史，或在 Files 中開啟 `.tex` / `.typ`。"
   }
 }

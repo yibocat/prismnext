@@ -6,12 +6,14 @@ import { useLayoutStore } from "@/stores/layout-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useThemeStore } from "@/stores/theme-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useRemoteStore } from "@/stores/remote-store";
 import { restoreWorkbenchLaunch } from "@/lib/workspace/project-lifecycle";
 import { useProLicenseStore } from "@/stores/pro-license-store";
 import { injectDiffOverrides } from "@/lib/editor-themes/diff-overrides";
 import { registerAllModes } from "@/modes/_register";
 import { AppCommandPalette, GlobalErrorBoundary } from "@/components/modules/shared";
 import { ProjectSetupDialog } from "@/components/modules/project";
+import { RemoteConnectHost } from "@/components/modules/remote/remote-connect-dialog";
 import { PrismRibbonMark } from "@/components/brand/prism-ribbon-mark";
 import { Toaster } from "@/components/ui/sonner";
 import { TabCloseConfirmDialog } from "@/components/layout/tab-close-confirm-dialog";
@@ -71,6 +73,7 @@ export function App() {
   const isMobile = useIsMobile();
   const leftSidebarView = useLayoutStore((s) => s.leftSidebarView);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const hydrateRemote = useRemoteStore((s) => s.hydrate);
   const hydrateProLicense = useProLicenseStore((s) => s.hydrate);
   const initTheme = useThemeStore((s) => s.loadConfig);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
@@ -141,6 +144,10 @@ export function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    void hydrateRemote();
+  }, [hydrateRemote]);
 
   useEffect(() => {
     void hydrateProLicense();
@@ -236,6 +243,7 @@ export function App() {
         <LocaleSync />
         <GlassNativeSync />
         <ProjectSetupDialog />
+        <RemoteConnectHost />
         <AppCommandPalette isMobile={isMobile} />
         <Toaster />
         <TabCloseConfirmDialog />

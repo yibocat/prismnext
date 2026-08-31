@@ -268,3 +268,29 @@ export function normalizeProjectTeamsState(raw: unknown): ProjectTeamsState {
     assetOverrides: normalizeOverridesMap(raw.assetOverrides),
   });
 }
+
+/** Read `defaultTeam` from a teams.json body. Invalid JSON → null. */
+export function projectDefaultTeamFromRaw(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    return normalizeProjectTeamsState(JSON.parse(raw)).defaultTeam ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Merge a project default team into a teams.json body (preserves other keys). */
+export function projectTeamsStateWithDefaultTeam(
+  raw: string | null | undefined,
+  teamId: string,
+): string {
+  let prev = emptyProjectTeamsState();
+  if (raw?.trim()) {
+    try {
+      prev = normalizeProjectTeamsState(JSON.parse(raw));
+    } catch {
+      prev = emptyProjectTeamsState();
+    }
+  }
+  return `${JSON.stringify({ ...prev, defaultTeam: teamId }, null, 2)}\n`;
+}

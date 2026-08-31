@@ -7,7 +7,7 @@ import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
 import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
-import { buildLatexWorkspacePrompt } from "../../src/main/prompts/modules/latex-workspace";
+import { buildManuscriptCompilePrompt } from "../../src/main/prompts/modules/manuscript-compile";
 import type { PromptContext } from "../../src/main/prompts/types";
 
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
@@ -97,13 +97,19 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     expect(EXPERIMENTS_PROMPT).toContain("methodology-auditor");
     expect(EXPERIMENTS_PROMPT).not.toContain("uv pip --system");
     expect(EXPERIMENTS_PROMPT).not.toContain("### Workflow (binding)");
-    const latex = buildLatexWorkspacePrompt({} as PromptContext);
+    const latex = buildManuscriptCompilePrompt({} as PromptContext);
     expect(latex).toContain("Soft workflow");
     expect(latex).toContain("latex-compile");
+    expect(latex).toContain("typst-compile");
     expect(latex).toContain("standalone");
-    expect(latex).toContain(".workbench/compile/");
+    expect(latex).toContain(".workbench/compile");
+    expect(latex).not.toMatch(/TeX workspace/i);
     expect(latex).not.toContain("pdflatex");
     expect(latex).not.toContain("forbidden");
+    const typstTools = readFileSync(join(__dirname, "../../src/main/agent/tools/typst.ts"), "utf8");
+    expect(typstTools).toContain("TOOL_NAMES.typstCompile");
+    expect(typstTools).toContain("TOOL_NAMES.typstCompileStandalone");
+    expect(typstTools).toContain("Never compile Typst via the bash tool");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

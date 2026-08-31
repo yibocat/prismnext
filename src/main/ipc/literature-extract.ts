@@ -14,9 +14,26 @@ import {
   retryPaperExtractForRenderer,
   testMineruFromSettings,
 } from "../literature/host";
+import { routeHostLiteratureMethod } from "../remote/literature-route";
+import { getRemoteSessionBroker } from "./remote";
+
+async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
+  return routeHostLiteratureMethod(method, args, getRemoteSessionBroker());
+}
+
+function handleExtract(
+  channel: string,
+  fn: (event: Electron.IpcMainInvokeEvent, args: any) => unknown,
+): void {
+  ipcMain.handle(channel, async (event, args) => {
+    const remote = await routeIfRemote(channel, args ?? {});
+    if (remote !== undefined) return remote;
+    return fn(event, args);
+  });
+}
 
 export function registerLiteratureExtractHandlers(): void {
-  ipcMain.handle(
+  handleExtract(
     "extract:enqueue",
     async (
       _event,
@@ -26,7 +43,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:cancel",
     async (
       _event,
@@ -36,14 +53,14 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:list",
     async (_event, args: { projectRoot: string; paperIds: string[] }) => {
       return listPaperExtractStates(args.projectRoot, args.paperIds);
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:get",
     async (
       _event,
@@ -53,7 +70,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:getBlocks",
     async (
       _event,
@@ -63,7 +80,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:openMd",
     async (
       _event,
@@ -77,14 +94,14 @@ export function registerLiteratureExtractHandlers(): void {
     return testMineruFromSettings(args.token);
   });
 
-  ipcMain.handle(
+  handleExtract(
     "extract:resume",
     async (_event, args: { projectRoot: string }) => {
       return resumeExtractQueuesForRenderer(args.projectRoot);
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:retry",
     async (
       _event,
@@ -94,7 +111,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:enqueueBatch",
     async (
       _event,
@@ -114,7 +131,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:enqueueCollection",
     async (
       _event,
@@ -134,7 +151,7 @@ export function registerLiteratureExtractHandlers(): void {
     },
   );
 
-  ipcMain.handle(
+  handleExtract(
     "extract:readPdf",
     async (
       _event,

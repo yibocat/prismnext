@@ -8,8 +8,8 @@ import { usePermissionStore } from "@/stores/permission-store";
 import { displayChatTitle } from "@/lib/i18n/display-chat-title";
 import {
   openExperimentsPanel,
+  openFilesMaximized,
   openLiteratureLibrary,
-  openTexWorkspaceMaximized,
 } from "@/lib/workspace/left-nav/panel-utils";
 import {
   countActiveAgents,
@@ -135,7 +135,7 @@ export function useTrayStatusSync(): void {
             projectName,
             modes: projectName
               ? [
-                  { id: "texworkspace", label: t("nav.texWorkspace") },
+                  { id: "files", label: t("modes.files.label") },
                   { id: "literature", label: t("nav.library") },
                   { id: "experiments", label: t("nav.experiments") },
                 ]
@@ -210,8 +210,8 @@ export function useTrayStatusSync(): void {
 
 function openTrayModeMaximized(modeId: TrayModeId): void {
   if (!useDocumentStore.getState().projectRoot) return;
-  if (modeId === "texworkspace") {
-    openTexWorkspaceMaximized();
+  if (modeId === "files") {
+    openFilesMaximized();
     return;
   }
   if (modeId === "literature") {

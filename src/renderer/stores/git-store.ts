@@ -41,10 +41,112 @@ const log = createLogger("git-store", "git");
 export type GitFilterMode = GitWorkingFilter;
 export type GitSyncing = false | "fetch" | "pull" | "push";
 
+const GIT_HINT_KEY = "prism.next.gitRepoHint.v1";
+
+type GitRepoHint = { isRepo: boolean; branch: string };
+
+let gitHintMemory: Record<string, GitRepoHint> = {};
+
+function loadPersistedGitHints(): Record<string, GitRepoHint> {
+  try {
+    const raw = localStorage.getItem(GIT_HINT_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const next: Record<string, GitRepoHint> = {};
+    for (const [root, value] of Object.entries(parsed)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const rec = value as { isRepo?: unknown; branch?: unknown };
+      if (typeof rec.isRepo !== "boolean") continue;
+      next[root] = { isRepo: rec.isRepo, branch: typeof rec.branch === "string" ? rec.branch : "" };
+    }
+    return next;
+  } catch {
+    return {};
+  }
+}
+
+export function readGitRepoHint(root: string): GitRepoHint | null {
+  const key = root.trim();
+  if (!key) return null;
+  if (gitHintMemory[key]) return gitHintMemory[key];
+  const persisted = loadPersistedGitHints();
+  gitHintMemory = { ...persisted, ...gitHintMemory };
+  return gitHintMemory[key] ?? null;
+}
+
+export function rememberGitRepoHint(root: string, hint: GitRepoHint): void {
+  const key = root.trim();
+  if (!key) return;
+  gitHintMemory[key] = hint;
+  try {
+    localStorage.setItem(GIT_HINT_KEY, JSON.stringify({ ...loadPersistedGitHints(), [key]: hint }));
+  } catch {
+    // private mode / quota — in-memory hint is enough for this session
+  }
+}
+
+export function _resetGitRepoHintsForTests(): void {
+  gitHintMemory = {};
+  try {
+    localStorage.removeItem(GIT_HINT_KEY);
+  } catch {
+    //
+  }
+}
+
 function toastGitDetail(text: string | undefined): string | undefined {
   const detail = text?.trim();
   if (!detail) return undefined;
   return detail.length > 300 ? `${detail.slice(0, 300)}...` : detail;
+}
+
+async function isRemoteGitOffline(projectRoot: string): Promise<boolean> {
+  const { parseRemoteAbs } = await import("@shared/remote");
+  const parsed = parseRemoteAbs(projectRoot);
+  if (!parsed) return false;
+  const { useRemoteStore } = await import("./remote-store");
+  const { remotePhaseIsReady } = await import("@/lib/remote/ensure-connected");
+  return !remotePhaseIsReady(useRemoteStore.getState().byProfileId[parsed.profileId]?.phase);
+}
+
+function applyOfflineGitHint(
+  projectRoot: string,
+  set: (partial: {
+    isGitRepo: boolean;
+    repoKnown: boolean;
+    checkingRepo: boolean;
+    branch?: string;
+    branches?: string[];
+    files: [];
+    loading: boolean;
+    error: null;
+  }) => void,
+  get: () => { branch: string; branches: string[] },
+): void {
+  const hint = readGitRepoHint(projectRoot);
+  if (hint?.isRepo) {
+    const branch = hint.branch || get().branch;
+    set({
+      isGitRepo: true,
+      repoKnown: true,
+      checkingRepo: false,
+      branch,
+      branches: branch ? Array.from(new Set([branch, ...get().branches])) : get().branches,
+      files: [],
+      loading: false,
+      error: null,
+    });
+    return;
+  }
+  set({
+    isGitRepo: false,
+    repoKnown: false,
+    checkingRepo: false,
+    files: [],
+    loading: false,
+    error: null,
+  });
 }
 
 export interface GitCreatePrDefaults {
@@ -108,6 +210,8 @@ interface GitState {
   loading: boolean;
   error: string | null;
   isGitRepo: boolean;
+  /** False when we have not asked a live Host (or disk) yet — do not show Init Git. */
+  repoKnown: boolean;
   checkingRepo: boolean;
 
   // ── Selection ──
@@ -275,6 +379,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   pendingBranch: null,
   switching: false,
   isGitRepo: false,
+  repoKnown: false,
   checkingRepo: true,
   unitRoot: null,
   gitFolderVersion: 0,
@@ -392,10 +497,15 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── checkRepo ──
   checkRepo: async (projectRoot: string) => {
     try {
+      if (await isRemoteGitOffline(projectRoot)) {
+        applyOfflineGitHint(projectRoot, set, get);
+        return;
+      }
       const isRepo = await gitDesktop.gitIsRepo(projectRoot);
       if (isRepo) {
         set({
           isGitRepo: true,
+          repoKnown: true,
           checkingRepo: false,
           branchCommits: [],
           branchCommitsForBranch: null,
@@ -412,10 +522,13 @@ export const useGitStore = create<GitState>()((set, get) => ({
         await get().refreshStatus(projectRoot);
         await get().refreshBranches(projectRoot);
         void get().refreshGhAuth(projectRoot);
+        rememberGitRepoHint(projectRoot, { isRepo: true, branch: get().branch });
       } else {
+        rememberGitRepoHint(projectRoot, { isRepo: false, branch: "" });
         // Clear stale git data from previous project to prevent cross-project pollution
         set({
           isGitRepo: false,
+          repoKnown: true,
           checkingRepo: false,
           files: [],
           branch: "",
@@ -437,6 +550,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
     } catch {
       set({
         isGitRepo: false,
+        repoKnown: true,
         checkingRepo: false,
         files: [],
         branch: "",
@@ -459,6 +573,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── refreshStatus ──
   refreshStatus: async (projectRoot: string) => {
+    if (await isRemoteGitOffline(projectRoot)) return;
     lastRefreshTimestamp = Date.now();
 
     // Short-lived cache: if status was fetched within the last second
@@ -484,8 +599,10 @@ export const useGitStore = create<GitState>()((set, get) => ({
         const msg = (err as Error).message || "Failed to get git status";
         // Non-repo roots should not surface a fatal toast (Git mode empty state handles CTA).
         if (/not a git repository/i.test(msg)) {
+          rememberGitRepoHint(projectRoot, { isRepo: false, branch: "" });
           set({
             isGitRepo: false,
+            repoKnown: true,
             loading: false,
             error: null,
             files: [],
@@ -565,6 +682,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
         tracking: data.tracking ?? EMPTY_TRACKING,
         loading: false,
       });
+      rememberGitRepoHint(projectRoot, { isRepo: true, branch: data.branch });
 
       // Pre-fetch git history in the background so the history tab is instant
       if (get().commits.length === 0) {
@@ -630,6 +748,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── refreshBranches ──
   refreshBranches: async (projectRoot: string) => {
+    if (await isRemoteGitOffline(projectRoot)) return;
     try {
       const data: GitBranchesData = await gitDesktop.gitBranches(projectRoot);
       // Only overwrite branch if we got a meaningful value
@@ -1351,6 +1470,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
       loading: false,
       error: null,
       isGitRepo: false,
+      repoKnown: false,
       checkingRepo: true,
       unitRoot: null,
       gitFolderVersion: 0,

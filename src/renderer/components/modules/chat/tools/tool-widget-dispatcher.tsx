@@ -22,7 +22,7 @@ import { PatchWidget } from "./patch-widget";
 import { DeleteWidget } from "./delete-widget";
 import { MoveWidget } from "./move-widget";
 import { LiteratureToolWidget } from "./literature-tool-widget";
-import { LatexToolWidget } from "./latex-tool-widget";
+import { ManuscriptCompileToolWidget } from "./manuscript-compile-tool-widget";
 import { ResearchBriefToolWidget } from "./research-brief-tool-widget";
 import { ProjectRuleToolWidget } from "./project-rule-tool-widget";
 import { ExperimentToolWidget } from "./experiment-tool-widget";
@@ -85,9 +85,12 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-export-bib": LiteratureToolWidget,
   "literature-delete": LiteratureToolWidget,
   "citation-health": LiteratureToolWidget,
-  "latex-root": LatexToolWidget,
-  "latex-compile": LatexToolWidget,
-  "latex-compile-standalone": LatexToolWidget,
+  "latex-root": ManuscriptCompileToolWidget,
+  "latex-compile": ManuscriptCompileToolWidget,
+  "latex-compile-standalone": ManuscriptCompileToolWidget,
+  "typst-root": ManuscriptCompileToolWidget,
+  "typst-compile": ManuscriptCompileToolWidget,
+  "typst-compile-standalone": ManuscriptCompileToolWidget,
   "research-brief-read": ResearchBriefToolWidget,
   "research-brief-update": ResearchBriefToolWidget,
   "project-rule-write": ProjectRuleToolWidget,

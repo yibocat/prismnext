@@ -24,7 +24,6 @@ import {
   parseExperimentRunKind,
   type ExperimentBriefLinks,
 } from "../../shared/experiments/log";
-import { kickoffExperimentRun } from "./experiment-run-executor";
 import { snapshotExperiment } from "./experiment-results-snapshot";
 import {
   readProvenanceEvents,
@@ -176,16 +175,18 @@ function dispatch(req: ExperimentToolRequest): Record<string, unknown> | null {
         hint: 'interpreter="external" requires pythonPath (absolute path or PATH-resolvable command, e.g. "sage")',
       };
     }
-    kickoffExperimentRun({
-      ctx,
-      id,
-      command,
-      artifacts: req.artifacts,
-      notes: req.notes,
-      kind,
-      chatSessionId: req.sessionId ?? null,
-      interpreter,
-      pythonPath: pythonPath || undefined,
+    void import("./experiment-run-executor").then(({ kickoffExperimentRun }) => {
+      kickoffExperimentRun({
+        ctx,
+        id,
+        command,
+        artifacts: req.artifacts,
+        notes: req.notes,
+        kind,
+        chatSessionId: req.sessionId ?? null,
+        interpreter,
+        pythonPath: pythonPath || undefined,
+      });
     });
     return null;
   }

@@ -19,8 +19,6 @@ export function createHomeTab(kind: RightTabKind, id: string, title?: string): R
       return { ...base, kind: "git-overview" };
     case "git-diff":
       return { ...base, kind: "git-diff" };
-    case "texworkspace":
-      return { ...base, kind: "texworkspace" };
     case "terminal":
       return { ...base, kind: "terminal" };
     case "settings-editor":
@@ -87,4 +85,27 @@ export function isExperimentsDetailTab(tab: RightTab): boolean {
 /** Strip mode-specific payload when resetting a persistent home tab. */
 export function buildInitialTabShell(tab: RightTab, initialTitle: string): RightTab {
   return createHomeTab(tab.kind, tab.id, initialTitle);
+}
+
+/**
+ * Leftover TeX Workspace tabs → Files (`kind: "file"`) when a fileId is present.
+ * Tabs without a file are dropped.
+ */
+export function migrateLegacyRightTab(raw: {
+  kind?: string;
+  fileId?: string;
+  [key: string]: unknown;
+}): RightTab | null {
+  if (raw.kind === "texworkspace") {
+    if (typeof raw.fileId !== "string" || !raw.fileId) return null;
+    return { ...raw, kind: "file" } as RightTab;
+  }
+  if (typeof raw.kind !== "string") return null;
+  return raw as unknown as RightTab;
+}
+
+export function migrateLegacyRightTabs(
+  tabs: Array<{ kind?: string; fileId?: string; [key: string]: unknown }>,
+): RightTab[] {
+  return tabs.map(migrateLegacyRightTab).filter((tab): tab is RightTab => tab != null);
 }

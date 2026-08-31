@@ -117,6 +117,30 @@ describe("ensureMyContentTeam", () => {
     };
     expect(raw.allowedExperts).toEqual(["$pack"]);
   });
+
+  it("seeds Chat when orchestrators/ exists but has no lead json", () => {
+    const root = makeTempDir("my-content-empty-orch-");
+    tempDirs.push(root);
+    setAppTeamsDirForTests(root);
+    const teamDir = join(root, MY_CONTENT_TEAM_ID);
+    mkdirSync(join(teamDir, "orchestrators"), { recursive: true });
+    writeFileSync(
+      join(teamDir, "team.json"),
+      JSON.stringify({
+        id: MY_CONTENT_TEAM_ID,
+        name: "Common Team",
+        description: "hangar",
+        version: "1.0.0",
+        publisher: "user",
+        tier: "free",
+      }),
+    );
+
+    expect(ensureMyContentTeam().createdOrRepaired).toBe(true);
+    expect(
+      existsSync(join(teamDir, "orchestrators", MY_CONTENT_LEAD_ID, "orchestrator.json")),
+    ).toBe(true);
+  });
 });
 
 describe("Common Team lead guards", () => {

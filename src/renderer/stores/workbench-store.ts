@@ -4,10 +4,12 @@ import {
   type WorkbenchProjectMember,
   type WorkbenchState,
 } from "../../shared/workbench/api";
+import type { ProjectDirectoryIndex } from "../../shared/workbench/project-directory-index";
 export {
   applyVisibleIdReorder,
   moveListItem,
 } from "../../shared/workbench/api";
+import { parseRemoteAbs, recoverRemoteAbs } from "@shared/remote";
 import { workbenchDesktop } from "@/lib/desktop-api/workbench";
 
 export function sameProjectPath(
@@ -15,7 +17,7 @@ export function sameProjectPath(
   b: string | null | undefined,
 ): boolean {
   if (!a?.trim() || !b?.trim()) return false;
-  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const norm = (p: string) => recoverRemoteAbs(p) ?? p.replace(/\\/g, "/").replace(/\/+$/, "");
   return norm(a) === norm(b);
 }
 
@@ -214,11 +216,49 @@ export function selectableWorkbenchProjects(state: {
   return list;
 }
 
-export function lastPathForSession(conversationId: string): string | null {
-  const state = useWorkbenchStore.getState();
-  const projectId = state.sessionProjectIds[conversationId];
+export function resolveSessionProjectMeta(
+  session: { projectId?: string; projectLastPath?: string },
+  members: ReadonlyArray<WorkbenchProjectMember>,
+  directory: ProjectDirectoryIndex = {},
+): { id?: string; name: string; lastPath: string; host?: string } | null {
+  const member =
+    (session.projectId
+      ? members.find((item) => item.id === session.projectId)
+      : undefined)
+    ?? members.find((item) => sameProjectPath(item.lastPath, session.projectLastPath));
+  const entry = session.projectId ? directory[session.projectId] : undefined;
+  const lastPath = member?.lastPath || entry?.lastPath || session.projectLastPath;
+  if (!lastPath) return null;
+  const name = member?.displayName
+    || entry?.displayName
+    || lastPath.replace(/\\/g, "/").split("/").filter(Boolean).at(-1)
+    || lastPath;
+  const host = parseRemoteAbs(lastPath)?.profileId;
+  return {
+    id: member?.id ?? entry?.projectId ?? session.projectId,
+    name,
+    lastPath,
+    ...(host ? { host } : {}),
+  };
+}
+
+export function lastPathForSessionIn(
+  state: {
+    sessionProjectIds: Record<string, string>;
+    members: WorkbenchProjectMember[];
+    projectDirectoryById?: ProjectDirectoryIndex;
+  },
+  conversationId: string | null | undefined,
+): string | null {
+  const projectId = conversationId?.trim() ? state.sessionProjectIds[conversationId.trim()] : "";
   if (!projectId) return null;
-  return state.members.find((member) => member.id === projectId)?.lastPath ?? null;
+  return state.members.find((member) => member.id === projectId)?.lastPath
+    ?? state.projectDirectoryById?.[projectId]?.lastPath
+    ?? null;
+}
+
+export function lastPathForSession(conversationId: string): string | null {
+  return lastPathForSessionIn(useWorkbenchStore.getState(), conversationId);
 }
 
 export function projectRootForSession(
@@ -229,6 +269,7 @@ export function projectRootForSession(
 }
 
 interface WorkbenchStoreState extends WorkbenchState {
+  projectDirectoryById: ProjectDirectoryIndex;
   loaded: boolean;
   focusConversationId: string | null;
   focusProjectId: string;
@@ -246,15 +287,20 @@ interface WorkbenchStoreState extends WorkbenchState {
   recordSessionProjects: (map: Record<string, string>) => void;
 }
 
-const empty: WorkbenchState = {
+const empty = {
   defaultProjectId: "",
   defaultLastPath: "",
-  workbenchProjectIds: [],
+  workbenchProjectIds: [] as string[],
   members: [] as WorkbenchProjectMember[],
+  projectDirectoryById: {} as ProjectDirectoryIndex,
 };
 
 function applyState(state: WorkbenchState): Partial<WorkbenchStoreState> {
-  return { ...state, loaded: true };
+  return {
+    ...state,
+    projectDirectoryById: state.projectDirectoryById ?? {},
+    loaded: true,
+  };
 }
 
 export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({

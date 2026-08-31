@@ -124,6 +124,7 @@ export {
 } from "./papers";
 export { inspectWorkbenchLibrary, resolveLibraryDisplayAbs } from "./paths";
 export { promoteZoteroPaperToProject } from "./zotero";
+export { importZoteroBatchForRenderer, parseLiteratureImportBatch } from "./zotero-import-batch";
 export {
   cancelStagedCitationAdd,
   getCitationHealth,

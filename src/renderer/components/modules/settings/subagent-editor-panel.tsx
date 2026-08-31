@@ -501,12 +501,12 @@ export function ExpertEditorPanel({ slot }: { slot: AgentExpertSlot }) {
             </div>
           ) : null}
           <DialogFooter>
-            <Button variant="outline" size="sm" className="shadow-none" onClick={() => setDeleteDialogOpen(false)}>
+            <Button variant="outline" size="xs" className="shadow-none" onClick={() => setDeleteDialogOpen(false)}>
               {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
-              size="sm"
+              size="xs"
               className="shadow-none"
               disabled={saving || deleteReferrersLoading}
               onClick={() => void deleteExpert()}

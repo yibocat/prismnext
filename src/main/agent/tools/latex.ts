@@ -7,6 +7,7 @@
 import { Type } from "@earendil-works/pi-ai";
 import { fileToolOutcome } from "../../../shared/agent/runtime";
 import { TOOL_NAMES } from "../../../shared/agent/tool-names";
+import { compileEngineFromRelPath } from "../../../shared/compile/artifact-key";
 import { resolveLatexRoot } from "../../lib/latex-root";
 import {
   compileManuscriptForAgent,
@@ -43,6 +44,12 @@ export const latexRootTool: NativeToolDefinition = {
   },
   async execute(args, ctx) {
     const mainFile = str(args.mainFile);
+    if (mainFile && compileEngineFromRelPath(mainFile) === "typst") {
+      return {
+        error: `${mainFile} is a Typst file. Call \`${TOOL_NAMES.typstRoot}\` instead of latex-root.`,
+        projectRoot: ctx.projectRoot,
+      };
+    }
     const resolved = resolveLatexRoot(ctx.projectRoot, mainFile || undefined);
     if (!resolved) {
       return { error: "Could not resolve LaTeX main file.", projectRoot: ctx.projectRoot };
@@ -62,9 +69,9 @@ export const latexRootTool: NativeToolDefinition = {
 export const latexCompileTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompile,
   label: "Compile LaTeX",
-  description: "Compile the TeX workspace manuscript into `.workbench/compile/`.",
+  description: "Compile the LaTeX paper into `.workbench/compile/`.",
   promptGuidelines: [
-    "This compiles the paper — the workspace manuscript root — into `.workbench/compile/`.",
+    "This compiles the paper — the resolved LaTeX manuscript root — into `.workbench/compile/`.",
     `Do not pass a \\documentclass{standalone} figure here. That file uses \`${TOOL_NAMES.latexCompileStandalone}\` and compiles in place next to the source.`,
     "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool.",
   ],
@@ -74,10 +81,15 @@ export const latexCompileTool: NativeToolDefinition = {
   }),
   permission: {
     category: "safe_write",
-    extractPath: (args) => str(args.mainFile) || "main.tex",
+    extractPath: (args) => str(args.mainFile) || undefined,
   },
   async execute(args, ctx) {
     const mainFile = str(args.mainFile);
+    if (mainFile && compileEngineFromRelPath(mainFile) === "typst") {
+      return {
+        error: `${mainFile} is a Typst file. Call \`${TOOL_NAMES.typstCompile}\` instead of latex-compile.`,
+      };
+    }
     return withCompileOutcome(
       await compileManuscriptForAgent(ctx.projectRoot, mainFile || undefined, args.useTexlive === true),
     );
@@ -105,8 +117,14 @@ export const latexCompileStandaloneTool: NativeToolDefinition = {
     extractPath: (args) => str(args.mainFile) || "figure.tex",
   },
   async execute(args, ctx) {
+    const mainFile = str(args.mainFile);
+    if (mainFile && compileEngineFromRelPath(mainFile) === "typst") {
+      return {
+        error: `${mainFile} is a Typst file. Call \`${TOOL_NAMES.typstCompileStandalone}\` instead of latex-compile-standalone.`,
+      };
+    }
     return withCompileOutcome(
-      await compileStandaloneForAgent(ctx.projectRoot, str(args.mainFile)),
+      await compileStandaloneForAgent(ctx.projectRoot, mainFile),
     );
   },
 };

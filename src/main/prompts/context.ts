@@ -18,7 +18,7 @@ function readWorkspaceDirsSafe(projectRoot: string): WorkspaceFolder[] {
       return folders as WorkspaceFolder[];
     }
     // No configured folders → []. Never invent a manuscript/main.tex here:
-    // the workspace-folders and latex-workspace modules would otherwise assert
+    // the workspace-folders and manuscript-compile modules would otherwise assert
     // paths that do not exist on disk.
     return [];
   } catch {

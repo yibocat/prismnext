@@ -74,9 +74,35 @@ import {
 
 export function formatAgentSendError(reason?: string): string {
   if (!reason) return i18n.t("agentLab.sendFailed");
+  if (
+    reason === "host_control_plane_dropped"
+    || reason.includes("Host control plane dropped")
+    || reason.includes("Host stdio is not open")
+  ) {
+    return i18n.t("remote.hostControlPlaneDropped");
+  }
+  if (reason === "agent_not_on_remote_yet" || reason === "remote_not_connected") {
+    return i18n.t("remote.agentNotReady");
+  }
+  if (reason === "entitlement") return i18n.t("remote.agentEntitlement");
+  if (reason === "missing_local_key") return i18n.t("remote.missingLocalKey");
+  if (reason === "host_model_unconfigured") return i18n.t("remote.hostModelUnconfigured");
+  if (reason.startsWith("missing_host_api_key")) {
+    const provider = reason.slice("missing_host_api_key:".length).trim() || "this model";
+    return i18n.t("remote.missingHostApiKey", { provider });
+  }
+  if (reason === "remote_attachment_not_uploaded") return i18n.t("remote.attachmentNotUploaded");
+  if (reason === "remote_attachment_too_large") return i18n.t("remote.attachmentTooLarge");
+  if (reason === "remote_module_pending") return i18n.t("remote.modulePending");
   if (reason === "turn_idle_timeout") return i18n.t("chat.errors.turn_timeout");
   if (reason === "terminated" || reason === "aborted") {
     return i18n.t("chat.errors.turn_aborted");
+  }
+  if (/connection error/i.test(reason)) {
+    return i18n.t("chat.errors.connectionLost");
+  }
+  if (/already processing/i.test(reason)) {
+    return i18n.t("chat.errors.alreadyProcessing");
   }
   if (reason.startsWith("unsupported_pi_provider")) {
     return i18n.t("agentLab.reason.unsupportedProvider");
@@ -634,7 +660,12 @@ export interface ChatState {
   newPiSession: () => void;
   clearAllSessions: () => void;
   clearCurrentTab: () => void;
-  loadSession: (sessionId: string, sessionDirectory?: string, projectLastPath?: string) => Promise<void>;
+  loadSession: (
+    sessionId: string,
+    sessionDirectory?: string,
+    projectLastPath?: string,
+    opts?: { connectRemote?: boolean },
+  ) => Promise<void>;
   /** Re-check prompt fingerprint vs session for one tab (after settings edits). */
   checkPromptStale: (tabId?: string) => Promise<void>;
   /** Truncate in-memory Conversation (and leftover messages) to a turn. */

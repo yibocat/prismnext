@@ -7,6 +7,8 @@
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
+import { listHostRuntimeBinCandidates } from "../../shared/remote/host-runtime-env";
 import { getAppPath, isAppPackaged, getResourcesPath } from "../app/paths";
 
 export interface TectonicBinaryInfo {
@@ -31,6 +33,26 @@ function platformArchDir(): { platformDir: string; archDir: string } {
   else archDir = arch;
 
   return { platformDir, archDir };
+}
+
+/**
+ * Host runtime: `~/.prismnext-host/current/bin/tectonic`.
+ * Do not require the dedicated Node — system Node + Host script, or just
+ * `$HOME/.prismnext-host/current/bin`, must still find the installer copy.
+ */
+export function resolveHostPayloadTectonicPath(): string | null {
+  const binName = process.platform === "win32" ? "tectonic.exe" : "tectonic";
+  const candidates = listHostRuntimeBinCandidates({
+    envBinDir: process.env.PRISM_HOST_BIN_DIR,
+    execPath: process.execPath,
+    argv1: process.argv[1],
+    home: process.env.HOME || homedir(),
+  });
+  for (const dir of candidates) {
+    const candidate = join(dir, binName);
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
 }
 
 export function resolveBundledTectonicBinaryPath(): string {
@@ -106,9 +128,36 @@ export function resetTectonicBinaryCacheForTests(): void {
   cached = null;
 }
 
+/** Host `main` sets this after it finds `current/bin`. */
+export function isHostRuntimeProcess(): boolean {
+  return Boolean(process.env.PRISM_HOST_BIN_DIR);
+}
+
+/** Product default is Tectonic. Do not tell the user to install TeX Live on a Host. */
+export function tectonicUnavailableError(): string {
+  if (isHostRuntimeProcess()) {
+    return (
+      "Tectonic was not found on this Host (~/.prismnext-host/current/bin/tectonic). "
+      + "Disconnect and reconnect so PrismNext can download it. Remote compile uses Tectonic, not TeX Live."
+    );
+  }
+  return "Tectonic was not found. Install Tectonic, or add TeX Live to PATH if you want that engine.";
+}
+
 /** Resolve bundled Tectonic first, then system install. */
 export async function resolveTectonicBinary(opts?: { force?: boolean }): Promise<TectonicBinaryInfo> {
-  if (cached && !opts?.force) return cached;
+  if (cached?.available && !opts?.force) return cached;
+
+  const hostPayload = resolveHostPayloadTectonicPath();
+  if (hostPayload) {
+    cached = {
+      available: true,
+      path: hostPayload,
+      bundled: true,
+      version: probeVersion(hostPayload),
+    };
+    return cached;
+  }
 
   const bundledPath = resolveBundledTectonicBinaryPath();
   if (existsSync(bundledPath)) {

@@ -53,6 +53,21 @@ describe("resolvePiModelFromRuntime", () => {
     });
   });
 
+  it("does not write an API key when modelTransport is proxy", async () => {
+    const runtime = fakeRuntime();
+    const setKey = vi.spyOn(runtime, "setRuntimeApiKey");
+    await expect(
+      resolvePiModelFromRuntime(runtime, {
+        providerId: "anthropic",
+        modelId: "claude-sonnet-4-5",
+        apiKey: "prismnext-gateway",
+        modelTransport: "proxy",
+      }),
+    ).rejects.toThrow("unknown_pi_model:anthropic/claude-sonnet-4-5");
+    expect(setKey).not.toHaveBeenCalled();
+    expect(runtime.refresh).not.toHaveBeenCalled();
+  });
+
   it("throws unknown_pi_model when refresh still does not register the model", async () => {
     const runtime = fakeRuntime();
     await expect(

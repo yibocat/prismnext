@@ -31,10 +31,6 @@ export function isWorkspaceModeOpen(modeId: string): boolean {
   );
 }
 
-export function isTexWorkspaceOpen(): boolean {
-  return isWorkspaceModeOpen("texworkspace");
-}
-
 export function isLiteraturePanelOpen(): boolean {
   return isWorkspaceModeOpen("literature");
 }
@@ -164,28 +160,32 @@ export function toggleExperimentsSplit(layout?: Pick<RightAreaLayoutCtx, "isMobi
   openExperimentsSplit(layout);
 }
 
-export function openTexWorkspaceSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
-  focusModeInRightArea("texworkspace", { layout });
+export function isFilesPanelOpen(): boolean {
+  return isWorkspaceModeOpen("files");
 }
 
-export function openTexWorkspaceMaximized(): void {
-  focusModeInRightArea("texworkspace", { maximize: true });
+export function openFilesSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
+  focusModeInRightArea("files", { layout });
 }
 
-export function toggleTexWorkspaceMaximize(): void {
+export function openFilesMaximized(): void {
+  focusModeInRightArea("files", { maximize: true });
+}
+
+export function toggleFilesMaximize(): void {
   const st = useLayoutStore.getState();
-  if (isTexWorkspaceOpen() && st.editorMaximized) {
-    dismissModeFromRightArea("texworkspace");
+  if (isFilesPanelOpen() && st.editorMaximized) {
+    dismissModeFromRightArea("files");
     return;
   }
-  openTexWorkspaceMaximized();
+  openFilesMaximized();
 }
 
-export function toggleTexWorkspaceSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
+export function toggleFilesSplit(layout?: Pick<RightAreaLayoutCtx, "isMobile">): void {
   const st = useLayoutStore.getState();
-  if (isTexWorkspaceOpen() && !st.editorMaximized) {
-    dismissModeFromRightArea("texworkspace");
+  if (isFilesPanelOpen() && !st.editorMaximized) {
+    dismissModeFromRightArea("files");
     return;
   }
-  openTexWorkspaceSplit(layout);
+  openFilesSplit(layout);
 }

@@ -1,5 +1,28 @@
 import { ipcMain } from "electron";
 import { getSettings, updateSettings } from "../app/settings";
+import { parseRemoteAbs } from "../../shared/remote";
+import { getRemoteSessionBroker } from "./remote";
+import { projectLifecycleAuthority } from "../project/project-lifecycle-authority";
+
+const PERMISSION_SETTING_KEYS = [
+  "toolAllowAlways",
+  "bashAllowAlwaysPatterns",
+  "permissionAllowedPaths",
+  "permissionAllowRules",
+  "permissionDenyRules",
+  "permissionMode",
+] as const;
+
+function pickPermissionPatch(input: Record<string, unknown>): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  let hit = false;
+  for (const key of PERMISSION_SETTING_KEYS) {
+    if (!(key in input)) continue;
+    hit = true;
+    out[key] = input[key];
+  }
+  return hit ? out : null;
+}
 import { promptManager } from "../prompts";
 import { buildPromptContext } from "../prompts/context";
 import { countPromptTokens } from "../lib/token-estimate";
@@ -10,13 +33,36 @@ import { syncTrayFromSettings } from "../app/tray";
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle("settings:get", async () => {
-    return getSettings();
+    const local = getSettings();
+    const root = projectLifecycleAuthority.currentRoot;
+    const parsed = root ? parseRemoteAbs(root) : null;
+    if (!parsed) return local;
+    const broker = getRemoteSessionBroker();
+    if (!broker.isBound(parsed.profileId)) return local;
+    try {
+      const remote = await broker.invoke(parsed.profileId, "settings:getRemotePermissions", {}) as Record<string, unknown>;
+      return { ...local, ...remote, permissionsStoredOn: "server" };
+    } catch {
+      return local;
+    }
   });
 
   ipcMain.handle(
     "settings:set",
     async (_event, patch: Record<string, unknown>) => {
+      const permissionPatch = pickPermissionPatch(patch);
+      const root = projectLifecycleAuthority.currentRoot;
+      const parsed = root ? parseRemoteAbs(root) : null;
+      if (permissionPatch && parsed) {
+        const broker = getRemoteSessionBroker();
+        if (broker.isBound(parsed.profileId)) {
+          await broker.invoke(parsed.profileId, "settings:setRemotePermissions", permissionPatch);
+        }
+      }
       updateSettings(patch as Parameters<typeof updateSettings>[0]);
+      if ("aiApiKeys" in patch || "aiBaseUrls" in patch) {
+        void getRemoteSessionBroker().reconfigureModelKeys().catch(() => undefined);
+      }
       // Invalidate prompt cache when user custom prompt changes
       if ("agentSystemPrompt" in patch) {
         promptManager.invalidate();

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { SETTINGS_FORM_TEXTAREA } from "@/components/modules/settings/settings-tokens";
 import { readResearchBrief } from "@/lib/files/open-research-brief";
 import { useExperimentStore } from "@/stores/experiment-store";
 import { useExperimentProjectRoot } from "./experiments-project-root";
@@ -132,6 +133,7 @@ export function ExperimentsBriefEditDialog({
             </label>
             <Textarea
               autoFocus
+              className={SETTINGS_FORM_TEXTAREA}
               value={hypothesis}
               disabled={busy}
               rows={3}
@@ -144,6 +146,7 @@ export function ExperimentsBriefEditDialog({
               {t("experiments.brief.rqLabel")}
             </label>
             <Textarea
+              className={SETTINGS_FORM_TEXTAREA}
               value={rq}
               disabled={busy}
               rows={2}
@@ -166,6 +169,7 @@ export function ExperimentsBriefEditDialog({
           <Button
             type="button"
             variant="secondary"
+            size="xs"
             disabled={busy}
             onClick={() => onOpenChange(false)}
           >
@@ -173,6 +177,7 @@ export function ExperimentsBriefEditDialog({
           </Button>
           <Button
             type="button"
+            size="xs"
             disabled={busy || !projectRoot}
             onClick={() => void handleSubmit()}
           >

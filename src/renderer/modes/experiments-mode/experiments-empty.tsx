@@ -163,7 +163,7 @@ function OpenWorkspaceSettingsButton() {
         // sets the function to "experiment" before saving.
         st.setSettingsCategory("workspace");
         st.setLeftSidebarView("settings");
-        openSettingsPanel({ kind: "workspace-folder", scope: "project", mode: "new" });
+        openSettingsPanel({ kind: "workspace-folder", mode: "new" });
       }}
     >
       <FolderPlusIcon className="size-3.5" />

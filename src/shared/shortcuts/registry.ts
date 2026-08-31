@@ -177,6 +177,7 @@ export const SHORTCUT_REGISTRY: readonly ShortcutDef[] = [
   },
   // Mode navigation: Control+1–6 on all platforms (+ Shift = maximize).
   // Avoids macOS screenshot chords (⌘⇧3/4/5). Templates: no shortcut.
+  // workspace.openTexWorkspace* ids are kept so custom chords still open Files.
   {
     id: "workspace.openTexWorkspace",
     category: "workspace",

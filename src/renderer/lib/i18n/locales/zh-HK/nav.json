@@ -4,7 +4,6 @@
   "library": "文獻庫",
   "experiments": "實驗",
   "templates": "模板",
-  "texWorkspace": "TeX 工作區",
   "settings": "設定",
   "updateToVersion": "更新到 {{version}}",
   "sessions": {
@@ -22,6 +21,12 @@
     "groupWorkbench": "工作臺",
     "groupUpdated": "更新日期",
     "status": "狀態",
+    "statusAll": "全部",
+    "statusWaiting": "等待許可",
+    "statusRunning": "執行中",
+    "statusUnread": "未讀",
+    "statusRead": "已讀",
+    "statusEmpty": "沒有符合該狀態的會話",
     "statusSoon": "暫無狀態篩選",
     "expandAll": "展開所有",
     "collapseAll": "摺疊所有",
@@ -74,7 +79,13 @@
     "recents": "最近專案",
     "more": "更多",
     "openFolder": "開啟資料夾",
-    "defaultBadge": "預設"
+    "defaultBadge": "預設",
+    "remote": "遠端",
+    "repos": "倉庫",
+    "localRepos": "本機",
+    "connectSsh": "透過 SSH 連線…",
+    "noSshHosts": "~/.ssh/config 裡還沒有主機",
+    "removeRecent": "從最近專案中移除"
   },
   "project": {
     "noProject": "未開啟專案",
@@ -90,6 +101,6 @@
   "customizeSidebar": {
     "menu": "自訂側邊欄",
     "title": "自訂側邊欄",
-    "description": "選擇要顯示的工作區模組，拖動可調整順序。預設只顯示 TeX 工作區和文獻庫。模板和團隊固定在新建對話下方。"
+    "description": "選擇要顯示的工作區模組，拖動可調整順序。預設只顯示檔案和文獻庫。模板和團隊固定在新建對話下方。"
   }
 }

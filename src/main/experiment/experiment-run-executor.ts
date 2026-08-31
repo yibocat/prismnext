@@ -9,7 +9,6 @@ import { existsSync, mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { basename, dirname, join, resolve as pathResolve } from "node:path";
 import { tmpdir } from "node:os";
-import { cancelAiCommandForSession } from "../terminal/ai-pty";
 import { getAppPath } from "../app/paths";
 import {
   appendRun,
@@ -104,6 +103,7 @@ export async function cancelExperimentExecution(
       // Fall through to the session-id kill so in-flight PTYs still stop.
     }
   }
+  const { cancelAiCommandForSession } = await import("../terminal/ai-pty");
   cancelAiCommandForSession(`experiment:${experimentId}:${runId}`);
 }
 

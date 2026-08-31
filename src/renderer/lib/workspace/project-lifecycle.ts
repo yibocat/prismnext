@@ -25,6 +25,7 @@ import { loadWorkbenchSessionUiPrefs } from "@/lib/chat/session-ui-prefs";
 import { agentDesktop } from "@/lib/desktop-api/agent";
 import { dialogDesktop } from "@/lib/desktop-api/dialog";
 import { fsDesktop } from "@/lib/desktop-api/fs";
+import { remoteDesktop } from "@/lib/desktop-api/remote";
 import { gitDesktop } from "@/lib/desktop-api/git";
 import { projectDesktop } from "@/lib/desktop-api/project";
 import { executionDesktop } from "@/lib/desktop-api/execution";
@@ -32,6 +33,8 @@ import { getProjectLastActiveFileId } from "@/lib/files/recent-files";
 import { i18n } from "@/lib/i18n";
 import { createLogger } from "@/services/logger";
 import { terminalExecutionIsFinal, type TerminalExecutionSummary } from "../../../shared/execution";
+import { encodeRemoteAbs, isRemoteProjectRoot, parseRemoteAbs, recoverRemoteAbs } from "../../../shared/remote";
+import { shouldSkipRemoteHostBind } from "@/lib/remote/ensure-connected";
 
 const log = createLogger("project-lifecycle");
 
@@ -96,11 +99,29 @@ export async function confirmProjectSwitchIfNeeded(
 export async function applyWorkbenchFocusChange(): Promise<void> {
   useRightPanelStore.getState().closeAllTabs({ force: true });
   clearPdfCache();
+  void import("@/stores/typst-session-store").then((m) => m.resetTypstSessionStore());
   useChangesStore.getState().clearAll();
   useWorktreeStore.getState().clearAll();
   useGitStore.getState().clearAll();
   useWorkspaceConfigStore.getState().reset();
   useExperimentStore.getState().reset();
+}
+
+/**
+ * After a remembered remote folder is already focused, Host becoming ready
+ * must fill the neighbors we skipped (file tree, Workspace folders, library,
+ * experiments). Does not reset tabs or git selection.
+ */
+export async function refreshFocusedRemoteNeighbors(projectRoot: string): Promise<void> {
+  const root = projectRoot.trim();
+  if (!root || !recoverRemoteAbs(root)) return;
+  await useWorkspaceConfigStore.getState().loadConfig(root);
+  const { useDocumentStore } = await import("@/stores/document-store");
+  await useDocumentStore.getState().reloadMetadataFromDisk(true);
+  void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+    void useLiteratureStore.getState().refresh(root);
+  });
+  void useExperimentStore.getState().refreshList(root);
 }
 
 export type WorkbenchFocusScan = {
@@ -121,31 +142,41 @@ export type WorkbenchFocusScan = {
  */
 export async function switchWorkbenchFocus(opts: {
   canonicalRoot: string;
+  connectRemote?: boolean;
   shouldAbort: () => boolean;
   supersededByClose: () => boolean;
   applyDocumentTree: (scan: WorkbenchFocusScan) => void;
 }): Promise<void> {
   const { canonicalRoot, shouldAbort, supersededByClose, applyDocumentTree } = opts;
+  const skipRemoteBind = shouldSkipRemoteHostBind(canonicalRoot, opts.connectRemote);
 
   await applyWorkbenchFocusChange();
   if (shouldAbort()) return;
 
-  projectDesktop.projectEnsure(canonicalRoot).catch(() => {});
+  if (!skipRemoteBind) {
+    projectDesktop.projectEnsure(canonicalRoot).catch(() => {});
+  }
   void import("@/stores/command-store").then(({ useCommandStore }) => {
     useCommandStore.getState().reloadCommands();
   });
 
-  const result = await fsDesktop.fsScanMetadata(canonicalRoot);
+  const result = skipRemoteBind
+    ? { files: [], folders: [] as string[] }
+    : await fsDesktop.fsScanMetadata(canonicalRoot);
   if (shouldAbort()) return;
 
-  gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
-  await useWorkspaceConfigStore.getState().loadConfig(canonicalRoot);
-  if (shouldAbort()) return;
-
-  void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+  if (!skipRemoteBind) {
+    gitDesktop.gitWarmup(canonicalRoot).catch(() => {});
+    await useWorkspaceConfigStore.getState().loadConfig(canonicalRoot);
     if (shouldAbort()) return;
-    void useLiteratureStore.getState().refresh(canonicalRoot);
-  });
+  }
+
+  if (!skipRemoteBind) {
+    void import("@/stores/literature-store").then(({ useLiteratureStore }) => {
+      if (shouldAbort()) return;
+      void useLiteratureStore.getState().refresh(canonicalRoot);
+    });
+  }
 
   const lastActiveFileId = getProjectLastActiveFileId(canonicalRoot);
   const expandedFolders = (() => {
@@ -296,8 +327,10 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
 
     const { useDocumentStore } = await import("@/stores/document-store");
     if (!useDocumentStore.getState().projectRoot && target.projectPath) {
+      const remote = recoverRemoteAbs(target.projectPath);
       const onWorkbench = state.members.some((member) => member.id === target.projectId);
-      if (onWorkbench) await useDocumentStore.getState().openProject(target.projectPath);
+      if (remote) await useDocumentStore.getState().focusProject(remote, { connectRemote: false });
+      else if (onWorkbench) await useDocumentStore.getState().openProject(target.projectPath);
       else await useDocumentStore.getState().focusProject(target.projectPath);
     }
 
@@ -308,8 +341,13 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
       if (mapped) projectIds.add(mapped);
     }
     const existing = new Set<string>();
+    const workbench = useWorkbenchStore.getState();
     for (const projectId of projectIds) {
-      const rows = await agentDesktop.agentListSessionsByProjectId(projectId) ?? [];
+      const member = resolveWorkbenchMember(workbench, projectId);
+      const rows = await agentDesktop.agentListSessionsByProjectId({
+        projectId,
+        projectRoot: member?.lastPath,
+      }) ?? [];
       for (const row of rows) {
         if (row?.conversationId) existing.add(row.conversationId);
       }
@@ -326,11 +364,11 @@ export async function restoreWorkbenchLaunch(opts?: { watch?: boolean }): Promis
       : null;
     for (const id of toLoad.filter((id) => id !== active)) {
       const path = pathFor(id);
-      if (path) await useChatStore.getState().loadSession(id, undefined, path);
+      if (path) await useChatStore.getState().loadSession(id, undefined, path, { connectRemote: false });
     }
     if (active) {
       const path = pathFor(active);
-      if (path) await useChatStore.getState().loadSession(active, undefined, path);
+      if (path) await useChatStore.getState().loadSession(active, undefined, path, { connectRemote: false });
     } else if (target.projectId) {
       const tabId = useChatStore.getState().activeTabId;
       if (tabId) useWorkbenchStore.getState().recordSessionProject(tabId, target.projectId);
@@ -355,7 +393,7 @@ export type RecentWorkbenchProject = JoinableRecentProject & {
   isDefault?: boolean;
 };
 
-/** Recents matching `query` (name or full path). Workbench members stay listed. */
+/** @deprecated Use `listUnifiedRecents` — this list hides remote:// recents. */
 export function filterRecentWorkbenchProjects(
   recents: ReadonlyArray<JoinableRecentProject>,
   memberPaths: ReadonlyArray<string>,
@@ -366,6 +404,7 @@ export function filterRecentWorkbenchProjects(
   const list = [...recents];
   if (
     defaultProject?.path.trim()
+    && !isRemoteProjectRoot(defaultProject.path)
     && !list.some((item) => sameProjectPath(item.path, defaultProject.path))
   ) {
     list.unshift({
@@ -376,6 +415,7 @@ export function filterRecentWorkbenchProjects(
   }
   return list
     .filter((item) => {
+      if (isRemoteProjectRoot(item.path)) return false;
       if (!q) return true;
       return item.name.toLowerCase().includes(q) || item.path.toLowerCase().includes(q);
     })
@@ -421,6 +461,27 @@ export async function joinWorkbenchFolder(path: string): Promise<boolean> {
   if (!ok) return false;
   const { useDocumentStore } = await import("@/stores/document-store");
   await useDocumentStore.getState().openProject(path);
+  return true;
+}
+
+export async function openRemoteWorkbenchProject(
+  profileId: string,
+  remoteRoot: string,
+): Promise<boolean> {
+  const { ensureRemoteProjectReady, isRemoteConnectError } = await import(
+    "@/lib/remote/ensure-connected"
+  );
+  const path = encodeRemoteAbs(profileId, remoteRoot);
+  try {
+    if (path) await ensureRemoteProjectReady(path);
+  } catch (error) {
+    if (isRemoteConnectError(error)) return false;
+    throw error;
+  }
+  const opened = await remoteDesktop.remoteOpenProject({ profileId, remoteRoot });
+  await useWorkbenchStore.getState().hydrate();
+  const { useDocumentStore } = await import("@/stores/document-store");
+  await useDocumentStore.getState().focusProject(opened.lastPath, { connectRemote: false });
   return true;
 }
 
@@ -477,7 +538,7 @@ export async function assignSessionProject(
 
   const { applyCheckoutTransition } = await import("@/lib/git/checkout-context");
   const { useDocumentStore } = await import("@/stores/document-store");
-  await useDocumentStore.getState().focusProject(member.lastPath);
+  await useDocumentStore.getState().focusProject(member.lastPath, { connectRemote: false });
   await applyCheckoutTransition({ type: "local" });
 
   const { refreshAgentSessionList } = await import("@/stores/chat/model");
@@ -499,8 +560,14 @@ export async function assignSessionToProjectPath(
 
   let member = resolveWorkbenchMemberByPath(useWorkbenchStore.getState(), folder);
   if (!member) {
-    const joined = await joinWorkbenchFolder(folder);
-    if (!joined) return false;
+    const remote = parseRemoteAbs(folder);
+    if (remote) {
+      const opened = await openRemoteWorkbenchProject(remote.profileId, remote.abs);
+      if (!opened) return false;
+    } else {
+      const joined = await joinWorkbenchFolder(folder);
+      if (!joined) return false;
+    }
     member = resolveWorkbenchMemberByPath(useWorkbenchStore.getState(), folder);
   }
   if (!member) return false;

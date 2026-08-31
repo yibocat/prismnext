@@ -4,6 +4,8 @@ export interface AgentAuthInput {
   provider?: string;
   modelId?: string;
   apiKey?: string;
+  /** Host Gateway mode: allow a placeholder key so Pi can start without secrets. */
+  allowMissingKey?: boolean;
   settings: {
     aiProvider?: string;
     aiModel?: string | null;
