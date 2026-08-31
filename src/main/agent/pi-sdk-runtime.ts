@@ -779,6 +779,10 @@ interface LivePiSession {
   activeTurn: LiveTurnAccumulator | null;
   /** Set by cancelTurn so the terminal-event fallback never overrides a cancel. */
   cancelled: boolean;
+  /** Bumped at the start of each sendTurn; cancelTurn snapshots it. */
+  promptGeneration: number;
+  /** `promptGeneration` that cancelTurn observed — only that send must stay cancelled. */
+  cancelledGeneration: number;
   /** Drop Pi `agent_end` while sendTurn aborts leftover work — it must not commit the next turn. */
   ignoringEngineTerminal?: boolean;
   /** Idle watchdog for the active turn — fires when no Pi event arrives for a while. */
@@ -1196,6 +1200,8 @@ export class PiSdkRuntime implements AgentRuntime {
       turnId,
       activeTurn: null,
       cancelled: false,
+      promptGeneration: 0,
+      cancelledGeneration: 0,
     });
     const modelRef = handle.getModelRef?.() ?? undefined;
     this.opts.store.createSession({
@@ -1230,14 +1236,25 @@ export class PiSdkRuntime implements AgentRuntime {
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
 
+    const generation = ++session.promptGeneration;
+
     // Abort leftover Pi work even when our activeTurn is already null (a
     // dropped provider stream can reject prompt() without aborting the agent).
     session.ignoringEngineTerminal = true;
     await session.handle.abort().catch(() => {});
     session.ignoringEngineTerminal = false;
-    if (session.cancelled) {
+
+    const cancelledThisSend =
+      session.cancelled && session.cancelledGeneration === generation;
+
+    if (cancelledThisSend) {
       this.beginTurnAccumulator(session, input);
-      this.persistActiveTurn(session, "cancelled");
+      this.emit({
+        type: "turn_cancelled",
+        runtimeSessionId: session.runtimeSessionId,
+        tabId: session.tabId,
+        turnId: session.turnId,
+      });
       return;
     }
     session.cancelled = false;
@@ -1423,6 +1440,7 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
     session.cancelled = true;
+    session.cancelledGeneration = session.promptGeneration;
     session.heldTerminal = undefined;
     this.opts.gate.cancelSession(runtimeSessionId);
     await session.handle.abort();

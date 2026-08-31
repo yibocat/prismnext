@@ -76,6 +76,8 @@ export function applyConversationEvent(
   // tool events) or stale events from a previous turn while a newer one streams.
   // Without these guards `ensureLive` would rebuild a ghost live turn (empty user
   // bubble, isStreaming stuck true) or overwrite the newer turn.
+  // Terminal events must use the same turnId check: Stop-and-send / queue flush
+  // starts a new live turn before the previous `turn_cancelled` IPC arrives.
   if (LATE_DROPPABLE_EVENTS.has(event.type)) {
     if (!conv.live) {
       if (
@@ -91,10 +93,11 @@ export function applyConversationEvent(
     if (conv.live.turnId !== event.turnId) return conv;
   }
   if (
-    (event.type === "turn_finished" || event.type === "turn_cancelled" || event.type === "turn_failed")
-    && !conv.live
+    event.type === "turn_finished"
+    || event.type === "turn_cancelled"
+    || event.type === "turn_failed"
   ) {
-    return conv;
+    if (!conv.live || conv.live.turnId !== event.turnId) return conv;
   }
 
   switch (event.type) {

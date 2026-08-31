@@ -624,6 +624,52 @@ describe("applyConversationEvent", () => {
     expect(conv.live?.assistant.blocks).toEqual([]);
   });
 
+  it("ignores a stale turn_cancelled while a newer turn is streaming", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "first",
+    });
+    conv = applyConversationEvent(conv, ev({ ...ids, type: "text_delta", eventId: "e-1", text: "partial" }));
+    conv = beginConversationTurn(conv, { turnId: "turn-2", userText: "queued" });
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      turnId: "turn-1",
+      type: "turn_cancelled",
+      eventId: "e-stale-cancel",
+    }));
+
+    expect(conv.live?.turnId).toBe("turn-2");
+    expect(conv.live?.user.blocks).toEqual([{ type: "text", text: "queued" }]);
+    expect(conv.turns).toHaveLength(0);
+  });
+
+  it("ignores stale turn_finished and turn_failed while a newer turn is streaming", () => {
+    let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
+      turnId: "turn-1",
+      userText: "first",
+    });
+    conv = beginConversationTurn(conv, { turnId: "turn-2", userText: "next" });
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      turnId: "turn-1",
+      type: "turn_finished",
+      eventId: "e-stale-done",
+    }));
+    expect(conv.live?.turnId).toBe("turn-2");
+
+    conv = applyConversationEvent(conv, ev({
+      ...ids,
+      turnId: "turn-1",
+      type: "turn_failed",
+      eventId: "e-stale-fail",
+      error: "turn_in_progress",
+    }));
+    expect(conv.live?.turnId).toBe("turn-2");
+    expect(conv.live?.assistant.blocks).toEqual([]);
+  });
+
   it("seals thinking/tool timings when the turn settles so folds show real durations", () => {
     let conv = beginConversationTurn(emptyConversation({ conversationId: "conv-1" }), {
       turnId: "turn-1",
