@@ -44,8 +44,10 @@ describe("files compile open path", () => {
   it("does not ship a Typst WASM compiler in the renderer", () => {
     expect(existsSync(join(renderer, "lib/typst/typst-live-engine.ts"))).toBe(false);
     const preview = readFileSync(join(renderer, "lib/typst/typst-live-preview.tsx"), "utf8");
-    expect(preview).toContain("LIVE_SHELL");
-    expect(preview).toContain("allow-same-origin");
+    expect(preview).not.toContain("LIVE_SHELL");
+    expect(preview).toContain("<iframe");
+    expect(preview).toContain("ensureTypstPreview");
+    expect(preview).not.toContain("TypstCliLivePreview");
     expect(preview).not.toContain("@myriaddreamin");
   });
 
@@ -72,15 +74,25 @@ describe("files compile open path", () => {
     expect(toolbar).toContain("AlertCircleIcon");
   });
 
-  it("routes .typ typing to the Typst live store, not LaTeX auto-compile", () => {
+  it("routes .typ typing to the Tinymist session store, not LaTeX auto-compile", () => {
     const doc = readFileSync(join(renderer, "stores/document-store.ts"), "utf8");
     const compile = readFileSync(join(renderer, "stores/compile-store.ts"), "utf8");
     const live = readFileSync(join(renderer, "stores/typst-live-store.ts"), "utf8");
-    expect(doc).toContain("scheduleTypstLive");
+    const session = readFileSync(join(renderer, "stores/typst-session-store.ts"), "utf8");
+    expect(doc).toContain("notifyTypstDidChange");
+    expect(doc).not.toContain("scheduleTypstLive");
     expect(doc).not.toContain("scheduleTypstLiveCompile");
     expect(compile).not.toContain("scheduleTypstLiveCompile");
     expect(compile).toContain("AUTO_COMPILE_DEBOUNCE");
-    expect(live).toContain("compileTypstLive");
+    expect(session).toContain("@/lib/desktop-api/typst");
+    expect(session).toContain("typstDidChange");
+    expect(session).toContain("onTypstDiagnostics");
+    expect(session).toContain("onTypstScrollTo");
+    expect(session).not.toContain("scheduleTypstLive");
+    expect(session).not.toContain("REMOTE FALLBACK");
+    expect(live).not.toContain("compileTypstLive");
+    expect(live).not.toContain("scheduleTypstLive");
+    expect(live).not.toContain("getTypstLivePages");
     expect(live).toContain("compileTypstPdf");
     expect(live).toContain("exportTypst");
     expect(live).not.toContain("AUTO_COMPILE_DEBOUNCE");
@@ -92,5 +104,27 @@ describe("files compile open path", () => {
     const typstMain = readFileSync(join(here, "../../src/main/compile/typst.ts"), "utf8");
     expect(typstMain).not.toContain("compileTypstLiveSvg");
     expect(typstMain).not.toContain("typstWatchSvgArgs");
+  });
+
+  it("does not ship typst watch, compile:typstLive, or the CLI SVG webview", () => {
+    const root = join(here, "../..");
+    expect(existsSync(join(root, "src/main/compile/typst-live.ts"))).toBe(false);
+    expect(existsSync(join(root, "src/main/compile/typst-binary.ts"))).toBe(false);
+    expect(existsSync(join(root, "scripts/download-typst.sh"))).toBe(false);
+    expect(existsSync(join(root, "scripts/typst-version.txt"))).toBe(false);
+    expect(existsSync(join(root, "scripts/host/typst-linux.txt"))).toBe(false);
+    expect(existsSync(join(renderer, "lib/typst/typst-cli-live-preview.tsx"))).toBe(false);
+    expect(existsSync(join(root, "tests/main/typst-live-watch.test.ts"))).toBe(false);
+    const ipc = readFileSync(join(root, "src/main/ipc/compile.ts"), "utf8");
+    const host = readFileSync(join(root, "src/host/compile-handlers.ts"), "utf8");
+    const preload = readFileSync(join(root, "src/preload/compile.ts"), "utf8");
+    const desktop = readFileSync(join(renderer, "lib/desktop-api/compile.ts"), "utf8");
+    const mainIndex = readFileSync(join(root, "src/main/index.ts"), "utf8");
+    expect(ipc).not.toContain("compile:typstLive");
+    expect(host).not.toContain("compile:typstLive");
+    expect(preload).not.toContain("compileTypstLive");
+    expect(desktop).not.toContain("compileTypstLive");
+    expect(mainIndex).not.toContain("disposeTypstLiveWatchers");
+    expect(mainIndex).toContain("killAllTinymistSessions");
   });
 });

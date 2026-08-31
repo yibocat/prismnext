@@ -184,6 +184,7 @@ export function clearPdfCache() {
     compilingKey: null,
   });
   void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
+  void import("./typst-session-store").then((m) => m.resetTypstSessionStore());
 }
 
 // ─── Auto-compile debounce timer ───
@@ -580,6 +581,7 @@ export const useCompileStore = create<CompileState>()(
           synctexForwardTarget: null,
         });
         void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
+        void import("./typst-session-store").then((m) => m.resetTypstSessionStore());
       },
 
       requestSynctexForward: (result) => {

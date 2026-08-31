@@ -1,7 +1,7 @@
 /**
- * Bundled Typst binary path resolution.
- * Packaged: <resources>/typst/typst[.exe]
- * Dev:      <project>/bin/typst/<platform>-<arch>/typst[.exe]
+ * Bundled Tinymist binary path resolution.
+ * Packaged: <resources>/tinymist/tinymist[.exe]
+ * Dev:      <project>/bin/tinymist/<platform>-<arch>/tinymist[.exe]
  */
 
 import { execSync } from "node:child_process";
@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { listHostRuntimeBinCandidates } from "../../shared/remote/host-runtime-env";
 import { getAppPath, isAppPackaged, getResourcesPath } from "../app/paths";
 
-export interface TypstBinaryInfo {
+export interface TinymistBinaryInfo {
   available: boolean;
   path: string;
   bundled: boolean;
@@ -35,8 +35,12 @@ function platformArchDir(): { platformDir: string; archDir: string } {
   return { platformDir, archDir };
 }
 
-export function resolveHostPayloadTypstPath(): string | null {
-  const binName = process.platform === "win32" ? "typst.exe" : "typst";
+function tinymistBinName(): string {
+  return process.platform === "win32" ? "tinymist.exe" : "tinymist";
+}
+
+export function resolveHostPayloadTinymistPath(): string | null {
+  const binName = tinymistBinName();
   const candidates = listHostRuntimeBinCandidates({
     envBinDir: process.env.PRISM_HOST_BIN_DIR,
     execPath: process.execPath,
@@ -50,20 +54,20 @@ export function resolveHostPayloadTypstPath(): string | null {
   return null;
 }
 
-export function resolveBundledTypstBinaryPath(): string {
-  const binName = process.platform === "win32" ? "typst.exe" : "typst";
+export function resolveBundledTinymistBinaryPath(): string {
+  const binName = tinymistBinName();
 
   if (isAppPackaged()) {
-    return join(getResourcesPath(), "typst", binName);
+    return join(getResourcesPath(), "tinymist", binName);
   }
 
   const { platformDir, archDir } = platformArchDir();
-  return join(getAppPath(), "bin", "typst", `${platformDir}-${archDir}`, binName);
+  return join(getAppPath(), "bin", "tinymist", `${platformDir}-${archDir}`, binName);
 }
 
-async function findSystemTypst(): Promise<string | null> {
+async function findSystemTinymist(): Promise<string | null> {
   try {
-    const result = execSync("which typst", { encoding: "utf-8", timeout: 5000 });
+    const result = execSync("which tinymist", { encoding: "utf-8", timeout: 5000 });
     const path = result.trim();
     if (path && existsSync(path)) return path;
   } catch {
@@ -72,7 +76,7 @@ async function findSystemTypst(): Promise<string | null> {
 
   if (process.platform === "darwin") {
     try {
-      const result = execSync(`/bin/zsh -l -c "which typst"`, {
+      const result = execSync(`/bin/zsh -l -c "which tinymist"`, {
         encoding: "utf-8",
         timeout: 5000,
       });
@@ -85,9 +89,9 @@ async function findSystemTypst(): Promise<string | null> {
 
   const standardPaths: string[] = [];
   if (process.platform === "darwin") {
-    standardPaths.push("/opt/homebrew/bin/typst", "/usr/local/bin/typst");
+    standardPaths.push("/opt/homebrew/bin/tinymist", "/usr/local/bin/tinymist");
   } else if (process.platform === "linux") {
-    standardPaths.push("/usr/bin/typst", "/usr/local/bin/typst");
+    standardPaths.push("/usr/bin/tinymist", "/usr/local/bin/tinymist");
   }
 
   for (const p of standardPaths) {
@@ -110,9 +114,9 @@ function probeVersion(binaryPath: string): string | null {
   }
 }
 
-let cached: TypstBinaryInfo | null = null;
+let cached: TinymistBinaryInfo | null = null;
 
-export function resetTypstBinaryCacheForTests(): void {
+export function resetTinymistBinaryCacheForTests(): void {
   cached = null;
 }
 
@@ -120,21 +124,22 @@ export function isHostRuntimeProcess(): boolean {
   return Boolean(process.env.PRISM_HOST_BIN_DIR);
 }
 
-/** Product Typst engine. Do not mention TeX Live. */
-export function typstUnavailableError(): string {
+export function tinymistUnavailableError(): string {
   if (isHostRuntimeProcess()) {
     return (
-      "Typst was not found on this Host (~/.prismnext-host/current/bin/typst). "
+      "Tinymist was not found on this Host (~/.prismnext-host/current/bin/tinymist). "
       + "Disconnect and reconnect so PrismNext can download it."
     );
   }
-  return "Typst was not found. Install the Typst CLI, or reconnect so a Host can download the pinned binary.";
+  return (
+    "Tinymist was not found. Run scripts/download-tinymist.sh, or reconnect so a Host can download the pinned binary."
+  );
 }
 
-export async function resolveTypstBinary(opts?: { force?: boolean }): Promise<TypstBinaryInfo> {
+export async function resolveTinymistBinary(opts?: { force?: boolean }): Promise<TinymistBinaryInfo> {
   if (cached?.available && !opts?.force) return cached;
 
-  const hostPayload = resolveHostPayloadTypstPath();
+  const hostPayload = resolveHostPayloadTinymistPath();
   if (hostPayload) {
     cached = {
       available: true,
@@ -145,7 +150,7 @@ export async function resolveTypstBinary(opts?: { force?: boolean }): Promise<Ty
     return cached;
   }
 
-  const bundledPath = resolveBundledTypstBinaryPath();
+  const bundledPath = resolveBundledTinymistBinaryPath();
   if (existsSync(bundledPath)) {
     cached = {
       available: true,
@@ -156,7 +161,7 @@ export async function resolveTypstBinary(opts?: { force?: boolean }): Promise<Ty
     return cached;
   }
 
-  const systemPath = await findSystemTypst();
+  const systemPath = await findSystemTinymist();
   if (systemPath) {
     cached = {
       available: true,

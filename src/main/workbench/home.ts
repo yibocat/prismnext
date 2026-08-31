@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { WorkbenchHomeSettings } from "../../shared/workbench/api";
@@ -13,6 +13,7 @@ import {
   HOME_SKILLS_MANIFEST_FILENAME,
   HOME_TEAMS_DIRNAME,
   HOME_TEAMS_STATE_FILENAME,
+  HOME_TYPST_LIVE_DIRNAME,
   HOST_INSTALL_DIRNAME,
   HOST_PRO_PACKAGE_DIRNAME,
   PROJECT_META_DIR,
@@ -131,6 +132,7 @@ export function ensureWorkbenchHome(opts?: WorkbenchHomeOpts): string {
   ]) {
     mkdirSync(join(home, rel), { recursive: true });
   }
+  rmSync(join(home, HOME_TYPST_LIVE_DIRNAME), { recursive: true, force: true });
   const settingsPath = join(home, HOME_SETTINGS_FILENAME);
   if (!existsSync(settingsPath)) {
     writeFileSync(

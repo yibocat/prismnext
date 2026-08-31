@@ -1,8 +1,0 @@
-# Linux musl Typst for Host runtime. Version must match scripts/typst-version.txt.
-# Digests from https://github.com/typst/typst/releases/tag/v0.15.1 (GitHub asset digest).
-# The server downloads this — not host:pack. Bump version, triples, and sha256 together.
-version 0.15.1
-triple-x64 x86_64-unknown-linux-musl
-triple-arm64 aarch64-unknown-linux-musl
-sha256-x64 a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
-sha256-arm64 5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee

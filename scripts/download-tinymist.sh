@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Download pinned Typst binaries into bin/typst/<platform>-<arch>/ for dev + packaging.
-# Keep all release platforms locally, then electron-builder copies the matching folder
-# per target (see electron-builder.yml).
+# Download pinned Tinymist binaries into bin/tinymist/<platform>-<arch>/ for
+# dev + packaging. Keep all release platforms locally, then electron-builder
+# copies the matching folder per target (see electron-builder.yml).
 #
 # Usage:
-#   ./scripts/download-typst.sh --all          # all platforms (recommended before dist)
-#   ./scripts/download-typst.sh                # host platform only (CI per-OS job)
-#   ./scripts/download-typst.sh 0.15.1 --all
+#   ./scripts/download-tinymist.sh --all          # all platforms (recommended before dist)
+#   ./scripts/download-tinymist.sh                # host platform only (CI per-OS job)
+#   ./scripts/download-tinymist.sh 0.15.2 --all
 #
-# Pin file: scripts/typst-version.txt
-# Digests: GitHub release asset sha256 for v0.15.1
+# Pin file: scripts/tinymist-version.txt
+# Digests: GitHub release *.sha256 assets for v0.15.2
 #
 # Manual download from browser? macOS may block the binary (Gatekeeper). After placing
-# the file, run:  xattr -dr com.apple.quarantine bin/typst/darwin-arm64/typst
+# the file, run:  xattr -dr com.apple.quarantine bin/tinymist/darwin-arm64/tinymist
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PIN_FILE="$SCRIPT_DIR/typst-version.txt"
-BINARIES_DIR="$SCRIPT_DIR/../bin/typst"
+PIN_FILE="$SCRIPT_DIR/tinymist-version.txt"
+BINARIES_DIR="$SCRIPT_DIR/../bin/tinymist"
 
 DOWNLOAD_ALL=0
 VERSION_ARG=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/download-typst.sh [--all] [version]
+Usage: ./scripts/download-tinymist.sh [--all] [version]
 
   --all   Download darwin-arm64, darwin-x64, linux-x64, linux-arm64, windows-x64
-  version Override pin in scripts/typst-version.txt
+  version Override pin in scripts/tinymist-version.txt
 EOF
 }
 
@@ -71,17 +71,17 @@ read_pin() {
 VERSION="${VERSION_ARG:-$(read_pin)}"
 VERSION="${VERSION#v}"
 
-BASE_URL="https://github.com/typst/typst/releases/download/v${VERSION}"
+BASE_URL="https://github.com/Myriad-Dreamin/tinymist/releases/download/v${VERSION}"
 
-# sha256 from GitHub release v0.15.1 asset digest. Unknown version: skip verify.
+# sha256 from GitHub release v0.15.2 *.sha256 assets. Unknown version: skip verify.
 expected_sha() {
   local archive="$1"
   case "$archive" in
-    typst-aarch64-apple-darwin.tar.xz) echo "48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a" ;;
-    typst-x86_64-apple-darwin.tar.xz) echo "7f9fdd9584866245de9a79e0add8f9236fae6f40a8a45e2c4771ccc14db4e0fa" ;;
-    typst-x86_64-unknown-linux-musl.tar.xz) echo "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c" ;;
-    typst-aarch64-unknown-linux-musl.tar.xz) echo "5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee" ;;
-    typst-x86_64-pc-windows-msvc.zip) echo "19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736" ;;
+    tinymist-aarch64-apple-darwin.tar.gz) echo "16241868c6752aa5e8f9c162562293c7cdf69e82f54687d7886336daf2c51915" ;;
+    tinymist-x86_64-apple-darwin.tar.gz) echo "fcfcfd01376394048443f81de349d165c271c17c36579eb9a08b889b30b8c3b2" ;;
+    tinymist-x86_64-unknown-linux-musl.tar.gz) echo "46ff973fbc89c89714e7b03488498404da0a517d4686e3f6f870b978c91d5f84" ;;
+    tinymist-aarch64-unknown-linux-musl.tar.gz) echo "bfa7e93af0c0761206d810ac4781b0dd17b09fbbba6a26bea8f1b0756fa5132a" ;;
+    tinymist-x86_64-pc-windows-msvc.zip) echo "91edb0d21edca5841b896d702d8086622792d52b71a9b444d8befb0e937969ae" ;;
     *) echo "" ;;
   esac
 }
@@ -105,13 +105,13 @@ download_one() {
   mkdir -p "$target_dir"
 
   local full_url="${BASE_URL}/${archive}"
-  echo "Downloading Typst ${VERSION} → ${platform_dir}-${arch_dir}..."
+  echo "Downloading Tinymist ${VERSION} → ${platform_dir}-${arch_dir}..."
   echo "  ${full_url}"
 
   local temp_dir
   temp_dir="$(mktemp -d)"
 
-  if ! curl -fsSL --retry 3 --retry-delay 2 "$full_url" -o "$temp_dir/archive"; then
+  if ! curl -fsSL --http1.1 --retry 3 --retry-delay 2 "$full_url" -o "$temp_dir/archive"; then
     rm -rf "$temp_dir"
     echo "Failed to download: $full_url" >&2
     return 1
@@ -135,14 +135,14 @@ download_one() {
   if [[ "$archive" == *.zip ]]; then
     unzip -o "$temp_dir/archive" -d "$temp_dir/extracted" >/dev/null
   else
-    tar -xJf "$temp_dir/archive" -C "$temp_dir/extracted"
+    tar -xzf "$temp_dir/archive" -C "$temp_dir/extracted"
   fi
 
   local binary_path
-  binary_path="$(find "$temp_dir/extracted" \( -name 'typst' -o -name 'typst.exe' \) -type f | head -1)"
+  binary_path="$(find "$temp_dir/extracted" \( -name 'tinymist' -o -name 'tinymist.exe' \) -type f | head -1)"
   if [[ -z "$binary_path" ]]; then
     rm -rf "$temp_dir"
-    echo "Could not find typst binary in $archive" >&2
+    echo "Could not find tinymist binary in $archive" >&2
     return 1
   fi
 
@@ -157,12 +157,12 @@ download_one() {
 }
 
 download_all_platforms() {
-  echo "Fetching Typst ${VERSION} for all release platforms (pin: $PIN_FILE)"
-  download_one darwin arm64 "typst-aarch64-apple-darwin.tar.xz" typst
-  download_one darwin x64 "typst-x86_64-apple-darwin.tar.xz" typst
-  download_one linux x64 "typst-x86_64-unknown-linux-musl.tar.xz" typst
-  download_one linux arm64 "typst-aarch64-unknown-linux-musl.tar.xz" typst
-  download_one windows x64 "typst-x86_64-pc-windows-msvc.zip" typst.exe
+  echo "Fetching Tinymist ${VERSION} for all release platforms (pin: $PIN_FILE)"
+  download_one darwin arm64 "tinymist-aarch64-apple-darwin.tar.gz" tinymist
+  download_one darwin x64 "tinymist-x86_64-apple-darwin.tar.gz" tinymist
+  download_one linux x64 "tinymist-x86_64-unknown-linux-musl.tar.gz" tinymist
+  download_one linux arm64 "tinymist-aarch64-unknown-linux-musl.tar.gz" tinymist
+  download_one windows x64 "tinymist-x86_64-pc-windows-msvc.zip" tinymist.exe
   echo "All platforms installed under $BINARIES_DIR"
 }
 
@@ -194,17 +194,17 @@ download_host_platform() {
       ;;
   esac
 
-  binary_name="typst"
+  binary_name="tinymist"
   if [[ "$platform_dir" == "windows" ]]; then
-    binary_name="typst.exe"
+    binary_name="tinymist.exe"
   fi
 
   if [[ "$platform_dir" == "darwin" ]]; then
-    archive="typst-${rust_arch}-apple-darwin.tar.xz"
+    archive="tinymist-${rust_arch}-apple-darwin.tar.gz"
   elif [[ "$platform_dir" == "linux" ]]; then
-    archive="typst-${rust_arch}-unknown-linux-musl.tar.xz"
+    archive="tinymist-${rust_arch}-unknown-linux-musl.tar.gz"
   else
-    archive="typst-${rust_arch}-pc-windows-msvc.zip"
+    archive="tinymist-${rust_arch}-pc-windows-msvc.zip"
   fi
 
   download_one "$platform_dir" "$arch_dir" "$archive" "$binary_name"

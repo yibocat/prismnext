@@ -50,6 +50,7 @@ export const projectHandlers: Record<
     if (!requested) {
       throw new RemoteOperationError("protocol", "remoteRoot must be an absolute POSIX path.");
     }
+    const previousRoot = ctx.remoteRoot;
     mkdirSync(requested, { recursive: true });
     const metaDir = posix.join(requested, ".workbench");
     const jsonPath = posix.join(metaDir, "workbench.json");
@@ -71,6 +72,10 @@ export const projectHandlers: Record<
     ctx.remoteRoot = requested;
     ctx.projectId = projectId;
     registerProjectRoot(requested);
+    if (previousRoot && previousRoot !== requested) {
+      const { disposeTinymistSession } = await import("../main/compile/tinymist-session");
+      await disposeTinymistSession(previousRoot).catch(() => undefined);
+    }
     return { projectId, remoteRoot: requested };
   },
 

@@ -33,7 +33,7 @@ export function posixDirname(path: string): string {
 
 /**
  * Places the Host payload `bin/` may live. First existing `prismnext-host`
- * / `tectonic` / `typst` wins — env, Node next-door, the Host script, then `~/.prismnext-host`.
+ * / `tectonic` / `tinymist` wins — env, Node next-door, the Host script, then `~/.prismnext-host`.
  */
 export function listHostRuntimeBinCandidates(input: {
   envBinDir?: string | null;
@@ -57,7 +57,7 @@ function normalizeHostDir(currentDir: string): string {
   return currentDir.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-export type HostRuntimeStep = "node" | "git" | "tectonic" | "typst";
+export type HostRuntimeStep = "node" | "git" | "tectonic" | "tinymist";
 
 export interface HostRuntimeBinStatus {
   available: boolean;
@@ -69,14 +69,14 @@ export interface HostRuntimeInventory {
   node: HostRuntimeBinStatus;
   git: HostRuntimeBinStatus;
   tectonic: HostRuntimeBinStatus;
-  typst: HostRuntimeBinStatus;
+  tinymist: HostRuntimeBinStatus;
 }
 
 export interface HostRuntimePins {
   node: string;
   git: string;
   tectonic: string;
-  typst: string;
+  tinymist: string;
 }
 
 /** Key/value pin or runtime-stamp text (`version 24.19.0`, `node 24.19.0`). */
@@ -97,23 +97,23 @@ export function hostRuntimePinsFromFiles(files: {
   node?: string | null;
   git?: string | null;
   tectonic?: string | null;
-  typst?: string | null;
+  tinymist?: string | null;
 }): HostRuntimePins {
   return {
     node: parseHostPinMap(files.node).version ?? "",
     git: parseHostPinMap(files.git).tag ?? "",
     tectonic: parseHostPinMap(files.tectonic).version ?? "",
-    typst: parseHostPinMap(files.typst).version ?? "",
+    tinymist: parseHostPinMap(files.tinymist).version ?? "",
   };
 }
 
 export function mergeHostRuntimePins(...sources: HostRuntimePins[]): HostRuntimePins {
-  const next: HostRuntimePins = { node: "", git: "", tectonic: "", typst: "" };
+  const next: HostRuntimePins = { node: "", git: "", tectonic: "", tinymist: "" };
   for (const source of sources) {
     if (!next.node && source.node) next.node = source.node;
     if (!next.git && source.git) next.git = source.git;
     if (!next.tectonic && source.tectonic) next.tectonic = source.tectonic;
-    if (!next.typst && source.typst) next.typst = source.typst;
+    if (!next.tinymist && source.tinymist) next.tinymist = source.tinymist;
   }
   return next;
 }
@@ -155,6 +155,6 @@ export function inventoryMissingSteps(
   if (binNeedsInstall(inv.node, pins.node, "node")) steps.push("node");
   if (binNeedsInstall(inv.git, pins.git, "git")) steps.push("git");
   if (binNeedsInstall(inv.tectonic, pins.tectonic, "tectonic")) steps.push("tectonic");
-  if (binNeedsInstall(inv.typst, pins.typst, "typst")) steps.push("typst");
+  if (binNeedsInstall(inv.tinymist, pins.tinymist, "tinymist")) steps.push("tinymist");
   return steps;
 }

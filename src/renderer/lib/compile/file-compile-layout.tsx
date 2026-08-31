@@ -17,7 +17,7 @@ export type FileCompileLayoutProps = {
   previewOpen: boolean;
   onPreviewOpenChange: (open: boolean) => void;
   compileRoot: string;
-  /** Typst live SVG: opening the pane must not kick a PDF compile. */
+  /** Typst live: opening the pane must not kick a PDF compile. */
   skipPreviewPdfCompile?: boolean;
 };
 
@@ -32,7 +32,7 @@ function createContentHost(): HTMLDivElement {
 
 /**
  * Files editor + preview split (PDF left, editor right).
- * LaTeX preview is Lector. Typst preview is live SVG or Lector, depending on the toolbar.
+ * LaTeX preview is Lector. Typst preview is Tinymist iframe or Lector, depending on the toolbar.
  */
 export function FileCompileLayout({
   editor,

@@ -30,6 +30,7 @@
     "typstHideLive": "Hide live preview",
     "typstPdfPreview": "PDF preview (Lector)",
     "typstPreviewStarting": "Compiling Typst preview…",
+    "typstPreviewFailed": "Typst preview failed to start: {{error}}",
     "typstExport": "Export",
     "typstExportPdf": "Export PDF",
     "typstExportPng": "Export PNG",

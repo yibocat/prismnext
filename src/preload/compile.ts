@@ -26,16 +26,6 @@ export const compileApi = {
 			skipSynctex: opts?.skipSynctex,
 			fast: opts?.fast,
 		}),
-	compileTypstLive: (
-		projectDir: string,
-		mainFile: string,
-		opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
-	) =>
-		ipcRenderer.invoke("compile:typstLive", {
-			projectDir,
-			mainFile,
-			dirtyFiles: opts?.dirtyFiles,
-		}),
 	compileTypstExport: (
 		projectDir: string,
 		mainFile: string,

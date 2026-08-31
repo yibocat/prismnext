@@ -12,7 +12,6 @@ function ipcSource(name: string): string {
 /** Spec §11 rows that this line has closed. Later phases append here. */
 const ROUTED = [
   { method: "compile:execute", ipc: "compile.ts" },
-  { method: "compile:typstLive", ipc: "compile.ts" },
   { method: "compile:typstExport", ipc: "compile.ts" },
   { method: "compile:detectTexlive", ipc: "compile.ts" },
   { method: "terminal:loadConfig", ipc: "terminal.ts" },

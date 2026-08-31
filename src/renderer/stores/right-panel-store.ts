@@ -876,6 +876,13 @@ function performCloseTab(
     return { tabs: next, activeTabId: nextActive };
   });
 
+  if (closingTab.kind === "file" && (closingTab.filePath || closingTab.fileId)) {
+    const rel = closingTab.filePath || closingTab.fileId || "";
+    void import("./typst-session-store").then(({ notifyTypstTabClosed }) => {
+      notifyTypstTabClosed(rel);
+    });
+  }
+
   if (closedAiTabId && !options?.skipAiDismiss) {
     useTerminalAiStore.getState().onAiTabClosedByUser(closedAiTabId);
   }

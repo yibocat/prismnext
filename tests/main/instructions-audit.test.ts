@@ -109,7 +109,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     const typstTools = readFileSync(join(__dirname, "../../src/main/agent/tools/typst.ts"), "utf8");
     expect(typstTools).toContain("TOOL_NAMES.typstCompile");
     expect(typstTools).toContain("TOOL_NAMES.typstCompileStandalone");
-    expect(typstTools).toContain("Never run `typst compile` via the bash tool");
+    expect(typstTools).toContain("Never compile Typst via the bash tool");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

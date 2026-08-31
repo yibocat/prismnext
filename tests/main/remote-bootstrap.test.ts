@@ -37,6 +37,10 @@ if [ "$STEP" = "tectonic" ] || [ "$STEP" = "all" ]; then
   printf '%s\\n' '#!/bin/sh' 'echo tectonic 0.15.0' > "$CURRENT/bin/tectonic"
   chmod +x "$CURRENT/bin/tectonic"
 fi
+if [ "$STEP" = "tinymist" ] || [ "$STEP" = "all" ]; then
+  printf '%s\\n' '#!/bin/sh' 'echo tinymist 0.15.2' > "$CURRENT/bin/tinymist"
+  chmod +x "$CURRENT/bin/tinymist"
+fi
 echo "stub $STEP"
 `;
 
@@ -50,6 +54,7 @@ async function makeHostTarball(dir: string): Promise<{ tarballPath: string; sha2
     mode: 0o755,
   });
   writeStubBin(join(dir, "current", "bin", "tectonic"));
+  writeStubBin(join(dir, "current", "bin", "tinymist"));
   writeStubBin(join(dir, "current", "vendor", "git", "bin", "git"));
   const tarballPath = join(dir, "payload.tar.gz");
   await tarCreate({ gzip: true, file: tarballPath, cwd: dir }, ["current"]);
@@ -147,6 +152,7 @@ describe("ensureHostPayload", () => {
       mode: 0o755,
     });
     writeStubBin(join(remoteCurrent, "bin", "node"));
+    writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
@@ -203,6 +209,7 @@ describe("ensureHostPayload", () => {
       mode: 0o755,
     });
     writeStubBin(join(remoteCurrent, "bin", "node"));
+    writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
@@ -264,6 +271,7 @@ exit 0
       mode: 0o755,
     });
     writeStubBin(join(remoteCurrent, "bin", "node"));
+    writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), `#!/bin/sh\nexit 0\n`, {
       mode: 0o755,

@@ -46,6 +46,12 @@ export interface SshStdioPipe {
   close(): Promise<void>;
 }
 
+/** SSH `-L` without occupying the TCP stream (Chromium speaks HTTP/WS itself). */
+export type SshLocalForward = {
+  localPort: number;
+  close(): Promise<void>;
+};
+
 export interface SshSession {
   exec(command: string, extra?: SshExecOptions): Promise<SshExecResult>;
   sftpPut(localPath: string, remotePath: string): Promise<void>;
@@ -55,6 +61,11 @@ export interface SshSession {
   openStdio(command: string): Promise<SshStdioPipe>;
   /** RW-4: SSH -L to Host listen. Same-machine tests may net.connect. */
   openForwardedTcp?(remotePort: number): Promise<SshStdioPipe>;
+  /**
+   * Extra `-L` on the existing SSH identity (no new login).
+   * When `localPort` is set, bind that exact laptop port (Typst data-plane same-number).
+   */
+  openLocalForward?(remotePort: number, localPort?: number): Promise<SshLocalForward>;
   dispose(): Promise<void>;
 }
 
@@ -162,6 +173,16 @@ class DirectorySshSession implements SshSession {
     const dest = this.resolveRemote(remotePath);
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, contents, "utf8");
+  }
+
+  async openLocalForward(remotePort: number, localPort?: number): Promise<SshLocalForward> {
+    if (localPort != null && localPort !== remotePort) {
+      throw new RemoteOperationError(
+        "host_runtime",
+        "Same-machine SSH stub cannot remap Typst preview ports.",
+      );
+    }
+    return { localPort: remotePort, close: async () => undefined };
   }
 
   async openStdio(command: string): Promise<SshStdioPipe> {

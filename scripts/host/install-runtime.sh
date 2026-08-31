@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Node, portable Git, Tectonic, and Typst into ~/.prismnext-host/current.
+# Install Node, portable Git, Tectonic, and Tinymist into ~/.prismnext-host/current.
 # Runs on the Linux server. The laptop only pushes this script + pin files.
 set -eu
 
@@ -10,7 +10,7 @@ STEP="all"
 PRINT_PLAN=0
 
 usage() {
-  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|typst|all] [--print-plan]" >&2
+  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|tinymist|all] [--print-plan]" >&2
 }
 
 need_cmd() {
@@ -49,9 +49,10 @@ download() {
   dest="$2"
   echo "downloading $(basename "$dest") (server-side; this can take a few minutes)…"
   if need_cmd curl; then
-    curl -fL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$dest" "$url"
+    # -sS: no meter (stderr meter was drowning the install log). Still fail on HTTP errors.
+    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$dest" "$url"
   elif need_cmd wget; then
-    wget -O "$dest" "$url"
+    wget -q -O "$dest" "$url"
   else
     echo "install-runtime: need curl or wget to download runtime binaries" >&2
     return 1
@@ -122,70 +123,90 @@ is_elf() {
   [ -f "$1" ] && [ "$(file_magic_hex "$1" 4)" = "7f454c46" ]
 }
 
-is_xz() {
-  [ -f "$1" ] && [ "$(file_magic_hex "$1" 6)" = "fd377a585a00" ]
-}
-
 is_gzip() {
   [ -f "$1" ] && [ "$(file_magic_hex "$1" 2)" = "1f8b" ]
+}
+
+# Directories are -x on Linux; the laptop sftpStat uses `[ -f ]` and treats
+# size 0 as missing. Skip / success must be a non-empty regular file.
+bin_ready() {
+  [ -f "$1" ] && [ -s "$1" ] && [ -x "$1" ]
+}
+
+place_bin() {
+  src="$1"
+  dest="$2"
+  label="$3"
+  if [ -d "$dest" ] && [ ! -L "$dest" ]; then
+    echo "install-runtime: replacing leftover directory $dest" >&2
+    rm -rf "$dest"
+  fi
+  mkdir -p "$(dirname "$dest")"
+  tmp="$dest.part"
+  rm -f "$tmp"
+  cp "$src" "$tmp"
+  chmod 755 "$tmp"
+  if ! bin_ready "$tmp"; then
+    echo "install-runtime: failed to stage $label at $tmp" >&2
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
+  if ! bin_ready "$dest"; then
+    echo "install-runtime: failed to place $label at $dest" >&2
+    return 1
+  fi
+}
+
+find_extracted_bin() {
+  extract="$1"
+  name="$2"
+  src=$(find "$extract" -type f -name "$name" 2>/dev/null | sed -n '1p')
+  if [ -n "$src" ]; then
+    printf '%s\n' "$src"
+    return 0
+  fi
+  find "$extract" -type f 2>/dev/null | while IFS= read -r f; do
+    if is_elf "$f"; then
+      printf '%s\n' "$f"
+      exit 0
+    fi
+  done
 }
 
 install_tectonic_payload() {
   payload="$1"
   dest="$2"
+  src=""
   if is_elf "$payload"; then
-    cp "$payload" "$dest"
+    src="$payload"
   elif is_gzip "$payload"; then
     extract="$CACHE/extract-tectonic-$ARCH"
     rm -rf "$extract"
     mkdir -p "$extract"
-    tar -xzf "$payload" -C "$extract"
-    src=$(find "$extract" -type f -name tectonic | head -1)
+    if ! tar -xzf "$payload" -C "$extract" 2>/dev/null; then
+      gzip -dc "$payload" > "$extract/tectonic" || {
+        echo "install-runtime: Tectonic archive is not gzip-tar or ELF" >&2
+        rm -rf "$extract"
+        return 1
+      }
+    fi
+    src=$(find_extracted_bin "$extract" tectonic)
+    if [ -z "$src" ]; then
+      gzip -dc "$payload" > "$extract/tectonic" 2>/dev/null || true
+      src=$(find_extracted_bin "$extract" tectonic)
+    fi
     if [ -z "$src" ]; then
       echo "install-runtime: Tectonic archive missing binary" >&2
       rm -rf "$extract"
       return 1
     fi
-    cp "$src" "$dest"
-    rm -rf "$extract"
   else
     echo "install-runtime: Tectonic cache is neither gzip nor ELF: $payload" >&2
     return 1
   fi
-  chmod 755 "$dest"
-  if [ ! -x "$dest" ]; then
-    echo "install-runtime: failed to place Tectonic at $dest" >&2
-    return 1
-  fi
-}
-
-install_typst_payload() {
-  payload="$1"
-  dest="$2"
-  if is_elf "$payload"; then
-    cp "$payload" "$dest"
-  elif is_xz "$payload"; then
-    extract="$CACHE/extract-typst-$ARCH"
-    rm -rf "$extract"
-    mkdir -p "$extract"
-    tar -xJf "$payload" -C "$extract"
-    src=$(find "$extract" -type f -name typst | head -1)
-    if [ -z "$src" ]; then
-      echo "install-runtime: Typst archive missing binary" >&2
-      rm -rf "$extract"
-      return 1
-    fi
-    cp "$src" "$dest"
-    rm -rf "$extract"
-  else
-    echo "install-runtime: Typst cache is neither xz nor ELF: $payload" >&2
-    return 1
-  fi
-  chmod 755 "$dest"
-  if [ ! -x "$dest" ]; then
-    echo "install-runtime: failed to place Typst at $dest" >&2
-    return 1
-  fi
+  place_bin "$src" "$dest" "Tectonic" || return 1
+  rm -rf "$CACHE/extract-tectonic-$ARCH"
 }
 
 install_node() {
@@ -303,7 +324,7 @@ install_tectonic() {
     return 0
   fi
 
-  if [ -x "$dest" ] && [ "$(stamp_get tectonic || true)" = "$ver" ]; then
+  if bin_ready "$dest" && [ "$(stamp_get tectonic || true)" = "$ver" ]; then
     echo "Tectonic $ver already installed — skip."
     return 0
   fi
@@ -332,25 +353,60 @@ install_tectonic() {
   echo "Tectonic $ver ready."
 }
 
-install_typst() {
-  ver=$(pin_get "$TYP_PIN" version) || {
-    echo "install-runtime: missing Typst pin" >&2
+install_tinymist_payload() {
+  payload="$1"
+  dest="$2"
+  src=""
+  if is_elf "$payload"; then
+    src="$payload"
+  elif is_gzip "$payload"; then
+    extract="$CACHE/extract-tinymist-$ARCH"
+    rm -rf "$extract"
+    mkdir -p "$extract"
+    if ! tar -xzf "$payload" -C "$extract" 2>/dev/null; then
+      gzip -dc "$payload" > "$extract/tinymist" || {
+        echo "install-runtime: Tinymist archive is not gzip-tar or ELF" >&2
+        rm -rf "$extract"
+        return 1
+      }
+    fi
+    src=$(find_extracted_bin "$extract" tinymist)
+    if [ -z "$src" ]; then
+      gzip -dc "$payload" > "$extract/tinymist" 2>/dev/null || true
+      src=$(find_extracted_bin "$extract" tinymist)
+    fi
+    if [ -z "$src" ]; then
+      echo "install-runtime: Tinymist archive missing binary" >&2
+      rm -rf "$extract"
+      return 1
+    fi
+  else
+    echo "install-runtime: Tinymist cache is neither gzip nor ELF: $payload" >&2
+    return 1
+  fi
+  place_bin "$src" "$dest" "Tinymist" || return 1
+  rm -rf "$CACHE/extract-tinymist-$ARCH"
+}
+
+install_tinymist() {
+  ver=$(pin_get "$TINY_PIN" version) || {
+    echo "install-runtime: missing Tinymist pin" >&2
     return 1
   }
-  triple=$(pin_get "$TYP_PIN" "triple-$ARCH")
-  sha=$(pin_get "$TYP_PIN" "sha256-$ARCH")
-  archive="typst-${triple}.tar.xz"
-  url="https://github.com/typst/typst/releases/download/v${ver}/${archive}"
-  dest="$CURRENT/bin/typst"
-  cache_name="typst-${ver}-${triple}.tar.xz"
+  triple=$(pin_get "$TINY_PIN" "triple-$ARCH")
+  sha=$(pin_get "$TINY_PIN" "sha256-$ARCH")
+  archive="tinymist-${triple}.tar.gz"
+  url="https://github.com/Myriad-Dreamin/tinymist/releases/download/v${ver}/${archive}"
+  dest="$CURRENT/bin/tinymist"
+  cache_name="tinymist-${ver}-${triple}.tar.gz"
 
   if [ "$PRINT_PLAN" = 1 ]; then
-    echo "typst $url $sha"
+    echo "tinymist $url $sha"
     return 0
   fi
 
-  if [ -x "$dest" ] && [ "$(stamp_get typst || true)" = "$ver" ]; then
-    echo "Typst $ver already installed — skip."
+  if bin_ready "$dest" && [ "$(stamp_get tinymist || true)" = "$ver" ]; then
+    echo "Tinymist $ver already installed — skip."
     return 0
   fi
 
@@ -358,9 +414,9 @@ install_typst() {
   tar_path="$CACHE/$cache_name"
 
   if [ -f "$tar_path" ] && is_elf "$tar_path"; then
-    install_typst_payload "$tar_path" "$dest" || return 1
-    stamp_set typst "$ver"
-    echo "Typst $ver ready (cached ELF)."
+    install_tinymist_payload "$tar_path" "$dest" || return 1
+    stamp_set tinymist "$ver"
+    echo "Tinymist $ver ready (cached ELF)."
     return 0
   fi
 
@@ -373,9 +429,9 @@ install_typst() {
     fi
   fi
 
-  install_typst_payload "$tar_path" "$dest" || return 1
-  stamp_set typst "$ver"
-  echo "Typst $ver ready."
+  install_tinymist_payload "$tar_path" "$dest" || return 1
+  stamp_set tinymist "$ver"
+  echo "Tinymist $ver ready."
 }
 
 while [ $# -gt 0 ]; do
@@ -440,7 +496,7 @@ RUNTIME="$CURRENT/runtime"
 NODE_PIN="$RUNTIME/node-version.txt"
 GIT_PIN="$RUNTIME/git-version.txt"
 TEC_PIN="$RUNTIME/tectonic-linux.txt"
-TYP_PIN="$RUNTIME/typst-linux.txt"
+TINY_PIN="$RUNTIME/tinymist-linux.txt"
 
 if [ ! -d "$RUNTIME" ]; then
   echo "install-runtime: missing $RUNTIME (Host payload pins)" >&2
@@ -452,7 +508,7 @@ run_step() {
     node) install_node ;;
     git) install_git ;;
     tectonic) install_tectonic ;;
-    typst) install_typst ;;
+    tinymist) install_tinymist ;;
     *)
       echo "install-runtime: unknown step $1" >&2
       return 1
@@ -464,7 +520,7 @@ if [ "$STEP" = "all" ]; then
   run_step node
   run_step git
   run_step tectonic
-  run_step typst
+  run_step tinymist
 else
   run_step "$STEP"
 fi

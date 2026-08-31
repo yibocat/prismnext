@@ -56,6 +56,9 @@ export function registerProjectLifecycleHandlers(
         const previousRoot = authority.currentRoot;
         if (previousRoot !== remote && previousRoot) {
           await watcher.stopWatching();
+          void import("../compile/tinymist-session").then((m) => {
+            void m.disposeTinymistSession(previousRoot);
+          });
         }
         authority.activate(remote);
         replaceRegisteredRoots(memberRoots().filter((root) => !isRemoteProjectRoot(root)));
@@ -65,6 +68,9 @@ export function registerProjectLifecycleHandlers(
       const previousRoot = authority.currentRoot;
       if (previousRoot !== rootPath && previousRoot) {
         await watcher.stopWatching();
+        void import("../compile/tinymist-session").then((m) => {
+          void m.disposeTinymistSession(previousRoot);
+        });
       }
 
       const transition = authority.activate(rootPath);
@@ -93,6 +99,9 @@ export function registerProjectLifecycleHandlers(
     authority.close();
     clearRoots();
     if (previousRoot) {
+      void import("../compile/tinymist-session").then((m) => {
+        void m.disposeTinymistSession(previousRoot);
+      });
       log.info("project.close", { project: basename(previousRoot) });
     }
   });

@@ -99,6 +99,7 @@ export async function confirmProjectSwitchIfNeeded(
 export async function applyWorkbenchFocusChange(): Promise<void> {
   useRightPanelStore.getState().closeAllTabs({ force: true });
   clearPdfCache();
+  void import("@/stores/typst-session-store").then((m) => m.resetTypstSessionStore());
   useChangesStore.getState().clearAll();
   useWorktreeStore.getState().clearAll();
   useGitStore.getState().clearAll();

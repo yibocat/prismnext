@@ -412,6 +412,12 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
       (typeof cached.content === "string" || typeof cached.dataUrl === "string");
     if (hasCachedPayload) {
       if (activeFileId !== id) set({ activeFileId: id });
+      const rel = (fileMetadata.get(id)?.relativePath || id).replace(/\\/g, "/");
+      if (typeof cached.content === "string" && compileEngineFromRelPath(rel) === "typst") {
+        void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+          notifyTypstDidOpen(id, rel, cached.content ?? "");
+        });
+      }
       return;
     }
 
@@ -472,13 +478,18 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         newMap.set(id, { content, isDirty: false });
         if (openSeq !== fileOpenGeneration) {
           set({ openedContents: newMap, contentVersion: get().contentVersion + 1 });
-          return;
+        } else {
+          set({
+            openedContents: newMap,
+            activeFileId: id,
+            contentVersion: get().contentVersion + 1,
+          });
         }
-        set({
-          openedContents: newMap,
-          activeFileId: id,
-          contentVersion: get().contentVersion + 1,
-        });
+        if (compileEngineFromRelPath(relPath) === "typst") {
+          void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+            notifyTypstDidOpen(id, relPath, content);
+          });
+        }
       }
     } catch {
       if (openSeq === fileOpenGeneration) {
@@ -491,6 +502,11 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const newMap = new Map(get().openedContents);
     newMap.set(id, { content, isDirty: false });
     set({ openedContents: newMap, activeFileId: id });
+    if (compileEngineFromRelPath(id) === "typst") {
+      void import("./typst-session-store").then(({ notifyTypstDidOpen }) => {
+        notifyTypstDidOpen(id, id, content);
+      });
+    }
   },
 
   ensureLazyProjectFileMeta: async (relativePath: string): Promise<boolean> => {
@@ -1504,8 +1520,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const file = state.files.find((f) => f.id === id);
     if (file && isLiveCompileSourceRel(file.relativePath)) {
       if (compileEngineFromRelPath(file.relativePath) === "typst") {
-        void import("./typst-live-store").then(({ scheduleTypstLive }) => {
-          scheduleTypstLive(file.id, file.relativePath);
+        void import("./typst-session-store").then(({ notifyTypstDidChange }) => {
+          notifyTypstDidChange(file.id, file.relativePath);
         });
       } else {
         void import("./compile-store").then(({ useCompileStore }) => {

@@ -15,6 +15,7 @@ import { updateApi } from "./update";
 import { proLicenseApi } from "./pro-license";
 import { windowApi } from "./window";
 import { compileApi } from "./compile";
+import { typstApi } from "./typst";
 import { literatureApi } from "./literature";
 import { literatureExtractApi } from "./literature-extract";
 import { zoteroApi } from "./zotero";
@@ -54,6 +55,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	...proLicenseApi,
 	...windowApi,
 	...compileApi,
+	...typstApi,
 	...literatureApi,
 	...literatureExtractApi,
 	...zoteroApi,

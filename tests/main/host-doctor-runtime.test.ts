@@ -40,8 +40,8 @@ describe("Host doctor runtime inventory", () => {
     expect(report.runtime?.git.path).toBe(join(gitDir, "git"));
     expect(report.runtime?.tectonic.available).toBe(false);
     expect(report.runtime?.tectonic.path).toBeNull();
-    expect(report.runtime?.typst.available).toBe(false);
-    expect(report.runtime?.typst.path).toBeNull();
+    expect(report.runtime?.tinymist.available).toBe(false);
+    expect(report.runtime?.tinymist.path).toBeNull();
   });
 
   it("finds tectonic next to the Host script", async () => {

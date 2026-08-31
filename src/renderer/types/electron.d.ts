@@ -1,6 +1,18 @@
 import type { AppSettings } from "../stores/settings-store";
 import type { CompileAgentCompleteEvent } from "@shared/compile/artifact-key";
 import type { TypstCliFormat } from "@shared/compile/typst-format";
+import type {
+  TypstDidChangeArgs,
+  TypstDidCloseArgs,
+  TypstDidOpenArgs,
+  TypstDiagnosticsEvent,
+  TypstEnsureSessionArgs,
+  TypstIpcError,
+  TypstPreviewReadyEvent,
+  TypstPreviewStartArgs,
+  TypstPreviewStopArgs,
+  TypstScrollToEvent,
+} from "@shared/typst/session";
 
 export interface TexliveStatus {
   available: boolean;
@@ -89,6 +101,18 @@ export type {
 } from "@shared/literature/paper-citation-network";
 
 export type { CompileAgentCompleteEvent };
+export type {
+  TypstDidChangeArgs,
+  TypstDidCloseArgs,
+  TypstDidOpenArgs,
+  TypstDiagnosticsEvent,
+  TypstEnsureSessionArgs,
+  TypstIpcError,
+  TypstPreviewReadyEvent,
+  TypstPreviewStartArgs,
+  TypstPreviewStopArgs,
+  TypstScrollToEvent,
+};
 
 export interface LiteratureCollection {
   id: string;
@@ -757,11 +781,6 @@ export interface ElectronAPI {
     | { pdfBytes?: ArrayBuffer; pdfPath?: string; buildDir?: string; stdout?: string }
     | { error: string; stdout?: string }
   >;
-  compileTypstLive: (
-    projectDir: string,
-    mainFile: string,
-    opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
-  ) => Promise<{ svgPages: string[]; stdout?: string } | { error: string; stdout?: string }>;
   compileTypstExport: (
     projectDir: string,
     mainFile: string,
@@ -793,6 +812,20 @@ export interface ElectronAPI {
   onCompileAgentComplete: (
     callback: (data: CompileAgentCompleteEvent) => void,
   ) => () => void;
+
+  typstEnsureSession: (
+    args: TypstEnsureSessionArgs,
+  ) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidOpen: (args: TypstDidOpenArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidChange: (args: TypstDidChangeArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstDidClose: (args: TypstDidCloseArgs) => Promise<{ ok: true } | TypstIpcError>;
+  typstPreviewStart: (
+    args: TypstPreviewStartArgs,
+  ) => Promise<TypstPreviewReadyEvent | TypstIpcError>;
+  typstPreviewStop: (args: TypstPreviewStopArgs) => Promise<{ ok: true } | TypstIpcError>;
+  onTypstPreviewReady: (callback: (data: TypstPreviewReadyEvent) => void) => () => void;
+  onTypstDiagnostics: (callback: (data: TypstDiagnosticsEvent) => void) => () => void;
+  onTypstScrollTo: (callback: (data: TypstScrollToEvent) => void) => () => void;
 
   // Literature library
   literatureList: (projectRoot: string) => Promise<LiteraturePaper[]>;

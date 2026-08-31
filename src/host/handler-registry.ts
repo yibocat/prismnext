@@ -20,6 +20,7 @@ import { teamsHandlers } from "./teams-handlers";
 import { interactionHandlers } from "./interaction-handlers";
 import { researchHandlers } from "./research-handlers";
 import { terminalHandlers } from "./terminal-handlers";
+import { typstHandlers, installTypstEvents } from "./typst-handlers";
 import { worktreeHandlers } from "./worktree-handlers";
 
 export type { HostHandlerContext };
@@ -35,6 +36,7 @@ const handlers: Record<string, HostHandler> = {
   ...literatureHandlers,
   ...experimentHandlers,
   ...compileHandlers,
+  ...typstHandlers,
   ...settingsHandlers,
   ...sessionHandlers,
   ...teamsHandlers,
@@ -128,6 +130,9 @@ export async function dispatchHostMethod(
   }
   if (method.startsWith("experiment:") || method.startsWith("execution:")) {
     installExperimentEvents(ctx);
+  }
+  if (method.startsWith("typst:")) {
+    installTypstEvents(ctx);
   }
   const handler = handlers[method];
   if (!handler) {

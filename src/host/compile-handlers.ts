@@ -6,7 +6,6 @@ import {
   compileTypstToFormat,
   encodeTypstWireFiles,
 } from "../main/compile/typst";
-import { compileTypstLiveSvg } from "../main/compile/typst-live";
 import type { HostHandlerContext } from "./context";
 
 function projectDir(params: Record<string, unknown>, ctx: HostHandlerContext): string {
@@ -52,22 +51,6 @@ export const compileHandlers: Record<
         || result.error?.includes("tex")
         ? "compile_engine_unavailable"
         : undefined,
-    };
-  },
-
-  async "compile:typstLive"(params, ctx) {
-    const root = projectDir(params, ctx);
-    const mainFile = String(params.mainFile ?? "");
-    const dirtyFiles = Array.isArray(params.dirtyFiles)
-      ? params.dirtyFiles as Array<{ relPath: string; content: string }>
-      : undefined;
-    const result = await compileTypstLiveSvg(root, mainFile, { dirtyFiles, source: "ui" });
-    if (!result.success || !result.files) {
-      return { error: result.error || "Compilation failed", stdout: result.logContent };
-    }
-    return {
-      svgPages: result.files.map((file) => file.bytes.toString("utf8")),
-      stdout: result.logContent,
     };
   },
 

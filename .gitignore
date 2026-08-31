@@ -16,8 +16,10 @@ scripts/host/.git-cache/
 
 # Tectonic binaries (downloaded or manually placed)
 bin/tectonic/
-# Typst binaries (downloaded or manually placed)
+# Leftover Typst CLI downloads — unused after Tinymist-only; keep ignored if present
 bin/typst/
+# Tinymist binaries (downloaded or manually placed)
+bin/tinymist/
 # Leftover local OpenCode agent binary — unused; do not commit if still present
 bin/opencode/
 .cursor/

@@ -7,7 +7,7 @@ import { TOOL_NAMES } from "../agent/tool-names";
 
 /** Engines prismnext's compiler may spawn — never via agent bash. */
 const LATEX_ENGINE =
-  "(?:pdflatex|xelatex|lualatex|latexmk|tectonic|typst)";
+  "(?:pdflatex|xelatex|lualatex|latexmk|tectonic|typst|tinymist)";
 
 /**
  * Match engine as a command word (optionally path-qualified / sudo), including
@@ -27,7 +27,7 @@ export function isDirectLatexCompileBashCommand(command: string): boolean {
 /** Tool-result / PTY gate message (same turn). */
 export function latexCompileBashBlockMessage(): string {
   return (
-    `prismnext: do not compile LaTeX or Typst via bash (pdflatex / xelatex / lualatex / latexmk / tectonic / typst). ` +
+    `prismnext: do not compile LaTeX or Typst via bash (pdflatex / xelatex / lualatex / latexmk / tectonic / typst / tinymist). ` +
     `Use \`${TOOL_NAMES.latexCompile}\` for the LaTeX paper (artifacts in \`.workbench/compile/\`). ` +
     `Use \`${TOOL_NAMES.latexCompileStandalone}\` for a \\documentclass{standalone} figure ` +
     `(PDF next to the source). ` +
@@ -42,6 +42,6 @@ export function latexCompileBashRedirectNote(): string {
     `A bash LaTeX/Typst compile was blocked. ` +
     `Call \`${TOOL_NAMES.latexCompile}\` / \`${TOOL_NAMES.latexCompileStandalone}\` for LaTeX, ` +
     `or \`${TOOL_NAMES.typstCompile}\` / \`${TOOL_NAMES.typstCompileStandalone}\` for Typst — ` +
-    `do not use pdflatex/latexmk/tectonic/typst in the shell.`
+    `do not use pdflatex/latexmk/tectonic/typst/tinymist in the shell.`
   );
 }

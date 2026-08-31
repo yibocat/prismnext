@@ -11,7 +11,6 @@ import {
   type TypstExportFile,
   type TypstWireFile,
 } from "../compile/typst";
-import { compileTypstLiveSvg } from "../compile/typst-live";
 import { parseRemoteAbs } from "../../shared/remote";
 import { routeHostDomainMethod } from "../remote/domain-route";
 import { getRemoteSessionBroker } from "./remote";
@@ -169,32 +168,6 @@ export function registerCompileHandlers(): void {
         log.debug("compile:execute failed", { error: result.error || "unknown" });
         return { error: result.error || "Compilation failed", stdout: result.logContent };
       }
-    },
-  );
-
-  ipcMain.handle(
-    "compile:typstLive",
-    async (
-      _event,
-      args: {
-        projectDir: string;
-        mainFile: string;
-        dirtyFiles?: Array<{ relPath: string; content: string }>;
-      },
-    ) => {
-      const routed = await routeIfRemote("compile:typstLive", args, ["projectDir"]);
-      if (routed !== undefined) return routed;
-      const result = await compileTypstLiveSvg(args.projectDir, args.mainFile, {
-        dirtyFiles: args.dirtyFiles,
-        source: "ui",
-      });
-      if (!result.success || !result.files) {
-        return { error: result.error || "Compilation failed", stdout: result.logContent };
-      }
-      return {
-        svgPages: result.files.map((file) => file.bytes.toString("utf8")),
-        stdout: result.logContent,
-      };
     },
   );
 

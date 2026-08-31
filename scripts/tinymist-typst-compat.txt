@@ -1,0 +1,7 @@
+# Recorded from bundled tinymist --version (darwin-arm64, 2026-08-31).
+# Tinymist pin: 0.15.2
+# Embedded Typst: 0.15.0 (git tag tinymist/v0.15.0)
+# Oneshot PDF / export / Agent: `tinymist compile` — same embedded Typst as live.
+# There is no separate Typst CLI pin.
+tinymist 0.15.2
+typst 0.15.0

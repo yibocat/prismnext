@@ -38,11 +38,12 @@ import {
 } from "./payload-path";
 import { ensureRemoteListenPort } from "./host-listen";
 import { profileModelKeys } from "./profile-overrides";
-import type { SshClient, SshSession, SshStdioPipe } from "./ssh-client";
+import type { SshClient, SshLocalForward, SshSession, SshStdioPipe } from "./ssh-client";
 import { appendOpenSshKnownHost } from "./system-ssh-client";
 import { licenseToHostProGrant, type HostProGrant } from "../../shared/pro";
 import { readProLicense } from "../teams/pro-license";
 import { pushLaptopProPackageToHost } from "./pro-push";
+import { releaseTypstPreviewForwards } from "./typst-preview-tunnel";
 
 const log = createLogger("remote");
 
@@ -362,6 +363,7 @@ export class RemoteSessionBroker {
   }
 
   async disconnect(profileId: string, opts?: { silent?: boolean }): Promise<void> {
+    await releaseTypstPreviewForwards(profileId).catch(() => undefined);
     const live = this.live.get(profileId);
     if (live?.pipe && !live.closing) {
       await this.invokeOn(live, "host.configure", {
@@ -552,6 +554,29 @@ export class RemoteSessionBroker {
       throw new RemoteOperationError("protocol", detail || "Could not create that folder.");
     }
     return { ok: true, path: abs };
+  }
+
+  /**
+   * Extra SSH `-L` for Typst preview HTTP/WS. Does not steal the Host control-plane pipe.
+   * Same-machine stubs map remotePort → the same local number (Host loopback is this machine).
+   */
+  async openLocalForward(
+    profileId: string,
+    remotePort: number,
+    localPort?: number,
+  ): Promise<SshLocalForward> {
+    const live = this.live.get(profileId);
+    if (!live) throw new RemoteOperationError("not_connected", "Not connected.");
+    if (live.session.openLocalForward) {
+      return live.session.openLocalForward(remotePort, localPort);
+    }
+    if (localPort != null && localPort !== remotePort) {
+      throw new RemoteOperationError(
+        "host_runtime",
+        "This SSH session cannot open a Typst preview tunnel (no local forward).",
+      );
+    }
+    return { localPort: localPort ?? remotePort, close: async () => undefined };
   }
 
   async invoke(profileId: string, method: string, params: unknown): Promise<unknown> {
@@ -852,10 +877,10 @@ export class RemoteSessionBroker {
       const tectonic = raw.runtime?.tectonic.available
         ? (raw.runtime.tectonic.version || "yes")
         : "missing";
-      const typst = raw.runtime?.typst?.available
-        ? (raw.runtime.typst.version || "yes")
+      const tinymist = raw.runtime?.tinymist?.available
+        ? (raw.runtime.tinymist.version || "yes")
         : "missing";
-      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}, tectonic ${tectonic}, typst ${typst}.`;
+      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}, tectonic ${tectonic}, tinymist ${tinymist}.`;
       this.log(live.profileId, detail, { level: raw.ok ? "ok" : "warn", gate: "doctor" });
       return {
         ...recordConnectGate(constitution, { gate: "doctor", ok: raw.ok, detail }),

@@ -30,6 +30,7 @@
     "typstHideLive": "收起即時預覽",
     "typstPdfPreview": "PDF 預覽（Lector）",
     "typstPreviewStarting": "正在編譯 Typst 預覽…",
+    "typstPreviewFailed": "Typst 預覽啟動失敗：{{error}}",
     "typstExport": "匯出",
     "typstExportPdf": "匯出 PDF",
     "typstExportPng": "匯出 PNG",

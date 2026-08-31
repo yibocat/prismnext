@@ -1,0 +1,5 @@
+# Pinned Tinymist CLI for Typst editing + live preview (dev + electron-builder).
+# Bump deliberately — see scripts/download-tinymist.sh
+# Must stay on the Typst 0.15.x line. Live + oneshot PDF use this binary
+# (`tinymist lsp` / `tinymist compile`). There is no separate Typst CLI pin.
+0.15.2

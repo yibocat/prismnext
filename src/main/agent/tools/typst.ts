@@ -33,7 +33,7 @@ export const typstRootTool: NativeToolDefinition = {
   promptGuidelines: [
     "Call this before compiling a Typst paper; `mainFile` is optional and auto-detected when omitted.",
     "The returned `buildDir` is `.workbench/compile/typst` for the paper. Standalone `.typ` files compile next to the source.",
-    "The Typst CLI always uses `--root` = the project folder. Nested drafts may `#include` / `#image` / `bibliography` files elsewhere in the project via `../`. Do not use OS-absolute paths (`/Users/…`).",
+    "Compile always uses `--root` = the project folder. Nested drafts may `#include` / `#image` / `bibliography` files elsewhere in the project via `../`. Do not use OS-absolute paths (`/Users/…`).",
   ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),
@@ -73,8 +73,8 @@ export const typstCompileTool: NativeToolDefinition = {
     `Do not also call \`${TOOL_NAMES.typstCompileStandalone}\` in the same turn.`,
     `Do not pass a standalone figure here. That file uses \`${TOOL_NAMES.typstCompileStandalone}\`.`,
     "Compile once after a batch of edits. If it still fails, report the errors — do not loop compile/edit.",
-    "Never run `typst compile` via the bash tool.",
-    "`typst compile` is invoked with `--root` = the project folder, so `#image` / `#include` / `bibliography` paths must stay inside the project (relative `../` from a nested draft is fine).",
+    "Never compile Typst via the bash tool.",
+    "Compile is invoked with `--root` = the project folder, so `#image` / `#include` / `bibliography` paths must stay inside the project (relative `../` from a nested draft is fine).",
   ],
   parameters: Type.Object({
     mainFile: Type.Optional(Type.String({ description: "Optional explicit manuscript main file path" })),
@@ -99,7 +99,7 @@ export const typstCompileStandaloneTool: NativeToolDefinition = {
     "`mainFile` is required.",
     `A file under the manuscript folder is the paper — use \`${TOOL_NAMES.typstCompile}\`, not this tool.`,
     `Do not also call \`${TOOL_NAMES.typstCompile}\` in the same turn.`,
-    "Never run `typst compile` via the bash tool.",
+    "Never compile Typst via the bash tool.",
   ],
   parameters: Type.Object({
     mainFile: Type.String({ description: "Standalone .typ path relative to the project" }),

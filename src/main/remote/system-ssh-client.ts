@@ -3,14 +3,14 @@
  * Auth, ProxyJump, IdentityFile, and known_hosts all come from `~/.ssh`.
  */
 
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { RemoteOperationError } from "../../shared/remote";
 import { fingerprintSha256 } from "./known-hosts";
-import type { SshClient, SshConnectInput, SshExecResult, SshSession, SshStdioPipe } from "./ssh-client";
+import type { SshClient, SshConnectInput, SshExecResult, SshLocalForward, SshSession, SshStdioPipe } from "./ssh-client";
 
 const execFileAsync = promisify(execFile);
 const SSH_TIMEOUT_MS = 20_000;
@@ -272,26 +272,8 @@ class SystemSshSession implements SshSession {
   }
 
   async openForwardedTcp(remotePort: number): Promise<SshStdioPipe> {
-    const { createServer } = await import("node:net");
-    const localPort = await new Promise<number>((resolve, reject) => {
-      const probe = createServer();
-      probe.once("error", reject);
-      probe.listen(0, "127.0.0.1", () => {
-        const addr = probe.address();
-        const port = addr && typeof addr === "object" ? addr.port : 0;
-        probe.close(() => resolve(port));
-      });
-    });
-    const child = spawn("ssh", [
-      ...batchArgs(),
-      "-N",
-      "-o",
-      "ExitOnForwardFailure=yes",
-      "-L",
-      `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`,
-      "--",
-      this.dest,
-    ], { stdio: ["ignore", "ignore", "pipe"] });
+    const localPort = await pickEphemeralLocalPort();
+    const child = spawnSshLocalForward(this.dest, localPort, remotePort);
     const { tcpPipe } = await import("./host-listen");
     const startedAt = Date.now();
     let last: Error | undefined;
@@ -309,14 +291,27 @@ class SystemSshSession implements SshSession {
         };
       } catch (err) {
         last = err instanceof Error ? err : new Error(String(err));
+        if (child.exitCode != null) break;
         await new Promise((resolve) => setTimeout(resolve, 80));
       }
     }
-    child.kill("SIGTERM");
+    if (!child.killed) child.kill("SIGTERM");
     throw new RemoteOperationError(
       "host_runtime",
       last?.message ?? "SSH local forward did not come up.",
     );
+  }
+
+  async openLocalForward(remotePort: number, localPort?: number): Promise<SshLocalForward> {
+    const boundPort = localPort && localPort > 0 ? localPort : await pickEphemeralLocalPort();
+    const child = spawnSshLocalForward(this.dest, boundPort, remotePort);
+    await waitForLocalForwardListener(child, boundPort);
+    return {
+      localPort: boundPort,
+      close: async () => {
+        if (!child.killed) child.kill("SIGTERM");
+      },
+    };
   }
 
   async openStdio(command: string): Promise<SshStdioPipe> {
@@ -341,4 +336,63 @@ class SystemSshSession implements SshSession {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function spawnSshLocalForward(dest: string, localPort: number, remotePort: number): ChildProcess {
+  return spawn("ssh", [
+    ...batchArgs(),
+    "-N",
+    "-o",
+    "ExitOnForwardFailure=yes",
+    "-L",
+    `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`,
+    "--",
+    dest,
+  ], { stdio: ["ignore", "ignore", "pipe"] });
+}
+
+async function pickEphemeralLocalPort(): Promise<number> {
+  const { createServer } = await import("node:net");
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const addr = probe.address();
+      const port = addr && typeof addr === "object" ? addr.port : 0;
+      probe.close(() => resolve(port));
+    });
+  });
+}
+
+/** Probe that ssh -L is listening; drop the socket so Chromium can use the port. */
+async function waitForLocalForwardListener(child: ChildProcess, localPort: number): Promise<void> {
+  const { createConnection } = await import("node:net");
+  const startedAt = Date.now();
+  let last: Error | undefined;
+  while (Date.now() - startedAt < 8_000) {
+    if (child.exitCode != null) {
+      throw new RemoteOperationError(
+        "host_runtime",
+        `SSH local forward exited ${child.exitCode}. The jump host may not allow -L.`,
+      );
+    }
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const sock = createConnection({ host: "127.0.0.1", port: localPort }, () => {
+          sock.destroy();
+          resolve();
+        });
+        sock.once("error", reject);
+      });
+      return;
+    } catch (err) {
+      last = err instanceof Error ? err : new Error(String(err));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
+  }
+  if (!child.killed) child.kill("SIGTERM");
+  throw new RemoteOperationError(
+    "host_runtime",
+    last?.message ?? "SSH local forward did not come up.",
+  );
 }

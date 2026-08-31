@@ -34,6 +34,7 @@ import {
   HOME_SETTINGS_FILENAME,
   HOME_SKILLS_DIRNAME,
   HOME_TEAMS_DIRNAME,
+  HOME_TYPST_LIVE_DIRNAME,
 } from "../../src/shared/workbench/paths";
 import {
   ensureWorkbenchHome,
@@ -229,6 +230,16 @@ describe("ensureWorkbenchHome", () => {
     fs.writeFileSync(settingsPath, JSON.stringify({ defaultProjectId: "p_keep" }), "utf-8");
     ensureWorkbenchHome({ homeDir: fakeHome });
     expect(JSON.parse(fs.readFileSync(settingsPath, "utf-8"))).toEqual({ defaultProjectId: "p_keep" });
+  });
+
+  it("deletes leftover ~/.prismnext/typst-live from CLI watch", () => {
+    const fakeHome = path.join(tmpRoot(), "Users", "me");
+    const home = resolveWorkbenchHome({ homeDir: fakeHome });
+    const stale = path.join(home, HOME_TYPST_LIVE_DIRNAME, "stale");
+    fs.mkdirSync(stale, { recursive: true });
+    fs.writeFileSync(path.join(stale, "page.svg"), "<svg/>");
+    ensureWorkbenchHome({ homeDir: fakeHome });
+    expect(fs.existsSync(path.join(home, HOME_TYPST_LIVE_DIRNAME))).toBe(false);
   });
 });
 

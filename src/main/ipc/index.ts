@@ -3,6 +3,7 @@ import { registerDialogHandlers } from "./dialog";
 import { registerProjectScaffoldHandlers } from "./project-scaffold";
 import { registerTemplateHandlers } from "./template";
 import { registerCompileHandlers } from "./compile";
+import { registerTypstHandlers } from "./typst";
 import { registerAgentHandlers } from "./agent";
 import { registerSettingsHandlers } from "./settings";
 import { registerBrowserHandlers } from "./browser";
@@ -47,6 +48,7 @@ export function registerIpcHandlers(): void {
   registerProjectScaffoldHandlers();
   registerTemplateHandlers();
   registerCompileHandlers();
+  registerTypstHandlers();
   registerAgentHandlers();
   registerMcpHandlers();
   registerSettingsHandlers();

@@ -96,3 +96,17 @@ export function resolveTypstRootFromBuffers(input: {
   if (findTypInList(files, "main.typ")) return "main.typ";
   return null;
 }
+
+/** Compile root for a `.typ` hint: standalone file, or paper root via magic comment / pin. */
+export function resolveTypstLiveMainRelFromState(input: {
+  files: Array<{ relativePath: string }>;
+  getContent: (rel: string) => string;
+  manuscriptDir: string | null;
+  mainFilePin: string | null;
+  hintRel: string;
+}): string | null {
+  const rel = normalizeRel(input.hintRel);
+  if (!rel.toLowerCase().endsWith(".typ")) return null;
+  if (isTypstStandaloneRel(rel, input.manuscriptDir)) return rel;
+  return resolveTypstRootFromBuffers({ ...input, hintRel: rel }) ?? rel;
+}

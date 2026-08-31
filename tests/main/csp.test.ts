@@ -43,6 +43,17 @@ describe("csp buildCsp", () => {
     expect(csp).toContain("http://localhost:*");
   });
 
+  it("both policies allow a localhost Tinymist preview iframe, not https frames", () => {
+    const prod = buildCsp(true);
+    const dev = buildCsp(false);
+    expect(prod).toContain("frame-src 'self' http://127.0.0.1:*");
+    expect(dev).toContain("frame-src 'self' http://127.0.0.1:*");
+    expect(dev).toContain("http://localhost:*");
+    const prodFrame = prod.match(/frame-src ([^;]+)/)?.[1] ?? "";
+    expect(prodFrame).not.toContain("https:");
+    expect(prod).not.toContain("ws://localhost");
+  });
+
   it("both policies block object-src and lock base-uri", () => {
     expect(buildCsp(true)).toContain("object-src 'none'");
     expect(buildCsp(false)).toContain("object-src 'none'");

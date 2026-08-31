@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Bundle prismnext-host (JS + Core teams + runtime pins + install-runtime).
- * Node, Git, Tectonic, and Typst are not packed here — the Linux server downloads
+ * Node, Git, Tectonic, and Tinymist are not packed here — the Linux server downloads
  * them from the pin files on first connect. Pack does not hit the network.
  */
 
@@ -56,9 +56,9 @@ function requireSha(pin, key, filePath) {
 const NODE_PIN = readKeyPin(join(root, "scripts/host/node-version.txt"));
 const HOST_GIT = readKeyPin(join(root, "scripts/host/git-version.txt"));
 const TECTONIC_LINUX = readKeyPin(join(root, "scripts/host/tectonic-linux.txt"));
-const TYPST_LINUX = readKeyPin(join(root, "scripts/host/typst-linux.txt"));
+const TINYMIST_LINUX = readKeyPin(join(root, "scripts/host/tinymist-linux.txt"));
 const TECTONIC_VERSION = readPinLines(join(root, "scripts/tectonic-version.txt"))[0].replace(/^v/, "");
-const TYPST_VERSION = readPinLines(join(root, "scripts/typst-version.txt"))[0].replace(/^v/, "");
+const TINYMIST_VERSION = readPinLines(join(root, "scripts/tinymist-version.txt"))[0].replace(/^v/, "");
 
 if (!NODE_PIN.version || !NODE_PIN.archive) {
   throw new Error("scripts/host/node-version.txt needs version and archive");
@@ -80,16 +80,16 @@ if (!TECTONIC_LINUX["triple-x64"] || !TECTONIC_LINUX["triple-arm64"]) {
 }
 requireSha(TECTONIC_LINUX, "sha256-x64", "scripts/host/tectonic-linux.txt");
 requireSha(TECTONIC_LINUX, "sha256-arm64", "scripts/host/tectonic-linux.txt");
-if (TYPST_LINUX.version !== TYPST_VERSION) {
+if (TINYMIST_LINUX.version !== TINYMIST_VERSION) {
   throw new Error(
-    `scripts/host/typst-linux.txt version ${TYPST_LINUX.version} must match scripts/typst-version.txt ${TYPST_VERSION}`,
+    `scripts/host/tinymist-linux.txt version ${TINYMIST_LINUX.version} must match scripts/tinymist-version.txt ${TINYMIST_VERSION}`,
   );
 }
-if (!TYPST_LINUX["triple-x64"] || !TYPST_LINUX["triple-arm64"]) {
-  throw new Error("scripts/host/typst-linux.txt needs triple-x64 and triple-arm64");
+if (!TINYMIST_LINUX["triple-x64"] || !TINYMIST_LINUX["triple-arm64"]) {
+  throw new Error("scripts/host/tinymist-linux.txt needs triple-x64 and triple-arm64");
 }
-requireSha(TYPST_LINUX, "sha256-x64", "scripts/host/typst-linux.txt");
-requireSha(TYPST_LINUX, "sha256-arm64", "scripts/host/typst-linux.txt");
+requireSha(TINYMIST_LINUX, "sha256-x64", "scripts/host/tinymist-linux.txt");
+requireSha(TINYMIST_LINUX, "sha256-arm64", "scripts/host/tinymist-linux.txt");
 
 const installSrc = join(root, "scripts/host/install-runtime.sh");
 if (!existsSync(installSrc)) {
@@ -130,8 +130,8 @@ copyFileSync(
   join(currentDir, "runtime", "tectonic-linux.txt"),
 );
 copyFileSync(
-  join(root, "scripts/host/typst-linux.txt"),
-  join(currentDir, "runtime", "typst-linux.txt"),
+  join(root, "scripts/host/tinymist-linux.txt"),
+  join(currentDir, "runtime", "tinymist-linux.txt"),
 );
 
 try {
@@ -175,5 +175,5 @@ writeFileSync(
   `${JSON.stringify({ desktopVersion, payloadSha256: sha256 }, null, 2)}\n`,
 );
 process.stdout.write(
-  `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} (slim; server downloads node=${NODE_PIN.version} git=${HOST_GIT.tag} tectonic=${TECTONIC_VERSION})\n`,
+  `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} (slim; server downloads node=${NODE_PIN.version} git=${HOST_GIT.tag} tectonic=${TECTONIC_VERSION} tinymist=${TINYMIST_VERSION})\n`,
 );

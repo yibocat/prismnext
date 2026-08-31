@@ -13,6 +13,7 @@ describe("isDirectLatexCompileBashCommand", () => {
     expect(isDirectLatexCompileBashCommand("latexmk -pdf main.tex")).toBe(true);
     expect(isDirectLatexCompileBashCommand("tectonic manuscript/main.tex")).toBe(true);
     expect(isDirectLatexCompileBashCommand("typst compile manuscript/main.typ")).toBe(true);
+    expect(isDirectLatexCompileBashCommand("tinymist compile manuscript/main.typ")).toBe(true);
   });
 
   it("detects chained / path-qualified / sudo", () => {

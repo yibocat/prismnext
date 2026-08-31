@@ -6,6 +6,7 @@ import {
   type CompileArtifactKey,
 } from "@shared/compile/artifact-key";
 import { parseTypstLog } from "@shared/compile/typst-log";
+import type { TypstDiagnosticItem } from "@shared/typst/session";
 
 export type CompileProblemEntry = {
   file?: string;
@@ -70,4 +71,50 @@ export function diagnosticsFromCompileLog(
     structuredErrors = structuredErrors.filter((e) => e.severity === "warning");
   }
   return { error, log, structuredErrors };
+}
+
+/** LSP publishDiagnostics → Files toolbar / CompileErrorPane. Warnings do not light the red badge. */
+export function diagnosticsFromTypstLspItems(items: TypstDiagnosticItem[]): CompileDiagnostics {
+  const errors = items.filter((item) => item.severity === "error");
+  if (errors.length === 0) {
+    return { error: null, log: null, structuredErrors: [] };
+  }
+  return {
+    error: errors[0]?.message ?? "Typst error",
+    log: null,
+    structuredErrors: errors.map((item) => ({
+      file: item.relPath,
+      line: item.line,
+      message: item.message,
+      severity: "error" as const,
+    })),
+  };
+}
+
+/**
+ * Artifact keys for a diagnostics event.
+ * `didChange` used to rebind the IPC callback with an empty compileRoot — never trust that.
+ */
+export function compileRootsForTypstDiagnostics(args: {
+  compileRootFromEvent: string;
+  previewCompileRoots: string[];
+  itemRelPaths: string[];
+}): string[] {
+  const fromEvent = args.compileRootFromEvent.replace(/\\/g, "/").replace(/^\/+/, "").trim();
+  if (fromEvent) return [fromEvent];
+  const previews = uniqueRels(args.previewCompileRoots);
+  if (previews.length > 0) return previews;
+  return uniqueRels(args.itemRelPaths);
+}
+
+function uniqueRels(rels: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of rels) {
+    const rel = raw.replace(/\\/g, "/").replace(/^\/+/, "").trim();
+    if (!rel || seen.has(rel)) continue;
+    seen.add(rel);
+    out.push(rel);
+  }
+  return out;
 }

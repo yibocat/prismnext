@@ -62,23 +62,23 @@ async function collectPayloadRuntime(): Promise<HostRuntimeInventory> {
     process.execPath,
   ]);
   const tectonicPath = firstExisting([binDir ? join(binDir, "tectonic") : null]);
-  const typstPath = firstExisting([binDir ? join(binDir, "typst") : null]);
+  const tinymistPath = firstExisting([binDir ? join(binDir, "tinymist") : null]);
   const gitPath = firstExisting([
     currentDir ? join(hostPayloadGitBinDir(currentDir), "git") : null,
     await which("git"),
   ]);
-  const [node, git, tectonic, typst] = await Promise.all([
+  const [node, git, tectonic, tinymist] = await Promise.all([
     probeBin(nodePath, ["--version"]),
     probeBin(gitPath, ["--version"]),
     probeBin(tectonicPath, ["--version"]),
-    probeBin(typstPath, ["--version"]),
+    probeBin(tinymistPath, ["--version"]),
   ]);
   if (nodePath === process.execPath && !node.version) {
     node.version = process.version;
     node.available = true;
     node.path = process.execPath;
   }
-  return { node, git, tectonic, typst };
+  return { node, git, tectonic, tinymist };
 }
 
 export async function runDoctor(): Promise<HostDoctorReport> {

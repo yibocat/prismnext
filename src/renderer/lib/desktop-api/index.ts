@@ -14,6 +14,7 @@ export { agentDesktop } from "./agent";
 export { researchDesktop } from "./research";
 export { settingsDesktop } from "./settings";
 export { compileDesktop } from "./compile";
+export { typstDesktop } from "./typst";
 export { terminalDesktop } from "./terminal";
 export { logDesktop } from "./log";
 export { extractDesktop } from "./extract";

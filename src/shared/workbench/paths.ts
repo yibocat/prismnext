@@ -39,7 +39,7 @@ export const HOME_SETTINGS_FILENAME = "settings.json";
 export const HOME_HOST_MODEL_FILENAME = "host-model.json";
 export const HOME_SKILLS_MANIFEST_FILENAME = "skills-manifest.json";
 export const HOME_TEAMS_STATE_FILENAME = "teams-state.json";
-/** Typst live SVG pages. Must stay outside the paper `--root` or `typst watch` recompiles itself. */
+/** Leftover CLI-watch SVG cache. Never write here; `ensureWorkbenchHome` deletes it. */
 export const HOME_TYPST_LIVE_DIRNAME = "typst-live";
 /** Remote Host install root on the *server* (`~/.prismnext-host`), not app home. */
 export const HOST_INSTALL_DIRNAME = ".prismnext-host";

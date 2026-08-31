@@ -16,7 +16,7 @@ import { isTypstStandaloneRel, resolveTypstRoot } from "../lib/typst-root";
 import { notifyAgentCompilePreview } from "./compile-preview-notify";
 import type { CompileLatexOptions } from "./types";
 import { parseTypstLog } from "./typst-log";
-import { resolveTypstBinary, typstUnavailableError } from "./typst-binary";
+import { resolveTinymistBinary, tinymistUnavailableError } from "./tinymist-binary";
 
 const log = createLogger("typst", "compile");
 
@@ -66,6 +66,7 @@ export interface TypstFormatCompileResult {
 }
 
 export function typstCompileArgs(projectDir: string, absMain: string, absPdf: string): string[] {
+  // P6-B: same argv for `tinymist compile`. Do not write a Typst lockfile into the user project.
   return ["compile", "--root", projectDir, absMain, absPdf];
 }
 
@@ -153,11 +154,11 @@ async function runTypstToPdf(
   buildDir: string,
   options: CompileLatexOptions,
 ): Promise<TypstCompileResult> {
-  const binary = await resolveTypstBinary();
+  const binary = await resolveTinymistBinary();
   if (!binary.available) {
     return {
       success: false,
-      error: typstUnavailableError(),
+      error: tinymistUnavailableError(),
       buildDir,
     };
   }
@@ -266,13 +267,13 @@ export async function compileTypstToFormat(
   options: CompileLatexOptions = {},
   outDirRel?: string,
 ): Promise<TypstFormatCompileResult> {
-  const binary = await resolveTypstBinary();
+  const binary = await resolveTinymistBinary();
   const normalized = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
   const stem = basename(normalized, extname(normalized));
   const buildDirRel = outDirRel ?? typstExportDirRel(stem);
   const buildDir = join(projectDir, buildDirRel);
   if (!binary.available) {
-    return { success: false, error: typstUnavailableError(), buildDir: buildDirRel };
+    return { success: false, error: tinymistUnavailableError(), buildDir: buildDirRel };
   }
 
   const absMain = join(projectDir, normalized);

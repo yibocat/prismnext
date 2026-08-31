@@ -19,7 +19,7 @@ export interface CompileLatexOptions extends CompileFlushOptions {
    * Live typing preview: prefer latency over full aux/bib convergence.
    * Tectonic: one TeX pass (`-r 0`); TeX Live: single latex, no bib.
    * Skips the strict “citations unresolved” failure gate (PDF still returned).
-   * Typst PDF ignores this — it is always one `typst compile`.
+   * Typst PDF ignores this — it is always one `tinymist compile`.
    */
   fast?: boolean;
 }

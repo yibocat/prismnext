@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isTypstStandaloneRel, resolveTypstRootFromBuffers } from "../../src/renderer/lib/typst/resolve-typst-root";
+import {
+  isTypstStandaloneRel,
+  resolveTypstLiveMainRelFromState,
+  resolveTypstRootFromBuffers,
+} from "../../src/renderer/lib/typst/resolve-typst-root";
 
 describe("resolveTypstRootFromBuffers", () => {
   const files = [
@@ -35,6 +39,18 @@ describe("resolveTypstRootFromBuffers", () => {
         hintRel: null,
       }),
     ).toBe("manuscript/main.typ");
+  });
+
+  it("uses a standalone .typ as its own compile root", () => {
+    expect(
+      resolveTypstLiveMainRelFromState({
+        files,
+        getContent: (rel) => contents[rel] ?? "",
+        manuscriptDir: "manuscript",
+        mainFilePin: "main.tex",
+        hintRel: "notes/scratch.typ",
+      }),
+    ).toBe("notes/scratch.typ");
   });
 });
 

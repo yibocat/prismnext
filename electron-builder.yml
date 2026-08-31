@@ -25,7 +25,8 @@ extraResources:
 #   Packaged → <resources>/tectonic/tectonic[.exe]
 #   Dev      → bin/tectonic/<platform>-<arch>/tectonic[.exe]
 # Folder names: darwin | linux | windows  (not electron-builder's mac/win macros).
-# Typst CLI — same layout under <resources>/typst and bin/typst/<platform>-<arch>/.
+# Tinymist — same layout under <resources>/tinymist and bin/tinymist/<platform>-<arch>/.
+# Typst live + oneshot PDF use Tinymist (embedded Typst). Do not ship a separate Typst CLI.
 mac:
   icon: resources/brand/icon.icns
   # dmg = human download; zip = electron-updater (generic provider requires zip on macOS)
@@ -38,10 +39,10 @@ mac:
       to: "tectonic"
       filter:
         - "tectonic*"
-    - from: "bin/typst/darwin-${arch}/"
-      to: "typst"
+    - from: "bin/tinymist/darwin-${arch}/"
+      to: "tinymist"
       filter:
-        - "typst*"
+        - "tinymist*"
 
 win:
   # Generated from app-icon-dark.png (Pillow). Falls back to PNG if missing.
@@ -54,10 +55,10 @@ win:
       to: "tectonic"
       filter:
         - "tectonic*"
-    - from: "bin/typst/windows-${arch}/"
-      to: "typst"
+    - from: "bin/tinymist/windows-${arch}/"
+      to: "tinymist"
       filter:
-        - "typst*"
+        - "tinymist*"
 
 linux:
   icon: resources/brand/app-icon-dark.png
@@ -69,10 +70,10 @@ linux:
       to: "tectonic"
       filter:
         - "tectonic*"
-    - from: "bin/typst/linux-${arch}/"
-      to: "typst"
+    - from: "bin/tinymist/linux-${arch}/"
+      to: "tinymist"
       filter:
-        - "typst*"
+        - "tinymist*"
 
 # CI may override with --config.publish.url="$R2_PUBLIC_BASE_URL".
 # Local dist:* uses --publish never — no upload.

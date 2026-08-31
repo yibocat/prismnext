@@ -283,6 +283,7 @@ describe("code structure host port (Phase 3)", () => {
       "src/preload/git.ts",
       "src/preload/agent.ts",
       "src/preload/remote.ts",
+      "src/preload/typst.ts",
     ]) {
       expect(existsSync(join(REPO, rel)), rel).toBe(true);
     }
@@ -293,8 +294,8 @@ describe("code structure host port (Phase 3)", () => {
       const src = readFileSync(file, "utf-8");
       keys.push(...[...src.matchAll(/^\t([a-zA-Z][a-zA-Z0-9]*):/gm)].map((m) => m[1]));
     }
-    expect(keys).toHaveLength(424);
-    expect(new Set(keys).size).toBe(424);
+    expect(keys).toHaveLength(432);
+    expect(new Set(keys).size).toBe(432);
     expect(keys).not.toContain("projectSetIcon");
     expect(keys).not.toContain("projectSetIconImage");
     expect(keys).toEqual(expect.arrayContaining([
@@ -325,6 +326,10 @@ describe("code structure host port (Phase 3)", () => {
       "remoteListDir",
       "remoteMkdir",
       "remoteOpenProject",
+      "typstEnsureSession",
+      "typstDidOpen",
+      "typstPreviewStart",
+      "onTypstPreviewReady",
     ]));
     expect(keys).not.toEqual(expect.arrayContaining([
       "chatSend",
@@ -781,6 +786,13 @@ describe("code structure renderer direction (Phase 4)", () => {
     );
     expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/remote.ts"))).toBe(true);
     expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/settings.ts"))).toBe(true);
+    expect(existsSync(join(REPO, "src/renderer/lib/desktop-api/typst.ts"))).toBe(true);
+    expect(sourceOf("src/renderer/lib/desktop-api/index.ts")).toMatch(
+      /export \{ typstDesktop \} from "\.\/typst"/,
+    );
+    expect(sourceOf("src/renderer/stores/typst-session-store.ts")).toMatch(
+      /from\s+["']@\/lib\/desktop-api\/typst["']/,
+    );
     for (const file of walkTsFiles(join(REPO, "src/renderer/stores"))) {
       const rel = relative(REPO, file);
       expect(sourceOf(rel), rel).not.toMatch(/window\.electronAPI/);

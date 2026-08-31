@@ -1,19 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseTypstLog } from "../../src/main/compile/typst-log";
 import { compileTypst, compileTypstForAgent, typstCompileArgs, typstFormatCompileArgs } from "../../src/main/compile/typst";
-import { typstWatchSvgArgs } from "../../src/main/compile/typst-live";
-import { resolveTypstBinary } from "../../src/main/compile/typst-binary";
+import { resolveTinymistBinary } from "../../src/main/compile/tinymist-binary";
 import { latexCompileTool } from "../../src/main/agent/tools/latex";
 import type { ToolExecuteContext } from "../../src/main/agent/tool-host";
 
-vi.mock("../../src/main/compile/typst-binary", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/main/compile/typst-binary")>();
+vi.mock("../../src/main/compile/tinymist-binary", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/main/compile/tinymist-binary")>();
   return {
     ...actual,
-    resolveTypstBinary: vi.fn(actual.resolveTypstBinary),
+    resolveTinymistBinary: vi.fn(actual.resolveTinymistBinary),
   };
 });
 
@@ -71,22 +70,11 @@ describe("typstCompileArgs", () => {
     ]);
   });
 
-  it("live SVG watch uses --format svg and the same --root", () => {
-    expect(
-      typstWatchSvgArgs(
-        "/proj",
-        "/proj/notes/a.typ",
-        "/home/user/.prismnext/typst-live/abcd/a/a-{p}-of-{t}.svg",
-      ),
-    ).toEqual([
-      "watch",
-      "--root",
-      "/proj",
-      "--format",
-      "svg",
-      "/proj/notes/a.typ",
-      "/home/user/.prismnext/typst-live/abcd/a/a-{p}-of-{t}.svg",
-    ]);
+  it("does not pass --save-lock", () => {
+    const args = typstCompileArgs("/proj", "/proj/main.typ", "/proj/out.pdf");
+    expect(args[0]).toBe("compile");
+    expect(args).not.toContain("--save-lock");
+    expect(typstFormatCompileArgs("/proj", "/proj/a.typ", "/proj/a.png", "png")).not.toContain("--save-lock");
   });
 
   it("HTML export opts into the html feature flag", () => {
@@ -113,13 +101,13 @@ describe("typstCompileArgs", () => {
 
 describe("compileTypst unavailable", () => {
   afterEach(() => {
-    vi.mocked(resolveTypstBinary).mockReset();
+    vi.mocked(resolveTinymistBinary).mockReset();
   });
 
-  it("returns a Typst-specific error without mentioning TeX Live", async () => {
-    vi.mocked(resolveTypstBinary).mockResolvedValue({
+  it("returns a Tinymist-specific error without mentioning TeX Live", async () => {
+    vi.mocked(resolveTinymistBinary).mockResolvedValue({
       available: false,
-      path: "/missing/typst",
+      path: "/missing/tinymist",
       bundled: false,
       version: null,
     });
@@ -128,7 +116,7 @@ describe("compileTypst unavailable", () => {
     writeFileSync(join(root, "manuscript", "main.typ"), "= Hi\n", "utf-8");
     const result = await compileTypst(root, "manuscript/main.typ");
     expect(result.success).toBe(false);
-    expect(result.error).toMatch(/Typst was not found/);
+    expect(result.error).toMatch(/Tinymist was not found/);
     expect(result.error).not.toMatch(/TeX Live|TeXLive|xelatex/i);
   });
 });
@@ -174,5 +162,13 @@ describe("compile IPC dispatches typst at the entry", () => {
     expect(ipc).toMatch(/=== ["']typst["']/);
     expect(host).toMatch(/=== ["']typst["']/);
     expect(orchestrate).not.toContain("compileTypst");
+  });
+
+  it("oneshot PDF/export spawn tinymist compile, not the typst CLI (P6-B)", () => {
+    const oneshot = readFileSync(join(__dirname, "../../src/main/compile/typst.ts"), "utf8");
+    expect(oneshot).toContain("resolveTinymistBinary");
+    expect(oneshot).not.toContain("resolveTypstBinary");
+    expect(oneshot).not.toContain('"watch"');
+    expect(existsSync(join(__dirname, "../../src/main/compile/typst-binary.ts"))).toBe(false);
   });
 });

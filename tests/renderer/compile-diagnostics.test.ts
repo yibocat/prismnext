@@ -146,6 +146,89 @@ describe("compile diagnostics by artifact key", () => {
   });
 });
 
+describe("diagnosticsFromTypstLspItems", () => {
+  it("maps LSP errors into structuredEntries without inventing a log", async () => {
+    const { diagnosticsFromTypstLspItems } = await import("../../src/renderer/lib/compile/compile-artifact");
+    const diag = diagnosticsFromTypstLspItems([
+      {
+        relPath: "manuscript/main.typ",
+        severity: "error",
+        message: "expected semicolon",
+        line: 12,
+      },
+      {
+        relPath: "manuscript/ch.typ",
+        severity: "warning",
+        message: "unused import",
+        line: 3,
+      },
+    ]);
+    expect(diag.log).toBeNull();
+    expect(diag.error).toBe("expected semicolon");
+    expect(diag.structuredErrors).toEqual([
+      {
+        file: "manuscript/main.typ",
+        line: 12,
+        message: "expected semicolon",
+        severity: "error",
+      },
+    ]);
+  });
+
+  it("clears the badge when only warnings remain", async () => {
+    const { diagnosticsFromTypstLspItems } = await import("../../src/renderer/lib/compile/compile-artifact");
+    const diag = diagnosticsFromTypstLspItems([
+      { relPath: "a.typ", severity: "warning", message: "hmm" },
+    ]);
+    expect(diag).toEqual({ error: null, log: null, structuredErrors: [] });
+  });
+});
+
+describe("compileRootsForTypstDiagnostics", () => {
+  it("ignores empty compileRoot from a didChange rebind and uses the live preview root", async () => {
+    const { compileRootsForTypstDiagnostics } = await import("../../src/renderer/lib/compile/compile-artifact");
+    expect(compileRootsForTypstDiagnostics({
+      compileRootFromEvent: "",
+      previewCompileRoots: ["manuscript/main.typ"],
+      itemRelPaths: ["manuscript/ch.typ"],
+    })).toEqual(["manuscript/main.typ"]);
+  });
+
+  it("falls back to diagnostic paths when no preview is running", async () => {
+    const { compileRootsForTypstDiagnostics } = await import("../../src/renderer/lib/compile/compile-artifact");
+    expect(compileRootsForTypstDiagnostics({
+      compileRootFromEvent: "",
+      previewCompileRoots: [],
+      itemRelPaths: ["draft.typ"],
+    })).toEqual(["draft.typ"]);
+  });
+});
+
+describe("applyTypstLspDiagnostics", () => {
+  afterEach(() => {
+    useCompileStore.setState({ diagnosticsByKey: {} });
+  });
+
+  it("writes LSP errors onto the compile-root artifact key", async () => {
+    const { paperKeyFromMainFile } = await import("../../src/renderer/lib/compile/compile-artifact");
+    const { applyTypstLspDiagnostics } = await import("../../src/renderer/stores/typst-session-store");
+    applyTypstLspDiagnostics({
+      projectRoot: "/p",
+      compileRoot: "main.typ",
+      items: [{
+        relPath: "ch.typ",
+        severity: "error",
+        message: "bad token",
+        line: 4,
+      }],
+    });
+    const key = compileArtifactCacheKey(paperKeyFromMainFile("/p", "main.typ"));
+    expect(useCompileStore.getState().diagnosticsByKey[key]?.structuredErrors).toEqual([
+      { file: "ch.typ", line: 4, message: "bad token", severity: "error" },
+    ]);
+  });
+});
+
 describe("shouldShowCompileProblemsStrip", () => {
   it("stays hidden while compiling a clean document", () => {
     expect(shouldShowCompileProblemsStrip(0)).toBe(false);

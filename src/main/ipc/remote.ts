@@ -75,6 +75,10 @@ export function getRemoteSessionBroker(): RemoteSessionBroker {
             void pullAndMirrorSession(getRemoteSessionBroker(), payload, profileId);
           }
         }
+        if (channel === "typst:previewReady") {
+          // Host 127.0.0.1 is the server loopback. Laptop rewrites after SSH -L in ipc/typst.ts.
+          return;
+        }
         const rewritten = rewriteHostEventPaths(payload, profileId);
         broadcast(channel, rewritten);
       },

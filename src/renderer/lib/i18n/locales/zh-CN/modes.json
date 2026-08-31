@@ -30,6 +30,7 @@
     "typstHideLive": "收起实时预览",
     "typstPdfPreview": "PDF 预览（Lector）",
     "typstPreviewStarting": "正在编译 Typst 预览…",
+    "typstPreviewFailed": "Typst 预览启动失败：{{error}}",
     "typstExport": "导出",
     "typstExportPdf": "导出 PDF",
     "typstExportPng": "导出 PNG",
