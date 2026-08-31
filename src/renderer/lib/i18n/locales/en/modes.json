@@ -48,7 +48,7 @@
     "warningCount": "{{count}} warnings",
     "warningCount_one": "{{count}} warning",
     "showProblems": "Show compile problems",
-    "hideProblems": "Hide compile problems"
+    "hideProblems": "Back to preview"
   },
   "researchPlan": {
     "label": "Plan",

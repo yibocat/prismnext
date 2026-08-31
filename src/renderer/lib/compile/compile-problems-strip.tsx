@@ -3,8 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   AlertCircleIcon,
   AlertTriangleIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   Loader2Icon,
   ScrollTextIcon,
 } from "lucide-react";
@@ -194,10 +192,10 @@ function CompileLogView({
 }
 
 /**
- * Collapsible compile problems strip for a Files `.tex` / `.typ` tab.
- * Data is keyed by Compile Artifact Key — not the last global compile.
+ * Compile errors in the Files preview slot (not a bottom strip).
+ * Toolbar badge toggles this vs SVG / PDF.
  */
-export function CompileProblemsStrip({ artifactKey }: { artifactKey: CompileArtifactKey }) {
+export function CompileErrorPane({ artifactKey }: { artifactKey: CompileArtifactKey }) {
   const { t } = useTranslation();
   const cacheKey = compileArtifactCacheKey(artifactKey);
   const diag = useCompileStore((s) => s.diagnosticsByKey[cacheKey]);
@@ -207,17 +205,12 @@ export function CompileProblemsStrip({ artifactKey }: { artifactKey: CompileArti
   const requestJumpToLine = useDocumentStore((s) => s.requestJumpToLine);
   const openFile = useRightPanelStore((s) => s.openFile);
   const manuscriptDir = useWorkspaceConfigStore((s) => s.manuscriptConfig?.dir ?? DEFAULT_MANUSCRIPT_DIR);
-
-  const [expanded, setExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<CompilePanelTab>("problems");
 
   const problems = useMemo(
     () => problemsFromDiagnostics(diag, artifactKey.engine),
     [diag, artifactKey.engine],
   );
-
-  const errorCount = problems.filter((p) => p.severity === "error").length;
-  const warningCount = problems.filter((p) => p.severity === "warning").length;
 
   const handleSelect = useCallback(
     (problem: LatexProblem) => {
@@ -232,89 +225,50 @@ export function CompileProblemsStrip({ artifactKey }: { artifactKey: CompileArti
     [files, manuscriptDir, openFile, requestJumpToLine],
   );
 
-  if (!shouldShowCompileProblemsStrip(problems.length)) return null;
-
-  const summary = [
-    errorCount > 0 ? t("modes.files.errorCount", { count: errorCount }) : null,
-    warningCount > 0 ? t("modes.files.warningCount", { count: warningCount }) : null,
-  ].filter(Boolean).join(" · ");
-
   return (
-    <div className="shrink-0 border-t border-border bg-background">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex h-7 w-full items-center gap-1.5 px-2 text-left text-[length:var(--font-size-12)] hover:bg-accent"
-        aria-expanded={expanded}
-        title={expanded ? t("modes.files.hideProblems") : t("modes.files.showProblems")}
-      >
-        {isThisCompiling ? (
-          <Loader2Icon className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-        ) : errorCount > 0 ? (
-          <AlertCircleIcon className="size-3.5 shrink-0 text-destructive" />
-        ) : (
-          <AlertTriangleIcon className="size-3.5 shrink-0 text-warning" />
-        )}
-        <span className={cn(
-          "min-w-0 flex-1 truncate",
-          errorCount > 0 ? "text-destructive" : "text-muted-foreground",
-        )}>
-          {summary || t("modes.files.compiling")}
-        </span>
-        {expanded ? (
-          <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronUpIcon className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-      </button>
-
-      {expanded ? (
-        <div className="flex h-44 flex-col border-t border-border">
-          <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-2 px-2 border-b border-border select-none">
-            <div className="flex items-center rounded-md border border-border p-0.5 gap-px">
-              <button
-                type="button"
-                onClick={() => setActiveTab("problems")}
-                className={cn(
-                  "flex items-center gap-1.5 h-6 px-2 rounded-sm text-[length:var(--font-size-12)] transition-colors",
-                  activeTab === "problems"
-                    ? "bg-muted text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <AlertCircleIcon className="size-3.5 shrink-0" />
-                <span>{t("modes.files.problems")}</span>
-                {problems.length > 0 && (
-                  <span className="text-[length:var(--font-hint)] tabular-nums opacity-70">
-                    {problems.length}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("log")}
-                className={cn(
-                  "flex items-center gap-1.5 h-6 px-2 rounded-sm text-[length:var(--font-size-12)] transition-colors",
-                  activeTab === "log"
-                    ? "bg-muted text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <ScrollTextIcon className="size-3.5 shrink-0" />
-                <span>{t("modes.files.compileLog")}</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1">
-            {activeTab === "problems" ? (
-              <ProblemsList isCompiling={isThisCompiling} problems={problems} onSelect={handleSelect} />
-            ) : (
-              <CompileLogView isCompiling={isThisCompiling} compileLog={diag?.log ?? ""} />
+    <div className="flex h-full min-h-0 w-full flex-col bg-background">
+      <div className="flex h-[var(--height-right-area-subtoolbar)] shrink-0 items-center gap-2 border-b border-border px-2 select-none">
+        <div className="flex items-center rounded-md border border-border p-0.5 gap-px">
+          <button
+            type="button"
+            onClick={() => setActiveTab("problems")}
+            className={cn(
+              "flex items-center gap-1.5 h-6 px-2 rounded-sm text-[length:var(--font-size-12)] transition-colors",
+              activeTab === "problems"
+                ? "bg-muted text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
             )}
-          </div>
+          >
+            <AlertCircleIcon className="size-3.5 shrink-0" />
+            <span>{t("modes.files.problems")}</span>
+            {problems.length > 0 && (
+              <span className="text-[length:var(--font-hint)] tabular-nums opacity-70">
+                {problems.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("log")}
+            className={cn(
+              "flex items-center gap-1.5 h-6 px-2 rounded-sm text-[length:var(--font-size-12)] transition-colors",
+              activeTab === "log"
+                ? "bg-muted text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <ScrollTextIcon className="size-3.5 shrink-0" />
+            <span>{t("modes.files.compileLog")}</span>
+          </button>
         </div>
-      ) : null}
+      </div>
+      <div className="min-h-0 flex-1">
+        {activeTab === "problems" ? (
+          <ProblemsList isCompiling={isThisCompiling} problems={problems} onSelect={handleSelect} />
+        ) : (
+          <CompileLogView isCompiling={isThisCompiling} compileLog={diag?.log ?? ""} />
+        )}
+      </div>
     </div>
   );
 }

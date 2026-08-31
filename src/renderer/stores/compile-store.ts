@@ -4,8 +4,11 @@ import { AUTO_COMPILE_DEBOUNCE, AUTO_COMPILE_SPINNER_MIN_MS, COMPILE_SPINNER_MIN
 import { useDocumentStore } from "./document-store";
 import { useWorkspaceConfigStore } from "./workspace-config-store";
 import { resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
-import { parseLatexLog } from "@/lib/compile/parse-latex-log";
-import { isTypstStandaloneRel, resolveTypstRootFromBuffers } from "@/lib/typst/resolve-typst-root";
+import {
+  diagnosticsFromCompileLog,
+  paperKeyFromMainFile,
+  type CompileDiagnostics,
+} from "@/lib/compile/compile-artifact";
 import { compileDesktop } from "@/lib/desktop-api/compile";
 import { fsDesktop } from "@/lib/desktop-api/fs";
 import {
@@ -21,112 +24,22 @@ import {
   deriveStandalonePdfRel,
   type CompileArtifactKey,
 } from "@shared/compile/artifact-key";
-import { parseTypstLog } from "@shared/compile/typst-log";
-import type { TypstCliFormat } from "@shared/compile/typst-format";
 import { isRemoteProjectRoot } from "@shared/remote";
+
+export {
+  diagnosticsFromCompileLog,
+  paperKeyFromMainFile,
+  type CompileDiagnostics,
+  type CompileProblemEntry,
+} from "@/lib/compile/compile-artifact";
 
 // ─── PDF Bytes + Path Cache (outside Zustand state) ───
 
 const _pdfBytesCache = new Map<string, Uint8Array>();
 let _currentPdfRootId: string | null = null;
-const _svgPagesCache = new Map<string, string[]>();
-let _typstLiveTimer: ReturnType<typeof setTimeout> | null = null;
-let _typstLiveInFlight = false;
-let _typstLivePending = false;
-
-export function paperKeyFromMainFile(projectRoot: string, mainFile: string): CompileArtifactKey {
-  const engine = compileEngineFromRelPath(mainFile) ?? "latex";
-  const manuscriptDir = useWorkspaceConfigStore.getState().manuscriptConfig?.dir ?? null;
-  if (engine === "typst" && isTypstStandaloneRel(mainFile, manuscriptDir)) {
-    return {
-      projectRoot,
-      engine,
-      route: "standalone",
-      sourceFile: mainFile.replace(/\\/g, "/"),
-    };
-  }
-  return {
-    projectRoot,
-    engine,
-    route: "paper",
-    compileRoot: mainFile.replace(/\\/g, "/"),
-  };
-}
 
 export function getPdfBytesForKey(key: CompileArtifactKey): Uint8Array | undefined {
   return _pdfBytesCache.get(compileArtifactCacheKey(key));
-}
-
-export function getTypstLivePages(key: CompileArtifactKey): string[] | undefined {
-  return _svgPagesCache.get(compileArtifactCacheKey(key));
-}
-
-async function runTypstLiveCompile(
-  projectDir: string,
-  mainFile: string,
-  evenIfClean: boolean,
-): Promise<void> {
-  if (_typstLiveInFlight) {
-    _typstLivePending = true;
-    return;
-  }
-  const docState = useDocumentStore.getState();
-  const snapshot = docState.getLiveCompilePayload();
-  const key = paperKeyFromMainFile(projectDir, mainFile);
-  const cacheKey = compileArtifactCacheKey(key);
-  if (!evenIfClean && snapshot.dirtyFiles.length === 0 && (getTypstLivePages(key)?.length ?? 0) > 0) {
-    return;
-  }
-
-  _typstLiveInFlight = true;
-  useCompileStore.setState({ compilingKey: cacheKey });
-  try {
-    const result = await compileDesktop.compileTypstLive(projectDir, mainFile, {
-      dirtyFiles: snapshot.dirtyFiles.length > 0 ? snapshot.dirtyFiles : undefined,
-    });
-    if ("svgPages" in result && result.svgPages) {
-      _svgPagesCache.set(cacheKey, result.svgPages);
-      if (snapshot.dirtyFiles.length > 0) {
-        docState.markCompiledClean(snapshot.dirtyFiles);
-      }
-      setCompileDiagnosticsForKey(
-        key,
-        diagnosticsFromCompileLog(mainFile, null, result.stdout ?? null),
-      );
-      useCompileStore.setState((s) => ({
-        typstLiveRevision: s.typstLiveRevision + 1,
-        compilingKey: null,
-      }));
-    } else if ("error" in result) {
-      setCompileDiagnosticsForKey(
-        key,
-        diagnosticsFromCompileLog(mainFile, result.error, result.stdout ?? null),
-      );
-      useCompileStore.setState({ compilingKey: null });
-    } else {
-      useCompileStore.setState({ compilingKey: null });
-    }
-  } catch (error) {
-    setCompileDiagnosticsForKey(
-      key,
-      diagnosticsFromCompileLog(
-        mainFile,
-        error instanceof Error ? error.message : String(error),
-        null,
-      ),
-    );
-    useCompileStore.setState({ compilingKey: null });
-  } finally {
-    _typstLiveInFlight = false;
-    if (_typstLivePending) {
-      _typstLivePending = false;
-      const latestRoot = useDocumentStore.getState().projectRoot;
-      const latestTarget = resolveUiCompileTargetPath();
-      if (latestRoot && latestTarget) {
-        void runTypstLiveCompile(latestRoot, latestTarget, true);
-      }
-    }
-  }
 }
 
 export function setPdfBytesForKey(key: CompileArtifactKey, data: Uint8Array): void {
@@ -144,19 +57,6 @@ export function setPdfBytesForKey(key: CompileArtifactKey, data: Uint8Array): vo
   }));
 }
 
-export type CompileProblemEntry = {
-  file?: string;
-  line?: number;
-  message: string;
-  severity?: "error" | "warning";
-};
-
-export type CompileDiagnostics = {
-  error: string | null;
-  log: string | null;
-  structuredErrors: CompileProblemEntry[];
-};
-
 export function setCompileDiagnosticsForKey(
   key: CompileArtifactKey,
   diag: CompileDiagnostics,
@@ -165,38 +65,6 @@ export function setCompileDiagnosticsForKey(
   useCompileStore.setState((s) => ({
     diagnosticsByKey: { ...s.diagnosticsByKey, [cacheKey]: diag },
   }));
-}
-
-export function diagnosticsFromCompileLog(
-  mainFile: string,
-  error: string | null,
-  log: string | null,
-): CompileDiagnostics {
-  const engine = compileEngineFromRelPath(mainFile);
-  let structuredErrors: CompileProblemEntry[] = [];
-  if (engine === "typst") {
-    structuredErrors = parseTypstLog(log ?? "").errors.map((e) => ({
-      file: e.file,
-      line: e.line,
-      message: e.message,
-      severity: "error" as const,
-    }));
-  } else {
-    structuredErrors = parseLatexLog(log).map((p) => ({
-      file: p.file,
-      line: p.line,
-      message: p.message,
-      severity: p.severity,
-    }));
-  }
-  if (error) {
-    if (structuredErrors.length === 0) {
-      structuredErrors = [{ message: error, severity: "error" }];
-    }
-  } else {
-    structuredErrors = structuredErrors.filter((e) => e.severity === "warning");
-  }
-  return { error, log, structuredErrors };
 }
 
 /** @deprecated latex paper + focused project only. New code must use getPdfBytesForKey. */
@@ -305,11 +173,9 @@ export function clearPdfCache() {
     _autoCompileTimer = null;
   }
   _pdfBytesCache.clear();
-  _svgPagesCache.clear();
   _currentPdfRootId = "";
   useCompileStore.setState({
     pdfRevision: 0,
-    typstLiveRevision: 0,
     lastCompiledRootId: "",
     lastCompiledProjectRoot: null,
     lastPaperKey: null,
@@ -317,6 +183,7 @@ export function clearPdfCache() {
     diagnosticsByKey: {},
     compilingKey: null,
   });
+  void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
 }
 
 // ─── Auto-compile debounce timer ───
@@ -388,7 +255,6 @@ interface CompileState {
   diagnosticsByKey: Record<string, CompileDiagnostics>;
   compilingKey: string | null;
   pdfRevision: number;
-  typstLiveRevision: number;
   compilerStatus: CompilerStatus | null;
   pendingRecompile: boolean;
   lastCompiledRootId: string | null;
@@ -413,9 +279,6 @@ interface CompileState {
   scheduleAutoCompile: () => void;
   /** PDF pane is open and cache is empty: compile once even if buffers match disk. */
   ensurePreviewCompile: (mainFile?: string) => void;
-  scheduleTypstLiveCompile: () => void;
-  ensureTypstLiveCompile: (mainFile?: string) => void;
-  exportTypst: (format: TypstCliFormat) => Promise<void>;
   requestSynctexForward: (result: Omit<SynctexForwardTarget, "rev">) => void;
 }
 
@@ -428,7 +291,6 @@ export const useCompileStore = create<CompileState>()(
       diagnosticsByKey: {},
       compilingKey: null,
       pdfRevision: 0,
-      typstLiveRevision: 0,
       compilerStatus: null,
       pendingRecompile: false,
       lastCompiledRootId: null,
@@ -444,6 +306,12 @@ export const useCompileStore = create<CompileState>()(
         mainFile: string,
         opts?: { fromAutoCompile?: boolean; evenIfClean?: boolean },
       ) => {
+        if (compileEngineFromRelPath(mainFile) === "typst") {
+          const { compileTypstPdf } = await import("./typst-live-store");
+          await compileTypstPdf(mainFile);
+          return;
+        }
+
         const fromAuto = opts?.fromAutoCompile ?? false;
         const evenIfClean = opts?.evenIfClean ?? false;
 
@@ -468,8 +336,7 @@ export const useCompileStore = create<CompileState>()(
               };
           const { dirtyRelPaths, dirtyFiles } = snapshot;
 
-          // Live pass with nothing dirty: buffers already match disk/build — skip engine
-          // (unless this is the first open of a Typst tab that still has no PDF).
+          // Live pass with nothing dirty: buffers already match disk/build — skip engine.
           if ((fromAuto || pass > 1) && dirtyRelPaths.length === 0 && dirtyFiles.length === 0) {
             if (!(evenIfClean && pass === 1)) break;
           }
@@ -660,8 +527,12 @@ export const useCompileStore = create<CompileState>()(
             return;
           }
           const docState = useDocumentStore.getState();
-          const { projectRoot, files } = docState;
+          const { projectRoot, files, activeFileId } = docState;
           if (!projectRoot || files.length === 0) {
+            return;
+          }
+          const activeRel = files.find((f) => f.id === activeFileId)?.relativePath ?? "";
+          if (compileEngineFromRelPath(activeRel) === "typst") {
             return;
           }
 
@@ -671,7 +542,6 @@ export const useCompileStore = create<CompileState>()(
             return;
           }
           if (compileEngineFromRelPath(targetPath) === "typst") {
-            void runTypstLiveCompile(projectRoot, targetPath, false);
             return;
           }
           get().compile(projectRoot, targetPath, { fromAutoCompile: true });
@@ -683,73 +553,33 @@ export const useCompileStore = create<CompileState>()(
         const projectRoot = useDocumentStore.getState().projectRoot;
         const targetPath = mainFile ?? resolveUiCompileTargetPath();
         if (!projectRoot || !targetPath) return;
+        if (compileEngineFromRelPath(targetPath) === "typst") {
+          void import("./typst-live-store").then((m) => {
+            void m.compileTypstPdf(targetPath, { skipIfCached: true });
+          });
+          return;
+        }
         const key = paperKeyFromMainFile(projectRoot, targetPath);
         if (getPdfBytesForKey(key)) return;
         void get().compile(projectRoot, targetPath, { fromAutoCompile: true, evenIfClean: true });
       },
 
-      scheduleTypstLiveCompile: () => {
-        if (_typstLiveTimer) clearTimeout(_typstLiveTimer);
-        if (!isAutoCompileEnabled()) return;
-        _typstLiveTimer = setTimeout(() => {
-          _typstLiveTimer = null;
-          if (!isAutoCompileEnabled()) return;
-          const projectRoot = useDocumentStore.getState().projectRoot;
-          const targetPath = resolveUiCompileTargetPath();
-          if (!projectRoot || !targetPath) return;
-          if (compileEngineFromRelPath(targetPath) !== "typst") return;
-          void runTypstLiveCompile(projectRoot, targetPath, false);
-        }, AUTO_COMPILE_DEBOUNCE);
-      },
-
-      ensureTypstLiveCompile: (mainFile) => {
-        if (_aiSessionCount > 0) return;
-        const projectRoot = useDocumentStore.getState().projectRoot;
-        const targetPath = mainFile ?? resolveUiCompileTargetPath();
-        if (!projectRoot || !targetPath) return;
-        if (compileEngineFromRelPath(targetPath) !== "typst") return;
-        const key = paperKeyFromMainFile(projectRoot, targetPath);
-        if (getTypstLivePages(key)?.length) return;
-        void runTypstLiveCompile(projectRoot, targetPath, true);
-      },
-
-      exportTypst: async (format) => {
-        const projectRoot = useDocumentStore.getState().projectRoot;
-        const targetPath = resolveUiCompileTargetPath();
-        if (!projectRoot || !targetPath) return;
-        const snapshot = useDocumentStore.getState().getLiveCompilePayload();
-        const result = await compileDesktop.compileTypstExport(projectRoot, targetPath, format, {
-          dirtyFiles: snapshot.dirtyFiles.length > 0 ? snapshot.dirtyFiles : undefined,
-        });
-        if ("ok" in result && result.ok === false) {
-          setCompileDiagnosticsForKey(
-            paperKeyFromMainFile(projectRoot, targetPath),
-            diagnosticsFromCompileLog(targetPath, result.error, result.stdout ?? null),
-          );
-        }
-      },
-
       clearCompileState: () => {
         clearAutoCompileTimer();
-        if (_typstLiveTimer) {
-          clearTimeout(_typstLiveTimer);
-          _typstLiveTimer = null;
-        }
         _pdfBytesCache.clear();
-        _svgPagesCache.clear();
         _currentPdfRootId = null;
         set({
           isCompiling: false,
           diagnosticsByKey: {},
           compilingKey: null,
           pdfRevision: 0,
-          typstLiveRevision: 0,
           lastCompiledRootId: null,
           lastCompiledProjectRoot: null,
           lastPaperKey: null,
           pendingRecompile: false,
           synctexForwardTarget: null,
         });
+        void import("./typst-live-store").then((m) => m.resetTypstLiveStore());
       },
 
       requestSynctexForward: (result) => {
@@ -789,25 +619,6 @@ function warnNoCompileTargetOnce(context: string): void {
 function resolveUiCompileTargetPath(): string | null {
   const docState = useDocumentStore.getState();
   const { files, activeFileId } = docState;
-  const active = files.find((f) => f.id === activeFileId);
-  const rel = active?.relativePath ?? "";
-  if (compileEngineFromRelPath(rel) === "typst") {
-    const manuscript = useWorkspaceConfigStore.getState().manuscriptConfig;
-    const manuscriptDir = manuscript?.dir ?? null;
-    if (isTypstStandaloneRel(rel, manuscriptDir)) return rel;
-    return (
-      resolveTypstRootFromBuffers({
-        files,
-        getContent: (path) => {
-          const f = files.find((x) => x.relativePath.replace(/\\/g, "/") === path.replace(/\\/g, "/"));
-          return f ? docState.getAsset(f.id) : "";
-        },
-        manuscriptDir,
-        mainFilePin: manuscript?.mainFile ?? null,
-        hintRel: rel,
-      }) ?? rel
-    );
-  }
   const resolved = resolveCompileTarget(activeFileId || "", files, docState.getAsset);
   const manuscriptConfig = useWorkspaceConfigStore.getState().manuscriptConfig;
   const pinRel = paperRelFromManuscript(manuscriptConfig);
@@ -823,8 +634,15 @@ export async function compileCurrentDocument(): Promise<void> {
   const docState = useDocumentStore.getState();
   const compileState = useCompileStore.getState();
 
-  const { projectRoot, files } = docState;
+  const { projectRoot, files, activeFileId } = docState;
   if (!projectRoot || files.length === 0) return;
+
+  const activeRel = files.find((f) => f.id === activeFileId)?.relativePath ?? "";
+  if (compileEngineFromRelPath(activeRel) === "typst") {
+    const { compileTypstPdf } = await import("./typst-live-store");
+    await compileTypstPdf(activeRel);
+    return;
+  }
 
   const targetPath = resolveUiCompileTargetPath();
   if (!targetPath) {

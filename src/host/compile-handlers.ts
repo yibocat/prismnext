@@ -3,10 +3,10 @@ import { compileEngineFromRelPath } from "../shared/compile/artifact-key";
 import { TYPST_CLI_FORMATS, type TypstCliFormat } from "../shared/compile/typst-format";
 import {
   compileTypstForIpc,
-  compileTypstLiveSvg,
   compileTypstToFormat,
   encodeTypstWireFiles,
 } from "../main/compile/typst";
+import { compileTypstLiveSvg } from "../main/compile/typst-live";
 import type { HostHandlerContext } from "./context";
 
 function projectDir(params: Record<string, unknown>, ctx: HostHandlerContext): string {

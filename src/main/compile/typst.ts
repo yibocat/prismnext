@@ -5,7 +5,6 @@ import { basename, dirname, extname, join } from "node:path";
 import { compileEngineFromRelPath, derivePaperBuildDir, derivePaperPdfRel, deriveStandalonePdfRel } from "../../shared/compile/artifact-key";
 import {
   typstExportDirRel,
-  typstLiveDirRel,
   typstOutputUsesPageTemplate,
   type TypstCliFormat,
 } from "../../shared/compile/typst-format";
@@ -84,10 +83,6 @@ export function typstFormatCompileArgs(
   if (format === "html") args.push("--features", "html");
   args.push(absMain, absOut);
   return args;
-}
-
-export function typstLiveSvgArgs(projectDir: string, absMain: string, absOutTemplate: string): string[] {
-  return typstFormatCompileArgs(projectDir, absMain, absOutTemplate, "svg");
 }
 
 async function flushDirtyFiles(
@@ -309,16 +304,6 @@ export async function compileTypstToFormat(
     };
   }
   return { success: true, files, logContent, buildDir: buildDirRel };
-}
-
-export async function compileTypstLiveSvg(
-  projectDir: string,
-  mainFile: string,
-  options: CompileLatexOptions = {},
-): Promise<TypstFormatCompileResult> {
-  const normalized = mainFile.replace(/\\/g, "/").replace(/^\.\//, "");
-  const stem = basename(normalized, extname(normalized));
-  return compileTypstToFormat(projectDir, normalized, "svg", options, typstLiveDirRel(stem));
 }
 
 function withAgentNotify(

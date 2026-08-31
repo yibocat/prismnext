@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { WorkspaceSplit } from "@/components/layout/workspace-split";
-import { CompileProblemsStrip } from "./compile-problems-strip";
-import { paperKeyFromMainFile, useCompileStore } from "@/stores/compile-store";
+import { useCompileStore } from "@/stores/compile-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { compileEngineFromRelPath } from "@shared/compile/artifact-key";
 import {
   previewOpenToViewMode,
   resolveCompileSplitCollapse,
@@ -31,8 +31,8 @@ function createContentHost(): HTMLDivElement {
 }
 
 /**
- * LaTeX Files: editor + compile PDF (Lector / pdf.js).
- * Typst Files: same split; the preview slot is live SVG or Lector depending on the toolbar.
+ * Files editor + preview split (PDF left, editor right).
+ * LaTeX preview is Lector. Typst preview is live SVG or Lector, depending on the toolbar.
  */
 export function FileCompileLayout({
   editor,
@@ -58,6 +58,12 @@ export function FileCompileLayout({
 
   useEffect(() => {
     if (!previewOpen || !projectRoot || skipPreviewPdfCompile) return;
+    if (compileEngineFromRelPath(compileRoot) === "typst") {
+      void import("@/stores/typst-live-store").then((m) => {
+        void m.compileTypstPdf(compileRoot, { skipIfCached: true });
+      });
+      return;
+    }
     useCompileStore.getState().ensurePreviewCompile(compileRoot);
   }, [previewOpen, projectRoot, compileRoot, skipPreviewPdfCompile]);
 
@@ -101,9 +107,6 @@ export function FileCompileLayout({
       </div>
       {hostsAttached ? createPortal(<>{preview}</>, pdfHost) : null}
       {hostsAttached ? createPortal(<>{editor}</>, editorHost) : null}
-      {projectRoot ? (
-        <CompileProblemsStrip artifactKey={paperKeyFromMainFile(projectRoot, compileRoot)} />
-      ) : null}
     </div>
   );
 }

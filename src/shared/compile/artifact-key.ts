@@ -22,7 +22,7 @@ export function compileEngineFromRelPath(relPath: string): CompileEngine | null 
   return null;
 }
 
-/** Sources whose editor buffers flush into auto-compile (LaTeX + Typst). */
+/** Sources whose editor buffers flush into live preview (Typst) or auto-compile (LaTeX). */
 export function isLiveCompileSourceRel(relPath: string): boolean {
   return /\.(tex|ltx|typ|bib|sty|cls|bst)$/i.test(relPath);
 }

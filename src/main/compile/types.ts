@@ -2,11 +2,15 @@ export type CompileSource = "ui" | "agent";
 export type CompileRoute = "manuscript" | "standalone";
 export type CompileEngineId = "tectonic-bundled" | "tectonic-system" | "texlive";
 
-export interface CompileLatexOptions {
+/** Dirty buffers flushed to disk before Typst watch / compile / export. Not a LaTeX live pass. */
+export interface CompileFlushOptions {
+  dirtyFiles?: Array<{ relPath: string; content: string }>;
+  source?: CompileSource;
+}
+
+export interface CompileLatexOptions extends CompileFlushOptions {
   /** Project-relative paths changed since the last compile (incremental sync). */
   dirtyRelPaths?: string[];
-  /** In-memory dirty sources — flushed to project tree before sync (skips renderer save). */
-  dirtyFiles?: Array<{ relPath: string; content: string }>;
   /** When true, omit pdfBytes — renderer reads from pdfPath on disk. */
   pdfOnDisk?: boolean;
   /** Skip SyncTeX (always on for now — SyncTeX UI is disabled). */
@@ -15,10 +19,9 @@ export interface CompileLatexOptions {
    * Live typing preview: prefer latency over full aux/bib convergence.
    * Tectonic: one TeX pass (`-r 0`); TeX Live: single latex, no bib.
    * Skips the strict “citations unresolved” failure gate (PDF still returned).
+   * Typst PDF ignores this — it is always one `typst compile`.
    */
   fast?: boolean;
-  /** Who kicked off this job. Defaults to ui. Agent compiles must pass "agent". */
-  source?: CompileSource;
 }
 
 export interface StandaloneCompileResult {

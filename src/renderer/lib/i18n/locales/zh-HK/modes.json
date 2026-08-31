@@ -48,7 +48,7 @@
     "warningCount": "{{count}} 個警告",
     "warningCount_one": "{{count}} 個警告",
     "showProblems": "顯示編譯問題",
-    "hideProblems": "隱藏編譯問題"
+    "hideProblems": "返回預覽"
   },
   "researchPlan": {
     "label": "Plan",

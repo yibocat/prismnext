@@ -1503,14 +1503,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     const file = state.files.find((f) => f.id === id);
     if (file && isLiveCompileSourceRel(file.relativePath)) {
-      void import("./compile-store").then(({ useCompileStore }) => {
-        const compile = useCompileStore.getState();
-        if (compileEngineFromRelPath(file.relativePath) === "typst") {
-          compile.scheduleTypstLiveCompile();
-        } else {
-          compile.scheduleAutoCompile();
-        }
-      });
+      if (compileEngineFromRelPath(file.relativePath) === "typst") {
+        void import("./typst-live-store").then(({ scheduleTypstLive }) => {
+          scheduleTypstLive(file.id, file.relativePath);
+        });
+      } else {
+        void import("./compile-store").then(({ useCompileStore }) => {
+          useCompileStore.getState().scheduleAutoCompile();
+        });
+      }
     }
   },
 

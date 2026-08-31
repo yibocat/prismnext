@@ -36,12 +36,16 @@ describe("files compile open path", () => {
     expect(toolbar).toContain("typstExport");
     expect(toolbar).toContain("ZapIcon");
     expect(toolbar).not.toContain("typst-live-engine");
+    const langs = readFileSync(join(renderer, "lib/editor/language-mappings.tsx"), "utf8");
+    expect(langs).toContain('".typ"');
+    expect(langs).toContain("prism-typst-language");
   });
 
   it("does not ship a Typst WASM compiler in the renderer", () => {
     expect(existsSync(join(renderer, "lib/typst/typst-live-engine.ts"))).toBe(false);
     const preview = readFileSync(join(renderer, "lib/typst/typst-live-preview.tsx"), "utf8");
-    expect(preview).toContain("srcDoc");
+    expect(preview).toContain("LIVE_SHELL");
+    expect(preview).toContain("allow-same-origin");
     expect(preview).not.toContain("@myriaddreamin");
   });
 
@@ -57,17 +61,36 @@ describe("files compile open path", () => {
     expect(send).toContain("resumeAutoCompileAfterAi(tabId)");
   });
 
-  it("mounts a keyed compile problems strip on Files .tex and .typ", () => {
+  it("mounts compile errors in the preview slot from a toolbar badge, not a bottom strip", () => {
     const layout = readFileSync(join(renderer, "lib/compile/file-compile-layout.tsx"), "utf8");
-    expect(layout).toContain("CompileProblemsStrip");
+    const content = readFileSync(join(renderer, "modes/files-mode/files-content.tsx"), "utf8");
+    const toolbar = readFileSync(join(renderer, "modes/files-mode/files-toolbar.tsx"), "utf8");
+    expect(layout).not.toContain("CompileProblemsStrip");
     expect(layout).not.toContain("texworkspaceProblemsOpen");
+    expect(content).toContain("CompileErrorPane");
+    expect(toolbar).toContain("setCompileErrorPane");
+    expect(toolbar).toContain("AlertCircleIcon");
   });
 
-  it("routes .typ typing to SVG live compile, not PDF auto-compile", () => {
+  it("routes .typ typing to the Typst live store, not LaTeX auto-compile", () => {
     const doc = readFileSync(join(renderer, "stores/document-store.ts"), "utf8");
-    const store = readFileSync(join(renderer, "stores/compile-store.ts"), "utf8");
-    expect(doc).toContain("scheduleTypstLiveCompile");
-    expect(store).toContain("compileTypstLive");
-    expect(store).toContain("exportTypst");
+    const compile = readFileSync(join(renderer, "stores/compile-store.ts"), "utf8");
+    const live = readFileSync(join(renderer, "stores/typst-live-store.ts"), "utf8");
+    expect(doc).toContain("scheduleTypstLive");
+    expect(doc).not.toContain("scheduleTypstLiveCompile");
+    expect(compile).not.toContain("scheduleTypstLiveCompile");
+    expect(compile).toContain("AUTO_COMPILE_DEBOUNCE");
+    expect(live).toContain("compileTypstLive");
+    expect(live).toContain("compileTypstPdf");
+    expect(live).toContain("exportTypst");
+    expect(live).not.toContain("AUTO_COMPILE_DEBOUNCE");
+    expect(live).not.toContain("isAutoCompileEnabled");
+    expect(compile).not.toContain("exportTypst");
+    expect(compile).not.toContain("resolveTypstRootFromBuffers");
+    expect(compile).not.toContain("compileTypstExport");
+    expect(compile).not.toContain("compileTypstLive");
+    const typstMain = readFileSync(join(here, "../../src/main/compile/typst.ts"), "utf8");
+    expect(typstMain).not.toContain("compileTypstLiveSvg");
+    expect(typstMain).not.toContain("typstWatchSvgArgs");
   });
 });

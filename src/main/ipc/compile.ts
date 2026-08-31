@@ -6,12 +6,12 @@ import { compileEngineFromRelPath } from "../../shared/compile/artifact-key";
 import { TYPST_CLI_FORMATS, type TypstCliFormat } from "../../shared/compile/typst-format";
 import {
   compileTypstForIpc,
-  compileTypstLiveSvg,
   compileTypstToFormat,
   decodeTypstWireFiles,
   type TypstExportFile,
   type TypstWireFile,
 } from "../compile/typst";
+import { compileTypstLiveSvg } from "../compile/typst-live";
 import { parseRemoteAbs } from "../../shared/remote";
 import { routeHostDomainMethod } from "../remote/domain-route";
 import { getRemoteSessionBroker } from "./remote";

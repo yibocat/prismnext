@@ -3,7 +3,8 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseTypstLog } from "../../src/main/compile/typst-log";
-import { compileTypst, compileTypstForAgent, typstCompileArgs, typstFormatCompileArgs, typstLiveSvgArgs } from "../../src/main/compile/typst";
+import { compileTypst, compileTypstForAgent, typstCompileArgs, typstFormatCompileArgs } from "../../src/main/compile/typst";
+import { typstWatchSvgArgs } from "../../src/main/compile/typst-live";
 import { resolveTypstBinary } from "../../src/main/compile/typst-binary";
 import { latexCompileTool } from "../../src/main/agent/tools/latex";
 import type { ToolExecuteContext } from "../../src/main/agent/tool-host";
@@ -70,21 +71,21 @@ describe("typstCompileArgs", () => {
     ]);
   });
 
-  it("live SVG uses --format svg and the same --root", () => {
+  it("live SVG watch uses --format svg and the same --root", () => {
     expect(
-      typstLiveSvgArgs(
+      typstWatchSvgArgs(
         "/proj",
         "/proj/notes/a.typ",
-        "/proj/.workbench/compile/typst/live/a/a-{p}.svg",
+        "/home/user/.prismnext/typst-live/abcd/a/a-{p}-of-{t}.svg",
       ),
     ).toEqual([
-      "compile",
+      "watch",
       "--root",
       "/proj",
       "--format",
       "svg",
       "/proj/notes/a.typ",
-      "/proj/.workbench/compile/typst/live/a/a-{p}.svg",
+      "/home/user/.prismnext/typst-live/abcd/a/a-{p}-of-{t}.svg",
     ]);
   });
 

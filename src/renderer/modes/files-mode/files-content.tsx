@@ -5,6 +5,8 @@ import { NoFileOpen } from "@/components/modules/editor/no-file-open";
 import { MarkdownPreview, resolveViewer, wrapTabContext } from "@/lib/workspace/mode-utils";
 import { FileCompileLayout } from "@/lib/compile/file-compile-layout";
 import { classifyCompileTab, isCompileLayoutTab } from "@/lib/compile/classify-compile-tab";
+import { CompileErrorPane } from "@/lib/compile/compile-problems-strip";
+import { paperKeyFromMainFile } from "@/lib/compile/compile-artifact";
 import { resolveCompilePreviewOpen } from "@/lib/compile/compile-split";
 import { PdfPreview } from "@/components/modules/preview";
 import { compileEngineFromRelPath } from "@shared/compile/artifact-key";
@@ -27,7 +29,10 @@ export function FilesContent({ tab, isActive }: { tab: RightTab; isActive: boole
   const mainFilePin = useWorkspaceConfigStore((s) => s.manuscriptConfig?.mainFile ?? null);
   const previewOpenByFileId = useLayoutStore((s) => s.compilePreviewOpenByFileId);
   const typstPreviewKindByFileId = useLayoutStore((s) => s.typstPreviewKindByFileId);
+  const compileErrorPaneByFileId = useLayoutStore((s) => s.compileErrorPaneByFileId);
   const setCompilePreviewOpen = useLayoutStore((s) => s.setCompilePreviewOpen);
+  const setCompileErrorPane = useLayoutStore((s) => s.setCompileErrorPane);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   useEffect(() => {
     if (!isActive || tab.kind !== "file" || !tab.fileId) return;
@@ -78,21 +83,28 @@ export function FilesContent({ tab, isActive }: { tab: RightTab; isActive: boole
       cls.engine === "typst" ? (typstRootRel ?? fileRel) : (resolved?.targetPath ?? fileRel);
     const typstKind = typstPreviewKindByFileId[fileId] ?? "live";
     const showTypstLive = cls.engine === "typst" && typstKind !== "pdf";
+    const artifactKey = projectRoot ? paperKeyFromMainFile(projectRoot, compileRoot) : null;
+    const showErrorPane = Boolean(compileErrorPaneByFileId[fileId]);
     return wrapTabContext(
       ctx,
       <FileCompileLayout
         editor={resolveViewer(fileRel)}
         preview={
-          showTypstLive ? (
+          showErrorPane && artifactKey ? (
+            <CompileErrorPane artifactKey={artifactKey} />
+          ) : showTypstLive ? (
             <TypstLivePreview compileRootRel={compileRoot} enabled={previewOpen && isActive} />
           ) : (
             <PdfPreview sourceMode="compile" />
           )
         }
         previewOpen={previewOpen}
-        onPreviewOpenChange={(open) => setCompilePreviewOpen(fileId, open)}
+        onPreviewOpenChange={(open) => {
+          setCompilePreviewOpen(fileId, open);
+          if (!open) setCompileErrorPane(fileId, false);
+        }}
         compileRoot={compileRoot}
-        skipPreviewPdfCompile={showTypstLive}
+        skipPreviewPdfCompile={showTypstLive || showErrorPane}
       />,
     );
   }

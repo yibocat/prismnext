@@ -1,18 +1,21 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTranslation } from "react-i18next";
 import { openUrlInBrowser } from "@/lib/browser-link";
-import { Columns2Icon, FileDownIcon, FileTextIcon, GlobeIcon, Loader2Icon, PlayIcon, ZapIcon, ZapOffIcon } from "lucide-react";
+import { AlertCircleIcon, Columns2Icon, FileDownIcon, FileTextIcon, GlobeIcon, Loader2Icon, PlayIcon, ZapIcon, ZapOffIcon } from "lucide-react";
 import { MarkdownToolbar } from "@/components/modules/editor/toolbars/markdown-toolbar";
 import { LanguageLabel } from "@/components/modules/editor/toolbars/language-label";
 import { Hint } from "@/components/ui/hint";
 import { cn } from "@/lib/utils";
 import type { RightTab } from "@/lib/workspace/mode-registry";
 import { classifyCompileTab, isCompileLayoutTab } from "@/lib/compile/classify-compile-tab";
+import { paperKeyFromMainFile } from "@/lib/compile/compile-artifact";
+import { problemsFromDiagnostics } from "@/lib/compile/compile-problems-strip";
 import { resolveCompilePreviewOpen } from "@/lib/compile/compile-split";
-import { compileEngineFromRelPath } from "@shared/compile/artifact-key";
+import { compileArtifactCacheKey, compileEngineFromRelPath } from "@shared/compile/artifact-key";
 import type { TypstCliFormat } from "@shared/compile/typst-format";
 import { compileCurrentDocument, useCompileStore } from "@/stores/compile-store";
+import { compileTypstPdf, exportTypst } from "@/stores/typst-live-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { isStandaloneTexDocument, resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
@@ -70,8 +73,11 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
     resolveCompilePreviewOpen(s.compilePreviewOpenByFileId[previewKey], fileRel),
   );
   const typstKind = useLayoutStore((s) => s.typstPreviewKindByFileId[previewKey] ?? "live");
+  const errorPaneOpen = useLayoutStore((s) => s.compileErrorPaneByFileId[previewKey] ?? false);
   const setCompilePreviewOpen = useLayoutStore((s) => s.setCompilePreviewOpen);
   const setTypstPreviewKind = useLayoutStore((s) => s.setTypstPreviewKind);
+  const setCompileErrorPane = useLayoutStore((s) => s.setCompileErrorPane);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isTypst = compileEngineFromRelPath(fileRel) === "typst";
 
   const cls = useMemo(() => {
@@ -104,6 +110,22 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
     };
   }, [fileRel, files, getAsset, manuscriptDir, mainFilePin, fileId]);
 
+  const artifactKey = projectRoot
+    ? paperKeyFromMainFile(projectRoot, cls.compileRoot)
+    : null;
+  const cacheKey = artifactKey ? compileArtifactCacheKey(artifactKey) : "";
+  const diag = useCompileStore((s) => (cacheKey ? s.diagnosticsByKey[cacheKey] : undefined));
+  const problems = useMemo(
+    () => problemsFromDiagnostics(diag, isTypst ? "typst" : "latex"),
+    [diag, isTypst],
+  );
+
+  useEffect(() => {
+    if (problems.length === 0 && errorPaneOpen) {
+      setCompileErrorPane(previewKey, false);
+    }
+  }, [problems.length, errorPaneOpen, previewKey, setCompileErrorPane]);
+
   if (!isCompileLayoutTab(cls.cls)) return null;
 
   return (
@@ -126,7 +148,8 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
           className={cn(TOOL_BTN, !isCompiling && "text-primary hover:text-primary")}
           onClick={() => {
             if (fileId) useDocumentStore.getState().setActiveFile(fileId);
-            void compileCurrentDocument();
+            if (isTypst) void compileTypstPdf(cls.compileRoot);
+            else void compileCurrentDocument();
           }}
           disabled={isCompiling}
         >
@@ -137,6 +160,25 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
           )}
         </button>
       </Hint>
+      {problems.length > 0 ? (
+        <Hint label={errorPaneOpen ? t("modes.files.hideProblems") : t("modes.files.showProblems")}>
+          <button
+            type="button"
+            className={cn(
+              TOOL_BTN,
+              errorPaneOpen ? "bg-muted text-destructive" : "text-destructive hover:text-destructive",
+            )}
+            onClick={() => {
+              const next = !errorPaneOpen;
+              setCompileErrorPane(previewKey, next);
+              if (next) setCompilePreviewOpen(previewKey, true);
+            }}
+          >
+            <AlertCircleIcon className="size-3.5" />
+          </button>
+        </Hint>
+      ) : null}
+      {isTypst ? null : (
       <Hint label={autoCompile ? t("modes.files.autoCompileOn") : t("modes.files.autoCompileOff")}>
         <button type="button" className={TOOL_BTN} onClick={toggleAutoCompile}>
           {autoCompile ? (
@@ -146,6 +188,7 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
           )}
         </button>
       </Hint>
+      )}
       {isTypst ? (
         <AppMenu>
           <Hint label={t("modes.files.typstExport")}>
@@ -161,7 +204,7 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
                 key={format}
                 onSelect={() => {
                   if (fileId) useDocumentStore.getState().setActiveFile(fileId);
-                  void useCompileStore.getState().exportTypst(format);
+                  void exportTypst(format);
                 }}
               >
                 {t(`modes.files.typstExport${format.charAt(0).toUpperCase()}${format.slice(1)}`)}
@@ -203,7 +246,7 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
               setCompilePreviewOpen(previewKey, true);
               if (fileId) useDocumentStore.getState().setActiveFile(fileId);
               if (next === "pdf") {
-                useCompileStore.getState().ensurePreviewCompile(cls.compileRoot);
+                void compileTypstPdf(cls.compileRoot, { skipIfCached: true });
               }
             }}
           >

@@ -54,6 +54,13 @@ const LANGUAGE_MAP: LanguageMap = {
     icon: FileCodeIcon,
   },
 
+  // ── Typst ──────────────────────────────────────────────
+  ".typ": {
+    name: "Typst",
+    load: () => import("@/lib/typst/prism-typst-language").then((m) => m.prismTypst()),
+    icon: FileTextIcon,
+  },
+
   // ── Markdown ───────────────────────────────────────────
   ".md": {
     name: "Markdown",

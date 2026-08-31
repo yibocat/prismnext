@@ -44,17 +44,17 @@ export function classifyCompileTab(input: {
   return { engine: "typst", kind: "paper-child" };
 }
 
-/** LaTeX Files chrome (`FileCompileLayout` + Lector). */
+/** LaTeX Files chrome (`FileCompileLayout` + Lector PDF). */
 export function isLatexCompileTab(cls: CompileTabClass): boolean {
   return cls.engine === "latex";
 }
 
-/** Typst Files chrome (same `FileCompileLayout` + Lector as LaTeX). */
+/** Typst Files chrome (same split; live SVG by default, Lector when the toolbar asks for PDF). */
 export function isTypstCompileTab(cls: CompileTabClass): boolean {
   return cls.engine === "typst";
 }
 
-/** `.tex` / `.typ` Files tabs that share editor + compile PDF preview. */
+/** `.tex` / `.typ` Files tabs that share the editor + preview split chrome. */
 export function isCompileLayoutTab(cls: CompileTabClass): boolean {
   return cls.engine === "latex" || cls.engine === "typst";
 }

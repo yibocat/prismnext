@@ -57,6 +57,9 @@ interface LayoutState {
   /** Typst right pane: live SVG webview vs Lector PDF. Missing key is live. */
   typstPreviewKindByFileId: Record<string, "live" | "pdf">;
   setTypstPreviewKind: (fileId: string, kind: "live" | "pdf") => void;
+  /** Preview slot shows compile errors instead of SVG/PDF. Session only. */
+  compileErrorPaneByFileId: Record<string, boolean>;
+  setCompileErrorPane: (fileId: string, open: boolean) => void;
 
   /** 中间主区域当前视图；centerView 型导航项激活时写入，见 left-nav/items.tsx */
   leftSidebarView: LeftSidebarView;
@@ -203,6 +206,14 @@ export const useLayoutStore = create<LayoutState>()(
           if (s.typstPreviewKindByFileId[fileId] === kind) return s;
           return {
             typstPreviewKindByFileId: { ...s.typstPreviewKindByFileId, [fileId]: kind },
+          };
+        }),
+      compileErrorPaneByFileId: {},
+      setCompileErrorPane: (fileId, open) =>
+        set((s) => {
+          if (s.compileErrorPaneByFileId[fileId] === open) return s;
+          return {
+            compileErrorPaneByFileId: { ...s.compileErrorPaneByFileId, [fileId]: open },
           };
         }),
 

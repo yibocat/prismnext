@@ -1,7 +1,8 @@
 /**
  * Compile desktop port.
  * Forwards to `window.electronAPI` — do not redefine DTOs here.
- * Used by compile-store.
+ * LaTeX PDF: compile-store → compileExecute.
+ * Typst live / PDF / export: typst-live-store → compileTypstLive / compileExecute / compileTypstExport.
  */
 
 import { forwardDesktop } from "./forward";
