@@ -1,8 +1,8 @@
 /**
  * Native Literature Tools for PrismNext Pi Agent Host.
  *
- * 10 tools covering local search, catalog discovery, paper reading,
- * PDF extraction, session citation staging, library management, and BibTeX export.
+ * 11 tools: local search, external discovery, reading, PDF extract,
+ * session citation staging, library CRUD, citation health, and .bib export.
  */
 
 import { Type } from "@earendil-works/pi-ai";
@@ -47,13 +47,11 @@ export const literatureSearchTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureSearch,
   label: "Search Literature",
   description:
-    "Search papers in the current project's literature library (workbench home `projects/<id>/library/`). " +
-    "Searches title, abstract, authors, bibkey, tags, and AI summary. " +
-    "Does NOT search external catalogs (use literature-discover for external search).",
+    "Search or list papers in the current project's literature library (title, abstract, authors, bibkey, tags, AI summary).",
   promptGuidelines: [
-    "Local library only — for topic discovery across arXiv/Crossref/OpenAlex/PubMed use literature-discover, then literature-stage the candidates you want to cite.",
+    "Project library only — external topic search is literature-discover.",
     "Omit `query` (and `tag`) to list the whole library; the response always includes a `collections` roster.",
-    "For exact cite keys use literature-read; for reading extracted PDF text use literature-read-pdf (after adding the paper to the intensive list).",
+    "For one paper's metadata use literature-read; for PDF body text use literature-read-pdf after literature-intensive-reading (add).",
   ],
   parameters: Type.Object({
     query: Type.Optional(Type.String({ description: "Search keyword query across title, abstract, authors, tags" })),
@@ -90,12 +88,11 @@ export const literatureSearchTool: NativeToolDefinition = {
 export const literatureDiscoverTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureDiscover,
   label: "Discover Literature",
-  description:
-    "Search external academic catalogs (arXiv, Crossref, OpenAlex, Semantic Scholar, PubMed) by topic. " +
-    "Returns candidate DOI/arXiv identifiers. Call literature-stage before citing as [n].",
+  description: "Search external academic catalogs by topic and return candidate papers with identifiers.",
   promptGuidelines: [
-    "This returns candidate identifiers, not final citations. Stage each hit you intend to cite with literature-stage, then reference the returned refId as [n] in your reply.",
-    "Prefer literature-stage over literature-add until the user confirms the candidate is wanted.",
+    "Returns `hits` (title, authors, year, doi/arxivId, abstract, source) — use abstracts to screen candidates, not as final evidence.",
+    "Stage each hit you intend to cite with literature-stage; reference the returned `refId` as [n] in your reply.",
+    "Prefer literature-stage over literature-add until the user confirms the paper should live in the project library.",
   ],
   parameters: Type.Object({
     query: Type.String({ minLength: 1, description: "Topic or keyword query for external catalog discovery" }),
@@ -132,8 +129,8 @@ export const literatureReadTool: NativeToolDefinition = {
   description:
     "Read library metadata, abstract, highlights, and PDF path for a paper in the project library by exact bibkey.",
   promptGuidelines: [
-    "Bibkeys are case-sensitive — copy the exact cite key from the Literature panel or from a literature-search result; do not guess.",
-    "For the paper body text (not metadata), use literature-read-pdf after adding the paper to the intensive reading list.",
+    "Bibkeys are case-sensitive — copy the exact cite key from the Literature panel or literature-search; do not guess.",
+    "For PDF body text (not metadata), use literature-read-pdf after literature-intensive-reading (add).",
   ],
   parameters: Type.Object({
     bibkey: Type.String({ minLength: 1, description: "Exact bibkey from the project Literature library" }),
@@ -179,7 +176,7 @@ export const literatureReadPdfTool: NativeToolDefinition = {
     "Read extracted PDF body text from the library cache for a paper on the intensive reading list. " +
     "Supports page ranges and keyword search.",
   promptGuidelines: [
-    "Prerequisite: the paper must already be on the intensive reading list — call literature-intensive-reading (action: add) first.",
+    "Prerequisite: add the paper with literature-intensive-reading (action: add) first.",
     "Use `pages` for a targeted range and `query` to filter within the extracted text; do not dump the whole PDF.",
     "When the body text is not cached yet, `force: true` queues an extraction that can take minutes; prefer reading what is already available unless the user needs the full text now.",
   ],
@@ -222,11 +219,12 @@ export const literatureReadPdfTool: NativeToolDefinition = {
 
 export const literatureIntensiveReadingTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureIntensiveReading,
-  label: "Intensive Reading",
-  description: "Add, remove, or list papers on this session's intensive reading list (required before literature-read-pdf).",
+  label: "Intensive Reading List",
+  description:
+    "Manage this session's intensive reading list (add, remove, or list) — required before literature-read-pdf.",
   promptGuidelines: [
-    "This list is per-session: adding a paper here is what unlocks literature-read-pdf for it.",
-    "Always resolve the exact bibkey first (literature-search / literature-read); the tool refuses unknown keys with a hint.",
+    "Per-session list: adding a bibkey here unlocks literature-read-pdf for that paper.",
+    "Resolve the exact bibkey with literature-search or literature-read first; unknown keys are rejected.",
   ],
   parameters: Type.Object({
     action: Type.Optional(Type.String({ description: "Operation: add | remove | list (default: add)" })),
@@ -289,12 +287,11 @@ export const literatureStageTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureStage,
   label: "Stage Citation",
   description:
-    "Verify a DOI or arXiv ID against external catalogs and stage as a session citation without writing to library.db. " +
-    "Reference the returned refId as [n] in your reply.",
+    "Verify a DOI or arXiv ID and stage it as a session citation (not saved to the project library).",
   promptGuidelines: [
-    "This is the intended bridge between discovering a paper and citing it — reference the returned `refId` as [n] in your reply text.",
-    "Staging does not persist to the library; use literature-add only when the user wants the paper saved into the project library.",
-    "Pass `discoveredFrom` honestly (literature-discover / websearch / user / agent) so provenance is recorded.",
+    "Reference the returned `refId` as [n] in your reply text.",
+    "Does not write to the project library — use literature-add when the user wants the paper persisted.",
+    "Pass `discoveredFrom` honestly (literature-discover / websearch / user / agent) for provenance.",
   ],
   parameters: Type.Object({
     doi: Type.Optional(Type.String({ description: "Exact DOI" })),
@@ -451,11 +448,12 @@ export const citationHealthTool: NativeToolDefinition = {
   name: TOOL_NAMES.citationHealth,
   label: "Citation Health",
   description:
-    "Unified citation health audit: cite keys in project .tex and .typ files vs .bib vs library.db.",
+    "Audit manuscript citations: keys used in the project vs entries in references.bib vs the literature library.",
   promptGuidelines: [
-    "Use this to detect missing/unresolved citations before claiming the manuscript compiles or is complete.",
-    "Scans both LaTeX `\\cite{}` and Typst `@key` / `#cite(<key>)`.",
-    "Set `verify: false` to skip the (slower) external catalog verification of .bib fallback entries.",
+    "Call when the user asks about missing citations, before claiming compile-ready, or after editing cites / .bib / library entries — not on every casual turn.",
+    "Automatically scans all project `.tex` (`\\cite{}`) and `.typ` (`@key`, `#cite`) sources and merges the key set; you do not choose LaTeX vs Typst.",
+    "Reports manuscript↔.bib gaps, manuscript↔library gaps, and .bib-only keys not in the library.",
+    "Set `verify: false` to skip slower external catalog checks on .bib fallback entries.",
   ],
   parameters: Type.Object({
     verify: Type.Optional(Type.Boolean({ description: "Verify gap entries against external catalogs (default true)" })),
@@ -504,15 +502,16 @@ export const citationHealthTool: NativeToolDefinition = {
 export const literatureExportBibTool: NativeToolDefinition = {
   name: TOOL_NAMES.literatureExportBib,
   label: "Export Library to .bib",
-  description: "Append BibTeX entries from the project literature library into the manuscript references.bib file.",
+  description:
+    "Append BibTeX entries from the literature library into the project's manuscript .bib file.",
   promptGuidelines: [
-    "By default exports only keys cited in the manuscript (`.tex` `\\cite{}` or `.typ` `@key`; `onlyCitedInTex: true`).",
-    "Use `bibkeys` for a precise subset, or `all: true` only when the user explicitly wants the entire library dumped.",
+    "Default: only bibkeys cited in the manuscript (LaTeX `.tex` and Typst `.typ` sources).",
+    "Use `bibkeys` for an explicit subset, or `all: true` only when the user wants the entire library exported.",
   ],
   parameters: Type.Object({
     bibkeys: Type.Optional(Type.Array(Type.String(), { description: "Optional list of specific bibkeys to export" })),
-    all: Type.Optional(Type.Boolean({ description: "Export entire library (default false — only cited keys)" })),
-    onlyCitedInTex: Type.Optional(Type.Boolean({ description: "Export keys cited in .tex/.typ (default true)" })),
+    all: Type.Optional(Type.Boolean({ description: "Export entire library (default false — manuscript-cited keys only)" })),
+    onlyCitedInTex: Type.Optional(Type.Boolean({ description: "Export keys cited in manuscript .tex/.typ sources (default true)" })),
   }),
   permission: {
     category: "safe_write",
