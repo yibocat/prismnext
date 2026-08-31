@@ -2,7 +2,7 @@
  * Interaction — when to create persisted figure/plot objects for chat.
  *
  * Spec/kind validation and path checks live in main; args/examples on interaction-* tools.
- * Chat one-shot file peeks use ```artifact (Reply depth) — not this module.
+ * Chat one-shot file peeks use ```artifact fences in the reply — documented below, not reply-depth.
  */
 import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 
@@ -14,7 +14,12 @@ export const INTERACTION_PROMPT = [
   "(`interaction` fence with `id`) in your reply so the user gets a **clickable card** and can",
   "reopen the same view later.",
   "",
-  "Not a live sandbox. Not a one-shot file peek — that is an `artifact` fence (path only; see Reply depth).",
+  "Not a live sandbox. Not a one-shot file peek — use an `artifact` fence with `path:` (below).",
+  "",
+  "### One-shot file peek",
+  "",
+  "- Quick glance at an on-disk file in chat → `artifact` fence with `path:` (and optional `title:`).",
+  "  Not an Interaction card — no revisit, no `.workbench/interactions/`.",
   "",
   "### When this applies",
   "",
@@ -23,7 +28,7 @@ export const INTERACTION_PROMPT = [
   "",
   "### Route",
   "",
-  "1. **One-shot path peek?** → `artifact` fence (Reply depth). Stop.",
+  "1. **One-shot path peek?** → `artifact` fence with `path:`. Stop.",
   "2. **Reopenable figure or CSV plot?** → file must **already exist** on disk,",
   `   then \`${TOOL_NAMES.interactionWrite}\` (params on the tool). Embed returned \`fenceMarkdown\` in the reply.`,
   `3. **Update / re-embed?** → \`${TOOL_NAMES.interactionList}\` / \`${TOOL_NAMES.interactionRead}\`, then write if needed.`,

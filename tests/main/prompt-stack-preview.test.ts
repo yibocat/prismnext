@@ -32,7 +32,11 @@ describe("prompt stack preview", () => {
       userCustomPrompt: undefined,
     });
     const stable = preview.sections.find((s) => s.id === "prism-system");
-    expect(stable?.content).toContain("# prismnext");
+    expect(stable?.content).toContain("## Research AI assistant");
+    expect(stable?.content).toContain("## Scholarly reasoning");
+    expect(stable?.content.indexOf("## Scholarly reasoning")).toBeLessThan(
+      stable?.content.indexOf("## Reply depth") ?? -1,
+    );
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
     const agents = preview.sections.find((s) => s.id === "agents-md");

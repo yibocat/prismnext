@@ -14,11 +14,9 @@ import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/litera
 import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
 
 describe("resolve-active-modules", () => {
-  it("stable system modules include workspace and cognitive baselines (not Interaction)", () => {
+  it("stable system modules follow explicit global order (reasoning → depth → workspace)", () => {
     const keys = resolveStableSystemModules().map((m) => m.key);
-    expect(keys).toEqual(
-      expect.arrayContaining(["workspace-folders", "research-reasoning", "reply-depth"]),
-    );
+    expect(keys).toEqual(["research-reasoning", "reply-depth", "workspace-folders"]);
     expect(keys).not.toContain("interaction");
   });
 

@@ -16,9 +16,17 @@ function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   return "";
 }
 
+/** Global modules inside stableSystem — explicit join order (1.2 → 1.3 → 1.4). */
+const GLOBAL_MODULE_ORDER = ["research-reasoning", "reply-depth", "workspace-folders"] as const;
+
 /** Modules injected into the global system baseline (always on — not agent-selectable). */
 export function resolveStableSystemModules(): PromptModule[] {
-  return ALL_MODULES.filter((m) => !m.profileOnly);
+  const globals = ALL_MODULES.filter((m) => !m.profileOnly);
+  const rank = new Map(GLOBAL_MODULE_ORDER.map((key, index) => [key, index]));
+  return globals.sort(
+    (a, b) => (rank.get(a.key as (typeof GLOBAL_MODULE_ORDER)[number]) ?? 99)
+      - (rank.get(b.key as (typeof GLOBAL_MODULE_ORDER)[number]) ?? 99),
+  );
 }
 
 /** Profile modules attached to every agent profile (orchestrator + experts). */

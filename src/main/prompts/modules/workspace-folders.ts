@@ -8,7 +8,7 @@ import {
   manuscriptMainFile,
 } from "../../../shared/workbench/workspace-folder";
 
-/** Build the prompt section describing functional workspace folders. */
+/** stableSystem block 1.4 — dynamic folder map from Workspace settings. */
 export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {
   if (!dirs || dirs.length === 0) return "";
 
@@ -33,15 +33,14 @@ export function buildWorkspacePrompt(dirs: WorkspaceFolder[]): string {
   });
 
   return (
-    "## Project Structure\n\n" +
-    "The project has the following functional folders. " +
-    "Use this structure to organize files and understand the project layout:\n\n" +
+    "## Project workspace\n\n" +
+    "PrismNext is **local-first**: this project folder holds the research tree. " +
+    "Chat is for thinking together; **files here are the durable record** when chat and disk diverge.\n\n" +
+    "Functional folders configured for this project:\n\n" +
     lines.join("\n") +
     (dirs.some((d) => d.function === "experiment")
       ? ""
-      : "\n\n- No `experiment/` folder is configured in Workspace settings. " +
-        "Experiment islands and run logs are unavailable until the user adds an Experiment folder " +
-        "(Settings → Workspace → Add folder → function: Experiment). Do not create experiment " +
-        "structure in the manuscript folder or project root.")
+      : "\n\n- No Experiment folder is configured. Experiment tools stay unavailable until the user adds one " +
+        "(Settings → Workspace → Add folder → Experiment). Do not invent experiment layout under manuscript or root.")
   );
 }
