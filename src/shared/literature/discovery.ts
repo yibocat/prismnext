@@ -86,9 +86,10 @@ export function clampDiscoveryLimit(limit: number | undefined | null): number {
   return Math.min(20, Math.max(1, Math.floor(limit)));
 }
 
+/** Keep discovery hit abstracts intact for agent triage (cap only extreme outliers). */
 export function truncateDiscoveryAbstract(
   text: string | undefined | null,
-  max = 600,
+  max = 8000,
 ): string | undefined {
   const t = (text ?? "").replace(/\s+/g, " ").trim();
   if (!t) return undefined;

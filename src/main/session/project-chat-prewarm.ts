@@ -2,7 +2,7 @@
  * Project-scoped file prewarm — syncs experts/skills/prompts to disk.
  * Does not spawn or reload OpenCode.
  */
-import { buildPromptContext } from "../prompts/context";
+import { buildPromptContext } from "../prompts";
 import { createLogger } from "../app/logger";
 import {
   refreshProjectSubagentsIntegrationIfNeeded,

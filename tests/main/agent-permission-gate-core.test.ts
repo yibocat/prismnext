@@ -274,7 +274,7 @@ describe("PermissionGate 4 Permission Modes Matrix", () => {
 
     // 1. read_only: allowed
     const readRes = await gate.decide(makeRequest({
-      toolName: "latex-root",
+      toolName: "literature-search",
       permissionMode: "ask",
     }));
     expect(readRes.decision).toBe("allow");

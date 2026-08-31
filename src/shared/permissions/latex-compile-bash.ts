@@ -28,7 +28,7 @@ export function isDirectLatexCompileBashCommand(command: string): boolean {
 export function latexCompileBashBlockMessage(): string {
   return (
     `prismnext: do not compile LaTeX or Typst via bash (pdflatex / xelatex / lualatex / latexmk / tectonic / typst / tinymist). ` +
-    `Use \`${TOOL_NAMES.latexCompile}\` for the LaTeX paper (artifacts in \`.workbench/compile/\`). ` +
+    `Use \`${TOOL_NAMES.latexCompile}\` for the LaTeX paper (artifacts in \`.workbench/compile/latex/\`). ` +
     `Use \`${TOOL_NAMES.latexCompileStandalone}\` for a \\documentclass{standalone} figure ` +
     `(PDF next to the source). ` +
     `Use \`${TOOL_NAMES.typstCompile}\` / \`${TOOL_NAMES.typstCompileStandalone}\` for Typst. ` +

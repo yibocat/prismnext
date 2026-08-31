@@ -1,14 +1,14 @@
 /**
  * Native LaTeX Tools for PrismNext Pi Agent Host.
  *
- * Paper root / paper compile / standalone-figure compile.
+ * Paper build + standalone (non-manuscript) build. Manuscript entry comes from
+ * the workspace Manuscript folder pin — see manuscript-compile module.
  */
 
 import { Type } from "@earendil-works/pi-ai";
 import { fileToolOutcome } from "../../../shared/agent/runtime";
 import { TOOL_NAMES } from "../../../shared/agent/tool-names";
 import { compileEngineFromRelPath } from "../../../shared/compile/artifact-key";
-import { resolveLatexRoot } from "../../lib/latex-root";
 import {
   compileManuscriptForAgent,
   compileStandaloneForAgent,
@@ -28,55 +28,19 @@ function withCompileOutcome(compiled: unknown): unknown {
   return compiled;
 }
 
-export const latexRootTool: NativeToolDefinition = {
-  name: TOOL_NAMES.latexRoot,
-  label: "Resolve LaTeX Root",
-  description: "Find the active root document, engine, and build directory for the manuscript.",
-  promptGuidelines: [
-    "Call this before compiling the paper or before reasoning about paper build paths; `mainFile` is optional and auto-detected when omitted.",
-    "The returned `buildDir` is `.workbench/compile/` for the paper. Standalone figures do not use this cache — their PDF sits next to the source.",
-  ],
-  parameters: Type.Object({
-    mainFile: Type.Optional(Type.String({ description: "Optional explicit main file path" })),
-  }),
-  permission: {
-    category: "read_only",
-  },
-  async execute(args, ctx) {
-    const mainFile = str(args.mainFile);
-    if (mainFile && compileEngineFromRelPath(mainFile) === "typst") {
-      return {
-        error: `${mainFile} is a Typst file. Call \`${TOOL_NAMES.typstRoot}\` instead of latex-root.`,
-        projectRoot: ctx.projectRoot,
-      };
-    }
-    const resolved = resolveLatexRoot(ctx.projectRoot, mainFile || undefined);
-    if (!resolved) {
-      return { error: "Could not resolve LaTeX main file.", projectRoot: ctx.projectRoot };
-    }
-    return {
-      mainFile: resolved.mainFile,
-      absolutePath: resolved.absolutePath,
-      engine: resolved.engine,
-      bibTool: resolved.bibTool,
-      buildDir: resolved.buildDir,
-      manuscriptFolder: resolved.manuscriptFolder,
-      resolution: resolved.resolution,
-    };
-  },
-};
-
 export const latexCompileTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompile,
-  label: "Compile LaTeX",
-  description: "Compile the LaTeX paper into `.workbench/compile/`.",
+  label: "Compile LaTeX manuscript",
+  description:
+    "Build the LaTeX manuscript entry (from the workspace Manuscript folder pin) into `.workbench/compile/latex/` and return success, errors, and PDF path.",
   promptGuidelines: [
-    "This compiles the paper — the resolved LaTeX manuscript root — into `.workbench/compile/`.",
-    `Do not pass a \\documentclass{standalone} figure here. That file uses \`${TOOL_NAMES.latexCompileStandalone}\` and compiles in place next to the source.`,
+    "Manuscript entry path comes from **Workspace Folder Descriptions** (Manuscript optional compile entry) — pass `mainFile` only when the user @-mentions a different paper `.tex`.",
+    "This compiles the paper — not a standalone `.tex` outside the manuscript workflow. Those use `" + TOOL_NAMES.latexCompileStandalone + "`.",
     "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool.",
+    "Compile once after a batch of edits; if it still fails, report structured errors — do not loop compile/edit.",
   ],
   parameters: Type.Object({
-    mainFile: Type.Optional(Type.String({ description: "Optional explicit manuscript main file path" })),
+    mainFile: Type.Optional(Type.String({ description: "Optional manuscript .tex (defaults to workspace Manuscript pin)" })),
     useTexlive: Type.Optional(Type.Boolean({ description: "Force use of system TeX Live if available" })),
   }),
   permission: {
@@ -98,19 +62,19 @@ export const latexCompileTool: NativeToolDefinition = {
 
 export const latexCompileStandaloneTool: NativeToolDefinition = {
   name: TOOL_NAMES.latexCompileStandalone,
-  label: "Compile standalone figure",
+  label: "Compile standalone LaTeX",
   description:
-    "Compile a standalone / TikZ figure `.tex` in place. The PDF is written next to the source, not under `.workbench/compile/`.",
+    "Compile a standalone, non-manuscript `.tex` in place (figure, template, slide, draft). PDF is written next to the source, not under `.workbench/compile/latex/`.",
   promptGuidelines: [
-    "Use this when the user wants to compile a standalone / TikZ figure — a `.tex` whose document class is `standalone`.",
-    "`mainFile` is required: the figure path they named or you found. Do not guess the paper root.",
-    `Do not use \`${TOOL_NAMES.latexCompile}\` for these files. That tool is the paper pipeline only.`,
+    "Use for `.tex` files that are **not** the paper entry from the Manuscript folder — e.g. \\documentclass{standalone} figures, templates, one-off docs.",
+    "`mainFile` is required: the path the user @-mentioned or you found via read/ls — do not guess the paper entry.",
+    `Do not use \`${TOOL_NAMES.latexCompile}\` for these files — that tool is for the manuscript only.`,
     "The PDF next to the source is enough to show in chat. Convert it only if they asked for another format.",
     "Never rasterize the PDF with bash (`sips`, `gs`, `pdftoppm`) just so you can look at it.",
     "Never run TeX engines (pdflatex/xelatex/tectonic/…) via the bash tool.",
   ],
   parameters: Type.Object({
-    mainFile: Type.String({ description: "Standalone figure .tex path relative to the project" }),
+    mainFile: Type.String({ description: "Standalone .tex path relative to the project" }),
   }),
   permission: {
     category: "safe_write",
@@ -130,7 +94,6 @@ export const latexCompileStandaloneTool: NativeToolDefinition = {
 };
 
 export const LATEX_TOOLS: NativeToolDefinition[] = [
-  latexRootTool,
   latexCompileTool,
   latexCompileStandaloneTool,
 ];

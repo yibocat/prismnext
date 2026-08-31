@@ -788,7 +788,7 @@ export interface ElectronAPI {
     opts?: { dirtyFiles?: Array<{ relPath: string; content: string }> },
   ) => Promise<
     | { canceled: true }
-    | { canceled: false; ok: true; path: string }
+    | { canceled: false; ok: true; files: string[]; buildDir: string; stdout?: string }
     | { canceled: false; ok: false; error: string; stdout?: string }
   >;
   compileDetectTexlive: (args?: { projectRoot?: string }) => Promise<CompilerStatus>;
@@ -1633,6 +1633,7 @@ export interface ElectronAPI {
     markdown: string;
     tokenEncoding: import("../../shared/providers/token-estimate").PromptTokenEncoding;
     totalTokenCount: number;
+    liveSystemPrompt?: string;
     sections: Array<{
       id: string;
       label: string;

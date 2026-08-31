@@ -1,0 +1,45 @@
+[
+  {
+    "id": "architecture-boxes",
+    "name": "Layered architecture boxes",
+    "type": "template",
+    "domain": ["general"],
+    "tags": [
+      "architecture",
+      "pipeline",
+      "boxes",
+      "cetz",
+      "schematic",
+      "block diagram"
+    ],
+    "description": "Four-stage box pipeline (Input → A → B → Output) with a parallel alt path. CeTZ 0.3.4.",
+    "path": "templates/architecture-boxes",
+    "typ": "template.typ",
+    "meta": "template.meta.json",
+    "requires": ["cetz:0.3.4"],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  },
+  {
+    "id": "exchange-diagram",
+    "name": "Exchange / commutative arrows",
+    "type": "template",
+    "domain": ["general"],
+    "tags": [
+      "commutative",
+      "exchange",
+      "arrows",
+      "fletcher",
+      "diagram"
+    ],
+    "description": "Three-node arrow diagram (A → B, A → C, B → C). Fletcher 0.5.8.",
+    "path": "templates/exchange-diagram",
+    "typ": "template.typ",
+    "meta": "template.meta.json",
+    "requires": ["fletcher:0.5.8"],
+    "author": "PrismNext",
+    "license": "MIT",
+    "has_edit_contract": true
+  }
+]

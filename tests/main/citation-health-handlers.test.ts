@@ -19,4 +19,19 @@ describe("citation health handlers", () => {
     expect(getCitationHealth(root).libraryCheck.citeKeysInTex).toContain("foo2024");
     expect(checkBibConsistency(root).citeKeysInTex).toContain("foo2024");
   });
+
+  it("reports cite keys from .typ via library and bib checks", () => {
+    const root = mkdtempSync(join(tmpdir(), "prism-audit-typ-"));
+    writeFileSync(
+      join(root, "main.typ"),
+      "#bibliography(\"refs.bib\")\n@foo2024\n",
+    );
+    writeFileSync(join(root, "refs.bib"), "@article{foo2024, title={Foo}}");
+
+    const health = getCitationHealth(root);
+    expect(health.libraryCheck.typFilesScanned).toBe(1);
+    expect(health.libraryCheck.citeKeysInTex).toContain("foo2024");
+    expect(checkBibConsistency(root).citeKeysInTex).toContain("foo2024");
+    expect(checkBibConsistency(root).bibPath).toBe("refs.bib");
+  });
 });

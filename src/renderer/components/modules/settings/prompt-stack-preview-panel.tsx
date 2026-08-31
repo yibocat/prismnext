@@ -31,11 +31,14 @@ const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
 
 /** Section id → role key under settings.editor.promptStack.role.* */
-const SECTION_ROLE_KEY: Record<string, "opencode" | "eachTurn" | "orchestrator"> = {
+const SECTION_ROLE_KEY: Record<string, "opencode" | "eachTurn" | "orchestrator" | "internal"> = {
+  "host-identity": "opencode",
   "prism-system": "opencode",
   "agents-md": "opencode",
-  "project-rules": "eachTurn",
   "orchestrator-agent": "orchestrator",
+  "profile-modules": "internal",
+  "task-roster": "opencode",
+  "project-rules": "eachTurn",
 };
 
 type StackPreview = PromptStackPreview;

@@ -26,9 +26,9 @@ describe("shouldExcludeFromManuscriptZip", () => {
 });
 
 describe("resolveCompilePdfAbsolutePath", () => {
-  it("maps main tex to .workbench/compile/<stem>.pdf", () => {
+  it("maps main tex to .workbench/compile/latex/<stem>.pdf", () => {
     expect(resolveCompilePdfAbsolutePath("/proj", "manuscript/main.tex")).toBe(
-      "/proj/.workbench/compile/main.pdf",
+      "/proj/.workbench/compile/latex/main.pdf",
     );
   });
 });

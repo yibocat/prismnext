@@ -28,11 +28,16 @@ function str(v: unknown): string {
 export const experimentLogTool: NativeToolDefinition = {
   name: TOOL_NAMES.experimentLog,
   label: "Manage Experiment Log",
-  description: "List, create, read, or append runs to experiment islands in the workspace registry.",
+  description:
+    "Manage experiment islands in the workspace registry — list, create, read run history, append run entries, " +
+    "capture environment (`detect_env`), or open an island in the UI (`open`). Does not execute shell commands.",
   promptGuidelines: [
-    "This records and reads experiment provenance — use `detect_env` after creating an island to capture the environment, and `append_run` for each executed run.",
-    "Use `list` / `read` to inspect islands and their run windows before deciding what to analyze.",
-    "This tool does not execute commands; to run a command in an island use experiment-run.",
+    "Start with `list` when the island slug is unknown; `read` returns meta plus a recent run window (`runsLimit`, optional stdout/stderr tails via `includeOutput`).",
+    "`create` when starting a new empirical line — optional `briefLinks` back to `.brief.md` (alignment only, not a run gate).",
+    "After `create` (or when toolchain/hardware profile matters), run `detect_env` so later runs compare fairly.",
+    "`append_run` records a run entry manually; live execution and logging → experiment-run.",
+    "Research story / RQ debate → Research design module — this tool is island registry and run history only.",
+    "Does not execute commands — use experiment-run.",
   ],
   parameters: Type.Object({
     action: Type.String({ minLength: 1, description: "Operation: list | create | read | append_run | detect_env | open" }),
@@ -78,11 +83,16 @@ export const experimentLogTool: NativeToolDefinition = {
 export const experimentRunTool: NativeToolDefinition = {
   name: TOOL_NAMES.experimentRun,
   label: "Run Experiment",
-  description: "Run a shell command in an existing experiment island and record its execution in the Job Monitor.",
+  description:
+    "Run a shell command in an existing experiment island. Starts in the background, streams to the Job Monitor, " +
+    "and records the run in the island log and provenance trail.",
   promptGuidelines: [
-    "Target an existing island slug (`id`) — create one with experiment-log first if needed.",
-    "The command runs under PermissionGate like bash; output is streamed live to the Job Monitor and recorded in the island's run log.",
-    "Declare `artifacts` (relative paths the command produces) and a `kind` (train/eval/plot/data/setup/other) so the run is properly catalogued.",
+    "Requires an existing island `id` — `create` with experiment-log first when starting a new line of work.",
+    "Set `kind` (train/eval/plot/data/setup/other) and `artifacts` (project-relative paths the command should produce) before long runs.",
+    "Python: default `interpreter=project` uses `.workbench/.venv` — never system Python; use `interpreter=external` + `pythonPath` when pinned elsewhere.",
+    "Runs under PermissionGate like bash; output streams live while chat continues — check Job Monitor and experiment-log `read` for tails.",
+    "Prefer this over one-off bash when the work should stay in the island registry (Experiments module).",
+    "Runs expected to cost more than a few minutes — confirm with the user (`question` tool) before starting.",
   ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Target experiment slug (e.g. exp-20260707-...)" }),
@@ -151,11 +161,13 @@ export const experimentRunTool: NativeToolDefinition = {
 export const resultsSnapshotTool: NativeToolDefinition = {
   name: TOOL_NAMES.resultsSnapshot,
   label: "Snapshot Experiment Results",
-  description: "Scan an experiment island for output figures, tables, and metrics without writing to registry.",
+  description:
+    "Scan an experiment island for output figures, tables, and metrics (read-only) — for Methods, chat summaries, or the next design iteration.",
   promptGuidelines: [
-    "Use after a run to summarize what an experiment produced — figures, CSV tables, JSON metrics — for Methods or a reply.",
-    "Complements experiment-log (run history); this tool scans output files and does not modify the registry.",
-    "Files it cannot parse are still listed, so you can read them yourself.",
+    "Call after runs when you need a structured picture of figures, CSV tables, or JSON metrics on disk.",
+    "Does not modify the registry — complement experiment-log `read` (run tails) and provenance-query (command behind a file).",
+    "Use `scanDirs` / `metricsFiles` on large islands; unparsed files are still listed for manual `read`.",
+    "Summarize outputs in your reply — tie metrics to the claim under test (Experiments module); story-level rethink → Research design.",
   ],
   parameters: Type.Object({
     id: Type.String({ minLength: 1, description: "Experiment slug to inspect" }),
@@ -193,11 +205,13 @@ export const resultsSnapshotTool: NativeToolDefinition = {
 export const provenanceQueryTool: NativeToolDefinition = {
   name: TOOL_NAMES.provenanceQuery,
   label: "Query Provenance",
-  description: "Query provenance history (.workbench/provenance.jsonl) to resolve which run produced an artifact or list recent runs.",
+  description:
+    "Query `.workbench/provenance.jsonl` — resolve which run produced an artifact, fetch a run by id, or list recent provenance events.",
   promptGuidelines: [
-    "Use `resolve_artifact` to answer \"which run produced this file\" (command/env/exit/chat), and `resolve_run` for a run by id.",
-    "An empty/null result is honest — nothing is recorded yet; report that rather than inventing a provenance.",
-    "Valuable when writing Methods (cite the real command that produced a figure) or reproducing a result.",
+    "`resolve_artifact` + project-relative `artifactPath` — command, env, exit code, and chat context for that file.",
+    "`resolve_run` / `list_recent` for run-centric history windows (`limit` on list).",
+    "Empty/null means nothing is recorded yet — report that honestly; do not invent provenance.",
+    "Use when writing Methods, reproducing a figure, or debugging which experiment-run produced a path.",
   ],
   parameters: Type.Object({
     action: Type.String({ minLength: 1, description: "Operation: resolve_artifact | resolve_run | list_recent" }),

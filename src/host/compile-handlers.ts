@@ -1,10 +1,9 @@
 import { compileLatex, detectTectonic, detectTexlive } from "../main/compile/facade";
 import { compileEngineFromRelPath } from "../shared/compile/artifact-key";
-import { TYPST_CLI_FORMATS, type TypstCliFormat } from "../shared/compile/typst-format";
+import { TYPST_CLI_FORMATS, typstExportFileRel, typstVisibleExportDirRel, type TypstCliFormat } from "../shared/compile/typst-format";
 import {
   compileTypstForIpc,
   compileTypstToFormat,
-  encodeTypstWireFiles,
 } from "../main/compile/typst";
 import type { HostHandlerContext } from "./context";
 
@@ -64,12 +63,17 @@ export const compileHandlers: Record<
     const dirtyFiles = Array.isArray(params.dirtyFiles)
       ? params.dirtyFiles as Array<{ relPath: string; content: string }>
       : undefined;
-    const result = await compileTypstToFormat(root, mainFile, format, { dirtyFiles, source: "ui" });
+    const outDirRel =
+      typeof params.outDirRel === "string" && params.outDirRel.trim()
+        ? params.outDirRel
+        : typstVisibleExportDirRel(mainFile);
+    const result = await compileTypstToFormat(root, mainFile, format, { dirtyFiles, source: "ui" }, outDirRel);
     if (!result.success || !result.files?.length) {
       return { error: result.error || "Compilation failed", stdout: result.logContent };
     }
     return {
-      files: encodeTypstWireFiles(result.files),
+      files: result.files.map((file) => typstExportFileRel(result.buildDir, file.name)),
+      buildDir: result.buildDir,
       stdout: result.logContent,
     };
   },

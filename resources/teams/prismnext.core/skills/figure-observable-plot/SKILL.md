@@ -1,6 +1,6 @@
 ---
 name: figure-observable-plot
-description: Use when a data figure needs Observable Plot's chart vocabulary — density, hexbin, facets, cell heatmap, geo — spec + CSV → experiment-run → SVG, then stop. Ordinary line/bar/scatter → figure-matplotlib. Diagrams → figure-tikz. Panel cards → figure-interaction. Manuscript include → figure-pipeline, and only if the user asked.
+description: Use when a data figure needs Observable Plot's chart vocabulary — density, hexbin, facets, cell heatmap, geo — spec + CSV → experiment-run → SVG, then stop. Ordinary line/bar/scatter → figure-matplotlib. Diagrams → figure-typst (.typ paper) or figure-tikz (.tex paper). Panel cards → figure-interaction. Manuscript include → figure-pipeline, and only if the user asked.
 license: MIT
 ---
 

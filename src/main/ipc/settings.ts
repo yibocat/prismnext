@@ -23,11 +23,9 @@ function pickPermissionPatch(input: Record<string, unknown>): Record<string, unk
   }
   return hit ? out : null;
 }
-import { promptManager } from "../prompts";
-import { buildPromptContext } from "../prompts/context";
+import { promptManager, CORE_PERSONA_PROMPT, buildPromptContext, buildPromptStackPreview, formatPromptStackPreviewMarkdown } from "../prompts";
 import { countPromptTokens } from "../lib/token-estimate";
 import { PROMPT_TOKEN_ENCODING } from "../../shared/providers/token-estimate";
-import { CORE_PERSONA_PROMPT } from "../prompts/layers/core-persona";
 import { refreshApplicationMenu } from "../menu";
 import { syncTrayFromSettings } from "../app/tray";
 
@@ -95,9 +93,6 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     "settings:getAssembledPrompt",
     async (_event, args?: { projectRoot?: string; userCustomPrompt?: string }) => {
-      const { buildPromptStackPreview, formatPromptStackPreviewMarkdown } = await import(
-        "../prompts/stack-preview",
-      );
       const preview = await buildPromptStackPreview({
         projectRoot: args?.projectRoot,
         userCustomPrompt: args?.userCustomPrompt,
@@ -109,9 +104,6 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle(
     "settings:getPromptStackPreview",
     async (_event, args?: { projectRoot?: string; userCustomPrompt?: string; orchestratorId?: string | null }) => {
-      const { buildPromptStackPreview, formatPromptStackPreviewMarkdown } = await import(
-        "../prompts/stack-preview",
-      );
       const preview = await buildPromptStackPreview({
         projectRoot: args?.projectRoot,
         userCustomPrompt: args?.userCustomPrompt,

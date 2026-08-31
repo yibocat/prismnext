@@ -180,10 +180,8 @@ describe("agent service status", () => {
       "literature-discover",
       "literature-read",
       "literature-stage",
-      "latex-root",
       "latex-compile",
       "latex-compile-standalone",
-      "typst-root",
       "typst-compile",
       "typst-compile-standalone",
       "research-brief-read",
@@ -206,7 +204,7 @@ describe("agent service status", () => {
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(39);
+    expect(missingKey.tools).toHaveLength(37);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({
@@ -306,7 +304,14 @@ describe("agent service status", () => {
       stableSystem: "stable prompt",
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
-    })).toContain("Focus on formal academic tone.");
+      profileModules: "## Chat paper citations\n\nStage external papers.",
+    })).toContain("## Chat paper citations");
+    expect(buildAgentSystemPrompt({
+      stableSystem: "stable prompt",
+      leadInstructions: "Focus on formal academic tone.",
+      leadName: "Academic Lead",
+      profileModules: "## Chat paper citations\n\nStage external papers.",
+    })).toMatch(/Focus on formal academic tone\.[\s\S]*## Chat paper citations/);
     expect(buildAgentSystemPrompt({
       stableSystem: "stable prompt",
       taskRoster: "## Available subagents (via Task)\n\n- `literature-synthesizer`",

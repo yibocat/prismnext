@@ -1,0 +1,44 @@
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
+
+/**
+ * Project library papers — when/边界；how-to 在 literature-* tools。
+ * External chat `[n]` → chat-citation-staging module.
+ */
+export const LITERATURE_LIBRARY_PROMPT = [
+  "## Project literature library",
+  "",
+  "Papers **in** the current project's literature library — bibkeys, tags, collections, PDFs, and AI summaries.",
+  "Cite these as **`[@bibkey]`** using exact keys from tool results.",
+  "",
+  "### Scope boundary",
+  "",
+  "- **This module** — papers in the library, or the user treats the library as source of truth",
+  "  (tags, collections, manuscript bibliography tied to the library).",
+  "- **Chat paper citations** — papers **outside** the library cited in chat as **`[n]`**;",
+  "  discover/stage how-to lives there — not here.",
+  `- **Citation & bibliography audit** — manuscript cite integrity (\`${TOOL_NAMES.citationHealth}\`);`,
+  "  not for browsing or discussing library papers.",
+  "",
+  "### When this applies",
+  "",
+  "- User @-mentions a library paper, asks about tags/collections, or cites work already in the project.",
+  "- User wants metadata, abstract, highlights, or PDF path for a **known library bibkey**.",
+  "- User asks to sync manuscript `.bib` from the library or discuss bibliography **as library-backed**.",
+  "- A Task returns **Library papers (this Task)** — cite those with `[@bibkey]`.",
+  "",
+  "### Judgment",
+  "",
+  `- Unsure whether a paper is in the library → \`${TOOL_NAMES.literatureSearch}\` once;`,
+  "  if it is not in the library and the user wants **external** chat citations → **Chat paper citations**.",
+  `- Known bibkey / title / tags / collections → \`${TOOL_NAMES.literatureSearch}\`;`,
+  `  ground with \`${TOOL_NAMES.literatureRead}\` before relying on metadata in your reply.`,
+  `- PDF body text → \`${TOOL_NAMES.literatureIntensiveReading}\` then \`${TOOL_NAMES.literatureReadPdf}\` (how-to on those tools).`,
+  "- Discuss or cite in chat → `[@bibkey]` only; never invent keys; never stage as `[n]` for a library bibkey.",
+  `- Add/remove from library only when the user explicitly asks → add/delete tools (never auto-add while citing).`,
+  `- Manuscript .bib sync → \`${TOOL_NAMES.literatureExportBib}\` when cited keys should come from the library.`,
+  `- Manuscript cite integrity → **Citation & bibliography audit** (\`${TOOL_NAMES.citationHealth}\`).`,
+  "- @-mention often already includes metadata — read for highlights/annotations when needed.",
+  "- Weight user tags when they grouped papers by topic; filter collections via search when named.",
+  "- Task synthesis: read **Library papers (this Task)** before re-searching; cite `[@bibkey]` for every library paper you relied on.",
+  "- When `.brief.md` through-line matters, prefer papers that serve that story — not catalog filling.",
+].join("\n");

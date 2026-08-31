@@ -30,15 +30,15 @@ describe("unified native tools catalog", () => {
   };
 
   it("exports unique host custom tools without Pi file/shell primitives", () => {
-    expect(ALL_NATIVE_TOOLS).toHaveLength(32);
+    expect(ALL_NATIVE_TOOLS).toHaveLength(30);
     const names = new Set(ALL_NATIVE_TOOLS.map((t) => t.name));
-    expect(names.size).toBe(32);
+    expect(names.size).toBe(30);
     expect(names.has("bash")).toBe(false);
     expect(names.has("read")).toBe(false);
 
     expect(LITERATURE_TOOLS).toHaveLength(10);
-    expect(LATEX_TOOLS).toHaveLength(3);
-    expect(TYPST_TOOLS).toHaveLength(3);
+    expect(LATEX_TOOLS).toHaveLength(2);
+    expect(TYPST_TOOLS).toHaveLength(2);
     expect(RESEARCH_BRIEF_TOOLS).toHaveLength(2);
     expect(EXPERIMENT_TOOLS).toHaveLength(4);
     expect(INTERACTION_TOOLS).toHaveLength(4);
@@ -69,10 +69,10 @@ describe("unified native tools catalog", () => {
     const toolHost = new ToolHost({ gate });
     toolHost.registerAll(ALL_NATIVE_TOOLS);
 
-    expect(toolHost.names()).toHaveLength(32);
+    expect(toolHost.names()).toHaveLength(30);
 
     const piTools = toolHost.toPiTools(() => ctx);
-    expect(piTools).toHaveLength(32);
+    expect(piTools).toHaveLength(30);
     for (const pt of piTools) {
       expect(pt.name).toBeTruthy();
       expect(pt.description).toBeTruthy();
@@ -83,17 +83,23 @@ describe("unified native tools catalog", () => {
     // Guidelines / snippets declared on native tools reach the Pi ToolDefinition.
     const literature = piTools.find((t) => t.name === "literature-search");
     expect(literature?.promptGuidelines?.length).toBeGreaterThan(0);
+    const briefRead = piTools.find((t) => t.name === "research-brief-read");
+    expect(briefRead?.promptGuidelines?.length).toBeGreaterThan(0);
+    const experimentLog = piTools.find((t) => t.name === "experiment-log");
+    expect(experimentLog?.promptGuidelines?.length).toBeGreaterThan(3);
+    const interactionWrite = piTools.find((t) => t.name === "interaction-write");
+    expect(interactionWrite?.promptGuidelines?.length).toBeGreaterThan(5);
     const question = piTools.find((t) => t.name === "question");
     expect(question?.promptGuidelines?.length).toBeGreaterThan(0);
 
     const labTools = createPiLabNativeTools();
-    expect(labTools).toHaveLength(32);
+    expect(labTools).toHaveLength(30);
 
     const piNative = createPiNativeTools({
       toolHost,
       getContext: () => ctx,
     });
-    expect(piNative).toHaveLength(32);
+    expect(piNative).toHaveLength(30);
   });
 
   it("executes system and fs tools in-memory with real file operations", async () => {

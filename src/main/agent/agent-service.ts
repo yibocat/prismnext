@@ -9,7 +9,7 @@ import { GATEWAY_PLACEHOLDER_KEY } from "../../shared/remote";
 import { createElectronSink, type ElectronSinkTarget } from "../remote/event-sink";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
-import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
+import { buildPlanModeTurnAppendix, assembleAgentSystemPrompt, HOST_SYSTEM_IDENTITY } from "../prompts";
 import {
   type AgentAnswerQuestionInput,
   type AgentAuthInput,
@@ -106,14 +106,7 @@ const AGENT_FALLBACK_CONVERSATION_ID = "agent";
 export const PI_DEFAULT_CODING_IDENTITY =
   "You are an expert coding assistant operating inside pi";
 
-export const HOST_SYSTEM_IDENTITY = [
-  "You are the PrismNext research collaborator for this project.",
-  "Do not claim to be Claude, GPT, Gemini, DeepSeek, or any other vendor model.",
-  "Use the file and shell tools registered from Pi, plus the host research tools.",
-  "Prefer literature-search for local papers, literature-discover for catalogs,",
-  "research-brief-update for the project brief, and experiment-run for island commands.",
-  "When a team expert is needed, call the task tool using the session roster — do not search the disk for subagents.",
-].join(" ");
+export { HOST_SYSTEM_IDENTITY };
 
 export function resolveAgentAuth(input: AgentAuthInput): AgentAuthResult {
   const provider = (input.provider ?? input.settings.aiProvider ?? "").trim();
@@ -146,20 +139,10 @@ export function buildAgentSystemPrompt(input: {
   agentsMd?: string;
   leadInstructions?: string;
   leadName?: string;
+  profileModules?: string;
   taskRoster?: string;
 }): string {
-  const leadSection = input.leadInstructions?.trim()
-    ? `## Active Team Lead: ${input.leadName || "Lead"}\n\n${input.leadInstructions.trim()}`
-    : "";
-  return [
-    HOST_SYSTEM_IDENTITY,
-    input.stableSystem.trim(),
-    input.agentsMd?.trim(),
-    leadSection,
-    input.taskRoster?.trim(),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  return assembleAgentSystemPrompt(input);
 }
 
 export function buildAgentUserText(input: {
@@ -1033,14 +1016,14 @@ export class AgentService {
       remoteJobNote: this.deps.remoteJobNote,
     }));
 
+    const {
+      buildPromptContext,
+      composeOrchestratorProfileModulePrompts,
+      composeSubagentProfileModulePrompts,
+    } = await import("../prompts");
+    const promptCtx = await buildPromptContext(input.projectRoot);
+
     if (ctx.roster && ctx.roster.length > 0) {
-      const { buildPromptContext } = await import("../prompts/context");
-      const { composeSubagentProfileModulePrompts } = await import(
-        "../prompts/resolve-active-modules"
-      );
-      const profileModules = await composeSubagentProfileModulePrompts(
-        await buildPromptContext(input.projectRoot),
-      );
       const subsessionRuntime = new PiSubsessionRuntime({
         allTools: ALL_NATIVE_TOOLS,
         gate,
@@ -1058,7 +1041,7 @@ export class AgentService {
           modelTransport: this.deps.modelTransport,
         }),
         skills: ctx.skills?.map((skill) => ({ dir: skill.dir, source: skill.fqid })),
-        profileModules,
+        profileModules: composeSubagentProfileModulePrompts(promptCtx),
         roster: ctx.roster,
         projectRoot: input.projectRoot,
         boundCheckoutPath: input.boundCheckoutPath,
@@ -1077,6 +1060,7 @@ export class AgentService {
       agentsMd: await this.deps.composeAgentsMd(input.projectRoot),
       leadInstructions: ctx.lead?.instructions,
       leadName: ctx.lead?.name,
+      profileModules: composeOrchestratorProfileModulePrompts(promptCtx),
       taskRoster: buildLiveTaskRosterMarkdown(
         (ctx.roster ?? []).map((entry) => ({
           id: entry.runtimeName,
@@ -1208,8 +1192,7 @@ export async function getAgentService(): Promise<AgentService> {
   if (singleton) return singleton;
   const { app } = await import("electron");
   const { getSettings } = await import("../app/settings");
-  const { promptManager } = await import("../prompts");
-  const { buildPromptContext } = await import("../prompts/context");
+  const { promptManager, buildPromptContext } = await import("../prompts");
 
   singleton = createAgentService({
     userDataDir: app.getPath("userData"),

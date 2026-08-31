@@ -38,7 +38,7 @@ export function findWorkspaceFolder(
 export const DEFAULT_FUNCTION_DESCRIPTIONS: Record<FolderFunction, string | null> = {
   manuscript:
     "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). " +
-    "Compile output is `.workbench/compile/` — do not edit that cache. " +
+    "Compile output is `.workbench/compile/latex/` or `.workbench/compile/typst/` — do not edit that cache. " +
     "Open sources in Files. A main-file pin is optional.",
   experiment:
     "Contains experiment-related files such as data, scripts, results, and analysis.",

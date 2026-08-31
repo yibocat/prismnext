@@ -1,4 +1,5 @@
 import { ALL_MODULES } from "./modules";
+import { GLOBAL_MODULE_ORDER } from "./stable/order";
 import type { PromptContext, PromptModule } from "./types";
 
 /** Legacy module keys still referenced in team JSON / cached profiles. */
@@ -16,9 +17,14 @@ function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   return "";
 }
 
-/** Modules injected into global `_prism-system.md` (always on — not agent-selectable). */
+/** Modules injected into the global system baseline (always on — not agent-selectable). */
 export function resolveStableSystemModules(): PromptModule[] {
-  return ALL_MODULES.filter((m) => !m.profileOnly);
+  const globals = ALL_MODULES.filter((m) => !m.profileOnly);
+  const rank = new Map(GLOBAL_MODULE_ORDER.map((key, index) => [key, index]));
+  return globals.sort(
+    (a, b) => (rank.get(a.key as (typeof GLOBAL_MODULE_ORDER)[number]) ?? 99)
+      - (rank.get(b.key as (typeof GLOBAL_MODULE_ORDER)[number]) ?? 99),
+  );
 }
 
 /** Profile modules attached to every agent profile (orchestrator + experts). */
@@ -70,8 +76,8 @@ export function resolveSubagentProfileModuleKeysFor(def: { modules?: string[] })
 }
 
 /**
- * Join scoped module prompts for agent profile sync (orchestrator / expert agent.md).
- * Workspace globals are already in `_prism-system.md`.
+ * Join scoped module prompts for the live orchestrator / expert system prompt.
+ * Workspace globals are already in composeStableSystem.
  */
 export function composeProfileModulePrompts(
   profileModules: string[] | undefined,

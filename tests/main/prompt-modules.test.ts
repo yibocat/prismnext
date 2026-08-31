@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { ALL_MODULES } from "../../src/main/prompts/modules";
-import { resolveStableSystemModules } from "../../src/main/prompts/resolve-active-modules";
-import type { PromptModule } from "../../src/main/prompts/types";
+import { ALL_MODULES, resolveStableSystemModules } from "../../src/main/prompts";
+import type { PromptModule } from "../../src/main/prompts";
 import { ALL_TOOL_NAMES } from "../../src/shared/agent/tool-names";
+
+const MODULES_DIR = join(__dirname, "../../src/main/prompts/modules");
+const STABLE_CATALOG_KEYS = new Set(["workspace-folders", "research-reasoning", "reply-depth"]);
+
+function walkCapabilityModuleSources(): Array<{ rel: string; src: string }> {
+  const out: Array<{ rel: string; src: string }> = [];
+  for (const entry of readdirSync(MODULES_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const sub = join(MODULES_DIR, entry.name);
+    for (const name of readdirSync(sub).filter((f) => f.endsWith(".ts"))) {
+      out.push({ rel: `${entry.name}/${name}`, src: readFileSync(join(sub, name), "utf8") });
+    }
+  }
+  return out;
+}
 
 function approxTokens(s: string): number {
   return Math.round(s.length / 4);
@@ -43,18 +57,33 @@ describe("prompt modules registry", () => {
     }
   });
 
-  it("does not hardcode registered tool names in double-quoted module prompt lines", () => {
+  it("does not hardcode registered tool names in double-quoted module catalog lines", () => {
     const customTools = ALL_TOOL_NAMES.filter((n) => n.includes("-"));
-    const dir = join(__dirname, "../../src/main/prompts/modules");
-    for (const file of readdirSync(dir).filter((f) => f.endsWith(".ts") && f !== "index.ts")) {
-      const src = readFileSync(join(dir, file), "utf8");
+    for (const { rel, src } of walkCapabilityModuleSources()) {
+      if (!rel.endsWith("/index.ts")) continue;
       if (!src.includes("TOOL_NAMES")) continue;
       const doubleQuoted = src.match(/"[^"]*"/g) ?? [];
       for (const quoted of doubleQuoted) {
         for (const toolName of customTools) {
-          expect(quoted, `${file}: ${quoted}`).not.toContain(toolName);
+          expect(quoted, `${rel}: ${quoted}`).not.toContain(toolName);
         }
       }
+    }
+  });
+
+  it("keeps capability modules as folders with an index facade", () => {
+    const loose = readdirSync(MODULES_DIR).filter((f) => f.endsWith(".ts") && f !== "index.ts");
+    expect(loose).toEqual([]);
+
+    for (const mod of ALL_MODULES) {
+      if (STABLE_CATALOG_KEYS.has(mod.key)) continue;
+      expect(existsSync(join(MODULES_DIR, mod.key, "index.ts")), mod.key).toBe(true);
+    }
+  });
+
+  it("module folders import internals only via their own index", () => {
+    for (const { rel, src } of walkCapabilityModuleSources()) {
+      expect(src, rel).not.toMatch(/from\s+["']\.\.\/[a-z0-9-]+\/(?:prompt|build)["']/);
     }
   });
 });

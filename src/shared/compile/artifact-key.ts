@@ -41,8 +41,7 @@ export function compileArtifactCacheKey(key: CompileArtifactKey): string {
 
 export function derivePaperPdfRel(engine: CompileEngine, compileRoot: string): string {
   const stem = texStem(compileRoot);
-  if (engine === "typst") return `.workbench/compile/typst/${stem}.pdf`;
-  return `.workbench/compile/${stem}.pdf`;
+  return `${derivePaperBuildDir(engine)}/${stem}.pdf`;
 }
 
 export function deriveStandalonePdfRel(sourceFile: string): string {
@@ -53,7 +52,13 @@ export function deriveStandalonePdfRel(sourceFile: string): string {
 }
 
 export function derivePaperBuildDir(engine: CompileEngine): string {
-  return engine === "typst" ? ".workbench/compile/typst" : ".workbench/compile";
+  return engine === "typst" ? ".workbench/compile/typst" : ".workbench/compile/latex";
+}
+
+/** Pre-0.9.1 LaTeX paper PDF path (flat under compile/). Used for disk hydration fallback. */
+export function deriveLegacyLatexPaperPdfRel(compileRoot: string): string {
+  const stem = texStem(compileRoot);
+  return `.workbench/compile/${stem}.pdf`;
 }
 
 /** Main → renderer `compile:agentComplete`. Legacy aliases: projectDir, mainFile. */
@@ -79,6 +84,6 @@ function normalizeRel(p: string): string {
 }
 
 function texStem(rel: string): string {
-  const base = rel.split("/").pop() ?? rel;
+  const base = normalizeRel(rel).split("/").pop() ?? rel;
   return base.replace(/\.(tex|ltx|typ)$/i, "");
 }

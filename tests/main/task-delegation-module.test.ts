@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
+import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts";
 
 describe("ORCHESTRATOR_JUDGMENT_PROMPT", () => {
   it("covers proactive scheduling and Task delegation for the orchestrator", () => {
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Orchestrator judgment");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Scope boundary");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Direct handling vs Task delegation");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Writing a Task brief");
+    expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Synthesizing expert output");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Available subagents (via Task)");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Do not search the project");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("call Task immediately");

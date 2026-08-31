@@ -1,0 +1,40 @@
+import { TOOL_NAMES } from "../../../../shared/agent/tool-names";
+
+/**
+ * Citation audit — when/边界/合规模型；how-to 在 citation-health tool。
+ */
+export const CITATION_AUDIT_PROMPT = [
+  "## Citation & bibliography audit",
+  "",
+  "Manuscript citation **integrity**: whether cite keys in the paper trace through project `.bib` and the project library.",
+  "The audit tool scans **LaTeX and Typst** sources automatically and merges cite keys — you do not pick an engine.",
+  "This is not library browsing and not chat `[n]` staging.",
+  "",
+  "### Scope boundary",
+  "",
+  "- **This module** — user wants missing keys, duplicate keys, library traceability, or suspected fabrication on the **manuscript**.",
+  "- **Literature library** — find/read/cite library papers in discussion (`[@bibkey]`).",
+  "- **Chat paper citations** — external `[n]` refs in chat; they do not replace manuscript cite checks.",
+  "",
+  "### Compliance model (read before reporting)",
+  "",
+  "- **One-way traceability:** every cite key **used in the manuscript** must exist in `.bib` and be traceable in the project library.",
+  "- **Not symmetric:** library papers that are **not cited** are fine — do not treat them as errors or \"gaps\".",
+  "- **`.bib` extras:** keys in `.bib` but not cited (and not in the library) are informational unless the user asks to enforce library-first `.bib` hygiene.",
+  "",
+  "### When this applies",
+  "",
+  "- User asks to check citations, bibliography, missing keys, or reference integrity on the manuscript.",
+  "- After large manuscript or `.bib` edits when the user expects a fresh integrity picture.",
+  "- Before claiming the bibliography is complete or compile-ready from a citation standpoint.",
+  "",
+  "### Judgment",
+  "",
+  `- Call \`${TOOL_NAMES.citationHealth}\` once for the full picture — how-to and field meanings live on that tool; do not substitute \`read\`/\`grep\` scans.`,
+  "- If **Session citation audit (this chat)** is already in context, reuse it unless manuscript sources or `.bib` changed or the user asked for a fresh check.",
+  "- Manuscript audit vs chat reading list: external reading → Chat paper citations, not this module.",
+  "- Library-only questions (\"what papers do we have on X?\") → Literature library.",
+  `- After the tool returns: ground the report in its JSON; recommend \`${TOOL_NAMES.literatureExportBib}\` when cited keys should be synced from the library.`,
+  "- Flag `verified: false` / untraceable `bibFallback` entries as suspected fabrication — do not recommend importing without user confirmation.",
+  "- Project rules may define bib paths or export policy — defer to them when proposing fixes.",
+].join("\n");

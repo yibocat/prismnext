@@ -17,7 +17,14 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import type { PromptContext } from "../prompts/types";
+import {
+  type PromptContext,
+  resolveOrchestratorActiveModuleKeys,
+  resolveActiveModuleKeys,
+  resolveSubagentProfileModuleKeysFor,
+  composeOrchestratorProfileModulePrompts,
+  composeProfileModulePrompts,
+} from "../prompts";
 import {
   type SubagentDefinition,
   type SubagentInfo,
@@ -27,13 +34,6 @@ import {
   type SaveCustomOrchestratorPayload,
   DEFAULT_ORCHESTRATOR_ID,
 } from "../../shared/agent/subagents";
-import {
-  resolveOrchestratorActiveModuleKeys,
-  resolveActiveModuleKeys,
-  resolveSubagentProfileModuleKeysFor,
-  composeOrchestratorProfileModulePrompts,
-  composeProfileModulePrompts,
-} from "../prompts/resolve-active-modules";
 import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { buildTaskPermissionBlock } from "../agent/task-orchestrator-gate";
 import {

@@ -1285,12 +1285,13 @@
       "toast": {
         "loadFailed": "Failed to load prompt stack preview."
       },
-      "openProject": "Open a project to preview AGENTS.md, project rules, and orchestrator agent.md.",
-      "intro": "Each layer is injected separately — not one monolithic system prompt. Layer 4 (with a project open) is the default Orchestrator primary agent definition (`agent.md`), not a merged assemble of layers 1–3. Scroll the panel to read expanded content.",
+      "openProject": "Open a project to preview AGENTS.md, project rules, Team lead, and built-in modules.",
+      "intro": "Each layer is injected separately — the same join the model sees at session start. Built-in capability modules are appended after Team lead and are not stored in Team files. Project rules go on each user turn, not in the system prompt.",
       "role": {
         "opencode": "System instructions",
         "eachTurn": "Each chat turn",
-        "orchestrator": "Primary agent · Expert team"
+        "orchestrator": "Team lead (user-editable)",
+        "internal": "Built-in modules (not user-editable)"
       },
       "layer": "Layer {{n}}",
       "chars": "{{count}} chars",
@@ -1423,7 +1424,7 @@
       },
       "descPlaceholder": "Explain what belongs in this folder so agents use it correctly.",
       "functionDesc": {
-        "manuscript": "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). Compile output is `.workbench/compile/` — do not edit that cache. Open sources in Files. A main-file pin is optional.",
+        "manuscript": "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). Compile output is `.workbench/compile/latex/` or `.workbench/compile/typst/` — do not edit that cache. Open sources in Files. A main-file pin is optional.",
         "experiment": "Root folder for experiment working directories. Each experiment gets a subfolder (code, data, results). Bookkeeping (run history) is stored automatically under the project — you do not configure a separate registry folder.",
         "literature": "Stores literature and reference PDFs for academic research and citation.",
         "notebook": "Contains notes in various formats such as Markdown files or Jupyter notebooks."

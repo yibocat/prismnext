@@ -97,7 +97,6 @@ export const MODULE_TOOL_MAP: Record<string, string[]> = {
     "literature-read-pdf",
     "citation-health",
     "literature-export-bib",
-    "latex-root",
   ],
   "literature-exploration": [
     "literature-search",
@@ -112,7 +111,6 @@ export const MODULE_TOOL_MAP: Record<string, string[]> = {
     "literature-export-bib",
   ],
   "latex-authoring": [
-    "latex-root",
     "latex-compile",
     "latex-compile-standalone",
     "literature-read",

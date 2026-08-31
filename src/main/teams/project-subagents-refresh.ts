@@ -1,5 +1,5 @@
 import { getHostEvents } from "../app/event-sink";
-import type { PromptContext } from "../prompts/types";
+import type { PromptContext } from "../prompts";
 import {
   buildAgentsPlan,
   getAgentsSyncState,

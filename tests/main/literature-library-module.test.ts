@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
+import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts";
 import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 describe("LITERATURE_LIBRARY_PROMPT", () => {
@@ -9,10 +9,13 @@ describe("LITERATURE_LIBRARY_PROMPT", () => {
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
     expect(LITERATURE_LIBRARY_PROMPT).toContain(TOOL_NAMES.literatureSearch);
     expect(LITERATURE_LIBRARY_PROMPT).toContain(TOOL_NAMES.literatureRead);
-    expect(LITERATURE_LIBRARY_PROMPT).not.toContain(TOOL_NAMES.literatureStage);
-    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("tag=");
-    expect(LITERATURE_LIBRARY_PROMPT).toContain("Task handoff");
     expect(LITERATURE_LIBRARY_PROMPT).toContain("Library papers (this Task)");
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain(TOOL_NAMES.literatureStage);
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain(TOOL_NAMES.literatureDiscover);
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("tag=");
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("Ask in order");
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("Soft workflow");
+    expect(LITERATURE_LIBRARY_PROMPT).not.toContain("Route the request");
 
     expect(LITERATURE_LIBRARY_PROMPT).not.toContain("| bibkey | Title | Year |");
     expect(LITERATURE_LIBRARY_PROMPT).not.toContain("| What you used | Tool |");

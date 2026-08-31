@@ -1285,12 +1285,13 @@
       "toast": {
         "loadFailed": "加载提示栈预览失败。"
       },
-      "openProject": "请先打开项目以预览 AGENTS.md、项目规则与编排器 agent.md。",
-      "intro": "每一层单独注入，并非整块系统提示词。打开项目时第 4 层是默认编排器主智能体定义（`agent.md`），而非第 1–3 层的合并。滚动面板可阅读展开内容。",
+      "openProject": "请先打开项目以预览 AGENTS.md、项目规则、Team 主智能体与内置模块。",
+      "intro": "每一层单独注入，顺序与会话启动时模型实际收到的系统提示相同。内置能力模块接在 Team 主智能体之后，不写入 Team 文件。项目规则挂在每轮用户消息前，不进系统提示。",
       "role": {
         "opencode": "系统指令",
         "eachTurn": "每轮对话",
-        "orchestrator": "主智能体 · 专家团队"
+        "orchestrator": "Team 主智能体（可编辑）",
+        "internal": "内置模块（不可编辑）"
       },
       "layer": "第 {{n}} 层",
       "chars": "{{count}} 字符",
@@ -1423,7 +1424,7 @@
       },
       "descPlaceholder": "说明此文件夹应存放什么内容，以便智能体正确使用。",
       "functionDesc": {
-        "manuscript": "成稿 / 论文主体所在目录（LaTeX `.tex` 或 Typst `.typ`）。编译产物在 `.workbench/compile/`，不要编辑该缓存。在 Files 中打开源文件。主文件 pin 可选。",
+        "manuscript": "成稿 / 论文主体所在目录（LaTeX `.tex` 或 Typst `.typ`）。编译产物在 `.workbench/compile/latex/` 或 `.workbench/compile/typst/`，不要编辑该缓存。在 Files 中打开源文件。主文件 pin 可选。",
         "experiment": "实验工作区根目录。每个实验会在此下建立子文件夹（代码、数据、结果）。运行记录由应用自动记账，无需单独配置「注册表」文件夹。",
         "literature": "存放学术研究与引用所需的文献与参考 PDF。",
         "notebook": "存放各类笔记，如 Markdown 或 Jupyter 笔记本。"

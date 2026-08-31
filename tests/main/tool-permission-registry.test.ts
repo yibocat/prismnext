@@ -59,8 +59,6 @@ describe("tool permission registry — classifications", () => {
       "literature-read-pdf",
       "literature-stage",
       "citation-health",
-      "latex-root",
-      "typst-root",
     ];
     for (const tool of readOnly) {
       const entry = TOOL_PERMISSION_REGISTRY[tool];

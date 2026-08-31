@@ -244,7 +244,7 @@ describe("Agent Session Lifecycle & Turn Persistence (Phase 4A)", () => {
       permissionMode: "auto",
     });
 
-    // Cancel turn
+    // Cancel after leftover abort so the send path records a cancelled turn.
     await runtime.cancelTurn(sessionResult.runtimeSessionId);
     await promise;
 

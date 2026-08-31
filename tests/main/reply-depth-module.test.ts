@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { REPLY_DEPTH_PROMPT } from "../../src/main/prompts/modules/reply-depth";
+import { REPLY_DEPTH_PROMPT } from "../../src/main/prompts";
 
 describe("REPLY_DEPTH_PROMPT", () => {
-  it("prefers thorough chat for research questions and protects expert voice", () => {
+  it("calibrates reply length and chat rendering only", () => {
     expect(REPLY_DEPTH_PROMPT).toContain("thorough chat answer");
-    expect(REPLY_DEPTH_PROMPT).toContain("Primary orchestrator");
-    expect(REPLY_DEPTH_PROMPT).toContain("Expert / subagent");
-    expect(REPLY_DEPTH_PROMPT).toContain("own instructions");
-    expect(REPLY_DEPTH_PROMPT).toContain("When Plan");
-    expect(REPLY_DEPTH_PROMPT).toContain("artifact");
-    expect(REPLY_DEPTH_PROMPT).toContain("Interaction");
+    expect(REPLY_DEPTH_PROMPT).toContain("Orchestrator");
+    expect(REPLY_DEPTH_PROMPT).toContain("Experts / subagents");
+    expect(REPLY_DEPTH_PROMPT).toContain("KaTeX");
+    expect(REPLY_DEPTH_PROMPT).toContain("$...$");
+    expect(REPLY_DEPTH_PROMPT).not.toContain("suggest-plan");
+    expect(REPLY_DEPTH_PROMPT).not.toContain("artifact");
+    expect(REPLY_DEPTH_PROMPT).not.toContain("Read before you change");
     expect(REPLY_DEPTH_PROMPT).not.toContain("BINDING");
   });
 });

@@ -9,21 +9,21 @@ import {
 } from "../../src/renderer/stores/compile-store";
 
 describe("resolveCompilePdfDiskPath", () => {
-  it("maps manuscript main.tex to .workbench/compile/main.pdf", () => {
+  it("maps manuscript main.tex to .workbench/compile/latex/main.pdf", () => {
     expect(resolveCompilePdfDiskPath("/proj", "manuscript/main.tex")).toBe(
-      "/proj/.workbench/compile/main.pdf",
+      "/proj/.workbench/compile/latex/main.pdf",
     );
   });
 
   it("uses basename stem for nested paths", () => {
     expect(resolveCompilePdfDiskPath("/proj", "paper/sections/root.tex")).toBe(
-      "/proj/.workbench/compile/root.pdf",
+      "/proj/.workbench/compile/latex/root.pdf",
     );
   });
 
   it("preserves Windows separators when project root uses them", () => {
     expect(resolveCompilePdfDiskPath("C:\\proj", "manuscript\\main.tex")).toBe(
-      "C:\\proj\\.workbench\\compile\\main.pdf",
+      "C:\\proj\\.workbench\\compile\\latex\\main.pdf",
     );
   });
 });

@@ -20,6 +20,7 @@ import {
 import {
   compileArtifactCacheKey,
   compileEngineFromRelPath,
+  deriveLegacyLatexPaperPdfRel,
   derivePaperPdfRel,
   deriveStandalonePdfRel,
   type CompileArtifactKey,
@@ -82,22 +83,13 @@ function joinProjectPath(projectRoot: string, ...parts: string[]): string {
   return [root, ...parts.map((p) => p.replace(/^[/\\]+/, "").replace(/[/\\]+/g, sep))].join(sep);
 }
 
-function texStem(relativePath: string): string {
-  const base = relativePath.split(/[/\\]/).pop() ?? relativePath;
-  return base.replace(/\.tex$/i, "");
-}
-
 /** Absolute path of the compile PDF for a manuscript main file. */
 export function resolveCompilePdfDiskPath(
   projectRoot: string,
   mainRelativePath: string,
 ): string {
-  return joinProjectPath(
-    projectRoot,
-    ".workbench",
-    "compile",
-    `${texStem(mainRelativePath)}.pdf`,
-  );
+  const rel = derivePaperPdfRel("latex", mainRelativePath);
+  return joinProjectPath(projectRoot, ...rel.split("/"));
 }
 
 let _ensureDiskPdfPromise: Promise<boolean> | null = null;
@@ -131,18 +123,27 @@ export async function ensureCompilePdfForKey(key: CompileArtifactKey): Promise<b
   _ensureDiskPdfKey = cacheKey;
   _ensureDiskPdfPromise = (async () => {
     if (getPdfBytesForKey(key)) return true;
-    const rel = key.route === "paper"
-      ? derivePaperPdfRel(key.engine, key.compileRoot)
-      : deriveStandalonePdfRel(key.sourceFile);
-    const abs = joinProjectPath(key.projectRoot, ...rel.split("/"));
-    try {
-      const { bytes } = await fsDesktop.fsReadBytes(abs);
-      if (!bytes?.byteLength) return false;
-      setPdfBytesForKey(key, new Uint8Array(bytes));
-      return true;
-    } catch {
-      return false;
+    const relCandidates =
+      key.route === "paper"
+        ? key.engine === "latex"
+          ? [
+              derivePaperPdfRel("latex", key.compileRoot),
+              deriveLegacyLatexPaperPdfRel(key.compileRoot),
+            ]
+          : [derivePaperPdfRel(key.engine, key.compileRoot)]
+        : [deriveStandalonePdfRel(key.sourceFile)];
+    for (const rel of relCandidates) {
+      const abs = joinProjectPath(key.projectRoot, ...rel.split("/"));
+      try {
+        const { bytes } = await fsDesktop.fsReadBytes(abs);
+        if (!bytes?.byteLength) continue;
+        setPdfBytesForKey(key, new Uint8Array(bytes));
+        return true;
+      } catch {
+        // try next candidate
+      }
     }
+    return false;
   })().finally(() => {
     if (_ensureDiskPdfKey === cacheKey) {
       _ensureDiskPdfPromise = null;
@@ -155,7 +156,7 @@ export async function ensureCompilePdfForKey(key: CompileArtifactKey): Promise<b
 
 /**
  * If memory cache is empty, try loading a previously compiled PDF from
- * `<project>/.workbench/compile/<stem>.pdf`. Remote roots skip disk (laptop
+ * `<project>/.workbench/compile/latex/<stem>.pdf`. Remote roots skip disk (laptop
  * path is not the Host compile dir). Returns true when bytes are available.
  */
 export async function ensureCompilePdfFromDisk(projectRoot: string): Promise<boolean> {

@@ -7,12 +7,17 @@ import {
   resolveBibliographyFromMain,
   resolveBibliographyPath,
 } from "../lib/bib-path-resolve";
-import { isStandaloneTexDocument, resolveLatexRoot, walkTexFiles } from "../lib/latex-root";
+import { isStandaloneTexDocument, resolveLatexRoot } from "../lib/latex-root";
+import { resolveTypstRoot } from "../lib/typst-root";
 import { citeCheckLiterature } from "../literature/facade";
+import { scanManuscriptCiteKeys } from "../literature/manuscript-cite-scan";
 import { notifyAgentCompilePreview } from "./compile-preview-notify";
 import { TOOL_NAMES } from "../../shared/agent/tool-names";
-import { projectCompileRel } from "../../shared/workbench/paths";
-import { derivePaperPdfRel } from "../../shared/compile/artifact-key";
+import { derivePaperBuildDir, derivePaperPdfRel } from "../../shared/compile/artifact-key";
+import { extractCiteKeysFromTex } from "../../shared/literature/tex-cite-keys";
+import { extractTypstBibliographyRel } from "../../shared/literature/typst-cite-keys";
+
+export { extractCiteKeysFromTex };
 
 export interface CompileErrorEntry {
   file?: string;
@@ -32,6 +37,7 @@ export interface AgentCompileResult {
 
 export interface BibCheckResult {
   texFilesScanned: number;
+  typFilesScanned: number;
   bibPath: string | null;
   citeKeysInTex: string[];
   keysInBib: string[];
@@ -39,23 +45,6 @@ export interface BibCheckResult {
   unusedKeys: string[];
   duplicateKeys: string[];
   libraryCheck?: ReturnType<typeof citeCheckLiterature>;
-}
-
-const CITE_COMMAND_RE =
-  /\\(?:[a-zA-Z@*]+)?cite(?:[a-zA-Z*]*)?(?:\*)?\{([^}]*)\}/g;
-
-/** Extract citation keys from LaTeX source. */
-export function extractCiteKeysFromTex(texContent: string): string[] {
-  const keys = new Set<string>();
-  for (const match of texContent.matchAll(CITE_COMMAND_RE)) {
-    const inner = match[1]?.trim();
-    if (!inner || inner === "*") continue;
-    for (const part of inner.split(",")) {
-      const key = part.trim();
-      if (key) keys.add(key);
-    }
-  }
-  return [...keys].sort();
 }
 
 function findDuplicateBibKeys(bibContent: string): string[] {
@@ -106,6 +95,33 @@ export function parseStructuredCompileErrors(log: string): CompileErrorEntry[] {
   return errors;
 }
 
+function readBibRel(
+  projectRoot: string,
+  rel: string,
+): { bibPath: string; bibContent: string | null } {
+  try {
+    return { bibPath: rel, bibContent: fs.readFileSync(join(projectRoot, rel), "utf-8") };
+  } catch {
+    return { bibPath: rel, bibContent: null };
+  }
+}
+
+function resolveTypstBibPath(
+  projectRoot: string,
+  mainFile: string,
+): { bibPath: string | null; bibContent: string | null } {
+  try {
+    const content = fs.readFileSync(join(projectRoot, mainFile), "utf-8");
+    const declared = extractTypstBibliographyRel(content);
+    if (!declared) return { bibPath: null, bibContent: null };
+    const dir = path.dirname(mainFile).replace(/\\/g, "/");
+    const rel = (dir === "." ? declared : `${dir}/${declared}`).replace(/\/+/g, "/");
+    return readBibRel(projectRoot, rel);
+  } catch {
+    return { bibPath: null, bibContent: null };
+  }
+}
+
 function resolveBibPathForCheck(
   projectRoot: string,
   mainFile: string,
@@ -114,14 +130,11 @@ function resolveBibPathForCheck(
   const hint = bibPathHint?.trim();
   if (hint) {
     const { resolvedPath } = resolveBibliographyPath(projectRoot, mainFile, hint);
-    if (resolvedPath) {
-      const abs = join(projectRoot, resolvedPath);
-      try {
-        return { bibPath: resolvedPath, bibContent: fs.readFileSync(abs, "utf-8") };
-      } catch {
-        return { bibPath: resolvedPath, bibContent: null };
-      }
-    }
+    if (resolvedPath) return readBibRel(projectRoot, resolvedPath);
+  }
+
+  if (mainFile.toLowerCase().endsWith(".typ")) {
+    return resolveTypstBibPath(projectRoot, mainFile);
   }
 
   const mainContent = fs.readFileSync(join(projectRoot, mainFile), "utf-8");
@@ -129,26 +142,23 @@ function resolveBibPathForCheck(
   if (!resolved.resolvedPath) {
     return { bibPath: resolved.declaredInMain[0] ?? null, bibContent: null };
   }
-  try {
-    return {
-      bibPath: resolved.resolvedPath,
-      bibContent: fs.readFileSync(join(projectRoot, resolved.resolvedPath), "utf-8"),
-    };
-  } catch {
-    return { bibPath: resolved.resolvedPath, bibContent: null };
-  }
+  return readBibRel(projectRoot, resolved.resolvedPath);
 }
 
-/** Compare \\cite keys across project .tex files vs .bib entries. */
+/** Compare cite keys across project `.tex` / `.typ` vs `.bib` entries. */
 export function checkBibConsistency(
   projectRoot: string,
   options?: { mainFile?: string | null; bibPath?: string | null; includeLibraryCheck?: boolean },
 ): BibCheckResult {
-  const root = resolveLatexRoot(projectRoot, options?.mainFile);
-  const mainFile = root?.mainFile ?? options?.mainFile?.trim() ?? "";
-  if (!mainFile) {
+  const scan = scanManuscriptCiteKeys(projectRoot);
+  const latexMain = resolveLatexRoot(projectRoot, options?.mainFile)?.mainFile;
+  const typstMain = resolveTypstRoot(projectRoot, options?.mainFile)?.mainFile;
+  const hint = options?.mainFile?.trim() ?? "";
+  const mainFile = hint || latexMain || typstMain || "";
+  if (!mainFile && scan.citeKeys.length === 0) {
     return {
-      texFilesScanned: 0,
+      texFilesScanned: scan.texFilesScanned,
+      typFilesScanned: scan.typFilesScanned,
       bibPath: null,
       citeKeysInTex: [],
       keysInBib: [],
@@ -158,25 +168,11 @@ export function checkBibConsistency(
     };
   }
 
-  const texFiles = walkTexFiles(projectRoot);
-  const citeKeys = new Set<string>();
-  for (const rel of texFiles) {
-    try {
-      const content = fs.readFileSync(join(projectRoot, rel), "utf-8");
-      for (const key of extractCiteKeysFromTex(content)) {
-        citeKeys.add(key);
-      }
-    } catch {
-      // skip unreadable
-    }
-  }
+  const { bibPath, bibContent } = mainFile
+    ? resolveBibPathForCheck(projectRoot, mainFile, options?.bibPath)
+    : { bibPath: null, bibContent: null };
 
-  const { bibPath, bibContent } = resolveBibPathForCheck(
-    projectRoot,
-    mainFile,
-    options?.bibPath,
-  );
-
+  const citeKeys = new Set(scan.citeKeys);
   const keysInBib = bibContent
     ? parseBibTeX(bibContent).map((e) => e.citekey).sort()
     : [];
@@ -188,7 +184,8 @@ export function checkBibConsistency(
   const duplicateKeys = bibContent ? findDuplicateBibKeys(bibContent) : [];
 
   const result: BibCheckResult = {
-    texFilesScanned: texFiles.length,
+    texFilesScanned: scan.texFilesScanned,
+    typFilesScanned: scan.typFilesScanned,
     bibPath,
     citeKeysInTex: citeList,
     keysInBib,
@@ -240,8 +237,7 @@ async function compileResolvedManuscript(
   useTexlive: boolean,
 ): Promise<AgentCompileResult> {
   const result = await compileLatex(projectRoot, root.mainFile, useTexlive, { source: "agent" });
-  const mainStem = basename(root.mainFile, extname(root.mainFile));
-  const buildDir = projectCompileRel();
+  const buildDir = derivePaperBuildDir("latex");
   const logContent = result.logContent ?? "";
   const errors = parseStructuredCompileErrors(logContent);
   const errorSummary =
@@ -271,7 +267,7 @@ async function compileResolvedManuscript(
     success: result.success,
     mainFile: root.mainFile,
     buildDir,
-    pdfPath: result.success ? `${buildDir}/${mainStem}.pdf` : undefined,
+    pdfPath: result.success ? derivePaperPdfRel("latex", root.mainFile) : undefined,
     errors,
     errorSummary,
     logTail,
@@ -295,7 +291,7 @@ export async function compileManuscriptForAgent(
       error:
         `${root.mainFile} is a standalone figure. ` +
         `Call \`${TOOL_NAMES.latexCompileStandalone}\` with mainFile set to that path. ` +
-        `\`${TOOL_NAMES.latexCompile}\` only compiles the paper into \`.workbench/compile/\`.`,
+        `\`${TOOL_NAMES.latexCompile}\` only compiles the paper into \`.workbench/compile/latex/\`.`,
     };
   }
 
@@ -350,7 +346,7 @@ export async function compileForAgent(
 
   // Route by document class, not by "is this the workspace main file".
   // A `\documentclass{standalone}` figure must compile in its own folder.
-  // Never sync `figures/` into `.workbench/compile/` or push the result
+  // Never sync `figures/` into `.workbench/compile/latex/` or push the result
   // into the TeX workspace paper preview.
   const resolvedContent = readResolvedTex(projectRoot, root.mainFile);
   if (resolvedContent && isStandaloneTexDocument(resolvedContent)) {

@@ -7,6 +7,9 @@ type IpcHandler = (event: unknown, args: unknown) => unknown | Promise<unknown>;
 const handlers = new Map<string, IpcHandler>();
 
 vi.mock("electron", () => ({
+  app: {
+    getVersion: () => "0.0.0-test",
+  },
   ipcMain: {
     handle(channel: string, fn: IpcHandler) {
       handlers.set(channel, fn);

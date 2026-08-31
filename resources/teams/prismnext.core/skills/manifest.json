@@ -24,35 +24,42 @@
     {
       "id": "figure-interaction",
       "name": "figure-interaction",
-      "description": "Use only when the user asked for a reopenable chat/panel card and the figure or CSV already exists on disk — interaction-write, one sentence, stop. Not for drawing (→ figure-matplotlib / figure-tikz) or manuscript wiring (→ figure-pipeline).",
+      "description": "Use only when the user asked for a reopenable chat/panel card and the figure or CSV already exists on disk — interaction-write, one sentence, stop. Not for drawing (→ figure-matplotlib / figure-tikz / figure-typst) or manuscript wiring (→ figure-pipeline).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-matplotlib",
       "name": "figure-matplotlib",
-      "description": "Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "description": "Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-typst if the manuscript root is .typ, else → figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-observable-plot",
       "name": "figure-observable-plot",
-      "description": "Use when a data figure needs Observable Plot's chart vocabulary — density, hexbin, facets, cell heatmap, geo — spec + CSV → experiment-run → SVG, then stop. Ordinary line/bar/scatter → figure-matplotlib. Diagrams → figure-tikz. Panel cards → figure-interaction. Manuscript include → figure-pipeline, and only if the user asked.",
+      "description": "Use when a data figure needs Observable Plot's chart vocabulary — density, hexbin, facets, cell heatmap, geo — spec + CSV → experiment-run → SVG, then stop. Ordinary line/bar/scatter → figure-matplotlib. Diagrams → figure-typst (.typ paper) or figure-tikz (.tex paper). Panel cards → figure-interaction. Manuscript include → figure-pipeline, and only if the user asked.",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-pipeline",
       "name": "figure-pipeline",
-      "description": "Use only when the user asked to put an existing (or just-drawn) figure into the manuscript — includegraphics, caption, label, in-text cite, then latex-compile. Not for drawing the figure (→ figure-matplotlib / figure-tikz / figure-observable-plot) and not for chat panel cards (→ figure-interaction).",
+      "description": "Use only when the user asked to put an existing (or just-drawn) figure into the manuscript. If the paper root is .typ: #figure / #image, then typst-compile. If the paper root is .tex: includegraphics, then latex-compile. Not for drawing the figure (→ figure-matplotlib / figure-tikz / figure-typst / figure-observable-plot) and not for chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },
     {
       "id": "figure-tikz",
       "name": "figure-tikz",
-      "description": "Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "description": "Use only when the manuscript root is `.tex` and you are drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Typst / CeTZ diagrams → figure-typst. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
+      "category": "academic",
+      "license": "MIT"
+    },
+    {
+      "id": "figure-typst",
+      "name": "figure-typst",
+      "description": "Use when the manuscript root is `.typ` (or the user asked for CeTZ / Typst diagrams) — catalog templates first (layered boxes, fletcher exchange), copy the `.typ`, edit only the contract lets, typst-compile-standalone, stop when the PDF sits next to the source. LaTeX TikZ → figure-tikz. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).",
       "category": "academic",
       "license": "MIT"
     },

@@ -5,7 +5,7 @@ import {
   deleteProjectRule,
   setProjectRuleEnabled,
   type ProjectRuleInfo,
-} from "../prompts/rules-sync";
+} from "../prompts";
 
 export function registerRulesHandlers(): void {
   ipcMain.handle("agent:listRules", async (_event, args: { projectPath: string }) => {

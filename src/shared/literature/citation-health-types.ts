@@ -15,6 +15,7 @@ export interface BibFallbackEntry {
 
 export interface CitationHealthLibraryCheck {
   texFilesScanned: number;
+  typFilesScanned?: number;
   citeKeysInTex: string[];
   knownKeys: string[];
   missingKeys: string[];
@@ -23,6 +24,7 @@ export interface CitationHealthLibraryCheck {
 
 export interface CitationHealthBibCheck {
   texFilesScanned: number;
+  typFilesScanned?: number;
   bibPath: string | null;
   citeKeysInTex: string[];
   keysInBib: string[];
@@ -36,7 +38,7 @@ export interface CitationHealthReport {
   bibCheck: CitationHealthBibCheck;
   libraryCheck: CitationHealthLibraryCheck;
   bibFallback: BibFallbackEntry[];
-  /** Keys in manuscript .bib that are not in library.db — policy violation under library-first rules. */
+  /** Keys in manuscript .bib that are not in library.db — informational unless cited in the manuscript. */
   bibKeysNotInLibrary: string[];
 }
 

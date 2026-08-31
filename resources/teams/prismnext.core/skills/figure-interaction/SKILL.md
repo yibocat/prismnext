@@ -1,6 +1,6 @@
 ---
 name: figure-interaction
-description: Use only when the user asked for a reopenable chat/panel card and the figure or CSV already exists on disk — interaction-write, one sentence, stop. Not for drawing (→ figure-matplotlib / figure-tikz) or manuscript wiring (→ figure-pipeline).
+description: Use only when the user asked for a reopenable chat/panel card and the figure or CSV already exists on disk — interaction-write, one sentence, stop. Not for drawing (→ figure-matplotlib / figure-tikz / figure-typst) or manuscript wiring (→ figure-pipeline).
 license: MIT
 ---
 

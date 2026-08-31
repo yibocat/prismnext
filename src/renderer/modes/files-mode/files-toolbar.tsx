@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useTranslation } from "react-i18next";
 import { openUrlInBrowser } from "@/lib/browser-link";
@@ -13,19 +13,13 @@ import { paperKeyFromMainFile } from "@/lib/compile/compile-artifact";
 import { problemsFromDiagnostics } from "@/lib/compile/compile-problems-strip";
 import { resolveCompilePreviewOpen } from "@/lib/compile/compile-split";
 import { compileArtifactCacheKey, compileEngineFromRelPath } from "@shared/compile/artifact-key";
-import type { TypstCliFormat } from "@shared/compile/typst-format";
 import { compileCurrentDocument, useCompileStore } from "@/stores/compile-store";
-import { compileTypstPdf, exportTypst } from "@/stores/typst-live-store";
+import { compileTypstPdf } from "@/stores/typst-live-store";
+import { TypstExportDialog } from "./typst-export-dialog";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useWorkspaceConfigStore } from "@/stores/workspace-config-store";
 import { isStandaloneTexDocument, resolveCompileTarget } from "@/lib/tex/resolve-tex-root";
 import { resolveTypstRootFromBuffers } from "@/lib/typst/resolve-typst-root";
-import {
-  AppMenu,
-  AppMenuContent,
-  AppMenuItem,
-  AppMenuTrigger,
-} from "@/components/ui/app-menu";
 
 interface FileToolbarProps {
   tab: RightTab;
@@ -79,6 +73,7 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
   const setCompileErrorPane = useLayoutStore((s) => s.setCompileErrorPane);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isTypst = compileEngineFromRelPath(fileRel) === "typst";
+  const [exportOpen, setExportOpen] = useState(false);
 
   const cls = useMemo(() => {
     const engine = compileEngineFromRelPath(fileRel);
@@ -190,28 +185,19 @@ function FilesCompileToolbar({ filePath, fileId }: { filePath: string; fileId?: 
       </Hint>
       )}
       {isTypst ? (
-        <AppMenu>
+        <>
           <Hint label={t("modes.files.typstExport")}>
-            <AppMenuTrigger asChild>
-              <button type="button" className={TOOL_BTN}>
-                <FileDownIcon className="size-3.5" />
-              </button>
-            </AppMenuTrigger>
+            <button type="button" className={TOOL_BTN} onClick={() => setExportOpen(true)}>
+              <FileDownIcon className="size-3.5" />
+            </button>
           </Hint>
-          <AppMenuContent align="end">
-            {(["pdf", "png", "svg", "html"] as TypstCliFormat[]).map((format) => (
-              <AppMenuItem
-                key={format}
-                onSelect={() => {
-                  if (fileId) useDocumentStore.getState().setActiveFile(fileId);
-                  void exportTypst(format);
-                }}
-              >
-                {t(`modes.files.typstExport${format.charAt(0).toUpperCase()}${format.slice(1)}`)}
-              </AppMenuItem>
-            ))}
-          </AppMenuContent>
-        </AppMenu>
+          <TypstExportDialog
+            open={exportOpen}
+            onOpenChange={setExportOpen}
+            compileRoot={cls.compileRoot}
+            fileId={fileId}
+          />
+        </>
       ) : null}
       <Hint
         label={

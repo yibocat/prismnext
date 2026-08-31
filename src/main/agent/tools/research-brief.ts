@@ -19,7 +19,16 @@ function str(v: unknown): string {
 export const researchBriefReadTool: NativeToolDefinition = {
   name: TOOL_NAMES.researchBriefRead,
   label: "Read Research Brief",
-  description: "Read the project research design brief (.brief.md at project root).",
+  description:
+    "Read the project research brief (`.brief.md` at project root) — the on-disk intellectual spine. " +
+    "Returns `raw`, parsed `sections`, and `sectionNames`; creates the template scaffold when missing.",
+  promptGuidelines: [
+    "Project-root `.brief.md` only — use this tool, not generic `read`, so sections parse consistently.",
+    "Read to **align** literature, writing, or experiments with the settled spine — not to memorize or quote the whole file.",
+    "Call when project intent is unclear, the user refers to direction/goals, or chat may disagree with on-disk intent (brief wins — ask before overwriting user prose).",
+    "Live research exploration stays in chat (Research design module); this returns what has **settled** on disk — empty or partial sections are OK.",
+    "Not an experiment plan, AGENTS.md, project rules, or chat memory — capture writes → research-brief-update (user-confirmed only; how-to on that tool).",
+  ],
   parameters: Type.Object({}),
   permission: {
     category: "read_only",

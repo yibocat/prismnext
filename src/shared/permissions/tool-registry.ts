@@ -85,11 +85,8 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   "literature-delete": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: DESTRUCTIVE },
   "citation-health": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "literature-export-bib": { permissionGroup: "file_write", confirmUx: "inline", diskMutation: true, rules: FILE_MUTATION },
-  "latex-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
-  // Compile writes PDF artifacts. Engines stay on the host tools — never bash.
   "latex-compile": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
   "latex-compile-standalone": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
-  "typst-root": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   "typst-compile": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
   "typst-compile-standalone": { permissionGroup: "file_write", confirmUx: "none", diskMutation: true, rules: FILE_MUTATION },
   "research-brief-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },

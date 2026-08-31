@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { TOOL_NAMES } from "../../shared/agent/tool-names";
 import { resolveSessionScratchKey } from "./chat-session-registry";
 import { sessionCitationsDir } from "../workbench/home";
 
@@ -116,9 +117,10 @@ export function formatSessionCiteAuditMarkdown(snapshot: SessionCiteAuditSnapsho
     CITE_AUDIT_APPENDIX_MARKER,
     "",
     "Structured audit results from this chat session. **Reuse for follow-up** — do not re-run audit tools unless",
-    "`.tex`/`.bib` changed or the user asks for a fresh check.",
+    "manuscript sources or `.bib` changed or the user asks for a fresh check.",
+    "Library papers not cited are **informational**, not audit failures.",
     "",
-    "### citation-health",
+    `### ${TOOL_NAMES.citationHealth}`,
   ];
 
   if (h.bibPath) lines.push(`- manuscript .bib: \`${h.bibPath}\``);
@@ -126,12 +128,15 @@ export function formatSessionCiteAuditMarkdown(snapshot: SessionCiteAuditSnapsho
   lines.push(`- missing in .bib: ${formatKeyList(h.missingInBib)}`);
   lines.push(`- unused in .tex: ${formatKeyList(h.unusedInBib)}`);
   lines.push(`- duplicate keys: ${formatKeyList(h.duplicateKeys)}`);
-  lines.push(`- missing in library: ${formatKeyList(h.missingInLibrary)}`);
+  lines.push(`- missing in library (issue): ${formatKeyList(h.missingInLibrary)}`);
+  if (h.unusedInLibrary?.length) {
+    lines.push(`- library papers not cited (informational): ${formatKeyList(h.unusedInLibrary)}`);
+  }
   if (h.bibFallbackCount != null && h.bibFallbackCount > 0) {
     lines.push(`- bibFallback entries (importable from .bib): ${h.bibFallbackCount}`);
   }
   if (h.bibKeysNotInLibrary?.length) {
-    lines.push(`- .bib keys not in library (policy): ${formatKeyList(h.bibKeysNotInLibrary)}`);
+    lines.push(`- .bib keys not in library (informational): ${formatKeyList(h.bibKeysNotInLibrary)}`);
   }
   lines.push("");
 

@@ -1,14 +1,17 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CHAT_CITATION_STAGING_PROMPT } from "../../src/main/prompts/modules/chat-citation-staging";
-import { CITATION_AUDIT_PROMPT } from "../../src/main/prompts/modules/citation-audit";
-import { RESEARCH_DESIGN_PROMPT } from "../../src/main/prompts/modules/research-design";
-import { EXPERIMENTS_PROMPT } from "../../src/main/prompts/modules/experiments";
-import { LITERATURE_LIBRARY_PROMPT } from "../../src/main/prompts/modules/literature-library";
-import { ORCHESTRATOR_JUDGMENT_PROMPT } from "../../src/main/prompts/modules/orchestrator-judgment";
-import { buildManuscriptCompilePrompt } from "../../src/main/prompts/modules/manuscript-compile";
-import type { PromptContext } from "../../src/main/prompts/types";
+import {
+  CHAT_CITATION_STAGING_PROMPT,
+  CITATION_AUDIT_PROMPT,
+  RESEARCH_DESIGN_PROMPT,
+  EXPERIMENTS_PROMPT,
+  LITERATURE_LIBRARY_PROMPT,
+  ORCHESTRATOR_JUDGMENT_PROMPT,
+  buildManuscriptCompilePrompt,
+} from "../../src/main/prompts";
+import type { PromptContext } from "../../src/main/prompts";
+import { TOOL_NAMES } from "../../src/shared/agent/tool-names";
 
 /** Core-pack 内容目录（Phase 2 起内置 agents 位于 core pack 内）。 */
 const CORE_PACK_DIR = join(process.cwd(), "resources", "teams", "prismnext.core");
@@ -77,24 +80,26 @@ describe("builtin instructions audit (Phase 1.3)", () => {
 
   it("knowledge modules cover citation and Task handoff workflows", () => {
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
-    expect(LITERATURE_LIBRARY_PROMPT).toContain("Task handoff");
+    expect(LITERATURE_LIBRARY_PROMPT).toContain("Library papers (this Task)");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("[n]");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Task handoff");
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("see that tool");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("on that tool");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Available subagents (via Task)");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).toContain("Do not search the project");
     expect(ORCHESTRATOR_JUDGMENT_PROMPT).not.toContain("@peer-reviewer");
     expect(CITATION_AUDIT_PROMPT).toContain("When this applies");
     expect(CITATION_AUDIT_PROMPT).toContain("citation-health");
-    expect(CITATION_AUDIT_PROMPT).toContain("peer-reviewer");
+    expect(CITATION_AUDIT_PROMPT).toContain("Compliance model");
+    expect(CITATION_AUDIT_PROMPT).not.toContain("peer-reviewer");
     expect(RESEARCH_DESIGN_PROMPT).toContain("research-brief-read");
-    expect(RESEARCH_DESIGN_PROMPT).toContain("research-design-coach");
+    expect(RESEARCH_DESIGN_PROMPT).not.toContain("research-design-coach");
+    expect(RESEARCH_DESIGN_PROMPT).toContain("Intellectual roadmap");
     expect(RESEARCH_DESIGN_PROMPT).toContain("Project brief");
-    expect(EXPERIMENTS_PROMPT).toContain("Soft workflow");
-    expect(EXPERIMENTS_PROMPT).toContain("experiment-log");
+    expect(EXPERIMENTS_PROMPT).toContain("Route the request");
+    expect(EXPERIMENTS_PROMPT).not.toContain("Soft workflow");
+    expect(EXPERIMENTS_PROMPT).toContain(TOOL_NAMES.experimentLog);
     expect(EXPERIMENTS_PROMPT).toContain("experiment-run");
     expect(EXPERIMENTS_PROMPT).toContain("results-snapshot");
-    expect(EXPERIMENTS_PROMPT).toContain("methodology-auditor");
+    expect(EXPERIMENTS_PROMPT).not.toContain("methodology-auditor");
     expect(EXPERIMENTS_PROMPT).not.toContain("uv pip --system");
     expect(EXPERIMENTS_PROMPT).not.toContain("### Workflow (binding)");
     const latex = buildManuscriptCompilePrompt({} as PromptContext);
@@ -109,7 +114,7 @@ describe("builtin instructions audit (Phase 1.3)", () => {
     const typstTools = readFileSync(join(__dirname, "../../src/main/agent/tools/typst.ts"), "utf8");
     expect(typstTools).toContain("TOOL_NAMES.typstCompile");
     expect(typstTools).toContain("TOOL_NAMES.typstCompileStandalone");
-    expect(typstTools).toContain("Never compile Typst via the bash tool");
+    expect(typstTools).toContain("Never invoke Typst via the bash tool");
   });
 
   it("no instructions.md under bundled resources duplicates removed academic modules", () => {

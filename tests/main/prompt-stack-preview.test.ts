@@ -32,21 +32,47 @@ describe("prompt stack preview", () => {
       userCustomPrompt: undefined,
     });
     const stable = preview.sections.find((s) => s.id === "prism-system");
-    expect(stable?.content).toContain("# prismnext");
+    expect(stable?.content).toContain("## Research AI assistant");
+    expect(stable?.content).toContain("## Scholarly reasoning");
+    expect(stable?.content.indexOf("## Scholarly reasoning")).toBeLessThan(
+      stable?.content.indexOf("## Reply depth") ?? -1,
+    );
     expect(stable?.content).not.toContain("Chat paper citations");
     expect(stable?.content).not.toContain("User AGENTS");
     const agents = preview.sections.find((s) => s.id === "agents-md");
     expect(agents?.fileHint).toBe(".workbench/agent/AGENTS.md");
   });
 
-  it("includes orchestrator agent.md with profile modules", async () => {
+  it("separates user-editable Team lead from silent built-in modules", async () => {
     const preview = await buildPromptStackPreview({ projectRoot: root });
-    const agent = preview.sections.find((s) => s.id === "orchestrator-agent");
-    expect(agent?.content).toContain("mode: primary");
-    expect(agent?.content).toContain("## Chat paper citations");
-    expect(agent?.content).toContain("## Orchestrator judgment");
-    expect(agent?.content).toContain("### Task delegation");
+    const lead = preview.sections.find((s) => s.id === "orchestrator-agent");
+    const modules = preview.sections.find((s) => s.id === "profile-modules");
+    expect(lead?.content).toContain("Active Team Lead:");
+    expect(lead?.content).not.toContain("mode: primary");
+    expect(lead?.content).not.toContain("## Chat paper citations");
+    expect(modules?.content).toContain("## Chat paper citations");
+    expect(modules?.content).toContain("## Orchestrator judgment");
+    expect(modules?.content).toContain("### Task delegation");
     expect(preview.orchestratorId).toBe("research-prism");
+  });
+
+  it("liveSystemPrompt equals the joined system sections (not project rules)", async () => {
+    const preview = await buildPromptStackPreview({ projectRoot: root });
+    const systemIds = [
+      "host-identity",
+      "prism-system",
+      "agents-md",
+      "orchestrator-agent",
+      "profile-modules",
+      "task-roster",
+    ];
+    const joined = preview.sections
+      .filter((s) => systemIds.includes(s.id) && s.content.trim())
+      .map((s) => s.content.trim())
+      .join("\n\n");
+    expect(preview.liveSystemPrompt).toBe(joined);
+    expect(preview.liveSystemPrompt).toContain("Chat paper citations");
+    expect(preview.liveSystemPrompt).not.toContain("mode: primary");
   });
 
   it("includes all enabled project rules in the preview", async () => {
@@ -79,7 +105,8 @@ Body B
     const rules = preview.sections.find((s) => s.id === "project-rules");
     expect(rules?.content).toContain("Rule A");
     expect(rules?.content).toContain("Body B");
-    expect(rules?.injectPath).toContain("all enabled always rules");
+    expect(rules?.injectPath).toContain("Each chat turn");
+    expect(preview.liveSystemPrompt).not.toContain("Body A");
   });
 
   it("formatPromptStackPreviewMarkdown lists injection paths", async () => {

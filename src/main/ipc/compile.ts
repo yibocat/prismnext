@@ -1,15 +1,12 @@
 import { BrowserWindow, dialog, ipcMain } from "electron";
-import { basename, dirname, extname, join } from "node:path";
-import { readFile, writeFile } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
+import { readFile } from "node:fs/promises";
 import { compileLatex, detectTexlive, detectTectonic } from "../compile/facade";
 import { compileEngineFromRelPath } from "../../shared/compile/artifact-key";
-import { TYPST_CLI_FORMATS, type TypstCliFormat } from "../../shared/compile/typst-format";
+import { TYPST_CLI_FORMATS, typstExportFileRel, typstVisibleExportDirRel, type TypstCliFormat } from "../../shared/compile/typst-format";
 import {
   compileTypstForIpc,
   compileTypstToFormat,
-  decodeTypstWireFiles,
-  type TypstExportFile,
-  type TypstWireFile,
 } from "../compile/typst";
 import { parseRemoteAbs } from "../../shared/remote";
 import { routeHostDomainMethod } from "../remote/domain-route";
@@ -42,48 +39,6 @@ async function routeIfRemote(method: string, args: unknown, keys: string[]): Pro
 
 function projectName(projectRoot: string): string {
   return basename(projectRoot) || "project";
-}
-
-const FORMAT_FILTER: Record<TypstCliFormat, { name: string; extensions: string[] }> = {
-  pdf: { name: "PDF", extensions: ["pdf"] },
-  png: { name: "PNG", extensions: ["png"] },
-  svg: { name: "SVG", extensions: ["svg"] },
-  html: { name: "HTML", extensions: ["html"] },
-};
-
-async function saveTypstExportFiles(
-  win: BrowserWindow,
-  files: TypstExportFile[],
-  format: TypstCliFormat,
-): Promise<
-  | { canceled: true }
-  | { canceled: false; ok: true; path: string }
-  | { canceled: false; ok: false; error: string }
-> {
-  const first = files[0];
-  if (!first) return { canceled: false, ok: false, error: "no-output" };
-  const result = await dialog.showSaveDialog(win, {
-    title: "Export Typst",
-    defaultPath: first.name,
-    filters: [FORMAT_FILTER[format]],
-  });
-  if (result.canceled || !result.filePath) return { canceled: true };
-  const destDir = dirname(result.filePath);
-  const stem = basename(result.filePath, extname(result.filePath));
-  const ext = extname(first.name) || `.${format}`;
-  if (files.length === 1) {
-    await writeFile(result.filePath, first.bytes);
-    return { canceled: false, ok: true, path: result.filePath };
-  }
-  let last = result.filePath;
-  for (const file of files) {
-    const page = file.name.match(/(\d+)(?=\.[^.]+$)/)?.[1];
-    const name = page ? `${stem}-${page}${ext}` : `${stem}${ext}`;
-    const abs = join(destDir, name);
-    await writeFile(abs, file.bytes);
-    last = abs;
-  }
-  return { canceled: false, ok: true, path: last };
 }
 
 export function registerCompileHandlers(): void {
@@ -186,34 +141,60 @@ export function registerCompileHandlers(): void {
       if (!TYPST_CLI_FORMATS.includes(format)) {
         return { canceled: false as const, ok: false as const, error: "bad-format" };
       }
-      const win = BrowserWindow.getFocusedWindow();
-      if (!win) return { canceled: true as const };
 
-      let files: TypstExportFile[];
-      const routed = await routeIfRemote("compile:typstExport", args, ["projectDir"]);
+      const outDirRel = typstVisibleExportDirRel(args.mainFile);
+      const routed = await routeIfRemote(
+        "compile:typstExport",
+        { ...args, outDirRel },
+        ["projectDir"],
+      );
       if (routed !== undefined) {
-        const raw = routed as { error?: string; stdout?: string; files?: TypstWireFile[] };
-        if (raw.error || !raw.files?.length) {
-          return { canceled: false as const, ok: false as const, error: raw.error || "Compilation failed", stdout: raw.stdout };
+        const raw = routed as { error?: string; stdout?: string; files?: unknown; buildDir?: string };
+        if (raw.error) {
+          return { canceled: false as const, ok: false as const, error: raw.error, stdout: raw.stdout };
         }
-        files = decodeTypstWireFiles(raw.files);
-      } else {
-        const result = await compileTypstToFormat(args.projectDir, args.mainFile, format, {
-          dirtyFiles: args.dirtyFiles,
-          source: "ui",
-        });
-        if (!result.success || !result.files?.length) {
+        const files = Array.isArray(raw.files)
+          ? raw.files.filter((item): item is string => typeof item === "string")
+          : [];
+        if (files.length === 0) {
           return {
             canceled: false as const,
             ok: false as const,
-            error: result.error || "Compilation failed",
-            stdout: result.logContent,
+            error: "Compilation failed",
+            stdout: raw.stdout,
           };
         }
-        files = result.files;
+        return {
+          canceled: false as const,
+          ok: true as const,
+          files,
+          buildDir: raw.buildDir ?? outDirRel,
+          stdout: raw.stdout,
+        };
       }
 
-      return saveTypstExportFiles(win, files, format);
+      const result = await compileTypstToFormat(
+        args.projectDir,
+        args.mainFile,
+        format,
+        { dirtyFiles: args.dirtyFiles, source: "ui" },
+        outDirRel,
+      );
+      if (!result.success || !result.files?.length) {
+        return {
+          canceled: false as const,
+          ok: false as const,
+          error: result.error || "Compilation failed",
+          stdout: result.logContent,
+        };
+      }
+      return {
+        canceled: false as const,
+        ok: true as const,
+        files: result.files.map((file) => typstExportFileRel(result.buildDir, file.name)),
+        buildDir: result.buildDir,
+        stdout: result.logContent,
+      };
     },
   );
 

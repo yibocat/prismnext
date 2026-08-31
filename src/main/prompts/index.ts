@@ -1,197 +1,94 @@
-// prism-next/src/main/prompts/index.ts
+/**
+ * Public facade for `src/main/prompts`.
+ *
+ * Code outside this directory must import from `"../prompts"` (this file).
+ * Do not deep-import `assemble/`, `stable/`, `modules/<key>/`, `engine/`, `stack-preview`, etc.
+ *
+ * Capability blocks live under `modules/<key>/`; consume them via this barrel
+ * or `./modules` (catalog). Never import a block's `prompt.ts` / `build.ts`.
+ */
 
-import { PromptComposer } from "./composer";
-import type { PromptLayer, PromptModule, PromptContext } from "./types";
-import { createCorePersonaLayer } from "./layers/core-persona";
-import { createActiveModulesLayer } from "./layers/active-modules";
-import { createAgentsMdLayer } from "./layers/agents-md";
-import { createCustomRulesLayer } from "./layers/custom-rules";
-import { ALL_MODULES } from "./modules";
-import { createLogger } from "../app/logger";
-import { countPromptTokens } from "../lib/token-estimate";
+export { promptManager } from "./engine/manager";
 
-/** DJB2 — must stay in sync with PromptComposer fingerprint hashing. */
-function djb2Hash(s: string): string {
-  let hash = 5381;
-  for (let i = 0; i < s.length; i++) {
-    hash = ((hash << 5) + hash) + s.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(36);
-}
+export type { PromptContext, PromptLayer, PromptModule } from "./types";
+export { buildPromptContext, type BuildPromptContextOptions } from "./context";
 
-function staticModuleContentFingerprint(): string {
-  return ALL_MODULES
-    .filter((m) => m.prompt)
-    .map((m) => `${m.key}=${djb2Hash(m.prompt!)}`)
-    .join(",");
-}
+export {
+  assembleAgentSystemPrompt,
+  buildAgentSystemPromptParts,
+  formatLeadAgentSection,
+  joinAgentSystemPromptParts,
+  HOST_SYSTEM_IDENTITY,
+  type AgentSystemPromptInput,
+  type AgentSystemPromptParts,
+} from "./assemble";
 
-const log = createLogger("prompt-manager", "agent");
+export {
+  composeStableSystem,
+  CORE_PERSONA_PROMPT,
+  createCorePersonaLayer,
+  RESEARCH_REASONING_PROMPT,
+  REPLY_DEPTH_PROMPT,
+  buildWorkspacePrompt,
+  GLOBAL_MODULE_ORDER,
+  type GlobalModuleKey,
+} from "./stable";
 
-const PROJECT_RULES_LAYER_ID = "custom-rules";
-const AGENTS_MD_LAYER_ID = "agents-md";
+export {
+  ALL_MODULES,
+  CHAT_CITATION_STAGING_PROMPT,
+  CITATION_AUDIT_PROMPT,
+  LITERATURE_LIBRARY_PROMPT,
+  ORCHESTRATOR_JUDGMENT_PROMPT,
+  buildOrchestratorJudgmentPrompt,
+  buildManuscriptCompilePrompt,
+  PROJECT_BRIEF_PROMPT,
+  PROJECT_RULES_MEMORY_PROMPT,
+  RESEARCH_DESIGN_PROMPT,
+  EXPERIMENTS_PROMPT,
+  INTERACTION_PROMPT,
+  SUBAGENT_ROLE_PROMPT,
+} from "./modules";
 
-/** Strip per-turn layers for stable system file generation. */
-function toStablePromptContext(ctx: PromptContext): PromptContext {
-  return { ...ctx };
-}
+export {
+  resolveStableSystemModules,
+  resolveSharedProfileModules,
+  resolveOrchestratorOnlyProfileModules,
+  resolveExpertOnlyProfileModules,
+  resolveProfileSelectableModules,
+  resolveOrchestratorProfileModuleKeys,
+  resolveSubagentProfileModuleKeys,
+  resolveSubagentProfileModuleKeysFor,
+  composeProfileModulePrompts,
+  composeOrchestratorProfileModulePrompts,
+  composeSubagentProfileModulePrompts,
+  resolveActiveModuleKeys,
+  resolveOrchestratorActiveModuleKeys,
+  resolveSubagentActiveModuleKeys,
+} from "./resolve-active-modules";
 
-const STABLE_SYSTEM_EXCLUDE_LAYERS = [
-  PROJECT_RULES_LAYER_ID,
-  AGENTS_MD_LAYER_ID,
-];
+export {
+  buildPlanModeTurnAppendix,
+  buildIntensiveReadingInstruction,
+  type IntensivePaper,
+  type IntensiveReadingOptions,
+} from "./per-turn";
 
-class PromptManager {
-  private composer = new PromptComposer();
-  private initialized = false;
+export {
+  PRISM_RULES_REL,
+  listProjectRules,
+  getPromptProjectRules,
+  installProjectRule,
+  deleteProjectRule,
+  setProjectRuleEnabled,
+  type ProjectRuleInfo,
+  type GetPromptProjectRulesOptions,
+} from "./rules-sync";
 
-  /** Register all layers and modules. Idempotent -- safe to call multiple times. */
-  initialize(): void {
-    if (this.initialized) return;
-
-    // Layer 0: Core persona (always on, never toggleable)
-    this.composer.register(createCorePersonaLayer());
-
-    // Layer 1: AGENTS.md — project rules (before generic modules)
-    this.composer.register(createAgentsMdLayer());
-
-    // Layer 2: Active modules (built-in toggles)
-    this.composer.register(createActiveModulesLayer());
-
-    // Layer 2.5: User custom rules
-    this.composer.register(createCustomRulesLayer());
-
-    // Precompute static layers (core-persona)
-    this.composer.preComputeStatic();
-
-    this.initialized = true;
-    log.info(`PromptManager initialized (${this.composer.getLayers().length} layers)`);
-  }
-
-  // -----------------------------------------------------------------
-  // Public API
-  // -----------------------------------------------------------------
-
-  /** Assemble the final prompt string from all enabled layers. */
-  compose(ctx: PromptContext): string {
-    this.initialize();
-    return this.composer.compose(ctx);
-  }
-
-  /** Base system prompt without project rules (legacy — prefer composeStableSystem). */
-  composeBase(ctx: PromptContext): string {
-    this.initialize();
-    return this.composer.compose(ctx, { excludeLayerIds: [PROJECT_RULES_LAYER_ID] });
-  }
-
-  /**
-   * Stable system content passed to the Pi ResourceLoader in memory.
-   * Excludes AGENTS.md (appended separately) and project rules (per-turn user block).
-   */
-  composeStableSystem(ctx: PromptContext): string {
-    this.initialize();
-    return this.composer.compose(toStablePromptContext(ctx), {
-      excludeLayerIds: STABLE_SYSTEM_EXCLUDE_LAYERS,
-    });
-  }
-
-  /** Project rules only — re-read from disk and injected on every chat turn. */
-  composeProjectRules(ctx: PromptContext): string {
-    this.initialize();
-    return this.composer.compose(ctx, { onlyLayerIds: [PROJECT_RULES_LAYER_ID] });
-  }
-
-  /** Get all layers (for settings UI introspection). */
-  getLayers(): readonly PromptLayer[] {
-    this.initialize();
-    return this.composer.getLayers();
-  }
-
-  /** Built-in knowledge module catalog (read-only — selection is per agent profile). */
-  getKnowledgeModuleCatalog(ctx: PromptContext = {}): Array<{
-    key: string;
-    label: string;
-    description: string;
-    source: string;
-    autoGenerated?: boolean;
-    profileOnly?: boolean;
-    selectableInProfile: boolean;
-    injectPath: string;
-    contentPreview: string;
-    charCount: number;
-    tokenCount: number;
-  }> {
-    return ALL_MODULES.map((m) => {
-      const text = m.build ? m.build(ctx) : m.prompt ?? "";
-      const contentPreview = text.trim()
-        || (m.autoGenerated
-          ? "Generated from project workspace configuration when folders are defined."
-          : "");
-      const { tokenCount, charCount } = countPromptTokens(contentPreview);
-      const injectPath = m.expertOnly
-        ? "Expert/subagent agent.md only (auto-attached)"
-        : m.orchestratorOnly
-          ? "Primary orchestrator agent.md only (auto-attached)"
-          : m.profileOnly
-            ? "Orchestrator + expert agent.md (auto-attached)"
-            : "Pi system prompt (all sessions)";
-      return {
-        key: m.key,
-        label: m.label,
-        description: m.description,
-        source: m.source,
-        autoGenerated: m.autoGenerated,
-        profileOnly: m.profileOnly,
-        selectableInProfile: Boolean(m.profileOnly),
-        injectPath,
-        contentPreview,
-        charCount,
-        tokenCount,
-      };
-    });
-  }
-
-  /** Toggle a layer on/off. Only works for userToggleable layers. */
-  setLayerEnabled(id: string, enabled: boolean): void {
-    this.composer.setEnabled(id, enabled);
-  }
-
-  /** Export current layer toggle states for persistence. */
-  dumpLayerStates(): Record<string, boolean> {
-    const result: Record<string, boolean> = {};
-    for (const l of this.composer.getLayers()) {
-      if (l.userToggleable) {
-        result[l.id] = l.enabled;
-      }
-    }
-    return result;
-  }
-
-  /** Restore layer toggle states from persisted settings. */
-  loadLayerStates(states: Record<string, boolean>): void {
-    for (const [id, enabled] of Object.entries(states)) {
-      if (id === "user-instructions") continue;
-      this.composer.setEnabled(id, enabled);
-    }
-    this.composer.invalidate();
-  }
-
-  /** Stable fingerprint for `_prism-system.md` sync (excludes per-turn / per-tab layers). */
-  computePromptFingerprint(ctx: PromptContext): string {
-    this.initialize();
-    const stableCtx = toStablePromptContext(ctx);
-    const base = this.composer.fingerprint(stableCtx, {
-      excludeLayerIds: STABLE_SYSTEM_EXCLUDE_LAYERS,
-    });
-    const modContent = staticModuleContentFingerprint();
-    return `${base}|${modContent}`;
-  }
-
-  /** Invalidate all caches. Call when settings or project data changes. */
-  invalidate(): void {
-    this.composer.invalidate();
-  }
-}
-
-/** Singleton -- the single entry point for all prompt assembly. */
-export const promptManager = new PromptManager();
+export {
+  buildPromptStackPreview,
+  formatPromptStackPreviewMarkdown,
+  type PromptStackPreview,
+  type PromptStackSection,
+  type BuildPromptStackPreviewOptions,
+} from "./stack-preview";

@@ -82,7 +82,7 @@ skills compose without coupling, and so the agent stays a research partner
 rather than a form-filler.
 
 - **Two layers, one discipline.** What must hold every single turn lives in
-  the always-on prompt layer (`src/main/prompts/modules/`). Skills are
+  the always-on prompt layer (`src/main/prompts/modules/<key>/`). Skills are
   loaded **on demand** for a task at hand. Before adding a rule to a skill,
   ask which layer it belongs to.
 - **Soft triggers.** No skill "auto-fires" on an event. The model matches
