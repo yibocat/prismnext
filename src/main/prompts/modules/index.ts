@@ -4,8 +4,8 @@ import type { PromptModule, PromptContext } from "../types";
 import { CHAT_CITATION_STAGING_PROMPT } from "./chat-citation-staging";
 import { CITATION_AUDIT_PROMPT } from "./citation-audit";
 import { LITERATURE_LIBRARY_PROMPT } from "./literature-library";
-import { RESEARCH_REASONING_PROMPT } from "./research-reasoning";
-import { REPLY_DEPTH_PROMPT } from "./reply-depth";
+import { RESEARCH_REASONING_PROMPT } from "../stable/research-reasoning";
+import { REPLY_DEPTH_PROMPT } from "../stable/reply-depth";
 import { buildOrchestratorJudgmentPrompt } from "./orchestrator-judgment";
 import { PROJECT_BRIEF_PROMPT } from "./project-brief";
 import { RESEARCH_DESIGN_PROMPT } from "./research-design";
@@ -14,7 +14,7 @@ import { INTERACTION_PROMPT } from "./interaction";
 import { PROJECT_RULES_MEMORY_PROMPT } from "./project-rules-memory";
 import { SUBAGENT_ROLE_PROMPT } from "./subagent-role";
 import { buildManuscriptCompilePrompt } from "./manuscript-compile";
-import { buildWorkspacePrompt } from "./workspace-folders";
+import { buildWorkspacePrompt } from "../stable/workspace-folders";
 
 /** All available prompt modules.
  *

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { promptManager } from "../../src/main/prompts";
-import { CORE_PERSONA_PROMPT } from "../../src/main/prompts/layers/core-persona";
+import { promptManager, composeStableSystem, CORE_PERSONA_PROMPT } from "../../src/main/prompts";
 import type { PromptContext } from "../../src/main/prompts/types";
 
 describe("promptManager.compose", () => {
@@ -35,5 +34,18 @@ describe("promptManager.compose", () => {
     expect(composed).toContain("Use pnpm only.");
     expect(composed).toContain("## Tests");
     expect(composed).toContain("Run pnpm test before finishing.");
+  });
+
+  it("composeStableSystem joins persona then global modules (no AGENTS.md / rules)", () => {
+    const ctx: PromptContext = {
+      agentsMdContent: "# Project\n\nUse pnpm only.",
+      customRules: [{ name: "Tests", content: "Run pnpm test before finishing." }],
+    };
+    const stable = composeStableSystem(ctx);
+    expect(stable).toBe(promptManager.composeStableSystem(ctx));
+    expect(stable).toContain("## Research AI assistant");
+    expect(stable.indexOf("## Scholarly reasoning")).toBeLessThan(stable.indexOf("## Reply depth"));
+    expect(stable).not.toContain("Use pnpm only.");
+    expect(stable).not.toContain("Run pnpm test before finishing.");
   });
 });

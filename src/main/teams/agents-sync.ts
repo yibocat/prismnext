@@ -11,7 +11,7 @@
  * the single-slot PrismExpertsSyncState (B11).
  */
 
-import type { PromptContext } from "../prompts/types";
+import type { PromptContext } from "../prompts";
 import type { OrchestratorDefV2, SubagentDefV2 } from "../../shared/teams/view";
 import {
   getAsset,

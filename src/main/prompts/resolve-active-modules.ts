@@ -1,4 +1,5 @@
 import { ALL_MODULES } from "./modules";
+import { GLOBAL_MODULE_ORDER } from "./stable/order";
 import type { PromptContext, PromptModule } from "./types";
 
 /** Legacy module keys still referenced in team JSON / cached profiles. */
@@ -15,9 +16,6 @@ function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   if (mod.prompt) return mod.prompt;
   return "";
 }
-
-/** Global modules inside stableSystem — explicit join order (1.2 → 1.3 → 1.4). */
-const GLOBAL_MODULE_ORDER = ["research-reasoning", "reply-depth", "workspace-folders"] as const;
 
 /** Modules injected into the global system baseline (always on — not agent-selectable). */
 export function resolveStableSystemModules(): PromptModule[] {

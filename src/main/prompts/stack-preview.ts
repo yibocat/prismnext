@@ -1,10 +1,10 @@
-import { promptManager } from "./index";
+import { promptManager } from "./engine/manager";
 import { buildPromptContext } from "./context";
 import { composeOrchestratorProfileModulePrompts } from "./resolve-active-modules";
 import {
   assembleAgentSystemPrompt,
   buildAgentSystemPromptParts,
-} from "./system-assemble";
+} from "./assemble";
 import type { PromptContext } from "./types";
 import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
 
@@ -134,14 +134,14 @@ export async function buildPromptStackPreview(
       "Host identity",
       "Session start — prepended in assembleAgentSystemPrompt",
       parts.hostIdentity,
-      "prompts/system-assemble.ts",
+      "prompts/assemble/host",
     ),
     section(
       "prism-system",
       "Pi system prompt (global baseline)",
       "Session start — core persona + global modules (not profile-only)",
       parts.stableSystem,
-      "PromptManager.composeStableSystem",
+      "prompts/stable (composeStableSystem)",
     ),
     section(
       "agents-md",
@@ -188,4 +188,4 @@ export async function buildPromptStackPreview(
   };
 }
 
-export { HOST_SYSTEM_IDENTITY } from "./system-assemble";
+export { HOST_SYSTEM_IDENTITY } from "./assemble";

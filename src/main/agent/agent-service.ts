@@ -9,11 +9,7 @@ import { GATEWAY_PLACEHOLDER_KEY } from "../../shared/remote";
 import { createElectronSink, type ElectronSinkTarget } from "../remote/event-sink";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
-import { buildPlanModeTurnAppendix } from "../prompts/per-turn/plan-mode";
-import {
-  assembleAgentSystemPrompt,
-  HOST_SYSTEM_IDENTITY,
-} from "../prompts/system-assemble";
+import { buildPlanModeTurnAppendix, assembleAgentSystemPrompt, HOST_SYSTEM_IDENTITY } from "../prompts";
 import {
   type AgentAnswerQuestionInput,
   type AgentAuthInput,
@@ -1020,11 +1016,11 @@ export class AgentService {
       remoteJobNote: this.deps.remoteJobNote,
     }));
 
-    const { buildPromptContext } = await import("../prompts/context");
     const {
+      buildPromptContext,
       composeOrchestratorProfileModulePrompts,
       composeSubagentProfileModulePrompts,
-    } = await import("../prompts/resolve-active-modules");
+    } = await import("../prompts");
     const promptCtx = await buildPromptContext(input.projectRoot);
 
     if (ctx.roster && ctx.roster.length > 0) {
@@ -1196,8 +1192,7 @@ export async function getAgentService(): Promise<AgentService> {
   if (singleton) return singleton;
   const { app } = await import("electron");
   const { getSettings } = await import("../app/settings");
-  const { promptManager } = await import("../prompts");
-  const { buildPromptContext } = await import("../prompts/context");
+  const { promptManager, buildPromptContext } = await import("../prompts");
 
   singleton = createAgentService({
     userDataDir: app.getPath("userData"),

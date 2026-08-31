@@ -80,6 +80,21 @@ describe("code structure layer boundaries (Phase 0)", () => {
     }
   });
 
+  it("imports prompts from the package facade outside src/main/prompts", () => {
+    const deepPrompt = /(?:from\s+|import\s*\()\s*["'][^"']*prompts\/[^"']+["']/;
+    for (const dir of ["src/main", "src/host"]) {
+      const files = walkTsFiles(join(REPO, dir)).filter((file) => {
+        const rel = relative(REPO, file);
+        return !rel.startsWith("src/main/prompts/");
+      });
+      expect(files.length).toBeGreaterThan(0);
+      for (const file of files) {
+        const rel = relative(REPO, file);
+        expect(importsFrom(file, deepPrompt), rel).toEqual([]);
+      }
+    }
+  });
+
   it("defines PermissionMode in one shared module", () => {
     const modes = sourceOf("src/shared/permissions/modes.ts");
     const session = sourceOf("src/shared/agent/session-agent.ts");

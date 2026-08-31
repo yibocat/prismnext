@@ -8,12 +8,12 @@
  * that block — not the whole file set.
  */
 
-import type { PromptContext } from "../prompts/types";
 import {
+  type PromptContext,
   composeOrchestratorProfileModulePrompts,
   composeProfileModulePrompts,
   resolveSubagentProfileModuleKeysFor,
-} from "../prompts/resolve-active-modules";
+} from "../prompts";
 import { buildSubagentRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { buildTaskPermissionBlock } from "../agent/task-orchestrator-gate";
 import type { SubagentDefinition } from "../../shared/agent/subagents";
