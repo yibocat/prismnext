@@ -14,6 +14,9 @@ import {
   resolveBibliographyFromMain,
   resolveMainTexRelativePath,
 } from "../lib/bib-path-resolve";
+import { resolveTypstRoot } from "../lib/typst-root";
+import { extractTypstBibliographyRel } from "../../shared/literature/typst-cite-keys";
+import { scanManuscriptCiteKeys } from "./manuscript-cite-scan";
 import { cslEntryFromPaperRow } from "../../shared/bibliographic-metadata/helpers";
 import { resolveIncomingBibkey, patchRawBibtexKey } from "../../shared/literature/bibkey-utils";
 import { coerceStoredDoi, normalizeArxivId } from "../../shared/literature/doi-utils";
@@ -164,65 +167,13 @@ export function formatBibliography(
   return new Cite(entries).format("bibliography", { template: style }) as string;
 }
 
-const CITE_COMMAND_RE =
-  /\\(?:cite|citep|citet|autocite|footcite|parencite|textcite|Cite|Citep|Citet)\*?(?:\[[^\]]*\])*\{([^}]+)\}/g;
-
-const TEX_SCAN_SKIP_DIRS = new Set([
-  ".prismnext",
-  ".workbench",
-  "node_modules",
-  ".git",
-  "out",
-  "dist",
-  "build",
-  ".cursor",
-]);
-
 export interface CiteCheckResult {
   texFilesScanned: number;
+  typFilesScanned: number;
   citeKeysInTex: string[];
   knownKeys: string[];
   missingKeys: string[];
   unusedKeys: string[];
-}
-
-function parseCiteKeysFromBraceContent(content: string): string[] {
-  return content
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function extractCiteKeysFromTex(tex: string): string[] {
-  const keys: string[] = [];
-  for (const match of tex.matchAll(CITE_COMMAND_RE)) {
-    keys.push(...parseCiteKeysFromBraceContent(match[1]));
-  }
-  return keys;
-}
-
-function collectTexFiles(projectRoot: string, maxFiles = 200): string[] {
-  const result: string[] = [];
-  function walk(dir: string): void {
-    if (result.length >= maxFiles) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (TEX_SCAN_SKIP_DIRS.has(entry.name)) continue;
-        walk(path.join(dir, entry.name));
-      } else if (entry.isFile() && entry.name.endsWith(".tex")) {
-        result.push(path.join(dir, entry.name));
-        if (result.length >= maxFiles) return;
-      }
-    }
-  }
-  walk(projectRoot);
-  return result;
 }
 
 export function citeCheckLiterature(projectRoot: string, paperIds?: string[]): CiteCheckResult {
@@ -239,24 +190,14 @@ export function citeCheckLiterature(projectRoot: string, paperIds?: string[]): C
 
   const knownKeys = [...new Set(papers.map((p) => p.bibkey).filter(Boolean))];
   const knownSet = new Set(knownKeys);
-
-  const citeKeysInTex: string[] = [];
-  const texFiles = collectTexFiles(projectRoot);
-  for (const file of texFiles) {
-    try {
-      citeKeysInTex.push(...extractCiteKeysFromTex(fs.readFileSync(file, "utf-8")));
-    } catch {
-      // skip unreadable files
-    }
-  }
-
-  const uniqueInTex = [...new Set(citeKeysInTex)];
-  const usedSet = new Set(uniqueInTex);
+  const scan = scanManuscriptCiteKeys(projectRoot);
+  const usedSet = new Set(scan.citeKeys);
   return {
-    texFilesScanned: texFiles.length,
-    citeKeysInTex: uniqueInTex,
+    texFilesScanned: scan.texFilesScanned,
+    typFilesScanned: scan.typFilesScanned,
+    citeKeysInTex: scan.citeKeys,
     knownKeys,
-    missingKeys: uniqueInTex.filter((k) => !knownSet.has(k)),
+    missingKeys: scan.citeKeys.filter((k) => !knownSet.has(k)),
     unusedKeys: knownKeys.filter((k) => !usedSet.has(k)),
   };
 }
@@ -280,6 +221,27 @@ export function findProjectBibPath(projectRoot: string): string {
     }
     const manuscriptBib = path.join(projectRoot, path.dirname(mainRel), "references.bib");
     if (fs.existsSync(manuscriptBib)) return manuscriptBib;
+  }
+
+  const typst = resolveTypstRoot(projectRoot);
+  if (typst) {
+    try {
+      const source = fs.readFileSync(path.join(projectRoot, typst.mainFile), "utf-8");
+      const declared = extractTypstBibliographyRel(source);
+      if (declared) {
+        const dir = path.dirname(typst.mainFile);
+        const rel = dir === "." ? declared : path.join(dir, declared);
+        const abs = path.join(projectRoot, rel);
+        if (fs.existsSync(abs)) return abs;
+        return abs;
+      }
+    } catch {
+      // fall through
+    }
+    const nextToTyp = path.join(projectRoot, path.dirname(typst.mainFile), "references.bib");
+    if (fs.existsSync(nextToTyp)) return nextToTyp;
+    const refsTyp = path.join(projectRoot, path.dirname(typst.mainFile), "refs.bib");
+    if (fs.existsSync(refsTyp)) return refsTyp;
   }
 
   const candidates = [

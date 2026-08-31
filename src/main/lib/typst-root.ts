@@ -61,7 +61,7 @@ function readTypFile(projectRoot: string, relPath: string): string | null {
   }
 }
 
-function walkTypFiles(projectRoot: string): string[] {
+export function walkTypFiles(projectRoot: string): string[] {
   const results: string[] = [];
   const skip = new Set([".git", ".workbench", ".prismnext", "node_modules"]);
 

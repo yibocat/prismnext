@@ -1,0 +1,32 @@
+{
+  "id": "architecture-boxes",
+  "name": "Layered architecture boxes",
+  "type": "template",
+  "domain": ["general"],
+  "tags": ["architecture", "pipeline", "boxes", "cetz"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["cetz:0.3.4"],
+  "description": "Four-stage box pipeline with a parallel alt path. Edit the #let labels only.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "in-label", "type": "text", "meaning": "left I/O box"},
+      {"name": "a-label", "type": "text", "meaning": "first stage box"},
+      {"name": "b-label", "type": "text", "meaning": "second stage box"},
+      {"name": "out-label", "type": "text", "meaning": "right I/O box"},
+      {"name": "alt-label", "type": "text", "meaning": "parallel alt box under stage 1"},
+      {"name": "stage-1", "type": "text", "meaning": "caption above first stage"},
+      {"name": "stage-2", "type": "text", "meaning": "caption above second stage"}
+    ],
+    "node_naming": "named rects in, a, b, out, ap",
+    "operations": [
+      {"id": "rename", "summary": "edit the matching #let"},
+      {"id": "drop-alt", "summary": "delete the ap rect and its two lines if no parallel path"}
+    ],
+    "invariants": [
+      "keep `#import \"@preview/cetz:0.3.4\"`",
+      "keep standalone `#set page(width: auto, height: auto, …)`",
+      "do not add a second @preview package in this file"
+    ]
+  }
+}

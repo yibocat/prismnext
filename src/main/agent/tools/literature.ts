@@ -451,9 +451,10 @@ export const citationHealthTool: NativeToolDefinition = {
   name: TOOL_NAMES.citationHealth,
   label: "Citation Health",
   description:
-    "Unified citation health audit: check \\cite keys across project .tex files, .bib files, and library.db.",
+    "Unified citation health audit: cite keys in project .tex and .typ files vs .bib vs library.db.",
   promptGuidelines: [
     "Use this to detect missing/unresolved citations before claiming the manuscript compiles or is complete.",
+    "Scans both LaTeX `\\cite{}` and Typst `@key` / `#cite(<key>)`.",
     "Set `verify: false` to skip the (slower) external catalog verification of .bib fallback entries.",
   ],
   parameters: Type.Object({
@@ -505,13 +506,13 @@ export const literatureExportBibTool: NativeToolDefinition = {
   label: "Export Library to .bib",
   description: "Append BibTeX entries from the project literature library into the manuscript references.bib file.",
   promptGuidelines: [
-    "By default exports only keys cited in the manuscript .tex (`onlyCitedInTex: true`) — this is what you normally want before a compile.",
+    "By default exports only keys cited in the manuscript (`.tex` `\\cite{}` or `.typ` `@key`; `onlyCitedInTex: true`).",
     "Use `bibkeys` for a precise subset, or `all: true` only when the user explicitly wants the entire library dumped.",
   ],
   parameters: Type.Object({
     bibkeys: Type.Optional(Type.Array(Type.String(), { description: "Optional list of specific bibkeys to export" })),
-    all: Type.Optional(Type.Boolean({ description: "Export entire library (default false — only cited keys in .tex)" })),
-    onlyCitedInTex: Type.Optional(Type.Boolean({ description: "Export keys cited in .tex (default true)" })),
+    all: Type.Optional(Type.Boolean({ description: "Export entire library (default false — only cited keys)" })),
+    onlyCitedInTex: Type.Optional(Type.Boolean({ description: "Export keys cited in .tex/.typ (default true)" })),
   }),
   permission: {
     category: "safe_write",

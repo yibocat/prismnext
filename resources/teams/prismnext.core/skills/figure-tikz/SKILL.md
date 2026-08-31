@@ -1,10 +1,12 @@
 ---
 name: figure-tikz
-description: Use when drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).
+description: Use only when the manuscript root is `.tex` and you are drawing a standalone TikZ figure — catalog templates first (OpenTikZ ML/systems plus PrismNext transformer, U-Net, diffusion, GNN, VAE, causal DAG, PRISMA, swimlane, timeline, tree, Venn), then generic architecture / commutative / small pgfplots fallbacks. Closed path — match catalog, copy the .tex, edit only the contract parameters, latex-compile-standalone, stop when the PDF sits next to the source. Typst / CeTZ diagrams → figure-typst. Not for experiment-data plots (→ figure-matplotlib), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).
 license: MIT
 ---
 
 # LaTeX TikZ Graphics
+
+LaTeX papers only (`.tex` root). If the paper is Typst, use `figure-typst`.
 
 Start from a shipped, compilable figure. When the PDF is next to the
 `.tex`, the job is done.

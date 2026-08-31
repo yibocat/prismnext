@@ -43,10 +43,38 @@ See \cite{used, missing}.
   it("reports missing, unused, and duplicate bib keys", () => {
     const result = checkBibConsistency(root);
     expect(result.texFilesScanned).toBeGreaterThan(0);
+    expect(result.typFilesScanned).toBe(0);
     expect(result.bibPath).toBe("manuscript/references.bib");
     expect(result.citeKeysInTex).toEqual(["missing", "used"]);
     expect(result.missingKeys).toEqual(["missing"]);
     expect(result.unusedKeys).toContain("orphan");
     expect(result.duplicateKeys).toEqual(["dup"]);
+  });
+
+  it("scans Typst @key / #cite against #bibliography .bib", () => {
+    rmSync(join(root, "manuscript", "main.tex"));
+    writeFileSync(
+      join(root, "main.typ"),
+      `#bibliography("refs.bib")
+See @used and #cite(<missing>).
+`,
+      "utf-8",
+    );
+    writeFileSync(
+      join(root, "refs.bib"),
+      [
+        "@article{used, title={Used}, author={A}, year={2024}}",
+        "@article{orphan, title={Orphan}, author={B}, year={2023}}",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const result = checkBibConsistency(root);
+    expect(result.texFilesScanned).toBe(0);
+    expect(result.typFilesScanned).toBe(1);
+    expect(result.bibPath).toBe("refs.bib");
+    expect(result.citeKeysInTex).toEqual(["missing", "used"]);
+    expect(result.missingKeys).toEqual(["missing"]);
+    expect(result.unusedKeys).toContain("orphan");
   });
 });

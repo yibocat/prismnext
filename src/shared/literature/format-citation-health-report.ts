@@ -5,7 +5,9 @@ export function formatCitationHealthReport(report: CitationHealthReport): string
   const { bibCheck: bib, libraryCheck: lib, bibKeysNotInLibrary, bibFallback } = report;
   const lines: string[] = ["Citation health report", ""];
 
-  lines.push(`Library (.tex → library.db): ${lib.citeKeysInTex.length} keys in .tex`);
+  lines.push(
+    `Library (manuscript → library.db): ${lib.citeKeysInTex.length} keys in .tex/.typ`,
+  );
   if (lib.missingKeys.length === 0) {
     lines.push("  ✓ All cited keys found in library");
   } else {
@@ -15,10 +17,10 @@ export function formatCitationHealthReport(report: CitationHealthReport): string
   lines.push("");
   lines.push(`Manuscript .bib: ${bib.bibPath ?? "(not found)"}`);
   if (bib.missingKeys.length === 0 && bib.duplicateKeys.length === 0) {
-    lines.push("  ✓ .tex ↔ .bib aligned (no missing or duplicate keys)");
+    lines.push("  ✓ manuscript ↔ .bib aligned (no missing or duplicate keys)");
   } else {
     if (bib.missingKeys.length > 0) {
-      lines.push(`  ✗ In .tex but not in .bib (${bib.missingKeys.length}): ${bib.missingKeys.join(", ")}`);
+      lines.push(`  ✗ In manuscript but not in .bib (${bib.missingKeys.length}): ${bib.missingKeys.join(", ")}`);
     }
     if (bib.duplicateKeys.length > 0) {
       lines.push(`  ✗ Duplicate bib keys: ${bib.duplicateKeys.join(", ")}`);

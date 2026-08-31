@@ -118,18 +118,28 @@ export async function compileTypstPdf(
   }
 }
 
-export async function exportTypst(format: TypstCliFormat): Promise<void> {
+export async function exportTypst(format: TypstCliFormat): Promise<{
+  ok: boolean;
+  files?: string[];
+  error?: string;
+}> {
   const projectRoot = useDocumentStore.getState().projectRoot;
   const targetPath = resolveTypstLiveMainRel();
-  if (!projectRoot || !targetPath) return;
+  if (!projectRoot || !targetPath) return { ok: false, error: "No Typst file" };
   const snapshot = useDocumentStore.getState().getLiveCompilePayload();
   const result = await compileDesktop.compileTypstExport(projectRoot, targetPath, format, {
     dirtyFiles: snapshot.dirtyFiles.length > 0 ? snapshot.dirtyFiles : undefined,
   });
+  if ("canceled" in result && result.canceled) return { ok: false };
   if ("ok" in result && result.ok === false) {
     setCompileDiagnosticsForKey(
       paperKeyFromMainFile(projectRoot, targetPath),
       diagnosticsFromCompileLog(targetPath, result.error, result.stdout ?? null),
     );
+    return { ok: false, error: result.error };
   }
+  if ("ok" in result && result.ok) {
+    return { ok: true, files: result.files };
+  }
+  return { ok: false, error: "Export failed" };
 }

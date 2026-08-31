@@ -1,0 +1,31 @@
+{
+  "id": "exchange-diagram",
+  "name": "Exchange / commutative arrows",
+  "type": "template",
+  "domain": ["general"],
+  "tags": ["commutative", "exchange", "arrows", "fletcher"],
+  "author": "PrismNext",
+  "license": "MIT",
+  "requires": ["fletcher:0.5.8"],
+  "description": "Three-node arrow diagram. Edit the #let labels only.",
+  "edit_contract": {
+    "parameters": [
+      {"name": "left-label", "type": "text", "meaning": "left node"},
+      {"name": "right-label", "type": "text", "meaning": "right node"},
+      {"name": "mid-label", "type": "text", "meaning": "bottom node"},
+      {"name": "top-arrow", "type": "text", "meaning": "A → B edge label"},
+      {"name": "left-arrow", "type": "text", "meaning": "A → C edge label"},
+      {"name": "right-arrow", "type": "text", "meaning": "B → C edge label"}
+    ],
+    "node_naming": "fletcher names <a> <b> <c>",
+    "operations": [
+      {"id": "rename", "summary": "edit the matching #let"},
+      {"id": "relabel-edge", "summary": "change top-arrow / left-arrow / right-arrow"}
+    ],
+    "invariants": [
+      "keep `#import \"@preview/fletcher:0.5.8\"`",
+      "do not also import a newer cetz in this file",
+      "keep standalone `#set page(width: auto, height: auto, …)`"
+    ]
+  }
+}

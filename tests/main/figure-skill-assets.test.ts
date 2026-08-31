@@ -11,6 +11,7 @@ const SKILLS = join(
 );
 
 const TIKZ = join(SKILLS, "figure-tikz");
+const TYPST = join(SKILLS, "figure-typst");
 const MPL = join(SKILLS, "figure-matplotlib");
 
 type CatalogItem = {
@@ -35,6 +36,7 @@ describe("figure-tikz catalog", () => {
     expect(skill).toContain("this skill");
     expect(skill).toContain("SKILL.md");
     expect(skill).toContain("latex-compile-standalone");
+    expect(skill).toContain("figure-typst");
     expect(skill).toContain("latexmk");
   });
 
@@ -112,6 +114,48 @@ describe("figure-tikz catalog", () => {
     expect(
       existsSync(join(TIKZ, "library", "reference", "color-palettes", "color-palettes.md")),
     ).toBe(true);
+  });
+});
+
+describe("figure-typst catalog", () => {
+  const catalog = JSON.parse(
+    readFileSync(join(TYPST, "library", "catalog.json"), "utf-8"),
+  ) as Array<{
+    id: string;
+    type: string;
+    path: string;
+    typ: string;
+    meta: string;
+    has_edit_contract: boolean;
+  }>;
+
+  it("points the skill at the local catalog and standalone Typst compile", () => {
+    const skill = readFileSync(join(TYPST, "SKILL.md"), "utf-8");
+    expect(skill).toMatch(/^name: figure-typst$/m);
+    expect(skill).toContain("library/catalog.json");
+    expect(skill).toContain("typst-compile-standalone");
+    expect(skill).toContain("@preview/cetz:0.3.4");
+    expect(skill).toContain("fletcher:0.5.8");
+    expect(skill).toContain("figure-tikz");
+  });
+
+  it("ships catalog items with typ + meta", () => {
+    expect(catalog.map((item) => item.id).sort()).toEqual(
+      ["architecture-boxes", "exchange-diagram"].sort(),
+    );
+    for (const item of catalog) {
+      const dir = join(TYPST, "library", item.path);
+      expect(existsSync(join(dir, item.typ)), item.id).toBe(true);
+      expect(existsSync(join(dir, item.meta)), item.id).toBe(true);
+      const source = readFileSync(join(dir, item.typ), "utf-8");
+      expect(source).toContain("#set page(width: auto, height: auto");
+      if (item.has_edit_contract) {
+        const meta = JSON.parse(readFileSync(join(dir, item.meta), "utf-8")) as {
+          edit_contract?: { parameters?: unknown[] };
+        };
+        expect(meta.edit_contract?.parameters?.length, item.id).toBeGreaterThan(0);
+      }
+    }
   });
 });
 

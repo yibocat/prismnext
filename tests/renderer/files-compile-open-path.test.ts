@@ -34,6 +34,8 @@ describe("files compile open path", () => {
     expect(content).toContain("skipPreviewPdfCompile");
     expect(toolbar).toContain("typstPdfPreview");
     expect(toolbar).toContain("typstExport");
+    expect(toolbar).toContain("TypstExportDialog");
+    expect(toolbar).not.toContain("AppMenu");
     expect(toolbar).toContain("ZapIcon");
     expect(toolbar).not.toContain("typst-live-engine");
     const langs = readFileSync(join(renderer, "lib/editor/language-mappings.tsx"), "utf8");
@@ -101,6 +103,16 @@ describe("files compile open path", () => {
     expect(compile).not.toContain("resolveTypstRootFromBuffers");
     expect(compile).not.toContain("compileTypstExport");
     expect(compile).not.toContain("compileTypstLive");
+    const dialog = readFileSync(join(renderer, "modes/files-mode/typst-export-dialog.tsx"), "utf8");
+    expect(dialog).toContain("typstVisibleExportDirRel");
+    expect(dialog).toContain("openProjectFileFromChat");
+    expect(dialog).toContain("refreshFiles");
+    const ipc = readFileSync(join(here, "../../src/main/ipc/compile.ts"), "utf8");
+    const host = readFileSync(join(here, "../../src/host/compile-handlers.ts"), "utf8");
+    expect(ipc).toContain("typstVisibleExportDirRel");
+    expect(host).toContain("typstVisibleExportDirRel");
+    expect(ipc).not.toContain("decodeTypstWireFiles");
+    expect(host).not.toContain("encodeTypstWireFiles");
     const typstMain = readFileSync(join(here, "../../src/main/compile/typst.ts"), "utf8");
     expect(typstMain).not.toContain("compileTypstLiveSvg");
     expect(typstMain).not.toContain("typstWatchSvgArgs");

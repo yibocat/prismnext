@@ -15,6 +15,7 @@ export interface BibFallbackEntry {
 
 export interface CitationHealthLibraryCheck {
   texFilesScanned: number;
+  typFilesScanned?: number;
   citeKeysInTex: string[];
   knownKeys: string[];
   missingKeys: string[];
@@ -23,6 +24,7 @@ export interface CitationHealthLibraryCheck {
 
 export interface CitationHealthBibCheck {
   texFilesScanned: number;
+  typFilesScanned?: number;
   bibPath: string | null;
   citeKeysInTex: string[];
   keysInBib: string[];

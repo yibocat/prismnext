@@ -27,6 +27,7 @@ const CATEGORIES = {
   "figure-observable-plot": "academic",
   "figure-pipeline": "academic",
   "figure-tikz": "academic",
+  "figure-typst": "academic",
   "hypothesis-design": "academic",
   "idea-lab": "academic",
   "intensive-reading-notes": "academic",

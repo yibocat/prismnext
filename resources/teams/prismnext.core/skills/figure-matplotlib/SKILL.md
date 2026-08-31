@@ -1,6 +1,6 @@
 ---
 name: figure-matplotlib
-description: Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).
+description: Use when drawing a data figure with matplotlib/seaborn — pick a named pattern script (line, CI band, grouped bar, violin, scatter+fit, heatmap, ROC/PR, or 2×2), copy it with the style file, fill real data, experiment-run, stop when PDF/PNG land in the figures folder. Not for architecture/schematics (→ figure-typst if the manuscript root is .typ, else → figure-tikz), Observable Plot vocab (→ figure-observable-plot), manuscript wiring (→ figure-pipeline), or chat panel cards (→ figure-interaction).
 license: MIT
 ---
 
