@@ -180,10 +180,8 @@ describe("agent service status", () => {
       "literature-discover",
       "literature-read",
       "literature-stage",
-      "latex-root",
       "latex-compile",
       "latex-compile-standalone",
-      "typst-root",
       "typst-compile",
       "typst-compile-standalone",
       "research-brief-read",
@@ -206,7 +204,7 @@ describe("agent service status", () => {
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(39);
+    expect(missingKey.tools).toHaveLength(37);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({

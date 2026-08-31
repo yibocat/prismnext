@@ -1,7 +1,7 @@
 /**
  * Native Literature Tools for PrismNext Pi Agent Host.
  *
- * 11 tools: local search, external discovery, reading, PDF extract,
+ * 10 tools: local search, external discovery, reading, PDF extract,
  * session citation staging, library CRUD, citation health, and .bib export.
  */
 

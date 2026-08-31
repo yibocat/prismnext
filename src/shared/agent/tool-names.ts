@@ -17,10 +17,8 @@ export const TOOL_NAMES = {
   literatureExportBib: "literature-export-bib",
   literatureDelete: "literature-delete",
   citationHealth: "citation-health",
-  latexRoot: "latex-root",
   latexCompile: "latex-compile",
   latexCompileStandalone: "latex-compile-standalone",
-  typstRoot: "typst-root",
   typstCompile: "typst-compile",
   typstCompileStandalone: "typst-compile-standalone",
   researchBriefRead: "research-brief-read",
@@ -44,7 +42,7 @@ export type ToolName = (typeof TOOL_NAMES)[ToolNameKey];
 /** All registered prismnext custom tool names (values of TOOL_NAMES). */
 export const ALL_TOOL_NAMES = Object.values(TOOL_NAMES);
 
-/** Paper compile or standalone-figure compile (both spawn a TeX engine). */
+/** Paper compile or standalone (non-manuscript) compile. */
 export function isLatexCompileToolName(name: string): boolean {
   const n = name.toLowerCase();
   return n === TOOL_NAMES.latexCompile || n === TOOL_NAMES.latexCompileStandalone;

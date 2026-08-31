@@ -81,7 +81,7 @@ Same four-beat: **copy → edit → `latex-compile-standalone` → stop.**
 
 ## Do not (unless the user named that next step)
 
-- `latex-root` or `latex-compile` — those are the paper
+- `latex-compile` — that is the manuscript build, not a figure
 - bash `which` / `ls` / `sips` / `gs` / `pdftoppm` / `rm`
 - `image-describe`, or rasterize the PDF so you can "look at it"
 - `delete` conversion leftovers or the compiled PDF

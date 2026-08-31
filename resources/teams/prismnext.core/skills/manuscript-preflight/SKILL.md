@@ -21,8 +21,8 @@ conversation.
 
 ## Checklist
 
-1. **Root** — `latex-root` confirms main file, engine, and bib tool.
-2. **Compile** — `latex-compile` → clean, or list errors with file/line.
+1. **Manuscript entry** — read **Workspace Folder Descriptions** (Manuscript folder + optional compile entry pin). For `.tex` use `latex-compile`; for `.typ` use `typst-compile`.
+2. **Compile** — build tool → clean, or list errors with file/line.
 3. **Citation integrity** — `citation-health` → missing keys, unused keys,
    library gaps, `verified=false` (suspected fabrication — flag loudly).
 4. **Bibliography sync** — keys that should come from the library are missing

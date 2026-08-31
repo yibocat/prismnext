@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, sep } from "node:path";
 import { zipSync, strToU8 } from "fflate";
-import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR } from "../../shared/workbench/paths";
+import { derivePaperPdfRel } from "../../shared/compile/artifact-key";
 
 const TEX_AUX_EXT = new Set([
   ".aux",
@@ -51,8 +51,8 @@ export function resolveCompilePdfAbsolutePath(
   projectRoot: string,
   mainRelativePath: string,
 ): string {
-  const stem = basename(mainRelativePath, extname(mainRelativePath));
-  return join(projectRoot, PROJECT_META_DIR, PROJECT_COMPILE_DIRNAME, `${stem}.pdf`);
+  const rel = derivePaperPdfRel("latex", mainRelativePath);
+  return join(projectRoot, ...rel.split("/"));
 }
 
 export async function fileExists(absPath: string): Promise<boolean> {

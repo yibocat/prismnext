@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileEngineFromRelPath,
   compileArtifactCacheKey,
+  deriveLegacyLatexPaperPdfRel,
   derivePaperPdfRel,
   deriveStandalonePdfRel,
   isLiveCompileSourceRel,
@@ -27,9 +28,9 @@ describe("isLiveCompileSourceRel", () => {
 });
 
 describe("derivePaperPdfRel", () => {
-  it("keeps latex pdf at .workbench/compile/<stem>.pdf", () => {
+  it("namespaces latex paper pdf under compile/latex", () => {
     expect(derivePaperPdfRel("latex", "manuscript/main.tex")).toBe(
-      ".workbench/compile/main.pdf",
+      ".workbench/compile/latex/main.pdf",
     );
   });
   it("namespaces typst paper pdf", () => {
@@ -40,6 +41,14 @@ describe("derivePaperPdfRel", () => {
   it("does not let latex and typst share a disk path when stems match", () => {
     expect(derivePaperPdfRel("latex", "manuscript/main.tex")).not.toBe(
       derivePaperPdfRel("typst", "manuscript/main.typ"),
+    );
+  });
+});
+
+describe("deriveLegacyLatexPaperPdfRel", () => {
+  it("maps pre-0.9.1 flat latex cache path", () => {
+    expect(deriveLegacyLatexPaperPdfRel("manuscript/main.tex")).toBe(
+      ".workbench/compile/main.pdf",
     );
   });
 });

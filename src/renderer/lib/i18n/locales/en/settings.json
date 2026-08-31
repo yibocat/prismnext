@@ -1424,7 +1424,7 @@
       },
       "descPlaceholder": "Explain what belongs in this folder so agents use it correctly.",
       "functionDesc": {
-        "manuscript": "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). Compile output is `.workbench/compile/` — do not edit that cache. Open sources in Files. A main-file pin is optional.",
+        "manuscript": "The finished paper lives here (LaTeX `.tex` or Typst `.typ`). Compile output is `.workbench/compile/latex/` or `.workbench/compile/typst/` — do not edit that cache. Open sources in Files. A main-file pin is optional.",
         "experiment": "Root folder for experiment working directories. Each experiment gets a subfolder (code, data, results). Bookkeeping (run history) is stored automatically under the project — you do not configure a separate registry folder.",
         "literature": "Stores literature and reference PDFs for academic research and citation.",
         "notebook": "Contains notes in various formats such as Markdown files or Jupyter notebooks."

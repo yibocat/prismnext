@@ -89,7 +89,7 @@ figures.
 ## Compilation notes
 
 - These templates are standalone figures. Compile with
-  `latex-compile-standalone` on the figure path. Do not call `latex-root`
+  `latex-compile-standalone` on the figure path. Do not call `latex-compile`
   or compile the paper to "check the engine."
 - Error messages point at the *end* of the picture, not the mistake: a
   missing `;` or an unknown style key usually sits a few lines above the

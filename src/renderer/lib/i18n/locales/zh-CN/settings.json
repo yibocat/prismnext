@@ -1424,7 +1424,7 @@
       },
       "descPlaceholder": "说明此文件夹应存放什么内容，以便智能体正确使用。",
       "functionDesc": {
-        "manuscript": "成稿 / 论文主体所在目录（LaTeX `.tex` 或 Typst `.typ`）。编译产物在 `.workbench/compile/`，不要编辑该缓存。在 Files 中打开源文件。主文件 pin 可选。",
+        "manuscript": "成稿 / 论文主体所在目录（LaTeX `.tex` 或 Typst `.typ`）。编译产物在 `.workbench/compile/latex/` 或 `.workbench/compile/typst/`，不要编辑该缓存。在 Files 中打开源文件。主文件 pin 可选。",
         "experiment": "实验工作区根目录。每个实验会在此下建立子文件夹（代码、数据、结果）。运行记录由应用自动记账，无需单独配置「注册表」文件夹。",
         "literature": "存放学术研究与引用所需的文献与参考 PDF。",
         "notebook": "存放各类笔记，如 Markdown 或 Jupyter 笔记本。"

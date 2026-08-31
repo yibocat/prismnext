@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveMainTexRelativePath } from "./bib-path-resolve";
 import { detectBibTool, detectTexEngine } from "./tex-detect";
-import { projectCompileRel } from "../../shared/workbench/paths";
+import { derivePaperBuildDir } from "../../shared/compile/artifact-key";
 
 /** Parse % !TEX root magic comment from content. */
 export function parseTexRootMagicComment(content: string): string | null {
@@ -37,7 +37,7 @@ export function hasDocumentClass(content: string): boolean {
  * True when the document uses the `standalone` class — a self-contained
  * graphic/figure artifact (what figure-tikz ships). These compile
  * in place in their own folder, never through the shared manuscript build
- * dir (`.workbench/compile/`).
+ * dir (`.workbench/compile/latex/`).
  */
 export function isStandaloneTexDocument(content: string): boolean {
   const head = content
@@ -128,7 +128,7 @@ function buildDirForDocument(relFile: string, content: string): string {
     const dir = normalizeRel(path.dirname(relFile));
     return dir === "." ? "." : dir;
   }
-  return projectCompileRel();
+  return derivePaperBuildDir("latex");
 }
 
 export function resolveLatexRoot(

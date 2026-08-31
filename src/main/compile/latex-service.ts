@@ -13,8 +13,7 @@ import { citeCheckLiterature } from "../literature/facade";
 import { scanManuscriptCiteKeys } from "../literature/manuscript-cite-scan";
 import { notifyAgentCompilePreview } from "./compile-preview-notify";
 import { TOOL_NAMES } from "../../shared/agent/tool-names";
-import { projectCompileRel } from "../../shared/workbench/paths";
-import { derivePaperPdfRel } from "../../shared/compile/artifact-key";
+import { derivePaperBuildDir, derivePaperPdfRel } from "../../shared/compile/artifact-key";
 import { extractCiteKeysFromTex } from "../../shared/literature/tex-cite-keys";
 import { extractTypstBibliographyRel } from "../../shared/literature/typst-cite-keys";
 
@@ -238,8 +237,7 @@ async function compileResolvedManuscript(
   useTexlive: boolean,
 ): Promise<AgentCompileResult> {
   const result = await compileLatex(projectRoot, root.mainFile, useTexlive, { source: "agent" });
-  const mainStem = basename(root.mainFile, extname(root.mainFile));
-  const buildDir = projectCompileRel();
+  const buildDir = derivePaperBuildDir("latex");
   const logContent = result.logContent ?? "";
   const errors = parseStructuredCompileErrors(logContent);
   const errorSummary =
@@ -269,7 +267,7 @@ async function compileResolvedManuscript(
     success: result.success,
     mainFile: root.mainFile,
     buildDir,
-    pdfPath: result.success ? `${buildDir}/${mainStem}.pdf` : undefined,
+    pdfPath: result.success ? derivePaperPdfRel("latex", root.mainFile) : undefined,
     errors,
     errorSummary,
     logTail,
@@ -293,7 +291,7 @@ export async function compileManuscriptForAgent(
       error:
         `${root.mainFile} is a standalone figure. ` +
         `Call \`${TOOL_NAMES.latexCompileStandalone}\` with mainFile set to that path. ` +
-        `\`${TOOL_NAMES.latexCompile}\` only compiles the paper into \`.workbench/compile/\`.`,
+        `\`${TOOL_NAMES.latexCompile}\` only compiles the paper into \`.workbench/compile/latex/\`.`,
     };
   }
 
@@ -348,7 +346,7 @@ export async function compileForAgent(
 
   // Route by document class, not by "is this the workspace main file".
   // A `\documentclass{standalone}` figure must compile in its own folder.
-  // Never sync `figures/` into `.workbench/compile/` or push the result
+  // Never sync `figures/` into `.workbench/compile/latex/` or push the result
   // into the TeX workspace paper preview.
   const resolvedContent = readResolvedTex(projectRoot, root.mainFile);
   if (resolvedContent && isStandaloneTexDocument(resolvedContent)) {

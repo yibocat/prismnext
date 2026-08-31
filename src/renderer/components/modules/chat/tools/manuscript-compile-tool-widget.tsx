@@ -10,15 +10,12 @@ import {
 } from "@/lib/chat/experiment-run-figures";
 
 const LABELS: Record<string, string> = {
-  "latex-root": "LaTeX root",
   "latex-compile": "LaTeX compile",
-  "latex-compile-standalone": "Figure compile",
-  "typst-root": "Typst root",
-  "typst-compile": "Typst compile",
-  "typst-compile-standalone": "Typst figure compile",
+  "latex-compile-standalone": "Standalone LaTeX",
+  "typst-compile": "Typst manuscript build",
+  "typst-compile-standalone": "Standalone Typst",
 };
 
-const ROOT_TOOLS = new Set(["latex-root", "typst-root"]);
 const COMPILE_TOOLS = new Set([
   "latex-compile",
   "latex-compile-standalone",
@@ -72,26 +69,6 @@ function CompileResultSummary({
   if (data.error && typeof data.error === "string") {
     return (
       <p className="text-[length:var(--font-chat-meta)] text-destructive">{data.error}</p>
-    );
-  }
-
-  if (ROOT_TOOLS.has(toolName)) {
-    const mainFile = typeof data.mainFile === "string" ? data.mainFile : "—";
-    const engine = typeof data.engine === "string" ? data.engine : null;
-    const bibTool = data.bibTool != null ? String(data.bibTool) : "none";
-    return (
-      <div className="space-y-0.5 text-[length:var(--font-chat-meta)] text-muted-foreground">
-        <p>
-          {typeof data.mainFile === "string" ? (
-            <ChatFileLink path={data.mainFile} className="font-normal" />
-          ) : (
-            <span className="text-foreground font-medium">{mainFile}</span>
-          )}
-          {engine ? ` · ${engine}` : ""}
-          {bibTool !== "none" ? ` · ${bibTool}` : ""}
-        </p>
-        {typeof data.buildDir === "string" ? <p>Build: {data.buildDir}</p> : null}
-      </div>
     );
   }
 

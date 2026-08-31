@@ -48,7 +48,7 @@ Hello \cite{foo}.
     expect(resolved!.mainFile).toBe("manuscript/main.tex");
     expect(resolved!.engine).toBe("xelatex");
     expect(resolved!.bibTool).toBe("bibtex");
-    expect(resolved!.buildDir).toBe(".workbench/compile");
+    expect(resolved!.buildDir).toBe(".workbench/compile/latex");
     expect(resolved!.manuscriptFolder).toBe("manuscript");
   });
 

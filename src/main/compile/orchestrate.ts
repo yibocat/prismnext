@@ -8,7 +8,7 @@ import { isHostRuntimeProcess, resolveTectonicBinary, tectonicUnavailableError }
 import { getTectonicDaemonSession } from "./tectonic-daemon";
 
 import { createLogger } from "../app/logger";
-import { PROJECT_COMPILE_DIRNAME, PROJECT_META_DIR, projectCompileRel } from "../../shared/workbench/paths";
+import { derivePaperBuildDir, derivePaperPdfRel } from "../../shared/compile/artifact-key";
 import { extractErrorLines, oneLineError, tectonicEngineId } from "./log";
 import type {
   CompileLatexOptions,
@@ -76,7 +76,7 @@ const lastBuilds = new Map<string, BuildInfo>();
  * Persistent build directory inside the project.
  */
 function persistentBuildDir(projectDir: string): string {
-  return join(projectDir, PROJECT_META_DIR, PROJECT_COMPILE_DIRNAME);
+  return join(projectDir, derivePaperBuildDir("latex"));
 }
 
 /**
@@ -522,7 +522,7 @@ async function compileWithTexlive(
 /**
  * Main compilation entry point.
  *
- * Syncs the main .tex directory into `.workbench/compile/`, compiles there
+ * Syncs the main .tex directory into `.workbench/compile/latex/`, compiles there
  * (source + aux + PDF colocated), then returns the PDF bytes for preview.
  */
 export async function compileLatex(
@@ -586,7 +586,7 @@ export async function compileLatex(
 
     const mainStem = basename(mainFile, extname(mainFile));
     const pdfPath = join(buildDir, `${mainStem}.pdf`);
-    const pdfRel = `${projectCompileRel()}/${mainStem}.pdf`;
+    const pdfRel = derivePaperPdfRel("latex", mainFile);
 
     const mainFilePath = join(projectDir, mainFile);
     if (!existsSync(mainFilePath)) {
@@ -762,7 +762,7 @@ export async function compileLatex(
  * Compile a standalone `.tex` (e.g. a `\documentclass{standalone}` TikZ
  * figure) IN PLACE: the engine runs in the figure's own folder and all
  * artifacts (PDF/aux/log) stay there. Never touches the shared manuscript
- * build dir (`.workbench/compile/`), so figure builds cannot clobber the
+ * build dir (`.workbench/compile/latex/`), so figure builds cannot clobber the
  * paper PDF. No bib passes, no SyncTeX — standalone graphics have neither.
  */
 export async function compileStandaloneTexInPlace(

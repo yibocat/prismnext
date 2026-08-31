@@ -69,7 +69,7 @@ describe("compileForAgent standalone routing", () => {
     compileStandaloneTexInPlace.mockReset();
     compileLatex.mockResolvedValue({
       success: true,
-      buildDir: ".workbench/compile",
+      buildDir: ".workbench/compile/latex",
       logContent: "",
     });
     compileStandaloneTexInPlace.mockResolvedValue({
@@ -194,7 +194,7 @@ describe("agent compile tool split", () => {
     compileStandaloneTexInPlace.mockReset();
     compileLatex.mockResolvedValue({
       success: true,
-      buildDir: ".workbench/compile",
+      buildDir: ".workbench/compile/latex",
       logContent: "",
     });
     compileStandaloneTexInPlace.mockResolvedValue({

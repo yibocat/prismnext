@@ -36,7 +36,7 @@ describe("latex compile bash messages", () => {
     expect(latexCompileBashBlockMessage()).toContain("latex-compile");
     expect(latexCompileBashBlockMessage()).toContain("latex-compile-standalone");
     expect(latexCompileBashBlockMessage()).toContain("typst-compile");
-    expect(latexCompileBashBlockMessage()).toContain(".workbench/compile/");
+    expect(latexCompileBashBlockMessage()).toContain(".workbench/compile/latex/");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile");
     expect(latexCompileBashRedirectNote()).toContain("latex-compile-standalone");
     expect(latexCompileBashRedirectNote()).toContain("typst-compile");

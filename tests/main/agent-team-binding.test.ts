@@ -414,7 +414,6 @@ describe("agent-team-binding (TeamResolver → Pi Adapter)", () => {
         "literature-search",
         "literature-read",
         "citation-health",
-        "latex-root",
       ]));
       expect(citationTools.allowedTools).not.toContain("bash");
       expect(citationTools.allowedTools).not.toContain("delete");

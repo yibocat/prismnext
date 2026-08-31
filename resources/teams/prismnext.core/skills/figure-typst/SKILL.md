@@ -57,7 +57,7 @@ diagram shows). Nothing else.
 
 ## Do not (unless the user named that next step)
 
-- `typst-root` or `typst-compile` — those are the paper
+- `typst-compile` — that is the manuscript build, not a figure
 - `latex-compile-standalone` or TikZ
 - bash `typst` / `tinymist` / `curl` / `rm`
 - `#image` into the manuscript, or `interaction-write`

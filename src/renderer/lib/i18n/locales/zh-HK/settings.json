@@ -1424,7 +1424,7 @@
       },
       "descPlaceholder": "說明此資料夾應存放什麼內容，以便智慧體正確使用。",
       "functionDesc": {
-        "manuscript": "成稿 / 論文主體所在目錄（LaTeX `.tex` 或 Typst `.typ`）。編譯產物在 `.workbench/compile/`，不要編輯該快取。在 Files 中開啟原始檔。主檔 pin 可選。",
+        "manuscript": "成稿 / 論文主體所在目錄（LaTeX `.tex` 或 Typst `.typ`）。編譯產物在 `.workbench/compile/latex/` 或 `.workbench/compile/typst/`，不要編輯該快取。在 Files 中開啟原始檔。主檔 pin 可選。",
         "experiment": "實驗工作區根目錄。每個實驗會在此下建立子資料夾（程式碼、資料、結果）。執行記錄由應用自動記賬，無需單獨配置「登錄檔」資料夾。",
         "literature": "存放學術研究與引用所需的文獻與參考 PDF。",
         "notebook": "存放各類筆記，如 Markdown 或 Jupyter 筆記本。"

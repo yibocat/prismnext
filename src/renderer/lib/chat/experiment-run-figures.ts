@@ -197,7 +197,7 @@ export function isManuscriptCompileToolUse(toolUse: ContentBlock): boolean {
   );
 }
 
-/** Successful compile PDF (in-place figure or `.workbench/compile/` paper). */
+/** Successful compile PDF (in-place standalone or `.workbench/compile/{latex|typst}/` paper). */
 export function extractCompileArtifactPaths(
   toolUse: ContentBlock,
   toolResult?: ContentBlock,

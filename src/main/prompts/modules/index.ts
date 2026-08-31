@@ -83,7 +83,7 @@ export const ALL_MODULES: PromptModule[] = [
     key: "manuscript-compile",
     label: "Manuscript & paper compile",
     description:
-      "Paper compile for LaTeX and Typst; manuscript folder from Workspace settings. Template Center is LaTeX-only.",
+      "Manuscript writing & build verify for LaTeX and Typst; entry from Workspace Manuscript folder pin.",
     enabled: true,
     profileOnly: true,
     source: "app",
