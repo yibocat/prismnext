@@ -306,7 +306,14 @@ describe("agent service status", () => {
       stableSystem: "stable prompt",
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
-    })).toContain("Focus on formal academic tone.");
+      profileModules: "## Chat paper citations\n\nStage external papers.",
+    })).toContain("## Chat paper citations");
+    expect(buildAgentSystemPrompt({
+      stableSystem: "stable prompt",
+      leadInstructions: "Focus on formal academic tone.",
+      leadName: "Academic Lead",
+      profileModules: "## Chat paper citations\n\nStage external papers.",
+    })).toMatch(/Focus on formal academic tone\.[\s\S]*## Chat paper citations/);
     expect(buildAgentSystemPrompt({
       stableSystem: "stable prompt",
       taskRoster: "## Available subagents (via Task)\n\n- `literature-synthesizer`",

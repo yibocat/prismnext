@@ -1633,6 +1633,7 @@ export interface ElectronAPI {
     markdown: string;
     tokenEncoding: import("../../shared/providers/token-estimate").PromptTokenEncoding;
     totalTokenCount: number;
+    liveSystemPrompt?: string;
     sections: Array<{
       id: string;
       label: string;

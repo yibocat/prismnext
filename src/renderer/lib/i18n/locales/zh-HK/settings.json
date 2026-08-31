@@ -1285,12 +1285,13 @@
       "toast": {
         "loadFailed": "載入提示棧預覽失敗。"
       },
-      "openProject": "請先開啟專案以預覽 AGENTS.md、專案規則與編排器 agent.md。",
-      "intro": "每一層單獨注入，並非整塊系統提示詞。開啟專案時第 4 層是預設編排器主智慧體定義（`agent.md`），而非第 1–3 層的合併。滾動面板可閱讀展開內容。",
+      "openProject": "請先開啟專案以預覽 AGENTS.md、專案規則、Team 主智慧體與內建模組。",
+      "intro": "每一層單獨注入，順序與工作階段啟動時模型實際收到的系統提示相同。內建能力模組接在 Team 主智慧體之後，不寫入 Team 檔案。專案規則掛在每輪使用者訊息前，不進系統提示。",
       "role": {
         "opencode": "系統指令",
         "eachTurn": "每輪對話",
-        "orchestrator": "主智慧體 · 專家團隊"
+        "orchestrator": "Team 主智慧體（可編輯）",
+        "internal": "內建模組（不可編輯）"
       },
       "layer": "第 {{n}} 層",
       "chars": "{{count}} 字元",

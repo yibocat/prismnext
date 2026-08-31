@@ -129,11 +129,11 @@ class PromptManager {
           : "");
       const { tokenCount, charCount } = countPromptTokens(contentPreview);
       const injectPath = m.expertOnly
-        ? "Expert/subagent agent.md only (auto-attached)"
+        ? "Expert/subagent system prompt only (auto-attached, not Team files)"
         : m.orchestratorOnly
-          ? "Primary orchestrator agent.md only (auto-attached)"
+          ? "Primary orchestrator system prompt only (auto-attached, not Team files)"
           : m.profileOnly
-            ? "Orchestrator + expert agent.md (auto-attached)"
+            ? "Orchestrator + expert system prompt (auto-attached, not Team files)"
             : "Pi system prompt (all sessions)";
       return {
         key: m.key,

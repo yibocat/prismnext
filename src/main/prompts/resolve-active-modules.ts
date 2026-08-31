@@ -16,7 +16,7 @@ function buildModulePromptText(mod: PromptModule, ctx: PromptContext): string {
   return "";
 }
 
-/** Modules injected into global `_prism-system.md` (always on — not agent-selectable). */
+/** Modules injected into the global system baseline (always on — not agent-selectable). */
 export function resolveStableSystemModules(): PromptModule[] {
   return ALL_MODULES.filter((m) => !m.profileOnly);
 }
@@ -70,8 +70,8 @@ export function resolveSubagentProfileModuleKeysFor(def: { modules?: string[] })
 }
 
 /**
- * Join scoped module prompts for agent profile sync (orchestrator / expert agent.md).
- * Workspace globals are already in `_prism-system.md`.
+ * Join scoped module prompts for the live orchestrator / expert system prompt.
+ * Workspace globals are already in composeStableSystem.
  */
 export function composeProfileModulePrompts(
   profileModules: string[] | undefined,
