@@ -62,6 +62,10 @@ describe("PiSdkRuntime turn stays live while PermissionGate is waiting", () => {
       permissionMode: "edit_auto",
     });
 
+    await vi.waitFor(() => {
+      expect(runtime.isTurnLive(session.runtimeSessionId)).toBe(true);
+    });
+
     emitPi?.({
       type: "message_update",
       assistantMessageEvent: { type: "text_delta", delta: "图好了" },
@@ -99,7 +103,6 @@ describe("PiSdkRuntime turn stays live while PermissionGate is waiting", () => {
   });
 
   it("does not fire engine_ended_without_terminal_event while a delete is waiting", async () => {
-    vi.useFakeTimers();
     const project = mkdtempSync(join(tmpdir(), "prism-pi-500-"));
     const storeRoot = mkdtempSync(join(tmpdir(), "prism-pi-500-store-"));
     dirs.push(project, storeRoot);
@@ -133,7 +136,9 @@ describe("PiSdkRuntime turn stays live while PermissionGate is waiting", () => {
       permissionMode: "edit_auto",
     });
 
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(resolvePrompt).toBeTruthy();
+    });
     const decidePromise = gate.decide({
       requestId: "perm-delete-1",
       runtimeSessionId: session.runtimeSessionId,
@@ -149,7 +154,9 @@ describe("PiSdkRuntime turn stays live while PermissionGate is waiting", () => {
 
     resolvePrompt?.();
     await sendPromise;
-    await vi.advanceTimersByTimeAsync(800);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 800);
+    });
 
     expect(events.some((event) => (
       event.type === "turn_failed"

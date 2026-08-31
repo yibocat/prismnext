@@ -779,6 +779,8 @@ interface LivePiSession {
   activeTurn: LiveTurnAccumulator | null;
   /** Set by cancelTurn so the terminal-event fallback never overrides a cancel. */
   cancelled: boolean;
+  /** Drop Pi `agent_end` while sendTurn aborts leftover work — it must not commit the next turn. */
+  ignoringEngineTerminal?: boolean;
   /** Idle watchdog for the active turn — fires when no Pi event arrives for a while. */
   watchdog?: ReturnType<typeof setTimeout>;
   /**
@@ -829,6 +831,13 @@ export class PiSdkRuntime implements AgentRuntime {
 
   private emit(event: AgentEvent): void {
     const enriched = this.enrichUsageEvent(event);
+    const live = this.sessions.get(enriched.runtimeSessionId);
+    if (
+      live?.ignoringEngineTerminal
+      && (enriched.type === "turn_finished" || enriched.type === "turn_failed")
+    ) {
+      return;
+    }
     if (this.holdTerminalWhilePermissionPending(enriched)) return;
     this.processTurnAccumulation(enriched);
     this.armTurnWatchdog(enriched.runtimeSessionId);
@@ -972,6 +981,23 @@ export class PiSdkRuntime implements AgentRuntime {
       });
       void live.handle.abort().catch(() => {});
     }, PI_TURN_IDLE_TIMEOUT_MS);
+  }
+
+  private beginTurnAccumulator(session: LivePiSession, input: TurnInput): void {
+    const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
+    const turnIndex = existingRecord?.turns.length ?? 0;
+    session.turnId = input.turnId || newTurnId();
+    session.activeTurn = {
+      turnIndex,
+      turnId: session.turnId,
+      createdAt: Date.now(),
+      userText: input.text,
+      ...(input.attachments?.length ? { userAttachments: input.attachments } : {}),
+      assistantText: "",
+      assistantThinking: "",
+      assistantBlocks: [],
+      toolCalls: new Map(),
+    };
   }
 
   private persistActiveTurn(
@@ -1206,23 +1232,16 @@ export class PiSdkRuntime implements AgentRuntime {
 
     // Abort leftover Pi work even when our activeTurn is already null (a
     // dropped provider stream can reject prompt() without aborting the agent).
+    session.ignoringEngineTerminal = true;
     await session.handle.abort().catch(() => {});
+    session.ignoringEngineTerminal = false;
+    if (session.cancelled) {
+      this.beginTurnAccumulator(session, input);
+      this.persistActiveTurn(session, "cancelled");
+      return;
+    }
     session.cancelled = false;
-
-    const existingRecord = this.opts.store.getSession(session.runtimeSessionId);
-    const turnIndex = existingRecord?.turns.length ?? 0;
-    session.turnId = input.turnId || newTurnId();
-    session.activeTurn = {
-      turnIndex,
-      turnId: session.turnId,
-      createdAt: Date.now(),
-      userText: input.text,
-      ...(input.attachments?.length ? { userAttachments: input.attachments } : {}),
-      assistantText: "",
-      assistantThinking: "",
-      assistantBlocks: [],
-      toolCalls: new Map(),
-    };
+    this.beginTurnAccumulator(session, input);
     // Initial idle watchdog — the first Pi event (or the terminal event) re-arms it.
     this.armTurnWatchdog(session.runtimeSessionId);
 
