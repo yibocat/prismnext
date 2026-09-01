@@ -142,6 +142,11 @@ export interface AppSettings {
   defaultDocClass?: "article" | "report" | "book";
   /** Custom system prompt for the agent shell. Empty = use built-in default. */
   agentSystemPrompt?: string;
+  /**
+   * Developer: show assembled prompt internals in Settings.
+   * Default off. Does not change what the model receives.
+   */
+  showPromptInternals?: boolean;
   /** Selected AI provider */
   aiProvider?: string;
   /** Selected AI model (null = provider default) */
@@ -295,6 +300,7 @@ const defaults: AppSettings = {
   autoCreateMainTex: true,
   defaultDocClass: "article",
   agentSystemPrompt: "",
+  showPromptInternals: false,
   editorSyntaxTheme: "prism",
   defaultWorkspaceDirs: [
     { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },

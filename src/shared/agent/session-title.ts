@@ -21,10 +21,17 @@ export function sanitizeGeneratedSessionTitle(raw: string): string {
 
 export function isProvisionalSessionTitle(title: string, firstUserText?: string): boolean {
   if (isGenericSessionTitle(title)) return true;
+  const current = title.trim();
+  if (!current) return true;
+  // First send writes the compiled agent prompt (file dumps, slash expansions)
+  // into the session record — that is not a user-chosen or model-written name.
+  if (current.includes("\n") || current.startsWith("## ")) return true;
   const excerpt = firstUserText?.trim();
   if (!excerpt) return false;
-  const current = title.trim();
-  return current === excerpt || current === excerpt.slice(0, 40) || current === excerpt.slice(0, 80);
+  return current === excerpt
+    || current === excerpt.slice(0, 40)
+    || current === excerpt.slice(0, 80)
+    || excerpt.startsWith(current);
 }
 
 export function shouldOfferAutoSessionTitle(opts: {
@@ -34,6 +41,51 @@ export function shouldOfferAutoSessionTitle(opts: {
 }): boolean {
   if (opts.userTitleSet || opts.autoTitleAttempted) return false;
   return opts.completedUserTurns === 1;
+}
+
+/** First user turn is enough — assistant may be thinking/tools only. */
+export function shouldRequestGeneratedSessionTitle(opts: {
+  userTitleSet?: boolean;
+  autoTitleAttempted?: boolean;
+  completedUserTurns: number;
+  firstUserExcerpt?: string | null;
+}): boolean {
+  if (!shouldOfferAutoSessionTitle(opts)) return false;
+  return Boolean(opts.firstUserExcerpt?.trim());
+}
+
+/**
+ * Product conversation id for agent IPC.
+ * Never use `tab.sessionId` when it may be a Pi runtime session id.
+ */
+export function resolveProductConversationId(tab: {
+  id: string;
+  sessionId?: string | null;
+  conversation?: { conversationId?: string } | null;
+}): string {
+  return tab.conversation?.conversationId?.trim() || tab.id;
+}
+
+/** Sidebar must not revert a generated name to the first-send dump. */
+export function shouldCopyListedSessionTitle(opts: {
+  listedTitle: string;
+  tabTitle: string;
+  userTitleSet?: boolean;
+  autoTitleAttempted?: boolean;
+}): boolean {
+  if (opts.userTitleSet) return false;
+  const listed = opts.listedTitle.trim();
+  const tab = opts.tabTitle.trim();
+  if (!listed || isGenericSessionTitle(listed)) return false;
+  if (tab === listed) return false;
+  if (
+    opts.autoTitleAttempted
+    && !isGenericSessionTitle(tab)
+    && listed.length > tab.length + 8
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function contentBlocksPlainText(blocks: ContentBlock[] | undefined): string {

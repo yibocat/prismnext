@@ -17,6 +17,8 @@ export interface PromptStackSection {
 }
 
 export interface PromptStackPreview {
+  teamId?: string;
+  teamName?: string;
   orchestratorId?: string;
   orchestratorName?: string;
   sections: PromptStackSection[];
@@ -27,6 +29,8 @@ export interface PromptStackPreview {
 export interface BuildPromptStackPreviewOptions {
   projectRoot?: string;
   userCustomPrompt?: string;
+  /** Project / composer active team — same chain as live chat. */
+  sessionTeamId?: string | null;
   orchestratorId?: string | null;
 }
 
@@ -52,8 +56,11 @@ export function formatPromptStackPreviewMarkdown(preview: PromptStackPreview): s
   ];
 
   if (preview.orchestratorName && preview.orchestratorId) {
+    const team = preview.teamName?.trim();
     lines.push(
-      `**Default orchestrator:** ${preview.orchestratorName} (\`${preview.orchestratorId}\`).`,
+      team
+        ? `**Active team:** ${team} · **Lead:** ${preview.orchestratorName} (\`${preview.orchestratorId}\`).`
+        : `**Default orchestrator:** ${preview.orchestratorName} (\`${preview.orchestratorId}\`).`,
       "",
     );
   } else if (!preview.sections.some((s) => s.id === "agents-md")) {
@@ -73,8 +80,15 @@ export function formatPromptStackPreviewMarkdown(preview: PromptStackPreview): s
 export async function buildPromptStackPreview(
   options: BuildPromptStackPreviewOptions = {},
 ): Promise<PromptStackPreview> {
-  const { projectRoot, userCustomPrompt, orchestratorId: explicitOrchestratorId } = options;
+  const {
+    projectRoot,
+    userCustomPrompt,
+    sessionTeamId,
+    orchestratorId: explicitOrchestratorId,
+  } = options;
 
+  let teamId: string | undefined;
+  let teamName: string | undefined;
   let orchestratorId: string | undefined;
   let orchestratorName: string | undefined;
   let leadInstructions = "";
@@ -90,9 +104,12 @@ export async function buildPromptStackPreview(
     const { resolveTeamPiBinding } = await import("../agent/team-binding");
     const binding = resolveTeamPiBinding({
       projectRoot,
+      sessionTeamId: sessionTeamId ?? null,
       orchestratorId: explicitOrchestratorId ?? null,
     });
     if (binding.ok && binding.lead) {
+      teamId = binding.team?.manifest.id ?? binding.lead.teamId;
+      teamName = binding.team?.manifest.name ?? binding.lead.name;
       orchestratorId = binding.lead.runtimeName;
       orchestratorName = binding.lead.name;
       leadInstructions = binding.lead.instructions;
@@ -181,6 +198,8 @@ export async function buildPromptStackPreview(
   ];
 
   return {
+    teamId,
+    teamName,
     orchestratorId,
     orchestratorName,
     sections,

@@ -15,6 +15,8 @@ export type BuiltinToolInfo = Awaited<
 export type PromptStackSummary = {
   totalTokens: number;
   sectionCount: number;
+  teamId?: string;
+  teamName?: string;
   orchestratorName?: string;
 };
 
@@ -37,22 +39,28 @@ function agentsMdPath(projectRoot: string): string {
 export async function fetchPromptStackPreview(
   projectRoot: string | null | undefined,
   userCustomPrompt?: string,
+  sessionTeamId?: string | null,
 ): Promise<PromptStackPreview> {
   return settingsDesktop.settingsGetPromptStackPreview(
     projectRoot ?? undefined,
     userCustomPrompt || undefined,
+    undefined,
+    sessionTeamId,
   );
 }
 
 export async function fetchPromptStackSummary(
   projectRoot: string | null | undefined,
   userCustomPrompt?: string,
+  sessionTeamId?: string | null,
 ): Promise<PromptStackSummary | null> {
   try {
-    const stack = await fetchPromptStackPreview(projectRoot, userCustomPrompt);
+    const stack = await fetchPromptStackPreview(projectRoot, userCustomPrompt, sessionTeamId);
     return {
       totalTokens: stack.totalTokenCount,
       sectionCount: stack.sections.length,
+      teamId: stack.teamId,
+      teamName: stack.teamName,
       orchestratorName: stack.orchestratorName,
     };
   } catch {

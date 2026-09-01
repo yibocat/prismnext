@@ -261,8 +261,9 @@
     "promptStale": "Base prompt was updated — it will refresh on your next message.",
     "categories": {
       "systemPrompt": "System prompt",
+      "modules": "Capability modules",
       "tools": "Tool definitions",
-      "rules": "Rules",
+      "rules": "Project instructions",
       "skills": "Skills",
       "mcp": "MCP & dynamic tools",
       "subagents": "Subagent definitions",

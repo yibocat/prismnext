@@ -6,6 +6,10 @@
  */
 
 import { HOST_SYSTEM_IDENTITY } from "./host";
+import {
+  wrapAgentsMdProjectContext,
+  wrapCapabilityModulesMarkup,
+} from "../../../shared/agent/prompt-markup";
 
 export interface AgentSystemPromptInput {
   stableSystem: string;
@@ -41,9 +45,9 @@ export function buildAgentSystemPromptParts(
   return {
     hostIdentity: HOST_SYSTEM_IDENTITY.trim(),
     stableSystem: input.stableSystem.trim(),
-    agentsMd: input.agentsMd?.trim() ?? "",
+    agentsMd: wrapAgentsMdProjectContext(input.agentsMd ?? ""),
     leadSection: formatLeadAgentSection(input.leadName, input.leadInstructions),
-    profileModules: input.profileModules?.trim() ?? "",
+    profileModules: wrapCapabilityModulesMarkup(input.profileModules ?? ""),
     taskRoster: input.taskRoster?.trim() ?? "",
   };
 }

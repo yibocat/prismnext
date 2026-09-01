@@ -764,6 +764,7 @@ export interface ElectronAPI {
   ) => () => void;
 
   onCloseTabRequest: (callback: () => void) => () => void;
+  onSetPromptInternals: (callback: (enabled: boolean) => void) => () => void;
 
   // Compile operations
   compileExecute: (
@@ -1627,7 +1628,10 @@ export interface ElectronAPI {
     projectRoot?: string,
     userCustomPrompt?: string,
     orchestratorId?: string | null,
+    sessionTeamId?: string | null,
   ) => Promise<{
+    teamId?: string;
+    teamName?: string;
     orchestratorId?: string;
     orchestratorName?: string;
     markdown: string;

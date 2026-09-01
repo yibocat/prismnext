@@ -52,7 +52,8 @@ import {
   extractSessionTitle,
   firstCompletedTurnExcerpts,
   isGenericSessionTitle,
-  shouldOfferAutoSessionTitle,
+  resolveProductConversationId,
+  shouldRequestGeneratedSessionTitle,
 } from "@/lib/chat/session-title";
 import { resolveTurnModelLabel } from "@/lib/chat/turn-model-label";
 import {
@@ -1230,19 +1231,18 @@ async function maybeGenerateSessionTitle(
 ): Promise<void> {
   const tab = getState().tabs.find((item) => item.id === tabId);
   if (!tab) return;
-  if (!shouldOfferAutoSessionTitle({
+  const excerpts = firstCompletedTurnExcerpts(tab.conversation);
+  if (!shouldRequestGeneratedSessionTitle({
     userTitleSet: tab.userTitleSet,
     autoTitleAttempted: tab.autoTitleAttempted,
     completedUserTurns: countCompletedContentTurns(tab.conversation),
+    firstUserExcerpt: excerpts?.user,
   })) return;
-
-  const excerpts = firstCompletedTurnExcerpts(tab.conversation);
-  if (!excerpts?.assistant.trim()) return;
 
   getState()._markAutoTitleAttempted(tabId);
   try {
     const result = await agentDesktop.agentGenerateSessionTitle({
-      conversationId: tab.sessionId || tab.id,
+      conversationId: resolveProductConversationId(tab),
       userText: excerpts?.user,
       assistantText: excerpts?.assistant,
     });

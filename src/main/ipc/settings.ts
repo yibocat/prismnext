@@ -65,7 +65,7 @@ export function registerSettingsHandlers(): void {
       if ("agentSystemPrompt" in patch) {
         promptManager.invalidate();
       }
-      if ("appLocale" in patch) {
+      if ("appLocale" in patch || "showPromptInternals" in patch) {
         refreshApplicationMenu();
       }
       if ("trayIconEnabled" in patch) {
@@ -103,10 +103,16 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle(
     "settings:getPromptStackPreview",
-    async (_event, args?: { projectRoot?: string; userCustomPrompt?: string; orchestratorId?: string | null }) => {
+    async (_event, args?: {
+      projectRoot?: string;
+      userCustomPrompt?: string;
+      sessionTeamId?: string | null;
+      orchestratorId?: string | null;
+    }) => {
       const preview = await buildPromptStackPreview({
         projectRoot: args?.projectRoot,
         userCustomPrompt: args?.userCustomPrompt,
+        sessionTeamId: args?.sessionTeamId,
         orchestratorId: args?.orchestratorId,
       });
       const sections = preview.sections.map((s) => {

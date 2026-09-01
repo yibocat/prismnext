@@ -51,6 +51,11 @@ export interface AppSettings {
   /** Custom system prompt — replaces the built-in core persona (Layer 0) when set.
    *  Modules, AGENTS.md, and project rules still append below. */
   agentSystemPrompt?: string;
+  /**
+   * Developer: show assembled prompt internals (full module / stack text) in Settings.
+   * Default off. Does not change what the model receives.
+   */
+  showPromptInternals?: boolean;
   /** Experimental: paint production chat text from AgentEvent. Default off. */
   agentEventUi?: boolean;
 
@@ -203,6 +208,7 @@ const defaults: AppSettings = {
   rightPanelCollapsed: false,
   agentTerminalMode: "pty",
   agentSystemPrompt: "",
+  showPromptInternals: false,
   permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
   autoDownloadUpdates: true,
   promptModules: {

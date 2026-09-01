@@ -57,6 +57,7 @@ import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
 import { snapshotPiSessionUsage, type PiUsageSnapshot } from "./context-usage";
+import { formatToolGuidelinesPrompt } from "./tool-guidelines-prompt";
 
 export const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
 export const PI_AI_PACKAGE = "@earendil-works/pi-ai";
@@ -115,6 +116,8 @@ export function probePiEmbedCompatibility(input: {
 export type ClosedResourceLoaderInput = {
   systemPrompt?: string;
   skills?: Skill[];
+  /** Appended after customPrompt — Pi still honors this when a custom system prompt is set. */
+  appendSystemPrompt?: string[];
 };
 
 function normalizeClosedLoaderInput(
@@ -134,11 +137,13 @@ export class ClosedResourceLoader implements ResourceLoader {
   };
   private readonly systemPrompt?: string;
   private readonly skills: Skill[];
+  private readonly appendSystemPrompt: string[];
 
   constructor(input?: string | ClosedResourceLoaderInput) {
     const opts = normalizeClosedLoaderInput(input);
     this.systemPrompt = opts.systemPrompt;
     this.skills = opts.skills ?? [];
+    this.appendSystemPrompt = (opts.appendSystemPrompt ?? []).map((part) => part.trim()).filter(Boolean);
   }
 
   async reload(): Promise<void> {}
@@ -172,7 +177,7 @@ export class ClosedResourceLoader implements ResourceLoader {
   }
 
   getAppendSystemPrompt(): string[] {
-    return [];
+    return this.appendSystemPrompt;
   }
 
   getAppendSystemPromptSources(): [] {
@@ -341,6 +346,8 @@ export function createPiNativeTools(input: {
       name: tool.name,
       label: tool.label,
       description: tool.description,
+      ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+      ...(tool.promptGuidelines?.length ? { promptGuidelines: tool.promptGuidelines } : {}),
       parameters: tool.parameters,
       execute: async (toolCallId, args, signal) => {
         const result = await input.toolHost.execute(tool.name, args as Record<string, unknown>, {
@@ -372,6 +379,8 @@ export interface PiSdkSessionFactoryInput {
   mcpServers?: McpServerDef[];
   /** Omit = all Pi primitives. `[]` = none (used by scoped subagent sessions). */
   primitiveToolNames?: readonly string[];
+  /** Per-turn project rules (RULE.md) — counted on the context ring, not the system prompt. */
+  projectRules?: string;
 }
 
 interface PiSessionHandle {
@@ -564,9 +573,11 @@ export function createPiSdkSessionFactory(
       : [];
     input.mcpHost?.markAttached(mcpTools.map((tool) => tool.name));
     const customTools = [...primitiveTools, ...hostTools, ...mcpTools];
+    const toolGuidelines = formatToolGuidelinesPrompt(customTools);
     const resourceLoader = new ClosedResourceLoader({
       systemPrompt: input.systemPrompt,
       skills: loadPiSkillsFromDirs(input.skills ?? []),
+      ...(toolGuidelines ? { appendSystemPrompt: [toolGuidelines] } : {}),
     });
     const sessionManager = createPiSessionManager(opts.cwd, opts.persist);
     const { session } = await createAgentSession({
@@ -641,7 +652,10 @@ export function createPiSdkSessionFactory(
         return agent?.state?.systemPrompt;
       },
       attachCustomTools: (tools) => attachPiCustomTools(session, tools),
-      getUsageSnapshot: (opts) => snapshotPiSessionUsage(session, opts),
+      getUsageSnapshot: (opts) => snapshotPiSessionUsage(session, {
+        ...opts,
+        projectRules: input.projectRules,
+      }),
       getModelRef: () => {
         const current = session.model;
         if (!current?.provider || !current.id) return null;

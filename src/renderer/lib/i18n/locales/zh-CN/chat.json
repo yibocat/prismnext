@@ -287,8 +287,9 @@
     "promptStale": "基础提示已更新——将在你发送下一条消息时刷新。",
     "categories": {
       "systemPrompt": "系统提示",
+      "modules": "能力模块",
       "tools": "工具定义",
-      "rules": "规则",
+      "rules": "项目说明与规则",
       "skills": "技能",
       "mcp": "MCP 与动态工具",
       "subagents": "子代理定义",

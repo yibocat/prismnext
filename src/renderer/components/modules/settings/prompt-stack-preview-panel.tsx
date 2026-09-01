@@ -1,18 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon, ChevronRightIcon, Loader2Icon, RefreshCwIcon } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDocumentStore } from "@/stores/document-store";
 import { useSettingsStore } from "@/stores/settings-store";
-import {
-  DOCUMENT_MARKDOWN_TYPOGRAPHY,
-  MARKDOWN_COMPONENTS,
-  prepareDocumentMarkdown,
-} from "@/lib/markdown/markdown-config";
+import { useTeamsStore } from "@/stores/teams-store";
 import {
   SETTINGS_CATEGORY_HEADER,
   SETTINGS_DETAIL_SHELL,
@@ -20,12 +14,14 @@ import {
 } from "./settings-tokens";
 import { formatTokenCount } from "@shared/providers/token-estimate";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
+import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
 import {
   fetchPromptStackPreview,
   subscribeExpertsIntegrationChanged,
   type PromptStackPreview,
   type PromptStackSection,
 } from "@/lib/settings";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0";
@@ -44,34 +40,16 @@ const SECTION_ROLE_KEY: Record<string, "opencode" | "eachTurn" | "orchestrator" 
 type StackPreview = PromptStackPreview;
 type StackSection = PromptStackSection;
 
-function SectionContentPreview({ content }: { content: string }) {
-  const body = useMemo(() => prepareDocumentMarkdown(content, "default"), [content]);
-  return (
-    <div
-      className={cn(
-        DOCUMENT_MARKDOWN_TYPOGRAPHY,
-        "text-[length:var(--font-size-12)]",
-        "[&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-[1.05em]",
-        "[&_h3]:mt-2.5 [&_h3]:mb-1",
-        "[&_p]:my-1.5",
-        "[&_ul]:my-1.5",
-      )}
-    >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
-        {body}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
 function StackSectionCard({
   section,
   index,
+  showFull,
   expanded,
   onToggle,
 }: {
   section: StackSection;
   index: number;
+  showFull: boolean;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -79,11 +57,61 @@ function StackSectionCard({
   const empty = !section.content.trim();
   const roleKey = SECTION_ROLE_KEY[section.id];
 
+  const header = (
+    <div className="min-w-0 flex-1 space-y-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn(BADGE, "bg-muted text-muted-foreground normal-case tracking-normal")}>
+          {t("settings.editor.promptStack.layer", { n: index + 1 })}
+        </span>
+        {roleKey ? (
+          <span
+            className={cn(
+              BADGE,
+              "bg-muted text-muted-foreground normal-case tracking-normal",
+            )}
+          >
+            {t(`settings.editor.promptStack.role.${roleKey}`)}
+          </span>
+        ) : null}
+        <p className="text-[length:var(--font-size-13)] font-medium">{section.label}</p>
+        <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
+          {t("settings.editor.promptStack.tokens", {
+            count: formatTokenCount(section.tokenCount),
+          })}
+        </span>
+      </div>
+      <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-snug">
+        <span className="font-medium text-muted-foreground/90">
+          {t("settings.editor.promptStack.injectVia")}{" "}
+        </span>
+        {section.injectPath}
+      </p>
+      {section.fileHint ? (
+        <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 truncate">
+          {section.fileHint}
+        </p>
+      ) : null}
+      {!showFull && empty ? (
+        <p className="text-[length:var(--font-size-11)] text-muted-foreground italic">
+          {t("settings.editor.promptStack.emptyContent")}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  if (!showFull) {
+    return (
+      <article className="rounded-lg border border-border px-4 py-3">
+        {header}
+      </article>
+    );
+  }
+
   return (
     <article className="rounded-lg border border-border overflow-hidden">
       <button
         type="button"
-        className="flex w-full items-start gap-2 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+        className="flex w-full items-start gap-2 px-4 py-3 text-left"
         onClick={onToggle}
         aria-expanded={expanded}
       >
@@ -94,50 +122,19 @@ function StackSectionCard({
             <ChevronRightIcon className="size-4" />
           )}
         </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={cn(BADGE, "bg-primary/10 text-primary normal-case tracking-normal")}>
-              {t("settings.editor.promptStack.layer", { n: index + 1 })}
-            </span>
-            {roleKey ? (
-              <span
-                className={cn(
-                  BADGE,
-                  "bg-muted text-muted-foreground normal-case tracking-normal",
-                )}
-              >
-                {t(`settings.editor.promptStack.role.${roleKey}`)}
-              </span>
-            ) : null}
-            <p className="text-[length:var(--font-size-13)] font-medium">{section.label}</p>
-            <span className="text-[length:var(--font-size-11)] text-muted-foreground/70 tabular-nums">
-              {t("settings.editor.promptStack.tokens", {
-                count: formatTokenCount(section.tokenCount),
-              })}
-            </span>
-          </div>
-          <p className="text-[length:var(--font-size-12)] text-muted-foreground leading-snug">
-            <span className="font-medium text-muted-foreground/90">
-              {t("settings.editor.promptStack.injectVia")}{" "}
-            </span>
-            {section.injectPath}
-          </p>
-          {section.fileHint ? (
-            <p className="text-[length:var(--font-size-11)] font-mono text-muted-foreground/70 truncate">
-              {section.fileHint}
-            </p>
-          ) : null}
-        </div>
+        {header}
       </button>
-
       {expanded ? (
-        <div className="border-t border-border bg-muted/15 px-4 py-3">
+        <div className="border-t border-border px-4 py-3">
           {empty ? (
             <p className="text-[length:var(--font-size-12)] text-muted-foreground italic">
               {t("settings.editor.promptStack.emptyContent")}
             </p>
           ) : (
-            <SectionContentPreview content={section.content} />
+            <SettingsModulePromptPreview
+              content={section.content}
+              shellClassName="min-h-0 rounded-none border-0 px-0 py-0"
+            />
           )}
         </div>
       ) : null}
@@ -149,6 +146,9 @@ export function PromptStackPreviewPanel() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const agentSystemPrompt = useSettingsStore((s) => s.settings.agentSystemPrompt) ?? "";
+  const showFull = useSettingsStore((s) => s.settings.showPromptInternals === true);
+  const activeTeamId = useTeamsStore((s) => s.activeTeamId);
+  const loadTeams = useTeamsStore((s) => s.load);
 
   const [preview, setPreview] = useState<StackPreview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,6 +163,7 @@ export function PromptStackPreviewPanel() {
         const data = await fetchPromptStackPreview(
           projectRoot,
           agentSystemPrompt || undefined,
+          activeTeamId,
         );
         setPreview(data);
         setExpandedIds((prev) => {
@@ -177,16 +178,17 @@ export function PromptStackPreviewPanel() {
         if (!silent) setLoading(false);
       }
     },
-    [projectRoot, agentSystemPrompt, t],
+    [projectRoot, agentSystemPrompt, activeTeamId, t],
   );
+
+  useEffect(() => {
+    if (projectRoot) void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
 
   useEffect(() => {
     void loadPreview();
   }, [loadPreview]);
 
-  // Live-update when main process re-syncs experts (default main agent or
-  // orchestrator content changed) — keeps the stack preview in sync with the
-  // configured base agent without a manual refresh.
   useEffect(() => {
     return subscribeExpertsIntegrationChanged(projectRoot, () => {
       void loadPreview({ silent: true });
@@ -249,12 +251,16 @@ export function PromptStackPreviewPanel() {
             <RefreshCwIcon className={cn("size-3.5", refreshing && "animate-spin")} />
             {t("settings.editor.promptStack.refresh")}
           </Button>
-          <Button variant="ghost" size="xs" onClick={expandAll}>
-            {t("settings.editor.promptStack.expandAll")}
-          </Button>
-          <Button variant="ghost" size="xs" onClick={collapseAll}>
-            {t("settings.editor.promptStack.collapseAll")}
-          </Button>
+          {showFull ? (
+            <>
+              <Button variant="ghost" size="xs" onClick={expandAll}>
+                {t("settings.editor.promptStack.expandAll")}
+              </Button>
+              <Button variant="ghost" size="xs" onClick={collapseAll}>
+                {t("settings.editor.promptStack.collapseAll")}
+              </Button>
+            </>
+          ) : null}
         </div>
         <div className="flex items-center gap-3 text-[length:var(--font-size-11)] text-muted-foreground tabular-nums">
           <span>
@@ -270,12 +276,27 @@ export function PromptStackPreviewPanel() {
 
       <div className="flex-1 min-h-0 overflow-auto">
         <div className={SETTINGS_DETAIL_SHELL}>
-          <PromptInternalsNotice />
+          <PromptInternalsNotice variant={showFull ? "developer" : "summary"} />
           <div className="space-y-1">
-            <p className={SETTINGS_ROW_DESC}>{t("settings.editor.promptStack.intro")}</p>
+            <p className={SETTINGS_ROW_DESC}>
+              {t(
+                showFull
+                  ? "settings.editor.promptStack.introFull"
+                  : "settings.editor.promptStack.intro",
+              )}
+            </p>
             {preview.orchestratorName && preview.orchestratorId ? (
               <p className="text-[length:var(--font-size-12)] text-muted-foreground">
-                {t("settings.editor.promptStack.defaultOrchestrator")}{" "}
+                {preview.teamId || preview.teamName ? (
+                  <>
+                    {t("settings.editor.promptStack.activeTeam")}{" "}
+                    <span className="font-medium text-foreground/90">
+                      {teamDisplayName(preview.teamId ?? "", preview.teamName, t)}
+                    </span>
+                    {" · "}
+                  </>
+                ) : null}
+                {t("settings.editor.promptStack.leadAgent")}{" "}
                 <span className="font-medium text-foreground/90">{preview.orchestratorName}</span>{" "}
                 <code className="text-[length:var(--font-size-11)]">{preview.orchestratorId}</code>
               </p>
@@ -293,6 +314,7 @@ export function PromptStackPreviewPanel() {
                 key={section.id}
                 section={section}
                 index={index}
+                showFull={showFull}
                 expanded={expandedIds.has(section.id)}
                 onToggle={() => toggleSection(section.id)}
               />

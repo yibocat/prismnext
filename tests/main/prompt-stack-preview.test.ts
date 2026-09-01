@@ -54,6 +54,8 @@ describe("prompt stack preview", () => {
     expect(modules?.content).toContain("## Orchestrator judgment");
     expect(modules?.content).toContain("### Task delegation");
     expect(preview.orchestratorId).toBe("research-prism");
+    expect(preview.teamId).toBeTruthy();
+    expect(preview.teamName).toBeTruthy();
   });
 
   it("liveSystemPrompt equals the joined system sections (not project rules)", async () => {
@@ -72,7 +74,9 @@ describe("prompt stack preview", () => {
       .join("\n\n");
     expect(preview.liveSystemPrompt).toBe(joined);
     expect(preview.liveSystemPrompt).toContain("Chat paper citations");
+    expect(preview.liveSystemPrompt).toContain("<capability_modules>");
     expect(preview.liveSystemPrompt).not.toContain("mode: primary");
+    expect(preview.sections.find((s) => s.id === "profile-modules")?.content).toContain("<capability_modules>");
   });
 
   it("includes all enabled project rules in the preview", async () => {
@@ -116,5 +120,6 @@ Body B
     expect(md).toContain("Pi system prompt");
     expect(md).toContain("**Inject via:**");
     expect(md).toContain("Generated preview");
+    expect(md).toContain("**Active team:**");
   });
 });

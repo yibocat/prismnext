@@ -21,6 +21,7 @@ export const shellDesktop = {
   windowClose: forwardDesktop("windowClose"),
   onWindowStateChange: forwardDesktop("onWindowStateChange"),
   onCloseTabRequest: forwardDesktop("onCloseTabRequest"),
+  onSetPromptInternals: forwardDesktop("onSetPromptInternals"),
 };
 
 export function desktopPlatform(): "darwin" | "win32" | "linux" {

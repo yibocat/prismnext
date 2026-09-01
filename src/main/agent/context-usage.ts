@@ -8,11 +8,20 @@
 import { countPromptTokens } from "../lib/token-estimate";
 import { isMcpToolName } from "./mcp-host";
 import {
+  breakdownTotal,
   estimateCostUsd,
   fitBreakdownToOccupancy,
   type ContextUsageBreakdown,
   type SessionUsageTotals,
 } from "../../shared/agent/context-usage";
+import {
+  CAPABILITY_MODULES_CLOSE,
+  CAPABILITY_MODULES_OPEN,
+  PROJECT_CONTEXT_CLOSE,
+  PROJECT_CONTEXT_OPEN,
+  TOOL_GUIDELINES_CLOSE,
+  TOOL_GUIDELINES_OPEN,
+} from "../../shared/agent/prompt-markup";
 
 const SUBAGENT_HEADING = "## Available subagents (via Task)";
 
@@ -32,6 +41,8 @@ export interface PiContextSnapshotSession {
     percent: number | null;
   } | undefined;
   systemPrompt?: string;
+  /** Per-turn RULE.md text — lives on the user message, not the system prompt. */
+  projectRules?: string;
   getAllTools?: () => Array<{
     name: string;
     description?: string;
@@ -117,12 +128,17 @@ function latestCompactionSummary(session: PiContextSnapshotSession): string {
 export function estimateContextBreakdown(
   session: PiContextSnapshotSession,
   occupancy: number | null,
+  extras?: { projectRules?: string },
 ): ContextUsageBreakdown {
   let system = typeof session.systemPrompt === "string" ? session.systemPrompt : "";
 
   const skillsExtract = extractSkills(system);
   system = skillsExtract.rest;
-  const rulesExtract = extractBlock(system, "<project_context>", "</project_context>");
+  const guidelinesExtract = extractBlock(system, TOOL_GUIDELINES_OPEN, TOOL_GUIDELINES_CLOSE);
+  system = guidelinesExtract.rest;
+  const modulesExtract = extractBlock(system, CAPABILITY_MODULES_OPEN, CAPABILITY_MODULES_CLOSE);
+  system = modulesExtract.rest;
+  const rulesExtract = extractBlock(system, PROJECT_CONTEXT_OPEN, PROJECT_CONTEXT_CLOSE);
   system = rulesExtract.rest;
   const subagentsExtract = extractFromHeading(system, SUBAGENT_HEADING);
   system = subagentsExtract.rest;
@@ -138,8 +154,11 @@ export function estimateContextBreakdown(
 
   const parts: ContextUsageBreakdown = {
     systemPrompt: countText(system),
-    tools: countText(toolsText),
-    rules: countText(rulesExtract.block),
+    modules: countText(modulesExtract.block),
+    tools: countText(toolsText) + countText(guidelinesExtract.block),
+    rules: countText(rulesExtract.block) + countText(
+      session.projectRules?.trim() || extras?.projectRules?.trim() || "",
+    ),
     skills: countText(skillsExtract.block),
     mcp: countText(mcpText),
     subagents: countText(subagentsExtract.block),
@@ -156,6 +175,8 @@ export function snapshotPiSessionUsage(
     includeBreakdown?: boolean;
     /** Keep this spend across a model switch when Pi has no in-band bill. */
     previousCostUsd?: number;
+    /** Per-turn RULE.md — not a field on the Pi session object. */
+    projectRules?: string;
   },
 ): PiUsageSnapshot | null {
   if (!session) return null;
@@ -180,6 +201,11 @@ export function snapshotPiSessionUsage(
   const hasAnything = occupancy != null || costUsd > 0 || stats != null || windowSize != null;
   if (!hasAnything) return null;
 
+  const breakdown = opts?.includeBreakdown
+    ? estimateContextBreakdown(session, occupancy, { projectRules: opts.projectRules })
+    : undefined;
+  const breakdownOrNone = breakdown && breakdownTotal(breakdown) > 0 ? breakdown : undefined;
+
   return {
     occupancyTokens: occupancy,
     windowSize,
@@ -188,7 +214,7 @@ export function snapshotPiSessionUsage(
     output: stats?.tokens.output ?? 0,
     cacheRead: stats?.tokens.cacheRead ?? 0,
     cacheWrite: stats?.tokens.cacheWrite ?? 0,
-    ...(opts?.includeBreakdown ? { breakdown: estimateContextBreakdown(session, occupancy) } : {}),
+    ...(breakdownOrNone ? { breakdown: breakdownOrNone } : {}),
     updatedAt: Date.now(),
   };
 }

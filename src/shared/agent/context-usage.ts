@@ -7,6 +7,7 @@
 
 export const CONTEXT_BREAKDOWN_KEYS = [
   "systemPrompt",
+  "modules",
   "tools",
   "rules",
   "skills",

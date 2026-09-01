@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useDocumentStore } from "@/stores/document-store";
+import { useTeamsStore } from "@/stores/teams-store";
 import { formatTokenCount } from "@shared/providers/token-estimate";
 import { openSettingsPanel } from "@/stores/settings-panel-store";
 import { useOnSettingsEditorKindsClosed } from "@/hooks/use-settings-editor";
@@ -21,6 +22,7 @@ import {
   subscribeExpertsIntegrationChanged,
   type ProjectRuleInfo,
 } from "@/lib/settings";
+import { teamDisplayName } from "@/lib/teams/team-display-name";
 
 const CATEGORY_HEADER =
   "text-[length:var(--font-size-12)] font-semibold uppercase tracking-wider text-muted-foreground/60 mb-1";
@@ -171,11 +173,15 @@ export function PromptsRulesSettings() {
   const { t } = useTranslation();
   const agentSystemPrompt = useSettingsStore((s) => s.settings.agentSystemPrompt) ?? "";
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const activeTeamId = useTeamsStore((s) => s.activeTeamId);
+  const loadTeams = useTeamsStore((s) => s.load);
 
   const isCustom = agentSystemPrompt.trim().length > 0;
   const [stackSummary, setStackSummary] = useState<{
     totalTokens: number;
     sectionCount: number;
+    teamId?: string;
+    teamName?: string;
     orchestratorName?: string;
   } | null>(null);
   const [agentsMdLength, setAgentsMdLength] = useState(0);
@@ -187,7 +193,7 @@ export function PromptsRulesSettings() {
 
   const refreshSummaries = useCallback(async () => {
     const [stack, agentsMd, internals] = await Promise.all([
-      fetchPromptStackSummary(projectRoot, agentSystemPrompt || undefined),
+      fetchPromptStackSummary(projectRoot, agentSystemPrompt || undefined, activeTeamId),
       readProjectAgentsMd(projectRoot),
       fetchPromptInternalsSummary(projectRoot),
     ]);
@@ -195,7 +201,11 @@ export function PromptsRulesSettings() {
     setAgentsMdLength(agentsMd.charCount);
     setHasAgentsMd(agentsMd.hasContent);
     setInternalsSummary(internals);
-  }, [projectRoot, agentSystemPrompt]);
+  }, [projectRoot, agentSystemPrompt, activeTeamId]);
+
+  useEffect(() => {
+    if (projectRoot) void loadTeams(projectRoot);
+  }, [projectRoot, loadTeams]);
 
   useEffect(() => {
     void refreshSummaries();
@@ -353,9 +363,18 @@ export function PromptsRulesSettings() {
                 </p>
                 {stackSummary?.orchestratorName ? (
                   <p className="text-[length:var(--font-size-11)] text-muted-foreground/70 mt-0.5">
-                    {t("settings.prompts.stackBaseAgent", {
-                      name: stackSummary.orchestratorName,
-                    })}
+                    {stackSummary.teamId || stackSummary.teamName
+                      ? t("settings.prompts.stackActiveTeam", {
+                          team: teamDisplayName(
+                            stackSummary.teamId ?? "",
+                            stackSummary.teamName,
+                            t,
+                          ),
+                          name: stackSummary.orchestratorName,
+                        })
+                      : t("settings.prompts.stackBaseAgent", {
+                          name: stackSummary.orchestratorName,
+                        })}
                   </p>
                 ) : null}
               </div>

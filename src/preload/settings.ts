@@ -15,11 +15,13 @@ export const settingsApi = {
 		projectRoot?: string,
 		userCustomPrompt?: string,
 		orchestratorId?: string | null,
+		sessionTeamId?: string | null,
 	) =>
 		ipcRenderer.invoke("settings:getPromptStackPreview", {
 			projectRoot,
 			userCustomPrompt,
 			orchestratorId,
+			sessionTeamId,
 		}),
 	settingsCountPromptTokens: (text: string) =>
 		ipcRenderer.invoke("settings:countPromptTokens", { text }),
