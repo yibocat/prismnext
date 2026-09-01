@@ -236,7 +236,7 @@ export function registerSettingsHandlers(): void {
     const { ALL_NATIVE_TOOLS } = await import("../agent/tools/index");
     const { PI_PRIMITIVE_TOOLS, isPiPrimitiveToolName } = await import("../agent/capability-matrix");
     const categoryFor = (name: string): string => {
-      if (name.startsWith("literature") || name.startsWith("citation")) return "reference";
+      if (name.startsWith("literature") || name.startsWith("citation") || name === "websearch" || name === "webfetch") return "reference";
       if (name.startsWith("latex")) return "compile";
       if (name === "question" || name === "suggest-plan" || isPiPrimitiveToolName(name)) return "utility";
       return "project";

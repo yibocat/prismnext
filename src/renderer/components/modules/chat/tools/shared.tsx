@@ -262,6 +262,18 @@ export function toolUseContextTitle(block: {
  *   const filePath = param(input, "file_path", "filePath");
  *   const isRecursive = param(input, "recursive");  // single key → tries both cases
  */
+export function parseToolJson(raw: unknown): unknown {
+  if (raw == null) return raw;
+  if (typeof raw !== "string") return raw;
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return raw;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
 export function param(
   input: any,
   snakeKey: string,

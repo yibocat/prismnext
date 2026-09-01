@@ -46,4 +46,11 @@ describe("desktop model seed for Host", () => {
     expect(seed.wrapOk).toBe(true);
     expect(seed.wrapKey.length).toBeGreaterThan(0);
   });
+
+  it("includes the Tavily key in the Host seed", () => {
+    storeCtl.data = {};
+    updateSettings({ tavilyApiKey: "tvly-seed" });
+    const seed = readDesktopModelSeed();
+    expect(seed.tavilyApiKey).toBe("tvly-seed");
+  });
 });

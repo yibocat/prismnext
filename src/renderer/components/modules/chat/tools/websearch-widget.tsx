@@ -2,7 +2,7 @@ import { useState, memo } from "react";
 import type { ContentBlock } from "@/stores/chat-store";
 import { SearchIcon, ExternalLinkIcon } from "lucide-react";
 import { openUrlInBrowser } from "@/lib/browser-link";
-import { ToolCard, param } from "./shared";
+import { ToolCard, param, parseToolJson } from "./shared";
 
 interface SearchResult {
   title?: string;
@@ -28,18 +28,13 @@ export const WebSearchWidget = memo(function WebSearchWidget({
 
   /** Try to parse search results from various formats */
   let results: SearchResult[] = [];
-  const raw = toolResult?.content;
-  if (raw) {
-    if (typeof raw === "object" && Array.isArray(raw)) {
-      results = raw;
-    } else if (typeof raw === "object" && raw.sources) {
-      results = raw.sources;
-    } else if (typeof raw === "object" && raw.results) {
-      results = raw.results;
-    } else if (typeof raw === "string") {
-      // Plain text output — show as-is
-      results = [];
-    }
+  const raw = parseToolJson(toolResult?.content);
+  if (Array.isArray(raw)) {
+    results = raw as SearchResult[];
+  } else if (raw && typeof raw === "object") {
+    const rec = raw as { sources?: SearchResult[]; results?: SearchResult[] };
+    if (Array.isArray(rec.sources)) results = rec.sources;
+    else if (Array.isArray(rec.results)) results = rec.results;
   }
 
   const outputText = typeof raw === "string" ? raw : JSON.stringify(raw ?? "", null, 2);

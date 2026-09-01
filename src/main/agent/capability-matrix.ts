@@ -69,6 +69,8 @@ export const HOST_RESEARCH_TOOLS: readonly ToolCapability[] = [
   { name: TOOL_NAMES.interactionWrite, kind: "host_research", notes: "interaction store" },
   { name: TOOL_NAMES.interactionOpen, kind: "host_research", notes: "interaction UI focus" },
   { name: TOOL_NAMES.imageDescribe, kind: "host_research", notes: "vision helper model" },
+  { name: TOOL_NAMES.websearch, kind: "host_research", notes: "Tavily search BYOK" },
+  { name: TOOL_NAMES.webfetch, kind: "host_research", notes: "Tavily extract BYOK" },
   { name: TOOL_NAMES.delete, kind: "host_research", notes: "host fs delete after PermissionGate" },
   { name: TOOL_NAMES.move, kind: "host_research", notes: "host fs move after PermissionGate" },
 ];

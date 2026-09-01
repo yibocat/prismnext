@@ -559,10 +559,11 @@
   },
   "literaturePage": {
     "title": "文獻",
-    "subtitle": "文獻庫儲存、PDF 提取與 Zotero。",
+    "subtitle": "文獻庫儲存、PDF 提取、網頁搜尋與 Zotero。",
     "libraryStorage": "文獻庫儲存",
     "pdfExtraction": "PDF 提取",
     "discoveryTitle": "文獻發現",
+    "webSearchTitle": "網頁搜尋",
     "zotero": "Zotero",
     "pageDesc": "專案文獻庫儲存與可選的 Zotero 同步。",
     "toast": {
@@ -573,6 +574,9 @@
     "storageDesc": "快取的 PDF 會保留，直到你刪除對應條目或清理下方未引用檔案。",
     "extractDesc": "Agent 與文獻面板會讀取本專案工作臺文獻庫中的快取 Markdown。設定 Token 後，MinerU（雲端）可上傳 PDF 做高精度解析。",
     "discoveryDesc": "內建 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可選 API 金鑰。無金鑰也可搜尋；金鑰可提高速率限制。",
+    "webSearchDesc": "Agent 的 websearch / webfetch 走 Tavily。請自行申請金鑰，PrismNext 不提供共享額度。免費檔每月 1000 credits（basic 搜尋 1 credit；basic 提取每 5 個 URL 1 credit）。",
+    "tavilySignup": "申請 Tavily API Key",
+    "tavilyDocs": "Tavily 文件",
     "zoteroDesc": "可選 — 在 Zotero 桌面端執行時流式讀取 PDF。Better BibTeX 提供 citekey；編輯集合需要 Web API 憑證或 debug-bridge 外掛。",
     "rows": {
       "project": "專案",
@@ -582,6 +586,7 @@
       "mineruToken": "MinerU API Token",
       "semanticScholarKey": "Semantic Scholar API 金鑰",
       "pubmedKey": "PubMed / NCBI API 金鑰",
+      "tavilyKey": "Tavily API 金鑰",
       "mineruConnection": "MinerU 連線",
       "autoExtract": "匯入時自動提取",
       "autoAiMetadata": "自動生成摘要與關鍵詞",
@@ -601,6 +606,7 @@
       "mineruToken": "可選 — 留空使用免費 flash 模式（10MB / 20 頁）。Token 可啟用高精度提取（最高 200MB / 200 頁）。PDF 會發送到 MinerU 伺服器。",
       "semanticScholarKey": "可選 — 提高 literature-discover 對 Semantic Scholar 的速率限制。",
       "pubmedKey": "可選 — 提高 literature-discover 對 PubMed / NCBI E-utilities 的速率限制。",
+      "tavilyKey": "Agent 網頁搜尋與抓取需要此金鑰。請到 tavily.com 免費申請。",
       "mineruTestHint": "測試 Token 或 flash 可用性。",
       "autoExtract": "將 PDF 加入文獻庫時排隊提取。",
       "autoAiMetadata": "PDF 文本提取後，生成一句話摘要並寫入標籤（每篇少量 token）。",
@@ -619,6 +625,7 @@
       "mineruToken": "Bearer token…",
       "semanticScholarKey": "x-api-key…",
       "pubmedKey": "NCBI api_key…",
+      "tavilyKey": "tvly-…",
       "apiKey": "輸入金鑰…"
     },
     "actions": {

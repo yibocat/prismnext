@@ -13,6 +13,7 @@ import {
   SYSTEM_TOOLS,
   INTERACTIVE_TOOLS,
   TYPST_TOOLS,
+  WEB_TOOLS,
 } from "../../src/main/agent/tools/index";
 import { createAgentNativeTools as createPiLabNativeTools } from "../../src/main/agent/agent-service";
 import { createPiNativeTools, hostToolsForChatModel } from "../../src/main/agent/pi-sdk-runtime";
@@ -30,9 +31,9 @@ describe("unified native tools catalog", () => {
   };
 
   it("exports unique host custom tools without Pi file/shell primitives", () => {
-    expect(ALL_NATIVE_TOOLS).toHaveLength(30);
+    expect(ALL_NATIVE_TOOLS).toHaveLength(32);
     const names = new Set(ALL_NATIVE_TOOLS.map((t) => t.name));
-    expect(names.size).toBe(30);
+    expect(names.size).toBe(32);
     expect(names.has("bash")).toBe(false);
     expect(names.has("read")).toBe(false);
 
@@ -44,6 +45,7 @@ describe("unified native tools catalog", () => {
     expect(INTERACTION_TOOLS).toHaveLength(4);
     expect(SYSTEM_TOOLS).toHaveLength(4);
     expect(INTERACTIVE_TOOLS).toHaveLength(2);
+    expect(WEB_TOOLS).toHaveLength(2);
 
     for (const tool of ALL_NATIVE_TOOLS) {
       expect(tool.name).toBeTruthy();
@@ -69,10 +71,10 @@ describe("unified native tools catalog", () => {
     const toolHost = new ToolHost({ gate });
     toolHost.registerAll(ALL_NATIVE_TOOLS);
 
-    expect(toolHost.names()).toHaveLength(30);
+    expect(toolHost.names()).toHaveLength(32);
 
     const piTools = toolHost.toPiTools(() => ctx);
-    expect(piTools).toHaveLength(30);
+    expect(piTools).toHaveLength(32);
     for (const pt of piTools) {
       expect(pt.name).toBeTruthy();
       expect(pt.description).toBeTruthy();
@@ -93,13 +95,13 @@ describe("unified native tools catalog", () => {
     expect(question?.promptGuidelines?.length).toBeGreaterThan(0);
 
     const labTools = createPiLabNativeTools();
-    expect(labTools).toHaveLength(30);
+    expect(labTools).toHaveLength(32);
 
     const piNative = createPiNativeTools({
       toolHost,
       getContext: () => ctx,
     });
-    expect(piNative).toHaveLength(30);
+    expect(piNative).toHaveLength(32);
   });
 
   it("executes system and fs tools in-memory with real file operations", async () => {

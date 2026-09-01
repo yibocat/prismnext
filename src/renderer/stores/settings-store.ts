@@ -242,6 +242,8 @@ export interface AppSettings {
   semanticScholarApiKey?: string;
   /** Optional NCBI API key for PubMed literature-discover rate limits */
   pubmedApiKey?: string;
+  /** User Tavily API key for Agent websearch / webfetch (BYOK). */
+  tavilyApiKey?: string;
   /** Default extract engine: pdfjs (local) | mineru (cloud) */
   literatureExtractEngineDefault?: "pdfjs" | "mineru";
   /** Auto-extract PDF on library import (default off) */

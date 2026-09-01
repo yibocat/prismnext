@@ -6,6 +6,7 @@ describe("LITERATURE_LIBRARY_PROMPT", () => {
   it("is library-citation workflow only — not external staging or tool catalog", () => {
     expect(LITERATURE_LIBRARY_PROMPT).toContain("project's literature library");
     expect(LITERATURE_LIBRARY_PROMPT).toContain("Chat paper citations");
+    expect(LITERATURE_LIBRARY_PROMPT).toContain("Web research");
     expect(LITERATURE_LIBRARY_PROMPT).toContain("[@bibkey]");
     expect(LITERATURE_LIBRARY_PROMPT).toContain(TOOL_NAMES.literatureSearch);
     expect(LITERATURE_LIBRARY_PROMPT).toContain(TOOL_NAMES.literatureRead);

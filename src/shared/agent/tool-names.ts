@@ -16,6 +16,8 @@ export const TOOL_NAMES = {
   literatureIntensiveReading: "literature-intensive-reading",
   literatureExportBib: "literature-export-bib",
   literatureDelete: "literature-delete",
+  websearch: "websearch",
+  webfetch: "webfetch",
   citationHealth: "citation-health",
   latexCompile: "latex-compile",
   latexCompileStandalone: "latex-compile-standalone",

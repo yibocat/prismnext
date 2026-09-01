@@ -799,8 +799,10 @@ export class RemoteSessionBroker {
       modelKeys: mode,
       extraBaseUrls: seed.extraBaseUrls,
       proGrant: this.currentProGrant(),
+      wrapKey: seed.wrapKey,
+      tavilyApiKey: seed.tavilyApiKey ?? "",
       ...(mode === "remote"
-        ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
+        ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls }
         : {}),
     });
     return {

@@ -4,10 +4,12 @@ import { dirname, join } from "node:path";
 import { sanitizeHostModelKeyMap } from "../shared/remote";
 import { HOME_HOST_MODEL_FILENAME } from "../shared/workbench/paths";
 import { resolveWorkbenchHome } from "../main/workbench/home";
+import { setHostTavilyApiKey } from "../main/lib/tavily/settings";
 
 export type HostModelSettings = {
   aiApiKeys?: Record<string, string>;
   aiBaseUrls?: Record<string, string>;
+  tavilyApiKey?: string;
 };
 
 const ALG = "aes-256-gcm";
@@ -89,9 +91,11 @@ function decryptEnvelope(envelope: HostModelEnvelope, key: Buffer): HostModelSet
     const rec = parsed as Record<string, unknown>;
     const aiApiKeys = sanitizeHostModelKeyMap(rec.aiApiKeys);
     const aiBaseUrls = asUrlMap(rec.aiBaseUrls);
+    const tavilyApiKey = typeof rec.tavilyApiKey === "string" ? rec.tavilyApiKey.trim() : "";
     return {
       ...(Object.keys(aiApiKeys).length > 0 ? { aiApiKeys } : {}),
       ...(Object.keys(aiBaseUrls).length > 0 ? { aiBaseUrls } : {}),
+      ...(tavilyApiKey ? { tavilyApiKey } : {}),
     };
   } catch {
     return null;
@@ -111,18 +115,24 @@ function settingsFromLegacyPlain(value: unknown): HostModelSettings {
   const rec = value as Record<string, unknown>;
   const aiApiKeys = sanitizeHostModelKeyMap(rec.aiApiKeys);
   const aiBaseUrls = asUrlMap(rec.aiBaseUrls);
+  const tavilyApiKey = typeof rec.tavilyApiKey === "string" ? rec.tavilyApiKey.trim() : "";
   return {
     ...(Object.keys(aiApiKeys).length > 0 ? { aiApiKeys } : {}),
     ...(Object.keys(aiBaseUrls).length > 0 ? { aiBaseUrls } : {}),
+    ...(tavilyApiKey ? { tavilyApiKey } : {}),
   };
 }
 
 function mergeMaps(base: HostModelSettings, extra: HostModelSettings): HostModelSettings {
   const aiApiKeys = { ...base.aiApiKeys, ...extra.aiApiKeys };
   const aiBaseUrls = { ...base.aiBaseUrls, ...extra.aiBaseUrls };
+  const tavilyApiKey = extra.tavilyApiKey !== undefined
+    ? extra.tavilyApiKey.trim()
+    : (base.tavilyApiKey ?? "");
   return {
     ...(Object.keys(aiApiKeys).length > 0 ? { aiApiKeys } : {}),
     ...(Object.keys(aiBaseUrls).length > 0 ? { aiBaseUrls } : {}),
+    ...(tavilyApiKey ? { tavilyApiKey } : {}),
   };
 }
 
@@ -144,12 +154,14 @@ function writeEnvelope(plain: HostModelSettings, key: Buffer): void {
 export function resetHostModelSettingsForTests(): void {
   unlocked = {};
   wrapKeyBytes = null;
+  setHostTavilyApiKey(undefined);
 }
 
 export function readHostModelSettings(): HostModelSettings {
   return {
     ...(unlocked.aiApiKeys ? { aiApiKeys: { ...unlocked.aiApiKeys } } : {}),
     ...(unlocked.aiBaseUrls ? { aiBaseUrls: { ...unlocked.aiBaseUrls } } : {}),
+    ...(unlocked.tavilyApiKey ? { tavilyApiKey: unlocked.tavilyApiKey } : {}),
   };
 }
 
@@ -161,10 +173,11 @@ export function mergeHostModelSettings(
   patch: HostModelSettings,
   wrapKey?: string,
 ): HostModelSettings {
-  const incoming = {
+  const incoming: HostModelSettings = {
     aiApiKeys: sanitizeHostModelKeyMap(patch.aiApiKeys),
     aiBaseUrls: asUrlMap(patch.aiBaseUrls),
   };
+  if (patch.tavilyApiKey !== undefined) incoming.tavilyApiKey = patch.tavilyApiKey;
   const decoded = decodeHostModelWrapKey(wrapKey);
   if (decoded) wrapKeyBytes = decoded;
   const key = wrapKeyBytes;
@@ -178,6 +191,8 @@ export function mergeHostModelSettings(
 
   const hasSecrets = Boolean(next.aiApiKeys && Object.keys(next.aiApiKeys).length > 0);
   const hasUrls = Boolean(next.aiBaseUrls && Object.keys(next.aiBaseUrls).length > 0);
-  if (key && (hasSecrets || hasUrls)) writeEnvelope(next, key);
+  const hasTavily = Boolean(next.tavilyApiKey);
+  if (key && (hasSecrets || hasUrls || hasTavily)) writeEnvelope(next, key);
+  setHostTavilyApiKey(next.tavilyApiKey);
   return readHostModelSettings();
 }

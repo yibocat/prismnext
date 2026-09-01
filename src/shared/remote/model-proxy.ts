@@ -47,6 +47,8 @@ export interface DesktopModelSeed extends DesktopModelSeedSummary {
   aiBaseUrls: Record<string, string>;
   extraBaseUrls: string[];
   wrapKey: string;
+  /** Laptop Tavily key for Host websearch/webfetch. Empty when unset. */
+  tavilyApiKey?: string;
 }
 
 export function emptyDesktopModelSeed(error: string): DesktopModelSeed {
@@ -57,6 +59,7 @@ export function emptyDesktopModelSeed(error: string): DesktopModelSeed {
     wrapKey: "",
     providerIds: [],
     wrapOk: false,
+    tavilyApiKey: "",
     error,
   };
 }

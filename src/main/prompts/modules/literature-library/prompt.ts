@@ -16,6 +16,7 @@ export const LITERATURE_LIBRARY_PROMPT = [
   "  (tags, collections, manuscript bibliography tied to the library).",
   "- **Chat paper citations** — papers **outside** the library cited in chat as **`[n]`**;",
   "  discover/stage how-to lives there — not here.",
+  "- **Web research** — public docs, packages, datasets, and tool sites — not library papers.",
   `- **Citation & bibliography audit** — manuscript cite integrity (\`${TOOL_NAMES.citationHealth}\`);`,
   "  not for browsing or discussing library papers.",
   "",

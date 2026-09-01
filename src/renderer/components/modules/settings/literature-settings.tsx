@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import type { LiteratureStorageStats, ZoteroStatus } from "@/types/electron.d";
 import { literatureDesktop } from "@/lib/desktop-api/literature";
 import { extractDesktop } from "@/lib/desktop-api/extract";
+import { AppBrowserLink } from "@/components/modules/shared/app-browser-link";
 import {
   isLiteratureAiMetadataConfigured,
   literatureAiMetadataModelLabel,
@@ -70,6 +71,7 @@ export function LiteratureSettings() {
   const [showMineruKey, setShowMineruKey] = useState(false);
   const [showS2Key, setShowS2Key] = useState(false);
   const [showPubmedKey, setShowPubmedKey] = useState(false);
+  const [showTavilyKey, setShowTavilyKey] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testingMineru, setTestingMineru] = useState(false);
   const [mineruStatus, setMineruStatus] = useState<string | null>(null);
@@ -414,6 +416,42 @@ export function LiteratureSettings() {
                 />
                 <Button variant="ghost" size="icon-xs" onClick={() => setShowPubmedKey(!showPubmedKey)}>
                   {showPubmedKey ? <EyeOffIcon className="size-3" /> : <EyeIcon className="size-3" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <h3 className={SECTION_TITLE}>{t("settings.literaturePage.webSearchTitle")}</h3>
+            <p className={SECTION_DESC}>{t("settings.literaturePage.webSearchDesc")}</p>
+          </div>
+          <div className={CARD}>
+            <div className={ROW}>
+              <div className="min-w-0 pr-3">
+                <p className={ROW_LABEL}>{t("settings.literaturePage.rows.tavilyKey")}</p>
+                <p className={ROW_DESC}>{t("settings.literaturePage.rowDesc.tavilyKey")}</p>
+                <p className={`${ROW_DESC} mt-1`}>
+                  <AppBrowserLink href="https://tavily.com">
+                    {t("settings.literaturePage.tavilySignup")}
+                  </AppBrowserLink>
+                  {" · "}
+                  <AppBrowserLink href="https://docs.tavily.com/">
+                    {t("settings.literaturePage.tavilyDocs")}
+                  </AppBrowserLink>
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Input
+                  type={showTavilyKey ? "text" : "password"}
+                  className="!h-7 !text-[length:var(--font-size-12)] w-48"
+                  placeholder={t("settings.literaturePage.placeholders.tavilyKey")}
+                  value={(settings.tavilyApiKey as string) || ""}
+                  onChange={(e) => updateSettings({ tavilyApiKey: e.target.value })}
+                />
+                <Button variant="ghost" size="icon-xs" onClick={() => setShowTavilyKey(!showTavilyKey)}>
+                  {showTavilyKey ? <EyeOffIcon className="size-3" /> : <EyeIcon className="size-3" />}
                 </Button>
               </div>
             </div>

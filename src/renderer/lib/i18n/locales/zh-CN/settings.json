@@ -559,10 +559,11 @@
   },
   "literaturePage": {
     "title": "文献",
-    "subtitle": "文献库存储、PDF 提取与 Zotero。",
+    "subtitle": "文献库存储、PDF 提取、网页搜索与 Zotero。",
     "libraryStorage": "文献库存储",
     "pdfExtraction": "PDF 提取",
     "discoveryTitle": "文献发现",
+    "webSearchTitle": "网页搜索",
     "zotero": "Zotero",
     "pageDesc": "项目文献库存储与可选的 Zotero 同步。",
     "toast": {
@@ -573,6 +574,9 @@
     "storageDesc": "缓存的 PDF 会保留，直到你删除对应条目或清理下方未引用文件。",
     "extractDesc": "Agent 与文献面板会读取本项目工作台文献库中的缓存 Markdown。设置 Token 后，MinerU（云端）可上传 PDF 做高精度解析。",
     "discoveryDesc": "内置 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可选 API 密钥。无密钥也可搜索；密钥可提高速率限制。",
+    "webSearchDesc": "Agent 的 websearch / webfetch 走 Tavily。请自行申请密钥，PrismNext 不提供共享额度。免费档每月 1000 credits（basic 搜索 1 credit；basic 提取每 5 个 URL 1 credit）。",
+    "tavilySignup": "申请 Tavily API Key",
+    "tavilyDocs": "Tavily 文档",
     "zoteroDesc": "可选 — 在 Zotero 桌面端运行时流式读取 PDF。Better BibTeX 提供 citekey；编辑集合需要 Web API 凭证或 debug-bridge 插件。",
     "rows": {
       "project": "项目",
@@ -582,6 +586,7 @@
       "mineruToken": "MinerU API Token",
       "semanticScholarKey": "Semantic Scholar API 密钥",
       "pubmedKey": "PubMed / NCBI API 密钥",
+      "tavilyKey": "Tavily API 密钥",
       "mineruConnection": "MinerU 连接",
       "autoExtract": "导入时自动提取",
       "autoAiMetadata": "自动生成摘要与关键词",
@@ -601,6 +606,7 @@
       "mineruToken": "可选 — 留空使用免费 flash 模式（10MB / 20 页）。Token 可启用高精度提取（最高 200MB / 200 页）。PDF 会发送到 MinerU 服务器。",
       "semanticScholarKey": "可选 — 提高 literature-discover 对 Semantic Scholar 的速率限制。",
       "pubmedKey": "可选 — 提高 literature-discover 对 PubMed / NCBI E-utilities 的速率限制。",
+      "tavilyKey": "Agent 网页搜索与抓取需要此密钥。请到 tavily.com 免费申请。",
       "mineruTestHint": "测试 Token 或 flash 可用性。",
       "autoExtract": "将 PDF 加入文献库时排队提取。",
       "autoAiMetadata": "PDF 文本提取后，生成一句话摘要并写入标签（每篇少量 token）。",
@@ -619,6 +625,7 @@
       "mineruToken": "Bearer token…",
       "semanticScholarKey": "x-api-key…",
       "pubmedKey": "NCBI api_key…",
+      "tavilyKey": "tvly-…",
       "apiKey": "输入密钥…"
     },
     "actions": {

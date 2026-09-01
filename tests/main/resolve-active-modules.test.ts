@@ -24,6 +24,7 @@ describe("resolve-active-modules", () => {
     const keys = resolveSharedProfileModules().map((m) => m.key);
     expect(keys).toContain("chat-citation-staging");
     expect(keys).toContain("literature-library");
+    expect(keys).toContain("web-research");
     expect(keys).toContain("experiments");
     expect(keys).toContain("interaction");
     expect(keys).not.toContain("orchestrator-judgment");
