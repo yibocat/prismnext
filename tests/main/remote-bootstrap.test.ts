@@ -6,10 +6,17 @@ import { describe, expect, it } from "vitest";
 import { ensureHostPayload } from "../../src/main/remote/bootstrap";
 import { createDirectoryBackedSshClient } from "../../src/main/remote/ssh-client";
 import { sha256File } from "../../src/main/remote/payload-path";
+import { hostPayloadAnydocNativePath } from "../../src/shared/remote/host-runtime-env";
 
 function writeStubBin(path: string, body = "#!/bin/sh\nexit 0\n"): void {
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, body, { mode: 0o755 });
+}
+
+function writeStubAnydoc(currentDir: string, arch: "x64" | "arm64" = "x64"): void {
+  const native = hostPayloadAnydocNativePath(currentDir, arch);
+  mkdirSync(join(native, ".."), { recursive: true });
+  writeFileSync(native, "native-binding\n");
 }
 
 const INSTALL_RUNTIME_STUB = `#!/bin/sh
@@ -41,6 +48,10 @@ if [ "$STEP" = "tinymist" ] || [ "$STEP" = "all" ]; then
   printf '%s\\n' '#!/bin/sh' 'echo tinymist 0.15.2' > "$CURRENT/bin/tinymist"
   chmod +x "$CURRENT/bin/tinymist"
 fi
+if [ "$STEP" = "anydoc" ] || [ "$STEP" = "all" ]; then
+  mkdir -p "$CURRENT/node_modules/@firecrawl/anydoc-linux-x64-gnu"
+  printf '%s\\n' 'native-binding' > "$CURRENT/node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node"
+fi
 echo "stub $STEP"
 `;
 
@@ -56,6 +67,7 @@ async function makeHostTarball(dir: string): Promise<{ tarballPath: string; sha2
   writeStubBin(join(dir, "current", "bin", "tectonic"));
   writeStubBin(join(dir, "current", "bin", "tinymist"));
   writeStubBin(join(dir, "current", "vendor", "git", "bin", "git"));
+  writeStubAnydoc(join(dir, "current"));
   const tarballPath = join(dir, "payload.tar.gz");
   await tarCreate({ gzip: true, file: tarballPath, cwd: dir }, ["current"]);
   return { tarballPath, sha256: sha256File(tarballPath) };
@@ -154,6 +166,7 @@ describe("ensureHostPayload", () => {
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
     });
@@ -211,6 +224,7 @@ describe("ensureHostPayload", () => {
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
     });
@@ -273,6 +287,7 @@ exit 0
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), `#!/bin/sh\nexit 0\n`, {
       mode: 0o755,
     });

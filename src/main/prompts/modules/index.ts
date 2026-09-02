@@ -15,6 +15,7 @@ import { CHAT_CITATION_STAGING_MODULE } from "./chat-citation-staging";
 import { CITATION_AUDIT_MODULE } from "./citation-audit";
 import { LITERATURE_LIBRARY_MODULE } from "./literature-library";
 import { WEB_RESEARCH_MODULE } from "./web-research";
+import { OFFICE_DOCUMENTS_MODULE } from "./office-documents";
 import { ORCHESTRATOR_JUDGMENT_MODULE } from "./orchestrator-judgment";
 import { MANUSCRIPT_COMPILE_MODULE } from "./manuscript-compile";
 import { PROJECT_BRIEF_MODULE } from "./project-brief";
@@ -28,6 +29,7 @@ export { CHAT_CITATION_STAGING_PROMPT, CHAT_CITATION_STAGING_MODULE } from "./ch
 export { CITATION_AUDIT_PROMPT, CITATION_AUDIT_MODULE } from "./citation-audit";
 export { LITERATURE_LIBRARY_PROMPT, LITERATURE_LIBRARY_MODULE } from "./literature-library";
 export { WEB_RESEARCH_PROMPT, WEB_RESEARCH_MODULE } from "./web-research";
+export { OFFICE_DOCUMENTS_PROMPT, OFFICE_DOCUMENTS_MODULE } from "./office-documents";
 export {
   ORCHESTRATOR_JUDGMENT_PROMPT,
   buildOrchestratorJudgmentPrompt,
@@ -91,6 +93,7 @@ export const ALL_MODULES: PromptModule[] = [
   CITATION_AUDIT_MODULE,
   LITERATURE_LIBRARY_MODULE,
   WEB_RESEARCH_MODULE,
+  OFFICE_DOCUMENTS_MODULE,
   ORCHESTRATOR_JUDGMENT_MODULE,
   MANUSCRIPT_COMPILE_MODULE,
   RESEARCH_REASONING_MODULE,

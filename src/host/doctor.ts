@@ -1,10 +1,10 @@
-import { accessSync, constants, existsSync } from "node:fs";
+import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { HostDoctorReport, HostRuntimeBinStatus, HostRuntimeInventory } from "../shared/remote";
-import { hostPayloadGitBinDir, listHostRuntimeBinCandidates } from "../shared/remote/host-runtime-env";
+import { hostPayloadAnydocNativePath, hostLinuxArchFromNode, hostPayloadGitBinDir, listHostRuntimeBinCandidates } from "../shared/remote/host-runtime-env";
 import { WORKBENCH_HOME_DIRNAME } from "../shared/workbench/paths";
 
 export type { HostDoctorReport };
@@ -39,6 +39,27 @@ async function probeBin(path: string | null, args: string[]): Promise<HostRuntim
   } catch {
     return { available: existsSync(path), version: null, path: existsSync(path) ? path : null };
   }
+}
+
+function probeAnydocNative(currentDir: string | null): HostRuntimeBinStatus {
+  const arch = hostLinuxArchFromNode();
+  if (!currentDir || !arch) return { available: false, version: null, path: null };
+  const nativePath = hostPayloadAnydocNativePath(currentDir, arch);
+  if (!existsSync(nativePath)) return { available: false, version: null, path: null };
+  try {
+    if (statSync(nativePath).size <= 0) return { available: false, version: null, path: null };
+  } catch {
+    return { available: false, version: null, path: null };
+  }
+  let version: string | null = null;
+  try {
+    const pkgPath = join(currentDir, "node_modules", "@firecrawl", "anydoc", "package.json");
+    const parsed = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
+    version = typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    version = null;
+  }
+  return { available: true, version, path: nativePath };
 }
 
 function firstExisting(paths: Array<string | null | undefined>): string | null {
@@ -78,7 +99,7 @@ async function collectPayloadRuntime(): Promise<HostRuntimeInventory> {
     node.available = true;
     node.path = process.execPath;
   }
-  return { node, git, tectonic, tinymist };
+  return { node, git, tectonic, tinymist, anydoc: probeAnydocNative(currentDir) };
 }
 
 export async function runDoctor(): Promise<HostDoctorReport> {

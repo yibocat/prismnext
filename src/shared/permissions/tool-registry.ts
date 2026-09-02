@@ -71,6 +71,7 @@ export const TOOL_PERMISSION_REGISTRY: Record<string, ToolPermissionEntry> = {
   glob: { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   webfetch: { permissionGroup: "network", confirmUx: "none", rules: READ_ONLY },
   websearch: { permissionGroup: "network", confirmUx: "none", rules: READ_ONLY },
+  "document-read": { permissionGroup: "read", confirmUx: "none", rules: READ_ONLY },
   question: { permissionGroup: "interactive", confirmUx: "none", rules: READ_ONLY },
   task: { confirmUx: "none", rules: READ_ONLY },
   skill: { confirmUx: "none", rules: READ_ONLY },

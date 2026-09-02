@@ -40,6 +40,7 @@ export {
   CITATION_AUDIT_PROMPT,
   LITERATURE_LIBRARY_PROMPT,
   WEB_RESEARCH_PROMPT,
+  OFFICE_DOCUMENTS_PROMPT,
   ORCHESTRATOR_JUDGMENT_PROMPT,
   buildOrchestratorJudgmentPrompt,
   buildManuscriptCompilePrompt,

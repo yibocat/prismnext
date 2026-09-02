@@ -259,6 +259,7 @@ const EXPLORE_TOOL_NAMES = new Set([
   "webfetch",
   "websearch",
   "web_search",
+  "document-read",
   "literature-search",
   "literature-discover",
   "literature-read",

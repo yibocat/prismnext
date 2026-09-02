@@ -93,6 +93,7 @@ import {
 import type { McpServerDef } from "../../shared/teams/types";
 import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { createLogger, shortLogDetail } from "../app/logger";
+import { applyPromptFilesToUserText } from "../session/prompt-file-attachments";
 
 const log = createLogger("agent-service", "agent");
 
@@ -386,7 +387,8 @@ export class AgentService {
     });
     if (!auth.ok) return { ok: false, error: auth.reason };
 
-    const text = input.text.trim();
+    const appliedFiles = await applyPromptFilesToUserText(input.text, input.promptFiles);
+    const text = appliedFiles.text.trim();
     if (!text) return { ok: false, error: "missing_prompt" };
 
     const sendEpoch = (this.sendEpoch.get(conversationId) ?? 0) + 1;

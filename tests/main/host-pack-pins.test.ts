@@ -23,6 +23,8 @@ describe("host pack pins", () => {
     expect(pack).toContain("scripts/host/node-version.txt");
     expect(pack).toContain("scripts/host/tectonic-linux.txt");
     expect(pack).toContain("scripts/host/tinymist-linux.txt");
+    expect(pack).toContain("scripts/host/anydoc-linux.txt");
+    expect(pack).toContain("node_modules/@firecrawl/anydoc");
     expect(pack).not.toContain("typst-linux.txt");
     expect(pack).not.toContain("typst-version.txt");
     expect(pack).toContain("install-runtime.sh");
@@ -33,13 +35,15 @@ describe("host pack pins", () => {
     expect(pack).not.toContain("ensureLinuxTectonic");
     expect(pack).not.toContain("nodejs.org/dist");
     expect(pack).not.toContain("dugite-native");
+    expect(pack).not.toContain("registry.npmjs.org");
   });
 
-  it("pins Node, Git, Tectonic, and Tinymist with sha256 for both Linux arches", () => {
+  it("pins Node, Git, Tectonic, Tinymist, and AnyDoc with sha256 for both Linux arches", () => {
     const node = pinMap(join(ROOT, "scripts/host/node-version.txt"));
     const git = pinMap(join(ROOT, "scripts/host/git-version.txt"));
     const tectonic = pinMap(join(ROOT, "scripts/host/tectonic-linux.txt"));
     const tinymist = pinMap(join(ROOT, "scripts/host/tinymist-linux.txt"));
+    const anydoc = pinMap(join(ROOT, "scripts/host/anydoc-linux.txt"));
     const sha = /^[0-9a-f]{64}$/;
     expect(node.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(node.archive).toContain("{arch}");
@@ -59,5 +63,10 @@ describe("host pack pins", () => {
     expect(tinymist["triple-arm64"]).toContain("linux");
     expect(tinymist["sha256-x64"]).toMatch(sha);
     expect(tinymist["sha256-arm64"]).toMatch(sha);
+    expect(anydoc.version).toBe("0.2.4");
+    expect(anydoc["package-x64"]).toBe("@firecrawl/anydoc-linux-x64-gnu");
+    expect(anydoc["package-arm64"]).toBe("@firecrawl/anydoc-linux-arm64-gnu");
+    expect(anydoc["sha256-x64"]).toMatch(sha);
+    expect(anydoc["sha256-arm64"]).toMatch(sha);
   });
 });

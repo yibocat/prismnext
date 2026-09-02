@@ -37,6 +37,7 @@ import {
   stripAgentSecrets,
 } from "../../shared/remote";
 import { getAgentService } from "../agent/agent-service";
+import { applyPromptFilesToUserText } from "../session/prompt-file-attachments";
 import { stageLaptopAttachmentsForRemote } from "../remote/agent-attachments";
 import {
   disconnectedRemoteAgentProbe,
@@ -174,14 +175,20 @@ export function registerAgentHandlers(): void {
 
   ipcMain.handle("agent:send", async (event, args: AgentSendInput) => {
     try {
-      const remote = await routeIfRemote("agent:send", args);
+      // Convert Office/PDF attachments on the laptop before local Pi or Host.
+      // Remote Host must not receive file:// paths that only exist here.
+      const applied = await applyPromptFilesToUserText(args.text, args.promptFiles);
+      const sendArgs: AgentSendInput = {
+        ...args,
+        text: applied.text,
+        promptFiles: undefined,
+        tabId: args.tabId,
+      };
+      const remote = await routeIfRemote("agent:send", sendArgs);
       if (remote !== undefined) return remote;
       const agent = await getAgentService();
       agent.attachOwner(event.sender);
-      return agent.send({
-        ...args,
-        tabId: args.tabId,
-      });
+      return agent.send(sendArgs);
     } catch (err) {
       if (err instanceof RemoteOperationError) {
         return {

@@ -25,6 +25,7 @@ describe("resolve-active-modules", () => {
     expect(keys).toContain("chat-citation-staging");
     expect(keys).toContain("literature-library");
     expect(keys).toContain("web-research");
+    expect(keys).toContain("office-documents");
     expect(keys).toContain("experiments");
     expect(keys).toContain("interaction");
     expect(keys).not.toContain("orchestrator-judgment");
@@ -49,6 +50,7 @@ describe("resolve-active-modules", () => {
   it("composeOrchestratorProfileModulePrompts inlines domain modules", () => {
     const text = composeOrchestratorProfileModulePrompts({});
     expect(text).toContain(LITERATURE_LIBRARY_PROMPT.split("\n")[0]);
+    expect(text).toContain("## Local documents");
     expect(text).toContain("## Orchestrator judgment");
   });
 

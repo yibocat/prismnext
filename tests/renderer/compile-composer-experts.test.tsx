@@ -33,4 +33,26 @@ describe("compileComposerPrompt selectedExpertIds", () => {
     ]);
     expect(shouldSendPromptToAgent(compiled, parts, 0)).toBe(true);
   });
+
+  it("routes @-mentioned Office files to promptFiles instead of UTF-8 inline", async () => {
+    const parts: ComposerPart[] = [
+      { type: "text", text: "这个文件你看看" },
+      {
+        type: "mention",
+        mentionType: "file",
+        id: "m-docx",
+        label: "详细流程.docx",
+        filePath: "/tmp/prism-fixture/详细流程.docx",
+        fileId: "file-docx",
+      },
+    ];
+    const compiled = await compileComposerPrompt(parts, async () => "");
+    expect(compiled.promptFiles).toHaveLength(1);
+    expect(compiled.promptFiles[0]?.name).toBe("详细流程.docx");
+    expect(compiled.promptFiles[0]?.uri).toContain("详细流程.docx");
+    expect(compiled.promptText).not.toContain("## Referenced files");
+    expect(compiled.promptText).toContain("## Composer attachments");
+    expect(compiled.promptText).toContain("详细流程.docx");
+    expect(compiled.promptText).toContain("Do not invent the document");
+  });
 });

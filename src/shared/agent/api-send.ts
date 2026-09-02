@@ -26,6 +26,17 @@ export interface AgentSendInput {
   attachments?: AgentSendAttachment[];
   /** Inline images passed straight to the Pi session for vision-capable models. */
   images?: AgentSendImage[];
+  /**
+   * Composer file-strip / @ document attachments (`file://` URIs).
+   * Main converts whitelist formats via AnyDoc and appends Markdown to `text`
+   * before the Pi turn — the model never sees the raw Office bytes.
+   */
+  promptFiles?: Array<{
+    uri: string;
+    name: string;
+    mimeType: string;
+    size?: number;
+  }>;
   sessionTeamId?: string;
   provider?: string;
   modelId?: string;

@@ -55,6 +55,7 @@ export function buildSmartPermissionRules(): Record<string, "allow" | "ask" | "d
     glob: "allow",
     webfetch: "allow",
     websearch: "allow",
+    "document-read": "allow",
     question: "allow",
     task: "allow",
     skill: "allow",
@@ -186,7 +187,7 @@ function isReadToolName(toolName: string): boolean {
   const n = toolName.toLowerCase();
   if (n.startsWith("lsp")) return true;
   return [
-    "read", "grep", "glob", "webfetch", "websearch", "question", "task", "skill",
+    "read", "grep", "glob", "webfetch", "websearch", "document-read", "question", "task", "skill",
     "todowrite", "literature-search", "literature-read", "literature-read-pdf",
     "literature-intensive-reading", "literature-stage", "citation-health",
     "latex-compile", "typst-compile", "research-brief-read", "suggest-plan", "results-snapshot",

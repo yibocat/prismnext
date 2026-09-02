@@ -57,7 +57,15 @@ function normalizeHostDir(currentDir: string): string {
   return currentDir.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-export type HostRuntimeStep = "node" | "git" | "tectonic" | "tinymist";
+export type HostRuntimeStep = "node" | "git" | "tectonic" | "tinymist" | "anydoc";
+
+export const HOST_RUNTIME_STEPS: readonly HostRuntimeStep[] = [
+  "node",
+  "git",
+  "tectonic",
+  "tinymist",
+  "anydoc",
+];
 
 export interface HostRuntimeBinStatus {
   available: boolean;
@@ -70,6 +78,7 @@ export interface HostRuntimeInventory {
   git: HostRuntimeBinStatus;
   tectonic: HostRuntimeBinStatus;
   tinymist: HostRuntimeBinStatus;
+  anydoc: HostRuntimeBinStatus;
 }
 
 export interface HostRuntimePins {
@@ -77,6 +86,7 @@ export interface HostRuntimePins {
   git: string;
   tectonic: string;
   tinymist: string;
+  anydoc: string;
 }
 
 /** Key/value pin or runtime-stamp text (`version 24.19.0`, `node 24.19.0`). */
@@ -98,22 +108,25 @@ export function hostRuntimePinsFromFiles(files: {
   git?: string | null;
   tectonic?: string | null;
   tinymist?: string | null;
+  anydoc?: string | null;
 }): HostRuntimePins {
   return {
     node: parseHostPinMap(files.node).version ?? "",
     git: parseHostPinMap(files.git).tag ?? "",
     tectonic: parseHostPinMap(files.tectonic).version ?? "",
     tinymist: parseHostPinMap(files.tinymist).version ?? "",
+    anydoc: parseHostPinMap(files.anydoc).version ?? "",
   };
 }
 
 export function mergeHostRuntimePins(...sources: HostRuntimePins[]): HostRuntimePins {
-  const next: HostRuntimePins = { node: "", git: "", tectonic: "", tinymist: "" };
+  const next: HostRuntimePins = { node: "", git: "", tectonic: "", tinymist: "", anydoc: "" };
   for (const source of sources) {
     if (!next.node && source.node) next.node = source.node;
     if (!next.git && source.git) next.git = source.git;
     if (!next.tectonic && source.tectonic) next.tectonic = source.tectonic;
     if (!next.tinymist && source.tinymist) next.tinymist = source.tinymist;
+    if (!next.anydoc && source.anydoc) next.anydoc = source.anydoc;
   }
   return next;
 }
@@ -156,5 +169,37 @@ export function inventoryMissingSteps(
   if (binNeedsInstall(inv.git, pins.git, "git")) steps.push("git");
   if (binNeedsInstall(inv.tectonic, pins.tectonic, "tectonic")) steps.push("tectonic");
   if (binNeedsInstall(inv.tinymist, pins.tinymist, "tinymist")) steps.push("tinymist");
+  if (binNeedsInstall(inv.anydoc, pins.anydoc, "anydoc")) steps.push("anydoc");
   return steps;
+}
+
+export function hostLinuxArchFromNode(arch = process.arch): "x64" | "arm64" | null {
+  if (arch === "x64") return "x64";
+  if (arch === "arm64") return "arm64";
+  return null;
+}
+
+export function hostAnydocLinuxPackageName(arch: "x64" | "arm64"): string {
+  return arch === "arm64"
+    ? "@firecrawl/anydoc-linux-arm64-gnu"
+    : "@firecrawl/anydoc-linux-x64-gnu";
+}
+
+export function hostPayloadAnydocNativePath(currentDir: string, arch: "x64" | "arm64"): string {
+  const pkg = hostAnydocLinuxPackageName(arch);
+  const file = arch === "arm64" ? "anydoc.linux-arm64-gnu.node" : "anydoc.linux-x64-gnu.node";
+  return `${normalizeHostDir(currentDir)}/node_modules/${pkg}/${file}`;
+}
+
+export function hostPayloadAnydocNativeCandidates(
+  currentDir: string,
+  arch?: "x64" | "arm64" | null,
+): string[] {
+  if (arch === "x64" || arch === "arm64") {
+    return [hostPayloadAnydocNativePath(currentDir, arch)];
+  }
+  return [
+    hostPayloadAnydocNativePath(currentDir, "x64"),
+    hostPayloadAnydocNativePath(currentDir, "arm64"),
+  ];
 }

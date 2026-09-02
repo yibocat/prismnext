@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Node, portable Git, Tectonic, and Tinymist into ~/.prismnext-host/current.
+# Install Node, portable Git, Tectonic, Tinymist, and AnyDoc into ~/.prismnext-host/current.
 # Runs on the Linux server. The laptop only pushes this script + pin files.
 set -eu
 
@@ -10,7 +10,7 @@ STEP="all"
 PRINT_PLAN=0
 
 usage() {
-  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|tinymist|all] [--print-plan]" >&2
+  echo "usage: install-runtime [--current DIR] [--host-root DIR] [--arch x64|arm64] [--step node|git|tectonic|tinymist|anydoc|all] [--print-plan]" >&2
 }
 
 need_cmd() {
@@ -434,6 +434,62 @@ install_tinymist() {
   echo "Tinymist $ver ready."
 }
 
+install_anydoc() {
+  ver=$(pin_get "$ANYDOC_PIN" version) || {
+    echo "install-runtime: missing AnyDoc pin" >&2
+    return 1
+  }
+  pkg=$(pin_get "$ANYDOC_PIN" "package-$ARCH")
+  sha=$(pin_get "$ANYDOC_PIN" "sha256-$ARCH")
+  if [ -z "$pkg" ] || [ -z "$sha" ]; then
+    echo "install-runtime: AnyDoc pin missing package-$ARCH or sha256-$ARCH" >&2
+    return 1
+  fi
+  unscoped=${pkg#@*/}
+  archive="${unscoped}-${ver}.tgz"
+  url="https://registry.npmjs.org/${pkg}/-/${archive}"
+  dest="$CURRENT/node_modules/$pkg"
+  native="$dest/anydoc.linux-${ARCH}-gnu.node"
+
+  if [ "$PRINT_PLAN" = 1 ]; then
+    echo "anydoc $url $sha"
+    return 0
+  fi
+
+  if [ -f "$native" ] && [ -s "$native" ] && [ "$(stamp_get anydoc || true)" = "$ver" ]; then
+    echo "AnyDoc $ver already installed — skip."
+    return 0
+  fi
+
+  mkdir -p "$CACHE"
+  tar_path="$CACHE/$archive"
+  if ! cache_ready "$tar_path" "$sha"; then
+    download "$url" "$tar_path"
+    verify_sha "$tar_path" "$sha" || return 1
+  fi
+
+  extract="$CACHE/extract-anydoc-$ARCH"
+  rm -rf "$extract"
+  mkdir -p "$extract"
+  tar -xzf "$tar_path" -C "$extract"
+  src="$extract/package"
+  if [ ! -f "$src/anydoc.linux-${ARCH}-gnu.node" ]; then
+    echo "install-runtime: AnyDoc archive missing native binding" >&2
+    rm -rf "$extract"
+    return 1
+  fi
+  rm -rf "$dest"
+  mkdir -p "$(dirname "$dest")"
+  cp -R "$src" "$dest"
+  rm -rf "$extract"
+  if [ ! -f "$native" ] || [ ! -s "$native" ]; then
+    echo "install-runtime: failed to place AnyDoc native at $native" >&2
+    return 1
+  fi
+  stamp_set anydoc "$ver"
+  echo "AnyDoc $ver ready."
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --current)
@@ -497,6 +553,7 @@ NODE_PIN="$RUNTIME/node-version.txt"
 GIT_PIN="$RUNTIME/git-version.txt"
 TEC_PIN="$RUNTIME/tectonic-linux.txt"
 TINY_PIN="$RUNTIME/tinymist-linux.txt"
+ANYDOC_PIN="$RUNTIME/anydoc-linux.txt"
 
 if [ ! -d "$RUNTIME" ]; then
   echo "install-runtime: missing $RUNTIME (Host payload pins)" >&2
@@ -509,6 +566,7 @@ run_step() {
     git) install_git ;;
     tectonic) install_tectonic ;;
     tinymist) install_tinymist ;;
+    anydoc) install_anydoc ;;
     *)
       echo "install-runtime: unknown step $1" >&2
       return 1
@@ -521,6 +579,7 @@ if [ "$STEP" = "all" ]; then
   run_step git
   run_step tectonic
   run_step tinymist
+  run_step anydoc
 else
   run_step "$STEP"
 fi

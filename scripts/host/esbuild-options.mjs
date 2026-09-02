@@ -26,6 +26,8 @@ export function hostEsbuildOptions({ root, outfile, entryPoints }) {
     define: {
       "import.meta.url": "__import_meta_url",
     },
+    // napi-rs prebuilds cannot be inlined; Host copies the package in Phase 6.
+    external: ["@firecrawl/anydoc"],
     alias: {
       "@shared": join(root, "src/shared"),
       electron: join(root, "src/host/electron-shim.ts"),

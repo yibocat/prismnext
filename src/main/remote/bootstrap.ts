@@ -1,6 +1,6 @@
 /**
  * Push the desktop's slim Host tarball over SFTP, then let the server
- * download Node / Git / Tectonic / Typst from the packed pin files.
+ * download Node / Git / Tectonic / Tinymist / AnyDoc from the packed pin files.
  * Does not touch `~/.prismnext` user data.
  */
 
@@ -22,6 +22,9 @@ import {
   runtimeBinFromStat,
   mergeHostRuntimePins,
   parseHostPinMap,
+  hostPayloadAnydocNativePath,
+  hostPayloadAnydocNativeCandidates,
+  HOST_RUNTIME_STEPS,
   type HostRuntimeInventory,
   type HostRuntimePins,
   type HostRuntimeStep,
@@ -99,9 +102,10 @@ function readDesktopHostRuntimePins(): HostRuntimePins {
       git: readFileSync(join(dir, "git-version.txt"), "utf8"),
       tectonic: readFileSync(join(dir, "tectonic-linux.txt"), "utf8"),
       tinymist: readFileSync(join(dir, "tinymist-linux.txt"), "utf8"),
+      anydoc: readFileSync(join(dir, "anydoc-linux.txt"), "utf8"),
     });
   } catch {
-    return { node: "", git: "", tectonic: "", tinymist: "" };
+    return { node: "", git: "", tectonic: "", tinymist: "", anydoc: "" };
   }
 }
 
@@ -112,6 +116,7 @@ async function readRemotePayloadPins(session: SshSession, currentDir: string): P
     git: await session.sftpRead(join(runtime, "git-version.txt")),
     tectonic: await session.sftpRead(join(runtime, "tectonic-linux.txt")),
     tinymist: await session.sftpRead(join(runtime, "tinymist-linux.txt")),
+    anydoc: await session.sftpRead(join(runtime, "anydoc-linux.txt")),
   });
 }
 
@@ -119,23 +124,38 @@ async function collectRuntimeInventory(
   session: SshSession,
   currentDir: string,
   hostRoot: string,
+  linuxArch?: "linux-x64" | "linux-arm64",
 ): Promise<HostRuntimeInventory> {
   const nodeBin = join(currentDir, "bin", "node");
   const tectonicBin = join(currentDir, "bin", "tectonic");
   const tinymistBin = join(currentDir, "bin", "tinymist");
   const gitBin = join(currentDir, "vendor", "git", "bin", "git");
+  const arch = installerArch(linuxArch);
+  const anydocCandidates = hostPayloadAnydocNativeCandidates(currentDir, arch);
   const stamp = parseHostPinMap(await session.sftpRead(join(hostRoot, HOST_RUNTIME_STAMP_FILENAME)));
-  const [node, git, tectonic, tinymist] = await Promise.all([
+  const [node, git, tectonic, tinymist, ...anydocStats] = await Promise.all([
     session.sftpStat(nodeBin),
     session.sftpStat(gitBin),
     session.sftpStat(tectonicBin),
     session.sftpStat(tinymistBin),
+    ...anydocCandidates.map((path) => session.sftpStat(path)),
   ]);
+  let anydocPath = "";
+  let anydocStat: { size: number } | null = null;
+  for (let i = 0; i < anydocCandidates.length; i += 1) {
+    const candidate = anydocStats[i] ?? null;
+    if (candidate && candidate.size > 0) {
+      anydocPath = anydocCandidates[i]!;
+      anydocStat = candidate;
+      break;
+    }
+  }
   return {
     node: runtimeBinFromStat(node, nodeBin, stamp.node ?? null),
     git: runtimeBinFromStat(git, gitBin, stamp.git ?? null),
     tectonic: runtimeBinFromStat(tectonic, tectonicBin, stamp.tectonic ?? null),
     tinymist: runtimeBinFromStat(tinymist, tinymistBin, stamp.tinymist ?? null),
+    anydoc: runtimeBinFromStat(anydocStat, anydocPath, stamp.anydoc ?? null),
   };
 }
 
@@ -143,11 +163,17 @@ async function missingRuntimeSteps(input: {
   session: SshSession;
   currentDir: string;
   hostRoot: string;
+  linuxArch?: "linux-x64" | "linux-arm64";
   pins?: HostRuntimePins;
 }): Promise<HostRuntimeStep[]> {
-  const inventory = await collectRuntimeInventory(input.session, input.currentDir, input.hostRoot);
+  const inventory = await collectRuntimeInventory(
+    input.session,
+    input.currentDir,
+    input.hostRoot,
+    input.linuxArch,
+  );
   const pins = mergeHostRuntimePins(
-    input.pins ?? { node: "", git: "", tectonic: "", tinymist: "" },
+    input.pins ?? { node: "", git: "", tectonic: "", tinymist: "", anydoc: "" },
     await readRemotePayloadPins(input.session, input.currentDir),
     readDesktopHostRuntimePins(),
   );
@@ -163,7 +189,7 @@ async function provisionHostRuntime(input: {
   log: (message: string) => void;
   steps?: HostRuntimeStep[];
 }): Promise<void> {
-  const steps = input.steps ?? ["node", "git", "tectonic", "tinymist"];
+  const steps = input.steps ?? [...HOST_RUNTIME_STEPS];
   if (steps.length === 0) return;
 
   const installBin = join(input.currentDir, "bin", "install-runtime");
@@ -179,8 +205,8 @@ async function provisionHostRuntime(input: {
 
   const arch = installerArch(input.linuxArch);
   const archFlag = arch ? ` --arch ${arch}` : "";
-  if (steps.length === 4) {
-    input.log("Server is downloading Node, Git, Tectonic, and Tinymist (needs outbound HTTPS)…");
+  if (steps.length === HOST_RUNTIME_STEPS.length) {
+    input.log("Server is downloading Node, Git, Tectonic, Tinymist, and AnyDoc (needs outbound HTTPS)…");
   } else {
     input.log(`Server is downloading ${steps.join(", ")} (needs outbound HTTPS)…`);
   }
@@ -196,7 +222,7 @@ async function provisionHostRuntime(input: {
         "host_runtime",
         result.stderr.trim()
           || result.stdout.trim()
-          || `server failed to download Host ${step}. The machine must reach nodejs.org and GitHub.`,
+            || `server failed to download Host ${step}. The machine must reach nodejs.org, GitHub, and registry.npmjs.org.`,
       );
     }
   }
@@ -229,6 +255,19 @@ async function provisionHostRuntime(input: {
       );
     }
   }
+  if (steps.includes("anydoc")) {
+    const arch = installerArch(input.linuxArch);
+    if (arch) {
+      const native = hostPayloadAnydocNativePath(input.currentDir, arch);
+      const anydoc = await input.session.sftpStat(native);
+      if (!anydoc || anydoc.size <= 0) {
+        throw new RemoteOperationError(
+          "host_runtime",
+          "install-runtime finished but Host AnyDoc native binding is still missing",
+        );
+      }
+    }
+  }
 }
 
 export async function ensureHostPayload(input: BootstrapInput): Promise<BootstrapResult> {
@@ -253,10 +292,11 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
       session: input.session,
       currentDir,
       hostRoot,
+      linuxArch: input.linuxArch,
       pins: input.pins,
     });
     if (missing.length === 0) {
-      input.log("Host program and Node / Git / Tectonic / Typst already match this app — skipping install.");
+      input.log("Host program and Node / Git / Tectonic / Tinymist / AnyDoc already match this app — skipping install.");
       return { action: "skipped", stamp: existing, hostRoot, appHome, currentDir, hostBin, nodeBin };
     }
     input.log(`Host program is present; installing missing runtime: ${missing.join(", ")}.`);
@@ -315,6 +355,7 @@ export async function ensureHostPayload(input: BootstrapInput): Promise<Bootstra
     session: input.session,
     currentDir,
     hostRoot,
+    linuxArch: input.linuxArch,
     pins: input.pins,
   });
   await provisionHostRuntime({

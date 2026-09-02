@@ -5,6 +5,8 @@ import type { ContentBlock } from "@/stores/chat-store";
 import type { ComposerAttachment, PromptImageAttachment, PromptFileAttachment } from "@/lib/chat/composer-attach-file";
 import {
   isVisionImagePath,
+  mimeTypeFromPath,
+  pathToFileUri,
   promptImageFromAttachment,
   promptFileFromAttachment,
 } from "@/lib/chat/composer-attach-file";
@@ -29,9 +31,23 @@ import {
   type PaperNoteAgentContext,
 } from "@/lib/literature/paper-agent-context";
 import { rewritePaperExtractImageSrcs } from "@shared/literature/paper-extract-images";
+import { isDocumentReadExtension } from "@shared/document/formats";
 
 /** Max chars inlined per @-mentioned text file (rest truncated with a note). */
 const MAX_INLINE_ATTACHMENT_CHARS = 200_000;
+
+function absolutePathForFileMention(fileId: string, filePath: string): string | null {
+  const store = useDocumentStore.getState();
+  const fromId = store.files.find((f) => f.id === fileId);
+  if (fromId?.absolutePath) return fromId.absolutePath;
+  if (isExternalFileId(fileId)) return resolveExternalPath(fileId);
+  const trimmed = filePath.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/") || /^[A-Za-z]:[\\/]/.test(trimmed)) return trimmed;
+  const root = store.projectRoot?.replace(/\/+$/, "");
+  if (root) return `${root}/${trimmed.replace(/^\//, "")}`;
+  return trimmed;
+}
 
 function looksLikeBinaryText(content: string): boolean {
   if (!content) return false;
@@ -221,6 +237,16 @@ export async function compileComposerPrompt(
   const promptImages: PromptImageAttachment[] = [];
   const promptFiles: PromptFileAttachment[] = [];
   for (const fp of fileParts) {
+    const abs = absolutePathForFileMention(fp.fileId, fp.filePath);
+    if (abs && isDocumentReadExtension(abs)) {
+      promptFiles.push({
+        kind: "resource_link",
+        uri: pathToFileUri(abs),
+        name: fp.label || abs.split(/[/\\]/).pop() || "document",
+        mimeType: mimeTypeFromPath(abs),
+      });
+      continue;
+    }
     let content = useDocumentStore.getState().getAsset(fp.fileId);
     if (!content && isExternalFileId(fp.fileId)) {
       const abs = resolveExternalPath(fp.fileId);
@@ -249,8 +275,11 @@ export async function compileComposerPrompt(
       if (img) promptImages.push(img);
       continue;
     }
-    // File strip attachments → ACP resource_link (file upload), not prompt text dump.
-    promptFiles.push(promptFileFromAttachment(att));
+    // File strip attachments → same AnyDoc path as @-mentioned Office files.
+    const next = promptFileFromAttachment(att);
+    if (!promptFiles.some((existing) => existing.uri === next.uri)) {
+      promptFiles.push(next);
+    }
   }
 
   for (const pinned of extraPinnedFiles ?? []) {
@@ -464,6 +493,19 @@ export async function compileComposerPrompt(
         "",
         `Enable and use tools from MCP server(s): ${names.join(", ")}.`,
         "Call the relevant MCP tools to complete the request below.",
+      ].join("\n"),
+    );
+  }
+
+  if (promptFiles.length > 0) {
+    const names = promptFiles.map((f) => `\`${f.name}\``).join(", ");
+    sections.push(
+      [
+        "## Composer attachments",
+        "",
+        `The user attached: ${names}.`,
+        "If this message does not include converted Markdown for that file (`[DOCX attachment: …]` or similar), you cannot see its contents.",
+        "Say that plainly. Do not invent the document. Do not present another project file (`.typ`, `.tex`, `.md`, …) as this attachment.",
       ].join("\n"),
     );
   }

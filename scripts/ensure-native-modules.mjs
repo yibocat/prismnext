@@ -37,3 +37,30 @@ if (probeNodePtyElectron()) {
   }
   console.log("[native] node-pty OK for Electron");
 }
+
+function probeAnydocElectron() {
+  const snippet = [
+    'try {',
+    '  const anydoc = require("@firecrawl/anydoc");',
+    '  if (typeof anydoc.toMarkdown !== "function") process.exit(2);',
+    '  process.exit(0);',
+    '} catch (err) {',
+    '  console.error(String(err && err.message ? err.message : err));',
+    '  process.exit(1);',
+    '}',
+  ].join("");
+  const result = spawnSync(electronBinary(), ["-e", snippet], {
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+  return result.status === 0;
+}
+
+if (probeAnydocElectron()) {
+  console.log("[native] @firecrawl/anydoc OK for Electron");
+} else {
+  // N-API prebuilds usually load without electron-rebuild. Missing optional
+  // platform packages should not block `pnpm dev` — document-read degrades.
+  console.warn("[native] @firecrawl/anydoc did not load under Electron; document-read will return anydoc_unavailable");
+}

@@ -1,0 +1,7 @@
+# Linux glibc AnyDoc native for Host runtime. Version must match @firecrawl/anydoc in package.json.
+# The server downloads this — not host:pack. Bump version and sha256 together.
+version 0.2.4
+package-x64 @firecrawl/anydoc-linux-x64-gnu
+package-arm64 @firecrawl/anydoc-linux-arm64-gnu
+sha256-x64 ca822ea3ad29a9b9ca6b7f6d2a6b3d5311153af25a6c35a7f5bdf0791fe7f2c9
+sha256-arm64 ed71661425a9959009d39ba495dbc565cc27a27f4eb0c93336b89f217e5c56b2

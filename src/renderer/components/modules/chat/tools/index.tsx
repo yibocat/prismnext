@@ -9,6 +9,7 @@ export { GlobWidget } from "./glob-widget";
 export { ListWidget } from "./list-widget";
 export { WebFetchWidget } from "./webfetch-widget";
 export { WebSearchWidget } from "./websearch-widget";
+export { DocumentReadWidget } from "./document-read-widget";
 export { TaskWidget } from "./task-widget";
 export { SkillWidget } from "./skill-widget";
 export { PatchWidget } from "./patch-widget";

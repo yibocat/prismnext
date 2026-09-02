@@ -14,6 +14,7 @@ export * from "./interaction";
 export * from "./system";
 export * from "./interactive";
 export * from "./web";
+export * from "./document";
 
 import { LITERATURE_TOOLS } from "./literature";
 import { LATEX_TOOLS } from "./latex";
@@ -24,11 +25,13 @@ import { INTERACTION_TOOLS } from "./interaction";
 import { SYSTEM_TOOLS } from "./system";
 import { INTERACTIVE_TOOLS } from "./interactive";
 import { WEB_TOOLS } from "./web";
+import { DOCUMENT_TOOLS } from "./document";
 import type { NativeToolDefinition } from "./types";
 
 export const ALL_NATIVE_TOOLS: readonly NativeToolDefinition[] = [
   ...LITERATURE_TOOLS,
   ...WEB_TOOLS,
+  ...DOCUMENT_TOOLS,
   ...LATEX_TOOLS,
   ...TYPST_TOOLS,
   ...RESEARCH_BRIEF_TOOLS,

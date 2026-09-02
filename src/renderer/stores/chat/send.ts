@@ -157,6 +157,7 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
           mcpServerAllowlist: composerExtras?.mcpServerAllowlist,
           skillIds: composerExtras?.skillIds,
           images: composerExtras?.promptImages,
+          promptFiles: composerExtras?.promptFiles,
           attachments: persistableAttachmentsFromUserBlocks(userBlocks),
         });
         if (!result.ok) {

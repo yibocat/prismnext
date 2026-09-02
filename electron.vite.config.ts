@@ -134,7 +134,7 @@ export default defineConfig({
         exclude: esmOnlyDeps,
       },
       rollupOptions: {
-        external: ["electron", "node-pty", "@napi-rs/canvas", "font-list"],
+        external: ["electron", "node-pty", "@napi-rs/canvas", "font-list", "@firecrawl/anydoc"],
       },
     },
   },
