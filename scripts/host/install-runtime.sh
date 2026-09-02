@@ -44,19 +44,53 @@ detect_arch() {
   esac
 }
 
-download() {
+download_to() {
   url="$1"
   dest="$2"
-  echo "downloading $(basename "$dest") (server-side; this can take a few minutes)…"
   if need_cmd curl; then
     # -sS: no meter (stderr meter was drowning the install log). Still fail on HTTP errors.
-    curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 30 -o "$dest" "$url"
+    # HTTP/1.1 + IPv4: Aliyun/China to npmjs often resets HTTP/2 or IPv6 mid-body (curl 23).
+    extra=""
+    case "$url" in
+      *registry.npmjs.org*|*registry.npmmirror.com*) extra="--http1.1 -4" ;;
+    esac
+    curl -fsSL $extra --retry 3 --retry-delay 2 --connect-timeout 30 -o "$dest" "$url"
   elif need_cmd wget; then
     wget -q -O "$dest" "$url"
   else
     echo "install-runtime: need curl or wget to download runtime binaries" >&2
     return 1
   fi
+}
+
+download() {
+  url="$1"
+  dest="$2"
+  echo "downloading $(basename "$dest") (server-side; this can take a few minutes)…"
+  mkdir -p "$(dirname "$dest")"
+  if [ -d "$dest" ]; then
+    echo "install-runtime: replacing leftover directory $dest" >&2
+    rm -rf "$dest"
+  fi
+  tmp="$dest.part"
+  rm -f "$tmp"
+  if ! download_to "$url" "$tmp"; then
+    case "$url" in
+      https://registry.npmjs.org/*)
+        mirror="https://registry.npmmirror.com/${url#https://registry.npmjs.org/}"
+        echo "install-runtime: retrying $(basename "$dest") via npmmirror" >&2
+        if download_to "$mirror" "$tmp"; then
+          mv -f "$tmp" "$dest"
+          return 0
+        fi
+        ;;
+    esac
+    echo "install-runtime: download failed for $(basename "$dest"). curl 23 is a write error: full disk, or the HTTP stream was reset (common from China to registry.npmjs.org)." >&2
+    df -h "$(dirname "$dest")" 2>/dev/null || true
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$dest"
 }
 
 file_sha256() {
@@ -106,9 +140,11 @@ stamp_set() {
 }
 
 cache_ready() {
-  path="$1"
-  sha="$2"
-  [ -f "$path" ] && verify_sha "$path" "$sha"
+  # POSIX sh has no `local`. Do not reuse caller names (`sha` in install_anydoc
+  # is the npm tarball hash; passing the .node hash used to clobber it).
+  _cr_path="$1"
+  _cr_sha="$2"
+  [ -f "$_cr_path" ] && verify_sha "$_cr_path" "$_cr_sha"
 }
 
 # First bytes as hex. GitHub sometimes serves the Tectonic musl build as a
@@ -434,25 +470,105 @@ install_tinymist() {
   echo "Tinymist $ver ready."
 }
 
+copy_deref_file() {
+  src="$1"
+  destfile="$2"
+  cp "$src" "$destfile"
+  if [ -L "$destfile" ]; then
+    target=$(readlink -f "$destfile" 2>/dev/null || true)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+      rel=$(readlink "$destfile")
+      case "$rel" in
+        /*) target="$rel" ;;
+        *) target="$(CDPATH= cd -- "$(dirname "$destfile")" && pwd)/$rel" ;;
+      esac
+    fi
+    rm -f "$destfile"
+    cp "$target" "$destfile"
+  fi
+}
+
+place_anydoc_native() {
+  src="$1"
+  dest="$2"
+  native="$3"
+  pkg="$4"
+  ver="$5"
+  native_name="$6"
+  arch="$7"
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  copy_deref_file "$src" "$native"
+  if [ ! -f "$native" ] || [ ! -s "$native" ]; then
+    echo "install-runtime: failed to place AnyDoc native at $native" >&2
+    return 1
+  fi
+  printf '%s\n' "{\"name\":\"$pkg\",\"version\":\"$ver\",\"main\":\"$native_name\",\"os\":[\"linux\"],\"cpu\":[\"$arch\"]}" > "$dest/package.json"
+}
+
+extract_anydoc_tarball() {
+  tar_path="$1"
+  cache="$2"
+  arch="$3"
+  native_name="$4"
+  dest="$5"
+  native="$6"
+  extract="$cache/extract-anydoc-$arch"
+  rm -rf "$extract"
+  mkdir -p "$extract"
+  tar -xzf "$tar_path" -C "$extract"
+  native_src=$(find "$extract" \( -type f -o -type l \) -name "$native_name" 2>/dev/null | sed -n '1p')
+  if [ -z "$native_src" ] || [ ! -s "$native_src" ]; then
+    echo "install-runtime: AnyDoc archive missing native binding" >&2
+    rm -rf "$extract"
+    return 1
+  fi
+  src_dir=$(CDPATH= cd -- "$(dirname "$native_src")" && pwd)
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  cp -R "$src_dir/." "$dest/"
+  if [ -L "$native" ]; then
+    target=$(readlink -f "$native" 2>/dev/null || true)
+    if [ -z "$target" ] || [ ! -f "$target" ]; then
+      rel=$(readlink "$native")
+      case "$rel" in
+        /*) target="$rel" ;;
+        *) target="$(CDPATH= cd -- "$(dirname "$native")" && pwd)/$rel" ;;
+      esac
+    fi
+    rm -f "$native"
+    cp "$target" "$native"
+  fi
+  rm -rf "$extract"
+  if [ ! -f "$native" ] || [ ! -s "$native" ]; then
+    echo "install-runtime: failed to place AnyDoc native at $native" >&2
+    return 1
+  fi
+}
+
 install_anydoc() {
   ver=$(pin_get "$ANYDOC_PIN" version) || {
     echo "install-runtime: missing AnyDoc pin" >&2
     return 1
   }
   pkg=$(pin_get "$ANYDOC_PIN" "package-$ARCH")
-  sha=$(pin_get "$ANYDOC_PIN" "sha256-$ARCH")
+  sha=$(pin_get "$ANYDOC_PIN" "tgz-sha256-$ARCH" || pin_get "$ANYDOC_PIN" "sha256-$ARCH")
+  native_sha=$(pin_get "$ANYDOC_PIN" "native-sha256-$ARCH" || true)
   if [ -z "$pkg" ] || [ -z "$sha" ]; then
     echo "install-runtime: AnyDoc pin missing package-$ARCH or sha256-$ARCH" >&2
     return 1
   fi
   unscoped=${pkg#@*/}
   archive="${unscoped}-${ver}.tgz"
-  url="https://registry.npmjs.org/${pkg}/-/${archive}"
+  npm_url="https://registry.npmjs.org/${pkg}/-/${archive}"
+  native_name="anydoc.linux-${ARCH}-gnu.node"
+  github_url="https://github.com/firecrawl/anydoc/releases/download/v${ver}/${native_name}"
   dest="$CURRENT/node_modules/$pkg"
-  native="$dest/anydoc.linux-${ARCH}-gnu.node"
+  native="$dest/$native_name"
 
   if [ "$PRINT_PLAN" = 1 ]; then
-    echo "anydoc $url $sha"
+    echo "anydoc $github_url ${native_sha:-$sha}"
+    echo "anydoc $npm_url $sha"
     return 0
   fi
 
@@ -462,30 +578,30 @@ install_anydoc() {
   fi
 
   mkdir -p "$CACHE"
+  cache_native="$CACHE/$native_name"
   tar_path="$CACHE/$archive"
-  if ! cache_ready "$tar_path" "$sha"; then
-    download "$url" "$tar_path"
-    verify_sha "$tar_path" "$sha" || return 1
+
+  if [ -n "$native_sha" ] && cache_ready "$cache_native" "$native_sha"; then
+    place_anydoc_native "$cache_native" "$dest" "$native" "$pkg" "$ver" "$native_name" "$ARCH" || return 1
+  elif cache_ready "$tar_path" "$sha"; then
+    extract_anydoc_tarball "$tar_path" "$CACHE" "$ARCH" "$native_name" "$dest" "$native" || return 1
+  else
+    # Same GitHub channel Tectonic/Tinymist already use. npmjs.org is often
+    # reset from China Aliyun (curl 23) even when GitHub works.
+    if download "$github_url" "$cache_native"; then
+      if [ -n "$native_sha" ]; then
+        verify_sha "$cache_native" "$native_sha" || return 1
+      fi
+      place_anydoc_native "$cache_native" "$dest" "$native" "$pkg" "$ver" "$native_name" "$ARCH" || return 1
+    else
+      echo "install-runtime: GitHub AnyDoc download failed; trying npm registry" >&2
+      rm -f "$cache_native"
+      download "$npm_url" "$tar_path" || return 1
+      verify_sha "$tar_path" "$sha" || return 1
+      extract_anydoc_tarball "$tar_path" "$CACHE" "$ARCH" "$native_name" "$dest" "$native" || return 1
+    fi
   fi
 
-  extract="$CACHE/extract-anydoc-$ARCH"
-  rm -rf "$extract"
-  mkdir -p "$extract"
-  tar -xzf "$tar_path" -C "$extract"
-  src="$extract/package"
-  if [ ! -f "$src/anydoc.linux-${ARCH}-gnu.node" ]; then
-    echo "install-runtime: AnyDoc archive missing native binding" >&2
-    rm -rf "$extract"
-    return 1
-  fi
-  rm -rf "$dest"
-  mkdir -p "$(dirname "$dest")"
-  cp -R "$src" "$dest"
-  rm -rf "$extract"
-  if [ ! -f "$native" ] || [ ! -s "$native" ]; then
-    echo "install-runtime: failed to place AnyDoc native at $native" >&2
-    return 1
-  fi
   stamp_set anydoc "$ver"
   echo "AnyDoc $ver ready."
 }

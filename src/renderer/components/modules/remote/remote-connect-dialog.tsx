@@ -107,15 +107,20 @@ export function RemoteConnectDialog({
     : null;
   const ready = phase === "ready";
 
+  const progressLabel = t("remote.connectProgress", { percent: progress.percent });
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-h-[min(92vh,56rem)] overflow-y-auto sm:max-w-3xl"
+        className={cn(
+          "flex max-h-[min(92vh,56rem)] flex-col overflow-hidden sm:max-w-3xl",
+          logsOpen && "h-[min(92vh,56rem)]",
+        )}
         onPointerDownOutside={blocking ? (event) => event.preventDefault() : undefined}
         onInteractOutside={blocking ? (event) => event.preventDefault() : undefined}
         onEscapeKeyDown={blocking ? (event) => event.preventDefault() : undefined}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0 pr-10">
           <DialogTitle>
             {ready
               ? t("remote.connectSuccess", { host: alias ?? "" })
@@ -129,65 +134,62 @@ export function RemoteConnectDialog({
           </DialogDescription>
         </DialogHeader>
         {errorMessage ? (
-          <p className="max-h-24 overflow-y-auto break-words whitespace-pre-wrap font-mono text-[length:var(--font-size-12)] text-destructive">
+          <p className="max-h-24 shrink-0 overflow-y-auto break-words whitespace-pre-wrap font-mono text-[length:var(--font-size-12)] text-destructive">
             {errorMessage}
           </p>
         ) : (
-          <p className="text-muted-foreground text-[length:var(--font-size-12)]">{t("remote.modelKeysNote")}</p>
+          <p className="shrink-0 break-words text-muted-foreground text-[length:var(--font-size-12)]">{t("remote.modelKeysNote")}</p>
         )}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[length:var(--font-size-12)] text-muted-foreground">
+        <div className="shrink-0 space-y-1.5">
+          <div className="flex items-center justify-between gap-3 text-[length:var(--font-size-12)] text-muted-foreground">
             <span>{t("remote.connectSteps")}</span>
-            <span className="tabular-nums">
-              {t("remote.connectProgress", {
-                completed: progress.completed,
-                total: progress.total,
-              })}
-            </span>
+            <span className="shrink-0 tabular-nums">{progressLabel}</span>
           </div>
-          <Progress value={progress.percent} className="bg-muted" />
+          <Progress
+            value={progress.percent}
+            className="bg-muted"
+            aria-label={progressLabel}
+          />
         </div>
-        <div className="min-h-0">
-          <ol className="max-h-48 space-y-1 overflow-y-auto text-[length:var(--font-size-12)]">
-            {REMOTE_CONNECT_GATES.map((gate) => {
-              const status = resolveConnectGateStatus(gate, constitution, profileLogs);
-              const detail = latestGateDetail(gate, constitution, profileLogs);
-              const current = progress.currentGate === gate;
-              return (
-                <li
-                  key={gate}
-                  className={cn(
-                    "flex items-center gap-2",
-                    status === "fail" ? "text-destructive" : "text-foreground",
+        <ol className="shrink-0 space-y-1.5 text-[length:var(--font-size-12)]">
+          {REMOTE_CONNECT_GATES.map((gate) => {
+            const status = resolveConnectGateStatus(gate, constitution, profileLogs);
+            const detail = latestGateDetail(gate, constitution, profileLogs);
+            const current = progress.currentGate === gate;
+            return (
+              <li
+                key={gate}
+                className={cn(
+                  "flex items-start gap-2",
+                  status === "fail" ? "text-destructive" : "text-foreground",
+                )}
+              >
+                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+                  {status === "ok" ? (
+                    <Check className="size-3.5" />
+                  ) : status === "fail" ? (
+                    <X className="size-3.5 text-destructive" />
+                  ) : current && !ready ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    t("remote.gatePending")
                   )}
-                >
-                  <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-                    {status === "ok" ? (
-                      <Check className="size-3.5" />
-                    ) : status === "fail" ? (
-                      <X className="size-3.5 text-destructive" />
-                    ) : current && !ready ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      t("remote.gatePending")
-                    )}
-                  </span>
-                  <p className="min-w-0 flex-1 truncate">
-                    <span>{t(`remote.gate.${gate}`)}</span>
-                    {detail ? (
-                      <span className="text-muted-foreground"> · {detail}</span>
-                    ) : null}
-                  </p>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+                </span>
+                <p className="min-w-0 flex-1 break-words leading-snug">
+                  <span>{t(`remote.gate.${gate}`)}</span>
+                  {detail ? (
+                    <span className="text-muted-foreground"> · {detail}</span>
+                  ) : null}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
         {profileLogs.length > 0 ? (
-          <div className="space-y-1">
+          <div className={cn("flex min-h-0 flex-col gap-1", logsOpen && "flex-1")}>
             <button
               type="button"
-              className="flex items-center gap-1 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground"
+              className="flex shrink-0 items-center gap-1 text-[length:var(--font-size-12)] text-muted-foreground hover:text-foreground"
               aria-expanded={logsOpen}
               onClick={() => setLogsOpen((current) => !current)}
             >
@@ -197,7 +199,7 @@ export function RemoteConnectDialog({
             {logsOpen ? (
               <div
                 ref={logPaneRef}
-                className="max-h-[min(40vh,24rem)] overflow-auto rounded-md border bg-muted p-3 font-mono text-[length:var(--font-size-12)] text-foreground"
+                className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-md border bg-muted p-3 font-mono text-[length:var(--font-size-12)] text-foreground"
               >
                 {profileLogs.map((line, index) => (
                   <p
@@ -216,7 +218,7 @@ export function RemoteConnectDialog({
             ) : null}
           </div>
         ) : null}
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           {awaiting ? (
             <Button
               type="button"

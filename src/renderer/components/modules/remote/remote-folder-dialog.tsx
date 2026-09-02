@@ -76,10 +76,7 @@ function RemoteConnectInlineStatus({ alias }: { alias: string }) {
         <div className="space-y-1">
           <Progress value={progress.percent} className="h-1.5 bg-muted" />
           <p className="text-[length:var(--font-size-12)] text-muted-foreground tabular-nums">
-            {t("remote.connectProgress", {
-              completed: progress.completed,
-              total: progress.total,
-            })}
+            {t("remote.connectProgress", { percent: progress.percent })}
           </p>
         </div>
       ) : null}

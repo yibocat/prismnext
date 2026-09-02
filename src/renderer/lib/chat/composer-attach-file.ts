@@ -162,6 +162,24 @@ export function isImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.has(ext);
 }
 
+/** Split OS drop/paste paths: images stay on the strip; everything else is an inline chip. */
+export function partitionComposerDropPaths(paths: string[]): {
+  imagePaths: string[];
+  filePaths: string[];
+} {
+  const imagePaths: string[] = [];
+  const filePaths: string[] = [];
+  for (const path of paths) {
+    if (isImagePath(path)) imagePaths.push(path);
+    else filePaths.push(path);
+  }
+  return { imagePaths, filePaths };
+}
+
+export function isComposerStripAttachment(att: ComposerAttachment): boolean {
+  return att.kind === "image" || isImagePath(att.absolutePath);
+}
+
 /** External / dialog / paste / drop attachment shown above the composer input. */
 export interface ComposerAttachment {
   id: string;

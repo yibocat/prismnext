@@ -1022,6 +1022,17 @@ export function persistableAttachmentsFromUserBlocks(
         path,
       });
     }
+    for (const part of block.inlineParts ?? []) {
+      if (part.type !== "mention" || part.mentionType !== "file") continue;
+      const path = (part.filePath || "").trim();
+      if (!path || seen.has(path)) continue;
+      seen.add(path);
+      out.push({
+        name: part.label || path.split(/[/\\]/).pop() || "file",
+        kind: "file",
+        path,
+      });
+    }
   }
   return out;
 }

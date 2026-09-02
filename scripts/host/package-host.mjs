@@ -105,8 +105,10 @@ if (!ANYDOC_LINUX.version || ANYDOC_LINUX.version !== anydocJsPkg.version) {
 if (!ANYDOC_LINUX["package-x64"] || !ANYDOC_LINUX["package-arm64"]) {
   throw new Error("scripts/host/anydoc-linux.txt needs package-x64 and package-arm64");
 }
-requireSha(ANYDOC_LINUX, "sha256-x64", "scripts/host/anydoc-linux.txt");
-requireSha(ANYDOC_LINUX, "sha256-arm64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "tgz-sha256-x64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "tgz-sha256-arm64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "native-sha256-x64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "native-sha256-arm64", "scripts/host/anydoc-linux.txt");
 
 const installSrc = join(root, "scripts/host/install-runtime.sh");
 if (!existsSync(installSrc)) {

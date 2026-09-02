@@ -46,7 +46,7 @@
   "connectContinue": "Continue",
   "connectDismiss": "Close",
   "connectLogs": "Connection log",
-  "connectProgress": "{{completed}}/{{total}}",
+  "connectProgress": "{{percent}}%",
   "connect": "Connect",
   "workspaceOffline": "Connect to this Host to open files, Git, and experiments.",
   "sshPickerTitle": "Connect via SSH",

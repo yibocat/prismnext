@@ -10,11 +10,12 @@ import {
   countActivityTools,
   formatActivityDuration,
   formatActivityInventoryLine,
+  splitProcessAndFinalReply,
   type AssistantSegment,
 } from "../../src/renderer/lib/chat/segment-assistant-blocks";
 import { toolUseContextTitle } from "../../src/renderer/components/modules/chat/tools/shared";
 
-/** Fold identity must stay `a|t|x` + first index. A `worked` remount is a contract break. */
+/** Inner burst keys stay `a|t|x` + first index. Outer `worked` is a chrome remount. */
 function foldIdentityKeys(segments: AssistantSegment[]): string[] {
   const keys: string[] = [];
   const walk = (segs: readonly AssistantSegment[]) => {
@@ -52,7 +53,7 @@ const labels = {
 };
 
 describe("segmentAssistantBlocks", () => {
-  it("live: groups consecutive thinking and tools into one activity fold", () => {
+  it("live: splits leading thought from the tool Activity fold", () => {
     const blocks: ContentBlock[] = [
       { type: "thinking", thinking: "plan" },
       { type: "tool_use", id: "t1", name: "read", input: { file_path: "main.tex" } },
@@ -60,9 +61,13 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Here is the answer." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments).toHaveLength(2);
-    expect(segments[0]).toMatchObject({ kind: "activity", blockIndices: [0, 1, 2] });
+    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
     expect(segments[1]).toMatchObject({ kind: "text", blockIndex: 3 });
+    const worked = segments[0];
+    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
+      { kind: "activity", blockIndices: [0] },
+      { kind: "activity", blockIndices: [1, 2] },
+    ]);
   });
 
   it("live: keeps AI prose outside and starts a new fold after prose", () => {
@@ -75,14 +80,16 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "More answer." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual([
+    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
+    const worked = segments[0];
+    expect(worked && worked.kind === "worked" ? worked.children.map((c) => c.kind) : []).toEqual([
+      "activity",
       "activity",
       "text",
       "activity",
-      "text",
+      "activity",
     ]);
-    expect(segments[0]).toMatchObject({ kind: "activity", blockIndices: [0, 1] });
-    expect(segments[2]).toMatchObject({ kind: "activity", blockIndices: [3, 4] });
+    expect(segments[1]).toMatchObject({ kind: "text", blockIndex: 5 });
   });
 
   it("live: does not merge across short prose", () => {
@@ -93,12 +100,7 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Final report." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual([
-      "activity",
-      "text",
-      "activity",
-      "text",
-    ]);
+    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
   });
 
   it("ignores empty text blocks", () => {
@@ -111,15 +113,16 @@ describe("segmentAssistantBlocks", () => {
     expect(segmentAssistantBlocks(blocks, { phase: "settled" })).toHaveLength(2);
   });
 
-  it("live: activity only while tools/thinking stream with no prose yet", () => {
+  it("live: thought then tools stay open as two folds until the final reply", () => {
     const blocks: ContentBlock[] = [
       { type: "thinking", thinking: "plan" },
       { type: "tool_use", id: "t1", name: "bash" },
       { type: "tool_use", id: "t2", name: "glob" },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments).toHaveLength(1);
-    expect(segments[0]?.kind).toBe("activity");
+    expect(segments.map((s) => s.kind)).toEqual(["activity", "activity"]);
+    expect(segments[0]).toMatchObject({ kind: "activity", blockIndices: [0] });
+    expect(segments[1]).toMatchObject({ kind: "activity", blockIndices: [1, 2] });
   });
 
   it("live: keeps Task/subagent outside the activity fold as a standalone tool", () => {
@@ -136,15 +139,16 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Task finished — here is the synthesis." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual([
+    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
+    const worked = segments[0];
+    expect(worked && worked.kind === "worked" ? worked.children.map((c) => c.kind) : []).toEqual([
+      "activity",
       "activity",
       "text",
       "tool",
-      "text",
     ]);
-    expect(segments[2]).toMatchObject({
-      kind: "tool",
-      block: { name: "task", id: "task1" },
+    expect(segments[1]).toMatchObject({
+      kind: "text",
     });
   });
 
@@ -168,7 +172,7 @@ describe("segmentAssistantBlocks", () => {
     });
   });
 
-  it("settled uses the same burst tree as live — no Worked-for remount", () => {
+  it("settled wraps thinking, tools, and interim prose before the last reply", () => {
     const blocks: ContentBlock[] = [
       { type: "thinking", thinking: "delegate" },
       { type: "tool_use", id: "r1", name: "read", input: { file_path: "a.tex" } },
@@ -183,13 +187,42 @@ describe("segmentAssistantBlocks", () => {
     ];
     const live = segmentAssistantBlocks(blocks, { phase: "live" });
     const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
-    expect(foldIdentityKeys(live)).toEqual(["a0", "x2", "t3", "x4"]);
-    expect(foldIdentityKeys(settled)).toEqual(foldIdentityKeys(live));
-    expect(settled.map((s) => s.kind)).toEqual(["activity", "text", "tool", "text"]);
-    expect(settled.some((s) => s.kind === "worked")).toBe(false);
+    expect(foldIdentityKeys(live)).toEqual(["WORKED-REMOUNT", "a0", "a1", "x2", "t3", "x4"]);
+    expect(foldIdentityKeys(settled)).toEqual(["WORKED-REMOUNT", "a0", "a1", "x2", "t3", "x4"]);
+    expect(settled[0]?.kind).toBe("worked");
+    expect(settled[1]).toMatchObject({ kind: "text", blockIndex: 4 });
+    const worked = settled[0];
+    expect(worked && worked.kind === "worked" ? worked.children.map((c) => c.kind) : []).toEqual([
+      "activity",
+      "activity",
+      "text",
+      "tool",
+    ]);
   });
 
-  it("history default matches live keys so reopen does not remount folds", () => {
+  it("live wraps into Worked-for once the final reply has started", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan" },
+      { type: "tool_use", id: "t1", name: "ls" },
+      { type: "tool_use", id: "t2", name: "read" },
+      { type: "text", text: "我读了这份文件——" },
+    ];
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
+  });
+
+  it("live keeps the process tree open while tools are still the last segment", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan" },
+      { type: "tool_use", id: "t1", name: "ls" },
+      { type: "text", text: "Checking layout." },
+      { type: "tool_use", id: "t2", name: "read" },
+    ];
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    expect(live.map((s) => s.kind)).toEqual(["activity", "activity", "text", "activity"]);
+  });
+
+  it("history default wraps process before the final reply; inner keys stay live identities", () => {
     const blocks: ContentBlock[] = [
       { type: "tool_use", id: "t1", name: "read" },
       { type: "text", text: "Mid." },
@@ -198,7 +231,7 @@ describe("segmentAssistantBlocks", () => {
     ];
     const live = foldIdentityKeys(segmentAssistantBlocks(blocks, { phase: "live" }));
     const history = foldIdentityKeys(segmentAssistantBlocks(blocks));
-    expect(live).toEqual(["a0", "x1", "a2", "x3"]);
+    expect(live).toEqual(["WORKED-REMOUNT", "a0", "x1", "a2", "x3"]);
     expect(history).toEqual(live);
   });
 
@@ -210,6 +243,139 @@ describe("segmentAssistantBlocks", () => {
     const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
     expect(live.map((s) => s.kind)).toEqual(["text"]);
     expect(settled.map((s) => s.kind)).toEqual(["text"]);
+  });
+
+  it("thinking-only stays a single Thought fold — no Worked-for shell", () => {
+    const blocks: ContentBlock[] = [
+      { type: "thinking", thinking: "plan the answer" },
+      { type: "text", text: "Here is the answer." },
+    ];
+    expect(segmentAssistantBlocks(blocks, { phase: "live" }).map((s) => s.kind)).toEqual([
+      "activity",
+      "text",
+    ]);
+    expect(segmentAssistantBlocks(blocks, { phase: "settled" }).map((s) => s.kind)).toEqual([
+      "activity",
+      "text",
+    ]);
+  });
+
+  it("keeps brief thoughts inside a tool Activity after tools have started", () => {
+    const blocks: ContentBlock[] = [
+      { type: "tool_use", id: "t1", name: "read" },
+      { type: "thinking", thinking: "brief" },
+      { type: "tool_use", id: "t2", name: "grep" },
+      { type: "text", text: "Final." },
+    ];
+    const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
+    expect(settled.map((s) => s.kind)).toEqual(["worked", "text"]);
+    const worked = settled[0];
+    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
+      { kind: "activity", blockIndices: [0, 1, 2] },
+    ]);
+  });
+
+  it("live: folds process preamble when the trailing text starts a heading reply", () => {
+    const blocks: ContentBlock[] = [
+      { type: "tool_use", id: "t1", name: "read" },
+      {
+        type: "text",
+        text: "我读了这份文件，先看结构。\n\n## 总结\n这是正式回复。",
+      },
+    ];
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
+    const worked = live[0];
+    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
+      { kind: "activity", blockIndices: [0] },
+      { kind: "text", block: { text: "我读了这份文件，先看结构。" } },
+    ]);
+    expect(live[1]).toMatchObject({
+      kind: "text",
+      block: { text: "## 总结\n这是正式回复。" },
+    });
+  });
+
+  it("live: leaves an unsplit preamble+reply glued together until settle or a heading", () => {
+    const blocks: ContentBlock[] = [
+      { type: "tool_use", id: "t1", name: "read" },
+      {
+        type: "text",
+        text: "我先看了一下附件。\n\n这份文档讲的是 RAG 六步流程，下面按步骤拆开。",
+      },
+    ];
+    const live = segmentAssistantBlocks(blocks, { phase: "live" });
+    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
+    expect(live[1]).toMatchObject({
+      kind: "text",
+      block: {
+        text: "我先看了一下附件。\n\n这份文档讲的是 RAG 六步流程，下面按步骤拆开。",
+      },
+    });
+  });
+
+  it("settled: folds a short trailing preamble before the longer reply", () => {
+    const blocks: ContentBlock[] = [
+      { type: "tool_use", id: "t1", name: "read" },
+      {
+        type: "text",
+        text: "我先看了一下附件。\n\n这份文档讲的是 RAG 六步流程，下面按步骤拆开。",
+      },
+    ];
+    const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
+    expect(settled.map((s) => s.kind)).toEqual(["worked", "text"]);
+    const worked = settled[0];
+    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
+      { kind: "activity", blockIndices: [0] },
+      { kind: "text", block: { text: "我先看了一下附件。" } },
+    ]);
+    expect(settled[1]).toMatchObject({
+      kind: "text",
+      block: { text: "这份文档讲的是 RAG 六步流程，下面按步骤拆开。" },
+    });
+  });
+});
+
+describe("splitProcessAndFinalReply", () => {
+  it("uses a heading after a blank line as the live/strong split", () => {
+    expect(
+      splitProcessAndFinalReply("看完了。\n\n## 结论\n可以发布。"),
+    ).toEqual({
+      process: "看完了。",
+      reply: "## 结论\n可以发布。",
+    });
+  });
+
+  it("does not soft-split while streaming", () => {
+    expect(
+      splitProcessAndFinalReply("看完了。\n\n下面是完整说明，比前言更长的一段正文。"),
+    ).toBeNull();
+  });
+
+  it("soft-splits a short preamble once the turn has settled", () => {
+    expect(
+      splitProcessAndFinalReply(
+        "看完了。\n\n下面是完整说明，比前言更长的一段正文。",
+        { allowSoft: true },
+      ),
+    ).toEqual({
+      process: "看完了。",
+      reply: "下面是完整说明，比前言更长的一段正文。",
+    });
+  });
+
+  it("does not steal a heading-led answer into process", () => {
+    expect(
+      splitProcessAndFinalReply("## 总结\n正文", { allowSoft: true }),
+    ).toBeNull();
+  });
+
+  it("does not split a single paragraph — we cannot tell process from reply", () => {
+    expect(
+      splitProcessAndFinalReply("我先看了附件，这份文档讲的是 RAG 六步流程。", {
+        allowSoft: true,
+      }),
+    ).toBeNull();
   });
 });
 

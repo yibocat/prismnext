@@ -1,6 +1,7 @@
 import type { ComposerPart } from "@/lib/chat/composer-parts";
 import { isComposerEmpty } from "@/lib/chat/composer-parts";
 import type { ComposerAttachment } from "@/lib/chat/composer-attach-file";
+import { stripCompiledPromptSections } from "@/lib/chat/user-message-display";
 import {
   buildComposerDisplayBlocks,
   compileComposerPrompt,
@@ -46,7 +47,10 @@ export function extractUserMessageEditParts(blocks: ContentBlock[]): {
   }
 
   if (inlineParts.length > 0) {
-    return { parts: inlineParts, attachments };
+    return {
+      parts: inlineParts,
+      attachments: attachments.filter((a) => a.kind === "image"),
+    };
   }
 
   const text = allBlocks
@@ -66,10 +70,11 @@ export function extractUserMessageEditParts(blocks: ContentBlock[]): {
     })
     .map((b) => b.text!)
     .join("\n");
+  const stripped = stripCompiledPromptSections(text);
 
   return {
-    parts: text ? [{ type: "text", text }] : [{ type: "text", text: "" }],
-    attachments,
+    parts: stripped ? [{ type: "text", text: stripped }] : [{ type: "text", text: "" }],
+    attachments: attachments.filter((a) => a.kind === "image"),
   };
 }
 

@@ -206,7 +206,8 @@ export async function compileComposerPrompt(
   }
 
   const displayLabel = partsToPlainText(parts).trim();
-  const attachmentDisplay = (attachments ?? []).map((a) => ({
+  const stripAttachments = (attachments ?? []).filter((a) => a.kind === "image");
+  const attachmentDisplay = stripAttachments.map((a) => ({
     name: a.name,
     kind: a.kind,
     path: a.displayPath,
@@ -587,7 +588,8 @@ export function buildComposerDisplayBlocks(
 ): ContentBlock[] {
   const expanded = expandLinkTokensInParts(parts);
   const displayLabel = partsToPlainText(expanded).trim();
-  const attachmentDisplay = (attachments ?? []).map((a) => ({
+  const stripAttachments = (attachments ?? []).filter((a) => a.kind === "image");
+  const attachmentDisplay = stripAttachments.map((a) => ({
     name: a.name,
     kind: a.kind,
     path: a.displayPath,

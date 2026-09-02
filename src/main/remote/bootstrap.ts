@@ -218,12 +218,16 @@ async function provisionHostRuntime(input: {
     );
     logExecOutput(input.log, result);
     if (result.code !== 0) {
-      throw new RemoteOperationError(
-        "host_runtime",
-        result.stderr.trim()
-          || result.stdout.trim()
-            || `server failed to download Host ${step}. The machine must reach nodejs.org, GitHub, and registry.npmjs.org.`,
-      );
+      const detail = result.stderr.trim()
+        || result.stdout.trim()
+        || `server failed to download Host ${step}. The machine must reach nodejs.org, GitHub, and registry.npmjs.org.`;
+      if (step === "anydoc") {
+        input.log(
+          `AnyDoc native did not install (${detail}). Host will still connect; document-read on this server stays unavailable until the machine can reach GitHub releases (preferred) or npm / npmmirror.`,
+        );
+        continue;
+      }
+      throw new RemoteOperationError("host_runtime", detail);
     }
   }
 
@@ -261,9 +265,8 @@ async function provisionHostRuntime(input: {
       const native = hostPayloadAnydocNativePath(input.currentDir, arch);
       const anydoc = await input.session.sftpStat(native);
       if (!anydoc || anydoc.size <= 0) {
-        throw new RemoteOperationError(
-          "host_runtime",
-          "install-runtime finished but Host AnyDoc native binding is still missing",
+        input.log(
+          "Host AnyDoc native binding is still missing — Office / document-read on this server will fail until the next successful install.",
         );
       }
     }

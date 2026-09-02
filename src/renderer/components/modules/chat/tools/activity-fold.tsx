@@ -22,6 +22,7 @@ import {
   formatActivityInventoryLine,
   inventoryHasDetail,
   isThinkingBlockStreaming,
+  isThinkingOnlyActivity,
   resolveActivityBurstPhase,
   resolveActivityDurationSec,
   sumThinkingDurations,
@@ -63,6 +64,7 @@ export const ActivityFold = memo(function ActivityFold({
   messageThinkingComplete,
   suppressArtifactPaths,
   turnSettled = false,
+  liveProcessOpen = false,
   childrenSegments,
 }: {
   blocks: ContentBlock[];
@@ -77,6 +79,8 @@ export const ActivityFold = memo(function ActivityFold({
   suppressArtifactPaths?: readonly string[];
   /** Whole-turn Worked for (history / turn complete) — not burst Planning/Exploring. */
   turnSettled?: boolean;
+  /** Live process phase: keep burst folds open (thinking + tools + interim prose). */
+  liveProcessOpen?: boolean;
   /**
    * Settled Worked-for body: keep live burst folds / Task / interim prose nested
    * inside instead of flattening tools into one list.
@@ -84,8 +88,8 @@ export const ActivityFold = memo(function ActivityFold({
   childrenSegments?: WorkedChildSegment[];
 }) {
   const { t } = useTranslation();
-  // Always start collapsed (live, settled, and session reopen). User toggles only.
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(() => liveProcessOpen && !turnSettled);
+  const startedAtRef = useRef<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
@@ -101,8 +105,8 @@ export const ActivityFold = memo(function ActivityFold({
 
   useEffect(() => {
     if (!isStreamingSegment) return;
-    frozenElapsedRef.current = null;
-    const start = Date.now();
+    if (startedAtRef.current == null) startedAtRef.current = Date.now();
+    const start = startedAtRef.current;
     const timer = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
     }, 200);
@@ -115,6 +119,13 @@ export const ActivityFold = memo(function ActivityFold({
       frozenElapsedRef.current = elapsed;
     }
   }, [isStreamingSegment, elapsed]);
+
+  // Default open while this burst is the live process. Never re-force open on
+  // token updates — that made the fold impossible to close. Collapse once the
+  // final reply starts or the turn settles.
+  useEffect(() => {
+    if (!liveProcessOpen) setExpanded(false);
+  }, [liveProcessOpen]);
 
   const toggleExpanded = useCallback(() => {
     if (toggleRef.current) {
@@ -212,7 +223,6 @@ export const ActivityFold = memo(function ActivityFold({
     ? null
     : resolveActivityBurstPhase(blocks);
   const PhaseIcon = burstPhase ? BURST_PHASE_ICON[burstPhase] : null;
-  // Align nested burst persist keys with live (`:aN`, not `:worked:aN`).
   const burstPersistBase = persistKey?.replace(/:worked$/, "") ?? persistKey;
 
   return (
@@ -249,8 +259,10 @@ export const ActivityFold = memo(function ActivityFold({
           />
         </span>
       </button>
-      {expanded ? (
-        <div className="mb-0.5 space-y-0.5">
+      <div
+        className={cn(expanded ? "mb-0.5 space-y-0.5" : "hidden")}
+        hidden={!expanded}
+      >
           {childrenSegments && childrenSegments.length > 0
             ? childrenSegments.map((child, childIndex) => {
                 if (child.kind === "text") {
@@ -263,7 +275,6 @@ export const ActivityFold = memo(function ActivityFold({
                         content={child.block.text!}
                         isAnimating={false}
                         sessionId={sessionId}
-                        muted
                       />
                     </div>
                   );
@@ -279,6 +290,25 @@ export const ActivityFold = memo(function ActivityFold({
                       />
                     </div>
                   );
+                }
+                if (isThinkingOnlyActivity(child.blocks)) {
+                  return child.blocks.map((block, i) => {
+                    if (block.type !== "thinking" || !block.thinking) return null;
+                    const blockIndex = child.blockIndices[i] ?? i;
+                    return (
+                      <ThinkingWidget
+                        key={`think-${blockIndex}`}
+                        thinking={block.thinking}
+                        duration={block.duration}
+                        sessionId={sessionId}
+                        persistKey={
+                          persistKey ? `${persistKey}:t${blockIndex}` : undefined
+                        }
+                        isStreamingMsg={false}
+                        isProgress={block._progress === true}
+                      />
+                    );
+                  });
                 }
                 const foldKey = child.blockIndices[0] ?? childIndex;
                 return (
@@ -340,8 +370,7 @@ export const ActivityFold = memo(function ActivityFold({
                 }
                 return null;
               })}
-        </div>
-      ) : null}
+      </div>
     </div>
   );
 });

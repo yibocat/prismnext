@@ -310,4 +310,61 @@ exit 0
       log: () => undefined,
     })).rejects.toThrow(/tectonic is still missing/);
   });
+
+  it("still connects when the AnyDoc native step fails", async () => {
+    const staging = mkdtempSync(join(tmpdir(), "prism-boot-noanydoc-"));
+    const remoteHome = mkdtempSync(join(tmpdir(), "prism-boot-noanydoc-home-"));
+    const current = join(staging, "current", "bin");
+    mkdirSync(current, { recursive: true });
+    writeFileSync(join(current, "prismnext-host"), "#!/usr/bin/env node\n", { mode: 0o755 });
+    writeFileSync(
+      join(current, "install-runtime"),
+      `#!/bin/sh
+echo "curl: (23) Failure writing output to destination" >&2
+exit 1
+`,
+      { mode: 0o755 },
+    );
+    const tarballPath = join(staging, "payload.tar.gz");
+    await tarCreate({ gzip: true, file: tarballPath, cwd: staging }, ["current"]);
+    const tarball = { tarballPath, sha256: sha256File(tarballPath) };
+
+    const remoteCurrent = join(remoteHome, ".prismnext-host", "current");
+    mkdirSync(join(remoteCurrent, "bin"), { recursive: true });
+    writeFileSync(join(remoteCurrent, "bin", "prismnext-host"), "#!/usr/bin/env node\n", {
+      mode: 0o755,
+    });
+    writeStubBin(join(remoteCurrent, "bin", "node"));
+    writeStubBin(join(remoteCurrent, "bin", "tectonic"));
+    writeStubBin(join(remoteCurrent, "bin", "tinymist"));
+    writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeFileSync(join(remoteCurrent, "bin", "install-runtime"), `#!/bin/sh
+echo "curl: (23) Failure writing output to destination" >&2
+exit 1
+`, { mode: 0o755 });
+    writeFileSync(
+      join(remoteCurrent, "stamp.json"),
+      `${JSON.stringify({ desktopVersion: "0.9.0", payloadSha256: tarball.sha256 }, null, 2)}\n`,
+    );
+
+    const ssh = createDirectoryBackedSshClient(remoteHome);
+    const session = await ssh.connect({
+      host: "lab",
+      port: 22,
+      user: "me",
+      onHostKey: () => "accept",
+    });
+    const logs: string[] = [];
+    const result = await ensureHostPayload({
+      session,
+      local: { ...tarball, desktopVersion: "0.9.0" },
+      linuxArch: "linux-x64",
+      log: (m) => logs.push(m),
+    });
+    expect(result.action).toBe("provisioned");
+    expect(logs.some((line) => /AnyDoc native did not install/i.test(line))).toBe(true);
+    expect(logs.some((line) => /document-read on this server stays unavailable/i.test(line))).toBe(
+      true,
+    );
+  });
 });

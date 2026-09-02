@@ -66,7 +66,9 @@ describe("host pack pins", () => {
     expect(anydoc.version).toBe("0.2.4");
     expect(anydoc["package-x64"]).toBe("@firecrawl/anydoc-linux-x64-gnu");
     expect(anydoc["package-arm64"]).toBe("@firecrawl/anydoc-linux-arm64-gnu");
-    expect(anydoc["sha256-x64"]).toMatch(sha);
-    expect(anydoc["sha256-arm64"]).toMatch(sha);
+    expect(anydoc["tgz-sha256-x64"]).toMatch(sha);
+    expect(anydoc["tgz-sha256-arm64"]).toMatch(sha);
+    expect(anydoc["native-sha256-x64"]).toMatch(sha);
+    expect(anydoc["native-sha256-arm64"]).toMatch(sha);
   });
 });

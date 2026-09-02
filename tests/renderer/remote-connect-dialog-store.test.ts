@@ -70,7 +70,10 @@ describe("remote connect dialog store", () => {
     expect(dialogSource).toContain("onOpenChange(false)");
     expect(dialogSource).toContain("autoCloseOnReady={autoCloseOnReady}");
     expect(dialogSource).toContain("connectProgress");
+    expect(dialogSource).toContain("progress.percent");
     expect(dialogSource).toContain("remote.connectLogs");
+    expect(dialogSource).not.toContain("max-h-48");
+    expect(dialogSource).not.toContain("flex-1 truncate");
     expect(dialogSource).toContain("remote.connectContinue");
     expect(dialogSource).toContain("onPointerDownOutside={blocking");
   });
