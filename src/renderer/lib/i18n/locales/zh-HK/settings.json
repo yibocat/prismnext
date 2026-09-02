@@ -307,7 +307,7 @@
     "knowledgeModules": "知識模組",
     "sectionPrompts": "提示",
     "agentTools": "Agent 工具",
-    "pageDesc": "編輯專案說明、規則與可選的人設覆蓋。產品提示詞核心在「高階」下只讀檢視。",
+    "pageDesc": "編輯專案說明、規則與可選的人設覆蓋。「高階」列出產品提示詞各層與內建工具。",
     "projectInstructions": "專案說明",
     "createAgentsMd": "建立 AGENTS.md",
     "previewStack": "預覽提示棧",
@@ -315,11 +315,13 @@
     "viewBrief": "檢視簡報",
     "sectionPromptsDesc": "基線人設覆蓋、按專案的 Agent 說明，以及持續更新的研究簡報。",
     "sectionAdvanced": "高階",
-    "sectionAdvancedDesc": "組合提示棧、知識模組與內建工具描述的只讀檢視 — 僅供除錯。請用專案規則、AGENTS.md 或 Skills 擴充套件行為，而非在此編輯。",
+    "sectionAdvancedDesc": "提示棧與內建模組只顯示名稱、體量與注入路徑。內建工具仍展示模型看到的完整描述。請用專案規則、AGENTS.md 或 Skills 擴充套件行為。",
     "advancedTitle": "提示詞核心",
     "advancedSummary": "{{layers}} 層提示棧 · {{modules}} 個模組 · {{tools}} 個工具",
     "advancedSummaryLoading": "正在載入提示棧摘要…",
-    "internalsNotice": "只讀 · 除錯檢視。此處為產品擁有的提示詞核心 — 請用專案規則、AGENTS.md 或 Skills 擴充套件行為，不要在此編輯。",
+    "internalsNotice": "只讀。此處為模型看到的內建工具描述。請用專案規則、AGENTS.md 或 Skills 擴充套件行為，不要在此編輯。",
+    "internalsNoticeSummary": "只讀摘要。此處不展示完整產品提示詞正文。",
+    "internalsNoticeDeveloper": "開發者檢視。此處為組裝後的完整提示詞正文，只讀，不會改變模型實際收到的內容。",
     "rulesDesc": "每次對話回合以獨立使用者訊息塊注入。編排器配置可限制為子集（空選擇 = 全部已啟用規則）。",
     "customPrompt": "自定義提示",
     "viewEditPrompt": "檢視並編輯提示",
@@ -335,21 +337,22 @@
       "customPrompt": "自定義提示會替換記憶體中系統提示的內建人設。",
       "builtinPrompt": "內建 PrismNext 人設。在記憶體中組裝，不會寫入專案檔案。",
       "stackSummary": "共 {{layers}} 層注入 · 合計約 {{tokens}} tokens（人設、AGENTS.md、專案規則、主 Agent）",
-      "openForStack": "開啟專案以檢視完整注入棧預覽。",
+      "openForStack": "開啟專案以檢視注入棧摘要。",
       "openForInstructions": "開啟專案以編輯專案說明。",
       "instructions": "專案專用說明寫在 `.workbench/agent/AGENTS.md`，會編入會話提示。",
       "agentsChars": "專案說明共 {{count}} 個字元。",
       "noAgents": "尚無 AGENTS.md — 可建立，或在聊天中執行 /setup。",
       "openForBrief": "開啟專案以編輯持續更新的研究設計簡報。",
       "brief": "專案根目錄 `.brief.md` 中的活態研究設計 — 此處只讀預覽；編輯會在 Files 中開啟。Agent 使用 research-brief-read/update。",
-      "modules": "引用、文獻庫、Task 與工作區模組的只讀目錄。",
+      "modules": "引用、文獻庫、Task 與工作區模組的名稱、角色與注入路徑 — 不含完整提示詞正文。",
       "tools": "檢視全部已註冊工具及模型選擇工具時看到的描述。"
     },
     "empty": {
       "openForRules": "開啟專案以管理專案規則。",
       "noRules": "尚無專案規則。"
     },
-    "stackBaseAgent": "基於主 Agent：{{name}}"
+    "stackBaseAgent": "基於主 Agent：{{name}}",
+    "stackActiveTeam": "目前團隊：{{team}} · 主 Agent：{{name}}"
   },
   "workspace": {
     "title": "工作區",
@@ -454,8 +457,10 @@
     "noSourceDevOnly": "一般只會出現在未寫入釋出地址的本地開發構建。",
     "proLicense": "Pro",
     "proLicenseTitle": "啟用碼",
-    "proLicenseDesc": "解鎖可選 Pro 增強（需使用含 Pro 模組的建置，如 pnpm dev:pro）。前期測試請用 PRISM-PRO-DEV-TEST，暫不收費；免費功能永不需要啟用碼。",
+    "proLicenseDesc": "解鎖可選 Pro 增強（需使用含 Pro 模組的建置，如 pnpm dev:pro）。前期測試請用 <proKey>{{key}}</proKey>，暫不收費；免費功能永不需要啟用碼。",
     "proKeyPlaceholder": "PRISM-PRO-DEV-TEST",
+    "proKeyCopyHint": "點一下複製",
+    "proKeyCopyFailed": "無法複製啟用碼。",
     "proActivate": "啟用",
     "proActivateSuccess": "Pro 已啟用",
     "proDeactivate": "取消啟用",
@@ -554,10 +559,11 @@
   },
   "literaturePage": {
     "title": "文獻",
-    "subtitle": "文獻庫儲存、PDF 提取與 Zotero。",
+    "subtitle": "文獻庫儲存、PDF 提取、網頁搜尋與 Zotero。",
     "libraryStorage": "文獻庫儲存",
     "pdfExtraction": "PDF 提取",
     "discoveryTitle": "文獻發現",
+    "webSearchTitle": "網頁搜尋",
     "zotero": "Zotero",
     "pageDesc": "專案文獻庫儲存與可選的 Zotero 同步。",
     "toast": {
@@ -568,6 +574,9 @@
     "storageDesc": "快取的 PDF 會保留，直到你刪除對應條目或清理下方未引用檔案。",
     "extractDesc": "Agent 與文獻面板會讀取本專案工作臺文獻庫中的快取 Markdown。設定 Token 後，MinerU（雲端）可上傳 PDF 做高精度解析。",
     "discoveryDesc": "內建 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可選 API 金鑰。無金鑰也可搜尋；金鑰可提高速率限制。",
+    "webSearchDesc": "Agent 的 websearch / webfetch 走 Tavily。請自行申請金鑰，PrismNext 不提供共享額度。免費檔每月 1000 credits（basic 搜尋 1 credit；basic 提取每 5 個 URL 1 credit）。",
+    "tavilySignup": "申請 Tavily API Key",
+    "tavilyDocs": "Tavily 文件",
     "zoteroDesc": "可選 — 在 Zotero 桌面端執行時流式讀取 PDF。Better BibTeX 提供 citekey；編輯集合需要 Web API 憑證或 debug-bridge 外掛。",
     "rows": {
       "project": "專案",
@@ -577,6 +586,7 @@
       "mineruToken": "MinerU API Token",
       "semanticScholarKey": "Semantic Scholar API 金鑰",
       "pubmedKey": "PubMed / NCBI API 金鑰",
+      "tavilyKey": "Tavily API 金鑰",
       "mineruConnection": "MinerU 連線",
       "autoExtract": "匯入時自動提取",
       "autoAiMetadata": "自動生成摘要與關鍵詞",
@@ -596,6 +606,7 @@
       "mineruToken": "可選 — 留空使用免費 flash 模式（10MB / 20 頁）。Token 可啟用高精度提取（最高 200MB / 200 頁）。PDF 會發送到 MinerU 伺服器。",
       "semanticScholarKey": "可選 — 提高 literature-discover 對 Semantic Scholar 的速率限制。",
       "pubmedKey": "可選 — 提高 literature-discover 對 PubMed / NCBI E-utilities 的速率限制。",
+      "tavilyKey": "Agent 網頁搜尋與抓取需要此金鑰。請到 tavily.com 免費申請。",
       "mineruTestHint": "測試 Token 或 flash 可用性。",
       "autoExtract": "將 PDF 加入文獻庫時排隊提取。",
       "autoAiMetadata": "PDF 文本提取後，生成一句話摘要並寫入標籤（每篇少量 token）。",
@@ -614,6 +625,7 @@
       "mineruToken": "Bearer token…",
       "semanticScholarKey": "x-api-key…",
       "pubmedKey": "NCBI api_key…",
+      "tavilyKey": "tvly-…",
       "apiKey": "輸入金鑰…"
     },
     "actions": {
@@ -1220,7 +1232,8 @@
       "title": "知識模組",
       "global": "全域性基線",
       "perProfile": "按 Agent 配置",
-      "intro": "隨 prismnext 附帶的內建工作流指南，始終可用 — 可在智慧體編輯器中按編排器或專家附加。工作區資料夾會從專案工作區設定全域性注入。",
+      "intro": "隨 PrismNext 附帶的內建工作流指南。此處列出各模組的名稱、體量與注入路徑，不展示完整提示詞正文。可在智慧體編輯器中按編排器或專家附加。工作區資料夾會從專案工作區設定全域性注入。",
+      "introFull": "隨 PrismNext 附帶的內建工作流指南。此開發者檢視展示模型收到的組裝模組正文。可在智慧體編輯器中按編排器或專家附加。工作區資料夾會從專案工作區設定全域性注入。",
       "badgeAuto": "自動",
       "badgeBuiltin": "內建",
       "badgePerAgent": "按智慧體",
@@ -1286,7 +1299,8 @@
         "loadFailed": "載入提示棧預覽失敗。"
       },
       "openProject": "請先開啟專案以預覽 AGENTS.md、專案規則、Team 主智慧體與內建模組。",
-      "intro": "每一層單獨注入，順序與工作階段啟動時模型實際收到的系統提示相同。內建能力模組接在 Team 主智慧體之後，不寫入 Team 檔案。專案規則掛在每輪使用者訊息前，不進系統提示。",
+      "intro": "每一層在工作階段啟動時單獨注入。此處列出層名、體量估計與注入路徑，不展示完整提示詞正文。內建能力模組接在 Team 主智慧體之後，不寫入 Team 檔案。專案規則掛在每輪使用者訊息前，不進系統提示。",
+      "introFull": "每一層單獨注入，順序與工作階段啟動時模型實際收到的系統提示相同。內建能力模組接在 Team 主智慧體之後，不寫入 Team 檔案。專案規則掛在每輪使用者訊息前，不進系統提示。",
       "role": {
         "opencode": "系統指令",
         "eachTurn": "每輪對話",
@@ -1305,6 +1319,8 @@
       "collapseAll": "全部摺疊",
       "layerCount": "{{count}} 層",
       "defaultOrchestrator": "預設編排器：",
+      "activeTeam": "目前團隊：",
+      "leadAgent": "主 Agent：",
       "loadError": "無法載入提示詞堆疊預覽。"
     },
     "prompt": {

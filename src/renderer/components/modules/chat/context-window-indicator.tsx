@@ -19,6 +19,7 @@ import {
 /** Fixed categorical hues — not theme Brand (git/diff convention). */
 const BREAKDOWN_COLORS: Record<ContextBreakdownKey, string> = {
   systemPrompt: "#8b8d94",
+  modules: "#0d9488",
   tools: "#7c6af7",
   rules: "#3d9a5f",
   skills: "#e3942c",

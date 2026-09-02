@@ -1,14 +1,13 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
-import { BrainIcon, ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   captureViewportAnchor,
   restoreViewportAnchor,
   type ViewportAnchorCapture,
 } from "@/lib/chat/preserve-viewport-anchor";
-import { TOOL_EXPANDED_CONTENT_CLASS } from "./shared";
 import { MarkdownRenderer } from "../markdown-renderer";
 import { formatActivityDuration } from "@/lib/chat/segment-assistant-blocks";
 
@@ -70,9 +69,9 @@ export function ThinkingWidget({
   variant?: "standalone" | "nested";
 }) {
   const { t } = useTranslation();
-  // Always start collapsed (session open / history / live). User toggles only.
   const [expanded, setExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const startedAtRef = useRef<number | null>(null);
   const globalStreaming = useChatStore((s) => s.isStreaming);
   const isStreaming = isStreamingMsg ?? globalStreaming;
 
@@ -96,7 +95,8 @@ export function ThinkingWidget({
 
   useEffect(() => {
     if (!isStreaming || isProgress) return;
-    const start = Date.now();
+    if (startedAtRef.current == null) startedAtRef.current = Date.now();
+    const start = startedAtRef.current;
     const timer = setInterval(() => {
       setElapsed((Date.now() - start) / 1000);
     }, 200);
@@ -121,19 +121,14 @@ export function ThinkingWidget({
     duration: formatActivityDuration(frozenDuration ?? 0.1),
   });
 
-  // Nested inside ActivityFold — keep thought fold/expand, but no BrainIcon
-  // (outer ActivityFold already owns that chrome).
+  // Nested inside ActivityFold — compact Thought line, no tool-panel box.
   if (variant === "nested") {
     if (isProgress) {
       return (
         <div className="py-0.5">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65"
-            disabled
-          >
-            <span>Initialization</span>
-          </button>
+          <span className="text-[length:var(--font-chat-message)] text-muted-foreground/65">
+            Initialization
+          </span>
         </div>
       );
     }
@@ -157,14 +152,14 @@ export function ThinkingWidget({
             )}
           />
         </button>
-        {expanded ? (
+        <div className={cn(!expanded && "hidden")} hidden={!expanded}>
           <ThinkingMarkdownBody
             thinking={thinking}
             isStreaming={isStreaming}
             sessionId={sessionId}
             className="pt-0 pb-0.5"
           />
-        ) : null}
+        </div>
       </div>
     );
   }
@@ -174,11 +169,10 @@ export function ThinkingWidget({
       <button
         ref={toggleRef}
         type="button"
-        className="flex items-center gap-2 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors group"
+        className="flex items-center gap-1.5 py-0.5 text-[length:var(--font-chat-message)] text-muted-foreground/65 hover:text-muted-foreground/80 transition-colors group"
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggleExpanded}
       >
-        <BrainIcon className="size-3.5 shrink-0" />
         <span
           className="tabular-nums transition-opacity duration-200"
           key={isStreaming ? "live" : "frozen"}
@@ -196,14 +190,14 @@ export function ThinkingWidget({
           )}
         />
       </button>
-      {expanded && (
+      <div className={cn(!expanded && "hidden")} hidden={!expanded}>
         <ThinkingMarkdownBody
           thinking={thinking}
           isStreaming={isStreaming}
           sessionId={sessionId}
-          className={cn(TOOL_EXPANDED_CONTENT_CLASS, "py-1 text-[length:var(--font-chat-message)]")}
+          className="py-0.5 text-[length:var(--font-chat-message)]"
         />
-      )}
+      </div>
     </div>
   );
 }

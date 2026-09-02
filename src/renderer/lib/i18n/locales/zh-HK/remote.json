@@ -46,7 +46,7 @@
   "connectContinue": "繼續",
   "connectDismiss": "關閉",
   "connectLogs": "連線日誌",
-  "connectProgress": "{{completed}}/{{total}}",
+  "connectProgress": "{{percent}}%",
   "connect": "連線",
   "workspaceOffline": "連上呢台 Host 之後，先可以睇檔案、Git 同實驗。",
   "sshPickerTitle": "透過 SSH 連線",

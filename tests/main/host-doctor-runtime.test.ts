@@ -42,6 +42,8 @@ describe("Host doctor runtime inventory", () => {
     expect(report.runtime?.tectonic.path).toBeNull();
     expect(report.runtime?.tinymist.available).toBe(false);
     expect(report.runtime?.tinymist.path).toBeNull();
+    expect(report.runtime?.anydoc.available).toBe(false);
+    expect(report.runtime?.anydoc.path).toBeNull();
   });
 
   it("finds tectonic next to the Host script", async () => {

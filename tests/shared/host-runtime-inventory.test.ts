@@ -17,6 +17,7 @@ function inventory(partial: Partial<HostRuntimeInventory>): HostRuntimeInventory
     git: bin(true, "v2.53.0-3"),
     tectonic: bin(true, "0.15.0"),
     tinymist: bin(true, "0.15.2"),
+    anydoc: bin(true, "0.2.4"),
     ...partial,
   };
 }
@@ -26,6 +27,7 @@ const pins = {
   git: "v2.53.0-3",
   tectonic: "0.15.0",
   tinymist: "0.15.2",
+  anydoc: "0.2.4",
 };
 
 describe("runtimeBinFromStat", () => {
@@ -62,6 +64,7 @@ describe("parseHostPinMap / hostRuntimePinsFromFiles", () => {
       git: "tag v2.53.0-3\n",
       tectonic: "version 0.15.0\n",
       tinymist: "version 0.15.2\n",
+      anydoc: "version 0.2.4\n",
     })).toEqual(pins);
   });
 });
@@ -69,6 +72,13 @@ describe("parseHostPinMap / hostRuntimePinsFromFiles", () => {
 describe("inventoryMissingSteps", () => {
   it("returns empty when all bins match the pins", () => {
     expect(inventoryMissingSteps(inventory({}), pins)).toEqual([]);
+  });
+
+  it("asks only for anydoc when that native binding is missing", () => {
+    expect(inventoryMissingSteps(
+      inventory({ anydoc: bin(false) }),
+      pins,
+    )).toEqual(["anydoc"]);
   });
 
   it("asks only for tinymist when that bin is missing", () => {
@@ -106,6 +116,7 @@ describe("inventoryMissingSteps", () => {
         git: bin(true, null),
         tectonic: bin(true, null),
         tinymist: bin(true, null),
+        anydoc: bin(true, null),
       }),
       pins,
     )).toEqual([]);

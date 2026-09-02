@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
  * Bundle prismnext-host (JS + Core teams + runtime pins + install-runtime).
- * Node, Git, Tectonic, and Tinymist are not packed here — the Linux server downloads
- * them from the pin files on first connect. Pack does not hit the network.
+ * Node, Git, Tectonic, Tinymist, and AnyDoc native bindings are not packed here —
+ * the Linux server downloads them from the pin files on first connect.
+ * Pack does not hit the network. The AnyDoc JS wrapper is copied from local
+ * node_modules (no darwin .node).
  */
 
 import { createHash } from "node:crypto";
@@ -57,6 +59,7 @@ const NODE_PIN = readKeyPin(join(root, "scripts/host/node-version.txt"));
 const HOST_GIT = readKeyPin(join(root, "scripts/host/git-version.txt"));
 const TECTONIC_LINUX = readKeyPin(join(root, "scripts/host/tectonic-linux.txt"));
 const TINYMIST_LINUX = readKeyPin(join(root, "scripts/host/tinymist-linux.txt"));
+const ANYDOC_LINUX = readKeyPin(join(root, "scripts/host/anydoc-linux.txt"));
 const TECTONIC_VERSION = readPinLines(join(root, "scripts/tectonic-version.txt"))[0].replace(/^v/, "");
 const TINYMIST_VERSION = readPinLines(join(root, "scripts/tinymist-version.txt"))[0].replace(/^v/, "");
 
@@ -91,6 +94,22 @@ if (!TINYMIST_LINUX["triple-x64"] || !TINYMIST_LINUX["triple-arm64"]) {
 requireSha(TINYMIST_LINUX, "sha256-x64", "scripts/host/tinymist-linux.txt");
 requireSha(TINYMIST_LINUX, "sha256-arm64", "scripts/host/tinymist-linux.txt");
 
+const anydocJsPkg = JSON.parse(
+  readFileSync(join(root, "node_modules/@firecrawl/anydoc/package.json"), "utf8"),
+);
+if (!ANYDOC_LINUX.version || ANYDOC_LINUX.version !== anydocJsPkg.version) {
+  throw new Error(
+    `scripts/host/anydoc-linux.txt version ${ANYDOC_LINUX.version || "empty"} must match @firecrawl/anydoc ${anydocJsPkg.version}`,
+  );
+}
+if (!ANYDOC_LINUX["package-x64"] || !ANYDOC_LINUX["package-arm64"]) {
+  throw new Error("scripts/host/anydoc-linux.txt needs package-x64 and package-arm64");
+}
+requireSha(ANYDOC_LINUX, "tgz-sha256-x64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "tgz-sha256-arm64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "native-sha256-x64", "scripts/host/anydoc-linux.txt");
+requireSha(ANYDOC_LINUX, "native-sha256-arm64", "scripts/host/anydoc-linux.txt");
+
 const installSrc = join(root, "scripts/host/install-runtime.sh");
 if (!existsSync(installSrc)) {
   throw new Error("scripts/host/install-runtime.sh missing");
@@ -98,6 +117,7 @@ if (!existsSync(installSrc)) {
 
 rmSync(join(currentDir, "bin"), { recursive: true, force: true });
 rmSync(join(currentDir, "vendor"), { recursive: true, force: true });
+rmSync(join(currentDir, "node_modules"), { recursive: true, force: true });
 mkdirSync(join(currentDir, "bin"), { recursive: true });
 mkdirSync(join(currentDir, "runtime"), { recursive: true });
 
@@ -133,6 +153,24 @@ copyFileSync(
   join(root, "scripts/host/tinymist-linux.txt"),
   join(currentDir, "runtime", "tinymist-linux.txt"),
 );
+copyFileSync(
+  join(root, "scripts/host/anydoc-linux.txt"),
+  join(currentDir, "runtime", "anydoc-linux.txt"),
+);
+
+const anydocSrc = join(root, "node_modules/@firecrawl/anydoc");
+const anydocDest = join(currentDir, "node_modules/@firecrawl/anydoc");
+mkdirSync(anydocDest, { recursive: true });
+for (const name of ["package.json", "anydoc.js", "anydoc.d.ts", "index.js", "index.d.ts", "cli.js", "README.md"]) {
+  const from = join(anydocSrc, name);
+  if (!existsSync(from)) {
+    if (name === "package.json" || name === "anydoc.js" || name === "index.js") {
+      throw new Error(`@firecrawl/anydoc missing ${name}; cannot pack Host document-read.`);
+    }
+    continue;
+  }
+  copyFileSync(from, join(anydocDest, name));
+}
 
 try {
   chmodSync(hostJsPath, 0o755);
@@ -175,5 +213,5 @@ writeFileSync(
   `${JSON.stringify({ desktopVersion, payloadSha256: sha256 }, null, 2)}\n`,
 );
 process.stdout.write(
-  `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} (slim; server downloads node=${NODE_PIN.version} git=${HOST_GIT.tag} tectonic=${TECTONIC_VERSION} tinymist=${TINYMIST_VERSION})\n`,
+  `packed ${tarballName} sha256=${sha256.slice(0, 12)}… desktop=${desktopVersion} (slim; server downloads node=${NODE_PIN.version} git=${HOST_GIT.tag} tectonic=${TECTONIC_VERSION} tinymist=${TINYMIST_VERSION} anydoc=${ANYDOC_LINUX.version})\n`,
 );

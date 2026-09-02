@@ -17,6 +17,7 @@ import { GlobWidget } from "./glob-widget";
 import { ListWidget } from "./list-widget";
 import { WebFetchWidget } from "./webfetch-widget";
 import { WebSearchWidget } from "./websearch-widget";
+import { DocumentReadWidget } from "./document-read-widget";
 import { SkillWidget } from "./skill-widget";
 import { PatchWidget } from "./patch-widget";
 import { DeleteWidget } from "./delete-widget";
@@ -85,6 +86,7 @@ const CUSTOM_TOOL_WIDGETS: Record<string, ToolWidgetComponent> = {
   "literature-export-bib": LiteratureToolWidget,
   "literature-delete": LiteratureToolWidget,
   "citation-health": LiteratureToolWidget,
+  "document-read": DocumentReadWidget,
   "latex-compile": ManuscriptCompileToolWidget,
   "latex-compile-standalone": ManuscriptCompileToolWidget,
   "typst-compile": ManuscriptCompileToolWidget,

@@ -65,7 +65,7 @@ export function registerSettingsHandlers(): void {
       if ("agentSystemPrompt" in patch) {
         promptManager.invalidate();
       }
-      if ("appLocale" in patch) {
+      if ("appLocale" in patch || "showPromptInternals" in patch) {
         refreshApplicationMenu();
       }
       if ("trayIconEnabled" in patch) {
@@ -103,10 +103,16 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle(
     "settings:getPromptStackPreview",
-    async (_event, args?: { projectRoot?: string; userCustomPrompt?: string; orchestratorId?: string | null }) => {
+    async (_event, args?: {
+      projectRoot?: string;
+      userCustomPrompt?: string;
+      sessionTeamId?: string | null;
+      orchestratorId?: string | null;
+    }) => {
       const preview = await buildPromptStackPreview({
         projectRoot: args?.projectRoot,
         userCustomPrompt: args?.userCustomPrompt,
+        sessionTeamId: args?.sessionTeamId,
         orchestratorId: args?.orchestratorId,
       });
       const sections = preview.sections.map((s) => {
@@ -230,7 +236,7 @@ export function registerSettingsHandlers(): void {
     const { ALL_NATIVE_TOOLS } = await import("../agent/tools/index");
     const { PI_PRIMITIVE_TOOLS, isPiPrimitiveToolName } = await import("../agent/capability-matrix");
     const categoryFor = (name: string): string => {
-      if (name.startsWith("literature") || name.startsWith("citation")) return "reference";
+      if (name.startsWith("literature") || name.startsWith("citation") || name === "websearch" || name === "webfetch" || name === "document-read") return "reference";
       if (name.startsWith("latex")) return "compile";
       if (name === "question" || name === "suggest-plan" || isPiPrimitiveToolName(name)) return "utility";
       return "project";

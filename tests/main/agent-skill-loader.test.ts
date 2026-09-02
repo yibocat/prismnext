@@ -63,5 +63,16 @@ describe("Pi host skill loader", () => {
     expect(loader.getSkills().skills.map((s) => s.name)).toEqual(["cite-check"]);
     expect(loader.getExtensions().extensions).toEqual([]);
     expect(loader.getAgentsFiles()).toEqual({ agentsFiles: [] });
+    expect(loader.getAppendSystemPrompt()).toEqual([]);
+  });
+
+  it("returns appendSystemPrompt parts for Pi when tool how-to is injected", () => {
+    const loader = new ClosedResourceLoader({
+      systemPrompt: "custom",
+      appendSystemPrompt: ["<tool_guidelines>\n- Call experiment-run after detect_env.\n</tool_guidelines>"],
+    });
+    expect(loader.getAppendSystemPrompt()).toEqual([
+      "<tool_guidelines>\n- Call experiment-run after detect_env.\n</tool_guidelines>",
+    ]);
   });
 });

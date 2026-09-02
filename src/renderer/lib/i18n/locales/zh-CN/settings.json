@@ -307,7 +307,7 @@
     "knowledgeModules": "知识模块",
     "sectionPrompts": "提示",
     "agentTools": "Agent 工具",
-    "pageDesc": "编辑项目说明、规则与可选的人设覆盖。产品提示词内核在「高级」下只读查看。",
+    "pageDesc": "编辑项目说明、规则与可选的人设覆盖。「高级」列出产品提示词各层与内置工具。",
     "projectInstructions": "项目说明",
     "createAgentsMd": "创建 AGENTS.md",
     "previewStack": "预览提示栈",
@@ -315,11 +315,13 @@
     "viewBrief": "查看简报",
     "sectionPromptsDesc": "基线人设覆盖、按项目的 Agent 说明，以及持续更新的研究简报。",
     "sectionAdvanced": "高级",
-    "sectionAdvancedDesc": "组合提示栈、知识模块与内置工具描述的只读视图 — 仅供调试。请用项目规则、AGENTS.md 或 Skills 扩展行为，而非在此编辑。",
+    "sectionAdvancedDesc": "提示栈与内置模块只显示名称、体量与注入路径。内置工具仍展示模型看到的完整描述。请用项目规则、AGENTS.md 或 Skills 扩展行为。",
     "advancedTitle": "提示词内核",
     "advancedSummary": "{{layers}} 层提示栈 · {{modules}} 个模块 · {{tools}} 个工具",
     "advancedSummaryLoading": "正在加载提示栈摘要…",
-    "internalsNotice": "只读 · 调试视图。此处为产品拥有的提示词内核 — 请用项目规则、AGENTS.md 或 Skills 扩展行为，不要在此编辑。",
+    "internalsNotice": "只读。此处为模型看到的内置工具描述。请用项目规则、AGENTS.md 或 Skills 扩展行为，不要在此编辑。",
+    "internalsNoticeSummary": "只读摘要。此处不展示完整产品提示词正文。",
+    "internalsNoticeDeveloper": "开发者视图。此处为组装后的完整提示词正文，只读，不会改变模型实际收到的内容。",
     "rulesDesc": "每次对话回合以独立用户消息块注入。编排器配置可限制为子集（空选择 = 全部已启用规则）。",
     "customPrompt": "自定义提示",
     "viewEditPrompt": "查看并编辑提示",
@@ -335,21 +337,22 @@
       "customPrompt": "自定义提示会替换内存中系统提示的内置人设。",
       "builtinPrompt": "内置 PrismNext 人设。在内存中组装，不会写入项目文件。",
       "stackSummary": "共 {{layers}} 层注入 · 合计约 {{tokens}} tokens（人设、AGENTS.md、项目规则、主 Agent）",
-      "openForStack": "打开项目以查看完整注入栈预览。",
+      "openForStack": "打开项目以查看注入栈摘要。",
       "openForInstructions": "打开项目以编辑项目说明。",
       "instructions": "项目专用说明写在 `.workbench/agent/AGENTS.md`，会编入会话提示。",
       "agentsChars": "项目说明共 {{count}} 个字符。",
       "noAgents": "尚无 AGENTS.md — 可创建，或在聊天中运行 /setup。",
       "openForBrief": "打开项目以编辑持续更新的研究设计简报。",
       "brief": "项目根目录 `.brief.md` 中的活态研究设计 — 此处只读预览；编辑会在 Files 中打开。Agent 使用 research-brief-read/update。",
-      "modules": "引用、文献库、Task 与工作区模块的只读目录。",
+      "modules": "引用、文献库、Task 与工作区模块的名称、角色与注入路径 — 不含完整提示词正文。",
       "tools": "查看全部已注册工具及模型选择工具时看到的描述。"
     },
     "empty": {
       "openForRules": "打开项目以管理项目规则。",
       "noRules": "尚无项目规则。"
     },
-    "stackBaseAgent": "基于主 Agent：{{name}}"
+    "stackBaseAgent": "基于主 Agent：{{name}}",
+    "stackActiveTeam": "当前团队：{{team}} · 主 Agent：{{name}}"
   },
   "workspace": {
     "title": "工作区",
@@ -454,8 +457,10 @@
     "noSourceDevOnly": "一般只会出现在未写入发布地址的本地开发构建。",
     "proLicense": "Pro",
     "proLicenseTitle": "激活码",
-    "proLicenseDesc": "解锁可选 Pro 增强（需使用含 Pro 模块的构建，如 pnpm dev:pro）。前期测试阶段请用 PRISM-PRO-DEV-TEST，暂不收费；免费功能永不需要激活码。",
+    "proLicenseDesc": "解锁可选 Pro 增强（需使用含 Pro 模块的构建，如 pnpm dev:pro）。前期测试阶段请用 <proKey>{{key}}</proKey>，暂不收费；免费功能永不需要激活码。",
     "proKeyPlaceholder": "PRISM-PRO-DEV-TEST",
+    "proKeyCopyHint": "点击复制",
+    "proKeyCopyFailed": "无法复制激活码。",
     "proActivate": "激活",
     "proActivateSuccess": "Pro 已激活",
     "proDeactivate": "取消激活",
@@ -554,10 +559,11 @@
   },
   "literaturePage": {
     "title": "文献",
-    "subtitle": "文献库存储、PDF 提取与 Zotero。",
+    "subtitle": "文献库存储、PDF 提取、网页搜索与 Zotero。",
     "libraryStorage": "文献库存储",
     "pdfExtraction": "PDF 提取",
     "discoveryTitle": "文献发现",
+    "webSearchTitle": "网页搜索",
     "zotero": "Zotero",
     "pageDesc": "项目文献库存储与可选的 Zotero 同步。",
     "toast": {
@@ -568,6 +574,9 @@
     "storageDesc": "缓存的 PDF 会保留，直到你删除对应条目或清理下方未引用文件。",
     "extractDesc": "Agent 与文献面板会读取本项目工作台文献库中的缓存 Markdown。设置 Token 后，MinerU（云端）可上传 PDF 做高精度解析。",
     "discoveryDesc": "内置 literature-discover（arXiv、Crossref、OpenAlex、Semantic Scholar、PubMed）的可选 API 密钥。无密钥也可搜索；密钥可提高速率限制。",
+    "webSearchDesc": "Agent 的 websearch / webfetch 走 Tavily。请自行申请密钥，PrismNext 不提供共享额度。免费档每月 1000 credits（basic 搜索 1 credit；basic 提取每 5 个 URL 1 credit）。",
+    "tavilySignup": "申请 Tavily API Key",
+    "tavilyDocs": "Tavily 文档",
     "zoteroDesc": "可选 — 在 Zotero 桌面端运行时流式读取 PDF。Better BibTeX 提供 citekey；编辑集合需要 Web API 凭证或 debug-bridge 插件。",
     "rows": {
       "project": "项目",
@@ -577,6 +586,7 @@
       "mineruToken": "MinerU API Token",
       "semanticScholarKey": "Semantic Scholar API 密钥",
       "pubmedKey": "PubMed / NCBI API 密钥",
+      "tavilyKey": "Tavily API 密钥",
       "mineruConnection": "MinerU 连接",
       "autoExtract": "导入时自动提取",
       "autoAiMetadata": "自动生成摘要与关键词",
@@ -596,6 +606,7 @@
       "mineruToken": "可选 — 留空使用免费 flash 模式（10MB / 20 页）。Token 可启用高精度提取（最高 200MB / 200 页）。PDF 会发送到 MinerU 服务器。",
       "semanticScholarKey": "可选 — 提高 literature-discover 对 Semantic Scholar 的速率限制。",
       "pubmedKey": "可选 — 提高 literature-discover 对 PubMed / NCBI E-utilities 的速率限制。",
+      "tavilyKey": "Agent 网页搜索与抓取需要此密钥。请到 tavily.com 免费申请。",
       "mineruTestHint": "测试 Token 或 flash 可用性。",
       "autoExtract": "将 PDF 加入文献库时排队提取。",
       "autoAiMetadata": "PDF 文本提取后，生成一句话摘要并写入标签（每篇少量 token）。",
@@ -614,6 +625,7 @@
       "mineruToken": "Bearer token…",
       "semanticScholarKey": "x-api-key…",
       "pubmedKey": "NCBI api_key…",
+      "tavilyKey": "tvly-…",
       "apiKey": "输入密钥…"
     },
     "actions": {
@@ -1220,7 +1232,8 @@
       "title": "知识模块",
       "global": "全局基线",
       "perProfile": "按 Agent 配置",
-      "intro": "随 prismnext 附带的内置工作流指南，始终可用 — 可在智能体编辑器中按编排器或专家附加。工作区文件夹会从项目工作区设置全局注入。",
+      "intro": "随 PrismNext 附带的内置工作流指南。此处列出各模块的名称、体量与注入路径，不展示完整提示词正文。可在智能体编辑器中按编排器或专家附加。工作区文件夹会从项目工作区设置全局注入。",
+      "introFull": "随 PrismNext 附带的内置工作流指南。此开发者视图展示模型收到的组装模块正文。可在智能体编辑器中按编排器或专家附加。工作区文件夹会从项目工作区设置全局注入。",
       "badgeAuto": "自动",
       "badgeBuiltin": "内置",
       "badgePerAgent": "按智能体",
@@ -1286,7 +1299,8 @@
         "loadFailed": "加载提示栈预览失败。"
       },
       "openProject": "请先打开项目以预览 AGENTS.md、项目规则、Team 主智能体与内置模块。",
-      "intro": "每一层单独注入，顺序与会话启动时模型实际收到的系统提示相同。内置能力模块接在 Team 主智能体之后，不写入 Team 文件。项目规则挂在每轮用户消息前，不进系统提示。",
+      "intro": "每一层在会话启动时单独注入。此处列出层名、体量估计与注入路径，不展示完整提示词正文。内置能力模块接在 Team 主智能体之后，不写入 Team 文件。项目规则挂在每轮用户消息前，不进系统提示。",
+      "introFull": "每一层单独注入，顺序与会话启动时模型实际收到的系统提示相同。内置能力模块接在 Team 主智能体之后，不写入 Team 文件。项目规则挂在每轮用户消息前，不进系统提示。",
       "role": {
         "opencode": "系统指令",
         "eachTurn": "每轮对话",
@@ -1305,6 +1319,8 @@
       "collapseAll": "全部折叠",
       "layerCount": "{{count}} 层",
       "defaultOrchestrator": "默认编排器：",
+      "activeTeam": "当前团队：",
+      "leadAgent": "主 Agent：",
       "loadError": "无法加载提示词堆栈预览。"
     },
     "prompt": {

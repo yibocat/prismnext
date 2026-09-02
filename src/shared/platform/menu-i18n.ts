@@ -9,6 +9,9 @@ const MENU: Record<
     closeWindow: string;
     edit: string;
     view: string;
+    help: string;
+    developer: string;
+    showFullPromptText: string;
   }
 > = {
   en: {
@@ -18,6 +21,9 @@ const MENU: Record<
     closeWindow: "Close Window",
     edit: "Edit",
     view: "View",
+    help: "Help",
+    developer: "Developer",
+    showFullPromptText: "Show Full Prompt Text",
   },
   "zh-CN": {
     file: "文件",
@@ -26,6 +32,9 @@ const MENU: Record<
     closeWindow: "关闭窗口",
     edit: "编辑",
     view: "查看",
+    help: "帮助",
+    developer: "开发者",
+    showFullPromptText: "显示完整提示词",
   },
   "zh-HK": {
     file: "檔案",
@@ -34,6 +43,9 @@ const MENU: Record<
     closeWindow: "關閉視窗",
     edit: "編輯",
     view: "檢視",
+    help: "說明",
+    developer: "開發者",
+    showFullPromptText: "顯示完整提示詞",
   },
 };
 

@@ -13,7 +13,7 @@ type MenuWindowApi = {
 
 let menuApi: MenuWindowApi | null = null;
 
-/** Rebuild menu after `appLocale` changes. */
+/** Rebuild menu after `appLocale` or developer prompt-internals changes. */
 export function refreshApplicationMenu(): void {
   if (menuApi) installApplicationMenu(menuApi);
 }
@@ -28,12 +28,14 @@ export function installApplicationMenu(api: MenuWindowApi): void {
   );
   const t = menuStrings(resolved);
 
-  const sendCloseTab = () => {
+  const sendToTarget = (channel: string, ...args: unknown[]) => {
     const win = api.getTargetWindow();
     if (win && !win.isDestroyed()) {
-      win.webContents.send("app:closeTab");
+      win.webContents.send(channel, ...args);
     }
   };
+
+  const showPromptInternals = getSettings().showPromptInternals === true;
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac
@@ -67,7 +69,7 @@ export function installApplicationMenu(api: MenuWindowApi): void {
         {
           label: t.closeTab,
           accelerator: "CmdOrCtrl+W",
-          click: sendCloseTab,
+          click: () => sendToTarget("app:closeTab"),
         },
         { type: "separator" },
         ...(isMac
@@ -101,6 +103,25 @@ export function installApplicationMenu(api: MenuWindowApi): void {
         { type: "separator" as const },
         { role: "togglefullscreen" as const },
         { role: "minimize" as const },
+      ],
+    },
+    {
+      label: t.help,
+      role: "help",
+      submenu: [
+        {
+          label: t.developer,
+          submenu: [
+            {
+              type: "checkbox",
+              label: t.showFullPromptText,
+              checked: showPromptInternals,
+              click: (item) => {
+                sendToTarget("app:setPromptInternals", item.checked === true);
+              },
+            },
+          ],
+        },
       ],
     },
   ];

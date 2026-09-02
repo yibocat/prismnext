@@ -51,6 +51,11 @@ export interface AppSettings {
   /** Custom system prompt — replaces the built-in core persona (Layer 0) when set.
    *  Modules, AGENTS.md, and project rules still append below. */
   agentSystemPrompt?: string;
+  /**
+   * Developer: show assembled prompt internals (full module / stack text) in Settings.
+   * Default off. Does not change what the model receives.
+   */
+  showPromptInternals?: boolean;
   /** Experimental: paint production chat text from AgentEvent. Default off. */
   agentEventUi?: boolean;
 
@@ -96,6 +101,8 @@ export interface AppSettings {
   semanticScholarApiKey?: string;
   /** Optional NCBI API key for PubMed literature-discover rate limits */
   pubmedApiKey?: string;
+  /** User Tavily API key for Agent websearch / webfetch (BYOK). */
+  tavilyApiKey?: string;
 
   /** Optional update feed override (generic provider root, or unpackaged
    *  version.json URL/path). Empty → use PRISM_UPDATER_BASE_URL / baked default. */
@@ -203,6 +210,7 @@ const defaults: AppSettings = {
   rightPanelCollapsed: false,
   agentTerminalMode: "pty",
   agentSystemPrompt: "",
+  showPromptInternals: false,
   permissionModeSchemaVersion: PERMISSION_MODE_SCHEMA_VERSION,
   autoDownloadUpdates: true,
   promptModules: {
@@ -305,10 +313,15 @@ const SENSITIVE_KEYS = [
   "mineruApiToken",
   "semanticScholarApiKey",
   "pubmedApiKey",
+  "tavilyApiKey",
 ] as const;
 
 function isSensitiveKey(key: string): boolean {
   return (SENSITIVE_KEYS as readonly string[]).includes(key);
+}
+
+export function isSensitiveSettingsKey(key: string): boolean {
+  return isSensitiveKey(key);
 }
 
 export function getSettings(): AppSettings {
@@ -359,6 +372,11 @@ export function getSettings(): AppSettings {
     settings.pubmedApiKey = decryptIfAvailable(encryptedPubmed);
   }
 
+  const encryptedTavily = store.get("tavilyApiKey") as string | undefined;
+  if (encryptedTavily) {
+    settings.tavilyApiKey = decryptIfAvailable(encryptedTavily);
+  }
+
   const encryptedAiKeys = store.get("aiApiKeys") as string | undefined;
   if (encryptedAiKeys) {
     try {
@@ -406,6 +424,8 @@ export function getSettings(): AppSettings {
     result.semanticScholarApiKey = settings.semanticScholarApiKey;
   if (settings.pubmedApiKey !== undefined)
     result.pubmedApiKey = settings.pubmedApiKey;
+  if (settings.tavilyApiKey !== undefined)
+    result.tavilyApiKey = settings.tavilyApiKey;
   if (settings.aiApiKeys !== undefined)
     result.aiApiKeys = settings.aiApiKeys;
   if (settings.remoteHostWrapKey !== undefined)
@@ -466,6 +486,7 @@ export function readDesktopModelSeed(): DesktopModelSeed {
         aiBaseUrls,
         extraBaseUrls: Object.values(aiBaseUrls),
         providerIds: hostModelProviderIds(aiApiKeys),
+        tavilyApiKey: (settings.tavilyApiKey ?? "").trim(),
       };
     }
     return {
@@ -475,6 +496,7 @@ export function readDesktopModelSeed(): DesktopModelSeed {
       wrapKey,
       providerIds: hostModelProviderIds(aiApiKeys),
       wrapOk: Boolean(wrapKey),
+      tavilyApiKey: (settings.tavilyApiKey ?? "").trim(),
     };
   } catch (err) {
     return emptyDesktopModelSeed(err instanceof Error ? err.message : String(err));

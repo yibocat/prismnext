@@ -23,7 +23,7 @@ import { useExperimentStore } from "@/stores/experiment-store";
 import { pickBestReadySource } from "../../../../../shared/literature/paper-extract";
 import type { ExperimentSummary } from "../../../../../shared/experiments/log";
 import { type ComposerPart, COMPOSER_PLACEHOLDER } from "@/lib/chat/composer-parts";
-import { absolutePathsFromDataTransfer } from "@/lib/chat/composer-attach-file";
+import { absolutePathsFromDataTransfer, isImagePath, partitionComposerDropPaths } from "@/lib/chat/composer-attach-file";
 import { COMPOSER_INSERT_MIME, acceptComposerDrop, isComposerInsertDrag } from "@/lib/chat/composer-drag";
 import { insertComposerDragPayloads } from "@/lib/chat/insert-to-chat";
 import { looksLikeUrl, normalizeBrowserUrl } from "@/lib/browser-link/normalize";
@@ -83,6 +83,30 @@ function clearSlashQuery(view: EditorView, q: ComposerQuery): void {
     changes: { from: q.from, to: q.to, insert: "" },
     selection: { anchor: q.from },
   });
+}
+
+function insertAbsoluteFilesAsMentions(view: EditorView, paths: string[]): void {
+  const store = useDocumentStore.getState();
+  for (const absPath of paths) {
+    if (isImagePath(absPath)) continue;
+    const file =
+      store.files.find((item) => item.absolutePath === absPath)
+      ?? store.registerExternalFile(absPath);
+    const pos = view.state.selection.main.head;
+    insertComposerToken(
+      view,
+      {
+        type: "mention",
+        mentionType: "file",
+        id: createTokenId(),
+        label: mentionFileDisplayLabel(file),
+        filePath: mentionFileLabel(file),
+        fileId: file.id,
+      },
+      pos,
+      pos,
+    );
+  }
 }
 
 /** Clear the `/…` query and enter Plan mode without inserting a command chip. */
@@ -334,8 +358,8 @@ export interface InlineComposerEditorProps {
   /** AiBar compact → expanded when a line is full or content wraps. */
   onLayoutExpand?: () => void;
   /**
-   * External files from paste / drop (absolute paths). Parent owns the
-   * attachment strip — do not insert as inline @file tokens.
+   * Image paths from paste / drop. Parent owns the image strip.
+   * Non-image files are inserted here as inline @file chips at the caret.
    */
   onExternalFiles?: (paths: string[]) => void;
   /**
@@ -1298,13 +1322,22 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               },
               paste(event, view) {
                 const paths = absolutePathsFromDataTransfer(event.clipboardData);
-                if (paths.length > 0 && onExternalFilesRef.current) {
-                  event.preventDefault();
-                  onExternalFilesRef.current(paths);
-                  if (densityRef.current === "compact") {
-                    onLayoutExpandRef.current?.();
+                if (paths.length > 0) {
+                  const { imagePaths, filePaths } = partitionComposerDropPaths(paths);
+                  if (filePaths.length > 0 || (imagePaths.length > 0 && onExternalFilesRef.current)) {
+                    event.preventDefault();
+                    if (filePaths.length > 0) {
+                      insertAbsoluteFilesAsMentions(view, filePaths);
+                      emitChange(view);
+                    }
+                    if (imagePaths.length > 0) {
+                      onExternalFilesRef.current?.(imagePaths);
+                    }
+                    if (densityRef.current === "compact") {
+                      onLayoutExpandRef.current?.();
+                    }
+                    return true;
                   }
-                  return true;
                 }
                 const structured = event.clipboardData
                   ? readComposerPartsFromClipboard(event.clipboardData)
@@ -1547,7 +1580,6 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               e.dataTransfer.dropEffect = "copy";
               return;
             }
-            if (!onExternalFilesRef.current) return;
             if (types.includes("Files")) {
               e.preventDefault();
               e.dataTransfer.dropEffect = "copy";
@@ -1562,16 +1594,27 @@ export const InlineComposerEditor = forwardRef<InlineComposerEditorHandle, Inlin
               }
               return;
             }
-            if (!onExternalFilesRef.current) return;
             const paths = absolutePathsFromDataTransfer(e.dataTransfer);
             if (paths.length > 0) {
-              e.preventDefault();
-              e.stopPropagation();
-              onExternalFilesRef.current(paths);
-              if (densityRef.current === "compact") {
-                onLayoutExpandRef.current?.();
+              const { imagePaths, filePaths } = partitionComposerDropPaths(paths);
+              const view = viewRef.current;
+              if (filePaths.length > 0 && view) {
+                e.preventDefault();
+                e.stopPropagation();
+                insertAbsoluteFilesAsMentions(view, filePaths);
+                emitChange(view);
               }
-              return;
+              if (imagePaths.length > 0 && onExternalFilesRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+                onExternalFilesRef.current(imagePaths);
+              }
+              if (filePaths.length > 0 || imagePaths.length > 0) {
+                if (densityRef.current === "compact") {
+                  onLayoutExpandRef.current?.();
+                }
+                return;
+              }
             }
             const uri = e.dataTransfer.getData("text/uri-list").trim()
               || e.dataTransfer.getData("text/plain").trim();

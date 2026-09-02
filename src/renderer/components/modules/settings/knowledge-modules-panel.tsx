@@ -12,11 +12,18 @@ import {
 } from "./settings-tokens";
 import { PromptInternalsNotice } from "./prompt-internals-notice";
 import { SettingsModulePromptPreview } from "./settings-module-prompt-preview";
+import { useSettingsStore } from "@/stores/settings-store";
 
 const BADGE =
   "inline-flex items-center rounded px-1.5 py-0.5 text-[length:var(--font-size-10)] font-medium uppercase tracking-wide shrink-0 bg-muted text-muted-foreground";
 
-function ModuleBlock({ mod }: { mod: KnowledgeModuleInfo }) {
+function ModuleBlock({
+  mod,
+  showFull,
+}: {
+  mod: KnowledgeModuleInfo;
+  showFull: boolean;
+}) {
   const { t } = useTranslation();
   return (
     <article className="min-w-0 space-y-2">
@@ -47,8 +54,9 @@ function ModuleBlock({ mod }: { mod: KnowledgeModuleInfo }) {
       <p className="text-[length:var(--font-size-11)] text-muted-foreground/80">
         {t("settings.editor.knowledge.injectedVia")} {mod.injectPath}
       </p>
-      {/* Single content frame — same idea as lead agent instructions preview. */}
-      {mod.contentPreview ? <SettingsModulePromptPreview content={mod.contentPreview} /> : null}
+      {showFull && mod.contentPreview ? (
+        <SettingsModulePromptPreview content={mod.contentPreview} />
+      ) : null}
     </article>
   );
 }
@@ -56,9 +64,11 @@ function ModuleBlock({ mod }: { mod: KnowledgeModuleInfo }) {
 function ModuleSection({
   title,
   modules,
+  showFull,
 }: {
   title: string;
   modules: KnowledgeModuleInfo[];
+  showFull: boolean;
 }) {
   if (modules.length === 0) return null;
   return (
@@ -66,7 +76,7 @@ function ModuleSection({
       <h3 className={SETTINGS_CATEGORY_HEADER}>{title}</h3>
       <div className="min-w-0 space-y-8">
         {modules.map((mod) => (
-          <ModuleBlock key={mod.key} mod={mod} />
+          <ModuleBlock key={mod.key} mod={mod} showFull={showFull} />
         ))}
       </div>
     </section>
@@ -76,6 +86,7 @@ function ModuleSection({
 export function KnowledgeModulesPanel() {
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
+  const showFull = useSettingsStore((s) => s.settings.showPromptInternals === true);
   const [modules, setModules] = useState<KnowledgeModuleInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -114,13 +125,27 @@ export function KnowledgeModulesPanel() {
           <h2 className="text-[length:var(--font-size-15)] font-semibold">
             {t("settings.editor.knowledge.title")}
           </h2>
-          <p className={SETTINGS_ROW_DESC}>{t("settings.editor.knowledge.intro")}</p>
+          <p className={SETTINGS_ROW_DESC}>
+            {t(
+              showFull
+                ? "settings.editor.knowledge.introFull"
+                : "settings.editor.knowledge.intro",
+            )}
+          </p>
         </div>
-        <PromptInternalsNotice />
+        <PromptInternalsNotice variant={showFull ? "developer" : "summary"} />
       </div>
 
-      <ModuleSection title={t("settings.editor.knowledge.global")} modules={grouped.global} />
-      <ModuleSection title={t("settings.editor.knowledge.perProfile")} modules={grouped.profile} />
+      <ModuleSection
+        title={t("settings.editor.knowledge.global")}
+        modules={grouped.global}
+        showFull={showFull}
+      />
+      <ModuleSection
+        title={t("settings.editor.knowledge.perProfile")}
+        modules={grouped.profile}
+        showFull={showFull}
+      />
     </div>
   );
 }

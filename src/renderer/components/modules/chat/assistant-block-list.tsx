@@ -21,6 +21,7 @@ import {
   activityFoldPersistKey,
   isActivityBurstStreaming,
   isThinkingBlockStreaming,
+  isThinkingOnlyActivity,
   segmentAssistantBlocks,
 } from "@/lib/chat/segment-assistant-blocks";
 
@@ -73,8 +74,10 @@ export const AssistantBlockList = memo(function AssistantBlockList({
       );
 
   const segments = useMemo(
-    () => (foldActivity ? segmentAssistantBlocks(blocks) : null),
-    [blocks, foldActivity],
+    () => (foldActivity
+      ? segmentAssistantBlocks(blocks, { phase: isStreamingMsg ? "live" : "settled" })
+      : null),
+    [blocks, foldActivity, isStreamingMsg],
   );
 
   const lastFlatTextIndex = useMemo(() => {
@@ -175,8 +178,46 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 </div>
               );
             }
+            if (segment.kind === "worked") {
+              return (
+                <ActivityFold
+                  key={`worked-${foldTurnId}`}
+                  blocks={segment.blocks}
+                  blockIndices={segment.blockIndices}
+                  toolResultMap={toolResultMap}
+                  sessionId={sessionId}
+                  persistKey={`${foldTurnId}:worked`}
+                  isStreamingSegment={false}
+                  messageThinkingComplete={thinkingComplete}
+                  suppressArtifactPaths={suppressArtifactPaths}
+                  turnSettled
+                  childrenSegments={segment.children}
+                />
+              );
+            }
             if (segment.kind !== "activity") return null;
             const firstIndex = segment.blockIndices[0] ?? segIndex;
+            if (isThinkingOnlyActivity(segment.blocks)) {
+              return segment.blocks.map((block, i) => {
+                if (block.type !== "thinking" || !block.thinking) return null;
+                const blockIndex = segment.blockIndices[i] ?? i;
+                return (
+                  <ThinkingWidget
+                    key={`think-${blockIndex}`}
+                    thinking={block.thinking}
+                    duration={block.duration}
+                    sessionId={sessionId}
+                    persistKey={sessionId ? `${foldTurnId}:t${blockIndex}` : undefined}
+                    isStreamingMsg={isThinkingBlockStreaming(
+                      segment.blocks,
+                      i,
+                      !!isStreamingMsg,
+                    )}
+                    isProgress={block._progress === true}
+                  />
+                );
+              });
+            }
             return (
               <ActivityFold
                 key={`activity-${firstIndex}`}
@@ -191,6 +232,7 @@ export const AssistantBlockList = memo(function AssistantBlockList({
                 messageThinkingComplete={thinkingComplete}
                 suppressArtifactPaths={suppressArtifactPaths}
                 turnSettled={false}
+                liveProcessOpen={!!isStreamingMsg && segIndex === segments.length - 1}
               />
             );
           })

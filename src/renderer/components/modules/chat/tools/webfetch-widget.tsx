@@ -3,7 +3,7 @@ import type { ContentBlock } from "@/stores/chat-store";
 import { GlobeIcon, ExternalLinkIcon } from "lucide-react";
 import { openUrlInBrowser } from "@/lib/browser-link";
 import { Hint } from "@/components/ui/hint";
-import { ToolCard, param } from "./shared";
+import { ToolCard, param, parseToolJson } from "./shared";
 
 export const WebFetchWidget = memo(function WebFetchWidget({
   toolUse,
@@ -21,9 +21,12 @@ export const WebFetchWidget = memo(function WebFetchWidget({
   const isError = toolResult?.is_error;
   const hasContent = toolResult?.content != null;
 
-  const outputText = typeof toolResult?.content === "string"
-    ? toolResult.content
-    : JSON.stringify(toolResult?.content ?? "", null, 2);
+  const parsed = parseToolJson(toolResult?.content);
+  const outputText = typeof parsed === "string"
+    ? parsed
+    : parsed && typeof parsed === "object" && typeof (parsed as { content?: unknown }).content === "string"
+      ? (parsed as { content: string }).content
+      : JSON.stringify(parsed ?? "", null, 2);
   const charCount = outputText.length;
 
   // Extract domain for display

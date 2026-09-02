@@ -10,7 +10,7 @@ const SCRIPT = join(ROOT, "scripts/host/install-runtime.sh");
 
 function copyPins(current: string): void {
   mkdirSync(join(current, "runtime"), { recursive: true });
-  for (const name of ["node-version.txt", "git-version.txt", "tectonic-linux.txt", "tinymist-linux.txt"]) {
+  for (const name of ["node-version.txt", "git-version.txt", "tectonic-linux.txt", "tinymist-linux.txt", "anydoc-linux.txt"]) {
     writeFileSync(join(current, "runtime", name), readFileSync(join(ROOT, "scripts/host", name)));
   }
 }
@@ -30,6 +30,8 @@ describe("host runtime installer plan", () => {
     expect(out).toContain("https://github.com/tectonic-typesetting/tectonic/releases/download/");
     expect(out).toContain("x86_64-unknown-linux-musl");
     expect(out).toContain("https://github.com/Myriad-Dreamin/tinymist/releases/download/");
+    expect(out).toContain("https://github.com/firecrawl/anydoc/releases/download/v0.2.4/anydoc.linux-x64-gnu.node");
+    expect(out).toContain("https://registry.npmjs.org/@firecrawl/anydoc-linux-x64-gnu/-/anydoc-linux-x64-gnu-0.2.4.tgz");
     expect(out).not.toContain("https://github.com/typst/typst/releases/download/");
     expect(out).not.toMatch(/downloading /);
   });
@@ -135,5 +137,81 @@ describe("host runtime installer plan", () => {
     const dest = join(current, "bin", "tinymist");
     expect(statSync(dest).isFile()).toBe(true);
     expect(readFileSync(dest).subarray(0, 4).equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))).toBe(true);
+  });
+
+  it("installs AnyDoc from a cached GitHub .node without hitting the network", () => {
+    const hostRoot = mkdtempSync(join(tmpdir(), "prism-runtime-anydoc-node-"));
+    const current = join(hostRoot, "current");
+    copyPins(current);
+    mkdirSync(join(hostRoot, "cache"), { recursive: true });
+    const cacheFile = join(hostRoot, "cache", "anydoc.linux-x64-gnu.node");
+    writeFileSync(cacheFile, "native-binding\n");
+    const digest = createHash("sha256").update(readFileSync(cacheFile)).digest("hex");
+    const pinPath = join(current, "runtime", "anydoc-linux.txt");
+    writeFileSync(
+      pinPath,
+      readFileSync(pinPath, "utf8").replace(/^native-sha256-x64 .+$/m, `native-sha256-x64 ${digest}`),
+    );
+    execFileSync("/bin/sh", [SCRIPT, "--current", current, "--host-root", hostRoot, "--arch", "x64", "--step", "anydoc"]);
+    const dest = join(current, "node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node");
+    expect(existsSync(dest)).toBe(true);
+    expect(readFileSync(dest, "utf8")).toContain("native-binding");
+  });
+
+  it("installs AnyDoc native from a cached npm tarball without hitting the network", () => {
+    const hostRoot = mkdtempSync(join(tmpdir(), "prism-runtime-anydoc-"));
+    const current = join(hostRoot, "current");
+    copyPins(current);
+    mkdirSync(join(hostRoot, "cache"), { recursive: true });
+    const payloadDir = mkdtempSync(join(tmpdir(), "prism-anydoc-payload-"));
+    mkdirSync(join(payloadDir, "package"));
+    writeFileSync(join(payloadDir, "package", "package.json"), JSON.stringify({
+      name: "@firecrawl/anydoc-linux-x64-gnu",
+      version: "0.2.4",
+    }));
+    writeFileSync(join(payloadDir, "package", "anydoc.linux-x64-gnu.node"), "native-binding\n");
+    const cacheFile = join(hostRoot, "cache", "anydoc-linux-x64-gnu-0.2.4.tgz");
+    execFileSync("tar", ["-czf", cacheFile, "-C", payloadDir, "package"]);
+    const digest = createHash("sha256").update(readFileSync(cacheFile)).digest("hex");
+    const pinPath = join(current, "runtime", "anydoc-linux.txt");
+    writeFileSync(
+      pinPath,
+      readFileSync(pinPath, "utf8").replace(/^tgz-sha256-x64 .+$/m, `tgz-sha256-x64 ${digest}`),
+    );
+    execFileSync("/bin/sh", [SCRIPT, "--current", current, "--host-root", hostRoot, "--arch", "x64", "--step", "anydoc"]);
+    const dest = join(current, "node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node");
+    expect(existsSync(dest)).toBe(true);
+    expect(readFileSync(dest, "utf8")).toContain("native-binding");
+  });
+
+  it("installs AnyDoc when the .node is a symlink inside the npm tarball", () => {
+    const hostRoot = mkdtempSync(join(tmpdir(), "prism-runtime-anydoc-link-"));
+    const current = join(hostRoot, "current");
+    copyPins(current);
+    mkdirSync(join(hostRoot, "cache"), { recursive: true });
+    const payloadDir = mkdtempSync(join(tmpdir(), "prism-anydoc-link-payload-"));
+    mkdirSync(join(payloadDir, "package", "prebuilds"), { recursive: true });
+    writeFileSync(join(payloadDir, "package", "package.json"), JSON.stringify({
+      name: "@firecrawl/anydoc-linux-x64-gnu",
+      version: "0.2.4",
+    }));
+    writeFileSync(join(payloadDir, "package", "prebuilds", "anydoc.linux-x64-gnu.node"), "native-binding\n");
+    execFileSync("ln", [
+      "-s",
+      "prebuilds/anydoc.linux-x64-gnu.node",
+      join(payloadDir, "package", "anydoc.linux-x64-gnu.node"),
+    ]);
+    const cacheFile = join(hostRoot, "cache", "anydoc-linux-x64-gnu-0.2.4.tgz");
+    execFileSync("tar", ["-czf", cacheFile, "-C", payloadDir, "package"]);
+    const digest = createHash("sha256").update(readFileSync(cacheFile)).digest("hex");
+    const pinPath = join(current, "runtime", "anydoc-linux.txt");
+    writeFileSync(
+      pinPath,
+      readFileSync(pinPath, "utf8").replace(/^tgz-sha256-x64 .+$/m, `tgz-sha256-x64 ${digest}`),
+    );
+    execFileSync("/bin/sh", [SCRIPT, "--current", current, "--host-root", hostRoot, "--arch", "x64", "--step", "anydoc"]);
+    const dest = join(current, "node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node");
+    expect(statSync(dest).isFile()).toBe(true);
+    expect(readFileSync(dest, "utf8")).toContain("native-binding");
   });
 });

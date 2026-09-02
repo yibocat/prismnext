@@ -67,7 +67,11 @@ import {
 import { useSettingsStore } from "@/stores/settings-store";
 import { CustomizeSidebarDialog } from "@/components/layout/customize-sidebar-dialog";
 import { cn } from "@/lib/utils";
-import { isGenericSessionTitle, resolveSessionTitle } from "@/lib/chat/session-title";
+import {
+  isGenericSessionTitle,
+  resolveSessionTitle,
+  shouldCopyListedSessionTitle,
+} from "@/lib/chat/session-title";
 import {
   deriveSessionListStatus,
   matchesSessionStatusFilter,
@@ -490,11 +494,15 @@ export const LeftSidebar = memo(function LeftSidebar() {
       });
 
       for (const s of result) {
-        if (!s.title.startsWith("New Chat")) {
-          const tab = tabs.find((t) => t.id === s.id || t.conversation?.conversationId === s.id);
-          if (tab && !tab.userTitleSet && tab.title !== s.title) {
-            chatStore._setTitle(tab.id, s.title);
-          }
+        const tab = tabs.find((t) => t.id === s.id || t.conversation?.conversationId === s.id);
+        if (!tab) continue;
+        if (shouldCopyListedSessionTitle({
+          listedTitle: s.title,
+          tabTitle: tab.title,
+          userTitleSet: tab.userTitleSet,
+          autoTitleAttempted: tab.autoTitleAttempted,
+        })) {
+          chatStore._setTitle(tab.id, s.title);
         }
       }
 

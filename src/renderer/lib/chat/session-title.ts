@@ -10,8 +10,11 @@ export {
   firstCompletedTurnExcerpts,
   isGenericSessionTitle,
   isProvisionalSessionTitle,
+  resolveProductConversationId,
   sanitizeGeneratedSessionTitle,
+  shouldCopyListedSessionTitle,
   shouldOfferAutoSessionTitle,
+  shouldRequestGeneratedSessionTitle,
 } from "@shared/agent/session-title";
 import { isGenericSessionTitle } from "@shared/agent/session-title";
 

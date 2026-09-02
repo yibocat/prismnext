@@ -67,14 +67,23 @@ describe("contextBarSegments", () => {
   it("sizes segments against the full window, not consumed total", () => {
     const segs = contextBarSegments({
       systemPrompt: 2900,
+      modules: 200,
       tools: 4000,
       skills: 352,
       subagents: 267,
       conversation: 4200,
     }, 11_600, 1_000_000);
     const fill = segs.reduce((sum, seg) => sum + seg.widthPct, 0);
-    expect(fill).toBeCloseTo(1.1719, 3);
+    expect(fill).toBeCloseTo(1.1919, 3);
     expect(fill).toBeLessThan(2);
+    expect(segs.map((seg) => seg.key)).toEqual([
+      "systemPrompt",
+      "modules",
+      "tools",
+      "skills",
+      "subagents",
+      "conversation",
+    ]);
     expect(segs.find((seg) => seg.key === "conversation")?.widthPct).toBeCloseTo(0.42, 2);
   });
 

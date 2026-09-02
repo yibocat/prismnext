@@ -1,8 +1,9 @@
 /**
  * Split assistant blocks into prose vs activity (thinking + tools).
  *
- * One tree for live and settled: contiguous thinking/tools → burst folds;
- * Task standalone; prose stays outside. Settling only changes chrome, never remounts.
+ * Live: contiguous thinking/tools → burst folds (kept open); Task standalone;
+ * prose stays visible. When the final reply starts — or after the turn
+ * settles — process + interim prose wrap into one Worked-for fold.
  */
 import type { ContentBlock } from "@/stores/chat-store";
 import {
@@ -69,13 +70,6 @@ function isStandaloneToolBlock(block: ContentBlock): boolean {
   return name === "task" || isQuestionToolBlock(block);
 }
 
-function isActivityBlock(block: ContentBlock): boolean {
-  if (isStandaloneToolBlock(block)) return false;
-  if (block.type === "tool_use") return true;
-  if (block.type === "thinking" && block.thinking?.trim()) return true;
-  return false;
-}
-
 function hasTextContent(block: ContentBlock): boolean {
   return block.type === "text" && !!block.text?.trim();
 }
@@ -87,12 +81,168 @@ export type SegmentAssistantBlocksOptions = {
   phase?: ActivityPhase;
 };
 
+const ATX_HEADING_RE = /^#{1,6}[ \t]+\S/;
+const SOFT_PROCESS_MAX_CHARS = 280;
+
+/**
+ * Split a trailing assistant text block into process preamble vs final reply.
+ *
+ * After the last tool, Pi often appends process prose and the real answer into
+ * the same text block. Strong (live): blank line then an ATX heading. Soft
+ * (settled): a short first paragraph then a longer remainder.
+ */
+export function splitProcessAndFinalReply(
+  text: string,
+  opts?: { allowSoft?: boolean },
+): { process: string; reply: string } | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const strong = trimmed.match(/^([\s\S]*?)\n\n+(#{1,6}[ \t]+\S[\s\S]*)$/);
+  if (strong) {
+    const process = strong[1]!.trim();
+    const reply = strong[2]!.trim();
+    if (process && reply) return { process, reply };
+  }
+
+  if (!opts?.allowSoft) return null;
+  const parts = trimmed.split(/\n\n+/);
+  if (parts.length < 2) return null;
+  const first = parts[0]!.trim();
+  const rest = parts.slice(1).join("\n\n").trim();
+  if (!first || !rest) return null;
+  if (ATX_HEADING_RE.test(first)) return null;
+  if (first.length > SOFT_PROCESS_MAX_CHARS) return null;
+  if (rest.length <= first.length) return null;
+  return { process: first, reply: rest };
+}
+
+function applyTrailingTextSplit(
+  segments: AssistantSegment[],
+  allowSoft: boolean,
+): AssistantSegment[] {
+  if (segments.length === 0) return segments;
+  const last = segments[segments.length - 1];
+  if (last?.kind !== "text") return segments;
+  const prev = segments[segments.length - 2];
+  // Soft split only when this text sits on the last tool burst. A later prose
+  // segment is already the reply; don't steal its first paragraph.
+  const split = splitProcessAndFinalReply(last.block.text ?? "", {
+    allowSoft: allowSoft && prev?.kind !== "text",
+  });
+  if (!split) return segments;
+  const processSeg: TextSegment = {
+    kind: "text",
+    blockIndex: last.blockIndex,
+    block: { ...last.block, text: split.process },
+  };
+  const replySeg: TextSegment = {
+    kind: "text",
+    blockIndex: last.blockIndex,
+    block: { ...last.block, text: split.reply },
+  };
+  return [...segments.slice(0, -1), processSeg, replySeg];
+}
+
+function processChildrenHaveTools(children: WorkedChildSegment[]): boolean {
+  return children.some((child) => {
+    if (child.kind === "tool") return !isQuestionToolBlock(child.block);
+    if (child.kind === "activity") return activityHasTools(child.blocks);
+    return false;
+  });
+}
+
+function flattenWorkedChildren(children: WorkedChildSegment[]): {
+  blocks: ContentBlock[];
+  blockIndices: number[];
+} {
+  const blocks: ContentBlock[] = [];
+  const blockIndices: number[] = [];
+  for (const child of children) {
+    if (child.kind === "activity") {
+      blocks.push(...child.blocks);
+      blockIndices.push(...child.blockIndices);
+    } else {
+      blocks.push(child.block);
+      blockIndices.push(child.blockIndex);
+    }
+  }
+  return { blocks, blockIndices };
+}
+
+/**
+ * Fold everything before the last prose segment into Worked for.
+ * Question chips stay outside so the ask UI remains visible.
+ */
+function wrapSettledWorked(segments: AssistantSegment[]): AssistantSegment[] {
+  const hasProcess = segments.some((s) => s.kind === "activity" || s.kind === "tool");
+  if (!hasProcess) return segments;
+
+  let lastTextIndex = -1;
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i]!.kind === "text") {
+      lastTextIndex = i;
+      break;
+    }
+  }
+  const splitAt = lastTextIndex >= 0 ? lastTextIndex : segments.length;
+  const before = segments.slice(0, splitAt);
+  const after = segments.slice(splitAt);
+  if (before.length === 0) return segments;
+
+  const questions: StandaloneToolSegment[] = [];
+  const processChildren: WorkedChildSegment[] = [];
+  for (const seg of before) {
+    if (seg.kind === "worked") continue;
+    if (seg.kind === "tool" && isQuestionToolBlock(seg.block)) {
+      questions.push(seg);
+      continue;
+    }
+    processChildren.push(seg);
+  }
+  if (
+    processChildren.length === 0
+    || !processChildrenHaveTools(processChildren)
+  ) {
+    return segments;
+  }
+
+  const flat = flattenWorkedChildren(processChildren);
+  return [
+    {
+      kind: "worked",
+      children: processChildren,
+      blocks: flat.blocks,
+      blockIndices: flat.blockIndices,
+    },
+    ...questions,
+    ...after,
+  ];
+}
+
+function shouldWrapLiveFinalReply(segments: AssistantSegment[]): boolean {
+  if (segments.length < 2) return false;
+  const last = segments[segments.length - 1];
+  if (last?.kind !== "text") return false;
+  const before = segments.slice(0, -1);
+  return processChildrenHaveTools(
+    before.filter((seg): seg is WorkedChildSegment => seg.kind !== "worked"),
+  );
+}
+
 /** Ordered prose / activity / standalone-tool segments preserving block order. */
 export function segmentAssistantBlocks(
   blocks: ContentBlock[],
-  _options?: SegmentAssistantBlocksOptions,
+  options?: SegmentAssistantBlocksOptions,
 ): AssistantSegment[] {
-  return segmentAssistantBlocksLive(blocks);
+  const live = segmentAssistantBlocksLive(blocks);
+  const phase = options?.phase ?? "settled";
+  const split = applyTrailingTextSplit(live, phase === "settled");
+  if (phase === "live") {
+    if (shouldWrapLiveFinalReply(split)) return wrapSettledWorked(split);
+    return split;
+  }
+  return wrapSettledWorked(split);
 }
 
 /** Persist / React key: turn + first block index. Never include live|settled. */
@@ -125,7 +275,7 @@ export function isActivityBurstStreaming(
   return false;
 }
 
-/** Live: burst folds + standalone Task; AI prose stays outside between bursts. */
+/** Live: Thought bursts stay separate from dense tool Activity; AI prose stays outside. */
 function segmentAssistantBlocksLive(blocks: ContentBlock[]): AssistantSegment[] {
   if (blocks.length === 0) return [];
 
@@ -151,7 +301,13 @@ function segmentAssistantBlocksLive(blocks: ContentBlock[]): AssistantSegment[] 
       out.push({ kind: "tool", blockIndex: i, block });
       continue;
     }
-    if (isActivityBlock(block)) {
+    if (block.type === "thinking" && block.thinking?.trim()) {
+      activityIndices.push(i);
+      activityBlocks.push(block);
+      continue;
+    }
+    if (block.type === "tool_use") {
+      if (isThinkingOnlyActivity(activityBlocks)) flushActivity();
       activityIndices.push(i);
       activityBlocks.push(block);
       continue;
@@ -171,6 +327,15 @@ export function countActivityTools(blocks: ContentBlock[]): number {
 
 export function countActivityThinking(blocks: ContentBlock[]): number {
   return blocks.filter((b) => b.type === "thinking" && b.thinking?.trim()).length;
+}
+
+export function activityHasTools(blocks: ContentBlock[]): boolean {
+  return blocks.some((block) => block.type === "tool_use");
+}
+
+/** Burst is only thinking — render a Thought fold, not an Activity (tool) fold. */
+export function isThinkingOnlyActivity(blocks: ContentBlock[]): boolean {
+  return countActivityThinking(blocks) > 0 && !activityHasTools(blocks);
 }
 
 /** Sum persisted thinking durations (seconds) inside a segment. */
@@ -259,6 +424,7 @@ const EXPLORE_TOOL_NAMES = new Set([
   "webfetch",
   "websearch",
   "web_search",
+  "document-read",
   "literature-search",
   "literature-discover",
   "literature-read",

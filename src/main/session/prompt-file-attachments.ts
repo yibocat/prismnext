@@ -1,91 +1,19 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { createLogger } from "../app/logger";
-import { getUserDataPath } from "../app/paths";
-import { extractPdfTextWithPdfJs } from "../literature/extract/literature-extract-pdfjs";
+import {
+  assertReadableSize,
+  documentReadFormatLabel,
+  isDocumentReadExtension,
+  readDocumentMarkdownCached,
+  type DocumentReadError,
+} from "../lib/anydoc";
 
 const log = createLogger("prompt-file-attachments", "agent");
-const execFileAsync = promisify(execFile);
 
 const MAX_TEXT_CHARS = 200_000;
-const MAX_PDF_CHARS = 120_000;
 const MAX_BLOB_BYTES = 5 * 1024 * 1024;
-const CACHE_VERSION = 1;
-
-/** Override only in tests — production always uses Electron userData. */
-let attachCacheDirOverride: string | null = null;
-
-export function _setAttachCacheDirForTests(dir: string | null) {
-  attachCacheDirOverride = dir;
-}
-
-function getAttachCacheDir(): string {
-  if (attachCacheDirOverride) return attachCacheDirOverride;
-  return path.join(getUserDataPath(), "composer-attach-cache");
-}
-
-interface ExtractCacheEntry {
-  v: number;
-  absPath: string;
-  mtimeMs: number;
-  size: number;
-  kind: "pdf" | "docx";
-  maxChars: number;
-  text: string;
-  truncated: boolean;
-}
-
-function cacheKey(absPath: string, mtimeMs: number, size: number, kind: string, maxChars: number): string {
-  return createHash("sha256")
-    .update(`${absPath}\0${mtimeMs}\0${size}\0${kind}\0${maxChars}\0${CACHE_VERSION}`)
-    .digest("hex");
-}
-
-async function readExtractCache(
-  absPath: string,
-  st: { mtimeMs: number; size: number },
-  kind: "pdf" | "docx",
-  maxChars: number,
-): Promise<ExtractCacheEntry | null> {
-  const key = cacheKey(absPath, st.mtimeMs, st.size, kind, maxChars);
-  const file = path.join(getAttachCacheDir(), `${key}.json`);
-  try {
-    const raw = await fs.readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as ExtractCacheEntry;
-    if (
-      parsed?.v !== CACHE_VERSION ||
-      parsed.absPath !== absPath ||
-      parsed.mtimeMs !== st.mtimeMs ||
-      parsed.size !== st.size ||
-      parsed.kind !== kind ||
-      parsed.maxChars !== maxChars ||
-      typeof parsed.text !== "string"
-    ) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-async function writeExtractCache(entry: ExtractCacheEntry): Promise<void> {
-  try {
-    const dir = getAttachCacheDir();
-    await fs.mkdir(dir, { recursive: true });
-    const key = cacheKey(entry.absPath, entry.mtimeMs, entry.size, entry.kind, entry.maxChars);
-    const file = path.join(dir, `${key}.json`);
-    const tmp = `${file}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(entry), "utf8");
-    await fs.rename(tmp, file);
-  } catch (err) {
-    log.warn("attach cache write failed", { err: String(err) });
-  }
-}
 
 export interface PromptFileInput {
   uri: string;
@@ -167,34 +95,38 @@ function truncate(text: string, max: number): { text: string; truncated: boolean
   };
 }
 
-function stripDocxXml(xml: string): string {
-  return xml
-    .replace(/<w:tab\/>/g, "\t")
-    .replace(/<w:br\/>/g, "\n")
-    .replace(/<\/w:p>/g, "\n")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+function documentNote(name: string, err: DocumentReadError): string {
+  return `「${name}」${err.message}`;
 }
 
-/** Best-effort DOCX text via system `unzip` (no extra npm dep). */
-async function extractDocxText(absPath: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("unzip", ["-p", absPath, "word/document.xml"], {
-      maxBuffer: 20 * 1024 * 1024,
-      encoding: "utf8",
+async function materializeDocument(
+  absPath: string,
+  uri: string,
+  name: string,
+  size: number,
+): Promise<{ block?: AcpResourceBlock; note?: string }> {
+  const sizeOk = assertReadableSize(size);
+  if (!sizeOk.ok) return { note: documentNote(name, sizeOk) };
+
+  const converted = await readDocumentMarkdownCached(absPath);
+  if (!converted.ok) {
+    log.warn("document attachment convert failed", {
+      absPath,
+      error: converted.error,
+      message: converted.message,
     });
-    const text = stripDocxXml(stdout);
-    return text || null;
-  } catch (err) {
-    log.warn("docx extract failed", { absPath, err: String(err) });
-    return null;
+    return { note: documentNote(name, converted) };
   }
+
+  const format = documentReadFormatLabel(absPath);
+  const resourceText = `[${format} attachment: ${name}]\n\n${converted.markdown}`;
+  return {
+    block: {
+      type: "resource",
+      resource: { uri, mimeType: "text/plain", text: resourceText },
+    },
+    note: converted.truncated ? `${format}「${name}」文本已截断后发给模型` : undefined,
+  };
 }
 
 async function materializeOne(file: PromptFileInput): Promise<{
@@ -216,106 +148,12 @@ async function materializeOne(file: PromptFileInput): Promise<{
     return { note: `不是普通文件：${name}` };
   }
 
-  // PDF → extract text (coding models generally cannot ingest raw PDF bytes).
-  // Cache under app userData — never the project tree.
-  if (mime === "application/pdf" || absPath.toLowerCase().endsWith(".pdf")) {
-    try {
-      const cached = await readExtractCache(absPath, st, "pdf", MAX_PDF_CHARS);
-      if (cached) {
-        return {
-          block: {
-            type: "resource",
-            resource: { uri, mimeType: "text/plain", text: cached.text },
-          },
-          note: cached.truncated ? `PDF「${name}」文本已截断后发给模型` : undefined,
-        };
-      }
-
-      const extracted = await extractPdfTextWithPdfJs(absPath);
-      const body = extracted.markdown?.trim() || "";
-      if (!body) {
-        return { note: `PDF 未能抽出文本（可能是扫描件）：${name}` };
-      }
-      const { text, truncated } = truncate(body, MAX_PDF_CHARS);
-      const resourceText = [
-        `[PDF attachment: ${name} · ${extracted.pageCount} page(s)]`,
-        text,
-      ].join("\n\n");
-      await writeExtractCache({
-        v: CACHE_VERSION,
-        absPath,
-        mtimeMs: st.mtimeMs,
-        size: st.size,
-        kind: "pdf",
-        maxChars: MAX_PDF_CHARS,
-        text: resourceText,
-        truncated,
-      });
-      return {
-        block: {
-          type: "resource",
-          resource: {
-            uri,
-            mimeType: "text/plain",
-            text: resourceText,
-          },
-        },
-        note: truncated ? `PDF「${name}」文本已截断后发给模型` : undefined,
-      };
-    } catch (err) {
-      log.error("pdf extract failed", { absPath, err: String(err) });
-      return { note: `PDF 文本提取失败：${name}` };
-    }
+  // Office / ODF / RTF / EPUB / CSV / PDF → AnyDoc (same cache as document-read).
+  if (isDocumentReadExtension(absPath)) {
+    return materializeDocument(absPath, uri, name, st.size);
   }
 
-  // DOCX → best-effort text extract (cached in userData)
-  if (
-    mime.includes("wordprocessingml") ||
-    absPath.toLowerCase().endsWith(".docx")
-  ) {
-    const cached = await readExtractCache(absPath, st, "docx", MAX_TEXT_CHARS);
-    if (cached) {
-      return {
-        block: {
-          type: "resource",
-          resource: { uri, mimeType: "text/plain", text: cached.text },
-        },
-        note: cached.truncated ? `DOCX「${name}」文本已截断后发给模型` : undefined,
-      };
-    }
-
-    const docxText = await extractDocxText(absPath);
-    if (!docxText) {
-      return {
-        note: `暂无法读取 .docx「${name}」的正文。请另存为 .md / .txt / .pdf 后再试。`,
-      };
-    }
-    const { text, truncated } = truncate(docxText, MAX_TEXT_CHARS);
-    const resourceText = `[DOCX attachment: ${name}]\n\n${text}`;
-    await writeExtractCache({
-      v: CACHE_VERSION,
-      absPath,
-      mtimeMs: st.mtimeMs,
-      size: st.size,
-      kind: "docx",
-      maxChars: MAX_TEXT_CHARS,
-      text: resourceText,
-      truncated,
-    });
-    return {
-      block: {
-        type: "resource",
-        resource: {
-          uri,
-          mimeType: "text/plain",
-          text: resourceText,
-        },
-      },
-      note: truncated ? `DOCX「${name}」文本已截断后发给模型` : undefined,
-    };
-  }
-
-  // Plain / code text
+  // Plain / code text (CSV is already handled above via the whitelist).
   if (isTextMime(mime, absPath)) {
     if (st.size > MAX_TEXT_CHARS * 4) {
       return { note: `文本附件过大，已跳过：${name}（${Math.round(st.size / 1024)}KB）` };
@@ -363,4 +201,77 @@ export async function materializePromptFiles(
     if (note) notes.push(note);
   }
   return { blocks, notes };
+}
+
+/**
+ * Flatten converted attachments into the user turn text Pi actually sees.
+ * Binary blobs stay out of the prompt (notes only) — models cannot parse base64 Office.
+ * Always name each attached file and whether conversion succeeded, so the model
+ * cannot treat a missing body as license to invent or substitute another file.
+ */
+export function formatMaterializedPromptFiles(
+  result: MaterializePromptFilesResult,
+  files: PromptFileInput[] = [],
+): string {
+  const texts: string[] = [];
+  for (const block of result.blocks) {
+    if ("text" in block.resource && block.resource.text.trim()) {
+      texts.push(block.resource.text.trim());
+    }
+  }
+
+  const statusLines: string[] = [];
+  for (const file of files) {
+    const converted = result.blocks.some((block) =>
+      "text" in block.resource
+      && (
+        block.resource.uri === file.uri
+        || block.resource.text.includes(`attachment: ${file.name}`)
+      )
+    );
+    if (converted) {
+      statusLines.push(
+        `- \`${file.name}\` — converted below. Answer from that Markdown. Do not substitute another project file.`,
+      );
+    } else {
+      statusLines.push(
+        `- \`${file.name}\` — NOT converted. You do not have this file's contents. Tell the user you cannot read it. Do not invent the document. Do not ls/read a different project file and present it as this attachment.`,
+      );
+    }
+  }
+
+  const sections: string[] = [];
+  if (statusLines.length > 0) {
+    sections.push(
+      [
+        "## Attachment status (this turn)",
+        "",
+        "These are the files the user attached. They are the subject of the request.",
+        "",
+        ...statusLines,
+      ].join("\n"),
+    );
+  }
+  if (texts.length > 0) {
+    sections.push(["## Attached files", "", ...texts].join("\n\n"));
+  }
+  if (result.notes.length > 0) {
+    sections.push(["## Attachment notes", "", ...result.notes.map((n) => `- ${n}`)].join("\n"));
+  }
+  return sections.join("\n\n");
+}
+
+export async function applyPromptFilesToUserText(
+  text: string,
+  files?: PromptFileInput[] | null,
+): Promise<{ text: string; notes: string[] }> {
+  if (!files?.length) return { text, notes: [] };
+  const result = await materializePromptFiles(files);
+  const extra = formatMaterializedPromptFiles(result, files);
+  const trimmed = text.trim();
+  if (!extra) return { text: trimmed, notes: result.notes };
+  return {
+    text: trimmed ? `${trimmed}\n\n${extra}` : extra,
+    notes: result.notes,
+  };
 }

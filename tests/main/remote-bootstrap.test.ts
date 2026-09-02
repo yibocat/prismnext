@@ -6,10 +6,17 @@ import { describe, expect, it } from "vitest";
 import { ensureHostPayload } from "../../src/main/remote/bootstrap";
 import { createDirectoryBackedSshClient } from "../../src/main/remote/ssh-client";
 import { sha256File } from "../../src/main/remote/payload-path";
+import { hostPayloadAnydocNativePath } from "../../src/shared/remote/host-runtime-env";
 
 function writeStubBin(path: string, body = "#!/bin/sh\nexit 0\n"): void {
   mkdirSync(join(path, ".."), { recursive: true });
   writeFileSync(path, body, { mode: 0o755 });
+}
+
+function writeStubAnydoc(currentDir: string, arch: "x64" | "arm64" = "x64"): void {
+  const native = hostPayloadAnydocNativePath(currentDir, arch);
+  mkdirSync(join(native, ".."), { recursive: true });
+  writeFileSync(native, "native-binding\n");
 }
 
 const INSTALL_RUNTIME_STUB = `#!/bin/sh
@@ -41,6 +48,10 @@ if [ "$STEP" = "tinymist" ] || [ "$STEP" = "all" ]; then
   printf '%s\\n' '#!/bin/sh' 'echo tinymist 0.15.2' > "$CURRENT/bin/tinymist"
   chmod +x "$CURRENT/bin/tinymist"
 fi
+if [ "$STEP" = "anydoc" ] || [ "$STEP" = "all" ]; then
+  mkdir -p "$CURRENT/node_modules/@firecrawl/anydoc-linux-x64-gnu"
+  printf '%s\\n' 'native-binding' > "$CURRENT/node_modules/@firecrawl/anydoc-linux-x64-gnu/anydoc.linux-x64-gnu.node"
+fi
 echo "stub $STEP"
 `;
 
@@ -56,6 +67,7 @@ async function makeHostTarball(dir: string): Promise<{ tarballPath: string; sha2
   writeStubBin(join(dir, "current", "bin", "tectonic"));
   writeStubBin(join(dir, "current", "bin", "tinymist"));
   writeStubBin(join(dir, "current", "vendor", "git", "bin", "git"));
+  writeStubAnydoc(join(dir, "current"));
   const tarballPath = join(dir, "payload.tar.gz");
   await tarCreate({ gzip: true, file: tarballPath, cwd: dir }, ["current"]);
   return { tarballPath, sha256: sha256File(tarballPath) };
@@ -154,6 +166,7 @@ describe("ensureHostPayload", () => {
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
     });
@@ -211,6 +224,7 @@ describe("ensureHostPayload", () => {
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), INSTALL_RUNTIME_STUB, {
       mode: 0o755,
     });
@@ -273,6 +287,7 @@ exit 0
     writeStubBin(join(remoteCurrent, "bin", "node"));
     writeStubBin(join(remoteCurrent, "bin", "tinymist"));
     writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeStubAnydoc(remoteCurrent);
     writeFileSync(join(remoteCurrent, "bin", "install-runtime"), `#!/bin/sh\nexit 0\n`, {
       mode: 0o755,
     });
@@ -294,5 +309,62 @@ exit 0
       linuxArch: "linux-x64",
       log: () => undefined,
     })).rejects.toThrow(/tectonic is still missing/);
+  });
+
+  it("still connects when the AnyDoc native step fails", async () => {
+    const staging = mkdtempSync(join(tmpdir(), "prism-boot-noanydoc-"));
+    const remoteHome = mkdtempSync(join(tmpdir(), "prism-boot-noanydoc-home-"));
+    const current = join(staging, "current", "bin");
+    mkdirSync(current, { recursive: true });
+    writeFileSync(join(current, "prismnext-host"), "#!/usr/bin/env node\n", { mode: 0o755 });
+    writeFileSync(
+      join(current, "install-runtime"),
+      `#!/bin/sh
+echo "curl: (23) Failure writing output to destination" >&2
+exit 1
+`,
+      { mode: 0o755 },
+    );
+    const tarballPath = join(staging, "payload.tar.gz");
+    await tarCreate({ gzip: true, file: tarballPath, cwd: staging }, ["current"]);
+    const tarball = { tarballPath, sha256: sha256File(tarballPath) };
+
+    const remoteCurrent = join(remoteHome, ".prismnext-host", "current");
+    mkdirSync(join(remoteCurrent, "bin"), { recursive: true });
+    writeFileSync(join(remoteCurrent, "bin", "prismnext-host"), "#!/usr/bin/env node\n", {
+      mode: 0o755,
+    });
+    writeStubBin(join(remoteCurrent, "bin", "node"));
+    writeStubBin(join(remoteCurrent, "bin", "tectonic"));
+    writeStubBin(join(remoteCurrent, "bin", "tinymist"));
+    writeStubBin(join(remoteCurrent, "vendor", "git", "bin", "git"));
+    writeFileSync(join(remoteCurrent, "bin", "install-runtime"), `#!/bin/sh
+echo "curl: (23) Failure writing output to destination" >&2
+exit 1
+`, { mode: 0o755 });
+    writeFileSync(
+      join(remoteCurrent, "stamp.json"),
+      `${JSON.stringify({ desktopVersion: "0.9.0", payloadSha256: tarball.sha256 }, null, 2)}\n`,
+    );
+
+    const ssh = createDirectoryBackedSshClient(remoteHome);
+    const session = await ssh.connect({
+      host: "lab",
+      port: 22,
+      user: "me",
+      onHostKey: () => "accept",
+    });
+    const logs: string[] = [];
+    const result = await ensureHostPayload({
+      session,
+      local: { ...tarball, desktopVersion: "0.9.0" },
+      linuxArch: "linux-x64",
+      log: (m) => logs.push(m),
+    });
+    expect(result.action).toBe("provisioned");
+    expect(logs.some((line) => /AnyDoc native did not install/i.test(line))).toBe(true);
+    expect(logs.some((line) => /document-read on this server stays unavailable/i.test(line))).toBe(
+      true,
+    );
   });
 });

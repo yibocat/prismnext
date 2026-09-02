@@ -48,6 +48,8 @@ describe("promptManager project rules injection split", () => {
     const fp = promptManager.computePromptFingerprint(ctx);
     expect(fp).toContain("chat-citation-staging=");
     expect(fp).toContain("literature-library=");
+    expect(fp).toContain("web-research=");
+    expect(fp).toContain("office-documents=");
   });
 
   it("composeStableSystem excludes AGENTS.md, project rules, and profile-only modules", () => {

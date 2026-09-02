@@ -5,11 +5,15 @@ import {
   extractSessionTitle,
   extractSessionTitleFromConversation,
   extractTitleFromContentBlocks,
+  firstCompletedTurnExcerpts,
   isGenericSessionTitle,
   isProvisionalSessionTitle,
+  resolveProductConversationId,
   resolveSessionTitle,
   sanitizeGeneratedSessionTitle,
+  shouldCopyListedSessionTitle,
   shouldOfferAutoSessionTitle,
+  shouldRequestGeneratedSessionTitle,
 } from "../../src/renderer/lib/chat/session-title";
 import { emptyConversation } from "../../src/shared/agent/conversation";
 import type { ChatStreamMessage } from "../../src/renderer/stores/chat-store";
@@ -181,5 +185,68 @@ describe("session-title", () => {
     expect(shouldOfferAutoSessionTitle({ completedUserTurns: 1 })).toBe(true);
     expect(shouldOfferAutoSessionTitle({ completedUserTurns: 1, userTitleSet: true })).toBe(false);
     expect(shouldOfferAutoSessionTitle({ completedUserTurns: 2 })).toBe(false);
+  });
+
+  it("treats the first-send compiled prompt dump as a provisional title", () => {
+    const compiled = [
+      "## Referenced files",
+      "",
+      "```main.tex",
+      "\\section{Intro}",
+      "```",
+      "",
+      "请改一下引言",
+    ].join("\n");
+    expect(isProvisionalSessionTitle(compiled.slice(0, 80), "请改一下引言")).toBe(true);
+  });
+
+  it("requests a generated title from the first user message even without assistant prose", () => {
+    const conv = {
+      ...emptyConversation({ conversationId: "c1" }),
+      turns: [{
+        turnId: "t1",
+        turnIndex: 0,
+        user: { blocks: [{ type: "text" as const, text: "请总结这篇论文的贡献" }] },
+        assistant: {
+          blocks: [
+            { type: "thinking" as const, thinking: "先读文件" },
+            { type: "tool_use" as const, id: "call-1", name: "read" },
+          ],
+        },
+        status: "completed" as const,
+      }],
+    };
+    const excerpts = firstCompletedTurnExcerpts(conv);
+    expect(excerpts?.user).toContain("请总结这篇论文的贡献");
+    expect(excerpts?.assistant.trim()).toBe("");
+    expect(shouldRequestGeneratedSessionTitle({
+      completedUserTurns: 1,
+      firstUserExcerpt: excerpts?.user,
+    })).toBe(true);
+  });
+
+  it("uses the product conversation id, not a runtime session id", () => {
+    expect(resolveProductConversationId({
+      id: "tab-1",
+      sessionId: "pi-runtime-xyz",
+      conversation: { conversationId: "tab-1" },
+    })).toBe("tab-1");
+  });
+
+  it("does not copy a first-message list title over a generated tab title", () => {
+    expect(shouldCopyListedSessionTitle({
+      listedTitle: "请帮我改一下论文的引言部分并核对引用",
+      tabTitle: "改写引言引用",
+      autoTitleAttempted: true,
+    })).toBe(false);
+    expect(shouldCopyListedSessionTitle({
+      listedTitle: "改写引言引用",
+      tabTitle: "请帮我改一下论文的引言部分并核对引用",
+      autoTitleAttempted: false,
+    })).toBe(true);
+    expect(shouldCopyListedSessionTitle({
+      listedTitle: "New Chat",
+      tabTitle: "请帮我改一下论文的引言部分并核对引用",
+    })).toBe(false);
   });
 });

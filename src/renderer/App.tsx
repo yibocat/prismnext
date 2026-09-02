@@ -22,6 +22,7 @@ import { LeftMainArea } from "@/components/layout/left-main-area";
 import { RightArea } from "@/components/layout/right-area";
 import { ShellFrame } from "@/components/layout/shell-frame";
 import { useAppCloseTab } from "@/hooks/use-app-close-tab";
+import { useAppDeveloperMenu } from "@/hooks/use-app-developer-menu";
 import { useAppShellShortcuts } from "@/hooks/use-app-shell-shortcuts";
 import { useProductShortcuts } from "@/hooks/use-product-shortcuts";
 import { useWorkspaceModeShortcuts } from "@/hooks/use-workspace-mode-shortcuts";
@@ -94,6 +95,7 @@ export function App() {
   }, []);
 
   useAppCloseTab();
+  useAppDeveloperMenu();
   useEffect(() => watchRightAreaToggleAnimation(), []);
   useLayoutEffect(() => {
     syncLeftSidebarWidthVar(sidebarWidth);

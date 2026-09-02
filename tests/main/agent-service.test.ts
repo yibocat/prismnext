@@ -100,6 +100,10 @@ describe("agent auth and prompt assembly", () => {
       stableSystem: "Stable system from PromptManager.",
       agentsMd: "# Project agents",
     })).toContain("# Project agents");
+    expect(buildAgentSystemPrompt({
+      stableSystem: "Stable system from PromptManager.",
+      agentsMd: "# Project agents",
+    })).toContain("<project_context>");
 
     expect(buildAgentUserText({
       text: "Search local papers about transformers.",
@@ -195,6 +199,8 @@ describe("agent service status", () => {
       "interaction-write",
       "interaction-open",
       "image-describe",
+      "websearch",
+      "webfetch",
       "read",
       "bash",
       "write",
@@ -204,7 +210,7 @@ describe("agent service status", () => {
       "question",
       "suggest-plan",
     ]));
-    expect(missingKey.tools).toHaveLength(37);
+    expect(missingKey.tools).toHaveLength(40);
     expect(missingKey.permissionMode).toBe("edit_auto");
 
     const missingProject = createAgentService({
@@ -311,7 +317,7 @@ describe("agent service status", () => {
       leadInstructions: "Focus on formal academic tone.",
       leadName: "Academic Lead",
       profileModules: "## Chat paper citations\n\nStage external papers.",
-    })).toMatch(/Focus on formal academic tone\.[\s\S]*## Chat paper citations/);
+    })).toMatch(/Focus on formal academic tone\.[\s\S]*<capability_modules>[\s\S]*## Chat paper citations/);
     expect(buildAgentSystemPrompt({
       stableSystem: "stable prompt",
       taskRoster: "## Available subagents (via Task)\n\n- `literature-synthesizer`",

@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { useTranslation } from "react-i18next";
+import { useEffect, useState, useCallback, type ReactNode } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
   CheckCircle2Icon,
@@ -28,6 +28,8 @@ import {
 import { toast } from "sonner";
 import { useSettingsStore } from "@/stores/settings-store";
 import { useProLicenseStore } from "@/stores/pro-license-store";
+import { PRO_DEV_TEST_KEY } from "@shared/pro/license";
+import { Hint } from "@/components/ui/hint";
 import type { UpdaterStatus } from "@/types/electron";
 import {
   SETTINGS_CARD,
@@ -48,6 +50,39 @@ const LEGAL_PAGES = [
   { id: "notices", url: `${WEBSITE_ORIGIN}/notices.html` },
   { id: "security", url: `${WEBSITE_ORIGIN}/security.html` },
 ] as const;
+
+function CopyableProKey({
+  children,
+  onCopied,
+}: {
+  children?: ReactNode;
+  onCopied?: (key: string) => void;
+}) {
+  const { t } = useTranslation();
+  const text = String(children ?? "").trim() || PRO_DEV_TEST_KEY;
+
+  const handleClick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onCopied?.(text);
+      toast.success(t("common.copied"));
+    } catch {
+      toast.error(t("settings.about.proKeyCopyFailed"));
+    }
+  };
+
+  return (
+    <Hint label={t("settings.about.proKeyCopyHint")}>
+      <button
+        type="button"
+        onClick={() => void handleClick()}
+        className="inline rounded-sm px-0.5 font-mono text-foreground underline decoration-dotted underline-offset-2 hover:bg-muted"
+      >
+        {text}
+      </button>
+    </Hint>
+  );
+}
 
 type Status = UpdateUiStatus;
 
@@ -354,7 +389,23 @@ export function AboutSettings() {
             <div className="flex flex-col gap-2 py-2.5">
               <div className="min-w-0">
                 <p className={ROW_LABEL}>{t("settings.about.proLicenseTitle")}</p>
-                <p className={ROW_DESC}>{t("settings.about.proLicenseDesc")}</p>
+                <p className={ROW_DESC}>
+                  <Trans
+                    i18nKey="settings.about.proLicenseDesc"
+                    values={{ key: PRO_DEV_TEST_KEY }}
+                    components={{
+                      proKey: (
+                        <CopyableProKey
+                          onCopied={(key) => {
+                            if (!license && !licenseKeyDraft.trim()) {
+                              setLicenseKeyDraft(key);
+                            }
+                          }}
+                        />
+                      ),
+                    }}
+                  />
+                </p>
               </div>
               {license?.plan === "pro" ? (
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1">

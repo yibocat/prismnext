@@ -262,10 +262,10 @@ export class RemoteSessionBroker {
         "bootstrap",
         true,
         boot.action === "skipped"
-          ? "Host program and Node / Git / Tectonic / Typst already match this app — skipping install."
+          ? "Host program and Node / Git / Tectonic / Tinymist / AnyDoc already match this app — skipping install."
           : boot.action === "provisioned"
             ? "Server installed the missing Host runtime."
-            : "Host program pushed; server downloaded any missing Node / Git / Tectonic / Typst.",
+            : "Host program pushed; server downloaded any missing Node / Git / Tectonic / Tinymist / AnyDoc.",
       );
 
       const node = await session.exec(`"${boot.nodeBin}" --version`);
@@ -799,8 +799,10 @@ export class RemoteSessionBroker {
       modelKeys: mode,
       extraBaseUrls: seed.extraBaseUrls,
       proGrant: this.currentProGrant(),
+      wrapKey: seed.wrapKey,
+      tavilyApiKey: seed.tavilyApiKey ?? "",
       ...(mode === "remote"
-        ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls, wrapKey: seed.wrapKey }
+        ? { aiApiKeys: seed.aiApiKeys, aiBaseUrls: seed.aiBaseUrls }
         : {}),
     });
     return {
@@ -880,7 +882,10 @@ export class RemoteSessionBroker {
       const tinymist = raw.runtime?.tinymist?.available
         ? (raw.runtime.tinymist.version || "yes")
         : "missing";
-      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}, tectonic ${tectonic}, tinymist ${tinymist}.`;
+      const anydoc = raw.runtime?.anydoc?.available
+        ? (raw.runtime.anydoc.version || "yes")
+        : "missing";
+      const detail = `Doctor: node ${raw.node || "missing"}, home ${raw.homeWritable ? "writable" : "not writable"}, git ${raw.git ? "yes" : "no"}, tectonic ${tectonic}, tinymist ${tinymist}, anydoc ${anydoc}.`;
       this.log(live.profileId, detail, { level: raw.ok ? "ok" : "warn", gate: "doctor" });
       return {
         ...recordConnectGate(constitution, { gate: "doctor", ok: raw.ok, detail }),

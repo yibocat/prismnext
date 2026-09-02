@@ -57,6 +57,7 @@ import { wrapPiPrimitiveTools } from "./pi-primitive-tools";
 import type { InteractionBroker } from "./interaction-broker";
 import type { SubagentSessionRunnerFactory } from "./pi-subsession-runtime";
 import { snapshotPiSessionUsage, type PiUsageSnapshot } from "./context-usage";
+import { formatToolGuidelinesPrompt } from "./tool-guidelines-prompt";
 
 export const PI_SDK_PACKAGE = "@earendil-works/pi-coding-agent";
 export const PI_AI_PACKAGE = "@earendil-works/pi-ai";
@@ -115,6 +116,8 @@ export function probePiEmbedCompatibility(input: {
 export type ClosedResourceLoaderInput = {
   systemPrompt?: string;
   skills?: Skill[];
+  /** Appended after customPrompt — Pi still honors this when a custom system prompt is set. */
+  appendSystemPrompt?: string[];
 };
 
 function normalizeClosedLoaderInput(
@@ -134,11 +137,13 @@ export class ClosedResourceLoader implements ResourceLoader {
   };
   private readonly systemPrompt?: string;
   private readonly skills: Skill[];
+  private readonly appendSystemPrompt: string[];
 
   constructor(input?: string | ClosedResourceLoaderInput) {
     const opts = normalizeClosedLoaderInput(input);
     this.systemPrompt = opts.systemPrompt;
     this.skills = opts.skills ?? [];
+    this.appendSystemPrompt = (opts.appendSystemPrompt ?? []).map((part) => part.trim()).filter(Boolean);
   }
 
   async reload(): Promise<void> {}
@@ -172,7 +177,7 @@ export class ClosedResourceLoader implements ResourceLoader {
   }
 
   getAppendSystemPrompt(): string[] {
-    return [];
+    return this.appendSystemPrompt;
   }
 
   getAppendSystemPromptSources(): [] {
@@ -341,6 +346,8 @@ export function createPiNativeTools(input: {
       name: tool.name,
       label: tool.label,
       description: tool.description,
+      ...(tool.promptSnippet ? { promptSnippet: tool.promptSnippet } : {}),
+      ...(tool.promptGuidelines?.length ? { promptGuidelines: tool.promptGuidelines } : {}),
       parameters: tool.parameters,
       execute: async (toolCallId, args, signal) => {
         const result = await input.toolHost.execute(tool.name, args as Record<string, unknown>, {
@@ -372,6 +379,8 @@ export interface PiSdkSessionFactoryInput {
   mcpServers?: McpServerDef[];
   /** Omit = all Pi primitives. `[]` = none (used by scoped subagent sessions). */
   primitiveToolNames?: readonly string[];
+  /** Per-turn project rules (RULE.md) — counted on the context ring, not the system prompt. */
+  projectRules?: string;
 }
 
 interface PiSessionHandle {
@@ -564,9 +573,11 @@ export function createPiSdkSessionFactory(
       : [];
     input.mcpHost?.markAttached(mcpTools.map((tool) => tool.name));
     const customTools = [...primitiveTools, ...hostTools, ...mcpTools];
+    const toolGuidelines = formatToolGuidelinesPrompt(customTools);
     const resourceLoader = new ClosedResourceLoader({
       systemPrompt: input.systemPrompt,
       skills: loadPiSkillsFromDirs(input.skills ?? []),
+      ...(toolGuidelines ? { appendSystemPrompt: [toolGuidelines] } : {}),
     });
     const sessionManager = createPiSessionManager(opts.cwd, opts.persist);
     const { session } = await createAgentSession({
@@ -641,7 +652,10 @@ export function createPiSdkSessionFactory(
         return agent?.state?.systemPrompt;
       },
       attachCustomTools: (tools) => attachPiCustomTools(session, tools),
-      getUsageSnapshot: (opts) => snapshotPiSessionUsage(session, opts),
+      getUsageSnapshot: (opts) => snapshotPiSessionUsage(session, {
+        ...opts,
+        projectRules: input.projectRules,
+      }),
       getModelRef: () => {
         const current = session.model;
         if (!current?.provider || !current.id) return null;
@@ -779,6 +793,10 @@ interface LivePiSession {
   activeTurn: LiveTurnAccumulator | null;
   /** Set by cancelTurn so the terminal-event fallback never overrides a cancel. */
   cancelled: boolean;
+  /** Bumped at the start of each sendTurn; cancelTurn snapshots it. */
+  promptGeneration: number;
+  /** `promptGeneration` that cancelTurn observed — only that send must stay cancelled. */
+  cancelledGeneration: number;
   /** Drop Pi `agent_end` while sendTurn aborts leftover work — it must not commit the next turn. */
   ignoringEngineTerminal?: boolean;
   /** Idle watchdog for the active turn — fires when no Pi event arrives for a while. */
@@ -1196,6 +1214,8 @@ export class PiSdkRuntime implements AgentRuntime {
       turnId,
       activeTurn: null,
       cancelled: false,
+      promptGeneration: 0,
+      cancelledGeneration: 0,
     });
     const modelRef = handle.getModelRef?.() ?? undefined;
     this.opts.store.createSession({
@@ -1230,14 +1250,25 @@ export class PiSdkRuntime implements AgentRuntime {
     if (!session) throw new Error(`unknown_session:${input.runtimeSessionId}`);
     if (session.tabId !== input.tabId) throw new Error(`tab_mismatch:${input.tabId}`);
 
+    const generation = ++session.promptGeneration;
+
     // Abort leftover Pi work even when our activeTurn is already null (a
     // dropped provider stream can reject prompt() without aborting the agent).
     session.ignoringEngineTerminal = true;
     await session.handle.abort().catch(() => {});
     session.ignoringEngineTerminal = false;
-    if (session.cancelled) {
+
+    const cancelledThisSend =
+      session.cancelled && session.cancelledGeneration === generation;
+
+    if (cancelledThisSend) {
       this.beginTurnAccumulator(session, input);
-      this.persistActiveTurn(session, "cancelled");
+      this.emit({
+        type: "turn_cancelled",
+        runtimeSessionId: session.runtimeSessionId,
+        tabId: session.tabId,
+        turnId: session.turnId,
+      });
       return;
     }
     session.cancelled = false;
@@ -1423,6 +1454,7 @@ export class PiSdkRuntime implements AgentRuntime {
     const session = this.sessions.get(runtimeSessionId);
     if (!session) return;
     session.cancelled = true;
+    session.cancelledGeneration = session.promptGeneration;
     session.heldTerminal = undefined;
     this.opts.gate.cancelSession(runtimeSessionId);
     await session.handle.abort();

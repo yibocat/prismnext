@@ -29,4 +29,11 @@ export const windowApi = {
 		ipcRenderer.on("app:closeTab", handler);
 		return () => ipcRenderer.removeListener("app:closeTab", handler);
 	},
+	onSetPromptInternals: (callback: (enabled: boolean) => void) => {
+		const handler = (_event: Electron.IpcRendererEvent, enabled: boolean) => {
+			callback(Boolean(enabled));
+		};
+		ipcRenderer.on("app:setPromptInternals", handler);
+		return () => ipcRenderer.removeListener("app:setPromptInternals", handler);
+	},
 };

@@ -1,0 +1,10 @@
+# Linux glibc AnyDoc native for Host runtime. Version must match @firecrawl/anydoc in package.json.
+# The server downloads this — not host:pack. Bump version and hashes together.
+# tgz-sha256-* = npm tarball. native-sha256-* = the .node (GitHub release; same bytes as inside the tarball).
+version 0.2.4
+package-x64 @firecrawl/anydoc-linux-x64-gnu
+package-arm64 @firecrawl/anydoc-linux-arm64-gnu
+tgz-sha256-x64 ca822ea3ad29a9b9ca6b7f6d2a6b3d5311153af25a6c35a7f5bdf0791fe7f2c9
+tgz-sha256-arm64 ed71661425a9959009d39ba495dbc565cc27a27f4eb0c93336b89f217e5c56b2
+native-sha256-x64 1c7927a844f33adac68279e8116585002fd125195f10330f9024e62f2c90b643
+native-sha256-arm64 0f94ccdedfb50e3313a842f501b2355d99f320888410cc51681f589d1f3e6210

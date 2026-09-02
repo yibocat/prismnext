@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   mimeTypeFromPath,
+  partitionComposerDropPaths,
   pathToFileUri,
   promptFileFromAttachment,
   type ComposerAttachment,
@@ -51,5 +52,17 @@ describe("composer file attachments as ACP resource_link", () => {
         1,
       ),
     ).toBe(true);
+  });
+
+  it("sends images to the strip and other files to inline chips", () => {
+    expect(partitionComposerDropPaths([
+      "/tmp/photo.png",
+      "/tmp/详细流程.docx",
+      "/tmp/slides.pptx",
+      "/tmp/chart.svg",
+    ])).toEqual({
+      imagePaths: ["/tmp/photo.png", "/tmp/chart.svg"],
+      filePaths: ["/tmp/详细流程.docx", "/tmp/slides.pptx"],
+    });
   });
 });

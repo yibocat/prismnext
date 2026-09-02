@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
-import { useMentionableFiles } from "@/lib/files/mentionable-files";
-import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
-import { isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
+import { mentionFileDisplayLabel, mentionFileLabel, useMentionableFiles } from "@/lib/files/mentionable-files";
+import { pickComposerAttachments, projectFileToAttachment, attachmentsFromAbsolutePaths, isComposerStripAttachment, type ComposerAttachment } from "@/lib/chat/composer-attach-file";
+import { createTokenId, isComposerEmpty, type ComposerPart, COMPOSER_PLACEHOLDER, composerNeedsExpandedLayout } from "@/lib/chat/composer-parts";
 import { loadSlashCatalog } from "@/lib/chat/slash-catalog";
 import { listProjectSubagents } from "@/lib/settings";
 import { useChatStore } from "@/stores/chat-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useComposerInsertStore } from "@/stores/composer-insert-store";
-import { useComposerEditorStore } from "@/stores/composer-editor-store";
+import { appendContextPartToActiveDraft, useComposerEditorStore } from "@/stores/composer-editor-store";
 import { useDocumentStore } from "@/stores/document-store";
 import { useCommandStore } from "@/stores/command-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -188,14 +188,50 @@ export function useChatComposer() {
     flushPendingInsert();
   }, [composerInsertNonce, flushPendingInsert]);
 
+  const insertFileAttachmentsAsMentions = useCallback((files: ComposerAttachment[]) => {
+    if (files.length === 0) return;
+    const handle =
+      editorRef.current ?? useComposerEditorStore.getState().handle;
+    for (const att of files) {
+      const target = {
+        id: att.fileId,
+        name: att.name,
+        relativePath: att.displayPath,
+        absolutePath: att.absolutePath,
+      };
+      if (handle) {
+        handle.insertFileMention(target);
+        continue;
+      }
+      appendContextPartToActiveDraft({
+        type: "mention",
+        mentionType: "file",
+        id: createTokenId(),
+        label: mentionFileDisplayLabel(target),
+        filePath: mentionFileLabel(target),
+        fileId: att.fileId,
+      });
+    }
+    if (!handle) {
+      const tabId = useChatStore.getState().activeTabId;
+      const tab = useChatStore.getState().tabs.find((t) => t.id === tabId);
+      useComposerEditorStore.getState().scheduleDraftPersist(tabId, loadDraftParts(tab?.draft));
+    }
+  }, []);
+
   const addAttachmentsFromPaths = useCallback(async (paths: string[], opts?: { imagesOnly?: boolean }) => {
     const next = await attachmentsFromAbsolutePaths(paths, opts);
     if (next.length === 0) return;
-    setPendingAttachments((prev) => {
-      const seen = new Set(prev.map((a) => a.absolutePath));
-      return [...prev, ...next.filter((a) => !seen.has(a.absolutePath))];
-    });
-  }, []);
+    const images = next.filter((a) => isComposerStripAttachment(a));
+    const files = next.filter((a) => !isComposerStripAttachment(a));
+    if (images.length > 0) {
+      setPendingAttachments((prev) => {
+        const seen = new Set(prev.map((a) => a.absolutePath));
+        return [...prev, ...images.filter((a) => !seen.has(a.absolutePath))];
+      });
+    }
+    insertFileAttachmentsAsMentions(files);
+  }, [insertFileAttachmentsAsMentions]);
 
   // Peek (don't consume yet) so React Strict Mode remount can still see the same paths.
   const handledAttachNonceRef = useRef(0);
@@ -275,11 +311,16 @@ export function useChatComposer() {
   const appendAttachments = useCallback(async (files: Awaited<ReturnType<typeof pickComposerAttachments>>) => {
     if (files.length === 0) return;
     const next = await Promise.all(files.map((f) => projectFileToAttachment(f)));
-    setPendingAttachments((prev) => {
-      const seen = new Set(prev.map((a) => a.absolutePath));
-      return [...prev, ...next.filter((a) => !seen.has(a.absolutePath))];
-    });
-  }, []);
+    const images = next.filter((a) => isComposerStripAttachment(a));
+    const docs = next.filter((a) => !isComposerStripAttachment(a));
+    if (images.length > 0) {
+      setPendingAttachments((prev) => {
+        const seen = new Set(prev.map((a) => a.absolutePath));
+        return [...prev, ...images.filter((a) => !seen.has(a.absolutePath))];
+      });
+    }
+    insertFileAttachmentsAsMentions(docs);
+  }, [insertFileAttachmentsAsMentions]);
 
   const handleAddFile = useCallback(async () => {
     const picked = await pickComposerAttachments();

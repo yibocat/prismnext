@@ -77,4 +77,17 @@ describe("host model settings", () => {
     expect(readHostModelSettings().aiApiKeys).toEqual({ anthropic: "sk-from-laptop" });
     expect(readFileSync(join(home, ".prismnext", HOME_HOST_MODEL_FILENAME), "utf8")).not.toContain("sk-from-laptop");
   });
+
+  it("persists tavilyApiKey in the envelope without plaintext", () => {
+    const home = mkdtempSync(join(tmpdir(), "prism-host-tavily-"));
+    setWorkbenchUserHomeOverride(home);
+    mergeHostModelSettings({ tavilyApiKey: "tvly-host-secret" }, wrapKey);
+    expect(readHostModelSettings().tavilyApiKey).toBe("tvly-host-secret");
+    const path = join(home, ".prismnext", HOME_HOST_MODEL_FILENAME);
+    expect(readFileSync(path, "utf8")).not.toContain("tvly-host-secret");
+    resetHostModelSettingsForTests();
+    expect(readHostModelSettings().tavilyApiKey).toBeUndefined();
+    mergeHostModelSettings({}, wrapKey);
+    expect(readHostModelSettings().tavilyApiKey).toBe("tvly-host-secret");
+  });
 });

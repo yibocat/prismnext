@@ -12,7 +12,9 @@ describe("CHAT_CITATION_STAGING_PROMPT", () => {
     expect(CHAT_CITATION_STAGING_PROMPT).toContain("on that tool");
     expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.literatureDiscover);
     expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.literatureSearch);
-    expect(CHAT_CITATION_STAGING_PROMPT).toContain("websearch");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain("Web research");
+    expect(CHAT_CITATION_STAGING_PROMPT).toContain(TOOL_NAMES.webfetch);
+    expect(CHAT_CITATION_STAGING_PROMPT).not.toContain(TOOL_NAMES.websearch);
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Ask in order");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Soft workflow");
     expect(CHAT_CITATION_STAGING_PROMPT).not.toContain("Route the request");

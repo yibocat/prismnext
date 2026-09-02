@@ -69,7 +69,13 @@ const handlers: Record<string, HostHandler> = {
             ),
           )
           : undefined,
+        ...(typeof params.tavilyApiKey === "string" ? { tavilyApiKey: params.tavilyApiKey } : {}),
       }, typeof params.wrapKey === "string" ? params.wrapKey : undefined);
+    } else if (typeof params.tavilyApiKey === "string") {
+      mergeHostModelSettings(
+        { tavilyApiKey: params.tavilyApiKey },
+        typeof params.wrapKey === "string" ? params.wrapKey : undefined,
+      );
     }
     setHostModelProxyEnabled(ctx.modelKeys === "gateway");
     setHostModelProxyExtraBaseUrls(ctx.extraBaseUrls);

@@ -93,6 +93,7 @@ import {
 import type { McpServerDef } from "../../shared/teams/types";
 import { buildLiveTaskRosterMarkdown } from "../../shared/agent/subagent-roster";
 import { createLogger, shortLogDetail } from "../app/logger";
+import { applyPromptFilesToUserText } from "../session/prompt-file-attachments";
 
 const log = createLogger("agent-service", "agent");
 
@@ -386,7 +387,8 @@ export class AgentService {
     });
     if (!auth.ok) return { ok: false, error: auth.reason };
 
-    const text = input.text.trim();
+    const appliedFiles = await applyPromptFilesToUserText(input.text, input.promptFiles);
+    const text = appliedFiles.text.trim();
     if (!text) return { ok: false, error: "missing_prompt" };
 
     const sendEpoch = (this.sendEpoch.get(conversationId) ?? 0) + 1;
@@ -431,8 +433,6 @@ export class AgentService {
               boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
             });
       }
-      this.updateDefaultTitle(conversationId, text);
-
       this.sessionId = binding.runtimeSessionId ?? null;
       this.projectRoot = projectRoot;
       this.activeConversationId = conversationId;
@@ -795,16 +795,23 @@ export class AgentService {
   ): Promise<AgentGenerateSessionTitleResult> {
     const conversationId = input.conversationId.trim();
     if (!conversationId) return { ok: false, error: "missing_conversation" };
-    const record = this.registry.store.getByConversationId(conversationId);
+    const record = this.registry.store.getByConversationId(conversationId)
+      ?? this.registry.store.getSession(conversationId);
     if (!record) return { ok: false, error: "unknown_conversation" };
     const { generateSessionTitleFromRecord } = await import("./session-title");
+    const live = this.startContexts.get(record.conversationId || conversationId)
+      ?? this.startContexts.get(conversationId);
     const result = await generateSessionTitleFromRecord(
       record,
       input,
       this.deps.getSettings(),
+      live
+        ? { auth: { provider: live.provider, modelId: live.modelId, apiKey: live.apiKey } }
+        : undefined,
     );
     if (!result.ok || !result.title || result.skipped) return result;
-    const latest = this.registry.store.getByConversationId(conversationId);
+    const latest = this.registry.store.getSession(record.runtimeSessionId)
+      ?? this.registry.store.getByConversationId(record.conversationId || conversationId);
     if (!latest) return result;
     const firstUser = (input.userText || latest.turns.find((turn) => turn.status === "completed")?.user.text || "").trim();
     if (!isProvisionalSessionTitle(latest.title, firstUser)) {
@@ -1086,6 +1093,7 @@ export class AgentService {
         })),
         mcpHost,
         mcpServers: selectMcpServers(ctx.mcpServers ?? [], ctx.mcpAllowlist),
+        projectRules: await this.deps.composeProjectRules(input.projectRoot),
       }),
       store,
       toolHost,
@@ -1148,14 +1156,6 @@ export class AgentService {
     const fresh = host.takeUnattached(tools);
     if (fresh.length === 0) return;
     runtime.attachCustomTools(sessionId, fresh);
-  }
-
-  private updateDefaultTitle(conversationId: string, text: string): void {
-    const title = text.trim().slice(0, 80);
-    if (!title) return;
-    const record = this.registry.store.getByConversationId(conversationId);
-    if (!record || (record.title && record.title !== "New Chat")) return;
-    this.registry.store.put({ ...record, title });
   }
 
   private async resetSession(conversationId?: string): Promise<void> {

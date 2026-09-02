@@ -50,6 +50,7 @@ describe("tool permission registry — classifications", () => {
       "glob",
       "webfetch",
       "websearch",
+      "document-read",
       "question",
       "task",
       "skill",

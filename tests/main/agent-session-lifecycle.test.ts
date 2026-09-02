@@ -253,4 +253,61 @@ describe("Agent Session Lifecycle & Turn Persistence (Phase 4A)", () => {
     expect(session?.turns[0]?.status).toBe("cancelled");
     expect(session?.turns[0]?.user.text).toBe("Start heavy calculation");
   });
+
+  it("prompts the next sendTurn after cancel instead of recording that send as cancelled", async () => {
+    let sessionSubscriber: ((event: unknown) => void) | null = null;
+    const prompted: string[] = [];
+    const fakeFactory: PiSessionFactory = async () => {
+      return {
+        prompt: async (text: string) => {
+          prompted.push(text);
+          sessionSubscriber?.({ type: "agent_end" });
+        },
+        abort: async () => {},
+        dispose: () => {},
+        subscribe: (fn) => {
+          sessionSubscriber = fn;
+          return () => {
+            sessionSubscriber = null;
+          };
+        },
+      };
+    };
+
+    const runtime = new PiSdkRuntime({
+      createPiSession: fakeFactory,
+      store,
+      toolHost,
+      gate,
+      agentDir: join(tempDir, "runtime"),
+    });
+
+    const sessionResult = await runtime.createSession({
+      tabId: "tab-queue",
+      projectRoot: "/path/to/project",
+      permissionMode: "auto",
+    });
+
+    const first = runtime.sendTurn({
+      runtimeSessionId: sessionResult.runtimeSessionId,
+      tabId: "tab-queue",
+      text: "in flight",
+      permissionMode: "auto",
+    });
+    await runtime.cancelTurn(sessionResult.runtimeSessionId);
+    await first;
+
+    await runtime.sendTurn({
+      runtimeSessionId: sessionResult.runtimeSessionId,
+      tabId: "tab-queue",
+      text: "follow-up after stop",
+      permissionMode: "auto",
+    });
+
+    expect(prompted).toContain("follow-up after stop");
+    const session = store.getSession(sessionResult.runtimeSessionId);
+    const last = session?.turns.at(-1);
+    expect(last?.user.text).toBe("follow-up after stop");
+    expect(last?.status).toBe("completed");
+  });
 });

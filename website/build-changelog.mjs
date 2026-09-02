@@ -1,0 +1,165 @@
+#!/usr/bin/env node
+/* One-shot: render website/changelog.html from changelog/releases/*.md
+   (the summarized GitHub-release copies, newest first). */
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, "..");
+const releasesDir = join(root, "changelog", "releases");
+
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function inline(text) {
+  let out = esc(text);
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return out;
+}
+
+/** releases/*.md have no `## version` heading; sections are `### Name`. */
+function parseRelease(md) {
+  const sections = [];
+  let current = null;
+  for (const line of md.split("\n")) {
+    const head = line.match(/^### (.+)$/);
+    if (head) {
+      current = { name: head[1].trim(), items: [] };
+      sections.push(current);
+      continue;
+    }
+    if (line.startsWith("- ") && current) {
+      current.items.push(line.slice(2).trim());
+    }
+  }
+  return sections;
+}
+
+const files = readdirSync(releasesDir)
+  .filter((f) => /^\d+\.\d+\.\d+\.md$/.test(f))
+  .sort((a, b) => b.localeCompare(a));
+
+let html = "";
+for (const f of files) {
+  const version = f.replace(/\.md$/, "");
+  const sections = parseRelease(readFileSync(join(releasesDir, f), "utf8"));
+  html += `      <article class="chlog-release">
+        <header class="chlog-head">
+          <h2><span class="chlog-ver">${esc(version)}</span></h2>
+        </header>
+`;
+  for (const sec of sections) {
+    if (!sec.items.length) continue;
+    html += `        <section class="chlog-section">
+          <h3>${esc(sec.name)}</h3>
+          <ul>
+`;
+    for (const item of sec.items) html += `            <li>${inline(item)}</li>\n`;
+    html += `          </ul>\n        </section>\n`;
+  }
+  html += `      </article>\n`;
+}
+
+const page = `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="PrismNext release notes and changelog." />
+    <meta name="theme-color" content="#101319" id="theme-color" />
+    <title>PrismNext — Changelog</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Outfit:wght@300..700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("prismnext-theme");
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260902a" />
+  </head>
+  <body data-page="changelog">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./" aria-label="PrismNext">
+          <img
+            id="wordmark-icon"
+            class="brand-icon"
+            src="./assets/app-icon-light.png"
+            width="26"
+            height="26"
+            alt=""
+            data-icon-dark="./assets/app-icon-light.png"
+            data-icon-light="./assets/app-icon-dark.png"
+          />
+          <span class="brand-name">Prism<em>Next</em></span>
+        </a>
+        <nav class="topnav" aria-label="Pages">
+          <a href="./" data-i18n="navHome">Home</a>
+          <a href="./changelog.html" class="is-current" data-i18n="navChangelog">Changelog</a>
+          <a href="./about.html" data-i18n="navAbout">About</a>
+        </nav>
+        <div class="topbar-actions">
+          <a class="ghost-btn gh-link" href="https://github.com/yibocat/prismnext" target="_blank" rel="noopener" aria-label="GitHub">
+            <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+          </a>
+          <button type="button" class="ghost-btn theme-cycle" title="Theme" aria-label="Theme">
+            <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+              />
+            </svg>
+            <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+            </svg>
+            <svg class="theme-icon theme-icon--system" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8M12 16v4" />
+            </svg>
+          </button>
+          <div class="lang" role="group" aria-label="Language">
+            <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+            <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
+          </div>
+          <a class="cta-btn cta-small" href="./#download" data-i18n="navDownload">Download</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="legal-shell chlog-page">
+      <header class="legal-head">
+        <p class="legal-meta" data-i18n="chlogKicker">Release notes</p>
+        <h1 data-i18n="chlogTitle">Changelog</h1>
+        <p class="legal-lede" data-i18n="chlogLede">
+          Every release at a glance — mirrored from the project's GitHub release notes.
+        </p>
+      </header>
+${html}    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-base">
+          <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="./site.js?v=20260902a"></script>
+  </body>
+</html>
+`;
+
+writeFileSync(join(here, "changelog.html"), page);
+console.log("website/changelog.html written from changelog/releases/");

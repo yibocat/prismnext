@@ -142,6 +142,11 @@ export interface AppSettings {
   defaultDocClass?: "article" | "report" | "book";
   /** Custom system prompt for the agent shell. Empty = use built-in default. */
   agentSystemPrompt?: string;
+  /**
+   * Developer: show assembled prompt internals in Settings.
+   * Default off. Does not change what the model receives.
+   */
+  showPromptInternals?: boolean;
   /** Selected AI provider */
   aiProvider?: string;
   /** Selected AI model (null = provider default) */
@@ -237,6 +242,8 @@ export interface AppSettings {
   semanticScholarApiKey?: string;
   /** Optional NCBI API key for PubMed literature-discover rate limits */
   pubmedApiKey?: string;
+  /** User Tavily API key for Agent websearch / webfetch (BYOK). */
+  tavilyApiKey?: string;
   /** Default extract engine: pdfjs (local) | mineru (cloud) */
   literatureExtractEngineDefault?: "pdfjs" | "mineru";
   /** Auto-extract PDF on library import (default off) */
@@ -295,6 +302,7 @@ const defaults: AppSettings = {
   autoCreateMainTex: true,
   defaultDocClass: "article",
   agentSystemPrompt: "",
+  showPromptInternals: false,
   editorSyntaxTheme: "prism",
   defaultWorkspaceDirs: [
     { function: "manuscript", name: "manuscript", mainFile: "main.tex", mainTex: "main.tex" },
