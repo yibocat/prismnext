@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="PrismNext release notes and changelog." />
+    <meta name="theme-color" content="#101319" id="theme-color" />
+    <title>PrismNext — Changelog</title>
+    <link rel="icon" type="image/png" href="./assets/favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Outfit:wght@300..700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (() => {
+        const saved = localStorage.getItem("prismnext-theme");
+        const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+    <link rel="stylesheet" href="./styles.css?v=20260902a" />
+  </head>
+  <body data-page="changelog">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand" href="./" aria-label="PrismNext">
+          <img
+            id="wordmark-icon"
+            class="brand-icon"
+            src="./assets/app-icon-light.png"
+            width="26"
+            height="26"
+            alt=""
+            data-icon-dark="./assets/app-icon-light.png"
+            data-icon-light="./assets/app-icon-dark.png"
+          />
+          <span class="brand-name">Prism<em>Next</em></span>
+        </a>
+        <nav class="topnav" aria-label="Pages">
+          <a href="./" data-i18n="navHome">Home</a>
+          <a href="./changelog.html" class="is-current" data-i18n="navChangelog">Changelog</a>
+          <a href="./pricing.html" data-i18n="navPricing">Pricing</a>
+          <a href="./about.html" data-i18n="navAbout">About</a>
+        </nav>
+        <div class="topbar-actions">
+          <a class="ghost-btn gh-link" href="https://github.com/yibocat/prismnext" target="_blank" rel="noopener" aria-label="GitHub">
+            <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+            </svg>
+          </a>
+          <button type="button" class="ghost-btn theme-cycle" title="Theme" aria-label="Theme">
+            <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+              />
+            </svg>
+            <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z" />
+            </svg>
+            <svg class="theme-icon theme-icon--system" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8M12 16v4" />
+            </svg>
+          </button>
+          <div class="lang" role="group" aria-label="Language">
+            <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
+            <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="legal-shell chlog-page">
+      <header class="legal-head">
+        <p class="legal-meta" data-i18n="chlogKicker">Release notes</p>
+        <h1 data-i18n="chlogTitle">Changelog</h1>
+        <p class="legal-lede" data-i18n="chlogLede">
+          Every release at a glance — mirrored from the project's GitHub release notes.
+        </p>
+      </header>
+      <article class="chlog-release">
+        <header class="chlog-head">
+          <h2><span class="chlog-ver">0.9.1</span></h2>
+        </header>
+        <section class="chlog-section">
+          <h3>Agent</h3>
+          <ul>
+            <li><strong>Experiments</strong>, <strong>Research design</strong>, and <strong>Project brief</strong> modules aligned as a trio: execution vs live research thinking vs <code>.brief.md</code> on disk; positive module openings; deeper roadmap/When/Judgment; no hard-coded subagent Task lines (orchestrator-judgment owns roster); brief tool how-to stays on research-brief-* tools.</li>
+            <li><strong>Orchestrator judgment</strong> and <strong>Subagent role</strong> modules deepened: direct-handling-vs-Task judgment, Task brief, synthesis discipline, expert grounding/deliverable; impersonal/role-noun module voice (no profile meta); roster varies by team; experts may use tools inside Task without nesting Task.</li>
+            <li><strong>Project rules memory</strong> module expanded: scope vs brief, AGENTS.md, skills, and chat; explicit vs heuristic persist with <code>question</code> confirm; append-before-create; project-rule-write only for <code>RULE.md</code>.</li>
+            <li>Removed <code>latex-root</code> and <code>typst-root</code> agent tools — manuscript entry comes from the Workspace Manuscript folder pin (Workspace Folder Descriptions + manuscript-compile module). Kept LaTeX/Typst manuscript build tools and LaTeX/Typst standalone figure builds for skills.</li>
+            <li><strong>Citation &amp; bibliography audit</strong> module slimmed to when/boundary/compliance model (LaTeX + Typst auto-scan); how-to moved to <code>citation-health</code> tool. Library papers not cited are informational — not audit failures.</li>
+            <li>Literature agent tools (search, discover, stage, citation-health, export-bib, …): shorter descriptions, clearer when-to-call guidance for citation-health, and intensive-reading list labeling. External discovery hits now return full abstracts (only extreme outliers truncated) so the model can screen candidates properly.</li>
+            <li>Chat sessions now actually receive the built-in capability modules (literature, compile, citations, …) after the Team lead text. Settings → Prompt stack preview shows that same live join — not the old OpenCode <code>agent.md</code> bake-in — so what you read in Settings is what the model gets. Team files stay user-editable and do not store those modules.</li>
+            <li>Plus 2 more agent improvements in this release.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Literature</h3>
+          <ul>
+            <li>Citation health and “export cited keys to <code>.bib</code>” now read Typst <code>@key</code> / <code>#cite(&lt;key&gt;)</code> as well as LaTeX <code>\cite{}</code>, against the same <code>.bib</code>. A Typst paper’s <code>#bibliography("refs.bib")</code> is how the <code>.bib</code> path is found. Hayagriva YAML is still later.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Under the hood</h3>
+          <ul>
+            <li>Embedded Pi agent host replaces OpenCode — chat, providers, skills, MCP, Plan mode, and Task delegation run through the product agent API.</li>
+            <li>Workbench storage moves to ~/.prismnext/ and &lt;project&gt;/.workbench/; sessions, libraries, worktrees, and skills use the new layout.</li>
+            <li>TypeScript 7 type-checking, Vite 7 / electron-vite 5 toolchain, and Electron 43 runtime upgrade.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Compile</h3>
+          <ul>
+            <li>LaTeX manuscript PDFs and build aux now live under <code>.workbench/compile/latex/</code> (sibling to <code>typst/</code>), not flat in <code>.workbench/compile/</code>. Preview hydration still reads the old flat path once when upgrading an existing project.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Files</h3>
+          <ul>
+            <li>Typst export is a Dialog (PDF / PNG / SVG / HTML), not a format menu that then pops the system Save As. The file lands next to the source in <code>export/&lt;stem&gt;/</code>, which Files can show — <code>.workbench/compile/</code> stays hidden. After a successful export, that file opens in Files (PDF preview or image). The Tinymist live pane is unchanged. Remote Hosts return those relative paths instead of shipping PNG/PDF bytes back for Save As; <strong>reconnect</strong> after this so the Host speaks the new protocol. Fully quit the app once (preload).</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Skills</h3>
+          <ul>
+            <li>New <strong>figure-typst</strong> skill: copy a CeTZ / fletcher catalog template, edit the contract labels, <code>typst-compile-standalone</code>. TikZ stays on LaTeX papers (<code>.tex</code> root). Wiring a finished figure into the manuscript (<code>figure-pipeline</code>) uses <code>#figure</code> / <code>#image</code> on Typst and <code>\includegraphics</code> on LaTeX.</li>
+            <li>Template Center is not growing a Universe gallery this round.</li>
+          </ul>
+        </section>
+      </article>
+      <article class="chlog-release">
+        <header class="chlog-head">
+          <h2><span class="chlog-ver">0.9.0</span></h2>
+        </header>
+        <section class="chlog-section">
+          <h3>Remote</h3>
+          <ul>
+            <li>Connect from the Workbench add menu using hosts in <code>~/.ssh/config</code> (ProxyJump, ssh-agent, and your keys work as in a terminal). A first-time host key is confirmed in the connection panel. Remote Workspace does not require a Pro license.</li>
+            <li>The first connect pushes a slim Host program; the Linux server then downloads Node, Git, and Tectonic into <code>~/.prismnext-host/current/</code>. Reconnect skips engines that are already installed. Chat on the Host uses keys from Settings → Models (BYOK); a laptop Gateway is opt-in if the server cannot reach the vendor.</li>
+            <li>Launch no longer SSHs on startup. Sidebar lists chats for every remote workbench project; clicking a remote chat (or sending) is what connects. Offline you can still read the laptop copy of those transcripts.</li>
+            <li>Chat, Files, Git, compile, literature, Plan, Interaction, and experiments on a remote project run on the Host. Worktrees checkout on the server. Unconnected remote tabs show a centered Connect instead of pretending the Host is there.</li>
+            <li>Remote compile returns PDF bytes into the preview (no temp path outside your home). Remote Typst live runs Tinymist on the server; this computer only forwards the preview port. Auto-compile on remote TeX starts off and is remembered per folder.</li>
+            <li>Opening a remote copy of a folder you already have locally gets its own workbench row. Switching to a remote project while that Host is already connected fills the file tree, Workspace folders, library, and experiments.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Files, TeX &amp; Typst</h3>
+          <ul>
+            <li>Open <code>.tex</code> / <code>.typ</code> in Files. Compile options and template backups live under Settings → Workspace. The manuscript folder can pin a <code>.tex</code> or <code>.typ</code>, or leave the main file empty.</li>
+            <li>Typing in Typst talks to <strong>Tinymist</strong>: live preview is an iframe, not a PDF split and not <code>typst watch</code> SVG. Play / PDF / export / Agent compile use <code>tinymist compile</code>. Compile problems use the Files toolbar red mark (click for the list; click the preview to jump to source).</li>
+            <li>LaTeX still auto-compiles the PDF after a short pause in typing; Typst live updates as you type. Auto-compile pauses during a chat turn so the engine is not fighting the agent.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Workbench &amp; chat</h3>
+          <ul>
+            <li>Chat’s homepage toolbar has a <strong>Host</strong> control (local vs server IP). Worktree sits under Host, not as its own button. A chat with messages shows a copyable locus (project · branch · worktree, or IP · branch · worktree).</li>
+            <li>Session rows use the full title; pin / archive / time overlay on hover. Titlebar status lists this computer and each live Host.</li>
+            <li>Dialogs follow Settings → Appearance (UI font and size). New Project on a remote host uses the same panel as local create.</li>
+          </ul>
+        </section>
+      </article>
+      <article class="chlog-release">
+        <header class="chlog-head">
+          <h2><span class="chlog-ver">0.8.0</span></h2>
+        </header>
+        <section class="chlog-section">
+          <h3>Workbench</h3>
+          <ul>
+            <li>The left sidebar is a <strong>workbench tree</strong>: open projects stay listed with their chats underneath. Switching chats changes the file tree, library, and panels without stopping the previous project’s agent.</li>
+            <li>Quit and reopen restores your last project and chat tabs. The default project can leave the workbench like any other folder; add it back from Recents (marked Default).</li>
+            <li>Drag project rows to reorder; filter chats by Workbench or Updated; archived chats live in a footer view. Project rows use folder marks.</li>
+            <li>Sessions live in <code>~/.prismnext/sessions/</code>; per-project libraries and worktrees under <code>~/.prismnext/projects/</code>; project metadata in <code>&lt;project&gt;/.workbench/</code>.</li>
+            <li>A background chat waiting for approval no longer steals focus — the sidebar marks the row and a title-bar chip names the project.</li>
+            <li>The Welcome / environment page is gone. Opening lands on a real default project at <code>Documents/PrismNext</code>.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Chat &amp; agent</h3>
+          <ul>
+            <li>Session rows show <strong>waiting, running, unread, and read</strong>. Right-click to pin, rename, pick an icon, mark unread, archive, or copy session ID / branch / a markdown transcript.</li>
+            <li>Chat runs on the <strong>embedded Pi</strong> host in the desktop app: send, history, permissions, Plan mode, Task delegation, MCP, skills, and the provider catalog go through <code>agent:*</code>.</li>
+            <li>Teams v2 staffs the desk — one Lead voice, Task specialists, skills, and team MCP — with PermissionGate Allow / Deny cards.</li>
+            <li>Conversation UI follows Pi’s turn model: thinking/tool folds, undo/rollback, permission cards above the composer, and a “show earlier” bar after context compress.</li>
+            <li>Empty homepage composer includes a project picker. After the first reply, PrismNext asks the model for a short title.</li>
+            <li>New and Default chat backgrounds are paper planes. Choosing a Git branch in AI Chat checks it out, same as the Git panel.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Git</h3>
+          <ul>
+            <li>The Git panel shows ahead/behind against any remote, plus Fetch, Pull (fast-forward), Push / Publish, and <strong>Add remote</strong> when none is configured.</li>
+            <li>After a feature branch is pushed, <strong>Create PR</strong> can open a GitHub pull request via <code>gh</code>.</li>
+            <li>Changes lenses: last agent turn, uncommitted / staged / unstaged, per-commit history, and <strong>Branch changes</strong> (net <code>default...HEAD</code>).</li>
+            <li>Isolated worktree checkouts stay under the app home, not inside the paper folder.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Shell</h3>
+          <ul>
+            <li><strong>Pixel shell</strong>: Left / Content / Right use remembered pixel widths. Content shrinks first; RightArea maximizes after Content hits 400px plus 140px of sash travel.</li>
+            <li>Desktop glass is the left rail only (Electron 43 vibrancy / Windows Mica). Title bars stay opaque.</li>
+            <li>Customize visible workspace modules from the left-sidebar context menu. RightArea shortcuts: ⌥⌘B split, ⌃⌘B maximize.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Browser, literature &amp; logs</h3>
+          <ul>
+            <li>Browser address bar suggests bookmarks, recents, URLs, and search.</li>
+            <li>Library no longer double-lists papers on first open.</li>
+            <li>Application Logs load the full ring buffer and record compile, agent host, project/git, and IPC events — without chat text or secrets.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Website</h3>
+          <ul>
+            <li>Homepage, Privacy, and Terms now match 0.8: five-pillar architecture, Workbench + embedded Pi, <code>.workbench/</code> vs <code>~/.prismnext/</code>, and Git remote / change-lens copy.</li>
+            <li>Privacy Policy, Terms, Open Source Notices, and Security stay linked from the site footer and Settings → About.</li>
+          </ul>
+        </section>
+        <section class="chlog-section">
+          <h3>Under the hood</h3>
+          <ul>
+            <li>Electron 43 (Chromium 150 / Node 24), TypeScript 7 type-checking, Vite 7 / electron-vite 5.</li>
+            <li>See <a href="../series/0.8.x.md" target="_blank" rel="noopener"><code>changelog/series/0.8.x.md</code></a> for the full development log.</li>
+          </ul>
+        </section>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-base">
+          <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
+        </div>
+      </div>
+    </footer>
+
+    <script src="./site.js?v=20260902a"></script>
+  </body>
+</html>

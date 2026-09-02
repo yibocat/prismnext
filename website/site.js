@@ -1,13 +1,89 @@
 (() => {
   const STRINGS = {
     en: {
-      title: "PrismNext — a local-first research desk",
+      title: "PrismNext — the AI agent research workbench",
       eyebrow: "Early Access",
-      navLoop: "§1 Loop",
-      navArch: "§2 Architecture",
-      navCaps: "§3 Capabilities",
-      navPro: "§4 Pro Teams",
-      navRefs: "References",
+      navDownload: "Download",
+      navChangelog: "Changelog",
+      navPricing: "Pricing",
+      navAbout: "About",
+      heroTitle1: "Your AI research team,",
+      heroTitle2: "on one desk.",
+      heroSub:
+        "PrismNext is an all-around AI-agent research collaboration app. Let the agent run the full research loop autonomously — read, think, experiment, write, review — or work side by side as your copilot. Multi-project workbench, literature, experiments, Git, LaTeX & Typst. Local-first, on your desk.",
+      heroDownload: "Download",
+      heroStar: "Star on GitHub",
+      loopKicker: "§1 — The AI research loop",
+      loopCaption: "review feeds the next pass — you stay in the loop",
+      shotHomeCap: "Chat with your team — the agent works across the whole desk",
+      shotLitCap: "Papers found mid-chat land in the side panel — one click to shelf them",
+      shotWriteCap: "Real-time preview — write in Typst or LaTeX, alone or with the agent",
+      shotTeamCap: "Team settings — inspect the Lead, subagents, and skills; fully customizable",
+      shotSkillsCap: "Every skill at a glance — protocols, templates, and checks",
+      shotComposerCap: "An in-paper composer — let the agent revise the manuscript directly",
+      shotReadCap: "Reading companion — the paper and its co-pilot, side by side",
+      obIdeate: "Ideate",
+      obIdeateSub: "Brainstorm · hypothesis cards · idea ledger",
+      obRead: "Read",
+      obReadSub: "Library · Zotero · MinerU · web",
+      obThink: "Think",
+      obThinkSub: "Notes · critique · derivations",
+      obDesign: "Design",
+      obDesignSub: "Brief · interactive Plan gates",
+      obRun: "Run",
+      obRunSub: "Gated experiments · provenance",
+      obWrite: "Write",
+      obWriteSub: "LaTeX · Typst · Proposed Changes",
+      obReview: "Review",
+      obReviewSub: "Diffs · gates · human veto",
+      loopFigNote: "Every beat is a conversation: hand the loop to the agent, or steer it beat by beat.",
+      statTeams: "Teams in Core + Pro",
+      statSkills: "Built-in research skills",
+      statPillars: "Engineering pillars",
+      statDesk: "Desk for every paper",
+      archKicker: "§2 — Architecture",
+      howKicker: "§3 — How it works",
+      howTitle: "From a spark to a manuscript",
+      howLede:
+        "Research is more than plan-run-check. The desk carries the whole journey — and every stage is a conversation you can steer or hand over.",
+      howSpark: "Spark the idea",
+      howSparkText:
+        "Brainstorm with a dedicated debate team, capture ideas in a durable ledger, and stress-test hypotheses before committing compute.",
+      howGround: "Ground it in literature",
+      howGroundText:
+        "The agents read what matters — papers, data, methods — and synthesize what is known, contested, and missing.",
+      howWork: "Design, run, verify",
+      howWorkText:
+        "Experiment matrices go through Plan and permission gates; runs are monitored live and receipted. Results are checked against the method before write-up.",
+      howWrite: "Write it up",
+      howWriteText:
+        "LaTeX or Typst with live preview, citation-checked references, and every agent edit arriving as a reviewable diff.",
+      coversTitle: "Beyond the loop",
+      coversLede:
+        "Switching the team switches the working mode. Beyond the core loop, specialist teams sit on the desk for the parts of research most tools ignore.",
+      covTeamsTitle: "One desk, many modes",
+      covTeamsText:
+        "Teams v2 is the signature: switching the team switches how the agent thinks and works — one Lead voice, delegated specialists, 30 built-in skills, MCP tools. Fully autonomous or shoulder-to-shoulder, your call.",
+      covIdeaTitle: "Idea Arena & Topic Brainstorm",
+      covIdeaText:
+        "Structured multi-agent debate — steel-man, devil's advocate, pragmatist — turns a vague interest into testable hypothesis cards, with a documented kill list.",
+      covLedgerTitle: "Idea Ledger",
+      covLedgerText:
+        "A durable account of closed ideas, why they were closed, and what would reopen them — so the team never re-litigates a dead end.",
+      covCrossTitle: "Translation Table",
+      covCrossText:
+        "Cross-disciplinary comparison: two fields assess the same claim, a translator aligns terminology, and a judge rules on feasibility and novelty asymmetry.",
+      covCareerTitle: "Milestone Coach & Committee",
+      covCareerText:
+        "Multi-year program coaching, portfolio audits against promotion standards, and a demanding mock committee with a recovery roadmap.",
+      covClaimTitle: "Claim Police",
+      covClaimText:
+        "A claim–evidence–hedge audit that flags statements outrunning the data — verification only, it never rewrites your manuscript.",
+      skillsKicker: "§4 — Skills",
+      proKicker: "§5 — Pro Teams",
+      principlesKicker: "§6 — Non-negotiables",
+      downloadTitle: "Free. On every desktop.",
+      downloadSub: "One installer per platform. Free core loop out of the box.",
       navHome: "Home",
       navPrivacy: "Privacy",
       navTerms: "Terms",
@@ -34,22 +110,22 @@
         "local-first · Workbench · embedded Pi · Teams v2 · execution plane · LaTeX · provenance · gated multi-agent",
       pillars: "Local-first · Open-Core · Bring your own API key · Zero telemetry",
       mn1: "co-drive, not autopilot →",
-      loopTitle: "The research loop",
+      loopTitle: "One agent, the whole research loop",
       loopLede:
-        "Ideation, literature, experiments, and writing stay on the same local desk — staffed by the active Team, not four disconnected tools.",
+        "Reading, thinking, experimenting, and writing are one continuous workflow — the agent can drive the entire loop autonomously, or step in only where you ask.",
       loopIdeation: "Ideation & Plan",
       loopIdeationDef: "Problem formulation, Brief, and interactive Plan (⌥P) approval gates.",
       loopLiterature: "Literature",
       loopLiteratureDef: "SQLite library, Zotero sync, MinerU parsing, and continuous citation auditing.",
       loopExperiment: "Experiment",
-      loopExperimentDef: "Unified terminal execution plane, live Job Monitor, and Methods provenance.",
+      loopExperimentDef: "Gated execution with a live Job Monitor; every run leaves a Methods-grade provenance receipt.",
       loopWriting: "Writing",
-      loopWritingDef: "First-class LaTeX, bundled Tectonic compilation, and Proposed Changes merge diffs.",
+      loopWritingDef: "First-class LaTeX & Typst, Tectonic / Tinymist compilation, and Proposed Changes merge diffs.",
       figManifold: "The research manifold — drag to rotate; the surface is live.",
       mn2: "read → design → run → write",
-      archTitle: "System Architecture",
+      archTitle: "Built on five pillars",
       archLede:
-        "PrismNext is engineered around five pillars for rigorous, reproducible scientific computing on a multi-project desk.",
+        "An AI-agent application is only as trustworthy as the ground it stands on — five pillars carry every autonomous and collaborative workflow.",
       archWorkbench: "Multi-Project Workbench",
       archWorkbenchDef:
         "Several paper folders stay open on one desk — each with its own chats, file tree, library slot, and modes. Switching focus changes the center and right panels without killing background agents.",
@@ -58,65 +134,45 @@
         "Your manuscript lives in the project Git tree. Structured metadata — agent instructions, compile cache, experiments, teams — lives in .workbench/. Cross-project state — chat sessions, per-project libraries, agent worktree checkouts, skills, and teams — lives in ~/.prismnext/. File watchers stay locked to authorized roots.",
       archPi: "Embedded Pi Agent + Teams v2",
       archPiDef:
-        "Chat runs on a research-enhanced Pi host in the main process (agent:* IPC). Teams v2 staffs the desk: one Lead voice, Task-delegated specialists, skills, slash commands, and team MCP servers. PermissionGate keeps consequential tools behind explicit Allow / Deny cards.",
-      archJobs: "Unified Terminal Execution Plane",
+        "Chat runs on a research-enhanced Pi host in the main process. Teams v2 staffs the desk: one Lead voice, Task-delegated specialists, skills, slash commands, and team MCP servers. PermissionGate keeps consequential tools behind explicit Allow / Deny cards.",
+      archJobs: "End-to-End AI Research Loop",
       archJobsDef:
-        "Chat bash commands and experiment runs share a unified executionId state machine. The read-only Job Monitor attaches directly to active process streams. Auto-logs receipts (command, exit code, duration, transcript, outputs) into runs.jsonl for direct citation in Methods.",
-      archOneApp: "Open-Core & Unified Single Installer",
-      archOneAppDef:
-        "The core desktop shell and compiler engine are open source (Apache-2.0). Official releases ship as one unified binary across macOS, Windows, and Linux. Free features are unlocked out of the box; pro specialty teams are verified locally without cloud roundtrips.",
+        "Read papers, question and critique, design and run experiments, then write — one continuous chain. Every experiment is gated by Plans and permission modes, monitored live, and receipted (command, exit code, duration, outputs) into runs.jsonl, so any claim in Methods can be traced to the run that produced it.",
+      archRemote: "Remote Research over SSH",
+      archRemoteDef:
+        "Connect to a lab machine from ~/.ssh/config. The Host runtime installs itself; chat, files, literature, compile, and long-running experiments execute on the server while your laptop stays the control desk. Model keys are sealed with AES-256-GCM and the unwrap key never leaves this computer.",
       mn8: "several papers, one desk →",
-      showcaseTitle: "Capabilities",
-      showcaseLede:
-        "Evidence over adjectives — nine integrated surfaces shipping in today's build, themed live by the header palette.",
-      shotHomeTitle: "One prompt box, staffed by the active Team",
-      shotHomeText:
-        "Select a Team, model, and allowed skills. The embedded Pi agent staffs the composer across literature discovery, mathematical derivations, experiment execution, or LaTeX drafting — per project, on one workbench.",
-      figHome: "The session composer — Team, model, and skills at hand. Drag for light vs dark.",
-      shotLitTitle: "Literature, searched and shelved",
-      shotLitText:
-        "Cross-database search across Crossref, arXiv, and OpenAlex. Two-way Zotero sync and MinerU PDF parsing. Continuous citation health audits verify .tex ↔ .bib ↔ library consistency.",
-      figLit: "Search results with shelf status, one click from the library.",
-      shotReadTitle: "Reading with a co-pilot",
-      shotReadText:
-        "Side-by-side PDF reader with section-linked margin notes. Ask questions about specific lemmas, experimental claims, or plots with automatic page citations.",
-      figRead: "The paper and its reading companion, side by side.",
-      shotIntensiveTitle: "Intensive reading, formula by formula",
-      shotIntensiveText:
-        "Lasso any complex mathematical equation or theorem. The agent unpacks notation, verifies step-by-step derivations, and flags implicit assumptions.",
-      figIntensive: "A lassoed formula, explained line by line.",
-      shotNotesTitle: "Notes that write back",
-      shotNotesText:
-        "Derivations, reading cards, and exploratory sketches live in project notes. The active Team structures, expands, and cross-references them as your ideas mature.",
-      figNotes: "Notes on the left, agent expansion on the right.",
-      shotExpTitle: "Experiments with provenance",
-      shotExpText:
-        "The active Team formulates experimental matrices, dispatches jobs, and files complete receipts into runs.jsonl — command, exit code, runtime, stdout/stderr, and artifact links.",
-      figExp: "A finished run with its full provenance receipt.",
-      shotGitTitle: "Git & Worktrees, built into the workspace",
-      shotGitText:
-        "Every step lands in Git. Visual diffs, remote fetch/pull/publish, GitHub PR creation, agent-turn change lenses, branch management, and isolated worktree checkouts — all inside the workspace.",
-      figGit: "Visual diff viewer and commit management.",
-      shotWritingTitle: "First-class LaTeX authoring",
-      shotWritingText:
-        "A native TeX workbench: document outline, instant PDF synchronization, bundled Tectonic compilation, and Proposed Changes review for human-in-the-loop draft editing.",
-      figWriting: "Source code, outline, and live compiled PDF.",
-      shotModelsTitle: "Every provider, your keys",
-      shotModelsText:
-        "DeepSeek, Claude, Gemini, GPT, Grok, Kimi, Qwen, MiniMax, or local custom endpoints. Switch providers mid-session with full BYOK privacy.",
-      figModels: "Multi-provider configuration — zero Prism cloud.",
-      shotAgentTitle: "Interactive research, human in the loop",
-      shotAgentText:
-        "The team proposes, you dispose: Plans require explicit consent, file changes provide visual diffs, and permission modes enforce strict boundaries.",
-      figAgent: "An interactive session — the team acts under strict human governance.",
-      skillsTitle: "Research standards, codified (29 Skills)",
+      newTitle: "What's new in 0.9",
+      newLede:
+        "The 0.9 line reshaped the desk: Typst beside LaTeX, document reading in chat, live web search, and a full remote workspace over plain SSH.",
+      newAnydocTitle: "Read Office & PDF in chat",
+      newAnydocText:
+        "Attach Word, PowerPoint, Excel, or EPUB files and the agent reads them locally via AnyDoc — no API key. Composer files become inline chips instead of Markdown dumps.",
+      newWebTitle: "Web search & fetch",
+      newWebText:
+        "The agent can search the public web and read a page with your own Tavily key — for docs, datasets, and APIs, not just papers.",
+      newFoldTitle: "Worked-for folds",
+      newFoldText:
+        "Thinking, tool calls, and in-between notes fold away as the answer lands — chat reads like a log you can skim, ending on the final reply.",
+      newTypstTitle: "Typst, first-class",
+      newTypstText:
+        "Open a .typ and Tinymist live-previews it in the pane — locally or on a remote Host. Compile to PDF, export, and cite against the same .bib.",
+      newRemoteTitle: "Remote workspace over SSH",
+      newRemoteText:
+        "Connect to a lab machine from ~/.ssh/config. The Host runtime installs itself; chat, files, literature, compile, and experiments run on the server. Keys are sealed with AES-256-GCM.",
+      newLaptopTitle: "Your laptop stays first-class",
+      newLaptopText:
+        "Remote sessions keep an offline laptop copy; cold start reads it without SSH. Remote TeX pauses auto-compile per folder. Worktrees and Plan drafts live on the Host.",
+      skillsTitle: "30 built-in research skills",
       skillsText:
-        "29 bundled scientific skills in PrismNext Core — each complete with formal protocol tables, LaTeX templates, and verification scripts.",
+        "30 bundled scientific skills in PrismNext Core — each complete with formal protocol tables, LaTeX/Typst templates, and verification scripts.",
       skillTierDesign: "Ideate, design & run · 7",
       skillTierWriting: "Writing · 7",
-      skillTierFigures: "Figures · 5",
+      skillTierFigures: "Figures · 6",
       skillTierReview: "Reading & review · 5",
       skillTierMeta: "Math & meta · 5",
+      skTypstFigure: "Copy a CeTZ / fletcher catalog template, edit contract labels, and compile a standalone figure.",
+      skNameTypst: "Typst figures",
       skIdeaLab: "Divergence before judgment, ideas persisted in dedicated folders.",
       skRelatedWork: "Library-to-synthesis narrative with grounded citations.",
       skReadingNotes: "Structured extraction and argument breakdown from PDFs.",
@@ -230,22 +286,39 @@
       themeModeLight: "Light",
       themeModeDark: "Dark",
       themeModeSystem: "System",
-      principlesTitle: "Axioms",
-      pLocalTitle: "Axiom 1 (Locality).",
+      principlesTitle: "Non-negotiables",
+      principlesLede:
+        "These are not features — they are the ground rules the product is built on. Every capability, autonomous or assisted, stays inside them.",
+      pLocalTitle: "Locality",
       pLocalText: "Your projects stay strictly on your local machine.",
-      pPrivacyTitle: "Axiom 2 (Privacy).",
+      pPrivacyTitle: "Privacy",
       pPrivacyText:
         "No product telemetry or analytics. We do not collect usage data or operate a PrismNext cloud.",
-      pKeyTitle: "Axiom 3 (Keys).",
+      pKeyTitle: "Keys",
       pKeyText: "Model calls route directly to providers using your own API keys — no Prism cloud, no middleman.",
-      pVetoTitle: "Axiom 4 (Veto).",
+      pVetoTitle: "Veto",
       pVetoText: "Every automated move is gated and auditable; the researcher retains absolute veto power.",
       refsTitle: "References",
       refSource: "PrismNext source code",
       refReleases: "PrismNext releases",
       refGithub: "Author's GitHub",
       refEmail: "Contact",
-      foot: "Local-first collaborative AI research desk — set in Instrument Serif, Sora & Plex Mono.",
+      foot: "The all-around AI-agent research collaboration app — autonomous loop or copilot, your call. Local-first, on your desk.",
+      footProduct: "Product",
+      footProject: "Project",
+      footLegal: "Legal",
+      chlogKicker: "Release notes",
+      chlogTitle: "Changelog",
+      chlogLede:
+        "Every user-facing change, newest first — mirrored from the project's changelog.",
+      chlogUnreleased: "Unreleased",
+      aboutKicker: "About",
+      aboutTitle: "About PrismNext",
+      aboutComing:
+        "This page is on its way — it will tell the story of PrismNext, the team behind it, and where the product is heading.",
+      aboutMeanwhile:
+        "Meanwhile, the homepage walks through what PrismNext does, and the changelog tracks every release.",
+      aboutBack: "Back to home",
       footFine: "© 2026 yibocat",
       osMac: "macOS",
       osWin: "Windows",
@@ -259,13 +332,93 @@
       downloadsLabel: "Downloads",
     },
     zh: {
-      title: "PrismNext — 本地优先的科研书桌",
-      eyebrow: "Early Access",
-      navLoop: "§1 闭环",
-      navArch: "§2 架构",
-      navCaps: "§3 能力",
-      navPro: "§4 Pro 团队",
-      navRefs: "参考文献",
+      title: "PrismNext — AI Agent 科研协作工作台",
+      eyebrow: "抢先体验",
+      navDownload: "下载",
+      navChangelog: "更新日志",
+      navPricing: "价格",
+      pricingKicker: "价格",
+      pricingTitle: "价格",
+      pricingComing:
+        "详细方案正在路上。开源核心始终免费；Pro 专科团队在本地激活，抢先体验期间免费开放。",
+      navAbout: "关于",
+      heroTitle1: "你的 AI 科研团队，",
+      heroTitle2: "就在一张书桌上。",
+      heroSub:
+        "PrismNext 是一个全方位的 AI Agent 科研协作应用：既能让 Agent 自主跑通完整的科研闭环——读文献、思考、批判、做实验、写作、审阅——也能作为科研副驾与你协作推进。多项目工作台、文献、实验、Git、LaTeX 与 Typst，本地优先，就在你的书桌上。",
+      heroDownload: "下载",
+      heroStar: "GitHub 点星",
+      loopKicker: "§1 — AI 科研闭环",
+      loopCaption: "审阅回流，再来一轮——你始终在环里",
+      shotHomeCap: "与团队对话——Agent 调动整张书桌",
+      shotLitCap: "对话中检索到的论文进入侧栏，一键入库",
+      shotWriteCap: "实时预览——Typst 或 LaTeX，自己写或让 Agent 写",
+      shotTeamCap: "团队设置——查看主 Agent、Subagent 与技能，高度自定义",
+      shotSkillsCap: "所有技能一览——协议、模板与检查",
+      shotComposerCap: "论文内 Composer——直接让 Agent 修改手稿",
+      shotReadCap: "论文伴读——手稿与副驾并排而立",
+      obIdeate: "构思",
+      obIdeateSub: "脑暴 · 假说卡片 · 想法账本",
+      obRead: "阅读",
+      obReadSub: "文献库 · Zotero · MinerU · 联网",
+      obThink: "思考",
+      obThinkSub: "笔记 · 批判 · 推导验证",
+      obDesign: "设计",
+      obDesignSub: "Brief · 交互式 Plan 闸门",
+      obRun: "运行",
+      obRunSub: "带闸门的实验 · 全程溯源",
+      obWrite: "写作",
+      obWriteSub: "LaTeX · Typst · Proposed Changes",
+      obReview: "审阅",
+      obReviewSub: "差异对比 · 闸门 · 人类否决",
+      loopFigNote: "每一拍都是一场对话：既可整环交给 Agent，也可逐拍亲自掌舵。",
+      statTeams: "Core + Pro 团队",
+      statSkills: "内置科研技能",
+      statPillars: "工程支柱",
+      statDesk: "一张书桌装下所有论文",
+      archKicker: "§2 — 系统架构",
+      howKicker: "§3 — 如何运转",
+      howTitle: "从一个火花，到一篇论文",
+      howLede:
+        "科研不只是「规划—执行—检验」。这张书桌承载完整的旅程——每一站既可由你主导，也可以交给团队。",
+      howSpark: "点燃想法",
+      howSparkText:
+        "与专门的论辩团队脑暴，把想法记入持久账本，在投入算力之前先对假说做压力测试。",
+      howGround: "扎进文献",
+      howGroundText:
+        "Agent 精读真正要紧的论文、数据与方法，综合出「哪些已知、哪些有争议、哪些仍缺失」。",
+      howWork: "设计、运行、检验",
+      howWorkText:
+        "实验矩阵经 Plan 与权限闸门放行；运行全程实时监视并留下收据。成文之前，结果先对照方法逐项复核。",
+      howWrite: "落笔成文",
+      howWriteText:
+        "LaTeX 或 Typst 实时预览，引用逐条核验，Agent 的每处修改都以可审阅的 diff 呈现。",
+      coversTitle: "闭环之外",
+      coversLede:
+        "切换团队，就是切换工作模式。核心闭环之外，还有一支支专科团队坐镇书桌，覆盖多数工具顾不到的科研环节。",
+      covTeamsTitle: "一张书桌，多种模式",
+      covTeamsText:
+        "Teams v2 是招牌：切换团队即切换 Agent 的思考与工作方式——一位 Lead 发声、专科专家被委派、30 项内置技能与 MCP 工具随行。完全自主，或并肩协作，由你决定。",
+      covIdeaTitle: "想法论辩场 & 选题脑暴",
+      covIdeaText:
+        "结构化多智能体论辩——正方、反方、务实派——把模糊兴趣打磨成可检验的假说卡片，并留下有据可查的淘汰清单。",
+      covLedgerTitle: "想法账本",
+      covLedgerText:
+        "持久记录已关闭的想法、关闭原因与重新开启的条件——团队不会在死胡同上反复空转。",
+      covCrossTitle: "跨学科对照台",
+      covCrossText:
+        "两个学科分别审视同一主张，译者对齐术语，再由裁判判断可行性与「在一方平凡、在另一方新颖」的不对称。",
+      covCareerTitle: "里程碑教练 & 答辩委员会",
+      covCareerText:
+        "多年期研究计划教练、对照晋升标准的成果组合审计，以及一场严苛的模拟答辩与恢复路线图。",
+      covClaimTitle: "主张核验",
+      covClaimText:
+        "「主张—证据—限定语」审计，标出超出数据支撑的表述——只核验，绝不代写你的手稿。",
+      skillsKicker: "§4 — 内置技能",
+      proKicker: "§5 — Pro 团队",
+      principlesKicker: "§6 — 不可妥协的底线",
+      downloadTitle: "免费，全平台可用。",
+      downloadSub: "每个平台一份安装包，免费核心开箱即用。",
       navHome: "首页",
       navPrivacy: "隐私",
       navTerms: "条款",
@@ -292,20 +445,20 @@
         "本地优先 · Workbench · 嵌入式 Pi · Teams v2 · 执行控制平面 · LaTeX · 实验溯源 · 有闸门的多智能体",
       pillars: "本地优先 · 开源核心 · 自备 API Key · 零数据遥测",
       mn1: "共驾，不是自动驾驶 →",
-      loopTitle: "科研闭环",
-      loopLede: "构思、文献、实验、撰写留在同一张本地书桌上——由当前活跃 Team 坐镇，而不是四个割裂的工具。",
+      loopTitle: "一个 Agent，跑通整个科研闭环",
+      loopLede: "阅读、思考、实验、写作是一条连续的工作流——Agent 既可以自主跑通全流程，也可以只在你需要处插手协助。",
       loopIdeation: "构思与规划",
       loopIdeationDef: "问题提炼、Research Brief 与交互式 Plan（⌥P）审批闸门。",
       loopLiterature: "文献库",
       loopLiteratureDef: "SQLite 本地文献库、Zotero 双向同步、MinerU 解析与持续引用审计。",
-      loopExperiment: "实验工作区",
-      loopExperimentDef: "统一作业执行控制平面、实时 Job Monitor 监视与 Methods 级收据溯源。",
-      loopWriting: "学术写作",
-      loopWritingDef: "原生 LaTeX、内置 Tectonic 编译、实时双向同步预览与 Proposed Changes 差异审阅。",
+      loopExperiment: "实验",
+      loopExperimentDef: "带闸门的执行与实时 Job Monitor；每次运行都留下 Methods 级溯源收据。",
+      loopWriting: "写作",
+      loopWritingDef: "原生 LaTeX 与 Typst、Tectonic / Tinymist 编译，以及 Proposed Changes 差异审阅。",
       figManifold: "科研流形——拖拽旋转，曲面是实时渲染的。",
       mn2: "读 → 设计 → 跑 → 写",
-      archTitle: "系统架构",
-      archLede: "PrismNext 围绕五大工程支柱构建，在多项目书桌上实现严密、可复现的科学研究计算。",
+      archTitle: "五大工程支柱",
+      archLede: "AI Agent 应用值不值得信任，取决于它脚下的地基——每一条自主或协作的工作流都站在这五根支柱上。",
       archWorkbench: "多项目 Workbench",
       archWorkbenchDef:
         "多张论文文件夹同时驻留于同一书桌——各自拥有独立的对话、文件树、文献槽位与模式面板。切换焦点时，中心区与右侧面板随之切换，后台 Agent 不被终止。",
@@ -314,56 +467,45 @@
         "手稿位于项目 Git 树。结构化元数据——Agent 说明、编译缓存、实验、团队——存于 .workbench/。跨项目状态——对话会话、按项目文献库、Agent worktree 签出、技能与团队——存于 ~/.prismnext/。文件监听严格锁定于授权根目录。",
       archPi: "嵌入式 Pi Agent + Teams v2",
       archPiDef:
-        "Chat 由主进程内的科研增强型 Pi 宿主驱动（agent:* IPC）。Teams v2 坐镇书桌：单一 Lead 对话声线、Task 委派专科、技能、斜杠命令与团队 MCP。PermissionGate 将高风险工具置于显式 Allow / Deny 卡片之后。",
-      archJobs: "统一作业执行控制平面",
+        "Chat 由主进程内的科研增强型 Pi 宿主驱动。Teams v2 坐镇书桌：单一 Lead 对话声线、Task 委派专科、技能、斜杠命令与团队 MCP。PermissionGate 将高风险工具置于显式 Allow / Deny 卡片之后。",
+      archJobs: "端到端 AI 科研闭环",
       archJobsDef:
-        "Chat 中的 Bash 命令与实验运行共享统一 executionId 状态机。只读 Job Monitor 直连进程实时输出流。运行回执（命令、退出码、时长、日志、产物）自动固化至 runs.jsonl，可直接引用至论文 Methods。",
-      archOneApp: "开源核心与统一二进制分发",
-      archOneAppDef:
-        "桌面客户端与编译内核完全开源（Apache-2.0）。官方发布为全平台（macOS、Windows、Linux）单一统一安装包。核心免费能力开箱即用；Pro 专科能力由本地许可证即时求值生效，无需云端往返。",
+        "读论文、提问与批判、设计并运行实验、再落笔成文——一条连续的链路。每个实验都经 Plan 与权限模式闸门、可实时监视，并把回执（命令、退出码、时长、产物）固化到 runs.jsonl，Methods 里的每个结论都能回溯到产生它的那次运行。",
+      archRemote: "SSH 远程科研",
+      archRemoteDef:
+        "从 ~/.ssh/config 直连实验室机器。Host 运行时自动装机；聊天、文件、文献、编译与长时实验都在服务器上执行，笔记本只是控制台。模型密钥以 AES-256-GCM 密封，解钥永不离开这台电脑。",
       mn8: "多篇论文，一张书桌 →",
-      showcaseTitle: "核心能力一览",
-      showcaseLede: "证据胜于形容词——九大集成科研工作面，每张截图均实时适配顶栏选中的出版级主题包与手绘背景。",
-      shotHomeTitle: "一个输入框，调动当前 Team 全局能力",
-      shotHomeText:
-        "选择活跃 Team、模型与可用技能。嵌入式 Pi Agent 在同一 Workbench 上，按项目驱动 Composer 发起文献检索、数学推导、实验运行或手稿起草。",
-      figHome: "会话 Composer——Team、模型与技能随取。拖动对比浅色与深色。",
-      shotLitTitle: "文献库：检索、解析与入库",
-      shotLitText: "跨 Crossref、arXiv、OpenAlex 全量检索。Zotero 双向同步与 MinerU 高精度 PDF 解析。实时健康检查保证 .tex ↔ .bib ↔ 文献库三向一致。",
-      figLit: "检索结果自带入库状态，一键沉淀至项目文献库。",
-      shotReadTitle: "并排伴读与交互式问答",
-      shotReadText: "PDF 在一侧，伴读智能体在另一侧。针对引理、定理或实验图表进行针对性提问，回答自动标注对应页码引用。",
-      figRead: "论文手稿与伴读智能体，并排而立。",
-      shotIntensiveTitle: "精读模式：公式定理逐行拆解",
-      shotIntensiveText: "框选任意复杂数学公式或推导段落，智能体拆解数学记号、给出逐步推导证明，并明确指出隐式假设条件。",
-      figIntensive: "被框选的公式推导，逐行严密剖析。",
-      shotNotesTitle: "会主动回写的结构化笔记",
-      shotNotesText: "数学推导、阅读卡片与探索性构思沉淀于项目笔记。当前 Team 随着研究深入协助你扩写、整理与建立交叉索引。",
-      figNotes: "左侧为结构化笔记，右侧由智能体实时协助展开。",
-      shotExpTitle: "带完整溯源（Provenance）的实验运行",
-      shotExpText: "当前 Team 协助制定实验矩阵、派发作业，并自动将完整回执写入 runs.jsonl——包含命令、退出码、时长、日志与图表产物。",
-      figExp: "一次完成的实验运行及其完整科研收据。",
-      shotGitTitle: "内置 Git 差异审阅与工作树隔离",
-      shotGitText:
-        "每一步探索均进入 Git。在工作区内部进行可视化差异、远程 fetch/pull/publish、GitHub PR 创建、Agent 轮次变更透镜、分支管理与独立 worktree 签出。",
-      figGit: "并排差异对比与版本提交管理。",
-      shotWritingTitle: "一等公民的原生 LaTeX 撰写",
-      shotWritingText: "原生 TeX 工作台：大纲导航、实时 PDF 快速同步、内置 Tectonic 编译，以及审阅修改稿件专用的 Proposed Changes 差异视图。",
-      figWriting: "LaTeX 源码、大纲目录与实时编译的 PDF 预览。",
-      shotModelsTitle: "任意模型供应商，自备 API Key",
-      shotModelsText: "DeepSeek、Claude、Gemini、GPT、Grok、Kimi、Qwen、MiniMax 或本地自定义端点。任务途中随时无缝换轨，100% 保护隐私。",
-      figModels: "多模型供应商配置面板——零中转，零 Prism 云端。",
-      shotAgentTitle: "可交互式科研，人类保持终审否决",
-      shotAgentText: "智能体提案，研究人员定夺：重大操作必须经 Plan 审批，文件修改给出清晰差异对比，权限模式严格划定边界。",
-      figAgent: "工作会话进行中——团队在严格的人类治理闸门下运行。",
-      skillsTitle: "固化的科研规范（29 项开箱技能）",
+      newTitle: "0.9 更新速览",
+      newLede:
+        "0.9 系列重塑了这张书桌：Typst 与 LaTeX 并列、聊天直读 Office 文档、可联网检索，以及基于纯 SSH 的完整远程工作区。",
+      newAnydocTitle: "聊天直读 Office 与 PDF",
+      newAnydocText:
+        "拖入 Word、PowerPoint、Excel 或 EPUB，Agent 经 AnyDoc 本地转换——无需 API Key。附件在输入框中是内联文件 chip，而不是整段 Markdown 倾倒。",
+      newWebTitle: "联网检索与网页阅读",
+      newWebText:
+        "Agent 可用你自己的 Tavily Key 搜索公网并读取页面——面向文档、数据集与 API，而不只是论文。",
+      newFoldTitle: "Worked for 折叠",
+      newFoldText:
+        "思考、工具调用与中间备注随答案落地自动折叠——聊天读起来像一份可快速浏览的执行日志，以终稿收尾。",
+      newTypstTitle: "Typst 一等公民",
+      newTypstText:
+        "打开 .typ 即由 Tinymist 实时预览——本机与远程 Host 皆可。可编译 PDF、导出，并与 LaTeX 共用同一份 .bib 引用。",
+      newRemoteTitle: "基于 SSH 的远程工作区",
+      newRemoteText:
+        "从 ~/.ssh/config 直连实验室机器。Host 运行时自动装机；聊天、文件、文献、编译与实验都在服务器上执行。模型密钥以 AES-256-GCM 密封存放。",
+      newLaptopTitle: "笔记本始终是一等公民",
+      newLaptopText:
+        "远程会话在本机保留离线副本，冷启动无需 SSH 即可阅读。远程 TeX 按文件夹记忆自动编译开关。Worktree 与 Plan 草稿留在 Host。",
+      skillsTitle: "30 项内置科研技能",
       skillsText:
-        "PrismNext Core 团队预置 29 项严密的科研技能——每项技能均配备标准协议表、LaTeX 模板与可执行验证脚本。技能归属于 Team，由当前允许名单自动加载。",
+        "PrismNext Core 团队预置 30 项严密的科研技能——每项技能均配备标准协议表、LaTeX/Typst 模板与可执行验证脚本。技能归属于 Team，由当前允许名单自动加载。",
       skillTierDesign: "构想、设计与运行 · 7",
       skillTierWriting: "学术写作 · 7",
-      skillTierFigures: "图表绘制 · 5",
+      skillTierFigures: "图表绘制 · 6",
       skillTierReview: "阅读与评审 · 5",
       skillTierMeta: "数学与元能力 · 5",
+      skTypstFigure: "复制 CeTZ / fletcher 目录模板，修改契约标签后编译独立图形。",
+      skNameTypst: "Typst 绘图",
       skIdeaLab: "大胆发散后收敛头脑风暴，构思持久化沉淀于 ideas/ 目录。",
       skRelatedWork: "从文献库到相关工作综述叙事，引用均具备实体出处。",
       skReadingNotes: "从 PDF 中提取结构化精读笔记与核心论证。",
@@ -467,21 +609,36 @@
       themeModeLight: "浅色",
       themeModeDark: "深色",
       themeModeSystem: "跟随系统",
-      principlesTitle: "设计公理",
-      pLocalTitle: "公理 1（绝对本地性）。",
+      principlesTitle: "不可妥协的底线",
+      principlesLede:
+        "这些不是功能，而是产品赖以构建的底线规则。无论自主还是辅助，所有能力都在这条线之内运行。",
+      pLocalTitle: "本地性",
       pLocalText: "所有科研项目数据、手稿与数据库严格保留在你的本地机器上。",
-      pPrivacyTitle: "公理 2（零遥测隐私）。",
+      pPrivacyTitle: "隐私",
       pPrivacyText: "无产品遥测、无行为分析。我们不收集使用数据，也不运营 PrismNext 云。",
-      pKeyTitle: "公理 3（自带密钥 BYOK）。",
+      pKeyTitle: "密钥",
       pKeyText: "模型调用走你自己的 API Key 与你信赖的供应商——无中转代理，绝无 Prism 云端。",
-      pVetoTitle: "公理 4（人类终审否决）。",
+      pVetoTitle: "终审否决",
       pVetoText: "所有自动化操作均受闸门约束且完全可审计；研究人员始终享有最终绝对否决权。",
       refsTitle: "参考文献与链接",
       refSource: "PrismNext 开源仓库",
       refReleases: "PrismNext 发布版本",
       refGithub: "作者 GitHub",
       refEmail: "联系邮箱",
-      foot: "本地优先的协作式 AI 科研工作台 —— 排版于 Instrument Serif、Sora 与 Plex Mono。",
+      foot: "全方位的 AI Agent 科研协作应用——自主闭环或副驾协作，由你决定。本地优先，就在你的书桌上。",
+      footProduct: "产品",
+      footProject: "项目",
+      footLegal: "法律",
+      chlogKicker: "版本发布",
+      chlogTitle: "更新日志",
+      chlogLede: "所有面向用户的变更，从新到旧——与项目 changelog 同步。",
+      chlogUnreleased: "未发布",
+      aboutKicker: "关于",
+      aboutTitle: "关于 PrismNext",
+      aboutComing:
+        "这个页面正在路上——它将讲述 PrismNext 的故事、背后的团队，以及产品的方向。",
+      aboutMeanwhile: "在此之前，首页介绍了 PrismNext 能做什么，更新日志记录了每个版本的变更。",
+      aboutBack: "返回首页",
       footFine: "© 2026 yibocat",
       osMac: "macOS",
       osWin: "Windows",
@@ -601,6 +758,17 @@
     });
 
     themePreview?.onThemeChange(eff);
+    updateThemeShots(eff);
+  }
+
+  /* Every img.theme-shot follows the page theme: shots3/<name>-<mode>.webp */
+  function updateThemeShots(mode) {
+    document.querySelectorAll("img.theme-shot[data-shot]").forEach((img) => {
+      const name = img.getAttribute("data-shot");
+      if (!name) return;
+      const next = `./assets/shots3/${name}-${mode}.webp`;
+      if (img.getAttribute("src") !== next) img.setAttribute("src", next);
+    });
   }
 
   function applyI18n() {
@@ -626,6 +794,7 @@
       if (key && t[key] != null) el.textContent = t[key];
     });
 
+    applyTheme();
     document.querySelectorAll(".lang-btn").forEach((btn) => {
       const active = btn.getAttribute("data-lang") === lang;
       btn.classList.toggle("is-active", active);
@@ -694,7 +863,7 @@
   }
 
   function setupScrollReveal() {
-    const nodes = document.querySelectorAll(".reveal-on-scroll");
+    const nodes = document.querySelectorAll(".reveal");
     if (!nodes.length) return;
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -718,7 +887,7 @@
 
   /* Highlight the nav link for the section currently in view. */
   function setupScrollSpy() {
-    const nav = document.querySelector(".head-nav");
+    const nav = document.querySelector(".topnav");
     if (!nav) return;
     const links = [...nav.querySelectorAll('a[href^="#"]')];
     const bySection = new Map();
@@ -764,6 +933,254 @@
     applyTheme();
   });
 
+  /* ═══ Motion: topbar state, hero parallax, loop diagram, stat counters ═══ */
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function setupTopbarState() {
+    const bar = document.querySelector(".topbar");
+    if (!bar) return;
+    const onScroll = () => bar.classList.toggle("is-scrolled", window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+  }
+
+  function setupHeroParallax() {
+    if (reducedMotion) return;
+    const grid = document.querySelector(".hero-grid");
+    if (!grid || window.matchMedia("(pointer: coarse)").matches) return;
+    let targetX = 0;
+    let targetY = 0;
+    let curX = 0;
+    let curY = 0;
+    let raf = null;
+    function tick() {
+      curX += (targetX - curX) * 0.06;
+      curY += (targetY - curY) * 0.06;
+      grid.style.transform = `translate(${curX.toFixed(2)}px, ${curY.toFixed(2)}px)`;
+      if (Math.abs(targetX - curX) > 0.1 || Math.abs(targetY - curY) > 0.1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        raf = null;
+      }
+    }
+    window.addEventListener("pointermove", (e) => {
+      const nx = e.clientX / window.innerWidth - 0.5;
+      const ny = e.clientY / window.innerHeight - 0.5;
+      targetX = nx * -18;
+      targetY = ny * -12;
+      if (!raf) raf = requestAnimationFrame(tick);
+    }, { passive: true });
+  }
+
+  /* Orbit loop: a glowing agent particle travels a ring of seven beats.
+     Beats live as HTML beside the canvas and light up as the particle passes. */
+  function setupOrbitLoop() {
+    const stage = document.querySelector("[data-orbit]");
+    const canvas = document.getElementById("orbit-canvas");
+    if (!stage || !canvas) return;
+    const beats = Array.from(stage.querySelectorAll(".orbit-beat"));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const BEATS = beats.length || 7;
+
+    function palette() {
+      const css = getComputedStyle(document.documentElement);
+      return {
+        accent: css.getPropertyValue("--accent").trim() || "#e06450",
+        brass: css.getPropertyValue("--brass").trim() || "#c9a24f",
+        line: css.getPropertyValue("--line-strong").trim() || "#39404d",
+        faint: css.getPropertyValue("--ink-faint").trim() || "#6f6a5d",
+        soft: css.getPropertyValue("--ink-soft").trim() || "#a8a294",
+      };
+    }
+
+    let pal = palette();
+
+    function sizeCanvas() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    // Active-beat highlight sync (HTML side).
+    let activeBeat = -1;
+    function setActive(i) {
+      if (i === activeBeat) return;
+      activeBeat = i;
+      beats.forEach((el, k) => el.classList.toggle("is-active", k === i));
+    }
+
+    if (reducedMotion) {
+      // Static final state: full ring, every beat lit.
+      setActive(BEATS - 1);
+      beats.forEach((el) => el.classList.add("is-active"));
+      return;
+    }
+
+    let running = false;
+    let visible = true;
+    let angle = -Math.PI / 2; // start at top
+    const SPEED = 0.36; // radians per second — one lap ≈ 17.5s
+
+    function draw() {
+      const w = canvas.getBoundingClientRect().width;
+      const h = w; // square
+      const cx = w / 2;
+      const cy = h / 2;
+      const R = w * 0.365;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // faint dotted guide ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.setLineDash([2, 7]);
+      ctx.strokeStyle = pal.line;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+
+      // beat nodes on the ring
+      for (let i = 0; i < BEATS; i++) {
+        const a = -Math.PI / 2 + (i / BEATS) * Math.PI * 2;
+        const x = cx + Math.cos(a) * R;
+        const y = cy + Math.sin(a) * R;
+        const lit = i === activeBeat;
+        ctx.beginPath();
+        ctx.arc(x, y, lit ? 7 : 4, 0, Math.PI * 2);
+        ctx.fillStyle = lit ? pal.accent : pal.soft;
+        ctx.globalAlpha = lit ? 1 : 0.55;
+        ctx.fill();
+        if (lit) {
+          // halo
+          ctx.beginPath();
+          ctx.arc(x, y, 14, 0, Math.PI * 2);
+          ctx.strokeStyle = pal.accent;
+          ctx.globalAlpha = 0.35;
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // traveled arc
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, -Math.PI / 2, angle);
+      ctx.strokeStyle = pal.accent;
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // particle with comet tail
+      const px = cx + Math.cos(angle) * R;
+      const py = cy + Math.sin(angle) * R;
+      const TAIL = 10;
+      for (let k = TAIL; k >= 1; k--) {
+        const a = angle - k * 0.035;
+        const tx = cx + Math.cos(a) * R;
+        const ty = cy + Math.sin(a) * R;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 3.2 * (1 - k / (TAIL + 1)), 0, Math.PI * 2);
+        ctx.fillStyle = pal.accent;
+        ctx.globalAlpha = 0.28 * (1 - k / (TAIL + 1));
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // glow
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, 18);
+      grad.addColorStop(0, pal.accent);
+      grad.addColorStop(1, "transparent");
+      ctx.beginPath();
+      ctx.arc(px, py, 18, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.5;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.6, 0, Math.PI * 2);
+      ctx.fillStyle = pal.accent;
+      ctx.fill();
+
+      // which beat does the particle face? (0 = top, clockwise)
+      const norm = (angle + Math.PI / 2 + Math.PI * 2) % (Math.PI * 2);
+      const beatIdx = Math.round((norm / (Math.PI * 2)) * BEATS) % BEATS;
+      setActive(beatIdx);
+    }
+
+    let last = performance.now();
+    function frame(now) {
+      if (!running) return;
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      if (visible) {
+        angle += SPEED * dt;
+        draw();
+      }
+      requestAnimationFrame(frame);
+    }
+
+    sizeCanvas();
+    draw();
+    const ro = new ResizeObserver(() => {
+      sizeCanvas();
+      draw();
+    });
+    ro.observe(canvas);
+
+    // Pause when offscreen.
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          visible = entry.isIntersecting;
+          if (visible) last = performance.now();
+        });
+      },
+      { threshold: 0 },
+    );
+    io.observe(canvas);
+
+    running = true;
+    requestAnimationFrame(frame);
+  }
+
+  /* Stat counters: count up once, when the row enters the viewport. */
+  function setupStatCounters() {
+    const nums = document.querySelectorAll(".stat-num[data-count]");
+    if (!nums.length) return;
+    if (reducedMotion) {
+      nums.forEach((el) => (el.textContent = el.getAttribute("data-count")));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target;
+          io.unobserve(el);
+          const target = Number(el.getAttribute("data-count")) || 0;
+          const dur = 1100;
+          const t0 = performance.now();
+          function frame(now) {
+            const t = Math.min(1, (now - t0) / dur);
+            const eased = 1 - Math.pow(1 - t, 3);
+            el.textContent = String(Math.round(target * eased));
+            if (t < 1) requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        });
+      },
+      { threshold: 0.6 },
+    );
+    nums.forEach((el) => io.observe(el));
+  }
+
   async function boot() {
     if (window.PrismThemePreview) {
       themePreview = window.PrismThemePreview.init(() => effectiveTheme());
@@ -774,6 +1191,10 @@
     applyI18n();
     setupScrollReveal();
     setupScrollSpy();
+    setupTopbarState();
+    setupHeroParallax();
+    setupOrbitLoop();
+    setupStatCounters();
 
     if (document.documentElement.getAttribute("data-page")) return;
 

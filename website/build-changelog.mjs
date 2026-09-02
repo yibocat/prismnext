@@ -1,12 +1,75 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark" data-pack="academic" data-page="notfound">
+#!/usr/bin/env node
+/* One-shot: render website/changelog.html from changelog/releases/*.md
+   (the summarized GitHub-release copies, newest first). */
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = join(here, "..");
+const releasesDir = join(root, "changelog", "releases");
+
+const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function inline(text) {
+  let out = esc(text);
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return out;
+}
+
+/** releases/*.md have no `## version` heading; sections are `### Name`. */
+function parseRelease(md) {
+  const sections = [];
+  let current = null;
+  for (const line of md.split("\n")) {
+    const head = line.match(/^### (.+)$/);
+    if (head) {
+      current = { name: head[1].trim(), items: [] };
+      sections.push(current);
+      continue;
+    }
+    if (line.startsWith("- ") && current) {
+      current.items.push(line.slice(2).trim());
+    }
+  }
+  return sections;
+}
+
+const files = readdirSync(releasesDir)
+  .filter((f) => /^\d+\.\d+\.\d+\.md$/.test(f))
+  .sort((a, b) => b.localeCompare(a));
+
+let html = "";
+for (const f of files) {
+  const version = f.replace(/\.md$/, "");
+  const sections = parseRelease(readFileSync(join(releasesDir, f), "utf8"));
+  html += `      <article class="chlog-release">
+        <header class="chlog-head">
+          <h2><span class="chlog-ver">${esc(version)}</span></h2>
+        </header>
+`;
+  for (const sec of sections) {
+    if (!sec.items.length) continue;
+    html += `        <section class="chlog-section">
+          <h3>${esc(sec.name)}</h3>
+          <ul>
+`;
+    for (const item of sec.items) html += `            <li>${inline(item)}</li>\n`;
+    html += `          </ul>\n        </section>\n`;
+  }
+  html += `      </article>\n`;
+}
+
+const page = `<!DOCTYPE html>
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="This page is not on the PrismNext website." />
-    <meta name="robots" content="noindex" />
+    <meta name="description" content="PrismNext release notes and changelog." />
     <meta name="theme-color" content="#101319" id="theme-color" />
-    <title>PrismNext — Page not found</title>
+    <title>PrismNext — Changelog</title>
     <link rel="icon" type="image/png" href="./assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,13 +83,11 @@
         const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", theme);
-        const pack = localStorage.getItem("prismnext-pack");
-        if (pack) document.documentElement.setAttribute("data-pack", pack);
       })();
     </script>
     <link rel="stylesheet" href="./styles.css?v=20260902a" />
   </head>
-  <body>
+  <body data-page="changelog">
     <header class="topbar">
       <div class="topbar-inner">
         <a class="brand" href="./" aria-label="PrismNext">
@@ -44,8 +105,7 @@
         </a>
         <nav class="topnav" aria-label="Pages">
           <a href="./" data-i18n="navHome">Home</a>
-          <a href="./changelog.html" data-i18n="navChangelog">Changelog</a>
-          <a href="./pricing.html" data-i18n="navPricing">Pricing</a>
+          <a href="./changelog.html" class="is-current" data-i18n="navChangelog">Changelog</a>
           <a href="./about.html" data-i18n="navAbout">About</a>
         </nav>
         <div class="topbar-actions">
@@ -73,57 +133,33 @@
             <button type="button" class="lang-btn is-active" data-lang="en" aria-pressed="true">EN</button>
             <button type="button" class="lang-btn" data-lang="zh" aria-pressed="false">中文</button>
           </div>
+          <a class="cta-btn cta-small" href="./#download" data-i18n="navDownload">Download</a>
         </div>
       </div>
     </header>
 
-    <main class="legal-shell">
-      <article class="legal" data-legal-lang="en">
-        <header class="legal-head">
-          <p class="legal-meta">404</p>
-          <h1>Page not found</h1>
-          <p class="legal-lede">
-            This address is not a page on the PrismNext website. It is not the homepage, and it is
-            not a silent redirect.
-          </p>
-        </header>
-        <p>You can return to the site or open one of the published notes:</p>
-        <ul>
-          <li><a href="./">Home</a></li>
-          <li><a href="./privacy.html">Privacy Policy</a></li>
-          <li><a href="./terms.html">Terms of Use</a></li>
-          <li><a href="./notices.html">Open Source Notices</a></li>
-          <li><a href="./security.html">Security</a></li>
-        </ul>
-      </article>
+    <main class="legal-shell chlog-page">
+      <header class="legal-head">
+        <p class="legal-meta" data-i18n="chlogKicker">Release notes</p>
+        <h1 data-i18n="chlogTitle">Changelog</h1>
+        <p class="legal-lede" data-i18n="chlogLede">
+          Every release at a glance — mirrored from the project's GitHub release notes.
+        </p>
+      </header>
+${html}    </main>
 
-      <article class="legal" data-legal-lang="zh" hidden>
-        <header class="legal-head">
-          <p class="legal-meta">404</p>
-          <h1>页面不存在</h1>
-          <p class="legal-lede">
-            这个地址不是 PrismNext 网站上的页面。它不是首页，也不会被悄悄换成首页。
-          </p>
-        </header>
-        <p>可以回到站点，或打开已发布的说明：</p>
-        <ul>
-          <li><a href="./">首页</a></li>
-          <li><a href="./privacy.html">隐私政策</a></li>
-          <li><a href="./terms.html">使用条款</a></li>
-          <li><a href="./notices.html">开源与第三方声明</a></li>
-          <li><a href="./security.html">安全报告</a></li>
-        </ul>
-      </article>
-
-      <footer class="footer">
-        <div class="footer-inner">
-          <div class="footer-base">
-            <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
-          </div>
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-base">
+          <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
         </div>
-      </footer>
-    </main>
+      </div>
+    </footer>
 
     <script src="./site.js?v=20260902a"></script>
   </body>
 </html>
+`;
+
+writeFileSync(join(here, "changelog.html"), page);
+console.log("website/changelog.html written from changelog/releases/");

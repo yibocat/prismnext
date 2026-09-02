@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-pack="academic" data-page="notfound">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="This page is not on the PrismNext website." />
-    <meta name="robots" content="noindex" />
+    <meta name="description" content="About PrismNext — the all-around AI-agent research collaboration app." />
     <meta name="theme-color" content="#101319" id="theme-color" />
-    <title>PrismNext — Page not found</title>
+    <title>PrismNext — About</title>
     <link rel="icon" type="image/png" href="./assets/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,13 +19,11 @@
         const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         const theme = saved === "light" || saved === "dark" ? saved : systemDark ? "dark" : "light";
         document.documentElement.setAttribute("data-theme", theme);
-        const pack = localStorage.getItem("prismnext-pack");
-        if (pack) document.documentElement.setAttribute("data-pack", pack);
       })();
     </script>
     <link rel="stylesheet" href="./styles.css?v=20260902a" />
   </head>
-  <body>
+  <body data-page="about">
     <header class="topbar">
       <div class="topbar-inner">
         <a class="brand" href="./" aria-label="PrismNext">
@@ -46,7 +43,7 @@
           <a href="./" data-i18n="navHome">Home</a>
           <a href="./changelog.html" data-i18n="navChangelog">Changelog</a>
           <a href="./pricing.html" data-i18n="navPricing">Pricing</a>
-          <a href="./about.html" data-i18n="navAbout">About</a>
+          <a href="./about.html" class="is-current" data-i18n="navAbout">About</a>
         </nav>
         <div class="topbar-actions">
           <a class="ghost-btn gh-link" href="https://github.com/yibocat/prismnext" target="_blank" rel="noopener" aria-label="GitHub">
@@ -78,51 +75,26 @@
     </header>
 
     <main class="legal-shell">
-      <article class="legal" data-legal-lang="en">
-        <header class="legal-head">
-          <p class="legal-meta">404</p>
-          <h1>Page not found</h1>
-          <p class="legal-lede">
-            This address is not a page on the PrismNext website. It is not the homepage, and it is
-            not a silent redirect.
-          </p>
-        </header>
-        <p>You can return to the site or open one of the published notes:</p>
-        <ul>
-          <li><a href="./">Home</a></li>
-          <li><a href="./privacy.html">Privacy Policy</a></li>
-          <li><a href="./terms.html">Terms of Use</a></li>
-          <li><a href="./notices.html">Open Source Notices</a></li>
-          <li><a href="./security.html">Security</a></li>
-        </ul>
+      <header class="legal-head">
+        <p class="legal-meta" data-i18n="aboutKicker">About</p>
+        <h1 data-i18n="aboutTitle">About PrismNext</h1>
+      </header>
+      <article class="legal">
+        <p data-i18n="aboutComing">This page is on its way — it will tell the story of PrismNext, the team behind it, and where the product is heading.</p>
+        <p data-i18n="aboutMeanwhile">Meanwhile, the homepage walks through what PrismNext does, and the changelog tracks every release.</p>
+        <p>
+          <a class="cta-btn cta-primary" href="./" data-i18n="aboutBack">Back to home</a>
+        </p>
       </article>
-
-      <article class="legal" data-legal-lang="zh" hidden>
-        <header class="legal-head">
-          <p class="legal-meta">404</p>
-          <h1>页面不存在</h1>
-          <p class="legal-lede">
-            这个地址不是 PrismNext 网站上的页面。它不是首页，也不会被悄悄换成首页。
-          </p>
-        </header>
-        <p>可以回到站点，或打开已发布的说明：</p>
-        <ul>
-          <li><a href="./">首页</a></li>
-          <li><a href="./privacy.html">隐私政策</a></li>
-          <li><a href="./terms.html">使用条款</a></li>
-          <li><a href="./notices.html">开源与第三方声明</a></li>
-          <li><a href="./security.html">安全报告</a></li>
-        </ul>
-      </article>
-
-      <footer class="footer">
-        <div class="footer-inner">
-          <div class="footer-base">
-            <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
-          </div>
-        </div>
-      </footer>
     </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="footer-base">
+          <p class="footer-copy"><span data-i18n="footCopy">© 2026 yibocat</span></p>
+        </div>
+      </div>
+    </footer>
 
     <script src="./site.js?v=20260902a"></script>
   </body>
