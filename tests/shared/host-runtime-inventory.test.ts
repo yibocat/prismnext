@@ -67,6 +67,15 @@ describe("parseHostPinMap / hostRuntimePinsFromFiles", () => {
       anydoc: "version 0.2.4\n",
     })).toEqual(pins);
   });
+
+  it("strips comments on CRLF pin files", () => {
+    expect(
+      parseHostPinMap("# Linux musl Tectonic\r\nversion 0.15.0\r\ntriple-x64 x86_64-unknown-linux-musl\r\n"),
+    ).toEqual({
+      version: "0.15.0",
+      "triple-x64": "x86_64-unknown-linux-musl",
+    });
+  });
 });
 
 describe("inventoryMissingSteps", () => {

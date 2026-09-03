@@ -33,7 +33,7 @@ const tarballName = "prismnext-host.tar.gz";
 
 function readPinLines(filePath) {
   return readFileSync(filePath, "utf8")
-    .split("\n")
+    .split(/\r?\n/)
     .map((line) => line.replace(/#.*$/, "").trim())
     .filter(Boolean);
 }

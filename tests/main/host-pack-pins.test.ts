@@ -4,16 +4,25 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(__dirname, "../..");
 
-function pinMap(filePath: string): Record<string, string> {
+function pinLines(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*$/, "").trim())
+    .filter(Boolean);
+}
+
+function pinMapFromString(raw: string): Record<string, string> {
   const map: Record<string, string> = {};
-  for (const line of readFileSync(filePath, "utf8").split("\n")) {
-    const trimmed = line.replace(/#.*$/, "").trim();
-    if (!trimmed) continue;
-    const space = trimmed.indexOf(" ");
+  for (const line of pinLines(raw)) {
+    const space = line.indexOf(" ");
     if (space < 0) continue;
-    map[trimmed.slice(0, space)] = trimmed.slice(space + 1).trim();
+    map[line.slice(0, space)] = line.slice(space + 1).trim();
   }
   return map;
+}
+
+function pinMap(filePath: string): Record<string, string> {
+  return pinMapFromString(readFileSync(filePath, "utf8"));
 }
 
 describe("host pack pins", () => {
@@ -36,6 +45,21 @@ describe("host pack pins", () => {
     expect(pack).not.toContain("nodejs.org/dist");
     expect(pack).not.toContain("dugite-native");
     expect(pack).not.toContain("registry.npmjs.org");
+    expect(pack).toContain("split(/\\r?\\n/)");
+  });
+
+  it("skips comments in CRLF pin files (Windows checkout)", () => {
+    const desktop = readFileSync(join(ROOT, "scripts/tectonic-version.txt"), "utf8").replaceAll(
+      "\n",
+      "\r\n",
+    );
+    const linuxRaw = readFileSync(join(ROOT, "scripts/host/tectonic-linux.txt"), "utf8").replaceAll(
+      "\n",
+      "\r\n",
+    );
+    const version = pinLines(desktop)[0]?.replace(/^v/, "");
+    expect(version).toBe("0.15.0");
+    expect(pinMapFromString(linuxRaw).version).toBe(version);
   });
 
   it("pins Node, Git, Tectonic, Tinymist, and AnyDoc with sha256 for both Linux arches", () => {

@@ -93,7 +93,7 @@ export interface HostRuntimePins {
 export function parseHostPinMap(raw: string | null | undefined): Record<string, string> {
   const map: Record<string, string> = {};
   if (!raw) return map;
-  for (const line of raw.split("\n")) {
+  for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.replace(/#.*$/, "").trim();
     if (!trimmed) continue;
     const space = trimmed.indexOf(" ");
