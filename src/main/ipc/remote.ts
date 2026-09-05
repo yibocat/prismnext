@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import type { RemoteBootstrapLogLine, RemoteConnectionState, RemoteSyncMode, SshConfigHost } from "../../shared/remote";
+import { parseRemoteAbs } from "../../shared/remote";
+import { encodeRemoteAbs, firstRemoteAbs } from "../remote/fs-bridge";
 import {
   MODEL_PROXY_START_CHANNEL,
   REMOTE_SYNC_PROGRESS_CHANNEL,
@@ -77,6 +79,28 @@ export function getRemoteSessionBroker(): RemoteSessionBroker {
         }
         if (channel === "typst:previewReady") {
           // Host 127.0.0.1 is the server loopback. Laptop rewrites after SSH -L in ipc/typst.ts.
+          return;
+        }
+        if (channel === "fs:fileChanged" && profileId) {
+          // Host change watcher: encode projectRoot AND changedPaths to
+          // remote:// before broadcast (the generic rewriter only covers
+          // scalar path keys, not arrays).
+          const rec = (payload ?? {}) as { projectRoot?: unknown; changedPaths?: unknown };
+          if (typeof rec.projectRoot !== "string") return;
+          const root = parseRemoteAbs(rec.projectRoot)
+            ? rec.projectRoot
+            : encodeRemoteAbs(profileId, rec.projectRoot);
+          if (!root) return;
+          const changedPaths = Array.isArray(rec.changedPaths)
+            ? rec.changedPaths
+              .filter((p): p is string => typeof p === "string")
+              .map((p) => {
+                if (parseRemoteAbs(p)) return p;
+                const bound = firstRemoteAbs(p);
+                return bound ? p : encodeRemoteAbs(profileId, p) ?? p;
+              })
+            : undefined;
+          broadcast("fs:fileChanged", { projectRoot: root, changedPaths });
           return;
         }
         const rewritten = rewriteHostEventPaths(payload, profileId);

@@ -5,7 +5,8 @@ import { useFocusedModeId } from "@/lib/workspace/modes-from-tabs";
 import { useDocumentStore } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { isFileBackedTab, modeNeedsLiveHost, modeRegistry, tabFilePath, tabNeedsLiveHost } from "@/lib/workspace/mode-registry";
-import { isRemoteProjectOffline } from "@/lib/remote/ensure-connected";
+import { isRemoteProjectOffline, isRemoteProjectReconnecting } from "@/lib/remote/ensure-connected";
+import { RemoteReconnectBanner } from "@/components/modules/remote/remote-reconnect-banner";
 import { RemoteConnectPrompt } from "@/components/modules/remote/remote-connect-prompt";
 import { useRemoteStore } from "@/stores/remote-store";
 import { useWindowState } from "@/hooks/use-window-state";
@@ -188,7 +189,11 @@ function RightAreaWorkspace() {
   const isSettingsEditorTab = activeTab?.kind === "settings-editor";
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
-  const hostProjectOffline = !inSettings && isRemoteProjectOffline(projectRoot, remoteByProfileId);
+  // Reconnecting is NOT offline: keep the last-known content on screen under a
+  // banner (the broker is self-healing); only a hard offline state (idle /
+  // disconnected / error) gets the full Connect prompt.
+  const hostReconnecting = !inSettings && isRemoteProjectReconnecting(projectRoot, remoteByProfileId);
+  const hostProjectOffline = !inSettings && !hostReconnecting && isRemoteProjectOffline(projectRoot, remoteByProfileId);
   const hostWorkspaceOffline = hostProjectOffline && modeNeedsLiveHost(focusedMode);
   const showTabToolbar =
     !inSettings &&
@@ -260,7 +265,18 @@ function RightAreaWorkspace() {
 
   // ── File watcher: reload files AND refresh git when external changes detected ──
   useEffect(() => {
-    const unsubscribe = fsDesktop.onFileChanged(({ changedPaths }) => {
+    const unsubscribe = fsDesktop.onFileChanged(({ projectRoot: eventRoot, changedPaths }) => {
+      // The watcher subscription is global while the event carries the root it
+      // belongs to. Ignore events from other (e.g. previously focused local)
+      // roots — otherwise a stale local change can trigger a rescan that
+      // overwrites the focused remote project's tree.
+      const activeRoot = useDocumentStore.getState().checkoutRoot
+        || useDocumentStore.getState().projectRoot;
+      if (eventRoot && activeRoot) {
+        const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+        if (norm(eventRoot) !== norm(activeRoot)) return;
+      }
+
       if (changedPaths && changedPaths.length > 0) {
         // Incremental: only reload the specific files that changed
         useDocumentStore.getState().incrementalFileChanged(changedPaths);
@@ -685,7 +701,12 @@ function RightAreaWorkspace() {
           {hostWorkspaceOffline ? (
             <RemoteConnectPrompt />
           ) : !inSettings || surfaceTabs.length > 0 ? (
-            <RightMainArea tabs={mainTabs} activeTabId={surfaceActiveTabId} />
+            <div className="flex h-full min-h-0 flex-col">
+              {hostReconnecting ? <RemoteReconnectBanner /> : null}
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <RightMainArea tabs={mainTabs} activeTabId={surfaceActiveTabId} />
+              </div>
+            </div>
           ) : null}
         </div>
 

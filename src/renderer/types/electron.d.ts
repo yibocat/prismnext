@@ -1519,6 +1519,13 @@ export interface ElectronAPI {
     args: import("../../shared/agent/api").AgentCancelSubagentInput,
   ) => Promise<{ ok: boolean }>;
   agentDispose: (args?: { conversationId?: string }) => Promise<{ ok: boolean }>;
+  agentPrewarm: (args: {
+    conversationId?: string;
+    tabId: string;
+    projectRoot: string;
+    boundCheckoutPath?: string;
+    sessionTeamId?: string | null;
+  }) => Promise<{ ok: boolean; reused?: boolean }>;
   agentResolvePermission: (args: {
     requestId: string;
     decision: "allow" | "deny";

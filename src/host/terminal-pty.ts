@@ -6,11 +6,14 @@ import {
   openSync,
   readFileSync,
   readlinkSync,
+  rmSync,
+  writeFileSync,
   writeSync,
 } from "node:fs";
+import { tmpdir as tmpdirSync } from "node:os";
 import { join } from "node:path";
 
-export type HostPtyBackend = "linux-ptmx" | "linux-script" | "pipe";
+export type HostPtyBackend = "linux-ptmx" | "linux-script" | "darwin-relay" | "pipe";
 
 export interface HostPty {
   pid: number;
@@ -21,11 +24,74 @@ export interface HostPty {
   kill(): void;
   onData(handler: (chunk: string) => void): void;
   onExit(handler: (code: number) => void): void;
+  /**
+   * Optional readiness signal (darwin-relay): fires once the PTY is live and
+   * pre-ready writes have been flushed. Other backends are ready at spawn.
+   */
+  onReady?(handler: () => void): void;
 }
 
 /** Linux `TIOCSPTLCK` / `TIOCGPTN` — same encoding on x64 and arm64. */
 const TIOCSPTLCK = 0x40045431;
 const TIOCGPTN = 0x80045430;
+
+/**
+ * Darwin ioctls (values verified against macOS `sys/ttycom.h` via clang):
+ * grantpt + unlockpt the ptmx slave, query its /dev/ttysN name, set winsize.
+ */
+const TIOCPTYGRANT_DARWIN = 0x20007454;
+const TIOCPTYUNLK_DARWIN = 0x20007452;
+const TIOCPTYGNAME_DARWIN = 0x40807453;
+const TIOCSWINSZ_DARWIN = 0x80087467;
+
+const DARWIN_PTY_RELAY_PERL = [
+  // grantpt AND unlockpt are both required: the slave stays EAGAIN-locked
+  // until both run. The original helper issued only TIOCPTYGRANT believing it
+  // was the unlock — the slave never opened, the shell silently fell back to
+  // plain pipes, and raced the relay for stdin bytes (intermittent command
+  // loss / missing CRLF). Values verified against macOS ttycom.h via clang.
+  `my $TIOCPTYGRANT = ${TIOCPTYGRANT_DARWIN};`,
+  `my $TIOCPTYUNLK = ${TIOCPTYUNLK_DARWIN};`,
+  `my $TIOCPTYGNAME = ${TIOCPTYGNAME_DARWIN};`,
+  `my $TIOCSWINSZ = ${TIOCSWINSZ_DARWIN};`,
+  "my ($shell, $cwd) = @ARGV;",
+  "open(my $master, '+>', '/dev/ptmx') or exit 10;",
+  "my $ubuf = chr(0) x 256;",
+  "ioctl($master, $TIOCPTYGRANT, $ubuf) or exit 11;",
+  "ioctl($master, $TIOCPTYUNLK, $ubuf) or exit 18;",
+  "my $nbuf = chr(0) x 128;",
+  "ioctl($master, $TIOCPTYGNAME, $nbuf) or exit 12;",
+  "my $slave = unpack('Z128', $nbuf);",
+  "my $S; for (1..40) { last if sysopen($S, $slave, 2); select(undef,undef,undef,0.05); }",
+  // A failed sysopen leaves the glob truthy — guard on the fd, not the handle.
+  "exit 13 unless defined fileno($S);",
+  // Real winsize on the tty (the old `system('stty', ...)` ran with a pipe
+  // stdin and never applied anything).
+  "ioctl($S, $TIOCSWINSZ, pack('S4', $ENV{PTY_ROWS} || 24, $ENV{PTY_COLS} || 80, 0, 0));",
+  "my $pid = fork(); exit 14 unless defined $pid;",
+  // Child: fresh-open the slave (session leader + no ctty yet → the tty
+  // becomes our controlling terminal) with retries, then dup onto stdio. A
+  // single un-retried sysopen raced the unlock window and left the shell on
+  // the inherited pipes.
+  "if ($pid == 0) { syscall(147); my $T; for (1..40) { last if sysopen($T, $slave, 2); select(undef,undef,undef,0.025); } exit 17 unless defined fileno($T); open(STDIN, '<&', $T); open(STDOUT, '>&', $T); open(STDERR, '>&', $T); chdir($cwd) or exit 15; exec($shell, '-f', '-i') or exit 16; }",
+  "close($S);",
+  "$| = 1; # unbuffered — the Host gates writes on this READY line",
+  "print \"READY pid=$pid\\n\";",
+  "binmode(STDIN); binmode(STDOUT);",
+  "my $rin = ''; vec($rin, fileno(STDIN), 1) = 1;",
+  "my $dead = 0; $SIG{TERM} = sub { $dead = 1; kill 'TERM', $pid; }; $SIG{CHLD} = sub { $dead = 1; };",
+  "while (!$dead) {",
+  "  my $r = $rin; vec($r, fileno($master), 1) = 1;",
+  "  my $n = select(my $rout = $r, undef, undef, 0.5);",
+  "  last if $dead;",
+  "  if ($n && $n > 0) {",
+  "    if (vec($rout, fileno($master), 1)) { my $b=''; my $rd; for (1..10) { $rd = sysread($master, $b, 8192); last if defined $rd || !$!{EINTR}; } last if !defined $rd || $rd == 0; my $off=0; while ($off < length($b)) { my $w = syswrite(STDOUT, $b, length($b)-$off, $off); last unless defined $w; $off += $w; } }",
+  "    if (vec($rout, fileno(STDIN), 1)) { my $b=''; my $rd; for (1..10) { $rd = sysread(STDIN, $b, 8192); last if defined $rd || !$!{EINTR}; } if (!defined $rd || $rd == 0) { vec($rin, fileno(STDIN), 1) = 0; next; } my $off=0; my $g=0; while ($off < length($b) && $g++ < 100) { my $w = syswrite($master, $b, length($b)-$off, $off); if (defined $w) { $off += $w; } elsif (!$!{EINTR}) { last; } } }",
+  "  }",
+  "  waitpid($pid, 1);",
+  "}",
+  "kill 'TERM', $pid;",
+].join("\n");
 
 /**
  * xterm treats LF as "down one row, stay in column". A real TTY's ONLCR
@@ -396,5 +462,161 @@ export function spawnHostPty(cwd: string, cols = 80, rows = 24): HostPty {
   } catch {
     // fall through
   }
+  try {
+    const darwin = spawnDarwinPtyRelay(cwd, shell, cols, rows);
+    if (darwin) return wrapCrlf(darwin);
+  } catch {
+    // fall through
+  }
   return wrapCrlf(spawnPipeShell(cwd, shell, cols, rows));
+}
+
+let darwinRelaySeq = 0;
+
+/**
+ * macOS backend. The Host cannot unlock ptmx itself (no ioctl; `script(1)`
+ * refuses a non-TTY stdin), and `/bin/zsh -i` over plain pipes never executes
+ * commands (zsh buffers until stdin closes). A small system perl allocates the
+ * PTY, spawns the shell with a controlling tty, and relays master↔stdio.
+ * Requires no non-core modules (plain ioctls; setsid via syscall(147)).
+ */
+function spawnDarwinPtyRelay(
+  cwd: string,
+  shell: string,
+  cols: number,
+  rows: number,
+): HostPty | null {
+  if (process.platform !== "darwin") return null;
+  const perl = findOnPath("perl") ?? "/usr/bin/perl";
+  // Write the helper to a temp file and run THAT. `perl -e` proved unreliable
+  // here: identical script+argv works from a file but the -e variant came up
+  // READY-with-dead-relay under some environments (script truncated/behaved
+  // differently). A file sidesteps the whole class of -e quirks.
+  // Path is unique per spawn: a shared per-process path let one spawn's
+  // cleanup delete the file another spawn had just written but perl had not
+  // read yet (slow exec under load) — the helper then died before READY.
+  const helperPath = join(
+    tmpdirSync(),
+    `prism-pty-relay-${process.pid}-${++darwinRelaySeq}.pl`,
+  );
+  try {
+    writeFileSync(helperPath, DARWIN_PTY_RELAY_PERL, { mode: 0o600 });
+  } catch {
+    return null;
+  }
+  const child = spawn(perl, [helperPath, shell, cwd], {
+    cwd,
+    env: {
+      ...ttyEnv(cwd, cols, rows),
+      PTY_COLS: String(Math.max(2, cols)),
+      PTY_ROWS: String(Math.max(2, rows)),
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  // Helper is self-contained — unlink once perl has had the file open. The
+  // window between spawn() and perl's open() can exceed a second under load,
+  // so a short fixed timer raced later spawns; tie cleanup to child exit and
+  // keep only a long unref'd fallback for never-exiting sessions.
+  const cleanupHelper = () => {
+    try {
+      rmSync(helperPath, { force: true });
+    } catch {
+      // ignore
+    }
+  };
+  child.on("exit", cleanupHelper);
+  const unlinkTimer = setTimeout(cleanupHelper, 30_000);
+  unlinkTimer.unref?.();
+  child.stdout?.setEncoding("utf8");
+  child.stderr?.setEncoding("utf8");
+
+  let dataHandler: (chunk: string) => void = () => undefined;
+  let exitHandler: (code: number) => void = () => undefined;
+  let exited = false;
+  child.on("exit", (code) => {
+    exited = true;
+    exitHandler(code ?? 0);
+  });
+
+  // The helper's zsh needs a moment after READY before its tty accepts input:
+  // a write issued in that window is swallowed (observed: first write lost even
+  // seconds later, while any subsequent write works). Hold writes until the
+  // relay has settled, then flush in order.
+  let ready = false;
+  let readySettled = false;
+  const readyHandlers: Array<() => void> = [];
+  let buffered = "";
+  const pendingWrites: string[] = [];
+  const flushPending = () => {
+    while (pendingWrites.length > 0) {
+      child.stdin?.write(pendingWrites.shift()!);
+    }
+  };
+  child.stdout!.on("data", (chunk: string) => {
+    if (!ready) {
+      buffered += chunk;
+      const lineEnd = buffered.indexOf("\n");
+      if (lineEnd < 0) return;
+      const first = buffered.slice(0, lineEnd);
+      buffered = buffered.slice(lineEnd + 1);
+      if (!first.startsWith("READY")) {
+        exited = true;
+        exitHandler(1);
+        return;
+      }
+      ready = true;
+      if (buffered) dataHandler(buffered);
+      // Give the helper's select loop a moment to come up, then flush
+      // pre-READY writes and signal readiness. (Immediate flush lost the
+      // first write; a 250ms settle empirically clears the startup window.)
+      setTimeout(() => {
+        readySettled = true;
+        flushPending();
+        for (const handler of readyHandlers.splice(0)) handler();
+      }, 250);
+      return;
+    }
+    dataHandler(chunk);
+  });
+  child.stderr?.on("data", (chunk: string) => {
+    if (!ready) {
+      // Helper died before the PTY was up — surface as exit.
+      if (!exited && !child.stdout!.readableLength) {
+        // Defer: stdout 'end' will fire the exit path; stderr only logs.
+      }
+    }
+  });
+
+  return {
+    pid: child.pid ?? 0,
+    shell,
+    backend: "darwin-relay",
+    write(data) {
+      if (exited) return;
+      // Before the relay settles, queue — the settle timer flushes in order.
+      if (!readySettled) {
+        pendingWrites.push(data);
+        return;
+      }
+      child.stdin?.write(data);
+    },
+    resize() {
+      // The relayed TTY keeps its spawn size; resizing needs a relay protocol
+      // message. Acceptable: remote terminals rarely resize, and the fallback
+      // pipe backend had the same limitation.
+    },
+    kill() {
+      child.kill("SIGTERM");
+    },
+    onData(handler) {
+      dataHandler = handler;
+    },
+    onExit(handler) {
+      exitHandler = handler;
+    },
+    onReady(handler) {
+      if (ready) handler();
+      else readyHandlers.push(handler);
+    },
+  };
 }

@@ -61,13 +61,13 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Here is the answer." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
-    expect(segments[1]).toMatchObject({ kind: "text", blockIndex: 3 });
-    const worked = segments[0];
-    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
-      { kind: "activity", blockIndices: [0] },
-      { kind: "activity", blockIndices: [1, 2] },
-    ]);
+    // Live keeps burst folds open (no Worked-for shell mid-stream): the shell
+    // toggling on prose↔tool alternation remounted the fold tree and made
+    // streaming visibly jump. The wrap happens exactly once, at settle.
+    expect(segments.map((s) => s.kind)).toEqual(["activity", "activity", "text"]);
+    expect(segments[0]).toMatchObject({ kind: "activity", blockIndices: [0] });
+    expect(segments[1]).toMatchObject({ kind: "activity", blockIndices: [1, 2] });
+    expect(segments[2]).toMatchObject({ kind: "text", blockIndex: 3 });
   });
 
   it("live: keeps AI prose outside and starts a new fold after prose", () => {
@@ -80,16 +80,15 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "More answer." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
-    const worked = segments[0];
-    expect(worked && worked.kind === "worked" ? worked.children.map((c) => c.kind) : []).toEqual([
+    expect(segments.map((s) => s.kind)).toEqual([
       "activity",
       "activity",
       "text",
       "activity",
       "activity",
+      "text",
     ]);
-    expect(segments[1]).toMatchObject({ kind: "text", blockIndex: 5 });
+    expect(segments[5]).toMatchObject({ kind: "text", blockIndex: 5 });
   });
 
   it("live: does not merge across short prose", () => {
@@ -100,7 +99,7 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Final report." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
+    expect(segments.map((s) => s.kind)).toEqual(["activity", "text", "activity", "text"]);
   });
 
   it("ignores empty text blocks", () => {
@@ -139,16 +138,16 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "Task finished — here is the synthesis." },
     ];
     const segments = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(segments.map((s) => s.kind)).toEqual(["worked", "text"]);
-    const worked = segments[0];
-    expect(worked && worked.kind === "worked" ? worked.children.map((c) => c.kind) : []).toEqual([
+    expect(segments.map((s) => s.kind)).toEqual([
       "activity",
       "activity",
       "text",
       "tool",
+      "text",
     ]);
-    expect(segments[1]).toMatchObject({
-      kind: "text",
+    expect(segments[3]).toMatchObject({
+      kind: "tool",
+      block: { name: "task" },
     });
   });
 
@@ -187,7 +186,9 @@ describe("segmentAssistantBlocks", () => {
     ];
     const live = segmentAssistantBlocks(blocks, { phase: "live" });
     const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
-    expect(foldIdentityKeys(live)).toEqual(["WORKED-REMOUNT", "a0", "a1", "x2", "t3", "x4"]);
+    // Live: burst folds stay open (stable keys, no mid-stream remount).
+    expect(foldIdentityKeys(live)).toEqual(["a0", "a1", "x2", "t3", "x4"]);
+    // Settled: one Worked-for shell, once — inner keys keep live identities.
     expect(foldIdentityKeys(settled)).toEqual(["WORKED-REMOUNT", "a0", "a1", "x2", "t3", "x4"]);
     expect(settled[0]?.kind).toBe("worked");
     expect(settled[1]).toMatchObject({ kind: "text", blockIndex: 4 });
@@ -200,7 +201,7 @@ describe("segmentAssistantBlocks", () => {
     ]);
   });
 
-  it("live wraps into Worked-for once the final reply has started", () => {
+  it("live keeps folds open when the final reply starts; settled wraps once", () => {
     const blocks: ContentBlock[] = [
       { type: "thinking", thinking: "plan" },
       { type: "tool_use", id: "t1", name: "ls" },
@@ -208,7 +209,9 @@ describe("segmentAssistantBlocks", () => {
       { type: "text", text: "我读了这份文件——" },
     ];
     const live = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
+    expect(live.map((s) => s.kind)).toEqual(["activity", "activity", "text"]);
+    const settled = segmentAssistantBlocks(blocks, { phase: "settled" });
+    expect(settled.map((s) => s.kind)).toEqual(["worked", "text"]);
   });
 
   it("live keeps the process tree open while tools are still the last segment", () => {
@@ -231,8 +234,8 @@ describe("segmentAssistantBlocks", () => {
     ];
     const live = foldIdentityKeys(segmentAssistantBlocks(blocks, { phase: "live" }));
     const history = foldIdentityKeys(segmentAssistantBlocks(blocks));
-    expect(live).toEqual(["WORKED-REMOUNT", "a0", "x1", "a2", "x3"]);
-    expect(history).toEqual(live);
+    expect(live).toEqual(["a0", "x1", "a2", "x3"]);
+    expect(history).toEqual(["WORKED-REMOUNT", "a0", "x1", "a2", "x3"]);
   });
 
   it("prose-only turns never grow a Worked-for shell", () => {
@@ -284,13 +287,13 @@ describe("segmentAssistantBlocks", () => {
       },
     ];
     const live = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
-    const worked = live[0];
-    expect(worked && worked.kind === "worked" ? worked.children : []).toMatchObject([
-      { kind: "activity", blockIndices: [0] },
-      { kind: "text", block: { text: "我读了这份文件，先看结构。" } },
-    ]);
+    // Strong (heading) split applies live; segments stay unwrapped burst shapes.
+    expect(live.map((s) => s.kind)).toEqual(["activity", "text", "text"]);
     expect(live[1]).toMatchObject({
+      kind: "text",
+      block: { text: "我读了这份文件，先看结构。" },
+    });
+    expect(live[2]).toMatchObject({
       kind: "text",
       block: { text: "## 总结\n这是正式回复。" },
     });
@@ -305,7 +308,7 @@ describe("segmentAssistantBlocks", () => {
       },
     ];
     const live = segmentAssistantBlocks(blocks, { phase: "live" });
-    expect(live.map((s) => s.kind)).toEqual(["worked", "text"]);
+    expect(live.map((s) => s.kind)).toEqual(["activity", "text"]);
     expect(live[1]).toMatchObject({
       kind: "text",
       block: {

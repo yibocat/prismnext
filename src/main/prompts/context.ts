@@ -42,6 +42,21 @@ export interface BuildPromptContextOptions {
 }
 
 /**
+ * One first message builds the prompt context up to five times
+ * (composeStableSystem / composeAgentsMd / composeProjectRules ×2 / direct).
+ * Each call re-reads workbench.json + AGENTS.md from disk. A short-TTL cache
+ * collapses those into one scan; `invalidatePromptContextCache` lets callers
+ * drop the entry out-of-band (rules sync, workspace config save).
+ */
+const PROMPT_CONTEXT_CACHE_TTL_MS = 3_000;
+const promptContextCache = new Map<string, { ctx: PromptContext; at: number }>();
+
+export function invalidatePromptContextCache(projectRoot?: string): void {
+  if (projectRoot == null) promptContextCache.clear();
+  else promptContextCache.delete(projectRoot);
+}
+
+/**
  * Build the full PromptContext for a given project.
  * Called in the chat:send handler before composing the prompt.
  */
@@ -49,6 +64,12 @@ export async function buildPromptContext(
   projectRoot?: string,
   _options?: BuildPromptContextOptions,
 ): Promise<PromptContext> {
+  const key = projectRoot?.trim() ?? "";
+  const cached = promptContextCache.get(key);
+  if (cached && Date.now() - cached.at < PROMPT_CONTEXT_CACHE_TTL_MS) {
+    return cached.ctx;
+  }
+
   const ctx: PromptContext = { projectRoot };
 
   if (projectRoot) {
@@ -79,5 +100,6 @@ export async function buildPromptContext(
     // settings may not be available during early startup
   }
 
+  promptContextCache.set(key, { ctx, at: Date.now() });
   return ctx;
 }

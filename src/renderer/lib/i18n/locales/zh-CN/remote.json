@@ -49,6 +49,8 @@
   "connectProgress": "{{percent}}%",
   "connect": "连接",
   "workspaceOffline": "连上这台 Host 之后，才能看文件、Git 和实验。",
+  "reconnectBanner": "连接中断，正在自动重连…内容可能过期",
+  "reconnectHint": "无需操作，重连成功后自动刷新。",
   "sshPickerTitle": "通过 SSH 连接",
   "sshHostnamePlaceholder": "SSH 主机名",
   "openSshConfig": "打开 SSH Config",

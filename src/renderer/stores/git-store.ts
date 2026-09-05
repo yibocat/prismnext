@@ -496,12 +496,19 @@ export const useGitStore = create<GitState>()((set, get) => ({
 
   // ── checkRepo ──
   checkRepo: async (projectRoot: string) => {
+    // Focused-root currency: if selectUnit focused another root while this
+    // check was in flight, discard — otherwise the panel flickers between
+    // the old and new repo's data (local ↔ remote switching).
+    const unitRootAtStart = get().unitRoot;
+    const focusedRootChanged = () => get().unitRoot !== unitRootAtStart;
     try {
       if (await isRemoteGitOffline(projectRoot)) {
+        if (focusedRootChanged()) return;
         applyOfflineGitHint(projectRoot, set, get);
         return;
       }
       const isRepo = await gitDesktop.gitIsRepo(projectRoot);
+      if (focusedRootChanged()) return;
       if (isRepo) {
         set({
           isGitRepo: true,
@@ -525,6 +532,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
         rememberGitRepoHint(projectRoot, { isRepo: true, branch: get().branch });
       } else {
         rememberGitRepoHint(projectRoot, { isRepo: false, branch: "" });
+        if (focusedRootChanged()) return;
         // Clear stale git data from previous project to prevent cross-project pollution
         set({
           isGitRepo: false,
@@ -548,6 +556,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
         });
       }
     } catch {
+      if (focusedRootChanged()) return;
       set({
         isGitRepo: false,
         repoKnown: true,
@@ -574,6 +583,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── refreshStatus ──
   refreshStatus: async (projectRoot: string) => {
     if (await isRemoteGitOffline(projectRoot)) return;
+    const unitRootAtStart = get().unitRoot;
     lastRefreshTimestamp = Date.now();
 
     // Short-lived cache: if status was fetched within the last second
@@ -593,6 +603,7 @@ export const useGitStore = create<GitState>()((set, get) => ({
           gitDesktop.gitDiffStats(projectRoot).catch(() => ({ unstaged: {}, staged: {} })),
         ]);
         const remotes = await remotesPromise;
+        if (get().unitRoot !== unitRootAtStart) return;
         _statusCache = { projectRoot, data, stats, timestamp: Date.now() };
         set({ remotes });
       } catch (err: unknown) {
@@ -676,6 +687,9 @@ export const useGitStore = create<GitState>()((set, get) => ({
         }
       }
 
+      // Landing guard: focused root changed while the status fetch was in
+      // flight — don't paint the old repo's files/branch over the new one.
+      if (get().unitRoot !== unitRootAtStart) return;
       set({
         branch: data.branch,
         files,
@@ -749,8 +763,11 @@ export const useGitStore = create<GitState>()((set, get) => ({
   // ── refreshBranches ──
   refreshBranches: async (projectRoot: string) => {
     if (await isRemoteGitOffline(projectRoot)) return;
+    const unitRootAtStart = get().unitRoot;
     try {
       const data: GitBranchesData = await gitDesktop.gitBranches(projectRoot);
+      // Don't paint another root's branch list over the focused one.
+      if (get().unitRoot !== unitRootAtStart) return;
       // Only overwrite branch if we got a meaningful value
       if (data.current && data.current !== "(no branch)") {
         set({ branches: data.branches, branch: data.current });

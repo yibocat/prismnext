@@ -39,10 +39,28 @@ export function conversationHasContent(
   return conv.turns.length > 0 || conv.live !== null;
 }
 
-export function conversationDisplayTurns(
-  conv: Conversation,
-): ConversationDisplayTurn[] {
-  const turns: ConversationDisplayTurn[] = conv.turns.map((turn) => ({
+/**
+ * Display turns are rebuilt on every view (once per streamed delta). The
+ * reducer never mutates committed turns, so their display projection is
+ * cached per turn object — stable identity keeps downstream memos (TurnRail
+ * previews, per-turn previews) from recomputing per token.
+ */
+const displayTurnCache = new WeakMap<ConversationTurn, ConversationDisplayTurn>();
+
+/** Structural source: a committed ConversationTurn or the live streaming turn. */
+type DisplayTurnSource = Pick<ConversationTurn, "turnId" | "turnIndex" | "user" | "assistant">
+  & { status: ConversationTurn["status"]; error?: string; meta?: TurnMessageMeta };
+
+function buildDisplayTurn(
+  turn: DisplayTurnSource,
+  raw: ConversationTurn | null,
+  live: boolean,
+): ConversationDisplayTurn {
+  if (raw) {
+    const cached = displayTurnCache.get(raw);
+    if (cached) return cached;
+  }
+  const built: ConversationDisplayTurn = {
     turnId: turn.turnId,
     turnIndex: turn.turnIndex,
     userBlocks: visibleUserBlocks(turn.user.blocks),
@@ -50,17 +68,21 @@ export function conversationDisplayTurns(
     status: turn.status,
     ...(turn.error ? { error: turn.error } : {}),
     ...(turn.meta ? { meta: turn.meta } : {}),
-    live: false,
-  }));
+    live,
+  };
+  if (raw) displayTurnCache.set(raw, built);
+  return built;
+}
+
+export function conversationDisplayTurns(
+  conv: Conversation,
+): ConversationDisplayTurn[] {
+  const turns: ConversationDisplayTurn[] = conv.turns.map(
+    (turn) => buildDisplayTurn(turn, turn, false),
+  );
   if (conv.live) {
-    turns.push({
-      turnId: conv.live.turnId,
-      turnIndex: conv.live.turnIndex,
-      userBlocks: visibleUserBlocks(conv.live.user.blocks),
-      assistantBlocks: conv.live.assistant.blocks,
-      status: "streaming",
-      live: true,
-    });
+    // The live turn object churns per delta — never cache it.
+    turns.push(buildDisplayTurn(conv.live, null, true));
   }
   return turns;
 }

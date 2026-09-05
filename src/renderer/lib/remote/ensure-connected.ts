@@ -31,6 +31,28 @@ export function remotePhaseIsReady(phase: RemoteConnectionState["phase"] | undef
   return phase === "ready";
 }
 
+/**
+ * Host dropped mid-session and the broker is auto-reconnecting on its own.
+ * NOT the same as offline: no user action is needed, panels should show their
+ * last-known data in a degraded (stale-data) state instead of empty shells
+ * or "Connect" prompts.
+ */
+export function remotePhaseIsReconnecting(
+  phase: RemoteConnectionState["phase"] | undefined,
+): boolean {
+  return phase === "reconnecting";
+}
+
+/** True when this folder is remote:// and its Host is auto-reconnecting. */
+export function isRemoteProjectReconnecting(
+  projectRoot: string | null | undefined,
+  byProfileId: Record<string, Pick<RemoteConnectionState, "phase">>,
+): boolean {
+  const parsed = parseRemoteAbs(projectRoot ?? "");
+  if (!parsed) return false;
+  return remotePhaseIsReconnecting(byProfileId[parsed.profileId]?.phase);
+}
+
 /** True when this folder is remote:// and the Host is not ready yet. */
 export function isRemoteProjectOffline(
   projectRoot: string | null | undefined,

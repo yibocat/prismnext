@@ -65,6 +65,7 @@ vi.stubGlobal("window", {
     agentCancel,
     agentDispose,
     agentLoadSession,
+    agentPrewarm: vi.fn().mockResolvedValue({ ok: true }),
   },
 });
 

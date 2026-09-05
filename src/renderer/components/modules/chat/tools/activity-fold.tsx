@@ -94,6 +94,8 @@ export const ActivityFold = memo(function ActivityFold({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
   const frozenElapsedRef = useRef<number | null>(null);
+  // Once the user toggles manually, auto open/close must stop fighting them.
+  const userToggledRef = useRef(false);
 
   useLayoutEffect(() => {
     const anchor = toggleRef.current;
@@ -120,14 +122,22 @@ export const ActivityFold = memo(function ActivityFold({
     }
   }, [isStreamingSegment, elapsed]);
 
-  // Default open while this burst is the live process. Never re-force open on
-  // token updates — that made the fold impossible to close. Collapse once the
-  // final reply starts or the turn settles.
+  // Auto state while streaming: open while this burst is the live process,
+  // collapse once the burst stops streaming. Two guards keep this stable:
+  //   1. user intent wins — after a manual toggle we never auto-change again;
+  //   2. the auto collapse captures a viewport anchor, so the height change
+  //      does not yank scroll position mid-read.
   useEffect(() => {
-    if (!liveProcessOpen) setExpanded(false);
-  }, [liveProcessOpen]);
+    if (liveProcessOpen || userToggledRef.current) return;
+    if (!expanded) return;
+    if (toggleRef.current) {
+      pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
+    }
+    setExpanded(false);
+  }, [liveProcessOpen, expanded]);
 
   const toggleExpanded = useCallback(() => {
+    userToggledRef.current = true;
     if (toggleRef.current) {
       pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
     }
@@ -259,16 +269,21 @@ export const ActivityFold = memo(function ActivityFold({
           />
         </span>
       </button>
-      <div
-        className={cn(expanded ? "mb-0.5 space-y-0.5" : "hidden")}
-        hidden={!expanded}
-      >
+      {/* Mount the body ONLY while expanded. A hidden-but-mounted body still
+          runs markdown/claim effects: visual artifacts inside it would win the
+          ChatVisualDedupe claim (it renders BEFORE the final reply in JSX
+          order), making the same figure in the visible reply render null —
+          "figures visible while streaming, gone after the turn settles".
+          Unmounting on collapse releases the claim so the reply wins. */}
+      {expanded ? (
+        <div className="mb-0.5 space-y-0.5">
           {childrenSegments && childrenSegments.length > 0
             ? childrenSegments.map((child, childIndex) => {
                 if (child.kind === "text") {
+                  const partSuffix = child.part ? `-${child.part}` : "";
                   return (
                     <div
-                      key={`worked-text-${child.blockIndex}`}
+                      key={`worked-text-${child.blockIndex}${partSuffix}`}
                       className="min-w-0 max-w-full overflow-hidden py-0.5 text-[length:var(--font-chat-message)]"
                     >
                       <MarkdownRenderer
@@ -370,7 +385,8 @@ export const ActivityFold = memo(function ActivityFold({
                 }
                 return null;
               })}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 });

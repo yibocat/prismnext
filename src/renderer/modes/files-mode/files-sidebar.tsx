@@ -163,6 +163,9 @@ export function FilesSidebar() {
   const renameFolder = useDocumentStore((s) => s.renameFolder);
   const createNewFile = useDocumentStore((s) => s.createNewFile);
   const createFolder = useDocumentStore((s) => s.createFolder);
+  // True while focusProject scans the newly focused root — the tree below
+  // still holds the PREVIOUS project's files, so show a skeleton instead.
+  const isSwitchingProject = useDocumentStore((s) => s.isSwitchingProject);
 
   // Delete file AND close any tabs that were viewing it
   const handleDeleteFile = useCallback(
@@ -698,6 +701,24 @@ export function FilesSidebar() {
       <div className="flex-1 min-h-0 flex flex-col">
         {/* ─── Virtualized file tree ─── */}
         <div className="flex-1 min-h-0">
+          {isSwitchingProject ? (
+            <div
+              className="flex-1 h-full min-h-0 px-2.5 py-2 animate-pulse"
+              aria-busy="true"
+              data-sidebar="switching-skeleton"
+            >
+              {Array.from({ length: 10 }, (_, i) => (
+                <div
+                  key={i}
+                  className="mb-2.5 h-4 rounded bg-muted"
+                  style={{
+                    width: `${88 - ((i * 13) % 42)}%`,
+                    marginLeft: `${(i % 3) * 14}px`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
           <AppContextMenu>
             <AppContextMenuTrigger asChild>
               <div
@@ -738,6 +759,7 @@ export function FilesSidebar() {
               </AppContextMenuItem>
             </AppContextMenuContent>
           </AppContextMenu>
+          )}
         </div>
 
       </div>

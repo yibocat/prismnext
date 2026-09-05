@@ -44,6 +44,14 @@ export async function ensureWorkspaceMainTex(projectRoot: string) {
   return projectDesktop.workspaceEnsureMainTex(projectRoot);
 }
 
+/**
+ * Monotonic id for loadConfig requests: the LAST STARTED load always wins,
+ * even when an older (e.g. previous project's) request resolves later —
+ * otherwise a slow local config load can overwrite the focused remote
+ * project's workspace dirs (wrong manuscriptDir silently filters the file tree).
+ */
+let loadConfigGeneration = 0;
+
 export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
   subscribeWithSelector((set, get) => ({
     workspaceDirs: [],
@@ -52,11 +60,13 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
     error: null,
 
     loadConfig: async (projectRoot: string) => {
+      const generation = ++loadConfigGeneration;
       // Reset before loading — prevents stale auto-save from previous project
       set({ loaded: false, workspaceDirs: [], manuscriptConfig: null, error: null });
       try {
         const dirs =
           await projectDesktop.workspaceGetConfig(projectRoot);
+        if (generation !== loadConfigGeneration) return;
         set({
           workspaceDirs: dirs,
           manuscriptConfig: findManuscriptConfig(dirs),
@@ -64,6 +74,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigState>()(
           error: null,
         });
       } catch (e: any) {
+        if (generation !== loadConfigGeneration) return;
         const defaults = defaultWorkspaceDirs();
         set({
           workspaceDirs: defaults,

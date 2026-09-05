@@ -13,6 +13,15 @@ let openProjectGeneration = 0;
 let projectOpenSupersededByClose = false;
 /** Monotonic id so a slower openFile cannot clobber a newer selection. */
 let fileOpenGeneration = 0;
+/**
+ * Monotonic id for the active workspace root. Bumped on every focus switch /
+ * checkout-root change / close. Async tree writers (metadata reload, watcher
+ * rescan, content reads) capture it before their first await and discard
+ * results on mismatch — otherwise a slow LOCAL scan can land after the user
+ * switched to a remote project (or vice versa) and overwrite the tree with
+ * the wrong project's files.
+ */
+let rootGeneration = 0;
 import { useRightPanelStore } from "./right-panel-store";
 import { tabFileId, tabFilePath } from "@/lib/workspace/mode-registry";
 import { useWorktreeStore } from "./worktree-store";
@@ -72,6 +81,13 @@ interface DocumentState {
   isSaving: boolean;
   /** True while openProject is in progress — UI can show a skeleton */
   isOpeningProject: boolean;
+  /**
+   * True while focusProject switches to a DIFFERENT root (not the first open —
+   * that uses isOpeningProject's full-screen overlay). During a switch the
+   * tree still holds the PREVIOUS project's files; panels show a skeleton
+   * instead of stale data ("Files stayed on the local project" perception).
+   */
+  isSwitchingProject: boolean;
   /** Per-file metadata for ALL project files (name, type, size).
    *  Built once on openProject / worktree switch. Updated incrementally by watcher. */
   fileMetadata: Map<string, FileMeta>;
@@ -254,6 +270,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
   initialized: false,
   isSaving: false,
   isOpeningProject: false,
+  isSwitchingProject: false,
   fileMetadata: new Map(),
   openedContents: new Map(),
   jumpTarget: null,
@@ -303,11 +320,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     }
 
     const generation = ++openProjectGeneration;
+    rootGeneration++;
     projectOpenSupersededByClose = false;
     const t0 = performance.now();
     let canonicalRoot = rootPath;
     const firstOpen = !previousRoot;
+    // Switching (not first open): show per-panel skeletons instead of the
+    // previous project's tree while the new root scans (seconds over SSH).
     if (firstOpen) set({ isOpeningProject: true });
+    else set({ isSwitchingProject: true });
     try {
       const remoteAbs = recoverRemoteAbs(rootPath);
       if (remoteAbs && connectRemote) {
@@ -324,6 +345,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
       await switchWorkbenchFocus({
         canonicalRoot,
+        previousRoot,
         connectRemote,
         shouldAbort: () => generation !== openProjectGeneration,
         supersededByClose: () => projectOpenSupersededByClose,
@@ -381,6 +403,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         const project = canonicalRoot.replace(/\\/g, "/").split("/").filter(Boolean).pop() ?? canonicalRoot;
         log.debug("focusProject complete", { durationMs: ms, project });
         if (firstOpen) set({ isOpeningProject: false });
+        set({ isSwitchingProject: false });
       }
     }
   },
@@ -660,6 +683,9 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const { checkoutRoot } = get();
     if (newRoot === checkoutRoot) return;
 
+    // New tree root — invalidate any in-flight scans from the old root.
+    rootGeneration++;
+
     // Save all dirty files in the current checkout before switching
     await get().saveAllFiles();
 
@@ -715,8 +741,14 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     // but allow explicit calls (git ops, manual refresh) to bypass.
     if (!force && _suppressWatcherReload) return;
 
+    // Root-currency guard: a slow scan (SSH remote, huge tree) must not
+    // overwrite the tree after the user switched to another project.
+    const generation = rootGeneration;
+    const scannedRoot = checkoutRoot;
+
     try {
       const result = await fsDesktop.fsScanMetadata(checkoutRoot);
+      if (rootGeneration !== generation || get().checkoutRoot !== scannedRoot) return;
       const newFiles: ProjectFile[] = result.files.map((f) => ({
         id: f.relativePath,
         name: f.relativePath.split("/").pop() || f.relativePath,
@@ -773,6 +805,10 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         ? newOpenedContents.has(currentActiveId) && newFiles.some((f) => f.id === currentActiveId)
         : false;
 
+      // Re-check before landing: closeTab above must stay sync, but this
+      // guards any future interleaving between scan and commit.
+      if (rootGeneration !== generation || get().checkoutRoot !== scannedRoot) return;
+
       // result.folders comes from the disk scan — it is the ground truth.
       // It includes empty folders (correct) and excludes non-existent ones.
       set({
@@ -800,6 +836,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
 
     // Skip watcher-triggered reload during save cascade
     if (_suppressWatcherReload) return;
+
+    // Root-currency guard: watcher events from the previous project must not
+    // touch the tree of the newly focused one (and vice versa).
+    const generation = rootGeneration;
+    const rootAtStart = checkoutRoot;
+    const isRootCurrent = () =>
+      rootGeneration === generation && get().checkoutRoot === rootAtStart;
 
     // Large batch or any structural change → full disk rescan (correct & fast)
     if (absolutePaths.length > 20) {
@@ -863,6 +906,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         readTasks.push(
           fsDesktop.fsReadImage(absPath)
             .then(({ dataUrl }) => {
+              if (!isRootCurrent()) return;
               const current = get().openedContents.get(relPath);
               if (current && !current.isDirty) {
                 const newMap = new Map(get().openedContents);
@@ -876,6 +920,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         readTasks.push(
           fsDesktop.fsRead(absPath)
             .then(({ content }) => {
+              if (!isRootCurrent()) return;
               const current = get().openedContents.get(relPath);
               if (current && !current.isDirty) {
                 const newMap = new Map(get().openedContents);
@@ -979,8 +1024,16 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     const { checkoutRoot, openedContents } = get();
     if (!checkoutRoot) return;
 
+    // Root-currency guard: branch switch rescan must not land after the
+    // user focused another (possibly remote) project.
+    const generation = rootGeneration;
+    const scannedRoot = checkoutRoot;
+    const isRootCurrent = () =>
+      rootGeneration === generation && get().checkoutRoot === scannedRoot;
+
     // Phase 1: scan metadata
     const result = await fsDesktop.fsScanMetadata(checkoutRoot);
+    if (!isRootCurrent()) return;
     const newFiles: ProjectFile[] = result.files.map((f) => ({
       id: f.relativePath,
       name: f.relativePath.split("/").pop() || f.relativePath,
@@ -1069,6 +1122,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
       }
     }
+
+    if (!isRootCurrent()) return;
 
     const { activeFileId: currentActiveId } = get();
     const activeStillExists = currentActiveId

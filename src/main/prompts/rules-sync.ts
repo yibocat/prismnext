@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { projectRulesRel } from "../../shared/workbench/paths";
+import { invalidatePromptContextCache } from "./context";
 
 export const PRISM_RULES_REL = projectRulesRel();
 const RULE_FILE = "RULE.md";
@@ -162,6 +163,7 @@ export function installProjectRule(
   const ruleDir = join(projectRoot, PRISM_RULES_REL, ruleId);
   mkdirSync(ruleDir, { recursive: true });
   writeFileSync(join(ruleDir, RULE_FILE), content, "utf-8");
+  invalidatePromptContextCache(projectRoot);
 }
 
 export function deleteProjectRule(projectRoot: string, ruleId: string): void {
@@ -169,6 +171,7 @@ export function deleteProjectRule(projectRoot: string, ruleId: string): void {
   if (existsSync(ruleDir)) {
     rmSync(ruleDir, { recursive: true, force: true });
   }
+  invalidatePromptContextCache(projectRoot);
 }
 
 export function setProjectRuleEnabled(
@@ -190,4 +193,5 @@ export function setProjectRuleEnabled(
     body: meta.body,
   });
   writeFileSync(ruleMdPath, next, "utf-8");
+  invalidatePromptContextCache(projectRoot);
 }

@@ -11,7 +11,7 @@
 export { promptManager } from "./engine/manager";
 
 export type { PromptContext, PromptLayer, PromptModule } from "./types";
-export { buildPromptContext, type BuildPromptContextOptions } from "./context";
+export { buildPromptContext, invalidatePromptContextCache, type BuildPromptContextOptions } from "./context";
 
 export {
   assembleAgentSystemPrompt,

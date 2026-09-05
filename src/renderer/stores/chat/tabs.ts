@@ -56,6 +56,21 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
     useWorkbenchStore.getState().setFocusConversation(id);
     syncCheckoutForTab(tab);
     syncCitationStagingForTab(tab);
+    // Fire-and-forget runtime prewarm: build the Pi session in the background
+    // so the first send skips runtime/MCP/prompt-assembly startup entirely.
+    // The main process swallows failures and send() rebuilds on mismatch.
+    if (isAgentRuntime(tab.runtime)) {
+      const root = useDocumentStore.getState().projectRoot;
+      if (root) {
+        // Optional chaining: electronAPI may lack the bridge in tests/host.
+        void agentDesktop.agentPrewarm({
+          conversationId: id,
+          tabId: id,
+          projectRoot: root,
+          sessionTeamId: tab.sessionTeamId,
+        })?.catch?.(() => {});
+      }
+    }
     return id;
   },
 
@@ -86,6 +101,9 @@ export const createChatTabsSlice: StateCreator<ChatState, [], [], Partial<ChatSt
     syncCheckoutForTab(hydratedTabs.find((t) => t.id === newActiveId));
     syncCitationStagingForTab(hydratedTabs.find((t) => t.id === newActiveId));
     clearTurnWindowState(id);
+    void import("../stream-store").then(({ useStreamStore }) => {
+      useStreamStore.getState().endTurn(id);
+    });
 
       // Clean up agent session for this tab — cancel any running prompt
       if (isAgentRuntime(closingTab.runtime)) {

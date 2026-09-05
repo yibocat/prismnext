@@ -232,17 +232,24 @@ const INITIAL_STATE = {
   checkedRunIds: [] as string[],
 };
 
+/** Monotonic id — the last-started experiment list refresh wins. */
+let refreshListGeneration = 0;
+
 export const useExperimentStore = create<ExperimentState>((set, get) => ({
   ...INITIAL_STATE,
 
   refreshList: async (projectRoot) => {
     if (!projectRoot) return;
+    // Last-started refresh wins: a slow list load for the previously focused
+    // project must not overwrite the focused project's experiments.
+    const generation = ++refreshListGeneration;
     set({ loading: true, error: null });
     try {
       // Archived toggle = archived-only view (not “include archived”).
       // IPC `includeArchived: true` returns the union; filter client-side.
       const archivedOnly = get().showArchived;
       const res = await experimentDesktop.experimentList(projectRoot, archivedOnly);
+      if (generation !== refreshListGeneration) return;
       if (!res.ok) {
         set({ experiments: [], corruptIds: [], loading: false, error: res.error });
         return;
@@ -257,6 +264,7 @@ export const useExperimentStore = create<ExperimentState>((set, get) => ({
         error: null,
       });
     } catch (err) {
+      if (generation !== refreshListGeneration) return;
       set({
         experiments: [],
         corruptIds: [],

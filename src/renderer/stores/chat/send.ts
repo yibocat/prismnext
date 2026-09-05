@@ -28,6 +28,7 @@ import { parseRemoteAbs } from "@shared/remote";
 import { ensureRemoteLiveForWork } from "@/lib/remote/ensure-connected";
 import { pauseAutoCompileForAi, resumeAutoCompileAfterAi } from "../compile-store";
 import { useDocumentStore } from "../document-store";
+import { useStreamStore, streamTabState } from "../stream-store";
 import { lastPathForSession, useWorkbenchStore } from "../workbench-store";
 import { markSessionAutoUnreadIfBackground } from "@/lib/chat/session-chrome";
 import { isActiveSessionFromChatState } from "@/lib/chat/session-status";
@@ -306,6 +307,9 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
       });
       return { tabs, ...projectActiveTab(tabs, state.activeTabId) };
     });
+    // Live assistant blocks are owned by the stream store from here on;
+    // text/thinking deltas bypass chat-store entirely (see _applyAgentEvent).
+    useStreamStore.getState().beginTurn(tabId, turnId);
     pauseAutoCompileForAi(tabId);
     const started = get().tabs.find((tab) => tab.id === tabId);
     const turnIndex = started?.conversation.live?.turnIndex ?? 0;
@@ -320,6 +324,21 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
   },
 
   _applyAgentEvent: (tabId, event) => {
+    // ── Streaming fast path ──
+    // Text/thinking/tool-progress deltas land here at display rate. They only
+    // shape the live turn's assistant blocks, so they bypass chat-store
+    // completely: no tabs.map, no conversation rebuild, no subscriber churn.
+    // The live turn renderer subscribes to stream-store instead.
+    if (
+      !event.subagent
+      && (event.type === "text_delta"
+        || event.type === "thinking_delta"
+        || event.type === "tool_progress")
+    ) {
+      useStreamStore.getState().applyDelta(tabId, event);
+      return;
+    }
+
     set((state) => {
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== tabId) return tab;
@@ -329,7 +348,27 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
           event.type === "turn_failed" && event.error
             ? { ...event, error: formatAgentSendError(event.error) }
             : event;
-        const conversation = applyConversationEvent(tab.conversation, mapped);
+        // The stream store owns the live blocks between tool events.
+        // Tool-lifecycle and terminal events must see the latest text before
+        // the reducer applies on top (terminal events commit these blocks
+        // into the turn record).
+        const streamBlocks =
+          tab.conversation.live && !event.subagent
+            ? streamTabState(tabId).turnId === tab.conversation.live.turnId
+              ? streamTabState(tabId).blocks
+              : null
+            : null;
+        const conversationInput =
+          streamBlocks && tab.conversation.live
+            ? {
+                ...tab.conversation,
+                live: {
+                  ...tab.conversation.live,
+                  assistant: { blocks: streamBlocks },
+                },
+              }
+            : tab.conversation;
+        const conversation = applyConversationEvent(conversationInput, mapped);
         const suggest = conversation.pendingPlanSuggest;
         return {
           ...applyConversationToTab(tab, conversation),
@@ -345,6 +384,20 @@ export const createChatSendSlice: StateCreator<ChatState, [], [], Partial<ChatSt
         streamTick: state.streamTick + 1,
       };
     });
+    // Keep the stream store authoritative for the live turn: reducer output
+    // wins on tool-lifecycle / subagent / terminal events.
+    const tabAfterEvent = get().tabs.find((item) => item.id === tabId);
+    const liveAfter = tabAfterEvent?.conversation.live;
+    if (liveAfter && !event.subagent) {
+      useStreamStore.getState().setBlocks(tabId, liveAfter.turnId, liveAfter.assistant.blocks);
+    }
+    if (
+      event.type === "turn_finished"
+      || event.type === "turn_failed"
+      || event.type === "turn_cancelled"
+    ) {
+      useStreamStore.getState().endTurn(tabId);
+    }
     if (event.type === "tool_finished" && event.ok) {
       const tab = get().tabs.find((item) => item.id === tabId);
       if (event.toolName === "literature-stage") {

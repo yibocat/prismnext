@@ -27,28 +27,37 @@ describe("VT CRLF translation", () => {
 });
 
 describe("host terminal stream", () => {
-  it("emits CRLF so a pipe-backed shell cannot staircase in xterm", async () => {
-    const root = mkdtempSync(join(tmpdir(), "prism-host-crlf-"));
-    const ctx = createHostContext();
-    ctx.remoteRoot = root;
-    const chunks: string[] = [];
-    ctx.emit = (channel, payload) => {
-      if (channel === "terminal:data") {
-        chunks.push(String((payload as { data?: string }).data ?? ""));
+  // Spawns a real PTY (darwin-relay: perl helper + shell). Under full-suite
+  // parallel load the relay handshake alone can take seconds, so give the
+  // whole test a generous budget instead of the 5s default.
+  it(
+    "emits CRLF so a pipe-backed shell cannot staircase in xterm",
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "prism-host-crlf-"));
+      const ctx = createHostContext();
+      ctx.remoteRoot = root;
+      const chunks: string[] = [];
+      ctx.emit = (channel, payload) => {
+        if (channel === "terminal:data") {
+          chunks.push(String((payload as { data?: string }).data ?? ""));
+        }
+      };
+      await dispatchHostMethod("terminal:create", { sessionId: "s-crlf", tabId: "t-crlf" }, ctx);
+      await dispatchHostMethod("terminal:write", { sessionId: "s-crlf", data: "printf 'a\\nb\\n'\n" }, ctx);
+      // A real PTY echoes the typed command back, so "contains a and b" is
+      // satisfied by the echo alone — poll for the actual CRLF output instead.
+      const deadline = Date.now() + 20_000;
+      let joined = "";
+      while (Date.now() < deadline) {
+        joined = chunks.join("");
+        if (/a\r\nb\r\n/.test(joined)) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
-    };
-    await dispatchHostMethod("terminal:create", { sessionId: "s-crlf", tabId: "t-crlf" }, ctx);
-    await dispatchHostMethod("terminal:write", { sessionId: "s-crlf", data: "printf 'a\\nb\\n'\n" }, ctx);
-    const deadline = Date.now() + 5000;
-    let joined = "";
-    while (Date.now() < deadline) {
-      joined = chunks.join("");
-      if (joined.includes("a") && joined.includes("b")) break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    await dispatchHostMethod("terminal:destroy", { sessionId: "s-crlf" }, ctx);
-    expect(joined).toMatch(/a\r\nb\r\n/);
-  });
+      await dispatchHostMethod("terminal:destroy", { sessionId: "s-crlf" }, ctx);
+      expect(joined).toMatch(/a\r\nb\r\n/);
+    },
+    30_000,
+  );
 });
 
 describe("xterm display contract", () => {

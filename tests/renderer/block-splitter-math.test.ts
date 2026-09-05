@@ -14,6 +14,69 @@ function simulateStreaming(chunks: string[]) {
   return { full, committedSnapshots };
 }
 
+describe("useBlockSplitter committedBlocks", () => {
+  const DOC = [
+    "## Heading intro",
+    "",
+    "First paragraph with $x=1$ math.",
+    "",
+    "$$ a^2 + b^2 = c^2 $$",
+    "",
+    "```ts",
+    "const a = 1;",
+    "```",
+    "",
+    "- item one",
+    "- item two",
+    "",
+    "Final paragraph.",
+  ].join("\n");
+
+  it("blocks appear in order within committed (whitespace slivers dropped)", () => {
+    const { result } = renderHook(() => useBlockSplitter(DOC));
+    const { committedBlocks, committed, pending } = result.current;
+    // No stray whitespace-only blocks; every block is real content.
+    for (const block of committedBlocks) {
+      expect(block.trim()).not.toBe("");
+    }
+    // Blocks must appear in order inside committed (blank slivers between
+    // fence close and the next \n\n are filtered out, so join !== committed).
+    let pos = 0;
+    for (const block of committedBlocks) {
+      const at = committed.indexOf(block, pos);
+      expect(at).toBeGreaterThanOrEqual(pos);
+      pos = at + block.length;
+    }
+    // Full document is still recoverable from committed + pending.
+    expect((committed + pending).replace(/\n+$/, "")).toBe(DOC);
+  });
+
+  it("keeps earlier blocks byte-identical while streaming appends", () => {
+    const chunks = DOC.split(/(?<=\n)/);
+    let full = "";
+    let prevBlocks: string[] = [];
+    for (const chunk of chunks) {
+      full += chunk;
+      const { result } = renderHook(() => useBlockSplitter(full));
+      const blocks = result.current.committedBlocks;
+      // Append-only: every previously seen block keeps its exact content.
+      for (let i = 0; i < prevBlocks.length; i++) {
+        expect(blocks[i]).toBe(prevBlocks[i]);
+      }
+      prevBlocks = blocks;
+    }
+    expect(prevBlocks.length).toBeGreaterThan(2);
+  });
+
+  it("never splits inside a fenced code block", () => {
+    const doc = "Intro.\n\n```py\nprint('a')\n\nprint('b')\n```\n\nTail.";
+    const { result } = renderHook(() => useBlockSplitter(doc));
+    const codeBlock = result.current.committedBlocks.find((b) => b.includes("print"));
+    expect(codeBlock).toContain("print('a')");
+    expect(codeBlock).toContain("print('b')");
+  });
+});
+
 const LABEL_SMOOTHING = `## Label Smoothing（简单提一下）
 
 训练时不是用 one-hot 标签（$y_t$ 位置为 1，其余为 0），而是做平滑：

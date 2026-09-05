@@ -1042,17 +1042,27 @@ export function applyConversationToTab(
   conversation: Conversation,
   extras?: { planEvents?: import("@shared/agent/api").AgentPlanEvent[] },
 ): TabState {
-  const turnMeta = { ...tab.turnMeta };
-  for (const turn of conversation.turns) {
-    if (turn.meta) turnMeta[turn.turnIndex] = turn.meta;
+  // This runs per streamed delta. `turns` (immutable reducer) only changes its
+  // reference when a turn commits — during streaming, rebuilding turnMeta and
+  // the subagent-runs projection here was pure per-token garbage.
+  const turnsChanged = tab.conversation.turns !== conversation.turns;
+  const turnMeta = turnsChanged ? { ...tab.turnMeta } : tab.turnMeta;
+  if (turnsChanged) {
+    for (const turn of conversation.turns) {
+      if (turn.meta) turnMeta[turn.turnIndex] = turn.meta;
+    }
   }
+  const subAgentRuns =
+    tab.conversation.subagentRuns === conversation.subagentRuns && tab.subAgentRuns
+      ? tab.subAgentRuns
+      : projectConversationSubagentRuns(conversation.subagentRuns);
   const usage = conversation.usage;
   return {
     ...tab,
     conversation,
     isStreaming: conversation.live !== null,
     turnMeta,
-    subAgentRuns: projectConversationSubagentRuns(conversation.subagentRuns),
+    subAgentRuns,
     ...(typeof usage?.inputTokens === "number" && usage.inputTokens > 0
       ? { contextTokens: usage.inputTokens, contextUsageSource: "usage_update" as const }
       : {}),

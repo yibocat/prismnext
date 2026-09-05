@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { emptyConversation } from "@shared/agent/conversation";
+import type { ContentBlock } from "@/lib/chat/types";
 import {
   collectConversationAssistantBlocks,
   conversationCompactedCount,
@@ -15,6 +16,7 @@ import "./tools/task-widget-register";
 import { TurnFooter, extractTurnCopyTextFromBlocks } from "./turn-footer";
 import {
   captureSentinelScrollAnchor,
+  followActiveTurnTail,
   isFollowingStreamTurn,
   pinActiveTurnTop,
   pinOrFollowActiveTurn,
@@ -37,6 +39,7 @@ import { MessageTodoDrawer } from "./todo-plan-bar";
 import { UserMessageHeader } from "./user-message-header";
 import { isTodoPlanDismissed } from "@/lib/chat/composer-pending-tools";
 import { useDocumentStore } from "@/stores/document-store";
+import { useStreamStore } from "@/stores/stream-store";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { useRemoteStore } from "@/stores/remote-store";
 import { parseRemoteAbs } from "@shared/remote";
@@ -110,6 +113,24 @@ TurnErrorRetry.displayName = "TurnErrorRetry";
 
 const chatLiteratureWarmupRoots = new Set<string>();
 
+/**
+ * Copy-text per turn, keyed on the turn's assistant blocks reference.
+ * Committed turns keep the same blocks reference across renders, so this
+ * turns an O(full turn text) join per streamed token into a Map hit.
+ */
+const turnCopyTextCache = new WeakMap<ContentBlock[], string>();
+
+function cachedTurnCopyText(blocks: ContentBlock[]): string {
+  const cached = turnCopyTextCache.get(blocks);
+  if (cached != null) return cached;
+  const text = extractTurnCopyTextFromBlocks(blocks);
+  turnCopyTextCache.set(blocks, text);
+  return text;
+}
+
+/** User-bubble preview per turn, keyed on the (stable) display userBlocks. */
+const turnPreviewCache = new WeakMap<ContentBlock[], ReturnType<typeof extractTurnUserPreviewFromBlocks>>();
+
 export const ChatMessages = memo(function ChatMessages() {
   const { t } = useTranslation();
   const conversation = useChatStore((s) => {
@@ -137,6 +158,15 @@ export const ChatMessages = memo(function ChatMessages() {
     return !!tab?.planConfirmSuppressed;
   });
   const turnMeta = useChatStore((s) => s.turnMeta);
+  // Live turn assistant blocks are owned by the stream store (text/thinking
+  // deltas bypass chat-store). Subscribing here re-renders ONLY this tree per
+  // frame — chat-store tabs/conversation stay referentially stable mid-turn.
+  const liveStreamBlocks = useStreamStore((s) =>
+    activeTabId ? (s.byTab[activeTabId]?.blocks ?? null) : null,
+  );
+  const liveStreamTurnId = useStreamStore((s) =>
+    activeTabId ? (s.byTab[activeTabId]?.turnId ?? null) : null,
+  );
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const remoteByProfileId = useRemoteStore((s) => s.byProfileId);
   const remoteLogs = useRemoteStore((s) => s.logs);
@@ -185,6 +215,12 @@ export const ChatMessages = memo(function ChatMessages() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const toolResultMapCacheRef = useRef<Map<string, ContentBlock> | null>(null);
+  const turnPreviewsCacheRef = useRef<Array<{
+    text: string;
+    hasAttachments: boolean;
+    meta?: import("@shared/agent/conversation").TurnMessageMeta;
+  }> | null>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const lastTurnRef = useRef<HTMLElement>(null);
   const lastTurnIndexRef = useRef<number | null>(null);
@@ -225,7 +261,14 @@ export const ChatMessages = memo(function ChatMessages() {
     const container = scrollRef.current;
     const turn = lastTurnRef.current;
     if (!container || !turn) return;
-    pinOrFollowActiveTurn(container, turn, smooth);
+    // Mid-stream: always chase the tail. pinOrFollowActiveTurn flips to
+    // pin-top whenever the turn height dips under the viewport (e.g. a fold
+    // collapsed), yanking the viewport back to the user message mid-stream.
+    if (isStreamingRef.current) {
+      followActiveTurnTail(container, turn, smooth);
+    } else {
+      pinOrFollowActiveTurn(container, turn, smooth);
+    }
     setShowScrollButton(false);
   }, []);
 
@@ -235,13 +278,31 @@ export const ChatMessages = memo(function ChatMessages() {
     [conversation, expandCompacted],
   );
 
-  const toolResultMap = useMemo(
-    () => buildToolResultMapFromBlocks(
+  const toolResultMap = useMemo(() => {
+    const map = buildToolResultMapFromBlocks(
       collectConversationAssistantBlocks(conversation),
       { isStreaming },
-    ),
-    [conversation, isStreaming],
-  );
+    );
+    // Identity-preserving cache: the map is rebuilt each render from blocks
+    // whose array churns per token, but the VALUES (tool_result block refs)
+    // are stable. Returning the previous Map whenever entries are
+    // reference-identical keeps every committed turn's memo (ToolWidget /
+    // ActivityFold / AssistantBlockList) alive instead of re-rendering the
+    // whole transcript on every streamed delta.
+    const prev = toolResultMapCacheRef.current;
+    if (prev && prev.size === map.size) {
+      let identical = true;
+      for (const [id, block] of map) {
+        if (prev.get(id) !== block) {
+          identical = false;
+          break;
+        }
+      }
+      if (identical) return prev;
+    }
+    toolResultMapCacheRef.current = map;
+    return map;
+  }, [conversation, isStreaming]);
 
   const todoAnchorTurnIndex = useMemo(() => {
     for (let i = turns.length - 1; i >= 0; i--) {
@@ -265,24 +326,55 @@ export const ChatMessages = memo(function ChatMessages() {
     return `↑${input} ↓${output}`;
   }, [conversation.usage]);
 
-  const turnPreviews = useMemo(
-    () =>
-      turns.map((turn, idx) => {
-        const p = extractTurnUserPreviewFromBlocks(turn.userBlocks);
-        return { text: p.text, hasAttachments: p.hasAttachments, meta: turn.meta ?? turnMeta[idx] };
-      }),
-    [turns, turnMeta],
-  );
+  const turnPreviews = useMemo(() => {
+    const next = turns.map((turn, idx) => {
+      // userBlocks identity is stable per committed turn (display-turn cache),
+      // so the preview extraction runs once per turn, not once per token.
+      let preview = turnPreviewCache.get(turn.userBlocks);
+      if (!preview) {
+        preview = extractTurnUserPreviewFromBlocks(turn.userBlocks);
+        turnPreviewCache.set(turn.userBlocks, preview);
+      }
+      return { text: preview.text, hasAttachments: preview.hasAttachments, meta: turn.meta ?? turnMeta[idx] };
+    });
+    // Identity-preserving array: TurnRail is memo'd; keep the previous array
+    // while every entry compares equal (the common case during streaming).
+    const prev = turnPreviewsCacheRef.current;
+    if (prev && prev.length === next.length) {
+      let identical = true;
+      for (let i = 0; i < next.length; i++) {
+        const a = prev[i]!;
+        const b = next[i]!;
+        if (a.text !== b.text || a.hasAttachments !== b.hasAttachments || a.meta !== b.meta) {
+          identical = false;
+          break;
+        }
+      }
+      if (identical) return prev;
+    }
+    turnPreviewsCacheRef.current = next;
+    return next;
+  }, [turns, turnMeta]);
 
   const lastTurnForIndicator = turns[turns.length - 1];
+  /**
+   * Assistant blocks for rendering: the live turn reads the stream store
+   * (fresh per frame); committed turns read the conversation (stable refs).
+   */
+  const liveTurnBlocks = liveStreamTurnId !== null
+    && liveStreamBlocks !== null
+    && lastTurnForIndicator?.live
+    && lastTurnForIndicator.turnId === liveStreamTurnId
+    ? liveStreamBlocks
+    : lastTurnForIndicator?.assistantBlocks ?? null;
   const hasCurrentTurnAssistantContent = useMemo(() => {
-    return (lastTurnForIndicator?.assistantBlocks ?? []).some((b) => {
+    return (liveTurnBlocks ?? []).some((b) => {
       if (b.type === "text" && b.text?.trim()) return true;
       if (b.type === "thinking" && b.thinking?.trim() && !b._progress) return true;
       if (b.type === "tool_use") return true;
       return false;
     });
-  }, [lastTurnForIndicator]);
+  }, [liveTurnBlocks]);
 
   const showStreamingIndicator = isStreaming && !hasCurrentTurnAssistantContent;
 
@@ -841,7 +933,11 @@ export const ChatMessages = memo(function ChatMessages() {
                   />
                 )}
                 <TurnAssistantContent
-                  blocks={turn.assistantBlocks}
+                  blocks={
+                    turn.live && liveTurnBlocks && turn.turnId === liveStreamTurnId
+                      ? liveTurnBlocks
+                      : turn.assistantBlocks
+                  }
                   toolResultMap={toolResultMap}
                   sessionId={chatSessionId ?? ""}
                   turnIndex={turnIdx}
@@ -852,7 +948,11 @@ export const ChatMessages = memo(function ChatMessages() {
                 />
                 <TurnFooter
                   turnIndex={turnIdx}
-                  copyText={extractTurnCopyTextFromBlocks(turn.assistantBlocks)}
+                  copyText={
+                    turn.live && liveTurnBlocks && turn.turnId === liveStreamTurnId
+                      ? cachedTurnCopyText(liveTurnBlocks)
+                      : cachedTurnCopyText(turn.assistantBlocks)
+                  }
                   isComplete={isTurnComplete}
                   completedAt={turnStamp?.completedAt}
                   modelLabel={turnStamp?.modelLabel}

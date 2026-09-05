@@ -153,9 +153,11 @@ export const AssistantBlockList = memo(function AssistantBlockList({
             if (segment.kind === "text") {
               const animateTip =
                 !!isStreamingMsg && segIndex === segments.length - 1;
+              // process/reply split segments share blockIndex — part disambiguates.
+              const partSuffix = segment.part ? `-${segment.part}` : "";
               return (
                 <div
-                  key={`text-${segment.blockIndex}`}
+                  key={`text-${segment.blockIndex}${partSuffix}`}
                   className="min-w-0 max-w-full overflow-hidden text-[length:var(--font-chat-message)]"
                 >
                   <MarkdownRenderer

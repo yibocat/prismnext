@@ -19,6 +19,11 @@ export type TextSegment = {
   kind: "text";
   blockIndex: number;
   block: ContentBlock;
+  /**
+   * Set when a single text block was split into process + reply segments —
+   * the two share `blockIndex`, so React keys must include this discriminator.
+   */
+  part?: "process" | "reply";
 };
 
 export type ActivitySegment = {
@@ -134,11 +139,13 @@ function applyTrailingTextSplit(
   const processSeg: TextSegment = {
     kind: "text",
     blockIndex: last.blockIndex,
+    part: "process",
     block: { ...last.block, text: split.process },
   };
   const replySeg: TextSegment = {
     kind: "text",
     blockIndex: last.blockIndex,
+    part: "reply",
     block: { ...last.block, text: split.reply },
   };
   return [...segments.slice(0, -1), processSeg, replySeg];
@@ -220,16 +227,6 @@ function wrapSettledWorked(segments: AssistantSegment[]): AssistantSegment[] {
   ];
 }
 
-function shouldWrapLiveFinalReply(segments: AssistantSegment[]): boolean {
-  if (segments.length < 2) return false;
-  const last = segments[segments.length - 1];
-  if (last?.kind !== "text") return false;
-  const before = segments.slice(0, -1);
-  return processChildrenHaveTools(
-    before.filter((seg): seg is WorkedChildSegment => seg.kind !== "worked"),
-  );
-}
-
 /** Ordered prose / activity / standalone-tool segments preserving block order. */
 export function segmentAssistantBlocks(
   blocks: ContentBlock[],
@@ -238,11 +235,12 @@ export function segmentAssistantBlocks(
   const live = segmentAssistantBlocksLive(blocks);
   const phase = options?.phase ?? "settled";
   const split = applyTrailingTextSplit(live, phase === "settled");
-  if (phase === "live") {
-    if (shouldWrapLiveFinalReply(split)) return wrapSettledWorked(split);
-    return split;
-  }
-  return wrapSettledWorked(split);
+  // Live phase must NOT wrap into a Worked-for fold. Wrapping while streaming
+  // re-keys the whole segment tree (activity-N ↔ worked-*) on every
+  // tool→prose→tool alternation, unmounting/remounting folds mid-stream —
+  // the open/close/open visual jump. The wrap now happens exactly once,
+  // when the turn settles.
+  return phase === "live" ? split : wrapSettledWorked(split);
 }
 
 /** Persist / React key: turn + first block index. Never include live|settled. */

@@ -1,4 +1,4 @@
-import { useMemo, memo } from "react";
+import { useEffect, useMemo, useState, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
 import {
@@ -22,7 +22,6 @@ import {
 // their live status streams in the message-flow tool card instead.
 function useComposerChromeStackItems(): ComposerChromeStackItem[] {
   const { t } = useTranslation();
-  const streamTick = useChatStore((s) => s.streamTick);
 
   const planSuggestVisible = useChatStore((s) => {
     const tab = s.tabs.find((x) => x.id === s.activeTabId);
@@ -36,6 +35,20 @@ function useComposerChromeStackItems(): ComposerChromeStackItem[] {
   const permissionGate = usePermissionGateState();
   const permissionOpen = permissionGate.show;
   const permissionPeek = permissionGate.peekLabel;
+
+  // Only follow stream changes while a hosted question exists — an
+  // unconditional streamTick subscription re-rendered the whole composer
+  // chrome stack on every stream chunk.
+  const [streamTick, setStreamTick] = useState(0);
+  useEffect(() => {
+    if (!questionId) return;
+    setStreamTick(useChatStore.getState().streamTick);
+    return useChatStore.subscribe((state, prev) => {
+      if (state.streamTick !== prev.streamTick) {
+        setStreamTick(state.streamTick);
+      }
+    });
+  }, [questionId]);
 
   const questionPeek = useMemo(() => {
     if (!questionId) return null;

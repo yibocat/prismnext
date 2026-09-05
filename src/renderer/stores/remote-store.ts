@@ -82,6 +82,15 @@ function onProfileReady(profileId: string): void {
       const { refreshFocusedRemoteNeighbors } = await import("@/lib/workspace/project-lifecycle");
       await refreshFocusedRemoteNeighbors(root).catch(() => undefined);
       void import("@/stores/git-store").then((mod) => mod.useGitStore.getState().checkRepo(root));
+      // Host became ready for the focused project: if a lazy focus closed the
+      // working set while the Host was down (or the connection dropped after a
+      // refocus), bring back the archived tabs now that the tree is live.
+      try {
+        const { restoreArchivedTabs } = await import("@/lib/workspace/tab-restore");
+        restoreArchivedTabs(root);
+      } catch {
+        // restore must never break the ready path
+      }
     }
     if (syncedReadyProfiles.has(profileId)) return;
     syncedReadyProfiles.add(profileId);

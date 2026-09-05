@@ -92,6 +92,13 @@ export const agentApi = {
 		ipcRenderer.invoke("agent:status", args),
 	agentSend: (args: import("../shared/agent/api").AgentSendInput) =>
 		ipcRenderer.invoke("agent:send", args),
+	agentPrewarm: (args: {
+		conversationId?: string;
+		tabId: string;
+		projectRoot: string;
+		boundCheckoutPath?: string;
+		sessionTeamId?: string | null;
+	}) => ipcRenderer.invoke("agent:prewarm", args),
 	agentCancel: (args: { conversationId: string }) =>
 		ipcRenderer.invoke("agent:cancel", args),
 	agentCancelSubagent: (args: import("../shared/agent/api").AgentCancelSubagentInput) =>

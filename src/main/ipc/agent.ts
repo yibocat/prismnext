@@ -223,6 +223,25 @@ export function registerAgentHandlers(): void {
     return { ok: true };
   });
 
+  /** Best-effort runtime prewarm for the first message. Never throws. */
+  ipcMain.handle(
+    "agent:prewarm",
+    async (_event, args: {
+      conversationId?: string;
+      tabId: string;
+      projectRoot: string;
+      boundCheckoutPath?: string;
+      sessionTeamId?: string | null;
+    }) => {
+      try {
+        const agent = await getAgentService();
+        return await agent.prewarm(args);
+      } catch {
+        return { ok: false };
+      }
+    },
+  );
+
   ipcMain.handle(
     "agent:resolvePermission",
     async (_event, args: { requestId: string; decision: "allow" | "deny" }) => {

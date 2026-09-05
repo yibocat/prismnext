@@ -310,7 +310,18 @@ export function registerFsHandlers(
     if (!rootPath) {
       throw new Error("Cannot watch an unopened project");
     }
-    if (isRemoteProjectRoot(rootPath)) return;
+    if (isRemoteProjectRoot(rootPath)) {
+      // Route to the Host's change watcher instead of silently no-oping —
+      // remote trees otherwise never self-update.
+      const remote = parseRemoteAbs(rootPath);
+      if (!remote) return;
+      const broker = getRemoteSessionBroker();
+      if (!broker.isBound(remote.profileId)) return;
+      await broker.invoke(remote.profileId, "fs:watchStart", {
+        rootPath: remote.abs,
+      }).catch(() => undefined);
+      return;
+    }
     await watcher.startWatching(rootPath);
     if (authority.currentRoot !== rootPath) {
       throw new Error("Cannot watch an unopened project");
@@ -318,6 +329,15 @@ export function registerFsHandlers(
   });
 
   ipcMain.handle("fs:watch-stop", async () => {
+    const rootPath = authority.currentRoot;
+    const remote = rootPath ? parseRemoteAbs(rootPath) : null;
+    if (remote) {
+      const broker = getRemoteSessionBroker();
+      if (broker.isBound(remote.profileId)) {
+        await broker.invoke(remote.profileId, "fs:watchStop", {}).catch(() => undefined);
+      }
+      return;
+    }
     await watcher.stopWatching();
   });
 

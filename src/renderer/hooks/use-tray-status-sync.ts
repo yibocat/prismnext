@@ -155,11 +155,15 @@ export function useTrayStatusSync(): void {
     };
 
     pushAll();
+    // Tray cares about tab identity / title / streaming state only. Compare
+    // those cheaply so per-token conversation changes skip the tray work —
+    // an unfiltered pushStatus ran on every streamed delta before.
+    const trayTabKey = (tabs: { id: string; sessionId?: string | null; title: string; isStreaming?: boolean }[]) =>
+      tabs.map((tab) => `${tab.id}:${tab.sessionId ?? ""}:${tab.title}:${tab.isStreaming ? 1 : 0}`).join("|");
     const unsubChat = useChatStore.subscribe((next, prev) => {
+      if (trayTabKey(next.tabs) === trayTabKey(prev.tabs)) return;
       pushStatus();
-      const tabKey = (tabs: { id: string; sessionId?: string | null; title: string }[]) =>
-        tabs.map((tab) => `${tab.id}:${tab.sessionId}:${tab.title}`).join("|");
-      if (tabKey(next.tabs) !== tabKey(prev.tabs)) pushMenu();
+      pushMenu();
     });
     const unsubPerm = usePermissionStore.subscribe(pushStatus);
     const unsubDoc = useDocumentStore.subscribe(pushAll);

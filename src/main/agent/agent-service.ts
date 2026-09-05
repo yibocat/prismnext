@@ -9,6 +9,7 @@ import { GATEWAY_PLACEHOLDER_KEY } from "../../shared/remote";
 import { createElectronSink, type ElectronSinkTarget } from "../remote/event-sink";
 import type { PermissionMode, SessionAgent } from "../../shared/agent/session-agent";
 import { isProvisionalSessionTitle } from "../../shared/agent/session-title";
+import { isRemoteProjectRoot } from "../../shared/remote";
 import { buildPlanModeTurnAppendix, assembleAgentSystemPrompt, HOST_SYSTEM_IDENTITY } from "../prompts";
 import {
   type AgentAnswerQuestionInput,
@@ -278,6 +279,12 @@ export class AgentService {
   private readonly mcpHosts = new Map<string, AgentMcpHost>();
   private readonly subsessionRuntimes = new Map<string, PiSubsessionRuntime>();
   private readonly subagentRunsByRuntime = new Map<string, Record<string, ConversationSubagentRun>>();
+  /**
+   * Conversations whose runtime was created by `prewarm()` with default
+   * settings. `send()` double-checks the structural context (roster / skills /
+   * MCP allowlist) the prewarm could not know about and rebuilds on mismatch.
+   */
+  private readonly prewarmedConversations = new Set<string>();
 
   constructor(private readonly deps: AgentServiceDeps) {
     this.registry = deps.registry ?? new RuntimeRegistry({
@@ -432,6 +439,29 @@ export class AgentService {
               projectRoot,
               boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
             });
+        this.prewarmedConversations.delete(conversationId);
+      } else if (this.prewarmedConversations.has(conversationId)) {
+        // The prewarmed runtime was built from defaults before the user sent.
+        // Roster / skills / MCP allowlist shape the runtime's tool set, so a
+        // mismatch means the prewarm missed something — rebuild for real.
+        const stale = this.prewarmIsStale(conversationId, teamBinding, input);
+        this.prewarmedConversations.delete(conversationId);
+        if (stale) {
+          log.info("prewarm.rebuild", { conversationId, reason: "context_mismatch" });
+          await this.resetSession(conversationId);
+          binding = existing
+            ? await this.registry.openConversation({
+                conversationId,
+                tabId: this.activeTabId,
+                projectRoot,
+              })
+            : await this.registry.createConversation({
+                conversationId,
+                tabId: this.activeTabId,
+                projectRoot,
+                boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
+              });
+        }
       }
       this.sessionId = binding.runtimeSessionId ?? null;
       this.projectRoot = projectRoot;
@@ -490,6 +520,105 @@ export class AgentService {
     if (!id) return;
     this.sendEpoch.set(id, (this.sendEpoch.get(id) ?? 0) + 1);
     this.sending.delete(id);
+  }
+
+  /** True when the prewarmed runtime's tool-shaping context differs from this send's. */
+  private prewarmIsStale(
+    conversationId: string,
+    teamBinding: TeamPiBindingResult | undefined,
+    input: AgentSendInput,
+  ): boolean {
+    const ctx = this.startContexts.get(conversationId);
+    if (!ctx) return true;
+    const rosterIds = (ctx.roster ?? []).map((r) => r.fqid).join(",");
+    const wantRosterIds = (teamBinding?.roster ?? []).map((r) => r.fqid).join(",");
+    if (rosterIds !== wantRosterIds) return true;
+    const skillSources = (ctx.skills ?? []).map((s) => s.fqid).join(",");
+    const wantSkills = teamBinding?.skills ?? [];
+    const wantExtra = input.skillIds ?? [];
+    const wantSkillSources = [
+      ...wantSkills.map((s) => s.fqid),
+      ...wantExtra,
+    ].join(",");
+    if (skillSources !== wantSkillSources) return true;
+    const mcpAllow = (ctx.mcpAllowlist ?? []).filter(Boolean).join(",");
+    const wantMcpAllow = (input.mcpServerAllowlist ?? []).filter(Boolean).join(",");
+    if (mcpAllow !== wantMcpAllow) return true;
+    return false;
+  }
+
+  /**
+   * Build the Pi runtime for a conversation before the first message so the
+   * send path skips PermissionGate / ToolHost / prompt compose / MCP spawn /
+   * session creation entirely. Pure optimization: failures are swallowed and
+   * `send()` rebuilds through the normal path, and `send()` verifies the
+   * structural context (roster / skills / MCP) and rebuilds on mismatch.
+   */
+  async prewarm(input: {
+    conversationId?: string;
+    tabId: string;
+    projectRoot: string;
+    boundCheckoutPath?: string;
+    sessionTeamId?: string | null;
+  }): Promise<{ ok: boolean; reused?: boolean }> {
+    const projectRoot = input.projectRoot.trim();
+    if (!projectRoot) return { ok: false };
+    // Remote sessions run their agent on the Host; local prewarm is meaningless.
+    if (isRemoteProjectRoot(projectRoot)) return { ok: false };
+    const conversationId = input.conversationId?.trim()
+      || input.tabId?.trim()
+      || AGENT_FALLBACK_CONVERSATION_ID;
+    if (this.registry.getBinding(conversationId)) return { ok: true, reused: true };
+    if (this.sending.has(conversationId)) return { ok: false };
+
+    const settings = this.deps.getSettings();
+    const auth = resolveAgentAuth({
+      settings: settings as AgentAuthInput["settings"],
+      allowMissingKey: this.deps.modelTransport === "proxy",
+    });
+    if (!auth.ok) return { ok: false };
+
+    // Resolve the same team binding send() would, so the runtime's tool set
+    // (Task roster / skills) matches the default case. `send()` still verifies.
+    let teamBinding: TeamPiBindingResult | undefined;
+    try {
+      teamBinding = (this.deps.resolveTeamBinding ?? resolveTeamPiBinding)({
+        projectRoot,
+        sessionTeamId: input.sessionTeamId ?? null,
+      });
+      if (teamBinding && !teamBinding.ok) return { ok: false };
+    } catch {
+      return { ok: false };
+    }
+
+    this.startContexts.set(conversationId, {
+      provider: auth.provider,
+      modelId: auth.modelId,
+      apiKey: auth.apiKey,
+      permissionMode: permissionModeFromSettings(settings),
+      ...(teamBinding?.lead ? { lead: teamBinding.lead } : {}),
+      ...(teamBinding?.roster ? { roster: teamBinding.roster } : {}),
+      ...(teamBinding?.skills ? { skills: teamBinding.skills.map((s) => ({ dir: s.dir, fqid: s.fqid })) } : {}),
+      ...(teamBinding?.mcps ? { mcpServers: mcpDefsFromTeamAssets(teamBinding.mcps) } : {}),
+    });
+    try {
+      await this.registry.createConversation({
+        conversationId,
+        tabId: input.tabId,
+        projectRoot,
+        boundCheckoutPath: input.boundCheckoutPath?.trim() || projectRoot,
+      });
+      this.prewarmedConversations.add(conversationId);
+      log.info("prewarm.ready", { conversationId, projectRoot });
+      return { ok: true };
+    } catch (err) {
+      this.startContexts.delete(conversationId);
+      log.warn("prewarm.fail", {
+        conversationId,
+        error: shortLogDetail(err instanceof Error ? err.message : String(err)),
+      });
+      return { ok: false };
+    }
   }
 
   async cancel(conversationId?: string): Promise<void> {
@@ -1162,6 +1291,7 @@ export class AgentService {
     const id = conversationId?.trim();
     if (!id) return;
     this.releaseTurnLock(id);
+    this.prewarmedConversations.delete(id);
     const host = this.mcpHosts.get(id);
     this.mcpHosts.delete(id);
     await host?.dispose().catch(() => {});
@@ -1172,6 +1302,16 @@ export class AgentService {
       if (runtimeSessionId) subs.cancelAllForParentSession(runtimeSessionId);
     }
     await this.registry.disposeConversation(id).catch(() => {});
+    // A prewarmed session that never sent a message must not pollute the
+    // session list — drop its empty record.
+    const record = this.registry.store.getByConversationId(id);
+    if (
+      record
+      && record.turns.length === 0
+      && isProvisionalSessionTitle(record.title)
+    ) {
+      this.registry.store.deleteByConversationId(id);
+    }
     if (id === this.activeConversationId) {
       this.runtime = null;
       this.sessionId = null;

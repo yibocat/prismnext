@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore } from "@/stores/chat-store";
 import {
@@ -13,9 +13,21 @@ import { TodoWriteWidget } from "./tools/todo-widget";
 export function MessageTodoDrawer() {
   const { t } = useTranslation();
   const todoId = useChatStore(selectComposerHostedTodoId);
-  const streamTick = useChatStore((s) => s.streamTick);
   const dismissEpoch = useChatStore((s) => s.todoPlanDismissEpoch);
   const dismissTodoPlan = useChatStore((s) => s.dismissTodoPlan);
+
+  // Only follow stream changes while a hosted plan exists — an unconditional
+  // streamTick subscription re-rendered this drawer on every stream chunk.
+  const [streamTick, setStreamTick] = useState(0);
+  useEffect(() => {
+    if (!todoId) return;
+    setStreamTick(useChatStore.getState().streamTick);
+    return useChatStore.subscribe((state, prev) => {
+      if (state.streamTick !== prev.streamTick) {
+        setStreamTick(state.streamTick);
+      }
+    });
+  }, [todoId]);
 
   const pending = useMemo(() => {
     if (!todoId) return null;

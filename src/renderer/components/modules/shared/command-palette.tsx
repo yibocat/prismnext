@@ -15,6 +15,7 @@ import { getRecentOpenedFilesForProject, trackRecentOpenedFile } from "@/lib/fil
 import { openProjectFileFromChat } from "@/lib/files/open-project-file";
 import { useLayoutStore, type RightToolbarTab } from "@/stores/layout-store";
 import { useChatStore } from "@/stores/chat-store";
+import type { TabState } from "@/stores/chat/model";
 import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
 import { useRightPanelStore } from "@/stores/right-panel-store";
 import { useExperimentStore } from "@/stores/experiment-store";
@@ -103,6 +104,9 @@ const SESSION_LIMIT_ALL = 6;
 const SETTINGS_PREVIEW_COUNT = 5;
 const BACKDROP_PREVIEW_COUNT = 5;
 
+/** Stable empty reference for the paused (closed) palette tabs selector. */
+const EMPTY_TABS: TabState[] = [];
+
 function previewWithSelected<T extends { id: string; selected: boolean }>(
   items: T[],
   limit: number,
@@ -151,7 +155,9 @@ export function CommandPalette({ open, onOpenChange, isMobile }: CommandPaletteP
   const { t } = useTranslation();
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const files = useDocumentStore((s) => s.files);
-  const chatTabs = useChatStore((s) => s.tabs);
+  // Paused while closed: the palette is always mounted (app-level ⌘K host);
+  // without this every stream delta re-rendered the whole palette body.
+  const chatTabs = useChatStore((s) => (open ? s.tabs : EMPTY_TABS));
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category>("all");

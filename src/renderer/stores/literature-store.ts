@@ -269,6 +269,8 @@ async function withCollectionWritePending<T>(
 let pdfImportSerial = Promise.resolve();
 
 const refreshInFlight = new Map<string, Promise<void>>();
+/** Monotonic id — the last-started library refresh wins (root-currency guard). */
+let refreshGeneration = 0;
 const bootstrapInFlight = new Map<string, Promise<void>>();
 
 /** First paint belongs to `bootstrapLiterature`; later activates may refresh. */
@@ -620,10 +622,14 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
     if (!projectRoot) return;
     const existing = refreshInFlight.get(projectRoot);
     if (existing) return existing;
+    // Last-started refresh wins: a slow scan for the previously focused
+    // project must not overwrite the focused project's library.
+    const generation = ++refreshGeneration;
     const run = (async () => {
       set({ loading: true, error: null });
       try {
         const papers = await literatureDesktop.literatureList(projectRoot);
+        if (generation !== refreshGeneration) return;
         useCitationStagingStore.getState().reconcileWithLibrary(papers);
         let libraryTagFilter = get().libraryTagFilter;
         if (libraryTagFilter) {
@@ -640,6 +646,7 @@ export const useLiteratureStore = create<LiteratureState>((set, get) => ({
         await get().refreshCollections(projectRoot);
         await get().loadViewPaperIds(projectRoot);
       } catch (err) {
+        if (generation !== refreshGeneration) return;
         set({ loading: false, error: err instanceof Error ? err.message : String(err) });
       }
     })();

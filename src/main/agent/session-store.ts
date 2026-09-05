@@ -148,15 +148,30 @@ function normalizePath(p: string): string {
   return p.replace(/\\/g, "/").replace(/\/+$/, "");
 }
 
-function atomicWriteJsonSync(filePath: string, data: unknown): void {
+/** Compact write: this is a machine-runtime store — pretty-print doubled/tripled
+ *  write amplification on every turn end (sync IO on the main process). */
+function atomicWriteJson(filePath: string, json: string): void {
   const dir = join(filePath, "..");
   mkdirSync(dir, { recursive: true });
   const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  writeFileSync(tmpPath, JSON.stringify(data, null, 2), "utf-8");
+  writeFileSync(tmpPath, json, "utf-8");
   renameSync(tmpPath, filePath);
 }
 
+/** Parsed-record cache entry, invalidated by mtime+size change. */
+interface SessionCacheEntry {
+  mtimeMs: number;
+  size: number;
+  record: AgentSessionRecord;
+}
+
+/** Cache is bounded — records hold full turn transcripts, don't grow unbounded. */
+const SESSION_CACHE_MAX_ENTRIES = 128;
+const SESSION_CACHE_MAX_RECORD_BYTES = 2 * 1024 * 1024;
+
 export class AgentSessionStore {
+  private readonly readCache = new Map<string, SessionCacheEntry>();
+
   constructor(private readonly rootDir: string) {}
 
   get root(): string {
@@ -219,14 +234,45 @@ export class AgentSessionStore {
     this.writeExclusive(record);
   }
 
+  /**
+   * Read a session record. Results are served from an mtime+size-validated
+   * in-memory cache: `getSession` is called 10+ times per turn-end and used to
+   * re-read+re-parse the full JSON file each time (sync IO on the main
+   * process → app-wide stall). The returned record is SHARED — mutators must
+   * `put()` immediately after mutating (existing discipline in this class).
+   */
   getSession(id: RuntimeSessionId): AgentSessionRecord | null {
     const path = this.fileFor(id);
+    const cached = this.readCache.get(path);
+    if (cached) {
+      try {
+        const st = statSync(path);
+        if (st.mtimeMs === cached.mtimeMs && st.size === cached.size) {
+          return cached.record;
+        }
+      } catch {
+        // File vanished — fall through to the not-found path below.
+        this.readCache.delete(path);
+        return null;
+      }
+      this.readCache.delete(path);
+    }
     if (!existsSync(path)) return null;
     try {
       const raw = readFileSync(path, "utf-8");
-      return migrateSessionRecord(JSON.parse(raw));
+      const record = migrateSessionRecord(JSON.parse(raw));
+      try {
+        const st = statSync(path);
+        if (raw.length <= SESSION_CACHE_MAX_RECORD_BYTES) {
+          this.cacheSet(path, { mtimeMs: st.mtimeMs, size: st.size, record });
+        }
+      } catch {
+        // stat failed after read — skip caching, value is still valid
+      }
+      return record;
     } catch {
       // Self-healing: move corrupted file to backup rather than crashing host
+      this.readCache.delete(path);
       try {
         const corruptPath = `${path}.corrupted.${Date.now()}`;
         renameSync(path, corruptPath);
@@ -237,6 +283,16 @@ export class AgentSessionStore {
         // ignore rename error
       }
       return null;
+    }
+  }
+
+  private cacheSet(path: string, entry: SessionCacheEntry): void {
+    this.readCache.delete(path); // refresh insertion order for FIFO eviction
+    this.readCache.set(path, entry);
+    while (this.readCache.size > SESSION_CACHE_MAX_ENTRIES) {
+      const oldest = this.readCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.readCache.delete(oldest);
     }
   }
 
@@ -462,6 +518,7 @@ export class AgentSessionStore {
 
   deleteSession(id: RuntimeSessionId): void {
     const path = this.fileFor(id);
+    this.readCache.delete(path);
     if (existsSync(path)) rmSync(path, { force: true });
   }
 
@@ -484,7 +541,19 @@ export class AgentSessionStore {
       ...record,
       updatedAt: new Date().toISOString(),
     });
-    atomicWriteJsonSync(this.fileFor(next.runtimeSessionId), next);
+    const path = this.fileFor(next.runtimeSessionId);
+    const json = JSON.stringify(next);
+    atomicWriteJson(path, json);
+    try {
+      const st = statSync(path);
+      if (json.length <= SESSION_CACHE_MAX_RECORD_BYTES) {
+        this.cacheSet(path, { mtimeMs: st.mtimeMs, size: st.size, record: next });
+      } else {
+        this.readCache.delete(path);
+      }
+    } catch {
+      this.readCache.delete(path);
+    }
     this.removeSiblingConversationFiles(
       next.conversationId || next.runtimeSessionId,
       next.runtimeSessionId,

@@ -41,6 +41,17 @@ export const terminalHandlers: Record<
       ctx.emit("terminal:exit", { sessionId, tabId, exitCode: code });
     });
     sessions.set(sessionId, pty);
+    // darwin-relay allocates its PTY asynchronously: wait for readiness so a
+    // write issued right after create() cannot race the relay handshake.
+    if (pty.onReady) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 5_000);
+        pty.onReady!(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    }
     return { ok: true, cwd, shell: pty.shell, pid: pty.pid, backend: pty.backend };
   },
 

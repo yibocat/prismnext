@@ -96,7 +96,15 @@ export async function confirmProjectSwitchIfNeeded(
  * Refresh the focused project's file/research UI without killing other
  * conversations, permissions, or background experiments (P4 / D-5 / D-6).
  */
-export async function applyWorkbenchFocusChange(): Promise<void> {
+export async function applyWorkbenchFocusChange(previousRoot?: string | null): Promise<void> {
+  // Archive the working set before tearing it down — returning to this
+  // project restores its tabs (terminal PTYs are not preserved; the restored
+  // terminal tab spawns a fresh shell with the same cwd).
+  if (previousRoot) {
+    const { archiveTabsForRoot } = await import("@/lib/workspace/tab-archive");
+    const panel = useRightPanelStore.getState();
+    archiveTabsForRoot(previousRoot, panel.tabs, panel.activeTabId);
+  }
   useRightPanelStore.getState().closeAllTabs({ force: true });
   clearPdfCache();
   void import("@/stores/typst-session-store").then((m) => m.resetTypstSessionStore());
@@ -142,15 +150,16 @@ export type WorkbenchFocusScan = {
  */
 export async function switchWorkbenchFocus(opts: {
   canonicalRoot: string;
+  previousRoot?: string | null;
   connectRemote?: boolean;
   shouldAbort: () => boolean;
   supersededByClose: () => boolean;
   applyDocumentTree: (scan: WorkbenchFocusScan) => void;
 }): Promise<void> {
-  const { canonicalRoot, shouldAbort, supersededByClose, applyDocumentTree } = opts;
+  const { canonicalRoot, previousRoot, shouldAbort, supersededByClose, applyDocumentTree } = opts;
   const skipRemoteBind = shouldSkipRemoteHostBind(canonicalRoot, opts.connectRemote);
 
-  await applyWorkbenchFocusChange();
+  await applyWorkbenchFocusChange(previousRoot);
   if (shouldAbort()) return;
 
   if (!skipRemoteBind) {
@@ -212,6 +221,12 @@ export async function switchWorkbenchFocus(opts: {
     files: result.files,
     folders: result.folders,
   });
+
+  // The new root's tree is on screen — restore its archived working set.
+  if (!shouldAbort()) {
+    const { restoreArchivedTabs } = await import("@/lib/workspace/tab-restore");
+    restoreArchivedTabs(canonicalRoot);
+  }
 
   const wb = useWorkbenchStore.getState();
   const member = wb.members.find((item) => sameProjectPath(item.lastPath, canonicalRoot));
@@ -294,6 +309,11 @@ let resumeTimer: ReturnType<typeof setTimeout> | null = null;
 let resumeUnsubs: Array<() => void> = [];
 
 export function rememberWorkbenchResume(): void {
+  // Skip while any turn is streaming: the snapshot only matters for crash
+  // recovery, and arming it per store change means every >250ms pause in a
+  // stream triggers an IPC + sync electron-store disk write mid-turn. The
+  // isStreaming=false transition itself re-fires this and writes then.
+  if (useChatStore.getState().tabs.some((tab) => tab.isStreaming)) return;
   if (resumeTimer) clearTimeout(resumeTimer);
   resumeTimer = setTimeout(() => {
     resumeTimer = null;

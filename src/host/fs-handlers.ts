@@ -249,4 +249,150 @@ export const fsHandlers: Record<string, (params: Record<string, unknown>, ctx: H
     }
     return { ok: true, eof: Boolean(params.eof) };
   },
+
+  // ─── Change watching ───
+  // The Host process has no chokidar; `fs.watch` is not recursive on Linux.
+  // A bounded-interval snapshot diff (relativePath → mtime:size) is portable
+  // and cheap relative to the scan IPCs the laptop already issues.
+
+  async "fs:watchStart"(params, ctx) {
+    const root = ctx.remoteRoot ?? normalizePosixAbs(String(params.rootPath ?? ""));
+    if (!root) {
+      throw new RemoteOperationError("protocol", "watchStart requires a bound remoteRoot.");
+    }
+    // Returns only after the baseline snapshot is taken: once this resolves,
+    // every poll reports real diffs (files present at start are baseline).
+    await startHostWatch(root, ctx);
+    return { ok: true, root };
+  },
+
+  async "fs:watchStop"() {
+    stopHostWatch();
+    return { ok: true };
+  },
 };
+
+// ─── Host change watcher (snapshot diff → ctx.emit) ───
+
+const HOST_WATCH_INTERVAL_MS = 3_000;
+const HOST_WATCH_MAX_FILES = 50_000;
+
+/** Test-only: shrink the poll interval (real timers in tests); null restores. */
+export function _setHostWatchIntervalForTests(ms: number | null): void {
+  hostWatchIntervalMs = ms ?? HOST_WATCH_INTERVAL_MS;
+}
+
+/** Test-only: hard-reset the watcher singleton between tests. */
+export function _resetHostWatchForTests(): void {
+  stopHostWatch();
+}
+
+/** Test-only: introspect the current watcher state. */
+export function _getHostWatchStateForTests(): {
+  root: string;
+  timerArmed: boolean;
+  scanning: boolean;
+  snapshotSize: number;
+  lastTickAt: number;
+} | null {
+  if (!hostWatch) return null;
+  return {
+    root: hostWatch.root,
+    timerArmed: hostWatch.timer != null,
+    scanning: hostWatch.scanning,
+    snapshotSize: hostWatch.snapshot.size,
+    lastTickAt: hostWatch.lastTickAt,
+  };
+}
+
+let hostWatchIntervalMs = HOST_WATCH_INTERVAL_MS;
+
+async function tick(state: HostWatchState): Promise<void> {
+  if (!hostWatch || hostWatch !== state || state.scanning) return;
+  state.scanning = true;
+  try {
+    const next = await snapshotRoot(state.root);
+    const changed: string[] = [];
+    for (const [rel, stamp] of next) {
+      if (state.snapshot.get(rel) !== stamp) changed.push(posix.join(state.root, rel));
+    }
+    for (const rel of state.snapshot.keys()) {
+      if (!next.has(rel)) changed.push(posix.join(state.root, rel));
+    }
+    state.snapshot = next;
+    // The baseline tick (interval not yet armed) never emits.
+    if (changed.length > 0 && state.timer) {
+      state.ctx.emit("fs:fileChanged", {
+        projectRoot: state.root,
+        changedPaths: changed.slice(0, 500),
+      });
+    }
+  } catch {
+    // transient fs errors — the next tick retries
+  } finally {
+    state.scanning = false;
+    state.lastTickAt = Date.now();
+  }
+}
+
+interface HostWatchState {
+  root: string;
+  timer: ReturnType<typeof setInterval> | null;
+  snapshot: Map<string, string>;
+  scanning: boolean;
+  ctx: HostHandlerContext;
+  /** Date.now() of the last COMPLETED tick — diagnostics for stale loops. */
+  lastTickAt: number;
+}
+
+let hostWatch: HostWatchState | null = null;
+
+/** Capture `relativePath → "mtimeMs:size"` for the whole bound root. */
+async function snapshotRoot(root: string): Promise<Map<string, string>> {
+  const snapshot = new Map<string, string>();
+  const walk = async (dir: string, prefix: string) => {
+    if (snapshot.size > HOST_WATCH_MAX_FILES) return;
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // deleted mid-walk or unreadable — skip subtree
+    }
+    for (const entry of entries) {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const abs = posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (shouldSkipDir(entry.name)) continue;
+        await walk(abs, relativePath);
+        continue;
+      }
+      if (HIDDEN_FILE_NAMES.has(entry.name.toLowerCase())) continue;
+      try {
+        const st = await stat(abs);
+        snapshot.set(relativePath, `${st.mtimeMs}:${st.size}`);
+      } catch {
+        // raced deletion — omit; the next tick settles it
+      }
+    }
+  };
+  await walk(root, "");
+  return snapshot;
+}
+
+async function startHostWatch(root: string, ctx: HostHandlerContext): Promise<void> {
+  if (hostWatch && hostWatch.root === root) return;
+  stopHostWatch();
+  const state: HostWatchState = { root, timer: null, snapshot: new Map(), scanning: false, ctx, lastTickAt: 0 };
+  hostWatch = state;
+  // Baseline snapshot runs to completion BEFORE the interval is armed and
+  // before watchStart resolves — pre-existing files are never reported.
+  await tick(state);
+  if (hostWatch !== state) return; // stopped while the baseline ran
+  state.timer = setInterval(() => void tick(state), hostWatchIntervalMs);
+}
+
+function stopHostWatch(): void {
+  const state = hostWatch;
+  hostWatch = null;
+  if (state?.timer) clearInterval(state.timer);
+}

@@ -49,6 +49,8 @@
   "connectProgress": "{{percent}}%",
   "connect": "Connect",
   "workspaceOffline": "Connect to this Host to open files, Git, and experiments.",
+  "reconnectBanner": "Connection dropped — reconnecting… content may be stale",
+  "reconnectHint": "Nothing to do; panels refresh automatically once reconnected.",
   "sshPickerTitle": "Connect via SSH",
   "sshHostnamePlaceholder": "SSH Hostname",
   "openSshConfig": "Open SSH Config",

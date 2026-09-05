@@ -28,6 +28,7 @@ vi.mock("electron", () => ({
 }));
 
 import { registerFsHandlers } from "../../src/main/ipc/fs";
+import { setRemoteSessionBrokerForTests } from "../../src/main/ipc/remote";
 import { ProjectLifecycleAuthority } from "../../src/main/project/project-lifecycle-authority";
 
 const home = "/fake-home";
@@ -92,5 +93,29 @@ describe("fs:watch-start IPC", () => {
 
     await expect(handler({}, { rootPath: root })).rejects.toThrow(/unopened project/);
     expect(stopWatching).not.toHaveBeenCalled();
+  });
+
+  it("routes remote roots to the host watcher instead of local chokidar", async () => {
+    const invoke = vi.fn().mockResolvedValue({ ok: true, root: "/home/u/proj" });
+    setRemoteSessionBrokerForTests({
+      isBound: () => true,
+      invoke,
+    } as never);
+    try {
+      authority.activate("remote://lab/home/u/proj");
+      const handler = handlers.get("fs:watch-start")!;
+      await handler({}, { rootPath: "remote://lab/home/u/proj" });
+      expect(invoke).toHaveBeenCalledWith("lab", "fs:watchStart", {
+        rootPath: "/home/u/proj",
+      });
+      expect(state.startWatching).not.toHaveBeenCalled();
+
+      const stopHandler = handlers.get("fs:watch-stop")!;
+      await stopHandler({}, { rootPath: "remote://lab/home/u/proj" });
+      expect(invoke).toHaveBeenCalledWith("lab", "fs:watchStop", {});
+      expect(stopWatching).not.toHaveBeenCalled();
+    } finally {
+      setRemoteSessionBrokerForTests(null);
+    }
   });
 });

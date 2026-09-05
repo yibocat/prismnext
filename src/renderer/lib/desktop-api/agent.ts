@@ -11,6 +11,7 @@ export const agentDesktop = {
   agentCancel: forwardDesktop("agentCancel"),
   agentCancelSubagent: forwardDesktop("agentCancelSubagent"),
   agentDispose: forwardDesktop("agentDispose"),
+  agentPrewarm: forwardDesktop("agentPrewarm"),
   agentLoadSession: forwardDesktop("agentLoadSession"),
   agentRenameSession: forwardDesktop("agentRenameSession"),
   agentGenerateSessionTitle: forwardDesktop("agentGenerateSessionTitle"),

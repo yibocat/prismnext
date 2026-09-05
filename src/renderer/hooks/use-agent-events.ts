@@ -14,11 +14,103 @@ function resolveAgentTabId(eventTabId: string): string | null {
   return tab?.id ?? null;
 }
 
+/**
+ * High-frequency delta types. Providers push one SSE chunk per token
+ * (40–150 events/s); applying each directly drives the whole store +
+ * React pipeline at that rate. Adjacent same-type deltas are merged and
+ * flushed once per animation frame — pure append coalescing, zero
+ * information loss beyond grouping within a frame.
+ */
+function isDeltaEvent(event: AgentEvent): boolean {
+  return (
+    event.type === "text_delta"
+    || event.type === "thinking_delta"
+    || event.type === "tool_progress"
+  );
+}
+
+/** Safety flush for hidden windows: rAF never fires while document.hidden. */
+const DELTA_FLUSH_FALLBACK_MS = 250;
+
+type QueuedDelta =
+  | { kind: "text_delta" | "thinking_delta"; event: AgentEvent }
+  | { kind: "tool_progress"; event: AgentEvent };
+
+const deltaQueues = new Map<string, QueuedDelta[]>();
+let rafId: number | null = null;
+let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushDeltaQueues(): void {
+  rafId = null;
+  if (fallbackTimer != null) {
+    clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  }
+  if (deltaQueues.size === 0) return;
+  const apply = useChatStore.getState()._applyAgentEvent;
+  const batches = [...deltaQueues.entries()];
+  deltaQueues.clear();
+  for (const [tabId, queue] of batches) {
+    for (const item of queue) {
+      apply(tabId, item.event);
+    }
+  }
+}
+
+function scheduleDeltaFlush(): void {
+  if (rafId != null) return;
+  rafId = requestAnimationFrame(flushDeltaQueues);
+  if (fallbackTimer == null) {
+    fallbackTimer = setTimeout(flushDeltaQueues, DELTA_FLUSH_FALLBACK_MS);
+  }
+}
+
+function queueDeltaEvent(tabId: string, event: AgentEvent): void {
+  let queue = deltaQueues.get(tabId);
+  if (!queue) {
+    queue = [];
+    deltaQueues.set(tabId, queue);
+  }
+  const last = queue[queue.length - 1];
+
+  // Merge adjacent same-type deltas — order is preserved exactly; only
+  // same-kind neighbours coalesce. tool_progress: latest text wins.
+  if (last) {
+    if (
+      (event.type === "text_delta" || event.type === "thinking_delta")
+      && last.kind === event.type
+    ) {
+      (last.event as { text: string }).text += (event as { text: string }).text;
+      return;
+    }
+    if (
+      event.type === "tool_progress"
+      && last.kind === "tool_progress"
+      && (last.event as { toolCallId?: unknown }).toolCallId
+        === (event as { toolCallId?: unknown }).toolCallId
+    ) {
+      queue[queue.length - 1] = { kind: "tool_progress", event };
+      return;
+    }
+  }
+  queue.push({ kind: event.type as QueuedDelta["kind"], event });
+}
+
 export function useAgentEvents(): void {
   useEffect(() => {
     const offEvent = agentDesktop.onAgentEvent((event: AgentEvent) => {
       const tabId = resolveAgentTabId(event.tabId);
       if (!tabId) return;
+
+      // Delta events are coalesced per frame; everything else flushes the
+      // pending deltas first so ordering across kinds is preserved.
+      if (isDeltaEvent(event)) {
+        queueDeltaEvent(tabId, event);
+        scheduleDeltaFlush();
+        return;
+      }
+      flushDeltaQueues();
+
       useChatStore.getState()._applyAgentEvent(tabId, event);
 
       if (event.type === "usage_updated") {
@@ -80,6 +172,17 @@ export function useAgentEvents(): void {
       }
     });
 
-    return offEvent;
+    return () => {
+      offEvent();
+      if (rafId != null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      if (fallbackTimer != null) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+      deltaQueues.clear();
+    };
   }, []);
 }

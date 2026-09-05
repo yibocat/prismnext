@@ -70,6 +70,10 @@ export function ThinkingWidget({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  // Body mounts on first expand and stays mounted: collapsed thoughts were
+  // re-running the full markdown pipeline on every streamed delta while
+  // hidden. Unmounting on collapse would re-parse again on each re-open.
+  const [everExpanded, setEverExpanded] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startedAtRef = useRef<number | null>(null);
   const globalStreaming = useChatStore((s) => s.isStreaming);
@@ -78,6 +82,14 @@ export function ThinkingWidget({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const pendingAnchorRef = useRef<ViewportAnchorCapture | null>(null);
 
+  const toggleExpanded = () => {
+    if (toggleRef.current) {
+      pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
+    }
+    setEverExpanded(true);
+    setExpanded((prev) => !prev);
+  };
+
   useLayoutEffect(() => {
     const anchor = toggleRef.current;
     const captured = pendingAnchorRef.current;
@@ -85,13 +97,6 @@ export function ThinkingWidget({
     restoreViewportAnchor(captured, anchor);
     pendingAnchorRef.current = null;
   }, [expanded]);
-
-  const toggleExpanded = () => {
-    if (toggleRef.current) {
-      pendingAnchorRef.current = captureViewportAnchor(toggleRef.current);
-    }
-    setExpanded((prev) => !prev);
-  };
 
   useEffect(() => {
     if (!isStreaming || isProgress) return;
@@ -153,12 +158,14 @@ export function ThinkingWidget({
           />
         </button>
         <div className={cn(!expanded && "hidden")} hidden={!expanded}>
-          <ThinkingMarkdownBody
-            thinking={thinking}
-            isStreaming={isStreaming}
-            sessionId={sessionId}
-            className="pt-0 pb-0.5"
-          />
+          {everExpanded ? (
+            <ThinkingMarkdownBody
+              thinking={thinking}
+              isStreaming={isStreaming}
+              sessionId={sessionId}
+              className="pt-0 pb-0.5"
+            />
+          ) : null}
         </div>
       </div>
     );
@@ -191,12 +198,14 @@ export function ThinkingWidget({
         />
       </button>
       <div className={cn(!expanded && "hidden")} hidden={!expanded}>
-        <ThinkingMarkdownBody
-          thinking={thinking}
-          isStreaming={isStreaming}
-          sessionId={sessionId}
-          className="py-0.5 text-[length:var(--font-chat-message)]"
-        />
+        {everExpanded ? (
+          <ThinkingMarkdownBody
+            thinking={thinking}
+            isStreaming={isStreaming}
+            sessionId={sessionId}
+            className="py-0.5 text-[length:var(--font-chat-message)]"
+          />
+        ) : null}
       </div>
     </div>
   );

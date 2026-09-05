@@ -11,7 +11,7 @@ import {
 import type { WorkspaceFolder } from "../../shared/workbench/workspace-folder";
 import { routeHostDomainMethod } from "../remote/domain-route";
 import { getRemoteSessionBroker } from "./remote";
-import { promptManager } from "../prompts";
+import { invalidatePromptContextCache, promptManager } from "../prompts";
 
 async function routeIfRemote(method: string, args: unknown): Promise<unknown | undefined> {
   return routeHostDomainMethod(method, args, {
@@ -48,6 +48,7 @@ export function registerWorkspaceHandlers(): void {
       const routed = await routeIfRemote("workspace:updateConfig", args);
       if (routed !== undefined) {
         promptManager.invalidate();
+        invalidatePromptContextCache(args.projectRoot);
         return routed as { success: boolean; errors?: string[] };
       }
       const errors = validateWorkspaceDirs(args.dirs);
@@ -56,6 +57,7 @@ export function registerWorkspaceHandlers(): void {
       }
       writeWorkspaceDirs(args.projectRoot, args.dirs);
       promptManager.invalidate();
+      invalidatePromptContextCache(args.projectRoot);
       return { success: true };
     },
   );
